@@ -1,1 +1,1 @@
-# open-lambda
+# OpenLambda
