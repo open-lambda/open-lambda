@@ -35,12 +35,17 @@ func main() {
 		resp, err := http.Get(url)
 		endTime := time.Now()
 
+		if err != nil {
+			log.Fatal("req failed:", err)
+		}
+
 		if resp.StatusCode == 200 {
 			type Timestamp struct {
 				Time string `json:"startup"`
 			}
 
 			// parse body
+			defer resp.Body.Close()
 			body, _ := ioutil.ReadAll(resp.Body)
 			var startup Timestamp
 			err = json.Unmarshal(body, &startup)

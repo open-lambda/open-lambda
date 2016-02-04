@@ -7,14 +7,24 @@ import (
 	docker "github.com/fsouza/go-dockerclient"
 )
 
+var client *docker.Client
+
+func initClient() {
+	// TODO: This requires that users haev pre-configured the environement to swarm manager
+	if c, err := docker.NewClientFromEnv(); err != nil {
+		log.Fatal("failed to get docker client: ", err)
+	} else {
+		client = c
+	}
+}
+
 func RunImg(img string, args []string) (stdout string, stderr string, err error) {
 	var (
 		outBuf bytes.Buffer
 		errBuf bytes.Buffer
 	)
-	// TODO: This requires that users haev pre-configured the environement to swarm manager
-	if client, err := docker.NewClientFromEnv(); err != nil {
-		log.Fatal("failed to get docker client: ", err)
+	if client == nil {
+		initClient()
 	} else {
 		// Ensure we are actually connected...
 		if _, err := client.Info(); err != nil {
@@ -60,7 +70,7 @@ func RunImg(img string, args []string) (stdout string, stderr string, err error)
 				Stderr:       true,
 			})
 			if err != nil {
-				log.Fatal(err)
+				log.Fatal("failed to attach to container\n", err)
 			}
 
 			// remove container
