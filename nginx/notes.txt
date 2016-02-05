@@ -1,5 +1,15 @@
 Load balancer *init* path:
 
+#4  0x000000000043faf9 in ngx_http_upstream_init_round_robin (cf=<optimized out>, us=<optimized out>) at src/http/ngx_http_upstream_round_robin.c:40
+#5  0x00000000004397c1 in ngx_http_upstream_init_main_conf (cf=0x7fffffffe190, conf=0x6a4608) at src/http/ngx_http_upstream.c:5949
+#6  0x0000000000422ed3 in ngx_http_block (cf=0x7fffffffe190, cmd=<optimized out>, conf=<optimized out>) at src/http/ngx_http.c:265
+#7  0x00000000004139d1 in ngx_conf_handler (last=1, cf=0x7fffffffe190) at src/core/ngx_conf_file.c:391
+#8  ngx_conf_parse (cf=cf@entry=0x7fffffffe190, filename=filename@entry=0x6a2918) at src/core/ngx_conf_file.c:247
+#9  0x00000000004115fc in ngx_init_cycle (old_cycle=old_cycle@entry=0x7fffffffe350) at src/core/ngx_cycle.c:264
+#10 0x0000000000403b8e in main (argc=<optimized out>, argv=<optimized out>) at src/core/nginx.c:353
+
+Load balancer *init peer* path:
+
 #4  0x000000000043f80a in ngx_http_upstream_init_round_robin_peer (
     r=<optimized out>, us=<optimized out>)
     at src/http/ngx_http_upstream_round_robin.c:227
