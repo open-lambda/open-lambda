@@ -8,7 +8,7 @@
 #include <ngx_config.h>
 #include <ngx_core.h>
 
-
+/*
 ngx_int_t
 ngx_daemon(ngx_log_t *log)
 {
@@ -66,5 +66,14 @@ ngx_daemon(ngx_log_t *log)
         }
     }
 
+    return NGX_OK;
+}
+    */
+
+
+ngx_int_t
+ngx_daemon(ngx_log_t *log)
+{
+    ngx_pid = ngx_getpid();
     return NGX_OK;
 }
