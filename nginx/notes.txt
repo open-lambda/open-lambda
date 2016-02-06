@@ -1,3 +1,8 @@
+How to build nginx:
+
+./configure --without-http_rewrite_module --without-http_gzip_module
+make
+
 Load balancer *init* path:
 
 #4  0x000000000043faf9 in ngx_http_upstream_init_round_robin (cf=<optimized out>, us=<optimized out>) at src/http/ngx_http_upstream_round_robin.c:40

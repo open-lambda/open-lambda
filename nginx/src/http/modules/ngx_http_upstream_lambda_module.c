@@ -103,6 +103,8 @@ ngx_http_upstream_init_lambda_peer(ngx_http_request_t *r,
 #endif
     ngx_http_upstream_lambda_peer_data_t  *iphp;
 
+    printf("TYLER: init peer\n");
+
     iphp = ngx_palloc(r->pool, sizeof(ngx_http_upstream_lambda_peer_data_t));
     if (iphp == NULL) {
         return NGX_ERROR;
@@ -150,106 +152,22 @@ ngx_http_upstream_get_lambda_peer(ngx_peer_connection_t *pc, void *data)
 {
     ngx_http_upstream_lambda_peer_data_t  *iphp = data;
 
-    time_t                        now;
-    ngx_int_t                     w;
-    uintptr_t                     m;
-    ngx_uint_t                    i, n, p, hash;
+    ngx_uint_t                    p, hash;
     ngx_http_upstream_rr_peer_t  *peer;
 
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0,
-                   "get ip hash peer, try: %ui", pc->tries);
-
-    /* TODO: cached */
-
-    if (iphp->tries > 20 || iphp->rrp.peers->single) {
-        return iphp->get_rr_peer(pc, &iphp->rrp);
-    }
-
-    now = ngx_time();
-
-    pc->cached = 0;
-    pc->connection = NULL;
+    printf("TYLER: tries: %d\n", iphp->tries);
+    iphp->tries++;
 
     hash = iphp->hash;
+    p = hash % iphp->rrp.peers->number;
+    peer = &iphp->rrp.peers->peer[p];
 
-    for ( ;; ) {
-
-        for (i = 0; i < (ngx_uint_t) iphp->addrlen; i++) {
-            hash = (hash * 113 + iphp->addr[i]) % 6271;
-        }
-
-        if (!iphp->rrp.peers->weighted) {
-            p = hash % iphp->rrp.peers->number;
-
-        } else {
-            w = hash % iphp->rrp.peers->total_weight;
-
-            for (i = 0; i < iphp->rrp.peers->number; i++) {
-                w -= iphp->rrp.peers->peer[i].weight;
-                if (w < 0) {
-                    break;
-                }
-            }
-
-            p = i;
-        }
-
-        n = p / (8 * sizeof(uintptr_t));
-        m = (uintptr_t) 1 << p % (8 * sizeof(uintptr_t));
-
-        if (iphp->rrp.tried[n] & m) {
-            goto next;
-        }
-
-        ngx_log_debug2(NGX_LOG_DEBUG_HTTP, pc->log, 0,
-                       "get ip hash peer, hash: %ui %04XA", p, m);
-
-        peer = &iphp->rrp.peers->peer[p];
-
-        /* ngx_lock_mutex(iphp->rrp.peers->mutex); */
-
-        if (peer->down) {
-            goto next_try;
-        }
-
-        if (peer->max_fails
-            && peer->fails >= peer->max_fails
-            && now - peer->checked <= peer->fail_timeout)
-        {
-            goto next_try;
-        }
-
-        break;
-
-    next_try:
-
-        iphp->rrp.tried[n] |= m;
-
-        /* ngx_unlock_mutex(iphp->rrp.peers->mutex); */
-
-        pc->tries--;
-
-    next:
-
-        if (++iphp->tries > 20) {
-            return iphp->get_rr_peer(pc, &iphp->rrp);
-        }
-    }
-
-    iphp->rrp.current = p;
-
+    // init connection info
+    pc->cached = 0;
+    pc->connection = NULL;
     pc->sockaddr = peer->sockaddr;
     pc->socklen = peer->socklen;
     pc->name = &peer->name;
-
-    if (now - peer->checked > peer->fail_timeout) {
-        peer->checked = now;
-    }
-
-    /* ngx_unlock_mutex(iphp->rrp.peers->mutex); */
-
-    iphp->rrp.tried[n] |= m;
-    iphp->hash = hash;
 
     return NGX_OK;
 }
