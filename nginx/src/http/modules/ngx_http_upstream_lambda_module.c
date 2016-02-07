@@ -8,6 +8,7 @@
 #include <ngx_config.h>
 #include <ngx_core.h>
 #include <ngx_http.h>
+#include <assert.h>
 
 
 typedef struct {
@@ -20,8 +21,6 @@ typedef struct {
     u_char                            *addr;
 
     u_char                             tries;
-
-    ngx_event_get_peer_pt              get_rr_peer;
 } ngx_http_upstream_lambda_peer_data_t;
 
 
@@ -92,6 +91,42 @@ ngx_http_upstream_init_lambda(ngx_conf_t *cf, ngx_http_upstream_srv_conf_t *us)
     return NGX_OK;
 }
 
+char *pstr(ngx_str_t str) {
+    char *s = malloc(str.len+1);
+    assert(s);
+    memcpy(s, str.data, str.len);
+    s[str.len] = '\0';
+    return s;
+}
+
+ngx_str_t arg_search(ngx_str_t *s, char *key) {
+    uint32_t start = 0;
+    uint32_t end = 0;
+    uint32_t split = 0;
+    ngx_str_t value = {.data=NULL, .len=0};
+    // iterate over parts separated by '&'
+    for (;;) {
+        if (end == s->len || s->data[end] == '&') {
+            ngx_str_t kv = {.data = &s->data[start], .len = end-start};
+            // find '='
+            for (split=0; split < kv.len; split++) {
+                if (kv.data[split] == '=') {
+                    if (strncmp((char *)kv.data, key, split) == 0) {
+                        value.data = &kv.data[split+1];
+                        value.len = kv.len - (split+1);
+                        break;
+                    }
+                }
+            }
+
+            if (end == s->len)
+                break;
+            start = end+1;
+        }
+        end++;
+    }
+    return value;
+}
 
 static ngx_int_t
 ngx_http_upstream_init_lambda_peer(ngx_http_request_t *r,
@@ -102,8 +137,7 @@ ngx_http_upstream_init_lambda_peer(ngx_http_request_t *r,
     struct sockaddr_in6                    *sin6;
 #endif
     ngx_http_upstream_lambda_peer_data_t  *iphp;
-
-    printf("TYLER: init peer\n");
+    ngx_str_t db_key = arg_search(&r->args, "key");
 
     iphp = ngx_palloc(r->pool, sizeof(ngx_http_upstream_lambda_peer_data_t));
     if (iphp == NULL) {
@@ -141,7 +175,6 @@ ngx_http_upstream_init_lambda_peer(ngx_http_request_t *r,
 
     iphp->hash = 89;
     iphp->tries = 0;
-    iphp->get_rr_peer = ngx_http_upstream_get_round_robin_peer;
 
     return NGX_OK;
 }

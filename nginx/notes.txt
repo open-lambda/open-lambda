@@ -1,6 +1,7 @@
 How to build nginx:
 
-./configure --without-http_rewrite_module --without-http_gzip_module
+apt-get install libssl-dev
+./configure --without-http_rewrite_module --without-http_gzip_module --with-http_ssl_module
 make
 
 Load balancer *init* path:
