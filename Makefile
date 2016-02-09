@@ -1,6 +1,13 @@
 GOPATH:=$(PWD)
-WORKER:=src/github.com/tylerharter/open-lambda/lambdaManager
+WORKER:=lambdaManager
 
 worker :
-	GOPATH=$(GOPATH) cd $(WORKER)/server; go build
-	GOPATH=$(GOPATH) cd $(WORKER)/prof/client; go build
+	cd hack && ./build.sh
+	mkdir -p bin
+	cp lambdaManager/server/server bin/lambdaWorker
+	cp lambdaManager/prof/client/client bin/client
+
+clean :
+	rm -rf bin
+	rm -rf hack/.gopath
+
