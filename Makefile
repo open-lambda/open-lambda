@@ -1,13 +1,17 @@
 GOPATH:=$(PWD)
 WORKER:=lambdaManager
 
+SERVER_BIN:=lambdaManager/server/server
+CLIENT_BIN:=lambdaManager/prof/client/client
 worker :
 	cd hack && ./build.sh
 	mkdir -p bin
-	cp lambdaManager/server/server bin/lambdaWorker
-	cp lambdaManager/prof/client/client bin/client
+	cp $(SERVER_BIN) bin/lambdaWorker
+	cp $(CLIENT_BIN) bin/client
 
 clean :
 	rm -rf bin
 	rm -rf hack/.gopath
+	rm $(SERVER_BIN)
+	rm $(CLIENT_BIN)
 
