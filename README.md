@@ -1,6 +1,17 @@
 # OpenLambda
 
-TODO
+# Building the lambdaWorker
+
+### Dependancies
+ - Go (https://golang.org/doc/install)
+ - Docker, with a running daemon (https://docs.docker.com/engine/installation/)
+ - TODO - Probably need to list the runc deps (libseccomp etc...)
+
+```
+make
+ls bin/
+client  lambdaWorker
+```
 
 # Building nginx
 
