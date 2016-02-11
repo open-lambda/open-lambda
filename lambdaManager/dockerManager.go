@@ -1,4 +1,4 @@
-package dockerManager
+package main
 
 import (
 	"bytes"
@@ -59,7 +59,7 @@ func removeContainer(container *docker.Container) error {
 	return nil
 }
 
-func RunImg(img string, args []string) (stdout string, stderr string, err error) {
+func DockerRunImg(img string, args []string) (stdout string, stderr string, err error) {
 	var (
 		outBuf bytes.Buffer
 		errBuf bytes.Buffer

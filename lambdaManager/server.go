@@ -5,8 +5,6 @@ import (
 	"log"
 	"net/http"
 	"strings"
-
-	"github.com/tylerharter/open-lambda/lambdaManager/dockerManager"
 )
 
 func HandleCmd(w http.ResponseWriter, r *http.Request) {
@@ -23,7 +21,7 @@ func HandleCmd(w http.ResponseWriter, r *http.Request) {
 
 	// This will block for container to exit
 	// TODO: can we stream stdout instead?
-	cStdOut, cStdErr, err := dockerManager.RunImg(img, args)
+	cStdOut, cStdErr, err := DockerRunImg(img, args)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		log.Println("docker job failed", err)

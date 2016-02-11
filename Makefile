@@ -1,7 +1,7 @@
 GOPATH:=$(PWD)
 WORKER:=lambdaManager
 
-SERVER_BIN:=lambdaManager/server/server
+SERVER_BIN:=lambdaManager/lambdaManager
 CLIENT_BIN:=lambdaManager/prof/client/client
 worker :
 	cd hack && ./build.sh

@@ -8,7 +8,7 @@ export CODE_BASE='../lambdaManager'
 export LAMBDA_PACKAGE='src/github.com/tylerharter/open-lambda'
 export GOPATH='.gopath'
 
-export WORKER='lambdaManager/server'
+export WORKER='lambdaManager/'
 export CLIENT='lambdaManager/prof/client'
 
 export WD=$(pwd)
