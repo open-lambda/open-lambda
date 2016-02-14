@@ -14,8 +14,8 @@ import (
 func main() {
 	var numRequests int
 
-	if len(os.Args) < 4 {
-		fmt.Println("Usage: ./client <host> <port> <num_requests>")
+	if len(os.Args) < 6 {
+		fmt.Println("Usage: ./client <host> <port> <num_requests> <img> <args>")
 		return
 	}
 
@@ -25,7 +25,7 @@ func main() {
 	} else {
 		log.Printf("bad num_requests: %v", err)
 	}
-	url := fmt.Sprintf("http://%s:%s/runContainer?img=start-timer&Args=", os.Args[1], os.Args[2])
+	url := fmt.Sprintf("http://%s:%s/runContainer?img=%s&args=%s&", os.Args[1], os.Args[2], os.Args[4], os.Args[5])
 
 	timesToStart := make([]time.Duration, numRequests)
 	timesRoundTrip := make([]time.Duration, numRequests)
