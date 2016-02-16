@@ -73,9 +73,7 @@ func main() {
 			timesRoundTrip = append(timesRoundTrip, roundTripTime)
 			log.Printf("roundTripTime: %v\n", roundTripTime)
 		} else {
-			log.Printf("req %d failed. Retrying.\n", i)
-			i--
-			continue
+			log.Fatalf("req %d failed.\n", i)
 		}
 	}
 
