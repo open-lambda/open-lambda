@@ -4,6 +4,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 )
 
@@ -35,6 +36,12 @@ func HandleCmd(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	if len(os.Args) < 3 {
+		log.Fatalf("usage: %s <registry hostname> <registry port>\n", os.Args[0])
+	}
+
+	SetRegistry(os.Args[1], os.Args[2])
+
 	http.HandleFunc("/runContainer", HandleCmd)
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }

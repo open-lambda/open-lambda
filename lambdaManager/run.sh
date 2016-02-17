@@ -3,4 +3,4 @@ docker run \
         -p 8080:8080\
         --name lambda-worker \
         -d \
-        lambda-worker
+        lambda-worker /go/bin/app 45.55.38.246 5000

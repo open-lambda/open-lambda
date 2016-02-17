@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"log"
 	"time"
 
@@ -10,7 +11,10 @@ import (
 
 var client *docker.Client
 
+var registryName string
+
 func initClient() {
+
 	// TODO: This requires that users haev pre-configured the environement to swarm manager
 	if c, err := docker.NewClientFromEnv(); err != nil {
 		log.Fatal("failed to get docker client: ", err)
@@ -19,28 +23,49 @@ func initClient() {
 	}
 }
 
+func SetRegistry(host string, port string) {
+	registryName = fmt.Sprintf("%s:%s", host, port)
+}
+
+func pullContainer(img string) error {
+	err := client.PullImage(
+		docker.PullImageOptions{
+			Repository: img,
+			Registry:   registryName,
+		},
+		docker.AuthConfiguration{})
+	log.Printf("pull of %s complete\n", img)
+
+	if err != nil {
+		log.Printf("failed to pull container: %v\n", err)
+	}
+	return err
+}
+
 func createContainer(img string, args []string) (*docker.Container, error) {
 	beforeContainerTime := time.Now()
-	// Create a new container, with correct args
-	container, err := client.CreateContainer(docker.CreateContainerOptions{
-		Config: &docker.Config{
-			Cmd:          args,
-			AttachStdout: true,
-			AttachStderr: true,
-			Image:        img,
+
+	// Create a new container with img and args
+	container, err := client.CreateContainer(
+		docker.CreateContainerOptions{
+			Config: &docker.Config{
+				Cmd:          args,
+				AttachStdout: true,
+				AttachStderr: true,
+				Image:        img,
+			},
+			HostConfig: &docker.HostConfig{},
 		},
-		HostConfig: &docker.HostConfig{},
-	})
-	afterContainerTime := time.Now()
-	log.Printf("container creation took %v\n", afterContainerTime.Sub(beforeContainerTime))
+	)
 
-	// TODO: This case should attempt to pull img
-	if err != nil {
-		log.Println("failed to create container", err)
-		return nil, err
+	if err == nil {
+		afterContainerTime := time.Now()
+		log.Printf("container creation took %v\n",
+			afterContainerTime.Sub(beforeContainerTime))
+	} else {
+		log.Printf("container %s failed to create with err: %v\n", img, err)
 	}
-
-	return container, nil
+	return container, err
 }
 
 func removeContainer(container *docker.Container) error {
@@ -69,9 +94,21 @@ func DockerRunImg(img string, args []string) (stdout string, stderr string, err 
 		initClient()
 	}
 
-	container, err := createContainer(img, args)
+	var container *docker.Container
+	container, err = createContainer(img, args)
 	if err != nil {
-		return "", "", err
+		// assume failed because need to pull container
+		err = pullContainer(img)
+		if err != nil {
+			log.Printf("container creation failed with: %v\n")
+			log.Printf("img pull failed with: %v\n")
+			return "", "", err
+		} else {
+			container, err = createContainer(img, args)
+			if err != nil {
+				log.Printf("failed to create container %s after good pull, with error: %v\n", img, err)
+			}
+		}
 	}
 
 	beforeRunTime := time.Now()
