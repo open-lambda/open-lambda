@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+// The greeting service definition.
+service Ready {
+  // Sends a greeting
+  rpc SayReady (ReadyRequest) returns (ReadyReply) {}
+}
+
+// The message 
+message ReadyRequest {
+    string id = 2;
+}
+
+// The response message containing the greetings
+message ReadyReply {}
