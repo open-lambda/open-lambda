@@ -208,6 +208,8 @@ func DockerMakeReady(img string) (containerHost string, err error) {
 					log.Printf("failed to unpause container %s with err %v\n", container.ID, err)
 					return "", err
 				}
+
+				return getContainerAddress(container)
 			} else if container.State.Running {
 				// Good to go
 				return getContainerAddress(container)
@@ -219,9 +221,17 @@ func DockerMakeReady(img string) (containerHost string, err error) {
 
 	err = client.StartContainer(container.ID, container.HostConfig)
 	if err != nil {
-		log.Println("failed to start container")
+		log.Printf("failed to start container with err %v\n", err)
 		return "", err
 	}
 
 	return getContainerAddress(container)
+}
+
+func DockerPause(img string) (err error) {
+	if err = client.PauseContainer(img); err != nil {
+		log.Printf("failed to pause container with error %v\n", err)
+		return err
+	}
+	return nil
 }

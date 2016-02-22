@@ -73,6 +73,11 @@ func RunLambda(w http.ResponseWriter, r *http.Request) {
 	}
 	proxy := &httputil.ReverseProxy{Director: director}
 	proxy.ServeHTTP(w, r)
+
+	// always pause lambda after running
+	if err = DockerPause(img); err != nil {
+		// idk do something?
+	}
 }
 
 func main() {
