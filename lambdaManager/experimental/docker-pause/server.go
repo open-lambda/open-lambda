@@ -38,6 +38,10 @@ func RunLambda(w http.ResponseWriter, r *http.Request) {
 	// components represent runLambda[0]/<name_of_container>[1]/<extra_things>...
 	// ergo we want [1] for name of container
 	img := urlParts[1]
+	i := strings.Index(img, "?")
+	if i >= 0 {
+		img = img[:i-1]
+	}
 	log.Printf("running lambda img \"%s\"\n", img)
 
 	// we'll ask docker manager to ensure the img is ready to accept requests
