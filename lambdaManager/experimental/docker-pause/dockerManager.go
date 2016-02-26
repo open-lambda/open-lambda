@@ -29,42 +29,6 @@ func NewContainerManager(host string, port string) (manager *ContainerManager) {
 	return manager
 }
 
-func (cm *ContainerManager) pullContainer(img string) error {
-	err := cm.client.PullImage(
-		docker.PullImageOptions{
-			Repository: img,
-			Registry:   cm.registryName,
-		},
-		docker.AuthConfiguration{})
-	log.Printf("pull of %s complete\n", img)
-
-	if err != nil {
-		log.Printf("failed to pull container: %v\n", err)
-		return err
-	}
-	return nil
-}
-
-// TODO: This is NOT thread safe
-// 		  Someone can steal the port between when we return,
-//		  And when it is used.
-func getFreePort() (port int, err error) {
-	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
-	if err != nil {
-		log.Println("os failed to give us good port with err %v", err)
-		return -1, err
-	}
-
-	l, err := net.ListenTCP("tcp", addr)
-	if err != nil {
-		log.Println("failed to listen, someone stole our port! %v", err)
-		return -1, err
-	}
-	defer l.Close()
-	port = l.Addr().(*net.TCPAddr).Port
-	return port, nil
-}
-
 func (cm *ContainerManager) createContainer(img string, args []string) (*docker.Container, error) {
 	// Create a new container with img and args
 	// Specifically give container name of img, so we can lookup later
@@ -75,11 +39,10 @@ func (cm *ContainerManager) createContainer(img string, args []string) (*docker.
 	// for a specific container is bound to 8080
 	port, err := getFreePort()
 	if err != nil {
-		log.Printf("failed to get free port with err %v", err)
+		log.Printf("failed to get free port with err %v\n", err)
 		return nil, err
-	} else {
-		log.Printf("container using port %d\n", port)
 	}
+
 	portStr := strconv.Itoa(port)
 	internalAppPort := map[docker.Port]struct{}{"8080/tcp": {}}
 	portBindings := map[docker.Port][]docker.PortBinding{
@@ -100,24 +63,13 @@ func (cm *ContainerManager) createContainer(img string, args []string) (*docker.
 			Name: img,
 		},
 	)
-
 	if err != nil {
-		log.Printf("container %s failed to create with err: %v\n", img, err)
+		// commented because at large scale, this isnt always an error, and therefor shouldnt polute logs
+		// log.Printf("container %s failed to create with err: %v\n", img, err)
 		return nil, err
 	}
+
 	return container, nil
-}
-
-func (cm *ContainerManager) removeContainer(container *docker.Container) error {
-	// remove container
-	if err := cm.client.RemoveContainer(docker.RemoveContainerOptions{
-		ID: container.ID,
-	}); err != nil {
-		log.Println("failed to rm container with err %v", err)
-		return err
-	}
-
-	return nil
 }
 
 func (cm *ContainerManager) pullAndCreate(img string, args []string) (container *docker.Container, err error) {
@@ -127,7 +79,7 @@ func (cm *ContainerManager) pullAndCreate(img string, args []string) (container 
 			return nil, err
 		}
 
-		if err = cm.pullContainer(img); err != nil {
+		if err = cm.DockerPull(img); err != nil {
 			log.Printf("img pull failed with: %v\n", err)
 			return nil, err
 		} else {
@@ -142,43 +94,33 @@ func (cm *ContainerManager) pullAndCreate(img string, args []string) (container 
 	return container, nil
 }
 
-// Returned as "port"
-func (cm *ContainerManager) getLambdaPort(containerID string) (port string, err error) {
-	container, err := cm.dockerInspect(containerID)
-	if err != nil {
-		return "", err
-	}
-
-	// TODO: Will we ever need to look at other ip's than the first?
-	port = container.HostConfig.PortBindings["8080/tcp"][0].HostPort
-
-	// on unix systems, port is given as "unix:port", this removes the prefix
-	if strings.HasPrefix(port, "unix") {
-		port = strings.Split(port, ":")[1]
-	}
-	return port, nil
-}
-
+// Will ensure given image is running
 // returns the port of the runnning container
 func (cm *ContainerManager) DockerMakeReady(img string) (port string, err error) {
 	// TODO: decide on one default lambda entry path
 	container, err := cm.pullAndCreate(img, []string{"/go/bin/app"})
 	if err != nil {
-		if strings.Contains(err.Error(), "container already exists") {
-			// make sure container is up
-			containerID := img
-			container, err = cm.dockerInspect(containerID)
-			if err != nil {
+		if !strings.Contains(err.Error(), "container already exists") {
+			// Unhandled error
+			return "", err
+		}
+
+		// make sure container is up
+		cid := img
+		container, err = cm.dockerInspect(cid)
+		if err != nil {
+			return "", err
+		}
+		if container.State.Paused {
+			// unpause
+			if err = cm.DockerUnpause(container.ID); err != nil {
 				return "", err
 			}
-			if container.State.Paused {
-				// unpause
-				if err = cm.DockerUnpause(container.ID); err != nil {
-					return "", err
-				}
+		} else if !container.State.Running {
+			// restart a stopped/crashed container
+			if err = cm.DockerRestart(container.ID); err != nil {
+				return "", err
 			}
-		} else {
-			return "", err
 		}
 	} else {
 		if err = cm.dockerStart(container); err != nil {
@@ -193,6 +135,15 @@ func (cm *ContainerManager) DockerMakeReady(img string) (port string, err error)
 	return port, nil
 }
 
+func (cm *ContainerManager) DockerRestart(img string) (err error) {
+	// Restart container after (0) seconds
+	if err = cm.client.RestartContainer(img, 0); err != nil {
+		log.Printf("failed to pause container with error %v\n", err)
+		return err
+	}
+	return nil
+}
+
 func (cm *ContainerManager) DockerPause(img string) (err error) {
 	if err = cm.client.PauseContainer(img); err != nil {
 		log.Printf("failed to pause container with error %v\n", err)
@@ -201,18 +152,34 @@ func (cm *ContainerManager) DockerPause(img string) (err error) {
 	return nil
 }
 
-func (cm *ContainerManager) DockerUnpause(containerID string) (err error) {
-	if err = cm.client.UnpauseContainer(containerID); err != nil {
-		log.Printf("failed to unpause container %s with err %v\n", containerID, err)
+func (cm *ContainerManager) DockerUnpause(cid string) (err error) {
+	if err = cm.client.UnpauseContainer(cid); err != nil {
+		log.Printf("failed to unpause container %s with err %v\n", cid, err)
 		return err
 	}
 	return nil
 }
 
-func (cm *ContainerManager) dockerInspect(containerID string) (container *docker.Container, err error) {
-	container, err = cm.client.InspectContainer(containerID)
+func (cm *ContainerManager) DockerPull(img string) error {
+	err := cm.client.PullImage(
+		docker.PullImageOptions{
+			Repository: img,
+			Registry:   cm.registryName,
+		},
+		docker.AuthConfiguration{},
+	)
+
 	if err != nil {
-		log.Printf("failed to inspect %s with err %v\n", containerID, err)
+		log.Printf("failed to pull container: %v\n", err)
+		return err
+	}
+	return nil
+}
+
+func (cm *ContainerManager) dockerInspect(cid string) (container *docker.Container, err error) {
+	container, err = cm.client.InspectContainer(cid)
+	if err != nil {
+		log.Printf("failed to inspect %s with err %v\n", cid, err)
 		return nil, err
 	}
 	return container, nil
@@ -224,4 +191,52 @@ func (cm *ContainerManager) dockerStart(container *docker.Container) (err error)
 		return err
 	}
 	return nil
+}
+
+func (cm *ContainerManager) dockerRemove(container *docker.Container) (err error) {
+	if err = cm.client.RemoveContainer(docker.RemoveContainerOptions{
+		ID: container.ID,
+	}); err != nil {
+		log.Println("failed to rm container with err %v", err)
+		return err
+	}
+
+	return nil
+}
+
+// Returned as "port"
+func (cm *ContainerManager) getLambdaPort(cid string) (port string, err error) {
+	container, err := cm.dockerInspect(cid)
+	if err != nil {
+		return "", err
+	}
+
+	// TODO: Will we ever need to look at other ip's than the first?
+	port = container.HostConfig.PortBindings["8080/tcp"][0].HostPort
+
+	// on unix systems, port is given as "unix:port", this removes the prefix
+	if strings.HasPrefix(port, "unix") {
+		port = strings.Split(port, ":")[1]
+	}
+	return port, nil
+}
+
+// TODO: This is NOT thread safe
+// 		  Someone can steal the port between when we return,
+//		  And when it is used.
+func getFreePort() (port int, err error) {
+	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
+	if err != nil {
+		log.Println("os failed to give us good port with err %v", err)
+		return -1, err
+	}
+
+	l, err := net.ListenTCP("tcp", addr)
+	if err != nil {
+		log.Println("failed to listen, someone stole our port! %v", err)
+		return -1, err
+	}
+	defer l.Close()
+	port = l.Addr().(*net.TCPAddr).Port
+	return port, nil
 }
