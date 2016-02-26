@@ -1,6 +1,10 @@
-### start-timer
+### pausable-start-timer
 
-Takes a timestamp upon lambda startup. Writes the timestamp to logs. Exits.
+Runs a server on 8080
+
+Accepts connections at /runLambda/start-timer
+
+Takes a timestamp upon lambda startup. Returns the timestamp
 
 // TODO: format time
 Example Log:
