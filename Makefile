@@ -1,10 +1,11 @@
 GOPATH:=$(PWD)
 WORKER:=worker
-WORKER_SRC:=$(cd worker $$ ls *.go)
+WORKER_SRC:=worker/*.go
 
 SERVER_BIN:=worker/worker
 CLIENT_BIN:=worker/prof/client/client
 
+.PHONY: $(WORKER)
 worker : $(WORKER_SRC)
 	cd hack && ./build.sh
 	mkdir -p bin
