@@ -29,51 +29,8 @@ func NewContainerManager(host string, port string) (manager *ContainerManager) {
 	return manager
 }
 
-func (cm *ContainerManager) createContainer(img string, args []string) (*docker.Container, error) {
-	// Create a new container with img and args
-	// Specifically give container name of img, so we can lookup later
-
-	// A note on ports
-	// lambdas ALWAYS use port 8080 internally, they are given a random port externally
-	// the client will later lookup the host port by finding which host port,
-	// for a specific container is bound to 8080
-	port, err := getFreePort()
-	if err != nil {
-		log.Printf("failed to get free port with err %v\n", err)
-		return nil, err
-	}
-
-	portStr := strconv.Itoa(port)
-	internalAppPort := map[docker.Port]struct{}{"8080/tcp": {}}
-	portBindings := map[docker.Port][]docker.PortBinding{
-		"8080/tcp": {{HostIP: "0.0.0.0", HostPort: portStr}}}
-	container, err := cm.client.CreateContainer(
-		docker.CreateContainerOptions{
-			Config: &docker.Config{
-				Cmd:          args,
-				AttachStdout: true,
-				AttachStderr: true,
-				Image:        img,
-				ExposedPorts: internalAppPort,
-			},
-			HostConfig: &docker.HostConfig{
-				PortBindings:    portBindings,
-				PublishAllPorts: true,
-			},
-			Name: img,
-		},
-	)
-	if err != nil {
-		// commented because at large scale, this isnt always an error, and therefor shouldnt polute logs
-		// log.Printf("container %s failed to create with err: %v\n", img, err)
-		return nil, err
-	}
-
-	return container, nil
-}
-
 func (cm *ContainerManager) pullAndCreate(img string, args []string) (container *docker.Container, err error) {
-	if container, err = cm.createContainer(img, args); err != nil {
+	if container, err = cm.dockerCreate(img, args); err != nil {
 		// if the container already exists, don't pull, let client decide how to handle
 		if strings.Contains(err.Error(), "already exists") {
 			return nil, err
@@ -83,7 +40,7 @@ func (cm *ContainerManager) pullAndCreate(img string, args []string) (container 
 			log.Printf("img pull failed with: %v\n", err)
 			return nil, err
 		} else {
-			container, err = cm.createContainer(img, args)
+			container, err = cm.dockerCreate(img, args)
 			if err != nil {
 				log.Printf("failed to create container %s after good pull, with error: %v\n", img, err)
 				return nil, err
@@ -174,6 +131,75 @@ func (cm *ContainerManager) DockerPull(img string) error {
 		return err
 	}
 	return nil
+}
+
+// Combines a docker create with a docker start
+func (cm *ContainerManager) DockerRun(img string, args []string, waitAndRemove bool) (err error) {
+	c, err := cm.dockerCreate(img, args)
+	if err != nil {
+		return err
+	}
+	err = cm.dockerStart(c)
+	if err != nil {
+		return err
+	}
+
+	if waitAndRemove {
+		// img == cid in our create container
+		_, err = cm.client.WaitContainer(img)
+		if err != nil {
+			log.Printf("failed to wait on container %s with err %v\n", img, err)
+			return err
+		}
+		err = cm.dockerRemove(c)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (cm *ContainerManager) dockerCreate(img string, args []string) (*docker.Container, error) {
+	// Create a new container with img and args
+	// Specifically give container name of img, so we can lookup later
+
+	// A note on ports
+	// lambdas ALWAYS use port 8080 internally, they are given a random port externally
+	// the client will later lookup the host port by finding which host port,
+	// for a specific container is bound to 8080
+	port, err := getFreePort()
+	if err != nil {
+		log.Printf("failed to get free port with err %v\n", err)
+		return nil, err
+	}
+
+	portStr := strconv.Itoa(port)
+	internalAppPort := map[docker.Port]struct{}{"8080/tcp": {}}
+	portBindings := map[docker.Port][]docker.PortBinding{
+		"8080/tcp": {{HostIP: "0.0.0.0", HostPort: portStr}}}
+	container, err := cm.client.CreateContainer(
+		docker.CreateContainerOptions{
+			Config: &docker.Config{
+				Cmd:          args,
+				AttachStdout: true,
+				AttachStderr: true,
+				Image:        img,
+				ExposedPorts: internalAppPort,
+			},
+			HostConfig: &docker.HostConfig{
+				PortBindings:    portBindings,
+				PublishAllPorts: true,
+			},
+			Name: img,
+		},
+	)
+	if err != nil {
+		// commented because at large scale, this isnt always an error, and therefor shouldnt polute logs
+		// log.Printf("container %s failed to create with err: %v\n", img, err)
+		return nil, err
+	}
+
+	return container, nil
 }
 
 func (cm *ContainerManager) dockerInspect(cid string) (container *docker.Container, err error) {
