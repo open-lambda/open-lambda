@@ -9,6 +9,11 @@ import (
 	"strings"
 )
 
+type Server struct {
+	registry_host string
+	registry_port string
+}
+
 // Parses request URL into its "/" delimated components
 func getUrlComponents(r *http.Request) []string {
 	path := r.URL.Path
@@ -27,7 +32,10 @@ func getUrlComponents(r *http.Request) []string {
 	return components
 }
 
-func RunLambda(w http.ResponseWriter, r *http.Request) {
+// RunLambda expects POST requests like this:
+//
+// curl -X POST localhost:8080/runLambda/<lambda-name> -d '{}'
+func (s *Server)RunLambda(w http.ResponseWriter, r *http.Request) {
 	urlParts := getUrlComponents(r)
 	if len(urlParts) < 2 {
 		http.Error(w, "Name of image to run required", http.StatusBadRequest)
@@ -43,7 +51,7 @@ func RunLambda(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("running lambda img \"%s\"\n", img)
 
-	cm := NewContainerManager(os.Args[1], os.Args[2])
+	cm := NewContainerManager(s.registry_host, s.registry_port)
 
 	// we'll ask docker manager to ensure the img is ready to accept requests
 	// This will either start the img, or unpause a started one
@@ -76,6 +84,11 @@ func main() {
 		log.Fatalf("usage: %s <registry hostname> <registry port>\n", os.Args[0])
 	}
 
-	http.HandleFunc("/runLambda/", RunLambda)
+	server := Server{
+		registry_host: os.Args[1],
+		registry_port: os.Args[2],
+	}
+
+	http.HandleFunc("/runLambda/", server.RunLambda)
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
