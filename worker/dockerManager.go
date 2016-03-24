@@ -18,7 +18,7 @@ type ContainerManager struct {
 func NewContainerManager(host string, port string) (manager *ContainerManager) {
 	manager = new(ContainerManager)
 
-	// NOTE: This requires that users haev pre-configured the environement a docker daemon
+	// NOTE: This requires that users have pre-configured the environement a docker daemon
 	if c, err := docker.NewClientFromEnv(); err != nil {
 		log.Fatal("failed to get docker client: ", err)
 	} else {
@@ -32,7 +32,7 @@ func NewContainerManager(host string, port string) (manager *ContainerManager) {
 func (cm *ContainerManager) pullAndCreate(img string, args []string) (container *docker.Container, err error) {
 	if container, err = cm.dockerCreate(img, args); err != nil {
 		// if the container already exists, don't pull, let client decide how to handle
-		if strings.Contains(err.Error(), "already exists") {
+		if err == docker.ErrContainerAlreadyExists {
 			return nil, err
 		}
 
@@ -55,9 +55,9 @@ func (cm *ContainerManager) pullAndCreate(img string, args []string) (container 
 // returns the port of the runnning container
 func (cm *ContainerManager) DockerMakeReady(img string) (port string, err error) {
 	// TODO: decide on one default lambda entry path
-	container, err := cm.pullAndCreate(img, []string{"/go/bin/app"})
+	container, err := cm.pullAndCreate(img, []string{})
 	if err != nil {
-		if !strings.Contains(err.Error(), "container already exists") {
+		if err != docker.ErrContainerAlreadyExists {
 			// Unhandled error
 			return "", err
 		}
@@ -95,7 +95,7 @@ func (cm *ContainerManager) DockerMakeReady(img string) (port string, err error)
 func (cm *ContainerManager) DockerRestart(img string) (err error) {
 	// Restart container after (0) seconds
 	if err = cm.client.RestartContainer(img, 0); err != nil {
-		log.Printf("failed to pause container with error %v\n", err)
+		log.Printf("failed to restart container with error %v\n", err)
 		return err
 	}
 	return nil
@@ -247,10 +247,15 @@ func (cm *ContainerManager) getLambdaPort(cid string) (port string, err error) {
 	return port, nil
 }
 
+func (cm *ContainerManager) Client() *docker.Client {
+	return cm.client
+}
+
 // TODO: This is NOT thread safe
 // 		  Someone can steal the port between when we return,
 //		  And when it is used.
 func getFreePort() (port int, err error) {
+	// TODO(tyler): what if the daemon is not local?
 	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
 	if err != nil {
 		log.Println("os failed to give us good port with err %v", err)

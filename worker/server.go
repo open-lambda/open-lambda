@@ -10,26 +10,49 @@ import (
 )
 
 type Server struct {
+	manager *ContainerManager
+
+	// config options
 	registry_host string
 	registry_port string
+	docker_host string
 }
 
-// Parses request URL into its "/" delimated components
-func getUrlComponents(r *http.Request) []string {
-	path := r.URL.Path
+func NewServer(
+	registry_host string,
+	registry_port string,
+	docker_host string) (*Server, error) {
 
-	// trim prefix
-	if strings.HasPrefix(path, "/") {
-		path = path[1:]
+	// registry
+	if registry_host == "" {
+		registry_host = "localhost"
+		log.Printf("Using %v for registry_host", registry_host)
 	}
 
-	// trim trailing "/"
-	if strings.HasSuffix(path, "/") {
-		path = path[:len(path)-1]
+	if registry_port == "" {
+		registry_port = "5000"
+		log.Printf("Using %v for registry_port", registry_port)
 	}
 
-	components := strings.Split(path, "/")
-	return components
+	// daemon
+	cm := NewContainerManager(registry_host, registry_port)
+	if docker_host == "" {
+		if strings.HasPrefix(cm.Client().Endpoint(), "unix://") {
+			docker_host = "localhost"
+			log.Printf("Using %v for docker_host", docker_host)
+		} else {
+			return nil, fmt.Errorf("please specify a docker host!")
+		}
+	}
+
+	// create server
+	server := &Server{
+		registry_host: registry_host,
+		registry_port: registry_port,
+		docker_host: docker_host,
+		manager: cm,
+	}
+	return server, nil
 }
 
 // RunLambda expects POST requests like this:
@@ -49,25 +72,16 @@ func (s *Server)RunLambda(w http.ResponseWriter, r *http.Request) {
 	if i >= 0 {
 		img = img[:i-1]
 	}
-	log.Printf("running lambda img \"%s\"\n", img)
-
-	cm := NewContainerManager(s.registry_host, s.registry_port)
 
 	// we'll ask docker manager to ensure the img is ready to accept requests
 	// This will either start the img, or unpause a started one
-	port, err := cm.DockerMakeReady(img)
+	port, err := s.manager.DockerMakeReady(img)
 	if err != nil {
 		http.Error(w, "Failed to startup desired lambda", http.StatusInternalServerError)
 		return
 	}
 
-	hostAddress, ok := os.LookupEnv("OL_DOCKER_HOST")
-	if !ok {
-		http.Error(w, "failed to lookup docker host (Did you set OL_DOCKER_HOST?)\n", http.StatusInternalServerError)
-		return
-	}
-
-	host := fmt.Sprintf("%s:%s", hostAddress, port)
+	host := fmt.Sprintf("%s:%s", s.docker_host, port)
 
 	log.Printf("proxying request to http://%s\n", host)
 	director := func(req *http.Request) {
@@ -79,14 +93,37 @@ func (s *Server)RunLambda(w http.ResponseWriter, r *http.Request) {
 	proxy.ServeHTTP(w, r)
 }
 
+
+// Parses request URL into its "/" delimated components
+func getUrlComponents(r *http.Request) []string {
+	path := r.URL.Path
+
+	// trim prefix
+	if strings.HasPrefix(path, "/") {
+		path = path[1:]
+	}
+
+	// trim trailing "/"
+	if strings.HasSuffix(path, "/") {
+		path = path[:len(path)-1]
+	}
+
+	components := strings.Split(path, "/")
+	return components
+}
+
 func main() {
 	if len(os.Args) < 3 {
 		log.Fatalf("usage: %s <registry hostname> <registry port>\n", os.Args[0])
 	}
 
-	server := Server{
-		registry_host: os.Args[1],
-		registry_port: os.Args[2],
+	docker_host, ok := os.LookupEnv("OL_DOCKER_HOST")
+	if !ok {
+		docker_host = ""
+	}
+	server,err := NewServer(os.Args[1], os.Args[2], docker_host)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	http.HandleFunc("/runLambda/", server.RunLambda)
