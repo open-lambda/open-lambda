@@ -2,6 +2,7 @@ package main
 
 import (
 	"testing"
+	"io/ioutil"
 	"log"
 	"fmt"
 	"strings"
@@ -9,25 +10,48 @@ import (
 	"net/http"
 )
 
-func RunServer() {
+func RunServer() *Server {
 	server,err := NewServer("", "", "")
 	if err != nil {
 		log.Fatal(err)
 	}
-	http.HandleFunc("/runLambda/", server.RunLambda)
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	go func() {
+		http.HandleFunc("/runLambda/", server.RunLambda)
+		log.Fatal(http.ListenAndServe(":8080", nil))
+	}()
+	return server
 }
 
-func TestPull(t *testing.T) {
-	go RunServer()
-
-	time.Sleep(1000 * time.Millisecond) // TODO
-
+func testReq() error {
 	url := "http://localhost:8080/runLambda/hello"
 	req, err := http.NewRequest("POST", url, strings.NewReader("{}"))
+	if err != nil {
+		return err
+	}
 	req.Header.Set("Content-Type", "application/json")
 	client := &http.Client{}
 	resp, err := client.Do(req)
-	// TODO: check resp
-	fmt.Printf("RESP: %v, %v\n", resp, err)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("RESP: %v\n", string(body))
+	return nil
+}
+
+func TestPull(t *testing.T) {
+	server := RunServer()
+	server.Manager().Dump()
+
+	for i := 1; i <= 10; i++ {
+		err := testReq()
+		if err != nil {
+			log.Printf("Error: %v\n", err)
+		}
+		time.Sleep(time.Second)
+	}
 }

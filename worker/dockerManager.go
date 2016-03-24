@@ -247,6 +247,27 @@ func (cm *ContainerManager) getLambdaPort(cid string) (port string, err error) {
 	return port, nil
 }
 
+func (cm *ContainerManager) Dump() {
+	opts := docker.ListContainersOptions{All:true}
+	containers, err := cm.client.ListContainers(opts)
+	if err != nil {
+		log.Fatal("Could not get container list")
+	}
+	log.Printf("=====================================\n")
+	for idx,info := range containers {
+		container, err := cm.dockerInspect(info.ID)
+		if err != nil {
+			log.Fatal("Could get container")
+		}
+
+		log.Printf("CONTAINER %d: %v, %v, %v\n", idx,
+			info.Image,
+			container.ID[:8],
+			container.State.String())
+	}
+	log.Printf("=====================================\n")
+}
+
 func (cm *ContainerManager) Client() *docker.Client {
 	return cm.client
 }

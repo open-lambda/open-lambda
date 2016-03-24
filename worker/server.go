@@ -55,6 +55,10 @@ func NewServer(
 	return server, nil
 }
 
+func (s *Server)Manager() *ContainerManager {
+	return s.manager
+}
+
 // RunLambda expects POST requests like this:
 //
 // curl -X POST localhost:8080/runLambda/<lambda-name> -d '{}'
