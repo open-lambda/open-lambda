@@ -48,12 +48,19 @@ func NewServer(
 	// daemon
 	cm := NewContainerManager(registry_host, registry_port)
 	if docker_host == "" {
-		if strings.HasPrefix(cm.Client().Endpoint(), "unix://") {
+		endpoint := cm.Client().Endpoint()
+		local := "unix://"
+		nonLocal := "https://"
+		if strings.HasPrefix(endpoint, local) {
 			docker_host = "localhost"
-			log.Printf("Using '%v' for docker_host", docker_host)
+		} else if strings.HasPrefix(endpoint, nonLocal) {
+			start := strings.Index(endpoint, nonLocal) + len([]rune(nonLocal))
+			end := strings.LastIndex(endpoint, ":")
+			docker_host = endpoint[start:end]
 		} else {
 			return nil, fmt.Errorf("please specify a docker host!")
 		}
+		log.Printf("Using '%v' for docker_host", docker_host)
 	}
 
 	// create server
