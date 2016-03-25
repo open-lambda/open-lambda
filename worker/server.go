@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
-	"net/http/httputil"
 	"os"
 	"strings"
+	"time"
 )
 
 type Server struct {
@@ -18,6 +20,15 @@ type Server struct {
 	docker_host string
 }
 
+type httpErr struct {
+	msg string
+	code int
+}
+
+func newHttpErr(msg string, code int) *httpErr {
+	return  &httpErr{msg:msg, code:code}
+}
+
 func NewServer(
 	registry_host string,
 	registry_port string,
@@ -26,12 +37,12 @@ func NewServer(
 	// registry
 	if registry_host == "" {
 		registry_host = "localhost"
-		log.Printf("Using %v for registry_host", registry_host)
+		log.Printf("Using '%v' for registry_host", registry_host)
 	}
 
 	if registry_port == "" {
 		registry_port = "5000"
-		log.Printf("Using %v for registry_port", registry_port)
+		log.Printf("Using '%v' for registry_port", registry_port)
 	}
 
 	// daemon
@@ -39,7 +50,7 @@ func NewServer(
 	if docker_host == "" {
 		if strings.HasPrefix(cm.Client().Endpoint(), "unix://") {
 			docker_host = "localhost"
-			log.Printf("Using %v for docker_host", docker_host)
+			log.Printf("Using '%v' for docker_host", docker_host)
 		} else {
 			return nil, fmt.Errorf("please specify a docker host!")
 		}
@@ -59,14 +70,12 @@ func (s *Server)Manager() *ContainerManager {
 	return s.manager
 }
 
-// RunLambda expects POST requests like this:
-//
-// curl -X POST localhost:8080/runLambda/<lambda-name> -d '{}'
-func (s *Server)RunLambda(w http.ResponseWriter, r *http.Request) {
+func (s *Server)RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 	urlParts := getUrlComponents(r)
 	if len(urlParts) < 2 {
-		http.Error(w, "Name of image to run required", http.StatusBadRequest)
-		return
+		return newHttpErr(
+			"Name of image to run required",
+			http.StatusBadRequest)
 	}
 
 	// components represent runLambda[0]/<name_of_container>[1]/<extra_things>...
@@ -81,20 +90,80 @@ func (s *Server)RunLambda(w http.ResponseWriter, r *http.Request) {
 	// This will either start the img, or unpause a started one
 	port, err := s.manager.DockerMakeReady(img)
 	if err != nil {
-		http.Error(w, "Failed to startup desired lambda", http.StatusInternalServerError)
-		return
+		return newHttpErr(
+			err.Error(),
+			http.StatusInternalServerError)
 	}
 
+	// read incoming request
+	rbody := []byte{}
+	if r.Body != nil {
+		defer r.Body.Close()
+		rbody, err = ioutil.ReadAll(r.Body)
+		if err != nil {
+			return newHttpErr(
+				err.Error(),
+				http.StatusInternalServerError)
+		}
+	}
+
+	// forward request to container.  r and w are the server
+	// request and response respectively.  r2 and w2 are the
+	// container request and response respectively.
 	host := fmt.Sprintf("%s:%s", s.docker_host, port)
+	url := fmt.Sprintf("http://%s%s", host, r.URL.Path)
+	log.Printf("proxying request to %s\n", url)
 
-	log.Printf("proxying request to http://%s\n", host)
-	director := func(req *http.Request) {
-		req = r
-		req.URL.Scheme = "http"
-		req.URL.Host = host
+	// TODO(tyler): some sort of smarter backoff.  Or, a better
+	// way to detect a started container.
+	for i:=0; i<10; i++ {
+		if i>0 {
+			log.Printf("retry request\n")
+			time.Sleep(time.Duration(i*10)*time.Millisecond)
+		}
+
+		r2, err := http.NewRequest("POST", url, bytes.NewReader(rbody))
+		if err != nil {
+			return newHttpErr(
+				err.Error(),
+				http.StatusInternalServerError)
+		}
+		r2.Header.Set("Content-Type", r.Header.Get("Content-Type"))
+		client := &http.Client{}
+		w2, err := client.Do(r2)
+		if err != nil {
+			log.Printf("request to container failed with %v\n", err)
+			continue
+		}
+		defer w2.Body.Close()
+		wbody, err := ioutil.ReadAll(w2.Body)
+		if err != nil {
+			return newHttpErr(
+				err.Error(),
+				http.StatusInternalServerError)
+		}
+
+		// forward response
+		w.WriteHeader(w2.StatusCode)
+		if _,err := w.Write(wbody); err != nil {
+			return newHttpErr(
+				err.Error(),
+				http.StatusInternalServerError)
+		}
+		return nil
 	}
-	proxy := &httputil.ReverseProxy{Director: director}
-	proxy.ServeHTTP(w, r)
+
+	return nil
+}
+
+// RunLambda expects POST requests like this:
+//
+// curl -X POST localhost:8080/runLambda/<lambda-name> -d '{}'
+func (s *Server)RunLambda(w http.ResponseWriter, r *http.Request) {
+	if err := s.RunLambdaErr(w, r); err != nil {
+		log.Printf("could not handle request: %s\n", err.msg)
+		http.Error(w, err.msg, err.code)
+	}
 }
 
 

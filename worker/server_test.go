@@ -1,13 +1,12 @@
 package main
 
 import (
-	"testing"
+	"fmt"
 	"io/ioutil"
 	"log"
-	"fmt"
-	"strings"
-	"time"
 	"net/http"
+	"strings"
+	"testing"
 )
 
 func RunServer() *Server {
@@ -50,8 +49,7 @@ func TestPull(t *testing.T) {
 	for i := 1; i <= 10; i++ {
 		err := testReq()
 		if err != nil {
-			log.Printf("Error: %v\n", err)
+			t.Error(err)
 		}
-		time.Sleep(time.Second)
 	}
 }
