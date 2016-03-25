@@ -223,7 +223,7 @@ func (cm *ContainerManager) dockerRemove(container *docker.Container) (err error
 	if err = cm.client.RemoveContainer(docker.RemoveContainerOptions{
 		ID: container.ID,
 	}); err != nil {
-		log.Println("failed to rm container with err %v", err)
+		log.Printf("failed to rm container with err %v", err)
 		return err
 	}
 
@@ -248,13 +248,13 @@ func (cm *ContainerManager) getLambdaPort(cid string) (port string, err error) {
 }
 
 func (cm *ContainerManager) Dump() {
-	opts := docker.ListContainersOptions{All:true}
+	opts := docker.ListContainersOptions{All: true}
 	containers, err := cm.client.ListContainers(opts)
 	if err != nil {
 		log.Fatal("Could not get container list")
 	}
 	log.Printf("=====================================\n")
-	for idx,info := range containers {
+	for idx, info := range containers {
 		container, err := cm.dockerInspect(info.ID)
 		if err != nil {
 			log.Fatal("Could get container")
@@ -279,13 +279,13 @@ func getFreePort() (port int, err error) {
 	// TODO(tyler): what if the daemon is not local?
 	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
 	if err != nil {
-		log.Println("os failed to give us good port with err %v", err)
+		log.Printf("os failed to give us good port with err %v", err)
 		return -1, err
 	}
 
 	l, err := net.ListenTCP("tcp", addr)
 	if err != nil {
-		log.Println("failed to listen, someone stole our port! %v", err)
+		log.Printf("failed to listen, someone stole our port! %v", err)
 		return -1, err
 	}
 	defer l.Close()

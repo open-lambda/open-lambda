@@ -17,16 +17,16 @@ type Server struct {
 	// config options
 	registry_host string
 	registry_port string
-	docker_host string
+	docker_host   string
 }
 
 type httpErr struct {
-	msg string
+	msg  string
 	code int
 }
 
 func newHttpErr(msg string, code int) *httpErr {
-	return  &httpErr{msg:msg, code:code}
+	return &httpErr{msg: msg, code: code}
 }
 
 func NewServer(
@@ -60,17 +60,17 @@ func NewServer(
 	server := &Server{
 		registry_host: registry_host,
 		registry_port: registry_port,
-		docker_host: docker_host,
-		manager: cm,
+		docker_host:   docker_host,
+		manager:       cm,
 	}
 	return server, nil
 }
 
-func (s *Server)Manager() *ContainerManager {
+func (s *Server) Manager() *ContainerManager {
 	return s.manager
 }
 
-func (s *Server)RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
+func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 	urlParts := getUrlComponents(r)
 	if len(urlParts) < 2 {
 		return newHttpErr(
@@ -116,10 +116,10 @@ func (s *Server)RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 
 	// TODO(tyler): some sort of smarter backoff.  Or, a better
 	// way to detect a started container.
-	for i:=0; i<10; i++ {
-		if i>0 {
+	for i := 0; i < 10; i++ {
+		if i > 0 {
 			log.Printf("retry request\n")
-			time.Sleep(time.Duration(i*10)*time.Millisecond)
+			time.Sleep(time.Duration(i*10) * time.Millisecond)
 		}
 
 		r2, err := http.NewRequest("POST", url, bytes.NewReader(rbody))
@@ -145,7 +145,7 @@ func (s *Server)RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 
 		// forward response
 		w.WriteHeader(w2.StatusCode)
-		if _,err := w.Write(wbody); err != nil {
+		if _, err := w.Write(wbody); err != nil {
 			return newHttpErr(
 				err.Error(),
 				http.StatusInternalServerError)
@@ -159,13 +159,12 @@ func (s *Server)RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 // RunLambda expects POST requests like this:
 //
 // curl -X POST localhost:8080/runLambda/<lambda-name> -d '{}'
-func (s *Server)RunLambda(w http.ResponseWriter, r *http.Request) {
+func (s *Server) RunLambda(w http.ResponseWriter, r *http.Request) {
 	if err := s.RunLambdaErr(w, r); err != nil {
 		log.Printf("could not handle request: %s\n", err.msg)
 		http.Error(w, err.msg, err.code)
 	}
 }
-
 
 // Parses request URL into its "/" delimated components
 func getUrlComponents(r *http.Request) []string {
@@ -194,7 +193,7 @@ func main() {
 	if !ok {
 		docker_host = ""
 	}
-	server,err := NewServer(os.Args[1], os.Args[2], docker_host)
+	server, err := NewServer(os.Args[1], os.Args[2], docker_host)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -10,7 +10,7 @@ import (
 )
 
 func RunServer() *Server {
-	server,err := NewServer("", "", "")
+	server, err := NewServer("", "", "")
 	if err != nil {
 		log.Fatal(err)
 	}
