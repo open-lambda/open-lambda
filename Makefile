@@ -18,3 +18,8 @@ clean :
 	rm $(SERVER_BIN)
 	rm $(CLIENT_BIN)
 
+.PHONY: node
+node : worker
+	mkdir -p node/bin
+	cp bin/worker node/bin/worker
+	docker build -t lambda-node node

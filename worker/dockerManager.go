@@ -120,16 +120,25 @@ func (cm *ContainerManager) DockerUnpause(cid string) (err error) {
 func (cm *ContainerManager) DockerPull(img string) error {
 	err := cm.client.PullImage(
 		docker.PullImageOptions{
-			Repository: img,
+			Repository: cm.registryName + "/" + img,
 			Registry:   cm.registryName,
+			Tag:        "latest",
 		},
 		docker.AuthConfiguration{},
 	)
-
 	if err != nil {
 		log.Printf("failed to pull container: %v\n", err)
 		return err
 	}
+
+	err = cm.client.TagImage(
+		cm.registryName+"/"+img,
+		docker.TagImageOptions{Repo: img, Force: true})
+	if err != nil {
+		log.Printf("failed to re-tag container: %v\n", err)
+		return err
+	}
+
 	return nil
 }
 
