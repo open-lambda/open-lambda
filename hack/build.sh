@@ -22,3 +22,6 @@ export GOPATH=${WD}/${GOPATH}
 cd ${GOPATH}/${LAMBDA_PACKAGE}/${WORKER} && go get && go build
 cd ${GOPATH}/${LAMBDA_PACKAGE}/${CLIENT} && go get && go build
 
+# setup commit hooks
+cd ${WD}
+ln -s ${WD}/pre-commit ${WD}/../.git/hooks/ || true
