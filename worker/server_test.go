@@ -22,7 +22,7 @@ func RunServer() *Server {
 }
 
 func testReq() error {
-	url := "http://localhost:8080/runLambda/hello"
+	url := "http://localhost:8080/runLambda/pausable-start-timer"
 	req, err := http.NewRequest("POST", url, strings.NewReader("{}"))
 	if err != nil {
 		return err

@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"net"
 	"strconv"
 	"strings"
 
@@ -11,7 +10,8 @@ import (
 )
 
 type ContainerManager struct {
-	client       *docker.Client
+	client *docker.Client
+
 	registryName string
 }
 
@@ -173,15 +173,12 @@ func (cm *ContainerManager) dockerCreate(img string, args []string) (*docker.Con
 	// Specifically give container name of img, so we can lookup later
 
 	// A note on ports
-	// lambdas ALWAYS use port 8080 internally, they are given a random port externally
+	// lambdas ALWAYS use port 8080 internally, they are given a free random port externally
 	// the client will later lookup the host port by finding which host port,
 	// for a specific container is bound to 8080
-	port, err := getFreePort()
-	if err != nil {
-		log.Printf("failed to get free port with err %v\n", err)
-		return nil, err
-	}
-
+	//
+	// Using port 0 will force the OS to choose a free port for us.
+	port := 0
 	portStr := strconv.Itoa(port)
 	internalAppPort := map[docker.Port]struct{}{"8080/tcp": {}}
 	portBindings := map[docker.Port][]docker.PortBinding{
@@ -247,7 +244,7 @@ func (cm *ContainerManager) getLambdaPort(cid string) (port string, err error) {
 	}
 
 	// TODO: Will we ever need to look at other ip's than the first?
-	port = container.HostConfig.PortBindings["8080/tcp"][0].HostPort
+	port = container.NetworkSettings.Ports["8080/tcp"][0].HostPort
 
 	// on unix systems, port is given as "unix:port", this removes the prefix
 	if strings.HasPrefix(port, "unix") {
@@ -279,25 +276,4 @@ func (cm *ContainerManager) Dump() {
 
 func (cm *ContainerManager) Client() *docker.Client {
 	return cm.client
-}
-
-// TODO: This is NOT thread safe
-// 		  Someone can steal the port between when we return,
-//		  And when it is used.
-func getFreePort() (port int, err error) {
-	// TODO(tyler): what if the daemon is not local?
-	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
-	if err != nil {
-		log.Printf("os failed to give us good port with err %v", err)
-		return -1, err
-	}
-
-	l, err := net.ListenTCP("tcp", addr)
-	if err != nil {
-		log.Printf("failed to listen, someone stole our port! %v", err)
-		return -1, err
-	}
-	defer l.Close()
-	port = l.Addr().(*net.TCPAddr).Port
-	return port, nil
 }
