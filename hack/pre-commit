@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 if [[ $(cd worker && gofmt -d .) ]]; then
 	cat <<\EOF
 Error:  format check failed
