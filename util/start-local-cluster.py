@@ -1,38 +1,43 @@
 #!/usr/bin/env python
-import os, sys, subprocess, json
+import os, sys, subprocess, json, argparse
 from common import *
-
-def run(cmd):
-    print 'EXEC ' + cmd
-    return subprocess.check_output(cmd, shell=True)
-
-def run_js(cmd):
-    return json.loads(run(cmd))
 
 def container_ip(cid):
     inspect = run_js('docker inspect '+cid)
     return only(inspect)['NetworkSettings']['IPAddress']
 
-def registry_port(cid):
+def lookup_registry_port(cid):
     inspect = run_js('docker inspect '+cid)
-    return only(inspect)['NetworkSettings']['Ports']['5000/tcp']['HostPort']
+    return only(only(inspect)['NetworkSettings']['Ports']['5000/tcp'])['HostPort']
 
 def main():
+    parser = argparse.ArgumentParser(description='number of workers')
+    parser.add_argument('--workers', '-w', default='1')
+    args = parser.parse_args()
+
     cluster_dir = os.path.join(SCRIPT_DIR, 'cluster')
-    if not os.path.exists(cluster_dir):
-        os.mkdir(cluster_dir)
+    if os.path.exists(cluster_dir):
+        print 'Cluster already running!'
+        sys.exit(1)
+    os.mkdir(cluster_dir)
 
     # start registry
     c = 'docker run -d -p 5000 registry:2'
     cid = run(c).strip()
     registry_ip = container_ip(cid)
+    registry_port = lookup_registry_port(cid)
     config = {'cid': cid,
               'ip': registry_ip,
-              'host_port': registry_port(cid)}
-    config_path = os.path.join(cluster_dir, 'registry.json' % i)
+              'host_port': registry_port}
+    config_path = os.path.join(cluster_dir, 'registry.json')
+    wrjs(config_path, config)
+    print 'started registry ' + registry_ip + ':5000 (or localhost:' + registry_port + ')'
+    print '='*40
 
     # start workers
-    for i in range(1):
+    workers = []
+    assert(int(args.workers) > 0)
+    for i in range(int(args.workers)):
         config = {'registry_host': registry_ip,
                   'registry_port': '5000'}
         config_path = os.path.join(cluster_dir, 'worker-%d.json' % i)
@@ -47,9 +52,15 @@ def main():
         config['ip'] = container_ip(cid)
         wrjs(config_path, config, atomic=True)
 
-        # TODO: run('docker kill '+cid)
-
         info_path = os.path.join(cluster_dir, 'worker-info-%d.json' % i)
+        print 'started worker ' + config['ip']
+        workers.append(config)
+    print '='*40
+    print 'Push images to OpenLambda registry as follows (or similar):'
+    print 'docker tag hello localhost:%s/hello; docker push localhost:%s/hello' % (registry_port, registry_port)
+    print '='*40
+    print 'Send requests as follows (or similar):'
+    print "curl -X POST %s:8080/runLambda/hello -d '{}'" % workers[-1]['ip']
 
 if __name__ == '__main__':
     main()

@@ -6,6 +6,15 @@ import collections, os, sys, math, json, subprocess
 
 ddict = collections.defaultdict
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
+TRACE_RUN = False
+
+def run(cmd):
+    if TRACE_RUN:
+        print 'EXEC ' + cmd
+    return subprocess.check_output(cmd, shell=True)
+
+def run_js(cmd):
+    return json.loads(run(cmd))
 
 def panic():
     assert(0)
