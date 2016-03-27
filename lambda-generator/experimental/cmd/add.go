@@ -15,10 +15,13 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
+)
+
+var (
+	location string
 )
 
 // addCmd represents the add command
@@ -29,11 +32,19 @@ var addCmd = &cobra.Command{
 Example (using effe frontend):
 	` + os.Args[0] + ` add my/new/handler
 Would create directories 'my/' and 'my/new/' along with file 'handler.go'
-'handler.go' would contain an effe template frontend.
-	`,
+'handler.go' would contain an effe template frontend.`,
+	PreRun: func(cmd *cobra.Command, args []string) {
+		// require a location
+		if len(args) < 1 {
+			cmd.Help()
+			os.Exit(1)
+		}
+		location = args[0]
+	},
 	Run: func(cmd *cobra.Command, args []string) {
-		// TODO: Work your own magic here
-		fmt.Println("add called")
+		if fe != nil {
+			fe.AddLambda(location)
+		}
 	},
 }
 

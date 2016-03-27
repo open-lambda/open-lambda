@@ -52,7 +52,6 @@ var initCmd = &cobra.Command{
 			os.Exit(1)
 		}
 		fmt.Printf("Initializing OpenLambda at\n\t%s\n", wd)
-		fmt.Printf("\tUsing %s frontend\n", fe.FrontEndName())
 		initManagementDir()
 	},
 }

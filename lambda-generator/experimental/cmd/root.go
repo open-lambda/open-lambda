@@ -17,6 +17,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -67,14 +68,58 @@ func init() {
 	// when this action is called directly.
 	RootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 
+	// find the .openlambda folder or warn user if not found
+	olDir := findOlDir()
+	if olDir == "" {
+		fmt.Printf("WARNING: no .openlambda directory found (Have you called %s init yet?)\n\n", os.Args[0])
+		return
+	}
+	fmt.Printf("using .openlambda at %s\n", olDir)
+
 	// Here we select the frontend, based on user configs found from above
 	switch frontendStr {
 	case "effe":
-		fe = effe.NewFrontEnd()
+		fe = effe.NewFrontEnd(olDir)
 	default:
 		fmt.Println("frontend %s is unsupported\n")
 		os.Exit(1)
 	}
+}
+
+func findOlDir() string {
+	wd, err := os.Getwd()
+	if err != nil {
+		fmt.Printf("failed to get wd with err %v\n", err)
+		os.Exit(1)
+	}
+
+	curr, err := filepath.Abs(wd)
+	if err != nil {
+		fmt.Printf("failed to get create abs path with err %v\n", err)
+		os.Exit(1)
+	}
+
+	// Walk one dir up each loop
+	// TODO "/" is ommitted. Do we want this?
+	for ; curr != "/"; curr = filepath.Dir(curr) {
+		dir := filepath.Join(curr, ".openlambda")
+		info, err := os.Stat(dir)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				fmt.Printf("failed to get info on %s with err %v\n", dir, err)
+				os.Exit(1)
+			}
+			continue
+		}
+		if !info.IsDir() {
+			fmt.Printf("warning: non-directory .openlambda at %s\n", dir)
+			continue
+		}
+		// found dir
+		return dir
+	}
+	// caller will log
+	return ""
 }
 
 // initConfig reads in config file and ENV variables if set.
