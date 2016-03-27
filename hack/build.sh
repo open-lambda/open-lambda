@@ -24,4 +24,4 @@ cd ${GOPATH}/${LAMBDA_PACKAGE}/${CLIENT} && go get && go build
 
 # setup commit hooks
 cd ${WD}
-ln -s ${WD}/pre-commit ${WD}/../.git/hooks/ || true
+ln -s ${WD}/pre-commit ${WD}/../.git/hooks/ >/dev/null 2>/dev/null || true
