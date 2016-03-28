@@ -58,7 +58,7 @@ func init() {
 	// will be global for your application.
 
 	RootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.experimental.yaml)")
-	RootCmd.PersistentFlags().StringVar(&frontendStr, "frontend", "effe", "OpenLambda frontend framework (default is effe)")
+	RootCmd.PersistentFlags().StringVar(&frontendStr, "frontend", "effe", "OpenLambda frontend framework")
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
 	RootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
