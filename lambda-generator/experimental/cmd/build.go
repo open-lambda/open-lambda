@@ -17,7 +17,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
 )
@@ -44,73 +43,20 @@ Any combination of files and directories may be built.
 			args = []string{root}
 		}
 
-		// validate all args
-		// Place each in either map of files, or map of directories
-		// Map is used for easy duplicate checking (bool unused)
-		buildFiles := make(map[string]bool)
-		buildDirs := make(map[string]bool)
-		valid := true
-		for _, path := range args {
-			info, err := os.Stat(path)
-			if err != nil {
-				fmt.Printf("path '%s' seems funny (err: %v)\n", err)
-				valid = false
-				continue
-			}
-
-			if info.IsDir() {
-				isDupAdd(buildDirs, path)
-			} else {
-				isDupAdd(buildFiles, path)
-			}
-		}
-		if !valid {
+		lambdas, err := FindLambdas(args)
+		if err != nil {
+			// Bad arguments
 			return
 		}
 
-		// Add any files in specified directories
-		for path, _ := range buildDirs {
-			for _, l := range getIndividualLambdas(path) {
-				isDupAdd(buildFiles, l)
-			}
-		}
-
 		// build each
-		for path, _ := range buildFiles {
+		for _, path := range lambdas {
 			// If we wanted polyglot projects, we need to detect lambda type here
 			// Same goes for detecting support files vs lambdas...
 			fmt.Printf("building '%s'\n", path)
 			fe.BuildLambda(path)
 		}
 	},
-}
-
-func getIndividualLambdas(dir string) (lambdas []string) {
-	lambdas = make([]string, 0)
-	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			fmt.Printf("file %s caused error %v\n", path, err)
-			return nil
-		}
-
-		if !info.IsDir() {
-			lambdas = append(lambdas, path)
-		}
-		return nil
-	})
-	return lambdas
-}
-
-// Warn if duplicate, otherwise add
-// Return true if dup
-func isDupAdd(m map[string]bool, key string) bool {
-	if _, dup := m[key]; dup {
-		fmt.Printf("WARN: '%s' specified twice, will only be built once\n", key)
-		return true
-	}
-	// value unused (false)
-	m[key] = false
-	return false
 }
 
 func init() {
