@@ -13,18 +13,21 @@ import (
 )
 
 const (
-	templateUrl = "https://raw.githubusercontent.com/siscia/effe/master/logic/logic.go"
-	effeUrl     = "https://raw.githubusercontent.com/siscia/effe/master/effe.go"
+	templateUrl   = "https://raw.githubusercontent.com/siscia/effe/master/logic/logic.go"
+	effeUrl       = "https://raw.githubusercontent.com/siscia/effe/master/effe.go"
+	dockerfileUrl = "https://raw.githubusercontent.com/docker-library/golang/ce284e14cdee73fbaa8fb680011a812f272eae2e/1.6/onbuild/Dockerfile"
 
-	templateName = "logic.go.template"
-	effeName     = "effe.go.template"
+	templateName   = "logic.go.template"
+	effeName       = "effe.go.template"
+	dockerfileName = "Dockerfile"
 )
 
 type FrontEnd struct {
 	*frontends.BaseFrontEnd
 
-	templatePath string
-	effePath     string
+	templatePath   string
+	effePath       string
+	dockerfilePath string
 }
 
 func NewFrontEnd(olDir string) *FrontEnd {
@@ -35,6 +38,7 @@ func NewFrontEnd(olDir string) *FrontEnd {
 		},
 		filepath.Join(olDir, "frontends", "effe", templateName),
 		filepath.Join(olDir, "frontends", "effe", effeName),
+		filepath.Join(olDir, "frontends", "effe", dockerfileName),
 	}
 }
 
@@ -88,6 +92,11 @@ func (fe *FrontEnd) AddLambda(location string) {
 	}
 }
 
+func (fe *FrontEnd) BuildLambda(location string) {
+	// TODO
+}
+
+// initializes effe resources
 func (fe *FrontEnd) doInit() {
 	effeDir := filepath.Join(fe.OlDir, "frontends", "effe")
 	info, err := os.Stat(effeDir)
@@ -119,8 +128,14 @@ func (fe *FrontEnd) getTemplates() {
 	if !exist(fe.effePath) {
 		download(effeUrl, fe.effePath)
 	}
+
+	// docker
+	if !exist(fe.dockerfilePath) {
+		download(dockerfileUrl, fe.dockerfilePath)
+	}
 }
 
+// checks if file exists
 func exist(file string) bool {
 	_, err := os.Stat(file)
 	if err != nil {
@@ -129,6 +144,7 @@ func exist(file string) bool {
 	return true
 }
 
+// download util function
 func download(url, fileName string) {
 	fmt.Printf("downloading %s\n", fileName)
 	f, err := os.Create(fileName)
