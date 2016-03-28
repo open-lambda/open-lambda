@@ -9,4 +9,9 @@ type FrontEnd interface {
 
 	// Builds lambda at <path>
 	BuildLambda(path string)
+
+	// Returns the ID for a given lambda path
+	// Id's are used to identify an individual lambda throughout the system
+	// Docker image tags are an example use of Id's
+	GetId(path string) (string, error)
 }

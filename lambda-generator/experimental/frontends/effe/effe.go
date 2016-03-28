@@ -76,6 +76,17 @@ func (fe *FrontEnd) AddLambda(location string) {
 	copyFile(fe.templatePath, dstPath)
 }
 
+// Create id from path name relative to project dir, delimiters replaced with '-'
+func (fe *FrontEnd) GetId(path string) (id string, err error) {
+	path, err = filepath.Rel(fe.ProjectDir, path)
+	if err != nil {
+		return "", err
+	}
+	id = strings.Replace(path, string(os.PathSeparator), "-", -1)
+
+	return id, nil
+}
+
 // Creates a temp wd, and moves to it
 // Copies lambda, effe, and dockerfile in
 // Does a docker build
@@ -109,13 +120,11 @@ func (fe *FrontEnd) BuildLambda(path string) {
 	copyFile(path, "logic/logic.go")
 	copyFile(fe.dockerfilePath, "Dockerfile")
 
-	// tag docker image with path name, delimiters replaced with '-'
-	tag, err := filepath.Rel(fe.ProjectDir, path)
+	tag, err := fe.GetId(path)
 	if err != nil {
-		fmt.Printf("Failed to make rel path %s with err %v\n", path, err)
+		fmt.Printf("failed to create id for lambda %s\n", path)
 		os.Exit(1)
 	}
-	tag = strings.Replace(tag, string(os.PathSeparator), "-", -1)
 
 	out, err := exec.Command("docker", "build", "-t", tag, ".").Output()
 	if err != nil {
