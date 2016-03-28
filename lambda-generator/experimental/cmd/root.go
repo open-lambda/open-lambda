@@ -15,6 +15,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -29,6 +30,8 @@ var (
 	cfgFile     string
 	frontendStr string
 	fe          frontends.FrontEnd
+
+	olDir string
 )
 
 // This represents the base command when called without any subcommands
@@ -64,7 +67,7 @@ func init() {
 	RootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 
 	// find the .openlambda folder or warn user if not found
-	olDir := findOlDir()
+	olDir = findOlDir()
 	if olDir == "" {
 		fmt.Printf("WARNING: no .openlambda directory found (Have you called %s init yet?)\n\n", os.Args[0])
 		return
@@ -122,12 +125,45 @@ func initConfig() {
 		viper.SetConfigFile(cfgFile)
 	}
 
-	viper.SetConfigName(".experimental") // name of config file (without extension)
-	viper.AddConfigPath("$HOME")         // adding home directory as first search path
-	viper.AutomaticEnv()                 // read in environment variables that match
+	viper.SetConfigName("lambdagen") // name of config file (without extension)
+	viper.AddConfigPath(olDir)
+	viper.AutomaticEnv() // read in environment variables that match
 
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {
-		fmt.Println("Using config file:", viper.ConfigFileUsed())
+		// fmt.Println("Using config file:", viper.ConfigFileUsed())
+	} else {
+		err := writeConfig(filepath.Join(olDir, "lambdagen.json"), Config{
+			DefaultFrontend: "effe",
+			RegistryHost:    "localhost",
+			RegistryPort:    "5000",
+		})
+		if err != nil {
+			fmt.Printf("failed to write defailt config with err %v\n", err)
+		}
 	}
+}
+
+// This is kinda gross down here
+type Config struct {
+	DefaultFrontend string
+
+	RegistryHost string
+	RegistryPort string
+}
+
+func writeConfig(path string, conf Config) error {
+	b, err := json.MarshalIndent(conf, "", "    ")
+	if err != nil {
+		return err
+	}
+
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	f.WriteString(string(b))
+	return nil
 }
