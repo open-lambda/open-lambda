@@ -34,8 +34,9 @@ type FrontEnd struct {
 func NewFrontEnd(olDir string) *FrontEnd {
 	return &FrontEnd{
 		&frontends.BaseFrontEnd{
-			Name:  "effe",
-			OlDir: olDir,
+			Name:       "effe",
+			OlDir:      olDir,
+			ProjectDir: filepath.Dir(olDir),
 		},
 		filepath.Join(olDir, "frontends", "effe", templateName),
 		filepath.Join(olDir, "frontends", "effe", effeName),
@@ -109,7 +110,7 @@ func (fe *FrontEnd) BuildLambda(path string) {
 	copyFile(fe.dockerfilePath, "Dockerfile")
 
 	// tag docker image with path name, delimiters replaced with '-'
-	tag, err := filepath.Rel(filepath.Dir(fe.OlDir), path)
+	tag, err := filepath.Rel(fe.ProjectDir, path)
 	if err != nil {
 		fmt.Printf("Failed to make rel path %s with err %v\n", path, err)
 		os.Exit(1)
