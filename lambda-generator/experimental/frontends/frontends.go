@@ -6,4 +6,7 @@ type FrontEnd interface {
 
 	// Adds a template lambda at <location>
 	AddLambda(location string)
+
+	// Builds lambda at <path>
+	BuildLambda(path string)
 }

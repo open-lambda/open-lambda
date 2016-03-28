@@ -3,11 +3,13 @@ package effe
 import (
 	"fmt"
 	"io"
-	"log"
+	"math/rand"
 	"net/http"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
+	"strings"
 
 	"github.com/tylerharter/open-lambda/lambda-generator/experimental/frontends"
 )
@@ -15,7 +17,7 @@ import (
 const (
 	templateUrl   = "https://raw.githubusercontent.com/siscia/effe/master/logic/logic.go"
 	effeUrl       = "https://raw.githubusercontent.com/siscia/effe/master/effe.go"
-	dockerfileUrl = "https://raw.githubusercontent.com/docker-library/golang/ce284e14cdee73fbaa8fb680011a812f272eae2e/1.6/onbuild/Dockerfile"
+	dockerfileUrl = "https://gist.githubusercontent.com/phonyphonecall/2fcb0e59dd9462d656b5/raw/bf9fc0716fbe689346c7e5dbde042058568c2fbe/Dockerfile"
 
 	templateName   = "logic.go.template"
 	effeName       = "effe.go.template"
@@ -24,7 +26,6 @@ const (
 
 type FrontEnd struct {
 	*frontends.BaseFrontEnd
-
 	templatePath   string
 	effePath       string
 	dockerfilePath string
@@ -70,30 +71,75 @@ func (fe *FrontEnd) AddLambda(location string) {
 		}
 	}
 
-	//TODO: lay down template, copy contents
-	filePath := path.Join(dir, handlerName+".go")
-	f, err := os.Create(filePath)
+	dstPath := path.Join(dir, handlerName+".go")
+	copyFile(fe.templatePath, dstPath)
+}
+
+// Creates a temp wd, and moves to it
+// Copies lambda, effe, and dockerfile in
+// Does a docker build
+func (fe *FrontEnd) BuildLambda(path string) {
+	fe.doInit()
+	path, err := filepath.Abs(path)
 	if err != nil {
-		fmt.Printf("failed to create file %s with err %v", filePath, err)
+		fmt.Printf("could not create abs from path %s\n", path)
 		os.Exit(1)
 	}
-	defer f.Close()
 
-	template, err := os.Open(fe.templatePath)
-	if err != nil {
-		fmt.Printf("failed to open file %s with err %v", fe.templatePath, err)
+	newDir, oldDir := fe.initScratchWd()
+	defer func() {
+		// change to old dir
+		if err := os.Chdir(oldDir); err != nil {
+			fmt.Printf("failed to chdir back to %s\n", oldDir)
+			os.Exit(1)
+		}
+		// Remove scratch dir
+		if err := os.RemoveAll(newDir); err != nil {
+			fmt.Printf("failed to remove %s with err %v\n", newDir, err)
+			os.Exit(1)
+		}
+	}()
+
+	copyFile(fe.effePath, "effe.go")
+	if err = os.Mkdir("logic", 0777); err != nil {
+		fmt.Printf("cannot make package dir 'logic' with err %v", err)
 		os.Exit(1)
 	}
-	defer template.Close()
+	copyFile(path, "logic/logic.go")
+	copyFile(fe.dockerfilePath, "Dockerfile")
 
-	if _, err = io.Copy(f, template); err != nil {
-		fmt.Printf("failed to copy template to %s with err %v\n", filePath, err)
+	// tag docker image with path name, delimiters replaced with '-'
+	tag, err := filepath.Rel(filepath.Dir(fe.OlDir), path)
+	if err != nil {
+		fmt.Printf("Failed to make rel path %s with err %v\n", path, err)
 		os.Exit(1)
+	}
+	tag = strings.Replace(tag, string(os.PathSeparator), "-", -1)
+
+	out, err := exec.Command("docker", "build", "-t", tag, ".").Output()
+	if err != nil {
+		fmt.Printf("failed to build docker img %s with output %s and err %v\n", tag, out, err)
 	}
 }
 
-func (fe *FrontEnd) BuildLambda(location string) {
-	// TODO
+// Create new wd, change to it, and return old
+func (fe *FrontEnd) initScratchWd() (newDir, oldDir string) {
+	newDir = filepath.Join(fe.OlDir, "frontends", "effe", getRandomName())
+	oldDir, err := os.Getwd()
+	if err != nil {
+		fmt.Printf("failed to get wd with err %v\n", err)
+		os.Exit(1)
+	}
+
+	if err = os.Mkdir(newDir, 0777); err != nil {
+		fmt.Printf("failed to mkdir %s with err %v\n", newDir, err)
+		os.Exit(1)
+	}
+
+	if err = os.Chdir(newDir); err != nil {
+		fmt.Printf("failed to chdir to %s with err %v\n", newDir, err)
+	}
+	return newDir, oldDir
 }
 
 // initializes effe resources
@@ -109,7 +155,7 @@ func (fe *FrontEnd) doInit() {
 		}
 	} else {
 		if !info.IsDir() {
-			log.Printf("%s is file but expected directory!\n", effeDir)
+			fmt.Printf("%s is file but expected directory!\n", effeDir)
 			os.Exit(1)
 		}
 	}
@@ -117,7 +163,7 @@ func (fe *FrontEnd) doInit() {
 	fe.getTemplates()
 }
 
-// Downloads template to file
+// Downloads templates to files
 func (fe *FrontEnd) getTemplates() {
 	// template
 	if !exist(fe.templatePath) {
@@ -135,16 +181,31 @@ func (fe *FrontEnd) getTemplates() {
 	}
 }
 
-// checks if file exists
-func exist(file string) bool {
-	_, err := os.Stat(file)
+// Utils
+
+// Copies src into new file dst
+func copyFile(src, dst string) {
+	dstFile, err := os.Create(dst)
 	if err != nil {
-		return false
+		fmt.Printf("failed to create file %s with err %v", dst, err)
+		os.Exit(1)
 	}
-	return true
+	defer dstFile.Close()
+
+	srcFile, err := os.Open(src)
+	if err != nil {
+		fmt.Printf("failed to open file %s with err %v", src, err)
+		os.Exit(1)
+	}
+	defer srcFile.Close()
+
+	if _, err = io.Copy(dstFile, srcFile); err != nil {
+		fmt.Printf("failed to copy file to %s with err %v\n", dst, err)
+		os.Exit(1)
+	}
 }
 
-// download util function
+// download loads file at url to fileName
 func download(url, fileName string) {
 	fmt.Printf("downloading %s\n", fileName)
 	f, err := os.Create(fileName)
@@ -165,4 +226,23 @@ func download(url, fileName string) {
 	if err != nil {
 		fmt.Printf("failed to copy response to template file with err %v\n", err)
 	}
+}
+
+// checks if file exists
+func exist(file string) bool {
+	_, err := os.Stat(file)
+	if err != nil {
+		return false
+	}
+	return true
+}
+
+func getRandomName() string {
+	var letters = []rune("abcdefghijklmnopqrstuvwxyz")
+	length := 10
+	buff := make([]rune, length)
+	for i := range buff {
+		buff[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(buff)
 }
