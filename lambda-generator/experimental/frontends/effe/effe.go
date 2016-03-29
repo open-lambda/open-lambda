@@ -9,7 +9,6 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
-	"strings"
 
 	"github.com/tylerharter/open-lambda/lambda-generator/experimental/frontends"
 )
@@ -74,17 +73,6 @@ func (fe *FrontEnd) AddLambda(location string) {
 
 	dstPath := path.Join(dir, handlerName+".go")
 	copyFile(fe.templatePath, dstPath)
-}
-
-// Create id from path name relative to project dir, delimiters replaced with '-'
-func (fe *FrontEnd) GetId(path string) (id string, err error) {
-	path, err = filepath.Rel(fe.ProjectDir, path)
-	if err != nil {
-		return "", err
-	}
-	id = strings.Replace(path, string(os.PathSeparator), "-", -1)
-
-	return id, nil
 }
 
 // Creates a temp wd, and moves to it
