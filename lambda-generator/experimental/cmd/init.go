@@ -29,9 +29,9 @@ var (
 var initCmd = &cobra.Command{
 	Use:   "init <target>",
 	Short: "Initialize a template OpenLambda project in <target> directory",
-	Long: `Creates a .openlambda/ directory containing default project configurations.
-
-	Places a "Hello world!" lambda at the root level of the proect.`,
+	Long: `
+Creates a .openlambda/ directory containing default project configurations.
+`,
 	PreRun: func(cmd *cobra.Command, args []string) {
 		// require a target init directory
 		if len(args) < 1 {
