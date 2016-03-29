@@ -19,6 +19,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/tylerharter/open-lambda/lambda-generator/experimental/cmd/util"
 )
 
 // buildCmd represents the build command
@@ -43,7 +44,7 @@ Any combination of files and directories may be built.
 			args = []string{root}
 		}
 
-		lambdas, err := FindLambdas(args)
+		lambdas, err := util.FindLambdas(args)
 		if err != nil {
 			// Bad arguments
 			return

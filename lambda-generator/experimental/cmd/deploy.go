@@ -22,6 +22,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"github.com/tylerharter/open-lambda/lambda-generator/experimental/cmd/util"
 )
 
 // deployCmd represents the deploy command
@@ -44,7 +45,7 @@ The docker registry may be configured in '.openlambda/lambdagen.json'
 			args = []string{root}
 		}
 
-		lambdas, err := FindLambdas(args)
+		lambdas, err := util.FindLambdas(args)
 		if err != nil {
 			// Bad arguments
 			return
