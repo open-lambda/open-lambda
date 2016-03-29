@@ -39,6 +39,13 @@ def main():
         time.sleep(1)
     assert(os.path.exists(PID_FILE))
 
+    # start rethinkdb
+    c = 'rethinkdb --bind all --http-port 8081'
+    join = config.get('rethinkdb_join', None)
+    if join != None:
+        c += ' --join ' + join
+    cmd(c + ' &')
+
     # start lambda worker
     c = ('/open-lambda/bin/worker <REGISTRY_HOST> <REGISTRY_PORT>')
     cmd(c

@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-import os, sys, subprocess, json, argparse
+import os, sys, subprocess, json, argparse, time
+import rethinkdb as r
 from common import *
 
 def container_ip(cid):
@@ -26,10 +27,10 @@ def main():
     cid = run(c).strip()
     registry_ip = container_ip(cid)
     registry_port = lookup_registry_port(cid)
+    config_path = os.path.join(cluster_dir, 'registry.json')
     config = {'cid': cid,
               'ip': registry_ip,
               'host_port': registry_port}
-    config_path = os.path.join(cluster_dir, 'registry.json')
     wrjs(config_path, config)
     print 'started registry ' + registry_ip + ':5000 (or localhost:' + registry_port + ')'
     print '='*40
@@ -38,9 +39,12 @@ def main():
     workers = []
     assert(int(args.workers) > 0)
     for i in range(int(args.workers)):
+        config_path = os.path.join(cluster_dir, 'worker-%d.json' % i)
         config = {'registry_host': registry_ip,
                   'registry_port': '5000'}
-        config_path = os.path.join(cluster_dir, 'worker-%d.json' % i)
+        if i > 0:
+            config['rethinkdb_join'] = workers[0]['ip']+':29015'
+
         wrjs(config_path, config)
         volumes = [('/sys/fs/cgroup', '/sys/fs/cgroup'),
                    (config_path, '/open-lambda-config.js')]
@@ -55,6 +59,21 @@ def main():
         info_path = os.path.join(cluster_dir, 'worker-info-%d.json' % i)
         print 'started worker ' + config['ip']
         workers.append(config)
+
+    # wait for rethinkdb
+    print '='*40
+    for i in range(10):
+        try:
+            r.connect(workers[0]['ip'], 28015).repl()
+            up = len(list(r.db('rethinkdb').table('server_status').run()))
+            if up < len(workers):
+                print '%d of %d rethinkdb instances are ready' % (up, len(workers))
+        except:
+            print 'waiting for first rethinkdb instance to come up'
+        time.sleep(1)
+    print 'all rethinkdb instances are ready'
+
+    # print directions
     print '='*40
     print 'Push images to OpenLambda registry as follows (or similar):'
     print 'docker tag hello localhost:%s/hello; docker push localhost:%s/hello' % (registry_port, registry_port)
