@@ -4,6 +4,7 @@ WORKER_SRC:=worker/*.go
 
 SERVER_BIN:=worker/worker
 CLIENT_BIN:=worker/prof/client/client
+NODE_BIN:=node/bin
 
 .PHONY: $(WORKER)
 worker : $(WORKER_SRC)
@@ -15,6 +16,7 @@ worker : $(WORKER_SRC)
 clean :
 	rm -rf bin
 	rm -rf hack/.gopath
+	rm -rf $(NODE_BIN)
 	rm $(SERVER_BIN)
 	rm $(CLIENT_BIN)
 
