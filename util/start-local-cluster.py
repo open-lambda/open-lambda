@@ -76,10 +76,10 @@ def main():
     # print directions
     print '='*40
     print 'Push images to OpenLambda registry as follows (or similar):'
-    print 'docker tag hello localhost:%s/hello; docker push localhost:%s/hello' % (registry_port, registry_port)
+    print 'IMG=hello && docker tag $IMG localhost:%s/$IMG; docker push localhost:%s/$IMG' % (registry_port, registry_port)
     print '='*40
     print 'Send requests as follows (or similar):'
-    print "curl -X POST %s:8080/runLambda/hello -d '{}'" % workers[-1]['ip']
+    print "IMG=hello && curl -X POST %s:8080/runLambda/$IMG -d '{}'" % workers[-1]['ip']
 
 if __name__ == '__main__':
     main()
