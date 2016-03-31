@@ -22,6 +22,7 @@ import (
 )
 
 // Given some paths of files and directories, returns the lambda paths
+// Ignores .openlambda directories
 func FindLambdas(paths []string) (files []string, err error) {
 	// validate all args
 	// Place each in either map of files, or map of directories
@@ -72,6 +73,10 @@ func getIndividualLambdas(dir string) (lambdas []string) {
 		if err != nil {
 			fmt.Printf("file %s caused error %v\n", path, err)
 			return nil
+		}
+		// Ignore .openlambda directories
+		if info.IsDir() && info.Name() == ".openlambda" {
+			return filepath.SkipDir
 		}
 
 		if !info.IsDir() {
