@@ -151,6 +151,13 @@ func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 		}
 
 		// forward response
+		// TODO(tyler): origins should be configurable
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods",
+			"GET, PUT, POST, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers",
+			"Content-Type, Content-Range, Content-Disposition, Content-Description")
+
 		w.WriteHeader(w2.StatusCode)
 		if _, err := w.Write(wbody); err != nil {
 			return newHttpErr(
