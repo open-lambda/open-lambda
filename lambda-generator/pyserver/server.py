@@ -23,27 +23,38 @@ def get_default_gateway_linux():
 class ServerHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kvargs):
         # gateway will refer to the Docker host on which this container runs
-        self.db_handle = rethinkdb.connect(get_default_gateway_linux(), 28015)
+        self.db_conn = rethinkdb.connect(get_default_gateway_linux(), 28015)
 
         # do_POST is called by SimpleHTTPRequestHandler.__init__, so
         # do this after any other init
         SimpleHTTPServer.SimpleHTTPRequestHandler.__init__(self, *args, **kvargs)
+
+    def send_result(self, result):
+        self.send_response(200) # OK
+        self.send_header('Content-type', 'text/json')
+        self.end_headers()
+        self.wfile.write(json.dumps(result))
 
     def do_GET(self):
         pass
 
     def do_POST(self):
         length = int(self.headers.getheader('content-length'))
-        event = json.loads(self.rfile.read(length))
+        # parse req
+        data = self.rfile.read(length)
         try :
-            result = lambda_func.handler(self.db_handle, event)
+            event = json.loads(data)
+        except:
+            self.send_result('could not parse ' + str(data))
+            return
+        # handle req
+        try :
+            result = lambda_func.handler(self.db_conn, event)
         except Exception:
-            result = traceback.format_exc()
-
-        self.send_response(200) # OK
-        self.send_header('Content-type', 'text/html')
-        self.end_headers()
-        self.wfile.write(json.dumps(result))
+            self.send_result(traceback.format_exc())
+            return
+        # respond
+        self.send_result(result)
 
 def main():
     httpd = SocketServer.TCPServer(("", PORT), ServerHandler)
