@@ -44,7 +44,6 @@ func testReq() error {
 
 func TestPull(t *testing.T) {
 	server := RunServer()
-	server.Manager().Dump()
 
 	for i := 1; i <= 10; i++ {
 		err := testReq()
@@ -52,4 +51,6 @@ func TestPull(t *testing.T) {
 			t.Error(err)
 		}
 	}
+	server.Manager().Dump()
+	server.Dump()
 }

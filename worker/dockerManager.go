@@ -7,12 +7,23 @@ import (
 	"strings"
 
 	docker "github.com/fsouza/go-dockerclient"
+	"github.com/phonyphonecall/turnip"
 )
 
 type ContainerManager struct {
 	client *docker.Client
 
 	registryName string
+
+	// timers
+	createTimer  *turnip.Turnip
+	pauseTimer   *turnip.Turnip
+	unpauseTimer *turnip.Turnip
+	pullTimer    *turnip.Turnip
+	restartTimer *turnip.Turnip
+	inspectTimer *turnip.Turnip
+	startTimer   *turnip.Turnip
+	removeTimer  *turnip.Turnip
 }
 
 func NewContainerManager(host string, port string) (manager *ContainerManager) {
@@ -26,6 +37,7 @@ func NewContainerManager(host string, port string) (manager *ContainerManager) {
 	}
 
 	manager.registryName = fmt.Sprintf("%s:%s", host, port)
+	manager.initTimers()
 	return manager
 }
 
@@ -102,22 +114,29 @@ func (cm *ContainerManager) DockerRestart(img string) (err error) {
 }
 
 func (cm *ContainerManager) DockerPause(img string) (err error) {
+	cm.pauseTimer.Start()
 	if err = cm.client.PauseContainer(img); err != nil {
 		log.Printf("failed to pause container with error %v\n", err)
 		return err
 	}
+	cm.pauseTimer.Stop()
+
 	return nil
 }
 
 func (cm *ContainerManager) DockerUnpause(cid string) (err error) {
+	cm.unpauseTimer.Start()
 	if err = cm.client.UnpauseContainer(cid); err != nil {
 		log.Printf("failed to unpause container %s with err %v\n", cid, err)
 		return err
 	}
+	cm.unpauseTimer.Stop()
+
 	return nil
 }
 
 func (cm *ContainerManager) DockerPull(img string) error {
+	cm.pullTimer.Start()
 	err := cm.client.PullImage(
 		docker.PullImageOptions{
 			Repository: cm.registryName + "/" + img,
@@ -126,6 +145,8 @@ func (cm *ContainerManager) DockerPull(img string) error {
 		},
 		docker.AuthConfiguration{},
 	)
+	cm.pullTimer.Stop()
+
 	if err != nil {
 		log.Printf("failed to pull container: %v\n", err)
 		return err
@@ -178,6 +199,7 @@ func (cm *ContainerManager) dockerCreate(img string, args []string) (*docker.Con
 	// for a specific container is bound to 8080
 	//
 	// Using port 0 will force the OS to choose a free port for us.
+	cm.createTimer.Start()
 	port := 0
 	portStr := strconv.Itoa(port)
 	internalAppPort := map[docker.Port]struct{}{"8080/tcp": {}}
@@ -199,6 +221,8 @@ func (cm *ContainerManager) dockerCreate(img string, args []string) (*docker.Con
 			Name: img,
 		},
 	)
+	cm.createTimer.Stop()
+
 	if err != nil {
 		// commented because at large scale, this isnt always an error, and therefor shouldnt polute logs
 		// log.Printf("container %s failed to create with err: %v\n", img, err)
@@ -209,19 +233,25 @@ func (cm *ContainerManager) dockerCreate(img string, args []string) (*docker.Con
 }
 
 func (cm *ContainerManager) dockerInspect(cid string) (container *docker.Container, err error) {
+	cm.inspectTimer.Start()
 	container, err = cm.client.InspectContainer(cid)
 	if err != nil {
 		log.Printf("failed to inspect %s with err %v\n", cid, err)
 		return nil, err
 	}
+	cm.inspectTimer.Stop()
+
 	return container, nil
 }
 
 func (cm *ContainerManager) dockerStart(container *docker.Container) (err error) {
+	cm.startTimer.Start()
 	if err = cm.client.StartContainer(container.ID, container.HostConfig); err != nil {
 		log.Printf("failed to start container with err %v\n", err)
 		return err
 	}
+	cm.startTimer.Stop()
+
 	return nil
 }
 
@@ -272,8 +302,30 @@ func (cm *ContainerManager) Dump() {
 			container.State.String())
 	}
 	log.Printf("=====================================\n")
+	log.Println()
+	log.Printf("====== Docker Operation Stats =======\n")
+	log.Printf("\tcreate: \t%fms\n", cm.createTimer.AverageMs())
+	log.Printf("\tinspect: \t%fms\n", cm.inspectTimer.AverageMs())
+	log.Printf("\tpause: \t\t%fms\n", cm.pauseTimer.AverageMs())
+	log.Printf("\tpull: \t\t%fms\n", cm.pullTimer.AverageMs())
+	log.Printf("\tremove: \t%fms\n", cm.removeTimer.AverageMs())
+	log.Printf("\trestart: \t%fms\n", cm.restartTimer.AverageMs())
+	log.Printf("\trestart: \t%fms\n", cm.restartTimer.AverageMs())
+	log.Printf("\tunpause: \t%fms\n", cm.unpauseTimer.AverageMs())
+	log.Printf("=====================================\n")
 }
 
 func (cm *ContainerManager) Client() *docker.Client {
 	return cm.client
+}
+
+func (cm *ContainerManager) initTimers() {
+	cm.createTimer = turnip.NewTurnip()
+	cm.inspectTimer = turnip.NewTurnip()
+	cm.pauseTimer = turnip.NewTurnip()
+	cm.pullTimer = turnip.NewTurnip()
+	cm.removeTimer = turnip.NewTurnip()
+	cm.restartTimer = turnip.NewTurnip()
+	cm.startTimer = turnip.NewTurnip()
+	cm.unpauseTimer = turnip.NewTurnip()
 }

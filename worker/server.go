@@ -9,6 +9,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/phonyphonecall/turnip"
 )
 
 type Server struct {
@@ -18,6 +20,8 @@ type Server struct {
 	registry_host string
 	registry_port string
 	docker_host   string
+
+	lambdaTimer *turnip.Turnip
 }
 
 type httpErr struct {
@@ -69,7 +73,9 @@ func NewServer(
 		registry_port: registry_port,
 		docker_host:   docker_host,
 		manager:       cm,
+		lambdaTimer:   turnip.NewTurnip(),
 	}
+
 	return server, nil
 }
 
@@ -174,10 +180,18 @@ func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 //
 // curl -X POST localhost:8080/runLambda/<lambda-name> -d '{}'
 func (s *Server) RunLambda(w http.ResponseWriter, r *http.Request) {
+	s.lambdaTimer.Start()
 	if err := s.RunLambdaErr(w, r); err != nil {
 		log.Printf("could not handle request: %s\n", err.msg)
 		http.Error(w, err.msg, err.code)
 	}
+	s.lambdaTimer.Stop()
+}
+
+func (s *Server) Dump() {
+	log.Printf("============ Server Stats ===========\n")
+	log.Printf("\tlambda: \t%fms\n", s.lambdaTimer.AverageMs())
+	log.Printf("=====================================\n")
 }
 
 // Parses request URL into its "/" delimated components
