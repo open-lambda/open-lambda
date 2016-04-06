@@ -39,7 +39,7 @@ def flask_post(path):
     try:
         event = json.loads(data)
     except:
-        return 'could not parse ' + str(data)
+        return 'could not parse "%s"' % str(data)
     # handle req
     try:
         return json.dumps(lambda_func.handler(db_conn(), event))
