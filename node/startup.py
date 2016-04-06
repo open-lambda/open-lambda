@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 import os, sys, time, json
 
-
 def get_config():
     path = '/open-lambda-config.js'
     if not os.path.exists(path):
@@ -9,13 +8,11 @@ def get_config():
     with open(path) as f:
         return json.loads(f.read())
 
-
 def cmd(c, check=True):
     print c
     rv = os.system(c)
     if check:
         assert (rv == 0)
-
 
 def main():
     config = get_config()
@@ -24,7 +21,7 @@ def main():
     PID_FILE = '/tmp/docker.pid'
     STORAGE_DRIVER = 'aufs'
     GRAPH = '/docker_vol'
-    c = ('docker daemon --pidfile=<PID_FILE> ' +
+    c = ('docker -d --pidfile=<PID_FILE> ' +
          '--storage-driver=<STORAGE_DRIVER> ' +
          '--insecure-registry=<REGISTRY_HOST>:<REGISTRY_PORT> ' +
          '--graph=<GRAPH> &> /tmp/docker.log &')
