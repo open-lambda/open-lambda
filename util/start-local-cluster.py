@@ -48,7 +48,7 @@ def main():
         wrjs(config_path, config)
         volumes = [('/sys/fs/cgroup', '/sys/fs/cgroup'),
                    (config_path, '/open-lambda-config.js')]
-        c = 'docker run -d --privileged <VOLUMES> lambda-node'
+        c = 'docker run -d --privileged <VOLUMES> -p 0:8080 lambda-node'
         c = c.replace('<VOLUMES>', ' '.join(['-v %s:%s'%(host,guest)
                                              for host,guest in volumes]))
         cid = run(c).strip()
