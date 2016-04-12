@@ -2,7 +2,7 @@
 import os, sys, random, string
 from common import *
 
-NGINX_EXAMPLE = 'docker run -d -p 80:80 -v %s/static:/usr/share/nginx/html:ro nginx'
+NGINX_EXAMPLE = 'docker run -d -p 80:80 -v %s:/usr/share/nginx/html:ro nginx'
 
 def main():
     app_name = ''.join(random.choice(string.ascii_lowercase) for _ in range(12))
