@@ -4,6 +4,8 @@ import netifaces
 import rethinkdb as r
 from common import *
 
+SKIP_DB = '--skip-db-wait'
+
 def container_ip(cid):
     inspect = run_js('docker inspect '+cid)
     return only(inspect)['NetworkSettings']['IPAddress']
@@ -13,13 +15,21 @@ def lookup_host_port(cid, guest_port):
     return only(only(inspect)['NetworkSettings']['Ports'][str(guest_port)+'/tcp'])['HostPort']
 
 def my_ip(name='eth0'):
-    ip = netifaces.ifaddresses('eth0')[netifaces.AF_INET][0]['addr']
+    ip = None
+    try :
+        ip = netifaces.ifaddresses('eth0')[netifaces.AF_INET][0]['addr']
+    except:
+        pass
     return ip
 
 def main():
     host_ip = my_ip()
-    parser = argparse.ArgumentParser(description='number of workers')
+    if host_ip == None:
+        print 'Could not find an IP using netifaces, using 127.0.0.1'
+        host_ip = '127.0.0.1'
+    parser = argparse.ArgumentParser()
     parser.add_argument('--workers', '-w', default='1')
+    parser.add_argument(SKIP_DB, default=False, action='store_true')
     args = parser.parse_args()
 
     cluster_dir = os.path.join(SCRIPT_DIR, 'cluster')
@@ -71,17 +81,19 @@ def main():
         workers.append(config)
 
     # wait for rethinkdb
-    print '='*40
-    for i in range(10):
-        try:
-            r.connect(workers[0]['ip'], 28015).repl()
-            up = len(list(r.db('rethinkdb').table('server_status').run()))
-            if up < len(workers):
-                print '%d of %d rethinkdb instances are ready' % (up, len(workers))
-        except:
-            print 'waiting for first rethinkdb instance to come up'
-        time.sleep(1)
-    print 'all rethinkdb instances are ready'
+    if not args.skip_db_wait:
+        print '='*40
+        print 'To continue without waiting for the DB, use ' + SKIP_DB
+        for i in range(10):
+            try:
+                r.connect(workers[0]['ip'], 28015).repl()
+                up = len(list(r.db('rethinkdb').table('server_status').run()))
+                if up < len(workers):
+                    print '%d of %d rethinkdb instances are ready' % (up, len(workers))
+            except:
+                print 'waiting for first rethinkdb instance to come up'
+            time.sleep(1)
+        print 'all rethinkdb instances are ready'
 
     # print directions
     print '='*40
@@ -92,9 +104,9 @@ def main():
            (host_ip, registry_port, host_ip, registry_port))
     print '='*40
     print 'Send requests as follows (or similar):'
-    print "IMG=hello && curl -X POST %s:8080/runLambda/$IMG -d '{}'" % workers[-1]['ip']
+    print "IMG=hello && curl -w \"\\n\" -X POST %s:8080/runLambda/$IMG -d '{}'" % workers[-1]['ip']
     print 'OR'
-    print "IMG=hello && curl -X POST %s:%s/runLambda/$IMG -d '{}'" % (host_ip, workers[-1]['host_port'])
+    print "IMG=hello && curl -w \"\\n\" -X POST %s:%s/runLambda/$IMG -d '{}'" % (host_ip, workers[-1]['host_port'])
 
 if __name__ == '__main__':
     main()
