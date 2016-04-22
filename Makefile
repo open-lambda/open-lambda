@@ -1,4 +1,3 @@
-GOPATH:=$(PWD)
 WORKER:=worker
 WORKER_SRC:=worker/*.go
 
@@ -9,7 +8,6 @@ NODE_BIN:=node/bin
 .PHONY: $(WORKER)
 worker : $(WORKER_SRC)
 	cd hack && ./build.sh
-	cd worker && ./build.sh
 	mkdir -p bin
 	cp $(SERVER_BIN) bin/worker
 	cp $(CLIENT_BIN) bin/client
