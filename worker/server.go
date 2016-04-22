@@ -180,6 +180,8 @@ func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 //
 // curl -X POST localhost:8080/runLambda/<lambda-name> -d '{}'
 func (s *Server) RunLambda(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Ready\n")
+
 	s.lambdaTimer.Start()
 	if err := s.RunLambdaErr(w, r); err != nil {
 		log.Printf("could not handle request: %s\n", err.msg)

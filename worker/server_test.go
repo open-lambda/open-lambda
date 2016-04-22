@@ -1,9 +1,9 @@
 package main
 
 import (
-	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 	"strings"
 	"testing"
@@ -14,10 +14,18 @@ func RunServer() *Server {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	listener, err := net.Listen("tcp", ":8080")
+	if err != nil {
+		log.Fatal(err)
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/runLambda/", server.RunLambda)
+	s := &http.Server{Addr: ":8080", Handler: mux}
 	go func() {
-		http.HandleFunc("/runLambda/", server.RunLambda)
-		log.Fatal(http.ListenAndServe(":8080", nil))
+		log.Fatal(s.Serve(listener))
 	}()
+
 	return server
 }
 
@@ -34,23 +42,17 @@ func testReq() error {
 		return err
 	}
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	_, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("RESP: %v\n", string(body))
 	return nil
 }
 
 func TestPull(t *testing.T) {
-	server := RunServer()
-
-	for i := 1; i <= 10; i++ {
-		err := testReq()
-		if err != nil {
-			t.Error(err)
-		}
+	RunServer()
+	err := testReq()
+	if err != nil {
+		t.Error(err)
 	}
-	server.Manager().Dump()
-	server.Dump()
 }
