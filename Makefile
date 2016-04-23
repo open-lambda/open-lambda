@@ -19,6 +19,11 @@ clean :
 	rm $(SERVER_BIN)
 	rm $(CLIENT_BIN)
 
+.PHONY: test
+test :
+	./testing/setup.py
+	cd worker && go test
+
 .PHONY: node
 node : worker
 	mkdir -p node/bin

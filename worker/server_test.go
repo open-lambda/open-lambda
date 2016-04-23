@@ -9,6 +9,12 @@ import (
 	"testing"
 )
 
+var server *Server
+
+func init() {
+	server = RunServer()
+}
+
 func RunServer() *Server {
 	server, err := NewServer("", "", "")
 	if err != nil {
@@ -29,29 +35,59 @@ func RunServer() *Server {
 	return server
 }
 
-func testReq() error {
-	url := "http://localhost:8080/runLambda/pausable-start-timer"
-	req, err := http.NewRequest("POST", url, strings.NewReader("{}"))
+func testReq(lambda_name string, post string) (string, error) {
+	url := "http://localhost:8080/runLambda/" + lambda_name
+	req, err := http.NewRequest("POST", url, strings.NewReader(post))
 	if err != nil {
-		return err
+		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer resp.Body.Close()
-	_, err = ioutil.ReadAll(resp.Body)
+	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return err
+		return "", err
 	}
-	return nil
+	return string(body), nil
 }
 
+func TestHello(t *testing.T) {
+	recv, err := testReq("hello", "{}")
+	if err != nil {
+		t.Error(err)
+	}
+	expected := "\"hello\""
+	if recv != expected {
+		t.Errorf("Expected %v from hello but got back %v\n", expected, recv)
+	}
+}
+
+func TestEcho(t *testing.T) {
+	values := []string{
+		"{}",
+		"{\"one\": 1}",
+		"1",
+		"\"test\"",
+	}
+	for _, send := range values {
+		recv, err := testReq("echo", send)
+		if err != nil {
+			t.Error(err)
+		}
+		if recv != send {
+			t.Errorf("Sent %v to echo but got back %v\n", send, recv)
+		}
+	}
+}
+
+// TODO(tyler): this test needs fixing.  It passes even if the Docker
+// image is not available.
 func TestPull(t *testing.T) {
-	RunServer()
-	err := testReq()
+	_, err := testReq("pausable-start-timer", "{}")
 	if err != nil {
 		t.Error(err)
 	}

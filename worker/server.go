@@ -141,6 +141,7 @@ func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 				err.Error(),
 				http.StatusInternalServerError)
 		}
+
 		r2.Header.Set("Content-Type", r.Header.Get("Content-Type"))
 		client := &http.Client{}
 		w2, err := client.Do(r2)
@@ -148,6 +149,7 @@ func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 			log.Printf("request to container failed with %v\n", err)
 			continue
 		}
+
 		defer w2.Body.Close()
 		wbody, err := ioutil.ReadAll(w2.Body)
 		if err != nil {
@@ -165,11 +167,13 @@ func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 			"Content-Type, Content-Range, Content-Disposition, Content-Description")
 
 		w.WriteHeader(w2.StatusCode)
+
 		if _, err := w.Write(wbody); err != nil {
 			return newHttpErr(
 				err.Error(),
 				http.StatusInternalServerError)
 		}
+
 		return nil
 	}
 
@@ -180,8 +184,6 @@ func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 //
 // curl -X POST localhost:8080/runLambda/<lambda-name> -d '{}'
 func (s *Server) RunLambda(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Ready\n")
-
 	s.lambdaTimer.Start()
 	if err := s.RunLambdaErr(w, r); err != nil {
 		log.Printf("could not handle request: %s\n", err.msg)
