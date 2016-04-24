@@ -18,8 +18,14 @@ mkdir -p ${LAMBDA_PACKAGE}
 ln -sf ${WD}/${CODE_BASE} ${LAMBDA_PACKAGE}
 
 # build
-cd ${WORKER}; go get; go build
-cd ${CLIENT}; go get; go build
+if [[ $1 == "test" ]]
+then
+    cd ${WORKER}; go test
+else
+    # just compile
+    cd ${WORKER}; go get; go build
+    cd ${CLIENT}; go get; go build
+fi
 
 # setup commit hooks
 ln -s ${WD}/pre-commit ${WD}/../.git/hooks/ >/dev/null 2>/dev/null || true

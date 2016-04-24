@@ -22,7 +22,7 @@ clean :
 .PHONY: test
 test :
 	./testing/setup.py
-	cd worker && go test
+	cd hack && ./build.sh test
 
 .PHONY: node
 node : worker

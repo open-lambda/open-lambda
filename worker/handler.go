@@ -1,7 +1,7 @@
 package main
 
 import (
-	state "./handler_state"
+	state "github.com/tylerharter/open-lambda/worker/handler_state"
 	"sync"
 )
 

@@ -83,41 +83,14 @@ func (s *Server) Manager() *ContainerManager {
 	return s.manager
 }
 
-func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
-	urlParts := getUrlComponents(r)
-	if len(urlParts) < 2 {
-		return newHttpErr(
-			"Name of image to run required",
-			http.StatusBadRequest)
-	}
-
-	// components represent runLambda[0]/<name_of_container>[1]/<extra_things>...
-	// ergo we want [1] for name of container
-	img := urlParts[1]
-	i := strings.Index(img, "?")
-	if i >= 0 {
-		img = img[:i-1]
-	}
-
+func (s *Server) ForwardToContainer(lambda_name string, r *http.Request, input []byte) ([]byte, *http.Response, *httpErr) {
 	// we'll ask docker manager to ensure the img is ready to accept requests
 	// This will either start the img, or unpause a started one
-	port, err := s.manager.DockerMakeReady(img)
+	port, err := s.manager.DockerMakeReady(lambda_name)
 	if err != nil {
-		return newHttpErr(
+		return nil, nil, newHttpErr(
 			err.Error(),
 			http.StatusInternalServerError)
-	}
-
-	// read incoming request
-	rbody := []byte{}
-	if r.Body != nil {
-		defer r.Body.Close()
-		rbody, err = ioutil.ReadAll(r.Body)
-		if err != nil {
-			return newHttpErr(
-				err.Error(),
-				http.StatusInternalServerError)
-		}
 	}
 
 	// forward request to container.  r and w are the server
@@ -129,15 +102,11 @@ func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 
 	// TODO(tyler): some sort of smarter backoff.  Or, a better
 	// way to detect a started container.
-	for i := 0; i < 10; i++ {
-		if i > 0 {
-			log.Printf("retry request\n")
-			time.Sleep(time.Duration(i*10) * time.Millisecond)
-		}
-
-		r2, err := http.NewRequest("POST", url, bytes.NewReader(rbody))
+	max_tries := 10
+	for tries := 1; ; tries++ {
+		r2, err := http.NewRequest("POST", url, bytes.NewReader(input))
 		if err != nil {
-			return newHttpErr(
+			return nil, nil, newHttpErr(
 				err.Error(),
 				http.StatusInternalServerError)
 		}
@@ -147,34 +116,75 @@ func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 		w2, err := client.Do(r2)
 		if err != nil {
 			log.Printf("request to container failed with %v\n", err)
+			if tries == max_tries {
+				return nil, nil, newHttpErr(
+					err.Error(),
+					http.StatusInternalServerError)
+			}
+			log.Printf("retry request\n")
+			time.Sleep(time.Duration(tries*10) * time.Millisecond)
 			continue
 		}
 
 		defer w2.Body.Close()
 		wbody, err := ioutil.ReadAll(w2.Body)
 		if err != nil {
+			return nil, nil, newHttpErr(
+				err.Error(),
+				http.StatusInternalServerError)
+		}
+		return wbody, w2, nil
+	}
+}
+
+func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
+	// components represent runLambda[0]/<name_of_container>[1]/<extra_things>...
+	// ergo we want [1] for name of container
+	urlParts := getUrlComponents(r)
+	if len(urlParts) < 2 {
+		return newHttpErr(
+			"Name of image to run required",
+			http.StatusBadRequest)
+	}
+	img := urlParts[1]
+	i := strings.Index(img, "?")
+	if i >= 0 {
+		img = img[:i-1]
+	}
+
+	// read request
+	rbody := []byte{}
+	if r.Body != nil {
+		defer r.Body.Close()
+		var err error
+		rbody, err = ioutil.ReadAll(r.Body)
+		if err != nil {
 			return newHttpErr(
 				err.Error(),
 				http.StatusInternalServerError)
 		}
+	}
 
-		// forward response
-		// TODO(tyler): origins should be configurable
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods",
-			"GET, PUT, POST, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers",
-			"Content-Type, Content-Range, Content-Disposition, Content-Description")
+	// forward to container
+	wbody, w2, err := s.ForwardToContainer(img, r, rbody)
+	if err != nil {
+		return err
+	}
 
-		w.WriteHeader(w2.StatusCode)
+	// write response
+	// TODO(tyler): origins should be configurable
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods",
+		"GET, PUT, POST, DELETE, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers",
+		"Content-Type, Content-Range, Content-Disposition, Content-Description")
 
-		if _, err := w.Write(wbody); err != nil {
-			return newHttpErr(
-				err.Error(),
-				http.StatusInternalServerError)
-		}
+	w.WriteHeader(w2.StatusCode)
 
-		return nil
+	if _, err := w.Write(wbody); err != nil {
+		return newHttpErr(
+			err.Error(),
+			http.StatusInternalServerError)
 	}
 
 	return nil
