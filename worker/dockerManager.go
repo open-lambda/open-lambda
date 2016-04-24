@@ -189,6 +189,40 @@ func (cm *ContainerManager) DockerRun(img string, args []string, waitAndRemove b
 	return nil
 }
 
+func (cm *ContainerManager) DockerImageExists(img_name string) (bool, error) {
+	_, err := cm.client.InspectImage(img_name)
+	if err == docker.ErrNoSuchImage {
+		return false, nil
+	} else if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (cm *ContainerManager) DockerContainerExists(cname string) (bool, error) {
+	_, err := cm.client.InspectContainer(cname)
+	if err != nil {
+		switch err.(type) {
+		default:
+			return false, err
+		case *docker.NoSuchContainer:
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+func (cm *ContainerManager) dockerStart(container *docker.Container) (err error) {
+	cm.startTimer.Start()
+	if err = cm.client.StartContainer(container.ID, container.HostConfig); err != nil {
+		log.Printf("failed to start container with err %v\n", err)
+		return err
+	}
+	cm.startTimer.Stop()
+
+	return nil
+}
+
 func (cm *ContainerManager) dockerCreate(img string, args []string) (*docker.Container, error) {
 	// Create a new container with img and args
 	// Specifically give container name of img, so we can lookup later
@@ -242,17 +276,6 @@ func (cm *ContainerManager) dockerInspect(cid string) (container *docker.Contain
 	cm.inspectTimer.Stop()
 
 	return container, nil
-}
-
-func (cm *ContainerManager) dockerStart(container *docker.Container) (err error) {
-	cm.startTimer.Start()
-	if err = cm.client.StartContainer(container.ID, container.HostConfig); err != nil {
-		log.Printf("failed to start container with err %v\n", err)
-		return err
-	}
-	cm.startTimer.Stop()
-
-	return nil
 }
 
 func (cm *ContainerManager) dockerRemove(container *docker.Container) (err error) {
