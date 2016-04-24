@@ -4,7 +4,7 @@
 if [[ $( cd worker && gofmt -d . ) ]]; then
 	cat <<\EOF
 Error:  format check failed
-        Please format worker/ with 'go fmt' and commit again
+        Please format worker/ with 'gofmt -w -l .' and commit again
 EOF
 	exit 1
 fi
