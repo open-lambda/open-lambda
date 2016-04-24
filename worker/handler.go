@@ -1,8 +1,10 @@
 package main
 
 import (
-	state "github.com/tylerharter/open-lambda/worker/handler_state"
+	"log"
 	"sync"
+
+	state "github.com/tylerharter/open-lambda/worker/handler_state"
 )
 
 type HandlerSet struct {
@@ -56,6 +58,7 @@ func (h *Handler) RunStart() (port string, err error) {
 
 	// are we the first?
 	if h.runners == 0 {
+		log.Printf("I'm in STATE %v\n", h.state.String())
 		if h.state == state.Stopped {
 			if err := cm.DockerRestart(h.name); err != nil {
 				return "", err
@@ -81,7 +84,19 @@ func (h *Handler) RunFinish() {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
+	cm := h.hset.cm
+
 	h.runners -= 1
+
+	// are we the first?
+	if h.runners == 0 {
+		if err := cm.DockerPause(h.name); err != nil {
+			// TODO(tyler): better way to handle this?  If
+			// we can't pause, the handler gets to keep
+			// running for free...
+			log.Printf("Could not pause %v!  Error: %v", h.name, err)
+		}
+	}
 }
 
 // assume lock held.  Make sure image is pulled, an determine whether
@@ -122,9 +137,11 @@ func (h *Handler) maybeInit() (err error) {
 	}
 
 	if container.State.Running {
-		h.state = state.Running
-	} else if container.State.Paused {
-		h.state = state.Paused
+		if container.State.Paused {
+			h.state = state.Paused
+		} else {
+			h.state = state.Running
+		}
 	} else {
 		h.state = state.Stopped
 	}

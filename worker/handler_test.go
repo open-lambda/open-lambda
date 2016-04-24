@@ -1,6 +1,7 @@
 package main
 
 import (
+	docker "github.com/fsouza/go-dockerclient"
 	"testing"
 )
 
@@ -22,7 +23,7 @@ func TestHandlerLookupDiff(t *testing.T) {
 	}
 }
 
-func TestHandlerHandlerInit(t *testing.T) {
+func TestHandlerHandlerPull(t *testing.T) {
 	cm := NewContainerManager("localhost", "5000")
 	handlers := NewHandlerSet(cm)
 	name := "nonlocal"
@@ -56,5 +57,60 @@ func TestHandlerHandlerInit(t *testing.T) {
 	}
 	if !exists {
 		t.Fatalf("Lambda %s not started by run", name)
+	}
+}
+
+func GetState(t *testing.T, cm *ContainerManager, img string) docker.State {
+	container, err := cm.DockerInspect(img)
+	if err != nil {
+		t.Fatalf("Could not inspect '%v'", img)
+	}
+	return container.State
+}
+
+func TestHandlerRunCountOne(t *testing.T) {
+	cm := NewContainerManager("localhost", "5000")
+	handlers := NewHandlerSet(cm)
+	h := handlers.Get("hello")
+
+	h.RunStart()
+	s := GetState(t, cm, "hello")
+	if !s.Running || s.Paused {
+		t.Fatalf("Unexpected state: %v", s.StateString())
+	}
+
+	h.RunFinish()
+	s = GetState(t, cm, "hello")
+	if !s.Running || !s.Paused {
+		t.Fatalf("Unexpected state: %v", s.StateString())
+	}
+}
+
+func TestHandlerRunCountMany(t *testing.T) {
+	cm := NewContainerManager("localhost", "5000")
+	handlers := NewHandlerSet(cm)
+	h := handlers.Get("hello")
+	count := 10
+
+	for i := 0; i < count; i++ {
+		h.RunStart()
+		s := GetState(t, cm, "hello")
+		if !s.Running || s.Paused {
+			t.Fatalf("Unexpected state: %v", s.StateString())
+		}
+	}
+
+	for i := 0; i < count; i++ {
+		h.RunFinish()
+		s := GetState(t, cm, "hello")
+		if i == count-1 {
+			if !s.Running || !s.Paused {
+				t.Fatalf("Unexpected state: %v", s.StateString())
+			}
+		} else {
+			if !s.Running || s.Paused {
+				t.Fatalf("Unexpected state: %v", s.StateString())
+			}
+		}
 	}
 }

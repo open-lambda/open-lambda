@@ -20,7 +20,7 @@ ln -sf ${WD}/${CODE_BASE} ${LAMBDA_PACKAGE}
 # build
 if [[ $1 == "test" ]]
 then
-    cd ${WORKER}; go test
+    cd ${WORKER}; go test ${@:2}
 else
     # just compile
     cd ${WORKER}; go get; go build
