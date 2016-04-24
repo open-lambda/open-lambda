@@ -41,8 +41,8 @@ func NewContainerManager(host string, port string) (manager *ContainerManager) {
 	return manager
 }
 
-func (cm *ContainerManager) pullAndCreate(img string, args []string) (container *docker.Container, err error) {
-	if container, err = cm.dockerCreate(img, args); err != nil {
+func (cm *ContainerManager) PullAndCreate(img string, args []string) (container *docker.Container, err error) {
+	if container, err = cm.DockerCreate(img, args); err != nil {
 		// if the container already exists, don't pull, let client decide how to handle
 		if err == docker.ErrContainerAlreadyExists {
 			return nil, err
@@ -52,7 +52,7 @@ func (cm *ContainerManager) pullAndCreate(img string, args []string) (container 
 			log.Printf("img pull failed with: %v\n", err)
 			return nil, err
 		} else {
-			container, err = cm.dockerCreate(img, args)
+			container, err = cm.DockerCreate(img, args)
 			if err != nil {
 				log.Printf("failed to create container %s after good pull, with error: %v\n", img, err)
 				return nil, err
@@ -67,7 +67,7 @@ func (cm *ContainerManager) pullAndCreate(img string, args []string) (container 
 // returns the port of the runnning container
 func (cm *ContainerManager) DockerMakeReady(img string) (port string, err error) {
 	// TODO: decide on one default lambda entry path
-	container, err := cm.pullAndCreate(img, []string{})
+	container, err := cm.PullAndCreate(img, []string{})
 	if err != nil {
 		if err != docker.ErrContainerAlreadyExists {
 			// Unhandled error
@@ -76,7 +76,7 @@ func (cm *ContainerManager) DockerMakeReady(img string) (port string, err error)
 
 		// make sure container is up
 		cid := img
-		container, err = cm.dockerInspect(cid)
+		container, err = cm.DockerInspect(cid)
 		if err != nil {
 			return "", err
 		}
@@ -165,7 +165,7 @@ func (cm *ContainerManager) DockerPull(img string) error {
 
 // Combines a docker create with a docker start
 func (cm *ContainerManager) DockerRun(img string, args []string, waitAndRemove bool) (err error) {
-	c, err := cm.dockerCreate(img, args)
+	c, err := cm.DockerCreate(img, args)
 	if err != nil {
 		return err
 	}
@@ -223,7 +223,7 @@ func (cm *ContainerManager) dockerStart(container *docker.Container) (err error)
 	return nil
 }
 
-func (cm *ContainerManager) dockerCreate(img string, args []string) (*docker.Container, error) {
+func (cm *ContainerManager) DockerCreate(img string, args []string) (*docker.Container, error) {
 	// Create a new container with img and args
 	// Specifically give container name of img, so we can lookup later
 
@@ -266,7 +266,7 @@ func (cm *ContainerManager) dockerCreate(img string, args []string) (*docker.Con
 	return container, nil
 }
 
-func (cm *ContainerManager) dockerInspect(cid string) (container *docker.Container, err error) {
+func (cm *ContainerManager) DockerInspect(cid string) (container *docker.Container, err error) {
 	cm.inspectTimer.Start()
 	container, err = cm.client.InspectContainer(cid)
 	if err != nil {
@@ -291,7 +291,7 @@ func (cm *ContainerManager) dockerRemove(container *docker.Container) (err error
 
 // Returned as "port"
 func (cm *ContainerManager) getLambdaPort(cid string) (port string, err error) {
-	container, err := cm.dockerInspect(cid)
+	container, err := cm.DockerInspect(cid)
 	if err != nil {
 		return "", err
 	}
@@ -314,7 +314,7 @@ func (cm *ContainerManager) Dump() {
 	}
 	log.Printf("=====================================\n")
 	for idx, info := range containers {
-		container, err := cm.dockerInspect(info.ID)
+		container, err := cm.DockerInspect(info.ID)
 		if err != nil {
 			log.Fatal("Could get container")
 		}

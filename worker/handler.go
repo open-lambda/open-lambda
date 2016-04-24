@@ -44,26 +44,44 @@ func (h *HandlerSet) Get(name string) *Handler {
 	return handler
 }
 
-func (h *Handler) RunStart() error {
+func (h *Handler) RunStart() (port string, err error) {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
 	if err := h.maybeInit(); err != nil {
-		return err
+		return "", err
+	}
+
+	cm := h.hset.cm
+
+	// are we the first?
+	if h.runners == 0 {
+		if h.state == state.Stopped {
+			if err := cm.DockerRestart(h.name); err != nil {
+				return "", err
+			}
+		} else if h.state == state.Paused {
+			if err := cm.DockerUnpause(h.name); err != nil {
+				return "", err
+			}
+		}
 	}
 
 	h.runners += 1
 
-	return nil
+	port, err = cm.getLambdaPort(h.name)
+	if err != nil {
+		return "", err
+	}
+
+	return port, nil
 }
 
-func (h *Handler) RunFinish() error {
+func (h *Handler) RunFinish() {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
 	h.runners -= 1
-
-	return nil
 }
 
 // assume lock held.  Make sure image is pulled, an determine whether
@@ -72,34 +90,44 @@ func (h *Handler) maybeInit() (err error) {
 	if h.state != state.Unitialized {
 		return nil
 	}
-	// if there is any error, set state back to Unitialized
-	defer func() {
-		if err != nil {
-			h.state = state.Unitialized
-		}
-	}()
 
-	// Is the image pulled?  Does container exist?  Is it paused?
-	img_exists, err := h.hset.cm.DockerImageExists(h.name)
+	cm := h.hset.cm
+
+	// make sure image is pulled
+	img_exists, err := cm.DockerImageExists(h.name)
 	if err != nil {
 		return err
 	}
-	if img_exists {
-		cont_exists, err := h.hset.cm.DockerContainerExists(h.name)
-		if err != nil {
+	if !img_exists {
+		if err := cm.DockerPull(h.name); err != nil {
 			return err
 		}
-		if cont_exists {
-			// TODO(tyler): check if paused
-			h.state = state.Running
-		} else {
-			h.state = state.Stopped
+	}
+
+	// make sure container is created
+	cont_exists, err := cm.DockerContainerExists(h.name)
+	if err != nil {
+		return err
+	}
+	if !cont_exists {
+		if _, err := cm.DockerCreate(h.name, []string{}); err != nil {
+			return err
 		}
+	}
+
+	// is container stopped, running, or started?
+	container, err := cm.DockerInspect(h.name)
+	if err != nil {
+		return err
+	}
+
+	if container.State.Running {
+		h.state = state.Running
+	} else if container.State.Paused {
+		h.state = state.Paused
 	} else {
-		if err := h.hset.cm.DockerPull(h.name); err != nil {
-			return err
-		}
 		h.state = state.Stopped
 	}
+
 	return nil
 }

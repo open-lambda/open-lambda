@@ -58,11 +58,11 @@ func testReq(lambda_name string, post string) (string, error) {
 func TestHello(t *testing.T) {
 	recv, err := testReq("hello", "{}")
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	expected := "\"hello\""
 	if recv != expected {
-		t.Errorf("Expected %v from hello but got back %v\n", expected, recv)
+		t.Fatalf("Expected '%v' from hello but got back '%v'\n", expected, recv)
 	}
 }
 
@@ -76,10 +76,10 @@ func TestEcho(t *testing.T) {
 	for _, send := range values {
 		recv, err := testReq("echo", send)
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 		if recv != send {
-			t.Errorf("Sent %v to echo but got back %v\n", send, recv)
+			t.Fatalf("Sent '%v' to echo but got back '%v'\n", send, recv)
 		}
 	}
 }
@@ -89,6 +89,6 @@ func TestEcho(t *testing.T) {
 func TestPull(t *testing.T) {
 	_, err := testReq("pausable-start-timer", "{}")
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 }

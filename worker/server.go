@@ -14,7 +14,8 @@ import (
 )
 
 type Server struct {
-	manager *ContainerManager
+	manager  *ContainerManager
+	handlers *HandlerSet
 
 	// config options
 	registry_host string
@@ -73,6 +74,7 @@ func NewServer(
 		registry_port: registry_port,
 		docker_host:   docker_host,
 		manager:       cm,
+		handlers:      NewHandlerSet(cm),
 		lambdaTimer:   turnip.NewTurnip(),
 	}
 
@@ -83,15 +85,14 @@ func (s *Server) Manager() *ContainerManager {
 	return s.manager
 }
 
-func (s *Server) ForwardToContainer(lambda_name string, r *http.Request, input []byte) ([]byte, *http.Response, *httpErr) {
-	// we'll ask docker manager to ensure the img is ready to accept requests
-	// This will either start the img, or unpause a started one
-	port, err := s.manager.DockerMakeReady(lambda_name)
+func (s *Server) ForwardToContainer(handler *Handler, r *http.Request, input []byte) ([]byte, *http.Response, *httpErr) {
+	port, err := handler.RunStart()
 	if err != nil {
 		return nil, nil, newHttpErr(
 			err.Error(),
 			http.StatusInternalServerError)
 	}
+	defer handler.RunFinish()
 
 	// forward request to container.  r and w are the server
 	// request and response respectively.  r2 and w2 are the
@@ -166,7 +167,8 @@ func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 	}
 
 	// forward to container
-	wbody, w2, err := s.ForwardToContainer(img, r, rbody)
+	handler := s.handlers.Get(img)
+	wbody, w2, err := s.ForwardToContainer(handler, r, rbody)
 	if err != nil {
 		return err
 	}

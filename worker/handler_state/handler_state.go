@@ -4,7 +4,7 @@ type HandlerState int
 
 const (
 	Unitialized HandlerState = iota
-	Stopped
+	Stopped                  // TODO(tyler): split into new and stopped?
 	Running
 	Paused
 )
