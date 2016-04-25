@@ -3,10 +3,11 @@ package main
 import (
 	docker "github.com/fsouza/go-dockerclient"
 	"testing"
+	"time"
 )
 
 func TestHandlerLookupSame(t *testing.T) {
-	handlers := NewHandlerSet(nil)
+	handlers := NewHandlerSet(HandlerSetOpts{})
 	a1 := handlers.Get("a")
 	a2 := handlers.Get("a")
 	if a1 != a2 {
@@ -15,7 +16,7 @@ func TestHandlerLookupSame(t *testing.T) {
 }
 
 func TestHandlerLookupDiff(t *testing.T) {
-	handlers := NewHandlerSet(nil)
+	handlers := NewHandlerSet(HandlerSetOpts{})
 	a := handlers.Get("a")
 	b := handlers.Get("b")
 	if a == b {
@@ -25,7 +26,7 @@ func TestHandlerLookupDiff(t *testing.T) {
 
 func TestHandlerHandlerPull(t *testing.T) {
 	cm := NewContainerManager("localhost", "5000")
-	handlers := NewHandlerSet(cm)
+	handlers := NewHandlerSet(HandlerSetOpts{cm: cm})
 	name := "nonlocal"
 
 	// containers should initially not be pulled
@@ -69,33 +70,35 @@ func GetState(t *testing.T, cm *ContainerManager, img string) docker.State {
 }
 
 func TestHandlerRunCountOne(t *testing.T) {
+	lru := NewHandlerLRU(1)
 	cm := NewContainerManager("localhost", "5000")
-	handlers := NewHandlerSet(cm)
+	handlers := NewHandlerSet(HandlerSetOpts{cm: cm, lru: lru})
 	h := handlers.Get("hello")
 
 	h.RunStart()
 	s := GetState(t, cm, "hello")
-	if !s.Running || s.Paused {
+	if !(s.Running && !s.Paused) {
 		t.Fatalf("Unexpected state: %v", s.StateString())
 	}
 
 	h.RunFinish()
 	s = GetState(t, cm, "hello")
-	if !s.Running || !s.Paused {
+	if !(s.Running && s.Paused) {
 		t.Fatalf("Unexpected state: %v", s.StateString())
 	}
 }
 
 func TestHandlerRunCountMany(t *testing.T) {
+	lru := NewHandlerLRU(1)
 	cm := NewContainerManager("localhost", "5000")
-	handlers := NewHandlerSet(cm)
+	handlers := NewHandlerSet(HandlerSetOpts{cm: cm, lru: lru})
 	h := handlers.Get("hello")
 	count := 10
 
 	for i := 0; i < count; i++ {
 		h.RunStart()
 		s := GetState(t, cm, "hello")
-		if !s.Running || s.Paused {
+		if !(s.Running && !s.Paused) {
 			t.Fatalf("Unexpected state: %v", s.StateString())
 		}
 	}
@@ -104,13 +107,36 @@ func TestHandlerRunCountMany(t *testing.T) {
 		h.RunFinish()
 		s := GetState(t, cm, "hello")
 		if i == count-1 {
-			if !s.Running || !s.Paused {
+			if !(s.Running && s.Paused) {
 				t.Fatalf("Unexpected state: %v", s.StateString())
 			}
 		} else {
-			if !s.Running || s.Paused {
+			if !(s.Running && !s.Paused) {
 				t.Fatalf("Unexpected state: %v", s.StateString())
 			}
 		}
+	}
+}
+
+func TestHandlerEvict(t *testing.T) {
+	lru := NewHandlerLRU(0)
+	cm := NewContainerManager("localhost", "5000")
+	handlers := NewHandlerSet(HandlerSetOpts{cm: cm, lru: lru})
+	h := handlers.Get("hello")
+	h.RunStart()
+	h.RunFinish()
+	s := GetState(t, cm, "hello")
+
+	// wait up to 5 seconds for evictor to evict
+	max_tries := 500
+	for tries := 1; ; tries++ {
+		s = GetState(t, cm, "hello")
+		if !s.Running {
+			return
+		} else if tries == max_tries {
+			t.Fatalf("Unexpected state: %v", s.StateString())
+		}
+		time.Sleep(100 * time.Millisecond)
+
 	}
 }

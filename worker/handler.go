@@ -7,10 +7,16 @@ import (
 	state "github.com/tylerharter/open-lambda/worker/handler_state"
 )
 
+type HandlerSetOpts struct {
+	cm  *ContainerManager
+	lru *HandlerLRU
+}
+
 type HandlerSet struct {
 	mutex    sync.Mutex
 	handlers map[string]*Handler
 	cm       *ContainerManager
+	lru      *HandlerLRU
 }
 
 type Handler struct {
@@ -21,10 +27,15 @@ type Handler struct {
 	runners int
 }
 
-func NewHandlerSet(cm *ContainerManager) (handlerSet *HandlerSet) {
+func NewHandlerSet(opts HandlerSetOpts) (handlerSet *HandlerSet) {
+	if opts.lru == nil {
+		opts.lru = NewHandlerLRU(0)
+	}
+
 	return &HandlerSet{
 		handlers: make(map[string]*Handler),
-		cm:       cm,
+		cm:       opts.cm,
+		lru:      opts.lru,
 	}
 }
 
@@ -58,7 +69,6 @@ func (h *Handler) RunStart() (port string, err error) {
 
 	// are we the first?
 	if h.runners == 0 {
-		log.Printf("I'm in STATE %v\n", h.state.String())
 		if h.state == state.Stopped {
 			if err := cm.DockerRestart(h.name); err != nil {
 				return "", err
@@ -68,6 +78,8 @@ func (h *Handler) RunStart() (port string, err error) {
 				return "", err
 			}
 		}
+		h.state = state.Running
+		h.hset.lru.Remove(h)
 	}
 
 	h.runners += 1
@@ -94,8 +106,31 @@ func (h *Handler) RunFinish() {
 			// TODO(tyler): better way to handle this?  If
 			// we can't pause, the handler gets to keep
 			// running for free...
-			log.Printf("Could not pause %v!  Error: %v", h.name, err)
+			log.Printf("Could not pause %v!  Error: %v\n", h.name, err)
 		}
+		h.state = state.Paused
+		h.hset.lru.Add(h)
+	}
+}
+
+func (h *Handler) StopIfPaused() {
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
+
+	cm := h.hset.cm
+
+	if h.state != state.Paused {
+		return
+	}
+
+	// TODO(tyler): why do we need to unpause in order to kill?
+	if err := cm.DockerUnpause(h.name); err != nil {
+		log.Printf("Could not unpause %v to kill it!  Error: %v\n", h.name, err)
+	} else if err := cm.DockerKill(h.name); err != nil {
+		// TODO: a resource leak?
+		log.Printf("Could not kill %v after unpausing!  Error: %v\n", h.name, err)
+	} else {
+		h.state = state.Stopped
 	}
 }
 

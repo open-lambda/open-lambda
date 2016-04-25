@@ -13,6 +13,9 @@ export LAMBDA_PACKAGE=${GOPATH}'/src/github.com/tylerharter/open-lambda'
 export WORKER=${LAMBDA_PACKAGE}'/worker/'
 export CLIENT=${LAMBDA_PACKAGE}'/worker/prof/client'
 
+# setup commit hooks
+ln -s ${WD}/pre-commit ${WD}/../.git/hooks/ >/dev/null 2>/dev/null || true
+
 # init gopath
 mkdir -p ${LAMBDA_PACKAGE}
 ln -sf ${WD}/${CODE_BASE} ${LAMBDA_PACKAGE}
@@ -26,6 +29,3 @@ else
     cd ${WORKER}; go get; go build
     cd ${CLIENT}; go get; go build
 fi
-
-# setup commit hooks
-ln -s ${WD}/pre-commit ${WD}/../.git/hooks/ >/dev/null 2>/dev/null || true

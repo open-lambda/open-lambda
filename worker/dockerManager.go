@@ -104,6 +104,17 @@ func (cm *ContainerManager) DockerMakeReady(img string) (port string, err error)
 	return port, nil
 }
 
+func (cm *ContainerManager) DockerKill(img string) (err error) {
+	// TODO(tyler): is there any advantage to trying to stop
+	// before killing?  (i.e., use SIGTERM instead SIGKILL)
+	opts := docker.KillContainerOptions{ID: img}
+	if err = cm.client.KillContainer(opts); err != nil {
+		log.Printf("failed to kill container with error %v\n", err)
+		return err
+	}
+	return nil
+}
+
 func (cm *ContainerManager) DockerRestart(img string) (err error) {
 	// Restart container after (0) seconds
 	if err = cm.client.RestartContainer(img, 0); err != nil {

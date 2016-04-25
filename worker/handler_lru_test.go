@@ -5,10 +5,10 @@ import (
 )
 
 func TestLRU(t *testing.T) {
-	handlers := NewHandlerSet(nil)
+	lru := NewHandlerLRU(0)
+	handlers := NewHandlerSet(HandlerSetOpts{lru: lru})
 	a := handlers.Get("a")
 
-	lru := NewHandlerLRU()
 	lru.Add(a)
 	if lru.Len() != 1 {
 		t.Fatalf("Unexpected len: %v", lru.Len())

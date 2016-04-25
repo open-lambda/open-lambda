@@ -74,7 +74,7 @@ func NewServer(
 		registry_port: registry_port,
 		docker_host:   docker_host,
 		manager:       cm,
-		handlers:      NewHandlerSet(cm),
+		handlers:      NewHandlerSet(HandlerSetOpts{cm: cm}),
 		lambdaTimer:   turnip.NewTurnip(),
 	}
 
