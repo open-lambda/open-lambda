@@ -1,14 +1,11 @@
 #!/usr/bin/python
-import SimpleHTTPServer
-import SocketServer
-import logging
-import cgi
-import traceback, json, time, os, socket, struct
+import traceback, json, socket, struct
 import lambda_func # assume submitted .py file is called lambda_func
 import rethinkdb
 import flask
 app = flask.Flask(__name__)
 
+PROCESSES_DEFAULT = 10
 PORT = 8080
 initialized = False
 config = None
@@ -50,10 +47,10 @@ def flask_post(path):
         return (traceback.format_exc(), 500) # internal error
 
 def main():
-    # TODO(tyler): shouldn't be fixed at 10 (make dynamic, or maybe
-    # use config)
     init()
-    app.run(processes=10, host='0.0.0.0', port=PORT)
+    procs = config.get('processes', PROCESSES_DEFAULT)
+    print 'Starting %d flask processes' % procs
+    app.run(processes=procs, host='0.0.0.0', port=PORT)
 
 if __name__ == '__main__':
     main()

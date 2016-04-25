@@ -5,8 +5,10 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 var server *Server
@@ -90,5 +92,21 @@ func TestPull(t *testing.T) {
 	_, err := testReq("pausable-start-timer", "{}")
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+// thread_counter starts a backup thread that runs forever,
+// incrementing a counter between 10ms sleeps.  If pausing works, the
+// counter won't tick many times between requests, even if wait
+// between them.
+func TestThreadPausing(t *testing.T) {
+	img := "thread_counter"
+	before_str, _ := testReq(img, "null")
+	time.Sleep(100 * time.Millisecond)
+	after_str, _ := testReq(img, "null")
+	before, _ := strconv.Atoi(before_str)
+	after, _ := strconv.Atoi(after_str)
+	if after-before > 2 {
+		t.Errorf("Background thread run between requests, ticking %v times\n", (after - before))
 	}
 }

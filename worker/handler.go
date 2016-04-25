@@ -42,6 +42,8 @@ func NewHandlerSet(opts HandlerSetOpts) (handlerSet *HandlerSet) {
 // always return a Handler, creating one if necessarily.
 func (h *HandlerSet) Get(name string) *Handler {
 	h.mutex.Lock()
+	defer h.mutex.Unlock()
+
 	handler := h.handlers[name]
 	if handler == nil {
 		handler = &Handler{
@@ -52,9 +54,18 @@ func (h *HandlerSet) Get(name string) *Handler {
 		}
 		h.handlers[name] = handler
 	}
-	h.mutex.Unlock()
 
 	return handler
+}
+
+func (h *HandlerSet) Dump() {
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
+
+	log.Printf("HANDLERS:\n")
+	for k, v := range h.handlers {
+		log.Printf("> %v: %v\n", k, v.state.String())
+	}
 }
 
 func (h *Handler) RunStart() (port string, err error) {

@@ -69,12 +69,16 @@ func NewServer(
 	}
 
 	// create server
+	opts := HandlerSetOpts{
+		cm:  cm,
+		lru: NewHandlerLRU(100), // TODO(tyler)
+	}
 	server := &Server{
 		registry_host: registry_host,
 		registry_port: registry_port,
 		docker_host:   docker_host,
 		manager:       cm,
-		handlers:      NewHandlerSet(HandlerSetOpts{cm: cm}),
+		handlers:      NewHandlerSet(opts),
 		lambdaTimer:   turnip.NewTurnip(),
 	}
 

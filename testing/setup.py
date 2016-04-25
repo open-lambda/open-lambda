@@ -3,12 +3,16 @@ import os, sys, random, string
 from common import *
 
 def main():
-    app_names = ['hello', 'echo']
+    apps = [
+        ('hello', 'nodb.json'),
+        ('echo', 'nodb.json'),
+        ('thread_counter', 'thread_counter.json')
+    ]
     root_dir = os.path.join(SCRIPT_DIR, '..')
     builder_dir = os.path.join(root_dir, 'lambda-generator')
 
     # create some applications
-    for app_name in app_names:
+    for app_name, config in apps:
         # cleanup
         os.system('docker rm -f ' + app_name)
         os.system('docker rmi -f ' + app_name)
@@ -18,9 +22,9 @@ def main():
         print 'Building image'
         builder = os.path.join(builder_dir, 'builder.py')
         run(builder + ' -l %s -n %s -c %s' %
-            (os.path.join(SCRIPT_DIR, 'lambdas/%s.py'%app_name),
+            (os.path.join(SCRIPT_DIR, 'lambdas', app_name+'.py'),
              app_name,
-             os.path.join(SCRIPT_DIR, 'lambdas/nodb.json')))
+             os.path.join(SCRIPT_DIR, 'lambdas', config)))
 
     # create an application that is only in the registry
     run('docker tag -f hello nonlocal')
