@@ -1,5 +1,5 @@
 #!/usr/bin/python
-import traceback, json, socket, struct
+import traceback, json, socket, struct, os, sys
 import lambda_func # assume submitted .py file is called lambda_func
 import rethinkdb
 import flask
@@ -16,10 +16,16 @@ def init():
     global initialized, config, db_conn
     if initialized:
         return
+    sys.stdout = sys.stderr # flask supresses stdout :(
     with open('config.json') as f:
         config = json.loads(f.read())
     if config.get('db', None) == 'rethinkdb':
-        db_conn = rethinkdb.connect(get_default_gateway_linux(), 28015)
+        addr = os.environ.get('RETHINKDB_PORT_28015_TCP', None)
+        if addr != None:
+            host, port = addr.split('//')[-1].split(':')
+        else:
+            host, port = get_default_gateway_linux(), '28015'
+        db_conn = rethinkdb.connect(host, int(port))
     initialized = True
 
 # source: http://stackoverflow.com/a/6556951
@@ -41,13 +47,17 @@ def flask_post(path):
         init()
         flask.request.get_data()
         data = flask.request.data
-        event = json.loads(data)
+        try :
+            event = json.loads(data)
+        except:
+            return ('bad POST data: "%s"'%str(data), 400)
         return json.dumps(lambda_func.handler(db_conn, event))
     except Exception:
         return (traceback.format_exc(), 500) # internal error
 
 def main():
-    init()
+    with open('config.json') as f:
+        config = json.loads(f.read())
     procs = config.get('processes', PROCESSES_DEFAULT)
     print 'Starting %d flask processes' % procs
     app.run(processes=procs, host='0.0.0.0', port=PORT)

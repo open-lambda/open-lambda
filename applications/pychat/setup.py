@@ -17,7 +17,10 @@ def main():
     print '='*40
     print 'Building image'
     builder = os.path.join(builder_dir, 'builder.py')
-    run(builder + ' -l %s -n %s' % ('chat.py', app_name))
+    run(builder + ' -n %s -l %s -c %s' %
+        (app_name,
+         os.path.join(SCRIPT_DIR, 'chat.py'),
+         os.path.join(SCRIPT_DIR, 'lambda-config.json')))
 
     # push image
     print '='*40

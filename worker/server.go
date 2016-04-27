@@ -109,7 +109,7 @@ func (s *Server) ForwardToContainer(handler *Handler, r *http.Request, input []b
 	// way to detect a started container.
 	max_tries := 10
 	for tries := 1; ; tries++ {
-		r2, err := http.NewRequest("POST", url, bytes.NewReader(input))
+		r2, err := http.NewRequest(r.Method, url, bytes.NewReader(input))
 		if err != nil {
 			return nil, nil, newHttpErr(
 				err.Error(),
