@@ -8,9 +8,10 @@ import (
 
 	docker "github.com/fsouza/go-dockerclient"
 	"github.com/phonyphonecall/turnip"
+	"github.com/tylerharter/open-lambda/worker/handler/state"
 )
 
-type ContainerManager struct {
+type DockerManager struct {
 	client *docker.Client
 
 	registryName string
@@ -26,8 +27,8 @@ type ContainerManager struct {
 	removeTimer  *turnip.Turnip
 }
 
-func NewContainerManager(host string, port string) (manager *ContainerManager) {
-	manager = new(ContainerManager)
+func NewDockerManager(host string, port string) (manager *DockerManager) {
+	manager = new(DockerManager)
 
 	// NOTE: This requires that users have pre-configured the environement a docker daemon
 	if c, err := docker.NewClientFromEnv(); err != nil {
@@ -41,7 +42,7 @@ func NewContainerManager(host string, port string) (manager *ContainerManager) {
 	return manager
 }
 
-func (cm *ContainerManager) PullAndCreate(img string, args []string) (container *docker.Container, err error) {
+func (cm *DockerManager) PullAndCreate(img string, args []string) (container *docker.Container, err error) {
 	if container, err = cm.DockerCreate(img, args); err != nil {
 		// if the container already exists, don't pull, let client decide how to handle
 		if err == docker.ErrContainerAlreadyExists {
@@ -65,7 +66,7 @@ func (cm *ContainerManager) PullAndCreate(img string, args []string) (container 
 
 // Will ensure given image is running
 // returns the port of the runnning container
-func (cm *ContainerManager) DockerMakeReady(img string) (port string, err error) {
+func (cm *DockerManager) DockerMakeReady(img string) (port string, err error) {
 	// TODO: decide on one default lambda entry path
 	container, err := cm.PullAndCreate(img, []string{})
 	if err != nil {
@@ -97,14 +98,14 @@ func (cm *ContainerManager) DockerMakeReady(img string) (port string, err error)
 		}
 	}
 
-	port, err = cm.GetLambdaPort(img)
+	port, err = cm.getLambdaPort(img)
 	if err != nil {
 		return "", err
 	}
 	return port, nil
 }
 
-func (cm *ContainerManager) DockerKill(img string) (err error) {
+func (cm *DockerManager) DockerKill(img string) (err error) {
 	// TODO(tyler): is there any advantage to trying to stop
 	// before killing?  (i.e., use SIGTERM instead SIGKILL)
 	opts := docker.KillContainerOptions{ID: img}
@@ -115,7 +116,7 @@ func (cm *ContainerManager) DockerKill(img string) (err error) {
 	return nil
 }
 
-func (cm *ContainerManager) DockerRestart(img string) (err error) {
+func (cm *DockerManager) DockerRestart(img string) (err error) {
 	// Restart container after (0) seconds
 	if err = cm.client.RestartContainer(img, 0); err != nil {
 		log.Printf("failed to restart container with error %v\n", err)
@@ -124,7 +125,7 @@ func (cm *ContainerManager) DockerRestart(img string) (err error) {
 	return nil
 }
 
-func (cm *ContainerManager) DockerPause(img string) (err error) {
+func (cm *DockerManager) DockerPause(img string) (err error) {
 	cm.pauseTimer.Start()
 	if err = cm.client.PauseContainer(img); err != nil {
 		log.Printf("failed to pause container with error %v\n", err)
@@ -135,7 +136,7 @@ func (cm *ContainerManager) DockerPause(img string) (err error) {
 	return nil
 }
 
-func (cm *ContainerManager) DockerUnpause(cid string) (err error) {
+func (cm *DockerManager) DockerUnpause(cid string) (err error) {
 	cm.unpauseTimer.Start()
 	if err = cm.client.UnpauseContainer(cid); err != nil {
 		log.Printf("failed to unpause container %s with err %v\n", cid, err)
@@ -146,7 +147,7 @@ func (cm *ContainerManager) DockerUnpause(cid string) (err error) {
 	return nil
 }
 
-func (cm *ContainerManager) DockerPull(img string) error {
+func (cm *DockerManager) DockerPull(img string) error {
 	cm.pullTimer.Start()
 	err := cm.client.PullImage(
 		docker.PullImageOptions{
@@ -175,7 +176,7 @@ func (cm *ContainerManager) DockerPull(img string) error {
 }
 
 // Combines a docker create with a docker start
-func (cm *ContainerManager) DockerRun(img string, args []string, waitAndRemove bool) (err error) {
+func (cm *DockerManager) DockerRun(img string, args []string, waitAndRemove bool) (err error) {
 	c, err := cm.DockerCreate(img, args)
 	if err != nil {
 		return err
@@ -200,7 +201,7 @@ func (cm *ContainerManager) DockerRun(img string, args []string, waitAndRemove b
 	return nil
 }
 
-func (cm *ContainerManager) DockerImageExists(img_name string) (bool, error) {
+func (cm *DockerManager) DockerImageExists(img_name string) (bool, error) {
 	_, err := cm.client.InspectImage(img_name)
 	if err == docker.ErrNoSuchImage {
 		return false, nil
@@ -210,7 +211,7 @@ func (cm *ContainerManager) DockerImageExists(img_name string) (bool, error) {
 	return true, nil
 }
 
-func (cm *ContainerManager) DockerContainerExists(cname string) (bool, error) {
+func (cm *DockerManager) DockerContainerExists(cname string) (bool, error) {
 	_, err := cm.client.InspectContainer(cname)
 	if err != nil {
 		switch err.(type) {
@@ -223,7 +224,7 @@ func (cm *ContainerManager) DockerContainerExists(cname string) (bool, error) {
 	return true, nil
 }
 
-func (cm *ContainerManager) dockerStart(container *docker.Container) (err error) {
+func (cm *DockerManager) dockerStart(container *docker.Container) (err error) {
 	cm.startTimer.Start()
 	if err = cm.client.StartContainer(container.ID, container.HostConfig); err != nil {
 		log.Printf("failed to start container with err %v\n", err)
@@ -234,7 +235,7 @@ func (cm *ContainerManager) dockerStart(container *docker.Container) (err error)
 	return nil
 }
 
-func (cm *ContainerManager) DockerCreate(img string, args []string) (*docker.Container, error) {
+func (cm *DockerManager) DockerCreate(img string, args []string) (*docker.Container, error) {
 	// Create a new container with img and args
 	// Specifically give container name of img, so we can lookup later
 
@@ -277,7 +278,7 @@ func (cm *ContainerManager) DockerCreate(img string, args []string) (*docker.Con
 	return container, nil
 }
 
-func (cm *ContainerManager) DockerInspect(cid string) (container *docker.Container, err error) {
+func (cm *DockerManager) DockerInspect(cid string) (container *docker.Container, err error) {
 	cm.inspectTimer.Start()
 	container, err = cm.client.InspectContainer(cid)
 	if err != nil {
@@ -289,7 +290,7 @@ func (cm *ContainerManager) DockerInspect(cid string) (container *docker.Contain
 	return container, nil
 }
 
-func (cm *ContainerManager) dockerRemove(container *docker.Container) (err error) {
+func (cm *DockerManager) dockerRemove(container *docker.Container) (err error) {
 	if err = cm.client.RemoveContainer(docker.RemoveContainerOptions{
 		ID: container.ID,
 	}); err != nil {
@@ -301,7 +302,7 @@ func (cm *ContainerManager) dockerRemove(container *docker.Container) (err error
 }
 
 // Returned as "port"
-func (cm *ContainerManager) GetLambdaPort(cid string) (port string, err error) {
+func (cm *DockerManager) getLambdaPort(cid string) (port string, err error) {
 	container, err := cm.DockerInspect(cid)
 	if err != nil {
 		return "", err
@@ -317,7 +318,7 @@ func (cm *ContainerManager) GetLambdaPort(cid string) (port string, err error) {
 	return port, nil
 }
 
-func (cm *ContainerManager) Dump() {
+func (cm *DockerManager) Dump() {
 	opts := docker.ListContainersOptions{All: true}
 	containers, err := cm.client.ListContainers(opts)
 	if err != nil {
@@ -349,11 +350,11 @@ func (cm *ContainerManager) Dump() {
 	log.Printf("=====================================\n")
 }
 
-func (cm *ContainerManager) Client() *docker.Client {
+func (cm *DockerManager) Client() *docker.Client {
 	return cm.client
 }
 
-func (cm *ContainerManager) initTimers() {
+func (cm *DockerManager) initTimers() {
 	cm.createTimer = turnip.NewTurnip()
 	cm.inspectTimer = turnip.NewTurnip()
 	cm.pauseTimer = turnip.NewTurnip()
@@ -362,4 +363,102 @@ func (cm *ContainerManager) initTimers() {
 	cm.restartTimer = turnip.NewTurnip()
 	cm.startTimer = turnip.NewTurnip()
 	cm.unpauseTimer = turnip.NewTurnip()
+}
+
+// Runs any preperation to get the container ready to run
+func (cm *DockerManager) MakeReady(name string) (info ContainerInfo, err error) {
+	// make sure image is pulled
+	imgExists, err := cm.DockerImageExists(name)
+	if err != nil {
+		return info, err
+	}
+	if !imgExists {
+		if err := cm.DockerPull(name); err != nil {
+			return info, err
+		}
+	}
+
+	// make sure container is created
+	contExists, err := cm.DockerContainerExists(name)
+	if err != nil {
+		return info, err
+	}
+	if !contExists {
+		if _, err := cm.DockerCreate(name, []string{}); err != nil {
+			return info, err
+		}
+	}
+
+	return cm.GetInfo(name)
+}
+
+// Returns the current state of the container
+// If a container has never been started, the port will be -1
+func (cm *DockerManager) GetInfo(name string) (info ContainerInfo, err error) {
+	container, err := cm.DockerInspect(name)
+	if err != nil {
+		return info, err
+	}
+
+	// TODO: can the State enum be both paused and running?
+	var hState state.HandlerState
+	if container.State.Running {
+		if container.State.Paused {
+			hState = state.Paused
+		} else {
+			hState = state.Running
+		}
+	} else {
+		hState = state.Stopped
+	}
+
+	// If the container has never been started, it will have no port
+	port := "-1"
+	if hState != state.Stopped {
+		port, err = cm.getLambdaPort(name)
+		if err != nil {
+			return info, err
+		}
+	}
+
+	info.State = hState
+	info.Port = port
+
+	return info, nil
+}
+
+// Starts a given container
+func (cm *DockerManager) Start(name string) error {
+	c, err := cm.DockerInspect(name)
+	if err != nil {
+		return err
+	}
+
+	return cm.dockerStart(c)
+}
+
+// Pauses a given container
+func (cm *DockerManager) Pause(name string) error {
+	return cm.DockerPause(name)
+}
+
+// Unpauses a given container
+func (cm *DockerManager) Unpause(name string) error {
+	return cm.DockerUnpause(name)
+}
+
+// Stops a given container
+func (cm *DockerManager) Stop(name string) error {
+	return cm.DockerKill(name)
+}
+
+// Frees all resources associated with a given lambda
+// Will stop if needed
+func (cm *DockerManager) Remove(name string) error {
+	container, err := cm.DockerInspect(name)
+	if err != nil {
+		return err
+	}
+
+	return cm.dockerRemove(container)
 }

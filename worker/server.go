@@ -16,7 +16,7 @@ import (
 )
 
 type Server struct {
-	manager  *container.ContainerManager
+	manager  container.ContainerManager
 	handlers *handler.HandlerSet
 
 	// config options
@@ -53,7 +53,7 @@ func NewServer(
 	}
 
 	// daemon
-	cm := container.NewContainerManager(registry_host, registry_port)
+	cm := container.NewDockerManager(registry_host, registry_port)
 	if docker_host == "" {
 		endpoint := cm.Client().Endpoint()
 		local := "unix://"
@@ -87,7 +87,7 @@ func NewServer(
 	return server, nil
 }
 
-func (s *Server) Manager() *container.ContainerManager {
+func (s *Server) Manager() container.ContainerManager {
 	return s.manager
 }
 

@@ -14,7 +14,7 @@ func (h HandlerState) String() string {
 	case Unitialized:
 		return "unitialized"
 	case Stopped:
-		return "stoppend"
+		return "stopped"
 	case Running:
 		return "running"
 	case Paused:
