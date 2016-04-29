@@ -1,4 +1,4 @@
-package main
+package handler
 
 import (
 	"testing"
@@ -6,7 +6,7 @@ import (
 
 func TestLRU(t *testing.T) {
 	lru := NewHandlerLRU(0)
-	handlers := NewHandlerSet(HandlerSetOpts{lru: lru})
+	handlers := NewHandlerSet(HandlerSetOpts{Lru: lru})
 	a := handlers.Get("a")
 
 	lru.Add(a)

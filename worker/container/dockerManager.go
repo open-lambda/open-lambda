@@ -1,4 +1,4 @@
-package main
+package container
 
 import (
 	"fmt"
@@ -97,7 +97,7 @@ func (cm *ContainerManager) DockerMakeReady(img string) (port string, err error)
 		}
 	}
 
-	port, err = cm.getLambdaPort(img)
+	port, err = cm.GetLambdaPort(img)
 	if err != nil {
 		return "", err
 	}
@@ -301,7 +301,7 @@ func (cm *ContainerManager) dockerRemove(container *docker.Container) (err error
 }
 
 // Returned as "port"
-func (cm *ContainerManager) getLambdaPort(cid string) (port string, err error) {
+func (cm *ContainerManager) GetLambdaPort(cid string) (port string, err error) {
 	container, err := cm.DockerInspect(cid)
 	if err != nil {
 		return "", err

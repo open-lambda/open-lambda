@@ -1,4 +1,4 @@
-package handler_state
+package state
 
 type HandlerState int
 

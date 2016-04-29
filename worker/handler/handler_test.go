@@ -1,9 +1,11 @@
-package main
+package handler
 
 import (
-	docker "github.com/fsouza/go-dockerclient"
 	"testing"
 	"time"
+
+	docker "github.com/fsouza/go-dockerclient"
+	"github.com/tylerharter/open-lambda/worker/container"
 )
 
 func TestHandlerLookupSame(t *testing.T) {
@@ -25,8 +27,8 @@ func TestHandlerLookupDiff(t *testing.T) {
 }
 
 func TestHandlerHandlerPull(t *testing.T) {
-	cm := NewContainerManager("localhost", "5000")
-	handlers := NewHandlerSet(HandlerSetOpts{cm: cm})
+	cm := container.NewContainerManager("localhost", "5000")
+	handlers := NewHandlerSet(HandlerSetOpts{Cm: cm})
 	name := "nonlocal"
 
 	// containers should initially not be pulled
@@ -61,7 +63,7 @@ func TestHandlerHandlerPull(t *testing.T) {
 	}
 }
 
-func GetState(t *testing.T, cm *ContainerManager, img string) docker.State {
+func GetState(t *testing.T, cm *container.ContainerManager, img string) docker.State {
 	container, err := cm.DockerInspect(img)
 	if err != nil {
 		t.Fatalf("Could not inspect '%v'", img)
@@ -71,8 +73,8 @@ func GetState(t *testing.T, cm *ContainerManager, img string) docker.State {
 
 func TestHandlerRunCountOne(t *testing.T) {
 	lru := NewHandlerLRU(1)
-	cm := NewContainerManager("localhost", "5000")
-	handlers := NewHandlerSet(HandlerSetOpts{cm: cm, lru: lru})
+	cm := container.NewContainerManager("localhost", "5000")
+	handlers := NewHandlerSet(HandlerSetOpts{Cm: cm, Lru: lru})
 	h := handlers.Get("hello")
 
 	h.RunStart()
@@ -90,8 +92,8 @@ func TestHandlerRunCountOne(t *testing.T) {
 
 func TestHandlerRunCountMany(t *testing.T) {
 	lru := NewHandlerLRU(1)
-	cm := NewContainerManager("localhost", "5000")
-	handlers := NewHandlerSet(HandlerSetOpts{cm: cm, lru: lru})
+	cm := container.NewContainerManager("localhost", "5000")
+	handlers := NewHandlerSet(HandlerSetOpts{Cm: cm, Lru: lru})
 	h := handlers.Get("hello")
 	count := 10
 
@@ -120,8 +122,8 @@ func TestHandlerRunCountMany(t *testing.T) {
 
 func TestHandlerEvict(t *testing.T) {
 	lru := NewHandlerLRU(0)
-	cm := NewContainerManager("localhost", "5000")
-	handlers := NewHandlerSet(HandlerSetOpts{cm: cm, lru: lru})
+	cm := container.NewContainerManager("localhost", "5000")
+	handlers := NewHandlerSet(HandlerSetOpts{Cm: cm, Lru: lru})
 	h := handlers.Get("hello")
 	h.RunStart()
 	h.RunFinish()

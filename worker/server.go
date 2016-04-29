@@ -11,11 +11,13 @@ import (
 	"time"
 
 	"github.com/phonyphonecall/turnip"
+	"github.com/tylerharter/open-lambda/worker/container"
+	"github.com/tylerharter/open-lambda/worker/handler"
 )
 
 type Server struct {
-	manager  *ContainerManager
-	handlers *HandlerSet
+	manager  *container.ContainerManager
+	handlers *handler.HandlerSet
 
 	// config options
 	registry_host string
@@ -51,7 +53,7 @@ func NewServer(
 	}
 
 	// daemon
-	cm := NewContainerManager(registry_host, registry_port)
+	cm := container.NewContainerManager(registry_host, registry_port)
 	if docker_host == "" {
 		endpoint := cm.Client().Endpoint()
 		local := "unix://"
@@ -69,27 +71,27 @@ func NewServer(
 	}
 
 	// create server
-	opts := HandlerSetOpts{
-		cm:  cm,
-		lru: NewHandlerLRU(100), // TODO(tyler)
+	opts := handler.HandlerSetOpts{
+		Cm:  cm,
+		Lru: handler.NewHandlerLRU(100), // TODO(tyler)
 	}
 	server := &Server{
 		registry_host: registry_host,
 		registry_port: registry_port,
 		docker_host:   docker_host,
 		manager:       cm,
-		handlers:      NewHandlerSet(opts),
+		handlers:      handler.NewHandlerSet(opts),
 		lambdaTimer:   turnip.NewTurnip(),
 	}
 
 	return server, nil
 }
 
-func (s *Server) Manager() *ContainerManager {
+func (s *Server) Manager() *container.ContainerManager {
 	return s.manager
 }
 
-func (s *Server) ForwardToContainer(handler *Handler, r *http.Request, input []byte) ([]byte, *http.Response, *httpErr) {
+func (s *Server) ForwardToContainer(handler *handler.Handler, r *http.Request, input []byte) ([]byte, *http.Response, *httpErr) {
 	port, err := handler.RunStart()
 	if err != nil {
 		return nil, nil, newHttpErr(

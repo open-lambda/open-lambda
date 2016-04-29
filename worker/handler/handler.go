@@ -1,21 +1,22 @@
-package main
+package handler
 
 import (
 	"log"
 	"sync"
 
-	state "github.com/tylerharter/open-lambda/worker/handler_state"
+	"github.com/tylerharter/open-lambda/worker/container"
+	"github.com/tylerharter/open-lambda/worker/handler/state"
 )
 
 type HandlerSetOpts struct {
-	cm  *ContainerManager
-	lru *HandlerLRU
+	Cm  *container.ContainerManager
+	Lru *HandlerLRU
 }
 
 type HandlerSet struct {
 	mutex    sync.Mutex
 	handlers map[string]*Handler
-	cm       *ContainerManager
+	cm       *container.ContainerManager
 	lru      *HandlerLRU
 }
 
@@ -28,14 +29,14 @@ type Handler struct {
 }
 
 func NewHandlerSet(opts HandlerSetOpts) (handlerSet *HandlerSet) {
-	if opts.lru == nil {
-		opts.lru = NewHandlerLRU(0)
+	if opts.Lru == nil {
+		opts.Lru = NewHandlerLRU(0)
 	}
 
 	return &HandlerSet{
 		handlers: make(map[string]*Handler),
-		cm:       opts.cm,
-		lru:      opts.lru,
+		cm:       opts.Cm,
+		lru:      opts.Lru,
 	}
 }
 
@@ -95,7 +96,7 @@ func (h *Handler) RunStart() (port string, err error) {
 
 	h.runners += 1
 
-	port, err = cm.getLambdaPort(h.name)
+	port, err = cm.GetLambdaPort(h.name)
 	if err != nil {
 		return "", err
 	}
