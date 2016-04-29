@@ -4,13 +4,22 @@ WORKER_SRC:=worker/*.go
 SERVER_BIN:=worker/worker
 CLIENT_BIN:=worker/prof/client/client
 NODE_BIN:=node/bin
+GO_FILES = $(shell find worker/ -name '*.go')
 
-.PHONY: $(WORKER)
-worker : $(WORKER_SRC)
+.PHONY: all
+all : imgs/lambda-node
+
+bin/worker : $(GO_FILES)
 	cd hack && ./build.sh
 	mkdir -p bin
 	cp $(SERVER_BIN) bin/worker
 	cp $(CLIENT_BIN) bin/client
+
+imgs/lambda-node : bin/worker node/Dockerfile node/startup.py
+	mkdir -p node/bin
+	cp bin/worker node/bin/worker
+	docker build -t lambda-node node
+	touch imgs/lambda-node
 
 clean :
 	rm -rf bin
@@ -23,9 +32,3 @@ clean :
 test :
 	./testing/setup.py
 	cd hack && ./build.sh test
-
-.PHONY: node
-node : worker
-	mkdir -p node/bin
-	cp bin/worker node/bin/worker
-	docker build -t lambda-node node
