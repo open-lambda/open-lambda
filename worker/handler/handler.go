@@ -96,10 +96,6 @@ func (h *Handler) RunStart() (port string, err error) {
 
 	h.runners += 1
 
-	// port, err = cm.GetLambdaPort(h.name)
-	// if err != nil {
-	// 	return "", err
-	// }
 	info, err := cm.GetInfo(h.name)
 	if err != nil {
 		return "", err
@@ -159,43 +155,6 @@ func (h *Handler) maybeInit() (err error) {
 
 	cm := h.hset.cm
 
-	// make sure image is pulled
-	// img_exists, err := cm.DockerImageExists(h.name)
-	// if err != nil {
-	// 	return err
-	// }
-	// if !img_exists {
-	// 	if err := cm.DockerPull(h.name); err != nil {
-	// 		return err
-	// 	}
-	// }
-
-	// // make sure container is created
-	// cont_exists, err := cm.DockerContainerExists(h.name)
-	// if err != nil {
-	// 	return err
-	// }
-	// if !cont_exists {
-	// 	if _, err := cm.DockerCreate(h.name, []string{}); err != nil {
-	// 		return err
-	// 	}
-	// }
-
-	// // is container stopped, running, or started?
-	// container, err := cm.DockerInspect(h.name)
-	// if err != nil {
-	// 	return err
-	// }
-
-	// if container.State.Running {
-	// 	if container.State.Paused {
-	// 		h.state = state.Paused
-	// 	} else {
-	// 		h.state = state.Running
-	// 	}
-	// } else {
-	// 	h.state = state.Stopped
-	// }
 	info, err := cm.MakeReady(h.name)
 	if err != nil {
 		return err
