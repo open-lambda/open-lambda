@@ -47,7 +47,8 @@ def main():
     config = {'cid': cid,
               'ip': registry_ip,
               'host_ip': host_ip,
-              'host_port': registry_port}
+              'host_port': registry_port,
+              'type': 'registry'}
     print config
     wrjs(config_path, config)
     print 'started registry ' + registry_ip + ':5000 (or localhost:' + registry_port + ')'
@@ -59,7 +60,8 @@ def main():
     for i in range(int(args.workers)):
         config_path = os.path.join(cluster_dir, 'worker-%d.json' % i)
         config = {'registry_host': registry_ip,
-                  'registry_port': '5000'}
+                  'registry_port': '5000',
+                  'type': 'worker'}
         if i > 0:
             config['rethinkdb_join'] = workers[0]['ip']+':29015'
 

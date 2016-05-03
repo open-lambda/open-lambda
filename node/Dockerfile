@@ -16,6 +16,9 @@ VOLUME ["/data"]
 # OL WORKER
 COPY bin /open-lambda/bin
 
-# INIT
+# SCRIPTS
 COPY startup.py /open-lambda/startup.py
+COPY kill.py /open-lambda/kill.py
+
+# INIT
 CMD ["python", "/open-lambda/startup.py"]
