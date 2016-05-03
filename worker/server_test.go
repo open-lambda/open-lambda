@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
@@ -109,4 +110,28 @@ func TestThreadPausing(t *testing.T) {
 	if after-before > 2 {
 		t.Errorf("Background thread run between requests, ticking %v times\n", (after - before))
 	}
+}
+
+func BenchmarkEcho(b *testing.B) {
+	values := []string{
+		"{\"one\": 1}",
+	}
+	for i := 0; i < b.N; i++ {
+		recv, err := testReq("echo", values[0])
+		if err != nil {
+			b.Fatal(err)
+		}
+		if recv != values[0] {
+			b.Fatalf("Sent '%v' to echo but got back '%v'\n", values[0], recv)
+		}
+	}
+}
+
+// Run benchmark at each test, and print nicely
+func TestFancyBenchmark(t *testing.T) {
+	br := testing.Benchmark(BenchmarkEcho)
+	us := br.NsPerOp() / (1000)
+	fmt.Printf("\t--- Echo Benchmark Report ---\n")
+	fmt.Printf("\tTiming: %vus per lambda req/rsp\n", us)
+	fmt.Printf("\tMemory: %v\n", br.MemString())
 }
