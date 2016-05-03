@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
@@ -127,11 +126,19 @@ func BenchmarkEcho(b *testing.B) {
 	}
 }
 
-// Run benchmark at each test, and print nicely
-func TestFancyBenchmark(t *testing.T) {
-	br := testing.Benchmark(BenchmarkEcho)
-	us := br.NsPerOp() / (1000)
-	fmt.Printf("\t--- Echo Benchmark Report ---\n")
-	fmt.Printf("\tTiming: %vus per lambda req/rsp\n", us)
-	fmt.Printf("\tMemory: %v\n", br.MemString())
+func BenchmarkEchoParallel(b *testing.B) {
+	values := []string{
+		"{\"one\": 1}",
+	}
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			recv, err := testReq("echo", values[0])
+			if err != nil {
+				b.Fatal(err)
+			}
+			if recv != values[0] {
+				b.Fatalf("Sent '%v' to echo but got back '%v'\n", values[0], recv)
+			}
+		}
+	})
 }

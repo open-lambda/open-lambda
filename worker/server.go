@@ -105,7 +105,7 @@ func (s *Server) ForwardToContainer(handler *handler.Handler, r *http.Request, i
 	// container request and response respectively.
 	host := fmt.Sprintf("%s:%s", s.docker_host, port)
 	url := fmt.Sprintf("http://%s%s", host, r.URL.Path)
-	log.Printf("proxying request to %s\n", url)
+	// log.Printf("proxying request to %s\n", url)
 
 	// TODO(tyler): some sort of smarter backoff.  Or, a better
 	// way to detect a started container.
