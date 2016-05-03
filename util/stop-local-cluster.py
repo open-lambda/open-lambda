@@ -19,6 +19,10 @@ def main():
         try:
             info = rdjs(path)
             cid = info['cid']
+            if info['type'] == 'worker':
+                # need this script, otherwise it hangs if Docker inside
+                # the container has paused sub containers.
+                run('docker exec '+cid+' /open-lambda/kill.py')
             run('docker kill '+cid)
         except Exception as e:
             print e

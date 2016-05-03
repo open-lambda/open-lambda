@@ -15,7 +15,7 @@ bin/worker : $(GO_FILES)
 	cp $(SERVER_BIN) bin/worker
 	cp $(CLIENT_BIN) bin/client
 
-imgs/lambda-node : bin/worker node/Dockerfile node/startup.py
+imgs/lambda-node : bin/worker node/Dockerfile node/startup.py node/kill.py
 	mkdir -p node/bin
 	cp bin/worker node/bin/worker
 	docker build -t lambda-node node
