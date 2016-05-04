@@ -25,7 +25,6 @@ type Handler struct {
 	hset    *HandlerSet
 	name    string
 	state   state.HandlerState
-	info    container.ContainerInfo
 	runners int
 }
 
@@ -49,12 +48,9 @@ func (h *HandlerSet) Get(name string) *Handler {
 	handler := h.handlers[name]
 	if handler == nil {
 		handler = &Handler{
-			hset:  h,
-			name:  name,
-			state: state.Unitialized,
-			info: container.ContainerInfo{
-				Port: "-1",
-			},
+			hset:    h,
+			name:    name,
+			state:   state.Unitialized,
 			runners: 0,
 		}
 		h.handlers[name] = handler
@@ -98,17 +94,14 @@ func (h *Handler) RunStart() (port string, err error) {
 		h.hset.lru.Remove(h)
 	}
 
-	// Init info if we havent yet
-	if h.info.Port == "-1" {
-		h.info, err = cm.GetInfo(h.name)
-		if err != nil {
-			return "", err
-		}
-	}
-
 	h.runners += 1
 
-	return h.info.Port, nil
+	info, err := cm.GetInfo(h.name)
+	if err != nil {
+		return "", err
+	}
+
+	return info.Port, nil
 }
 
 func (h *Handler) RunFinish() {
