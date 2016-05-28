@@ -7,6 +7,9 @@ def run(cmd):
 
 def main():
     for cid in run('docker ps -q').strip().split('\n'):
+	if cid == '':
+		continue
+
         state = json.loads(run('docker inspect ' + cid))
         assert(len(state) == 1)
         paused = state[0]['State']['Paused']
