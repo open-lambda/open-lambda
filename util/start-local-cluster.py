@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import os, sys, subprocess, json, argparse, time
+import os, sys, subprocess, json, argparse, time, shutil
 import netifaces
 import rethinkdb as r
 from common import *
@@ -34,8 +34,37 @@ def main():
 
     cluster_dir = os.path.join(SCRIPT_DIR, 'cluster')
     if os.path.exists(cluster_dir):
-        print 'Cluster already running!'
-        sys.exit(1)
+        running = False
+        for filename in os.listdir(cluster_dir):
+            path = os.path.join(cluster_dir, filename)
+            if os.path.isdir(path):
+                print "Removing unexpected directory: [" + filename + "]"
+                shutil.rmtree(path, ignore_errors=True)
+                continue
+            if not filename.endswith('.json'):
+                print "Removing unexpected non-json file: [" + filename + "]"
+                os.remove(path)
+                continue
+
+            try: 
+                info = rdjs(path)
+            except ValueError, e:
+                print "Removing invalid '.json' file: [" + filename + "]"
+                os.remove(path)
+                continue
+                
+            cid = info['cid']
+            cmd = 'docker inspect -f {{.State.Running}} %s' % (cid)
+            r = run(cmd).strip()
+            if r == 'true':
+                running = True
+
+        if running:
+            print 'Cluster already running!'
+            sys.exit(1)
+        else:
+            shutil.rmtree(cluster_dir, ignore_errors=True)
+
     os.mkdir(cluster_dir)
 
     # start registry
