@@ -28,7 +28,7 @@ def main():
         	fd.write('FROM '+env['distribution']+'\n')
         	if 'alpine' in env['distribution']:
             		fd.write('RUN apk add --update python py-pip\n')
-        	if 'phusion/baseimage' or 'ubuntu' in env['distribution']:
+        	if 'phusion/baseimage' in env['distribution'] or 'ubuntu' in env['distribution']:
             		fd.write('RUN apt-get -y update\n')
             		fd.write('RUN apt-get -y install python-pip\n')
 
