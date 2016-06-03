@@ -1,0 +1,10 @@
+{
+	"distribution":"phusion/baseimage",
+	"pip": [
+		"Flask"
+	],
+	"apt": [
+		"tesseract-ocr",
+		"python-imaging"
+	]
+}
