@@ -1,5 +1,4 @@
 var config;
-var holdButton = '</td><td><button class="hold">Hold</button></td></tr>';
 
 function lambda_post(data, callback) {
   var url = config['url']
@@ -23,12 +22,21 @@ function clear() {
   });
 }
 
-function hold() {
-  lambda_post({"op":"hold"}, function(data){
-
+function hold(snum) {
+  var data = {"op":"hold", "snum":snum};
+  lambda_post(data, function(data){
+    alert(data);
+    // pass
   });
 }
 
+function book() {
+  lambda_post({"op":"book"}, function(data){
+    // pass
+  });
+}
+
+// TODO how to determine if this is really the newest? how to manage?
 function updates(ts) {
   var data = {"op":"updates", "ts":ts};
   lambda_post(data, function(data){
@@ -36,18 +44,23 @@ function updates(ts) {
       html_error = data.error.replace(/\n/g, '<br/>');
       $("#seatmap").html("Error: <br/><br/>" + html_error + "<br/><br/>Consider refreshing.")
     } else {
-      if ($("#snum_" + data.result.snum).length == 0) {
-        addSeat(data.result.snum, data.result.stat);
-      } else {
-        // TODO replace status in row
+      $("#seatmap").html('<tr><td>Number</td><td>Status</td><td>Action</td></tr>');
+      for (var i = 1; i <= data.result['max']; i++) {
+        $("#seatmap").append(
+          '<tr id=snum_' + i +
+          '><td>'        + i +
+          '</td><td>'    + data.result.smap[i]
+        );
+        if (data.result.smap[i] = 'free') {
+          $("#snum_" + i).append(
+            '</td><td><button snum=' + i + 
+            ' class="hold">Hold</button></td></tr>'
+          );
+        }
       }
       updates(data.result.ts);
     }
   });
-}
-
-function addSeat(snum, stat) {
-  $("#seatmap").append('<tr id=snum_' + snum + '><td>' + snum + '</td><td>' + stat + holdButton);
 }
 
 function main() {
@@ -57,6 +70,10 @@ function main() {
 
       // setup handlers
       $("#clear").click(clear);
+      $("#book").click(book);
+      $(".hold").on("click", function(){
+        hold($(this).attr("snum"));
+      });
 
       updates(0);
     })
