@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"errors"
 
 	"github.com/phonyphonecall/turnip"
 	"github.com/tylerharter/open-lambda/worker/container"
@@ -94,6 +95,9 @@ func (s *Server) Manager() container.ContainerManager {
 func (s *Server) ForwardToContainer(handler *handler.Handler, r *http.Request, input []byte) ([]byte, *http.Response, *httpErr) {
 	port, err := handler.RunStart()
 	if err != nil {
+		if strings.Contains(err.Error(), "is not paused") {
+			err = errors.New("Initial execution of lambda handler failed") 
+		}
 		return nil, nil, newHttpErr(
 			err.Error(),
 			http.StatusInternalServerError)
@@ -181,11 +185,12 @@ func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 
 	// write response
 	// TODO(tyler): origins should be configurable
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods",
-		"GET, PUT, POST, DELETE, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers",
-		"Content-Type, Content-Range, Content-Disposition, Content-Description")
+	// w.Header().Set("Access-Control-Allow-Origin", "*")
+	// w.Header().Set("Access-Control-Allow-Methods",
+	//	"GET, PUT, POST, DELETE, OPTIONS")
+	//w.Header().Set("Access-Control-Allow-Headers",
+	//	"Content-Type, Content-Range, Content-Disposition, Content-Description")
+
 
 	w.WriteHeader(w2.StatusCode)
 
@@ -202,12 +207,25 @@ func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 //
 // curl -X POST localhost:8080/runLambda/<lambda-name> -d '{}'
 func (s *Server) RunLambda(w http.ResponseWriter, r *http.Request) {
+	// write response headers
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods",
+		"GET, PUT, POST, DELETE, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers",
+		"Content-Type, Content-Range, Content-Disposition, Content-Description, X-Requested-With")
+
+	//if r.Method == "options" {
+	//	w.WriteHeader(200)
+	//} else {
 	s.lambdaTimer.Start()
 	if err := s.RunLambdaErr(w, r); err != nil {
 		log.Printf("could not handle request: %s\n", err.msg)
 		http.Error(w, err.msg, err.code)
 	}
 	s.lambdaTimer.Stop()
+
+	//}
+
 }
 
 func (s *Server) Dump() {
