@@ -1,10 +1,8 @@
 {
-	"distribution":"phusion/baseimage",
+	"distribution": "ubuntu",
 	"pip": [
-		"Flask"
+		"Flask",
+		"rethinkdb"
 	],
-	"apt": [
-		"tesseract-ocr",
-		"python-imaging"
-	]
+	"add":["tesseract-lambda.tar.gz"]
 }
