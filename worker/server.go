@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -9,7 +10,6 @@ import (
 	"os"
 	"strings"
 	"time"
-	"errors"
 
 	"github.com/phonyphonecall/turnip"
 	"github.com/tylerharter/open-lambda/worker/container"
@@ -96,7 +96,7 @@ func (s *Server) ForwardToContainer(handler *handler.Handler, r *http.Request, i
 	port, err := handler.RunStart()
 	if err != nil {
 		if strings.Contains(err.Error(), "is not paused") {
-			err = errors.New("Initial execution of lambda handler failed") 
+			err = errors.New("Error: Container stopped when it should be paused. Execution of lambda handler likely failed.")
 		}
 		return nil, nil, newHttpErr(
 			err.Error(),
@@ -191,7 +191,6 @@ func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 	//w.Header().Set("Access-Control-Allow-Headers",
 	//	"Content-Type, Content-Range, Content-Disposition, Content-Description")
 
-
 	w.WriteHeader(w2.StatusCode)
 
 	if _, err := w.Write(wbody); err != nil {
@@ -214,17 +213,17 @@ func (s *Server) RunLambda(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Headers",
 		"Content-Type, Content-Range, Content-Disposition, Content-Description, X-Requested-With")
 
-	//if r.Method == "options" {
-	//	w.WriteHeader(200)
-	//} else {
-	s.lambdaTimer.Start()
-	if err := s.RunLambdaErr(w, r); err != nil {
-		log.Printf("could not handle request: %s\n", err.msg)
-		http.Error(w, err.msg, err.code)
-	}
-	s.lambdaTimer.Stop()
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(200)
+	} else {
+		s.lambdaTimer.Start()
+		if err := s.RunLambdaErr(w, r); err != nil {
+			log.Printf("could not handle request: %s\n", err.msg)
+			http.Error(w, err.msg, err.code)
+		}
+		s.lambdaTimer.Stop()
 
-	//}
+	}
 
 }
 
