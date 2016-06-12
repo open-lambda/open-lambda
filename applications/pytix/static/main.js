@@ -1,4 +1,5 @@
 var config;
+var unum;
 
 function lambda_post(data, callback) {
   var url = config['url']
@@ -18,21 +19,23 @@ function lambda_post(data, callback) {
 
 function clear() {
   lambda_post({"op":"init"}, function(data){
-    // pass
+    return data.result;
   });
 }
 
 function hold(snum) {
-  var data = {"op":"hold", "snum":snum};
+  var data = {"op":"hold", "snum":snum, "unum":unum};
   lambda_post(data, function(data){
-    alert(data);
-    // pass
+    if (data.result['replaced'] != 1) {
+      $("#alert_" + snum).html(" Already held!");
+    }
+    return data.result;
   });
 }
 
 function book() {
-  lambda_post({"op":"book"}, function(data){
-    // pass
+  lambda_post({"op":"book", "unum":unum}, function(data){
+    return data.result;
   });
 }
 
@@ -51,11 +54,15 @@ function updates(ts) {
           '><td>'        + i +
           '</td><td>'    + data.result.smap[i]
         );
-        if (data.result.smap[i] = 'free') {
+        if (data.result.smap[i] == 'free') {
           $("#snum_" + i).append(
-            '</td><td><button snum=' + i + 
-            ' class="hold">Hold</button></td></tr>'
+            '</td><td><button snum='           + i + 
+            ' class="hold" id=btn_'            + i +
+            '>Hold</button></td><td id=alert_' + i +
+            '></td></tr>'
           );
+        } else if (data.result.umap[i] == unum) {
+          $("#snum_" + i).append(' by you</td></tr>');
         }
       }
       updates(data.result.ts);
@@ -68,14 +75,16 @@ function main() {
     .done(function(data) {
       config = data;
 
+      unum = Math.floor(Math.random() * 999999999);
+
+      updates(0);
+
       // setup handlers
       $("#clear").click(clear);
       $("#book").click(book);
-      $(".hold").on("click", function(){
+      $("body").on("click", ".hold", function(){
         hold($(this).attr("snum"));
       });
-
-      updates(0);
     })
     .fail(function( jqxhr, textStatus, error ) {
       $("#seatmap").html("Error: " + error + ".  Consider refreshing.")

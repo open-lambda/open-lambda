@@ -6,6 +6,7 @@ VENU = 'venu' # TABLE
 ID   = 'id'   # COLUMN
 TS   = 'ts'   # COLUMN
 SMAP = 'smap' # COLUMN
+UMAP = 'umap' # COLUMN
 MAX  = 'max'  # COLUMN
 CNT  = 20     # number of seats
 
@@ -22,45 +23,59 @@ def init(conn, event):
     r.db(TIX).table(VENU).index_create(TS).run(conn)
 
     smap = {}
-    smap['max'] = CNT
+    umap = {}
     for x in range(1, CNT + 1):
         smap[str(x)] = 'free' 
+        umap[str(x)] = ''
 
     rv += str(r.db(TIX).table(VENU).insert({
         ID: 0,
         SMAP: smap,
+        UMAP: umap,
         MAX: CNT,
-        TS:   time.time()
+        TS: time.time()
     }).run(conn))
 
     return rv
 
 def hold(conn, event):
-    snum = event.get('snum')
-#    if r.db(TIX).table(VENU).get(snum).get_field(STAT).run(conn) != 'free':
-#        return 'seat %f not free' % snum
-#
-#    r.db(TIX).table(VENU).get(snum).update({STAT: 'held',
-#                                     TS:   time.time()}).run(conn)
-#    return 'held %f' % snum
-    r.db(TIX).table(VENU).get(0).update(lambda VENU:
+    snum = str(event.get('snum'))
+    unum = str(event.get('unum'))
+
+    smap = {}
+    umap = {}
+    smap = r.db(TIX).table(VENU).get(0).get_field(SMAP).run(conn)
+    umap = r.db(TIX).table(VENU).get(0).get_field(UMAP).run(conn)
+    smap[snum] = 'held'
+    umap[snum] = unum
+    result = r.db(TIX).table(VENU).get(0).update(lambda VENU:
         r.branch(
             VENU[SMAP][snum] == 'free',
-            {SMAP[snum]: 'held', TS: time.time()},
+            {SMAP: smap, UMAP: umap, TS: time.time()},
             {}
         )
     ).run(conn)
-    return 'returned from hold'
+    if result:
+        return result
 
 def book(conn, event):
-    snum = event.get('snum')
-    if r.db(TIX).table(VENU).get(snum).get_field(STAT).run(conn) != 'held':
-        return 'seat %f not held' % snum
+    unum = str(event.get('unum'))
 
-    r.db(TIX).table(VENU).get(snum).update({STAT: 'booked',
-                                     NAME: name,
-                                     TS:   time.time()}).run(conn)
-    return 'booked %f' % (snum)
+    smap = {}
+    umap = {}
+    smap = r.db(TIX).table(VENU).get(0).get_field(SMAP).run(conn)
+    umap = r.db(TIX).table(VENU).get(0).get_field(UMAP).run(conn)
+    for x in range (1, CNT + 1):
+        if smap[str(x)] == 'held' and umap[str(x)] == unum:
+            smap[str(x)] = 'booked'
+
+    result = r.db(TIX).table(VENU).get(0).update({
+        SMAP: smap,
+        TS: time.time()
+    }).run(conn)
+
+    if result:
+        return result
 
 def updates(conn, event):
     ts = event.get('ts', 0)
