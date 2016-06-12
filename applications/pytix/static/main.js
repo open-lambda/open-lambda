@@ -62,7 +62,7 @@ function updates(ts) {
             '></td></tr>'
           );
         } else if (data.result.umap[i] == unum) {
-          $("#snum_" + i).append(' by you</td></tr>');
+          $("#snum_" + i).append('<td>by you</td></tr>');
         }
       }
       updates(data.result.ts);
