@@ -16,6 +16,12 @@ function lambda_post(data, callback) {
   });  
 }
 
+function init() {
+    lambda_post({"op": "init"}, function(data){
+        //do nothing
+    });
+}
+/*
 function clear() {
   lambda_post({"op":"init"}, function(data){
     // pass
@@ -42,13 +48,13 @@ function updates(ts) {
     }
   });
 }
-
+*/
 function main() {
-  $("#comments").html("initializing");
+  $("#initmsg").html("initializing");
   $.getJSON('config.json')
     .done(function(data) {
-      config = data;
-      $("#comments").html("");
+      init()
+      $("#initmsg").html("");
 
       // setup handlers
       $('#comment').keypress(function(e){
