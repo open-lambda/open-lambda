@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -95,9 +94,6 @@ func (s *Server) Manager() container.ContainerManager {
 func (s *Server) ForwardToContainer(handler *handler.Handler, r *http.Request, input []byte) ([]byte, *http.Response, *httpErr) {
 	port, err := handler.RunStart()
 	if err != nil {
-		if strings.Contains(err.Error(), "is not paused") {
-			err = errors.New("Error: Container stopped when it should be paused. Execution of lambda handler likely failed.")
-		}
 		return nil, nil, newHttpErr(
 			err.Error(),
 			http.StatusInternalServerError)
@@ -182,14 +178,6 @@ func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 	if err != nil {
 		return err
 	}
-
-	// write response
-	// TODO(tyler): origins should be configurable
-	// w.Header().Set("Access-Control-Allow-Origin", "*")
-	// w.Header().Set("Access-Control-Allow-Methods",
-	//	"GET, PUT, POST, DELETE, OPTIONS")
-	//w.Header().Set("Access-Control-Allow-Headers",
-	//	"Content-Type, Content-Range, Content-Disposition, Content-Description")
 
 	w.WriteHeader(w2.StatusCode)
 
