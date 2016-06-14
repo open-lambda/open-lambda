@@ -28,7 +28,7 @@ def main():
 	info = rdjs(path)
         cid = info['cid']
         if info['type'] == 'worker':
-	    out.write("\n<--------------- Start worker [%s] logs: --------------->\n\n" % cid)
+	    out.write("\n<--------------- Start worker container [%s] logs: --------------->\n\n" % cid)
 	    out.flush()
 
 	    cmd = ['docker', 'logs']
@@ -41,10 +41,7 @@ def main():
 	        print 'Docker logs command execution failed.'
 	        sys.exit(1)
 
-	    #if not args.tail:
-		#out.write("\n")
-
-	    out.write("\n<--------------- End worker [%s] logs --------------->\n" % cid)
+	    out.write("\n<--------------- End worker container [%s] logs --------------->\n" % cid)
 
     out.close()
 if __name__ == '__main__':

@@ -75,14 +75,14 @@ func (cm *DockerManager) dockerLogs(cid string, buf *bytes.Buffer) (err error) {
 
 func (cm *DockerManager) dockerError(cid string, outer error) (err error) {
 	buf := bytes.NewBufferString(outer.Error())
-	buf.WriteString(fmt.Sprintf("<---Container [%s] logs:--->\n", cid))
+	buf.WriteString(fmt.Sprintf("<--- Start handler container [%s] logs: --->\n", cid))
 
 	err = cm.dockerLogs(cid, buf)
 	if err != nil {
 		return err
 	}
 
-	buf.WriteString(fmt.Sprintf("<---End container [%s] logs--->\n", cid))
+	buf.WriteString(fmt.Sprintf("<--- End handler container [%s] logs --->\n", cid))
 
 	return errors.New(buf.String())
 }
