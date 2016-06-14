@@ -1,0 +1,84 @@
+---
+# These tasks install http and the php modules.
+
+- hosts: common
+  remote_user: vagrant
+  become: yes
+  become_user: root
+  vars:
+    ansible_python_interpreter: /usr/bin/python2
+    python_packages:
+      - netifaces
+      - rethinkdb
+
+  tasks:
+     - name: Add LXC Repo
+       apt_repository: repo='ppa:ubuntu-lxc/lxd-stable' state=present
+
+     - name: Grab Kernel Version
+       shell: uname -r
+       register: kver
+
+     - name: Install Packages
+       apt: name={{ item }} state=present update_cache=yes
+       with_items:
+          - docker.io
+          - python-pip
+          - golang
+          - python2.7-dev
+          - curl
+          - ca-certificates
+          - linux-image-extra-virtual
+          - linux-image-extra-{{ kver.stdout }}
+
+     - name: Enable aufs
+       modprobe: name=aufs state=present
+
+     - name: Install Python Packages
+       pip:  name="{{ python_packages | join(' ') }}"
+
+     - name: Add vagrant User To Docker Group
+       user: name=vagrant append=yes groups=docker
+
+     - name: Start docker Service
+       service: name=docker state=started enabled=yes
+
+     - name: Create opt Directory
+       file: path=/opt state=directory
+             owner=root mode=0775
+
+     - name: Create the Github SSH public key file
+       copy: src="~/.ssh/id_rsa.pub"
+             dest="/root/.ssh/id_rsa.pub"
+             mode=0644
+
+     - name: Create the Github SSH private key file
+       copy: src="~/.ssh/id_rsa"
+             dest="/root/.ssh/id_rsa"
+             mode=0600
+
+     - name: Clone open-lambda Repo
+       git:  repo=git@github.com:tylerharter/open-lambda.git
+             dest=/opt/open-lambda
+             accept_hostkey=yes
+             key_file=/root/.ssh/id_rsa
+       ignore_errors: yes
+
+     - name: chmod Source Directory
+       file: path=/opt/open-lambda/ state=directory
+             owner=vagrant mode=0775 recurse=yes
+
+     - name: Build Lambda-node
+       make: chdir=/opt/open-lambda/ target=imgs/lambda-node
+
+     - name: Start Cluster
+       shell: python /opt/open-lambda/util/start-local-cluster.py
+
+     - name: Start PyChat App
+       shell: python /opt/open-lambda/applications/pychat/setup.py
+
+     - name: Point PyChat To localhost
+       replace: dest=/opt/open-lambda/applications/pychat/static/config.json regexp=10.0.2.15 replace=localhost
+
+     - name: Start nginx Container
+       shell: docker run -d -p 80:80 -v /opt/open-lambda/applications/pychat/static:/usr/share/nginx/html:ro nginx
