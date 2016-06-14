@@ -1,10 +1,13 @@
 package container
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"log"
 	"strconv"
 	"strings"
+	"time"
 
 	docker "github.com/fsouza/go-dockerclient"
 	"github.com/phonyphonecall/turnip"
@@ -25,6 +28,7 @@ type DockerManager struct {
 	inspectTimer *turnip.Turnip
 	startTimer   *turnip.Turnip
 	removeTimer  *turnip.Turnip
+	logTimer     *turnip.Turnip
 }
 
 func NewDockerManager(host string, port string) (manager *DockerManager) {
@@ -40,6 +44,47 @@ func NewDockerManager(host string, port string) (manager *DockerManager) {
 	manager.registryName = fmt.Sprintf("%s:%s", host, port)
 	manager.initTimers()
 	return manager
+}
+
+func (cm *DockerManager) dockerLogs(cid string, buf *bytes.Buffer) (err error) {
+	cm.logTimer.Start()
+
+	err = cm.client.Logs(docker.LogsOptions{
+		Container:         cid,
+		OutputStream:      buf,
+		ErrorStream:       buf,
+		InactivityTimeout: time.Second,
+		Follow:            false,
+		Stdout:            true,
+		Stderr:            true,
+		Since:             0,
+		Timestamps:        false,
+		Tail:              "all",
+		RawTerminal:       false,
+	})
+
+	if err != nil {
+		log.Printf("failed to get logs for %s with err %v\n", cid, err)
+		return err
+	}
+
+	cm.logTimer.Stop()
+
+	return nil
+}
+
+func (cm *DockerManager) dockerError(cid string, outer error) (err error) {
+	buf := bytes.NewBufferString(outer.Error())
+	buf.WriteString(fmt.Sprintf("<---Container [%s] logs:--->\n", cid))
+
+	err = cm.dockerLogs(cid, buf)
+	if err != nil {
+		return err
+	}
+
+	buf.WriteString(fmt.Sprintf("<---End container [%s] logs--->\n", cid))
+
+	return errors.New(buf.String())
 }
 
 func (cm *DockerManager) pullAndCreate(img string, args []string) (container *docker.Container, err error) {
@@ -111,7 +156,7 @@ func (cm *DockerManager) dockerKill(img string) (err error) {
 	opts := docker.KillContainerOptions{ID: img}
 	if err = cm.client.KillContainer(opts); err != nil {
 		log.Printf("failed to kill container with error %v\n", err)
-		return err
+		return cm.dockerError(img, err)
 	}
 	return nil
 }
@@ -120,7 +165,7 @@ func (cm *DockerManager) dockerRestart(img string) (err error) {
 	// Restart container after (0) seconds
 	if err = cm.client.RestartContainer(img, 0); err != nil {
 		log.Printf("failed to restart container with error %v\n", err)
-		return err
+		return cm.dockerError(img, err)
 	}
 	return nil
 }
@@ -129,7 +174,7 @@ func (cm *DockerManager) dockerPause(img string) (err error) {
 	cm.pauseTimer.Start()
 	if err = cm.client.PauseContainer(img); err != nil {
 		log.Printf("failed to pause container with error %v\n", err)
-		return err
+		return cm.dockerError(img, err)
 	}
 	cm.pauseTimer.Stop()
 
@@ -140,7 +185,7 @@ func (cm *DockerManager) dockerUnpause(cid string) (err error) {
 	cm.unpauseTimer.Start()
 	if err = cm.client.UnpauseContainer(cid); err != nil {
 		log.Printf("failed to unpause container %s with err %v\n", cid, err)
-		return err
+		return cm.dockerError(cid, err)
 	}
 	cm.unpauseTimer.Stop()
 
@@ -161,7 +206,7 @@ func (cm *DockerManager) dockerPull(img string) error {
 
 	if err != nil {
 		log.Printf("failed to pull container: %v\n", err)
-		return err
+		return cm.dockerError(img, err)
 	}
 
 	err = cm.client.TagImage(
@@ -169,7 +214,7 @@ func (cm *DockerManager) dockerPull(img string) error {
 		docker.TagImageOptions{Repo: img, Force: true})
 	if err != nil {
 		log.Printf("failed to re-tag container: %v\n", err)
-		return err
+		return cm.dockerError(img, err)
 	}
 
 	return nil
@@ -191,7 +236,7 @@ func (cm *DockerManager) dockerRun(img string, args []string, waitAndRemove bool
 		_, err = cm.client.WaitContainer(img)
 		if err != nil {
 			log.Printf("failed to wait on container %s with err %v\n", img, err)
-			return err
+			return cm.dockerError(img, err)
 		}
 		err = cm.dockerRemove(c)
 		if err != nil {
@@ -229,7 +274,7 @@ func (cm *DockerManager) dockerStart(container *docker.Container) (err error) {
 	cm.startTimer.Start()
 	if err = cm.client.StartContainer(container.ID, container.HostConfig); err != nil {
 		log.Printf("failed to start container with err %v\n", err)
-		return err
+		return cm.dockerError(container.ID, err)
 	}
 	cm.startTimer.Stop()
 
@@ -273,7 +318,7 @@ func (cm *DockerManager) dockerCreate(img string, args []string) (*docker.Contai
 	if err != nil {
 		// commented because at large scale, this isnt always an error, and therefor shouldnt polute logs
 		// log.Printf("container %s failed to create with err: %v\n", img, err)
-		return nil, err
+		return nil, cm.dockerError(img, err)
 	}
 
 	return container, nil
@@ -284,7 +329,7 @@ func (cm *DockerManager) dockerInspect(cid string) (container *docker.Container,
 	container, err = cm.client.InspectContainer(cid)
 	if err != nil {
 		log.Printf("failed to inspect %s with err %v\n", cid, err)
-		return nil, err
+		return nil, cm.dockerError(cid, err)
 	}
 	cm.inspectTimer.Stop()
 
@@ -296,7 +341,7 @@ func (cm *DockerManager) dockerRemove(container *docker.Container) (err error) {
 		ID: container.ID,
 	}); err != nil {
 		log.Printf("failed to rm container with err %v", err)
-		return err
+		return cm.dockerError(container.ID, err)
 	}
 
 	return nil
@@ -306,7 +351,7 @@ func (cm *DockerManager) dockerRemove(container *docker.Container) (err error) {
 func (cm *DockerManager) getLambdaPort(cid string) (port string, err error) {
 	container, err := cm.dockerInspect(cid)
 	if err != nil {
-		return "", err
+		return "", cm.dockerError(cid, err)
 	}
 
 	// TODO: Will we ever need to look at other ip's than the first?
@@ -329,7 +374,7 @@ func (cm *DockerManager) Dump() {
 	for idx, info := range containers {
 		container, err := cm.dockerInspect(info.ID)
 		if err != nil {
-			log.Fatal("Could get container")
+			log.Fatal("Could not get container")
 		}
 
 		log.Printf("CONTAINER %d: %v, %v, %v\n", idx,
@@ -342,6 +387,7 @@ func (cm *DockerManager) Dump() {
 	log.Printf("====== Docker Operation Stats =======\n")
 	log.Printf("\tcreate: \t%fms\n", cm.createTimer.AverageMs())
 	log.Printf("\tinspect: \t%fms\n", cm.inspectTimer.AverageMs())
+	log.Printf("\tlogs: \t%fms\n", cm.logTimer.AverageMs())
 	log.Printf("\tpause: \t\t%fms\n", cm.pauseTimer.AverageMs())
 	log.Printf("\tpull: \t\t%fms\n", cm.pullTimer.AverageMs())
 	log.Printf("\tremove: \t%fms\n", cm.removeTimer.AverageMs())
@@ -364,6 +410,7 @@ func (cm *DockerManager) initTimers() {
 	cm.restartTimer = turnip.NewTurnip()
 	cm.startTimer = turnip.NewTurnip()
 	cm.unpauseTimer = turnip.NewTurnip()
+	cm.logTimer = turnip.NewTurnip()
 }
 
 // Runs any preperation to get the container ready to run
@@ -456,10 +503,10 @@ func (cm *DockerManager) Stop(name string) error {
 // Frees all resources associated with a given lambda
 // Will stop if needed
 func (cm *DockerManager) Remove(name string) error {
-	container, err := cm.dockerInspect(name)
+	c, err := cm.dockerInspect(name)
 	if err != nil {
-		return err
+		return cm.dockerError(name, err)
 	}
 
-	return cm.dockerRemove(container)
+	return cm.dockerRemove(c)
 }

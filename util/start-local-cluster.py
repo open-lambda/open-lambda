@@ -38,26 +38,30 @@ def main():
         for filename in os.listdir(cluster_dir):
             path = os.path.join(cluster_dir, filename)
             if os.path.isdir(path):
-                print "Removing unexpected directory: [" + filename + "]"
+                print "Removing unexpected directory: [%s]" % filename
                 shutil.rmtree(path, ignore_errors=True)
                 continue
             if not filename.endswith('.json'):
-                print "Removing unexpected non-json file: [" + filename + "]"
+                print "Removing unexpected non-json file: [%s]" % filename
                 os.remove(path)
                 continue
 
             try: 
                 info = rdjs(path)
-            except ValueError, e:
-                print "Removing invalid '.json' file: [" + filename + "]"
+            except ValueError as e:
+                print "Removing invalid '.json' file: [%s]" % filename
                 os.remove(path)
                 continue
                 
             cid = info['cid']
-            cmd = 'docker inspect -f {{.State.Running}} %s' % (cid)
-            r = run(cmd).strip()
-            if r == 'true':
-                running = True
+            cmd = 'docker inspect -f {{.State.Running}} %s' % cid
+	    try:
+            	r = run(cmd).strip()
+		if r == 'true':
+		    running = True
+	    except subprocess.CalledProcessError as e:
+		print "Encountered unexpected worker file [%s]. Use stop-local-cluster.py to properly stop cluster." % filename 
+
 
         if running:
             print 'Cluster already running!'
