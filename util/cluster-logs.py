@@ -20,28 +20,28 @@ def main():
     else:
 	out = sys.stdout
 
-    for filename in os.listdir(CLUSTER_DIR):
-        path = os.path.join(CLUSTER_DIR, filename)
-        if not filename.endswith('.json'):
-            continue
-            
-	info = rdjs(path)
-        cid = info['cid']
-        if info['type'] == 'worker':
-	    out.write("\n<--------------- Start worker container [%s] logs: --------------->\n\n" % cid)
-	    out.flush()
+    for c in run('docker ps').strip().split('\n')[1:]:
+	if c == '':
+		continue
 
-	    cmd = ['docker', 'logs']
-	    if args.tail:
-	        cmd.append('--tail="%s"' % args.tail)
+	attr = c.split()
+   	cid = attr[0]
+	image = attr[1].split(':')[0]	 
 
-	    cmd.append(cid)
+	out.write("\n<--------------- Start '%s' container [%s] logs: --------------->\n\n" % (image, cid))
+	out.flush()
 
-	    if subprocess.call(cmd, stdout=out, stderr=out) != 0:
-	        print 'Docker logs command execution failed.'
-	        sys.exit(1)
+	cmd = ['docker', 'logs']
+	if args.tail:
+	    cmd.append('--tail="%s"' % args.tail)
 
-	    out.write("\n<--------------- End worker container [%s] logs --------------->\n" % cid)
+	cmd.append(cid)
+
+	if subprocess.call(cmd, stdout=out, stderr=out) != 0:
+            print 'Docker logs command execution failed.'
+	    sys.exit(1)
+
+        out.write("\n<--------------- End '%s' container [%s] logs --------------->\n" % (image, cid))
 
     out.close()
 if __name__ == '__main__':
