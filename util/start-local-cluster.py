@@ -5,6 +5,9 @@ import rethinkdb as r
 from common import *
 
 SKIP_DB = '--skip-db-wait'
+REGISTRY_PORT = '5000'
+WORKER_PORT =   '8080'
+BALANCER_PORT = '85'
 
 def container_ip(cid):
     inspect = run_js('docker inspect '+cid)
@@ -21,6 +24,17 @@ def my_ip(name='eth0'):
     except:
         pass
     return ip
+
+def write_nginx_config(path, workers):
+    config = 'http {\n\tupstream handlers {\n'
+
+    for worker in workers:
+	config += '\t\tserver %s:%s;\n' % (worker['ip'], WORKER_PORT)
+
+    config += '\t}\n\tserver {\n\t\tlisten %s;\n\t\tlocation / {\n\t\t\tproxy_pass http://handlers;\n\t\t}\n\t}\n}\nevents{}' % BALANCER_PORT
+
+    with open(path, 'w') as fd:
+	fd.write(config)	
 
 def main():
     host_ip = my_ip()
@@ -72,19 +86,18 @@ def main():
     os.mkdir(cluster_dir)
 
     # start registry
-    c = 'docker run -d -p 0:5000 registry:2'
+    c = 'docker run -d -p 0:%s registry:2' % REGISTRY_PORT
     cid = run(c).strip()
     registry_ip = container_ip(cid)
-    registry_port = lookup_host_port(cid, 5000)
+    registry_port = lookup_host_port(cid, REGISTRY_PORT)
     config_path = os.path.join(cluster_dir, 'registry.json')
     config = {'cid': cid,
               'ip': registry_ip,
               'host_ip': host_ip,
               'host_port': registry_port,
               'type': 'registry'}
-    print config
     wrjs(config_path, config)
-    print 'started registry ' + registry_ip + ':5000 (or localhost:' + registry_port + ')'
+    print 'started registry %s:%s (or localhost:%s)' % (registry_ip, REGISTRY_PORT, registry_port)
     print '='*40
 
     # start workers
@@ -93,7 +106,7 @@ def main():
     for i in range(int(args.workers)):
         config_path = os.path.join(cluster_dir, 'worker-%d.json' % i)
         config = {'registry_host': registry_ip,
-                  'registry_port': '5000',
+                  'registry_port': REGISTRY_PORT,
                   'type': 'worker'}
         if i > 0:
             config['rethinkdb_join'] = workers[0]['ip']+':29015'
@@ -101,23 +114,46 @@ def main():
         wrjs(config_path, config)
         volumes = [('/sys/fs/cgroup', '/sys/fs/cgroup'),
                    (config_path, '/open-lambda-config.js')]
-        c = 'docker run -d --privileged <VOLUMES> -p 0:8080 lambda-node'
+        c = 'docker run -d --privileged <VOLUMES> -p 0:%s lambda-node' % WORKER_PORT
         c = c.replace('<VOLUMES>', ' '.join(['-v %s:%s'%(host,guest)
                                              for host,guest in volumes]))
         cid = run(c).strip()
         config['cid'] = cid
         config['ip'] = container_ip(cid)
         config['host_ip'] = host_ip
-        config['host_port'] = lookup_host_port(cid, 8080)
+        config['host_port'] = lookup_host_port(cid, WORKER_PORT)
         wrjs(config_path, config, atomic=True)
 
         info_path = os.path.join(cluster_dir, 'worker-info-%d.json' % i)
-        print 'started worker ' + config['ip']
+        print 'started worker %s:%s' % (config['ip'], WORKER_PORT)
         workers.append(config)
+
+    print '='*40
+
+    # start load-balancer
+    nginx_path = os.path.join(SCRIPT_DIR, 'nginx.config')
+    write_nginx_config(nginx_path, workers)
+
+    c = 'docker run -p 0:%s -v %s:/etc/nginx/nginx.conf:ro -d nginx' % (BALANCER_PORT, nginx_path)
+    cid = run(c).strip()
+
+    balancer_ip = container_ip(cid)
+    balancer_port = lookup_host_port(cid, BALANCER_PORT)
+    config_path = os.path.join(cluster_dir, 'loadbalancer.json')
+    config = {'cid': cid,
+              'ip': balancer_ip,
+              'host_ip': host_ip,
+              'host_port': balancer_port,
+              'type': 'loadbalancer'}    
+
+    config_path = os.path.join(cluster_dir, 'loadbalancer-%d.json' % 1)
+    wrjs(config_path, config, atomic=True)
+
+    print 'started loadbalancer ' + balancer_ip + ':%s' % BALANCER_PORT
+    print '='*40
 
     # wait for rethinkdb
     if not args.skip_db_wait:
-        print '='*40
         print 'To continue without waiting for the DB, use ' + SKIP_DB
         for i in range(10):
             try:
@@ -138,10 +174,15 @@ def main():
     print ('IMG=hello && docker tag $IMG %s:%s/$IMG; docker push %s:%s/$IMG' %
            (host_ip, registry_port, host_ip, registry_port))
     print '='*40
-    print 'Send requests as follows (or similar):'
-    print "IMG=hello && curl -w \"\\n\" -X POST %s:8080/runLambda/$IMG -d '{}'" % workers[-1]['ip']
+    print 'Send requests directly to workers as follows (or similar):'
+    print "IMG=hello && curl -w \"\\n\" -X POST %s:%s/runLambda/$IMG -d '{}'" % (workers[-1]['ip'], WORKER_PORT)
     print 'OR'
     print "IMG=hello && curl -w \"\\n\" -X POST %s:%s/runLambda/$IMG -d '{}'" % (host_ip, workers[-1]['host_port'])
+    print '='*40
+    print 'Send requests to the loadbalancer as follows (or similar):'
+    print "IMG=hello && curl -w \"\\n\" -X POST %s:%s/runLambda/$IMG -d '{}'" % (workers[-1]['ip'], WORKER_PORT)
+    print 'OR'
+    print "IMG=hello && curl -w \"\\n\" -X POST %s:%s/runLambda/$IMG -d '{}'" % (balancer_ip, balancer_port)
 
 if __name__ == '__main__':
     main()
