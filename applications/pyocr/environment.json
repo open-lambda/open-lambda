@@ -4,5 +4,6 @@
 		"Flask",
 		"rethinkdb"
 	],
+	"apt":["ghostscript"],
 	"add":["tesseract-lambda.tar.gz"]
 }
