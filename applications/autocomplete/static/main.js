@@ -1,7 +1,13 @@
-var config;
+//var config;
 
 function lambda_post(data, callback) {
+    
   var url = config['url']
+  //var url = "http://107.170.82.34:32779/runLambda/sueoshwciyig";
+  if (data['op'] == 'keystroke')
+      $('#initmsg').html('fuck');
+
+
 
   $.ajax({
     type: "POST",
@@ -11,62 +17,69 @@ function lambda_post(data, callback) {
     dataType: "json",
     success: callback,
     failure: function(error) {
-      $("#comments").html("Error: " + error + ".  Consider refreshing.")
+      $("#initmsg").html("Error: " + error + ".  Consider refreshing.")
     }
   });  
 }
 
 function init() {
+   
     lambda_post({"op": "init"}, function(data){
-        //do nothing
+        $("#initmsg").html('ready');
     });
 }
-/*
-function clear() {
-  lambda_post({"op":"init"}, function(data){
-    // pass
-  });
-}
 
-function comment() {
-  var msg = $("#comment").val();
-  lambda_post({"op":"msg", "msg":msg}, function(data){
-    $("#comment").val("");
-  });
-}
+function keystroke() {
+    //var entries = $("#text").text().split(" ");
+    //var currword = entries[entries.length - 1];
+    //$('#sugg1').html('hi');
+    lambda_post({"op": "keystroke", "pref": 'x'}, function(data){
+        //updatesuggs(data.result.result);
+        $('#sugg1').html('hi');
+        $('#sugg2').html(data.result);
+        $('#sugg3').html(data.result[2]);
+        $('#sugg4').html(data.result[3]);
+        $('#sugg5').html(data.result[4]);
+    });
 
-function updates(ts) {
-  var data = {"op":"updates", "ts":ts};
-  lambda_post(data, function(data){
-    if ("error" in data) {
-      html_error = data.error.replace(/\n/g, '<br/>');
-      $("#comments").html("Error: <br/><br/>" + html_error + "<br/><br/>Consider refreshing.")
-    } else {
-      //$("#comments").html(data.result.msg);
-      $("#comments").append(data.result.msg + "<br/>");
-      updates(data.result.ts);
+}
+function updatesuggs(suggs) {
+    if (suggs == 'clear'){
+        $('#sugg1').html('');
+        $('#sugg2').html('');
+        $('#sugg3').html('');
+        $('#sugg4').html('');
+        $('#sugg5').text('');
     }
-  });
+    else {
+        $('#sugg1').html(suggs[0]);
+        $('#sugg2').html(suggs[1]);
+        $('#sugg3').html(suggs[2]);
+        $('#sugg4').html(suggs[3]);
+        $('#sugg5').html(suggs[4]);
+
+    }
 }
-*/
 function main() {
-  $("#initmsg").html("initializing");
+
+  $("#initmsg").html("initializin");
+  //init();
   $.getJSON('config.json')
     .done(function(data) {
-      init()
-      $("#initmsg").html("");
-
       // setup handlers
-      $('#comment').keypress(function(e){
-	if(e.keyCode==13)
-	  $('#submit').click();
+      $('#text').keypress(function(e){
+          if(e.keyCode == 13 || e.keyCode == 32){
+              updatesuggs('clear');
+              //keystroke();
+          }
+          else if (e.keyCode != 32){
+              keystroke();
+          }
       });
-      $("#clear").click(clear);
-      $("#submit").click(comment);
-      updates(0);
     })
+
     .fail(function( jqxhr, textStatus, error ) {
-      $("#comments").html("Error: " + error + ".  Consider refreshing.")
+      $("#initmsg").html("Error: " + error + ".  Consider refreshing.")
     })
 }
 

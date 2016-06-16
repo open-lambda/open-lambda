@@ -1,14 +1,10 @@
 # source of words is http://norvig.com/google-books-common-words.txt
-import time, traceback, sys
-import marisa_trie as mt
-"""
-class WordObj:
-    def __init__(self, word, freq):
-        self.word = word
-        self.freq = freq
-"""
+import time, traceback, sys, marisa_trie
+global words
+global freqs
+global prefs
+global trie
 def setup():
-
     #make array of words objects with word and frequency
     f = open("words.txt")
     words = []
@@ -40,14 +36,12 @@ def setup():
         rangeind = (int(line[1]), int(line[2]))
         ranges.append(rangeind)
     fmt = "<LL"
-    trie = mt.RecordTrie(fmt, zip(prefixes, ranges))
+    trie = marisa_trie.RecordTrie(fmt, zip(prefixes, ranges))
+    g.close()
     return words, freqs, prefixes, trie
 
 def init(event):
-    global words
-    global freqs
-    global prefs
-    global trie
+
     words, freqs, prefs, trie = setup()
     return 'initialized'
 
@@ -63,6 +57,7 @@ def findMaxFreq(prefrange, currmax):
 
 def keystroke(event):
     prefix = event['pref']
+    global trie
     prefixu = unicode(prefix)
     prefrange = trie.get(prefixu)
     suggestions = []
@@ -82,7 +77,7 @@ def handler(conn, event):
     if fn != None:
         try:
             result = fn(event)
-            return {'result': result}
+            return {'result':result}
         except Exception:
             return {'error': traceback.format_exc()}
     else:
@@ -93,4 +88,10 @@ t = time.time()
 suggestions = keystroke("a")
 print (time.time() - t)
 print suggestions
+res = handler(5, {"op":"init"})
+print (res)
+t = time.time()
+res = handler(4, {"op":"keystroke", "pref": "ab"})
+print (time.time() - t)
+print res
 """

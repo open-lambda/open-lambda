@@ -17,10 +17,11 @@ def main():
     print '='*40
     print 'Building image'
     builder = os.path.join(builder_dir, 'builder.py')
-    run(builder + ' -n %s -l %s -c %s' %
+    run(builder + ' -n %s -l %s -c %s -e %s' %
         (app_name,
-         os.path.join(SCRIPT_DIR, 'chat.py'),
-         os.path.join(SCRIPT_DIR, 'lambda-config.json')))
+         os.path.join(SCRIPT_DIR, 'autocomplete.py'),
+         os.path.join(SCRIPT_DIR, 'lambda-config.json'),
+         os.path.join(SCRIPT_DIR, 'environment.json')))
 
     # push image
     print '='*40
@@ -31,10 +32,10 @@ def main():
     run('docker push ' + img)
 
     # setup config
-    worker0 = rdjs(os.path.join(cluster_dir, 'worker-0.json')) # TODO
+    balancer = rdjs(os.path.join(cluster_dir, 'loadbalancer-1.json'))
     config_file = os.path.join(static_dir, 'config.json')
     url = ("http://%s:%s/runLambda/%s" %
-           (worker0['host_ip'], worker0['host_port'], app_name))
+           (balancer['host_ip'], balancer['host_port'], app_name))
     wrjs(config_file, {'url': url})
 
     # directions
