@@ -32,10 +32,10 @@ def main():
     run('docker push ' + img)
 
     # setup config
-    worker0 = rdjs(os.path.join(cluster_dir, 'worker-0.json')) # TODO
+    balancer = rdjs(os.path.join(cluster_dir, 'loadbalancer-1.json'))
     config_file = os.path.join(static_dir, 'config.json')
     url = ("http://%s:%s/runLambda/%s" %
-           (worker0['host_ip'], worker0['host_port'], app_name))
+           (balancer['host_ip'], balancer['host_port'], app_name))
     wrjs(config_file, {'url': url})
 
     # directions
