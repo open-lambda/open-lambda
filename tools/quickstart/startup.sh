@@ -17,15 +17,4 @@ pip install rethinkdb
 cd open-lambda
 service docker start
 docker daemon
-make imgs/lambda-node
-./util/start-local-cluster.py
-./util/setup.py pychat chat.py
-docker run -d -p 80:80 -v $PWD/applications/pychat/static:/usr/share/nginx/html:ro nginx
-cd ../..
-echo To access app, either:
-echo 1. Go to localhost:80 and use the web interface
-echo 2. Use curl. Sample curl:
-echo curl -w "\n" localhost:port/runLambda/imageName -d '{}'
-echo port is the load balancer port found in output of docker ps
-echo imageName is "latest" image from docker images
 
