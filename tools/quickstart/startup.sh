@@ -12,8 +12,6 @@ apt-get -y install curl
 apt-get -y install git
 pip install netifaces
 pip install rethinkdb
-`clone the repository when it is public`
-`git clone https://github.com/tylerharter/open-lambda`
 cd open-lambda
 service docker start
 docker daemon
