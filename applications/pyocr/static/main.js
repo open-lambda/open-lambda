@@ -26,7 +26,8 @@ function success(json) {
   delete requests[name];
 
   console.log('request for ' + name + ' took ' + (elapsed/1000) + ' s total')
-  console.log('ocr time for ' + name + ' was ' + ret['time'] + ' s')
+  console.log('ocr time for ' + name + ' was ' + ret['ocr_time'] + ' s')
+  console.log('conversion time for ' + name + ' was ' + ret['convert_time'] + ' s')
 
   var txt = atob(ret['data']);
   var blob = new Blob([txt], {type:"text/plain;charset=utf-8"});

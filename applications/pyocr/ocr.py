@@ -10,8 +10,6 @@ def ocr(event):
         temp.write(base64.b64decode(b64))
         temp.flush()
 
-	start = time.clock()
-
 	ocr_name = temp.name
 	if event['filename'].split('.')[1] == 'pdf':
 	    ocr_name += '.tiff'
@@ -21,8 +19,9 @@ def ocr(event):
 	    )
 	    print cmd
 	    try:
+		start = time.time()
 	        output = subprocess.check_output(cmd, shell=True)
-		print output
+		convert_time = time.time() - start
 	    except subprocess.CalledProcessError as convertE:
 	        print convertE.output
 	        raise convertE
@@ -36,8 +35,9 @@ def ocr(event):
         )
 
         try:
+	    start = time.time()
             output = subprocess.check_output(cmd, shell=True)
-            ocr_time = time.clock() - start
+            ocr_time = time.time() - start
         except subprocess.CalledProcessError as ocrE:
             print ocrE.output
             raise ocrE
@@ -49,7 +49,7 @@ def ocr(event):
         
         ret_name = event['filename'].split('.')[0] + '.txt'
 
-        return {'data':ocr, 'filename':ret_name, 'time':ocr_time}
+        return {'data':ocr, 'filename':ret_name, 'ocr_time':ocr_time, 'convert_time':conver_time}
 
 def handler(conn, event):
     fn = {
