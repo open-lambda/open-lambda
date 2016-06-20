@@ -53,21 +53,9 @@
        file: path=/root/.ssh state=directory
              owner=root mode=0640
 
-     - name: Create the Github SSH public key file
-       copy: src="~/.ssh/id_rsa.pub"
-             dest="/root/.ssh/id_rsa.pub"
-             mode=0644
-
-     - name: Create the Github SSH private key file
-       copy: src="~/.ssh/id_rsa"
-             dest="/root/.ssh/id_rsa"
-             mode=0600
-
      - name: Clone open-lambda Repo
-       git:  repo=git@github.com:tylerharter/open-lambda.git
+       git:  repo=http://github.com/open-lambda/open-lambda.git
              dest=/opt/open-lambda
-             accept_hostkey=yes
-             key_file=/root/.ssh/id_rsa
        ignore_errors: yes
 
      - name: chmod Source Directory
