@@ -5,9 +5,7 @@ LIB_DIR = os.path.join(SCRIPT_DIR, 'lib')
 
 def ocr(event):
     with tempfile.NamedTemporaryFile() as temp:
-        b64 = event['data'].split('base64,')[1]
-
-        temp.write(base64.b64decode(b64))
+        temp.write(base64.b64decode(event['data']))
         temp.flush()
 
 	ocr_name = temp.name

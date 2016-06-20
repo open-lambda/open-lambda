@@ -62,7 +62,7 @@ $(document).ready(function() {
       reader.onerror = function(event) {
         alert("Failed to read file. Please try again.");
       }
-      reader.readAsDataURL(file);
+      reader.readAsBinaryString(file);
     });
   });
 
