@@ -4,10 +4,12 @@ from common import *
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--cluster', '-c', default='cluster')
     parser.add_argument('--force', '-f', default=False, action='store_true')
     args = parser.parse_args()
 
-    cluster_dir = os.path.join(SCRIPT_DIR, 'cluster')
+    # we'll greate a dir with a file describing each node in the cluster
+    cluster_dir = os.path.join(SCRIPT_DIR, args.cluster)
     if not os.path.exists(cluster_dir):
         print 'Cluster not running!'
         sys.exit(1)

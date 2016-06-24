@@ -43,10 +43,13 @@ def main():
         host_ip = '127.0.0.1'
     parser = argparse.ArgumentParser()
     parser.add_argument('--workers', '-w', default='1')
+    parser.add_argument('--cluster', '-c', default='cluster')
     parser.add_argument(SKIP_DB, default=False, action='store_true')
     args = parser.parse_args()
 
-    cluster_dir = os.path.join(SCRIPT_DIR, 'cluster')
+    # we'll greate a dir with a file describing each node in the cluster
+    cluster_dir = os.path.join(SCRIPT_DIR, args.cluster)
+
     if os.path.exists(cluster_dir):
         running = False
         for filename in os.listdir(cluster_dir):
