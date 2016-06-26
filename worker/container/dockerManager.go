@@ -327,9 +327,16 @@ func (cm *DockerManager) getLambdaPort(cid string) (port string, err error) {
 		return "", cm.dockerError(cid, err)
 	}
 
-	// TODO: Will we ever need to look at other ip's than the first?
-	ports := container.NetworkSettings.Ports
-	port = ports["8080/tcp"][0].HostPort
+	container_port := docker.Port("8080/tcp")
+	ports := container.NetworkSettings.Ports[container_port]
+	if len(ports) == 0 {
+		err := fmt.Errorf("could not lookup host port for %v", container_port)
+		return "", cm.dockerError(cid, err)
+	} else if len(ports) > 1 {
+		err := fmt.Errorf("multiple host port mapping to %v", container_port)
+		return "", cm.dockerError(cid, err)
+	}
+	port = ports[0].HostPort
 
 	// on unix systems, port is given as "unix:port", this removes the prefix
 	if strings.HasPrefix(port, "unix") {
