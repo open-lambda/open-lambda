@@ -26,6 +26,9 @@ type ContainerManager interface {
 	// Frees all resources associated with a given lambda
 	// Will stop if needed
 	Remove(name string) error
+
+	// Return recent log output for container
+	Logs(name string) (string, error)
 }
 
 type ContainerInfo struct {

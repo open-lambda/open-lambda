@@ -484,3 +484,16 @@ func (cm *DockerManager) Remove(name string) error {
 
 	return cm.dockerRemove(c)
 }
+
+// Return recent log output for container
+func (cm *DockerManager) Logs(name string) (string, error) {
+	container, err := cm.dockerInspect(name)
+	if err != nil {
+		return "", err
+	}
+	buf := &bytes.Buffer{}
+	if err := cm.dockerLogs(container.ID, buf); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
+}

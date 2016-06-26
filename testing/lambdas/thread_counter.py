@@ -1,32 +1,26 @@
 from threading import *
-import time
+import time, sys
 
 t = None
-ms = 0
-m = Lock()
 
 def worker():
-    global ms
+    counter = 0
     while True:
-        m.acquire()
-        ms += 10
-        m.release()
-        time.sleep(0.01)
+        print 'counter=%d' % counter
+        sys.stdout.flush()
+        counter += 1
+        time.sleep(0.001)
 
 def handler(db_conn, event):
-    global t, ms
+    global t
     if t == None:
         print 'Init worker thread'
         t = Thread(target=worker)
         t.start()
-    m.acquire()
-    _ms = ms
-    m.release()
-    return _ms
+    time.sleep(0.1)
+    return 'Background thread started'
 
 def main():
-    print handler(None, None)
-    time.sleep(1)
     print handler(None, None)
 
 if __name__ == '__main__':

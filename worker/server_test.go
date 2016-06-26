@@ -86,19 +86,41 @@ func TestEcho(t *testing.T) {
 	}
 }
 
+func last_count(img string) int {
+	logs, err := server.manager.Logs(img)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+	lines := strings.Split(logs, "\n")
+	for i := range lines {
+		line := lines[len(lines)-i-1]
+		parts := strings.Split(line, "=")
+		if parts[0] == "counter" {
+			if n, err := strconv.Atoi(parts[1]); err == nil {
+				return n
+			} else {
+				panic("not an int: " + parts[1])
+			}
+		}
+	}
+	return 0
+}
+
 // thread_counter starts a backup thread that runs forever,
 // incrementing a counter between 10ms sleeps.  If pausing works, the
 // counter won't tick many times between requests, even if wait
 // between them.
 func TestThreadPausing(t *testing.T) {
 	img := "thread_counter"
-	before_str, _ := testReq(img, "null")
+	testReq(img, "null")
+	count1 := last_count(img)
 	time.Sleep(100 * time.Millisecond)
-	after_str, _ := testReq(img, "null")
-	before, _ := strconv.Atoi(before_str)
-	after, _ := strconv.Atoi(after_str)
-	if after-before > 20 {
-		t.Errorf("Background thread ran between requests for about %v ms\n", (after - before))
+	count2 := last_count(img)
+	if count1 <= 0 {
+		log.Fatal("count1 isn't positive")
+	}
+	if count2 != count1 {
+		log.Fatal("count1 != count2")
 	}
 }
 

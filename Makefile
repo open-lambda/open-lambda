@@ -38,6 +38,5 @@ test-cluster :
 test : test-cluster
 	$(eval export TEST_REGISTRY := localhost:$(shell jq -r '.host_port' ./util/$(TEST_CLUSTER)/registry.json))
 	./testing/setup.py
-#	cd hack && ./build.sh test . ./handler -v # test
-	cd hack && ./build.sh test . -v           # test1
+	cd hack && ./build.sh test . ./handler -v
 	./util/stop-local-cluster.py -c $(TEST_CLUSTER)
