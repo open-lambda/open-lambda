@@ -5,8 +5,8 @@ import (
 	"log"
 	"sync"
 
-	"github.com/tylerharter/open-lambda/worker/container"
-	"github.com/tylerharter/open-lambda/worker/handler/state"
+	"github.com/open-lambda/open-lambda/worker/container"
+	"github.com/open-lambda/open-lambda/worker/handler/state"
 )
 
 type HandlerSetOpts struct {

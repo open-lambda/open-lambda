@@ -9,7 +9,7 @@ set -e
 export WD=$(pwd)
 export GOPATH=${WD}'/.gopath'
 export CODE_BASE='../worker'
-export LAMBDA_PACKAGE=${GOPATH}'/src/github.com/tylerharter/open-lambda'
+export LAMBDA_PACKAGE=${GOPATH}'/src/github.com/open-lambda/open-lambda'
 export WORKER=${LAMBDA_PACKAGE}'/worker/'
 export CLIENT=${LAMBDA_PACKAGE}'/worker/prof/client'
 

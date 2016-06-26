@@ -1,6 +1,6 @@
 package container
 
-import "github.com/tylerharter/open-lambda/worker/handler/state"
+import "github.com/open-lambda/open-lambda/worker/handler/state"
 
 type ContainerManager interface {
 

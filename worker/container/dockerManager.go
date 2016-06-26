@@ -10,8 +10,8 @@ import (
 	"time"
 
 	docker "github.com/fsouza/go-dockerclient"
+	"github.com/open-lambda/open-lambda/worker/handler/state"
 	"github.com/phonyphonecall/turnip"
-	"github.com/tylerharter/open-lambda/worker/handler/state"
 )
 
 type DockerManager struct {

@@ -1,5 +1,5 @@
 {
-	"ImportPath": "github.com/tylerharter/open-lambda/worker",
+	"ImportPath": "github.com/open-lambda/open-lambda/worker",
 	"GoVersion": "go1.6",
 	"GodepVersion": "v62",
 	"Deps": [

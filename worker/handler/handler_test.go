@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tylerharter/open-lambda/worker/container"
-	"github.com/tylerharter/open-lambda/worker/handler/state"
+	"github.com/open-lambda/open-lambda/worker/container"
+	"github.com/open-lambda/open-lambda/worker/handler/state"
 )
 
 func NewDockerManager() (manager *container.DockerManager) {

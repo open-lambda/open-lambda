@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	pb "github.com/tylerharter/open-lambda/lambdaManager/experimental/docker-pause/ready-comms/proto"
+	pb "github.com/open-lambda/open-lambda/lambdaManager/experimental/docker-pause/ready-comms/proto"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )

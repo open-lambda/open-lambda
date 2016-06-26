@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/open-lambda/open-lambda/worker/container"
+	"github.com/open-lambda/open-lambda/worker/handler"
 	"github.com/phonyphonecall/turnip"
-	"github.com/tylerharter/open-lambda/worker/container"
-	"github.com/tylerharter/open-lambda/worker/handler"
 )
 
 type Server struct {
