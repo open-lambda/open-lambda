@@ -86,15 +86,6 @@ func TestEcho(t *testing.T) {
 	}
 }
 
-// TODO(tyler): this test needs fixing.  It passes even if the Docker
-// image is not available.
-func TestPull(t *testing.T) {
-	_, err := testReq("pausable-start-timer", "{}")
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
 // thread_counter starts a backup thread that runs forever,
 // incrementing a counter between 10ms sleeps.  If pausing works, the
 // counter won't tick many times between requests, even if wait
@@ -106,8 +97,8 @@ func TestThreadPausing(t *testing.T) {
 	after_str, _ := testReq(img, "null")
 	before, _ := strconv.Atoi(before_str)
 	after, _ := strconv.Atoi(after_str)
-	if after-before > 2 {
-		t.Errorf("Background thread run between requests, ticking %v times\n", (after - before))
+	if after-before > 20 {
+		t.Errorf("Background thread ran between requests for about %v ms\n", (after - before))
 	}
 }
 

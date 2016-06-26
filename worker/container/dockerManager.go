@@ -59,7 +59,7 @@ func (cm *DockerManager) dockerLogs(cid string, buf *bytes.Buffer) (err error) {
 		Stderr:            true,
 		Since:             0,
 		Timestamps:        false,
-		Tail:              "all",
+		Tail:              "20",
 		RawTerminal:       false,
 	})
 
@@ -205,8 +205,7 @@ func (cm *DockerManager) dockerPull(img string) error {
 	cm.pullTimer.Stop()
 
 	if err != nil {
-		log.Printf("failed to pull container: %v\n", err)
-		return cm.dockerError(img, err)
+		return fmt.Errorf("failed to pull '%v' from %v registry\n", img, cm.registryName)
 	}
 
 	err = cm.client.TagImage(
@@ -214,35 +213,9 @@ func (cm *DockerManager) dockerPull(img string) error {
 		docker.TagImageOptions{Repo: img, Force: true})
 	if err != nil {
 		log.Printf("failed to re-tag container: %v\n", err)
-		return cm.dockerError(img, err)
+		return fmt.Errorf("failed to re-tag container: %v\n", err)
 	}
 
-	return nil
-}
-
-// Combines a docker create with a docker start
-func (cm *DockerManager) dockerRun(img string, args []string, waitAndRemove bool) (err error) {
-	c, err := cm.dockerCreate(img, args)
-	if err != nil {
-		return err
-	}
-	err = cm.dockerStart(c)
-	if err != nil {
-		return err
-	}
-
-	if waitAndRemove {
-		// img == cid in our create container
-		_, err = cm.client.WaitContainer(img)
-		if err != nil {
-			log.Printf("failed to wait on container %s with err %v\n", img, err)
-			return cm.dockerError(img, err)
-		}
-		err = cm.dockerRemove(c)
-		if err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
@@ -355,7 +328,8 @@ func (cm *DockerManager) getLambdaPort(cid string) (port string, err error) {
 	}
 
 	// TODO: Will we ever need to look at other ip's than the first?
-	port = container.NetworkSettings.Ports["8080/tcp"][0].HostPort
+	ports := container.NetworkSettings.Ports
+	port = ports["8080/tcp"][0].HostPort
 
 	// on unix systems, port is given as "unix:port", this removes the prefix
 	if strings.HasPrefix(port, "unix") {

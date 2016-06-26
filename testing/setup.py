@@ -14,6 +14,7 @@ def main():
     # create some applications
     for app_name, config in apps:
         # cleanup
+        js = run_js('docker inspect ' + app_name)
         os.system('docker rm -f ' + app_name)
         os.system('docker rmi -f ' + app_name)
 
@@ -26,12 +27,19 @@ def main():
              app_name,
              os.path.join(SCRIPT_DIR, 'lambdas', config)))
 
+    print '='*40
+
     # create an application that is only in the registry
+    TEST_REGISTRY = os.environ['TEST_REGISTRY']
+    assert(len(TEST_REGISTRY) > 0)
+    print 'Push test images to ' + TEST_REGISTRY
+
     run('docker tag -f hello nonlocal')
-    run('docker tag -f nonlocal localhost:5000/nonlocal')
-    run('docker push localhost:5000/nonlocal')
+    run('docker tag -f hello hello2')
+    run('docker tag -f nonlocal %s/nonlocal' % TEST_REGISTRY)
+    run('docker push %s/nonlocal' % TEST_REGISTRY)
     run('docker rmi -f nonlocal')
-    run('docker rmi -f localhost:5000/nonlocal')
+    run('docker rmi -f %s/nonlocal' % TEST_REGISTRY)
 
     w = 80
     print '='*w

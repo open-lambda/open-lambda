@@ -1,12 +1,22 @@
 package handler
 
 import (
+	"log"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/tylerharter/open-lambda/worker/container"
 	"github.com/tylerharter/open-lambda/worker/handler/state"
 )
+
+func NewDockerManager() (manager *container.DockerManager) {
+	reg := os.Getenv("TEST_REGISTRY")
+	log.Printf("Use registry %v", reg)
+	components := strings.Split(reg, ":")
+	return container.NewDockerManager(components[0], components[1])
+}
 
 func TestHandlerLookupSame(t *testing.T) {
 	handlers := NewHandlerSet(HandlerSetOpts{})
@@ -27,7 +37,7 @@ func TestHandlerLookupDiff(t *testing.T) {
 }
 
 func TestHandlerHandlerPull(t *testing.T) {
-	cm := container.NewDockerManager("localhost", "5000")
+	cm := NewDockerManager()
 	handlers := NewHandlerSet(HandlerSetOpts{Cm: cm})
 	name := "nonlocal"
 
@@ -73,18 +83,18 @@ func GetState(t *testing.T, cm container.ContainerManager, img string) state.Han
 
 func TestHandlerRunCountOne(t *testing.T) {
 	lru := NewHandlerLRU(1)
-	cm := container.NewDockerManager("localhost", "5000")
+	cm := NewDockerManager()
 	handlers := NewHandlerSet(HandlerSetOpts{Cm: cm, Lru: lru})
-	h := handlers.Get("hello")
+	h := handlers.Get("hello2")
 
 	h.RunStart()
-	s := GetState(t, cm, "hello")
+	s := GetState(t, cm, "hello2")
 	if !(s == state.Running) {
 		t.Fatalf("Unexpected state: %v", s.String())
 	}
 
 	h.RunFinish()
-	s = GetState(t, cm, "hello")
+	s = GetState(t, cm, "hello2")
 	if !(s == state.Paused) {
 		t.Fatalf("Unexpected state(2): %v", s.String())
 	}
@@ -92,14 +102,14 @@ func TestHandlerRunCountOne(t *testing.T) {
 
 func TestHandlerRunCountMany(t *testing.T) {
 	lru := NewHandlerLRU(1)
-	cm := container.NewDockerManager("localhost", "5000")
+	cm := NewDockerManager()
 	handlers := NewHandlerSet(HandlerSetOpts{Cm: cm, Lru: lru})
-	h := handlers.Get("hello")
+	h := handlers.Get("hello2")
 	count := 10
 
 	for i := 0; i < count; i++ {
 		h.RunStart()
-		s := GetState(t, cm, "hello")
+		s := GetState(t, cm, "hello2")
 		if !(s == state.Running) {
 			t.Fatalf("Unexpected state: %v", s.String())
 		}
@@ -107,7 +117,7 @@ func TestHandlerRunCountMany(t *testing.T) {
 
 	for i := 0; i < count; i++ {
 		h.RunFinish()
-		s := GetState(t, cm, "hello")
+		s := GetState(t, cm, "hello2")
 		if i == count-1 {
 			if !(s == state.Paused) {
 				t.Fatalf("Unexpected state: %v", s.String())
@@ -122,17 +132,17 @@ func TestHandlerRunCountMany(t *testing.T) {
 
 func TestHandlerEvict(t *testing.T) {
 	lru := NewHandlerLRU(0)
-	cm := container.NewDockerManager("localhost", "5000")
+	cm := NewDockerManager()
 	handlers := NewHandlerSet(HandlerSetOpts{Cm: cm, Lru: lru})
-	h := handlers.Get("hello")
+	h := handlers.Get("hello2")
 	h.RunStart()
 	h.RunFinish()
-	s := GetState(t, cm, "hello")
+	s := GetState(t, cm, "hello2")
 
 	// wait up to 5 seconds for evictor to evict
 	max_tries := 500
 	for tries := 1; ; tries++ {
-		s = GetState(t, cm, "hello")
+		s = GetState(t, cm, "hello2")
 		if !(s == state.Running) {
 			return
 		} else if tries == max_tries {

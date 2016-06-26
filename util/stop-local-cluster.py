@@ -6,13 +6,18 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--cluster', '-c', default='cluster')
     parser.add_argument('--force', '-f', default=False, action='store_true')
+    parser.add_argument('--if-running', default=False, action='store_true')
     args = parser.parse_args()
 
     # we'll greate a dir with a file describing each node in the cluster
     cluster_dir = os.path.join(SCRIPT_DIR, args.cluster)
     if not os.path.exists(cluster_dir):
-        print 'Cluster not running!'
-        sys.exit(1)
+        if args.if_running:
+            # it's OK, we weren't assuming it was running
+            sys.exit(0)
+        else:
+            print 'Cluster not running!'
+            sys.exit(1)
 
     for filename in os.listdir(cluster_dir):
         path = os.path.join(cluster_dir, filename)

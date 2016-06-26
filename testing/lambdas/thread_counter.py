@@ -2,27 +2,27 @@ from threading import *
 import time
 
 t = None
-counter = 0
+ms = 0
 m = Lock()
 
 def worker():
-    global counter
+    global ms
     while True:
         m.acquire()
-        counter += 1
+        ms += 10
         m.release()
         time.sleep(0.01)
 
 def handler(db_conn, event):
-    global t, counter
+    global t, ms
     if t == None:
         print 'Init worker thread'
         t = Thread(target=worker)
         t.start()
     m.acquire()
-    _counter = counter
+    _ms = ms
     m.release()
-    return _counter
+    return _ms
 
 def main():
     print handler(None, None)

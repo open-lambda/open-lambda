@@ -4,7 +4,7 @@
 # to setup a GOPATH inspired from docker's script:
 # https://github.com/docker/docker/blob/master/hack/make.sh
 
-set -e -x
+set -e
 
 export WD=$(pwd)
 export GOPATH=${WD}'/.gopath'

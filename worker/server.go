@@ -98,6 +98,7 @@ func (s *Server) ForwardToContainer(handler *handler.Handler, r *http.Request, i
 			err.Error(),
 			http.StatusInternalServerError)
 	}
+
 	defer handler.RunFinish()
 
 	// forward request to container.  r and w are the server
@@ -129,7 +130,7 @@ func (s *Server) ForwardToContainer(handler *handler.Handler, r *http.Request, i
 					http.StatusInternalServerError)
 			}
 			log.Printf("retry request\n")
-			time.Sleep(time.Duration(tries*10) * time.Millisecond)
+			time.Sleep(time.Duration(tries*100) * time.Millisecond)
 			continue
 		}
 

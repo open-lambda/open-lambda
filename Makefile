@@ -5,6 +5,7 @@ SERVER_BIN:=worker/worker
 CLIENT_BIN:=worker/prof/client/client
 NODE_BIN:=node/bin
 GO_FILES = $(shell find worker/ -name '*.go')
+TEST_CLUSTER:=test_cluster
 
 .PHONY: all
 all : imgs/lambda-node
@@ -28,7 +29,15 @@ clean :
 	rm $(SERVER_BIN)
 	rm $(CLIENT_BIN)
 
-.PHONY: test
-test :
+.PHONY: test test-cluster
+
+test-cluster :
+	./util/stop-local-cluster.py -c $(TEST_CLUSTER) --if-running
+	./util/start-local-cluster.py -c $(TEST_CLUSTER) --skip-db-wait
+
+test : test-cluster
+	$(eval export TEST_REGISTRY := localhost:$(shell jq -r '.host_port' ./util/$(TEST_CLUSTER)/registry.json))
 	./testing/setup.py
-	cd hack && ./build.sh test
+#	cd hack && ./build.sh test . ./handler -v # test
+	cd hack && ./build.sh test . -v           # test1
+	./util/stop-local-cluster.py -c $(TEST_CLUSTER)

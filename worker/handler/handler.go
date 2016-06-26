@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"log"
 	"sync"
 
@@ -100,6 +101,9 @@ func (h *Handler) RunStart() (port string, err error) {
 	if err != nil {
 		return "", err
 	}
+	if info.Port == "-1" {
+		return "", fmt.Errorf("container %v is not running", h.name)
+	}
 
 	return info.Port, nil
 }
@@ -146,7 +150,7 @@ func (h *Handler) StopIfPaused() {
 	}
 }
 
-// assume lock held.  Make sure image is pulled, an determine whether
+// assume lock held.  Make sure image is pulled, and determine whether
 // container is running.
 func (h *Handler) maybeInit() (err error) {
 	if h.state != state.Unitialized {
