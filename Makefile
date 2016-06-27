@@ -26,6 +26,7 @@ imgs/lambda-node : bin/worker node/Dockerfile node/startup.py node/kill.py
 
 # OL server
 bin/worker : $(GO_FILES)
+	cd $(WORKER_DIR) && $(GO) get
 	cd $(WORKER_DIR) && $(GO) install
 	mkdir -p bin
 	cp $(GO_PATH)/bin/worker ./bin
@@ -41,6 +42,7 @@ test-cluster :
 test : test-cluster
 	$(eval export TEST_REGISTRY := localhost:$(shell jq -r '.host_port' ./util/$(TEST_CLUSTER)/registry.json))
 	./testing/setup.py
+	cd $(WORKER_DIR) && $(GO) get
 	cd $(WORKER_DIR) && $(GO) test . ./handler -v
 	./util/stop-local-cluster.py -c $(TEST_CLUSTER)
 
