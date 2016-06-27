@@ -7,35 +7,41 @@ NODE_BIN:=node/bin
 GO_FILES = $(shell find worker/ -name '*.go')
 TEST_CLUSTER:=test_cluster
 
+GO = $(abspath ./hack/go.sh)
+GO_PATH = hack/go
+WORKER_DIR = $(GO_PATH)/src/github.com/open-lambda/open-lambda/worker
+
 .PHONY: all
 all : imgs/lambda-node
 
-bin/worker : $(GO_FILES)
-	cd hack && ./build.sh
-	mkdir -p bin
-	cp $(SERVER_BIN) bin/worker
-	cp $(CLIENT_BIN) bin/client
-
+# OL worker container, with OL server, Docker, and RethinkDB
 imgs/lambda-node : bin/worker node/Dockerfile node/startup.py node/kill.py
 	mkdir -p node/bin
 	cp bin/worker node/bin/worker
 	docker build -t lambda-node node
 	touch imgs/lambda-node
 
-clean :
-	rm -rf bin
-	rm -rf $(NODE_BIN)
-	rm $(SERVER_BIN)
-	rm $(CLIENT_BIN)
+# OL server
+bin/worker : $(GO_FILES)
+	cd $(WORKER_DIR) && $(GO) install
+	mkdir -p bin
+	cp $(GO_PATH)/bin/worker ./bin
 
 .PHONY: test test-cluster
 
+# create cluster for testing
 test-cluster :
 	./util/stop-local-cluster.py -c $(TEST_CLUSTER) --if-running
 	./util/start-local-cluster.py -c $(TEST_CLUSTER) --skip-db-wait
 
+# run go unit tests in initialized environment
 test : test-cluster
 	$(eval export TEST_REGISTRY := localhost:$(shell jq -r '.host_port' ./util/$(TEST_CLUSTER)/registry.json))
 	./testing/setup.py
-	cd hack && ./build.sh test . ./handler -v
+	cd $(WORKER_DIR) && $(GO) test . ./handler -v
 	./util/stop-local-cluster.py -c $(TEST_CLUSTER)
+
+.PHONY: clean
+clean :
+	rm -rf bin
+	rm -f imgs/lambda-node
