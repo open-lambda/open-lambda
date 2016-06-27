@@ -8,13 +8,51 @@ ddict = collections.defaultdict
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 TRACE_RUN = True
 
-def run(cmd):
+def docker_clean_container(name):
+    status = docker_status(name)
+    if status == 'image':
+        pass
+    elif status == 'paused':
+        run('docker unpause '+name)
+        run('docker kill '+name)
+        run('docker rm '+name)
+    elif status == 'running':
+        run('docker kill '+name)
+        run('docker rm '+name)
+    elif status == 'stopped':
+        run('docker rm '+name)
+    elif status == 'none':
+        pass
+    else:
+        panic()
+
+def docker_status(name):
+    try:
+        js = run_js('docker inspect '+name, quiet=True)
+        state = js[0].get('State')
+        if state == None:
+            return 'image'
+        if state['Paused']:
+            return 'paused'
+        if state['Running']:
+            return 'running'
+        return 'stopped'
+    except:
+        return 'none'
+
+def run(cmd, quiet=False):
+    err = None
+    if quiet:
+        err = open('/dev/null')
     if TRACE_RUN:
         print 'EXEC ' + cmd
-    return subprocess.check_output(cmd, shell=True)
+    rv = subprocess.check_output(cmd, shell=True, stderr=err)
+    if err != None:
+        err.close()
+    return rv
 
-def run_js(cmd):
-    return json.loads(run(cmd))
+def run_js(cmd, quiet=False):
+    return json.loads(run(cmd, quiet))
 
 def panic():
     assert(0)

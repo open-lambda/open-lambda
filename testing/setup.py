@@ -14,9 +14,7 @@ def main():
     # create some applications
     for app_name, config in apps:
         # cleanup
-        js = run_js('docker inspect ' + app_name)
-        os.system('docker rm -f ' + app_name)
-        os.system('docker rmi -f ' + app_name)
+        docker_clean_container(app_name)
 
         # build image
         print '='*40
