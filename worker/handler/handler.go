@@ -5,19 +5,19 @@ import (
 	"log"
 	"sync"
 
-	"github.com/open-lambda/open-lambda/worker/container"
 	"github.com/open-lambda/open-lambda/worker/handler/state"
+	"github.com/open-lambda/open-lambda/worker/sandbox"
 )
 
 type HandlerSetOpts struct {
-	Cm  container.ContainerManager
+	Cm  sandbox.SandboxManager
 	Lru *HandlerLRU
 }
 
 type HandlerSet struct {
 	mutex    sync.Mutex
 	handlers map[string]*Handler
-	cm       container.ContainerManager
+	cm       sandbox.SandboxManager
 	lru      *HandlerLRU
 }
 
@@ -102,7 +102,7 @@ func (h *Handler) RunStart() (port string, err error) {
 		return "", err
 	}
 	if info.Port == "-1" {
-		return "", fmt.Errorf("container %v is not running", h.name)
+		return "", fmt.Errorf("sandbox %v is not running", h.name)
 	}
 
 	return info.Port, nil
@@ -151,7 +151,7 @@ func (h *Handler) StopIfPaused() {
 }
 
 // assume lock held.  Make sure image is pulled, and determine whether
-// container is running.
+// sandbox is running.
 func (h *Handler) maybeInit() (err error) {
 	if h.state != state.Unitialized {
 		return nil

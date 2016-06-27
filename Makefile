@@ -34,7 +34,7 @@ bin/worker : $(GO_FILES)
 .PHONY: test test-cluster
 
 # create cluster for testing
-test-cluster :
+test-cluster : imgs/lambda-node
 	./util/stop-local-cluster.py -c $(TEST_CLUSTER) --if-running
 	./util/start-local-cluster.py -c $(TEST_CLUSTER) --skip-db-wait
 

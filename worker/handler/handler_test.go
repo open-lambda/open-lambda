@@ -7,15 +7,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/open-lambda/open-lambda/worker/container"
 	"github.com/open-lambda/open-lambda/worker/handler/state"
+	"github.com/open-lambda/open-lambda/worker/sandbox"
 )
 
-func NewDockerManager() (manager *container.DockerManager) {
+func NewDockerManager() (manager *sandbox.DockerManager) {
 	reg := os.Getenv("TEST_REGISTRY")
 	log.Printf("Use registry %v", reg)
 	components := strings.Split(reg, ":")
-	return container.NewDockerManager(components[0], components[1])
+	return sandbox.NewDockerManager(components[0], components[1])
 }
 
 func TestHandlerLookupSame(t *testing.T) {
@@ -41,7 +41,7 @@ func TestHandlerHandlerPull(t *testing.T) {
 	handlers := NewHandlerSet(HandlerSetOpts{Cm: cm})
 	name := "nonlocal"
 
-	// containers should initially not be pulled
+	// sandboxs should initially not be pulled
 	exists, err := cm.DockerImageExists(name)
 	if err != nil {
 		t.Fatal(err.Error())
@@ -73,7 +73,7 @@ func TestHandlerHandlerPull(t *testing.T) {
 	}
 }
 
-func GetState(t *testing.T, cm container.ContainerManager, img string) state.HandlerState {
+func GetState(t *testing.T, cm sandbox.SandboxManager, img string) state.HandlerState {
 	info, err := cm.GetInfo(img)
 	if err != nil {
 		t.Fatalf("Could not get info '%v'", img)

@@ -1,4 +1,4 @@
-package container
+package sandbox
 
 import (
 	"bytes"
@@ -395,7 +395,7 @@ func (cm *DockerManager) initTimers() {
 }
 
 // Runs any preperation to get the container ready to run
-func (cm *DockerManager) MakeReady(name string) (info ContainerInfo, err error) {
+func (cm *DockerManager) MakeReady(name string) (info SandboxInfo, err error) {
 	// make sure image is pulled
 	imgExists, err := cm.DockerImageExists(name)
 	if err != nil {
@@ -423,7 +423,7 @@ func (cm *DockerManager) MakeReady(name string) (info ContainerInfo, err error) 
 
 // Returns the current state of the container
 // If a container has never been started, the port will be -1
-func (cm *DockerManager) GetInfo(name string) (info ContainerInfo, err error) {
+func (cm *DockerManager) GetInfo(name string) (info SandboxInfo, err error) {
 	container, err := cm.dockerInspect(name)
 	if err != nil {
 		return info, err

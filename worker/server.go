@@ -10,13 +10,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/open-lambda/open-lambda/worker/container"
 	"github.com/open-lambda/open-lambda/worker/handler"
+	"github.com/open-lambda/open-lambda/worker/sandbox"
 	"github.com/phonyphonecall/turnip"
 )
 
 type Server struct {
-	manager  container.ContainerManager
+	manager  sandbox.SandboxManager
 	handlers *handler.HandlerSet
 
 	// config options
@@ -53,7 +53,7 @@ func NewServer(
 	}
 
 	// daemon
-	cm := container.NewDockerManager(registry_host, registry_port)
+	cm := sandbox.NewDockerManager(registry_host, registry_port)
 	if docker_host == "" {
 		endpoint := cm.Client().Endpoint()
 		local := "unix://"
@@ -87,11 +87,11 @@ func NewServer(
 	return server, nil
 }
 
-func (s *Server) Manager() container.ContainerManager {
+func (s *Server) Manager() sandbox.SandboxManager {
 	return s.manager
 }
 
-func (s *Server) ForwardToContainer(handler *handler.Handler, r *http.Request, input []byte) ([]byte, *http.Response, *httpErr) {
+func (s *Server) ForwardToSandbox(handler *handler.Handler, r *http.Request, input []byte) ([]byte, *http.Response, *httpErr) {
 	port, err := handler.RunStart()
 	if err != nil {
 		return nil, nil, newHttpErr(
@@ -101,15 +101,15 @@ func (s *Server) ForwardToContainer(handler *handler.Handler, r *http.Request, i
 
 	defer handler.RunFinish()
 
-	// forward request to container.  r and w are the server
+	// forward request to sandbox.  r and w are the server
 	// request and response respectively.  r2 and w2 are the
-	// container request and response respectively.
+	// sandbox request and response respectively.
 	host := fmt.Sprintf("%s:%s", s.docker_host, port)
 	url := fmt.Sprintf("http://%s%s", host, r.URL.Path)
 	// log.Printf("proxying request to %s\n", url)
 
 	// TODO(tyler): some sort of smarter backoff.  Or, a better
-	// way to detect a started container.
+	// way to detect a started sandbox.
 	max_tries := 10
 	for tries := 1; ; tries++ {
 		r2, err := http.NewRequest(r.Method, url, bytes.NewReader(input))
@@ -123,7 +123,7 @@ func (s *Server) ForwardToContainer(handler *handler.Handler, r *http.Request, i
 		client := &http.Client{}
 		w2, err := client.Do(r2)
 		if err != nil {
-			log.Printf("request to container failed with %v\n", err)
+			log.Printf("request to sandbox failed with %v\n", err)
 			if tries == max_tries {
 				return nil, nil, newHttpErr(
 					err.Error(),
@@ -146,8 +146,8 @@ func (s *Server) ForwardToContainer(handler *handler.Handler, r *http.Request, i
 }
 
 func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
-	// components represent runLambda[0]/<name_of_container>[1]/<extra_things>...
-	// ergo we want [1] for name of container
+	// components represent runLambda[0]/<name_of_sandbox>[1]/<extra_things>...
+	// ergo we want [1] for name of sandbox
 	urlParts := getUrlComponents(r)
 	if len(urlParts) < 2 {
 		return newHttpErr(
@@ -173,9 +173,9 @@ func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 		}
 	}
 
-	// forward to container
+	// forward to sandbox
 	handler := s.handlers.Get(img)
-	wbody, w2, err := s.ForwardToContainer(handler, r, rbody)
+	wbody, w2, err := s.ForwardToSandbox(handler, r, rbody)
 	if err != nil {
 		return err
 	}
