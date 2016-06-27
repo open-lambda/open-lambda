@@ -3,6 +3,7 @@
 *.ko
 *.obj
 *.elf
+*.pyc
 
 # Precompiled Headers
 *.gch
@@ -37,3 +38,9 @@
 *~
 
 .vagrant
+
+# Built stuff
+/hack/go
+/imgs
+/util/cluster
+/bin
