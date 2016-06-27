@@ -1,7 +1,5 @@
 package sandbox
 
-import "github.com/open-lambda/open-lambda/worker/handler/state"
-
 type SandboxManager interface {
 
 	// Runs any preperation to get the sandbox ready to run
@@ -29,9 +27,4 @@ type SandboxManager interface {
 
 	// Return recent log output for sandbox
 	Logs(name string) (string, error)
-}
-
-type SandboxInfo struct {
-	State state.HandlerState
-	Port  string
 }
