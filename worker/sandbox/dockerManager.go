@@ -10,7 +10,6 @@ import (
 	"time"
 
 	docker "github.com/fsouza/go-dockerclient"
-	"github.com/open-lambda/open-lambda/worker/handler/state"
 	"github.com/phonyphonecall/turnip"
 )
 
@@ -44,6 +43,10 @@ func NewDockerManager(host string, port string) (manager *DockerManager) {
 	manager.registryName = fmt.Sprintf("%s:%s", host, port)
 	manager.initTimers()
 	return manager
+}
+
+func (cm *DockerManager) Create(name string) Sandbox {
+	return &DockerSandbox{name: name, mgr: cm}
 }
 
 func (cm *DockerManager) dockerLogs(cid string, buf *bytes.Buffer) (err error) {
@@ -392,115 +395,4 @@ func (cm *DockerManager) initTimers() {
 	cm.startTimer = turnip.NewTurnip()
 	cm.unpauseTimer = turnip.NewTurnip()
 	cm.logTimer = turnip.NewTurnip()
-}
-
-// Runs any preperation to get the container ready to run
-func (cm *DockerManager) MakeReady(name string) (info SandboxInfo, err error) {
-	// make sure image is pulled
-	imgExists, err := cm.DockerImageExists(name)
-	if err != nil {
-		return info, err
-	}
-	if !imgExists {
-		if err := cm.dockerPull(name); err != nil {
-			return info, err
-		}
-	}
-
-	// make sure container is created
-	contExists, err := cm.dockerContainerExists(name)
-	if err != nil {
-		return info, err
-	}
-	if !contExists {
-		if _, err := cm.dockerCreate(name, []string{}); err != nil {
-			return info, err
-		}
-	}
-
-	return cm.GetInfo(name)
-}
-
-// Returns the current state of the container
-// If a container has never been started, the port will be -1
-func (cm *DockerManager) GetInfo(name string) (info SandboxInfo, err error) {
-	container, err := cm.dockerInspect(name)
-	if err != nil {
-		return info, err
-	}
-
-	// TODO: can the State enum be both paused and running?
-	var hState state.HandlerState
-	if container.State.Running {
-		if container.State.Paused {
-			hState = state.Paused
-		} else {
-			hState = state.Running
-		}
-	} else {
-		hState = state.Stopped
-	}
-
-	// If the container has never been started, it will have no port
-	port := "-1"
-	if hState != state.Stopped {
-		port, err = cm.getLambdaPort(name)
-		if err != nil {
-			return info, err
-		}
-	}
-
-	info.State = hState
-	info.Port = port
-
-	return info, nil
-}
-
-// Starts a given container
-func (cm *DockerManager) Start(name string) error {
-	c, err := cm.dockerInspect(name)
-	if err != nil {
-		return err
-	}
-
-	return cm.dockerStart(c)
-}
-
-// Pauses a given container
-func (cm *DockerManager) Pause(name string) error {
-	return cm.dockerPause(name)
-}
-
-// Unpauses a given container
-func (cm *DockerManager) Unpause(name string) error {
-	return cm.dockerUnpause(name)
-}
-
-// Stops a given container
-func (cm *DockerManager) Stop(name string) error {
-	return cm.dockerKill(name)
-}
-
-// Frees all resources associated with a given lambda
-// Will stop if needed
-func (cm *DockerManager) Remove(name string) error {
-	c, err := cm.dockerInspect(name)
-	if err != nil {
-		return cm.dockerError(name, err)
-	}
-
-	return cm.dockerRemove(c)
-}
-
-// Return recent log output for container
-func (cm *DockerManager) Logs(name string) (string, error) {
-	container, err := cm.dockerInspect(name)
-	if err != nil {
-		return "", err
-	}
-	buf := &bytes.Buffer{}
-	if err := cm.dockerLogs(container.ID, buf); err != nil {
-		return "", err
-	}
-	return buf.String(), nil
 }

@@ -11,6 +11,12 @@ import (
 	"github.com/open-lambda/open-lambda/worker/sandbox"
 )
 
+type MockSandboxManager struct{}
+
+func (MockSandboxManager) Create(name string) sandbox.Sandbox {
+	return nil
+}
+
 func NewDockerManager() (manager *sandbox.DockerManager) {
 	reg := os.Getenv("TEST_REGISTRY")
 	log.Printf("Use registry %v", reg)
@@ -19,7 +25,7 @@ func NewDockerManager() (manager *sandbox.DockerManager) {
 }
 
 func TestHandlerLookupSame(t *testing.T) {
-	handlers := NewHandlerSet(HandlerSetOpts{})
+	handlers := NewHandlerSet(HandlerSetOpts{Cm: MockSandboxManager{}})
 	a1 := handlers.Get("a")
 	a2 := handlers.Get("a")
 	if a1 != a2 {
@@ -28,7 +34,7 @@ func TestHandlerLookupSame(t *testing.T) {
 }
 
 func TestHandlerLookupDiff(t *testing.T) {
-	handlers := NewHandlerSet(HandlerSetOpts{})
+	handlers := NewHandlerSet(HandlerSetOpts{Cm: MockSandboxManager{}})
 	a := handlers.Get("a")
 	b := handlers.Get("b")
 	if a == b {
@@ -73,12 +79,12 @@ func TestHandlerHandlerPull(t *testing.T) {
 	}
 }
 
-func GetState(t *testing.T, cm sandbox.SandboxManager, img string) state.HandlerState {
-	info, err := cm.GetInfo(img)
+func GetState(t *testing.T, h *Handler) state.HandlerState {
+	state, err := h.sandbox.State()
 	if err != nil {
-		t.Fatalf("Could not get info '%v'", img)
+		t.Fatalf("Could not get state for %v", h.name)
 	}
-	return info.State
+	return state
 }
 
 func TestHandlerRunCountOne(t *testing.T) {
@@ -88,13 +94,13 @@ func TestHandlerRunCountOne(t *testing.T) {
 	h := handlers.Get("hello2")
 
 	h.RunStart()
-	s := GetState(t, cm, "hello2")
+	s := GetState(t, h)
 	if !(s == state.Running) {
 		t.Fatalf("Unexpected state: %v", s.String())
 	}
 
 	h.RunFinish()
-	s = GetState(t, cm, "hello2")
+	s = GetState(t, h)
 	if !(s == state.Paused) {
 		t.Fatalf("Unexpected state(2): %v", s.String())
 	}
@@ -109,7 +115,7 @@ func TestHandlerRunCountMany(t *testing.T) {
 
 	for i := 0; i < count; i++ {
 		h.RunStart()
-		s := GetState(t, cm, "hello2")
+		s := GetState(t, h)
 		if !(s == state.Running) {
 			t.Fatalf("Unexpected state: %v", s.String())
 		}
@@ -117,7 +123,7 @@ func TestHandlerRunCountMany(t *testing.T) {
 
 	for i := 0; i < count; i++ {
 		h.RunFinish()
-		s := GetState(t, cm, "hello2")
+		s := GetState(t, h)
 		if i == count-1 {
 			if !(s == state.Paused) {
 				t.Fatalf("Unexpected state: %v", s.String())
@@ -137,12 +143,12 @@ func TestHandlerEvict(t *testing.T) {
 	h := handlers.Get("hello2")
 	h.RunStart()
 	h.RunFinish()
-	s := GetState(t, cm, "hello2")
+	s := GetState(t, h)
 
 	// wait up to 5 seconds for evictor to evict
 	max_tries := 500
 	for tries := 1; ; tries++ {
-		s = GetState(t, cm, "hello2")
+		s = GetState(t, h)
 		if !(s == state.Running) {
 			return
 		} else if tries == max_tries {

@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"fmt"
 	"log"
 	"sync"
 
@@ -25,6 +24,7 @@ type Handler struct {
 	mutex   sync.Mutex
 	hset    *HandlerSet
 	name    string
+	sandbox sandbox.Sandbox
 	state   state.HandlerState
 	runners int
 }
@@ -51,6 +51,7 @@ func (h *HandlerSet) Get(name string) *Handler {
 		handler = &Handler{
 			hset:    h,
 			name:    name,
+			sandbox: h.cm.Create(name),
 			state:   state.Unitialized,
 			runners: 0,
 		}
@@ -78,16 +79,14 @@ func (h *Handler) RunStart() (port string, err error) {
 		return "", err
 	}
 
-	cm := h.hset.cm
-
 	// are we the first?
 	if h.runners == 0 {
 		if h.state == state.Stopped {
-			if err := cm.Start(h.name); err != nil {
+			if err := h.sandbox.Start(); err != nil {
 				return "", err
 			}
 		} else if h.state == state.Paused {
-			if err := cm.Unpause(h.name); err != nil {
+			if err := h.sandbox.Unpause(); err != nil {
 				return "", err
 			}
 		}
@@ -97,28 +96,18 @@ func (h *Handler) RunStart() (port string, err error) {
 
 	h.runners += 1
 
-	info, err := cm.GetInfo(h.name)
-	if err != nil {
-		return "", err
-	}
-	if info.Port == "-1" {
-		return "", fmt.Errorf("sandbox %v is not running", h.name)
-	}
-
-	return info.Port, nil
+	return h.sandbox.Port()
 }
 
 func (h *Handler) RunFinish() {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
-	cm := h.hset.cm
-
 	h.runners -= 1
 
 	// are we the first?
 	if h.runners == 0 {
-		if err := cm.Pause(h.name); err != nil {
+		if err := h.sandbox.Pause(); err != nil {
 			// TODO(tyler): better way to handle this?  If
 			// we can't pause, the handler gets to keep
 			// running for free...
@@ -133,21 +122,23 @@ func (h *Handler) StopIfPaused() {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
-	cm := h.hset.cm
-
 	if h.state != state.Paused {
 		return
 	}
 
 	// TODO(tyler): why do we need to unpause in order to kill?
-	if err := cm.Unpause(h.name); err != nil {
+	if err := h.sandbox.Unpause(); err != nil {
 		log.Printf("Could not unpause %v to kill it!  Error: %v\n", h.name, err)
-	} else if err := cm.Stop(h.name); err != nil {
+	} else if err := h.sandbox.Stop(); err != nil {
 		// TODO: a resource leak?
 		log.Printf("Could not kill %v after unpausing!  Error: %v\n", h.name, err)
 	} else {
 		h.state = state.Stopped
 	}
+}
+
+func (h *Handler) Sandbox() sandbox.Sandbox {
+	return h.sandbox
 }
 
 // assume lock held.  Make sure image is pulled, and determine whether
@@ -157,13 +148,13 @@ func (h *Handler) maybeInit() (err error) {
 		return nil
 	}
 
-	cm := h.hset.cm
-
-	info, err := cm.MakeReady(h.name)
+	err = h.sandbox.MakeReady()
 	if err != nil {
 		return err
 	}
-	h.state = info.State
+	if h.state, err = h.sandbox.State(); err != nil {
+		return err
+	}
 
 	return nil
 }
