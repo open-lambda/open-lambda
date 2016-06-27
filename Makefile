@@ -24,7 +24,6 @@ imgs/lambda-node : bin/worker node/Dockerfile node/startup.py node/kill.py
 
 clean :
 	rm -rf bin
-	rm -rf hack/.gopath
 	rm -rf $(NODE_BIN)
 	rm $(SERVER_BIN)
 	rm $(CLIENT_BIN)
