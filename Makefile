@@ -12,7 +12,10 @@ GO_PATH = hack/go
 WORKER_DIR = $(GO_PATH)/src/github.com/open-lambda/open-lambda/worker
 
 .PHONY: all
-all : imgs/lambda-node
+all : .git/hooks/pre-commit imgs/lambda-node
+
+.git/hooks/pre-commit: util/pre-commit
+	cp util/pre-commit .git/hooks/pre-commit
 
 # OL worker container, with OL server, Docker, and RethinkDB
 imgs/lambda-node : bin/worker node/Dockerfile node/startup.py node/kill.py
