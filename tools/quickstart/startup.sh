@@ -1,5 +1,4 @@
 #!/bin/bash
-APP=pychat
 add-apt-repository ppa:ubuntu-lxc/lxd-stable -y
 apt-get update
 apt-get -y install golang
@@ -12,7 +11,4 @@ apt-get -y install curl
 apt-get -y install git
 pip install netifaces
 pip install rethinkdb
-cd open-lambda
 service docker start
-docker daemon
-
