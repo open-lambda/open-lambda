@@ -11,4 +11,4 @@ apt-get -y install curl
 apt-get -y install git
 pip install netifaces
 pip install rethinkdb
-service docker start
+service docker restart
