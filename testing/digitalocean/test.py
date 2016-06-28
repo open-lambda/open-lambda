@@ -73,9 +73,10 @@ def main():
     hosts = [ip]
     client = ParallelSSHClient(hosts)
 
-    client.copy_file('test.sh', '/tmp/test.sh')
+    client.copy_file('./test.sh', '/tmp/test.sh')
 
-    output = client.run_command('bash /tmp/test.sh', sudo=True)
+    url = 'https://raw.githubusercontent.com/open-lambda/open-lambda/master/testing/digitalocean/test.sh'
+    output = client.run_command('wget %s; bash test.sh' % url, sudo=True)
     output = output.values()[0]
     for l in output["stdout"]:
         print l
@@ -83,7 +84,7 @@ def main():
         print l
 
     # make sure we cleanup everything!
-    kill()
+    #kill()
 
 if __name__ == '__main__':
     main()
