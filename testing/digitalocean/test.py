@@ -84,7 +84,7 @@ def main():
         print l
 
     # make sure we cleanup everything!
-    #kill()
+    kill()
 
 if __name__ == '__main__':
     main()
