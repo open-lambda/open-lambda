@@ -30,10 +30,11 @@ def makeDB(host):
         ra[WORD] = linesplit[1]
         ra[FREQ] = int(linesplit[2])
         if int(linesplit[0]) % 5000 == 0:
-            print linesplit[0]
+            print str(linesplit[0]) + "/97565 words loaded"
         r.db(AC).table(WORDS).insert(ra).run(conn)
     f.close()
     print "========================"
+    print "letters go from a to z"
     g = open(os.path.join(SCRIPT_DIR, "rangesCSV.txt"), 'r')
     ra = {PREF: None, LOWER: None, UPPER: None}
     for line in g:
@@ -49,5 +50,8 @@ def makeDB(host):
     g.close()
     return 'initialized'
 
-msg = makeDB("localhost")
+
+cluster_dir = os.path.join(SCRIPT_DIR, "..", "..","util", "cluster")
+worker0 = rdjs(os.path.join(cluster_dir, 'worker-0.json'))
+msg = makeDB(worker0['ip'])
 print msg
