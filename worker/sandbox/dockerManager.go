@@ -45,14 +45,14 @@ func NewDockerManager(host string, port string) (manager *DockerManager) {
 	return manager
 }
 
-func (cm *DockerManager) Create(name string) Sandbox {
-	return &DockerSandbox{name: name, mgr: cm}
+func (dm *DockerManager) Create(name string) Sandbox {
+	return &DockerSandbox{name: name, mgr: dm}
 }
 
-func (cm *DockerManager) dockerLogs(cid string, buf *bytes.Buffer) (err error) {
-	cm.logTimer.Start()
+func (dm *DockerManager) dockerLogs(cid string, buf *bytes.Buffer) (err error) {
+	dm.logTimer.Start()
 
-	err = cm.client.Logs(docker.LogsOptions{
+	err = dm.client.Logs(docker.LogsOptions{
 		Container:         cid,
 		OutputStream:      buf,
 		ErrorStream:       buf,
@@ -71,16 +71,16 @@ func (cm *DockerManager) dockerLogs(cid string, buf *bytes.Buffer) (err error) {
 		return err
 	}
 
-	cm.logTimer.Stop()
+	dm.logTimer.Stop()
 
 	return nil
 }
 
-func (cm *DockerManager) dockerError(cid string, outer error) (err error) {
+func (dm *DockerManager) dockerError(cid string, outer error) (err error) {
 	buf := bytes.NewBufferString(outer.Error())
 	buf.WriteString(fmt.Sprintf("<--- Start handler container [%s] logs: --->\n", cid))
 
-	err = cm.dockerLogs(cid, buf)
+	err = dm.dockerLogs(cid, buf)
 	if err != nil {
 		return err
 	}
@@ -90,18 +90,18 @@ func (cm *DockerManager) dockerError(cid string, outer error) (err error) {
 	return errors.New(buf.String())
 }
 
-func (cm *DockerManager) pullAndCreate(img string, args []string) (container *docker.Container, err error) {
-	if container, err = cm.dockerCreate(img, args); err != nil {
+func (dm *DockerManager) pullAndCreate(img string, args []string) (container *docker.Container, err error) {
+	if container, err = dm.dockerCreate(img, args); err != nil {
 		// if the container already exists, don't pull, let client decide how to handle
 		if err == docker.ErrContainerAlreadyExists {
 			return nil, err
 		}
 
-		if err = cm.dockerPull(img); err != nil {
+		if err = dm.dockerPull(img); err != nil {
 			log.Printf("img pull failed with: %v\n", err)
 			return nil, err
 		} else {
-			container, err = cm.dockerCreate(img, args)
+			container, err = dm.dockerCreate(img, args)
 			if err != nil {
 				log.Printf("failed to create container %s after good pull, with error: %v\n", img, err)
 				return nil, err
@@ -114,9 +114,9 @@ func (cm *DockerManager) pullAndCreate(img string, args []string) (container *do
 
 // Will ensure given image is running
 // returns the port of the runnning container
-func (cm *DockerManager) dockerMakeReady(img string) (port string, err error) {
+func (dm *DockerManager) dockerMakeReady(img string) (port string, err error) {
 	// TODO: decide on one default lambda entry path
-	container, err := cm.pullAndCreate(img, []string{})
+	container, err := dm.pullAndCreate(img, []string{})
 	if err != nil {
 		if err != docker.ErrContainerAlreadyExists {
 			// Unhandled error
@@ -125,94 +125,94 @@ func (cm *DockerManager) dockerMakeReady(img string) (port string, err error) {
 
 		// make sure container is up
 		cid := img
-		container, err = cm.dockerInspect(cid)
+		container, err = dm.dockerInspect(cid)
 		if err != nil {
 			return "", err
 		}
 		if container.State.Paused {
 			// unpause
-			if err = cm.dockerUnpause(container.ID); err != nil {
+			if err = dm.dockerUnpause(container.ID); err != nil {
 				return "", err
 			}
 		} else if !container.State.Running {
 			// restart a stopped/crashed container
-			if err = cm.dockerRestart(container.ID); err != nil {
+			if err = dm.dockerRestart(container.ID); err != nil {
 				return "", err
 			}
 		}
 	} else {
-		if err = cm.dockerStart(container); err != nil {
+		if err = dm.dockerStart(container); err != nil {
 			return "", err
 		}
 	}
 
-	port, err = cm.getLambdaPort(img)
+	port, err = dm.getLambdaPort(img)
 	if err != nil {
 		return "", err
 	}
 	return port, nil
 }
 
-func (cm *DockerManager) dockerKill(img string) (err error) {
+func (dm *DockerManager) dockerKill(img string) (err error) {
 	// TODO(tyler): is there any advantage to trying to stop
 	// before killing?  (i.e., use SIGTERM instead SIGKILL)
 	opts := docker.KillContainerOptions{ID: img}
-	if err = cm.client.KillContainer(opts); err != nil {
+	if err = dm.client.KillContainer(opts); err != nil {
 		log.Printf("failed to kill container with error %v\n", err)
-		return cm.dockerError(img, err)
+		return dm.dockerError(img, err)
 	}
 	return nil
 }
 
-func (cm *DockerManager) dockerRestart(img string) (err error) {
+func (dm *DockerManager) dockerRestart(img string) (err error) {
 	// Restart container after (0) seconds
-	if err = cm.client.RestartContainer(img, 0); err != nil {
+	if err = dm.client.RestartContainer(img, 0); err != nil {
 		log.Printf("failed to restart container with error %v\n", err)
-		return cm.dockerError(img, err)
+		return dm.dockerError(img, err)
 	}
 	return nil
 }
 
-func (cm *DockerManager) dockerPause(img string) (err error) {
-	cm.pauseTimer.Start()
-	if err = cm.client.PauseContainer(img); err != nil {
+func (dm *DockerManager) dockerPause(img string) (err error) {
+	dm.pauseTimer.Start()
+	if err = dm.client.PauseContainer(img); err != nil {
 		log.Printf("failed to pause container with error %v\n", err)
-		return cm.dockerError(img, err)
+		return dm.dockerError(img, err)
 	}
-	cm.pauseTimer.Stop()
+	dm.pauseTimer.Stop()
 
 	return nil
 }
 
-func (cm *DockerManager) dockerUnpause(cid string) (err error) {
-	cm.unpauseTimer.Start()
-	if err = cm.client.UnpauseContainer(cid); err != nil {
+func (dm *DockerManager) dockerUnpause(cid string) (err error) {
+	dm.unpauseTimer.Start()
+	if err = dm.client.UnpauseContainer(cid); err != nil {
 		log.Printf("failed to unpause container %s with err %v\n", cid, err)
-		return cm.dockerError(cid, err)
+		return dm.dockerError(cid, err)
 	}
-	cm.unpauseTimer.Stop()
+	dm.unpauseTimer.Stop()
 
 	return nil
 }
 
-func (cm *DockerManager) dockerPull(img string) error {
-	cm.pullTimer.Start()
-	err := cm.client.PullImage(
+func (dm *DockerManager) dockerPull(img string) error {
+	dm.pullTimer.Start()
+	err := dm.client.PullImage(
 		docker.PullImageOptions{
-			Repository: cm.registryName + "/" + img,
-			Registry:   cm.registryName,
+			Repository: dm.registryName + "/" + img,
+			Registry:   dm.registryName,
 			Tag:        "latest",
 		},
 		docker.AuthConfiguration{},
 	)
-	cm.pullTimer.Stop()
+	dm.pullTimer.Stop()
 
 	if err != nil {
-		return fmt.Errorf("failed to pull '%v' from %v registry\n", img, cm.registryName)
+		return fmt.Errorf("failed to pull '%v' from %v registry\n", img, dm.registryName)
 	}
 
-	err = cm.client.TagImage(
-		cm.registryName+"/"+img,
+	err = dm.client.TagImage(
+		dm.registryName+"/"+img,
 		docker.TagImageOptions{Repo: img, Force: true})
 	if err != nil {
 		log.Printf("failed to re-tag container: %v\n", err)
@@ -223,8 +223,8 @@ func (cm *DockerManager) dockerPull(img string) error {
 }
 
 // Left public for handler tests. Consider refactor
-func (cm *DockerManager) DockerImageExists(img_name string) (bool, error) {
-	_, err := cm.client.InspectImage(img_name)
+func (dm *DockerManager) DockerImageExists(img_name string) (bool, error) {
+	_, err := dm.client.InspectImage(img_name)
 	if err == docker.ErrNoSuchImage {
 		return false, nil
 	} else if err != nil {
@@ -233,8 +233,8 @@ func (cm *DockerManager) DockerImageExists(img_name string) (bool, error) {
 	return true, nil
 }
 
-func (cm *DockerManager) dockerContainerExists(cname string) (bool, error) {
-	_, err := cm.client.InspectContainer(cname)
+func (dm *DockerManager) dockerContainerExists(cname string) (bool, error) {
+	_, err := dm.client.InspectContainer(cname)
 	if err != nil {
 		switch err.(type) {
 		default:
@@ -246,18 +246,18 @@ func (cm *DockerManager) dockerContainerExists(cname string) (bool, error) {
 	return true, nil
 }
 
-func (cm *DockerManager) dockerStart(container *docker.Container) (err error) {
-	cm.startTimer.Start()
-	if err = cm.client.StartContainer(container.ID, container.HostConfig); err != nil {
+func (dm *DockerManager) dockerStart(container *docker.Container) (err error) {
+	dm.startTimer.Start()
+	if err = dm.client.StartContainer(container.ID, container.HostConfig); err != nil {
 		log.Printf("failed to start container with err %v\n", err)
-		return cm.dockerError(container.ID, err)
+		return dm.dockerError(container.ID, err)
 	}
-	cm.startTimer.Stop()
+	dm.startTimer.Stop()
 
 	return nil
 }
 
-func (cm *DockerManager) dockerCreate(img string, args []string) (*docker.Container, error) {
+func (dm *DockerManager) dockerCreate(img string, args []string) (*docker.Container, error) {
 	// Create a new container with img and args
 	// Specifically give container name of img, so we can lookup later
 
@@ -267,13 +267,13 @@ func (cm *DockerManager) dockerCreate(img string, args []string) (*docker.Contai
 	// for a specific container is bound to 8080
 	//
 	// Using port 0 will force the OS to choose a free port for us.
-	cm.createTimer.Start()
+	dm.createTimer.Start()
 	port := 0
 	portStr := strconv.Itoa(port)
 	internalAppPort := map[docker.Port]struct{}{"8080/tcp": {}}
 	portBindings := map[docker.Port][]docker.PortBinding{
 		"8080/tcp": {{HostIP: "0.0.0.0", HostPort: portStr}}}
-	container, err := cm.client.CreateContainer(
+	container, err := dm.client.CreateContainer(
 		docker.CreateContainerOptions{
 			Config: &docker.Config{
 				Cmd:          args,
@@ -289,55 +289,55 @@ func (cm *DockerManager) dockerCreate(img string, args []string) (*docker.Contai
 			Name: img,
 		},
 	)
-	cm.createTimer.Stop()
+	dm.createTimer.Stop()
 
 	if err != nil {
 		// commented because at large scale, this isnt always an error, and therefor shouldnt polute logs
 		// log.Printf("container %s failed to create with err: %v\n", img, err)
-		return nil, cm.dockerError(img, err)
+		return nil, dm.dockerError(img, err)
 	}
 
 	return container, nil
 }
 
-func (cm *DockerManager) dockerInspect(cid string) (container *docker.Container, err error) {
-	cm.inspectTimer.Start()
-	container, err = cm.client.InspectContainer(cid)
+func (dm *DockerManager) dockerInspect(cid string) (container *docker.Container, err error) {
+	dm.inspectTimer.Start()
+	container, err = dm.client.InspectContainer(cid)
 	if err != nil {
 		log.Printf("failed to inspect %s with err %v\n", cid, err)
-		return nil, cm.dockerError(cid, err)
+		return nil, dm.dockerError(cid, err)
 	}
-	cm.inspectTimer.Stop()
+	dm.inspectTimer.Stop()
 
 	return container, nil
 }
 
-func (cm *DockerManager) dockerRemove(container *docker.Container) (err error) {
-	if err = cm.client.RemoveContainer(docker.RemoveContainerOptions{
+func (dm *DockerManager) dockerRemove(container *docker.Container) (err error) {
+	if err = dm.client.RemoveContainer(docker.RemoveContainerOptions{
 		ID: container.ID,
 	}); err != nil {
 		log.Printf("failed to rm container with err %v", err)
-		return cm.dockerError(container.ID, err)
+		return dm.dockerError(container.ID, err)
 	}
 
 	return nil
 }
 
 // Returned as "port"
-func (cm *DockerManager) getLambdaPort(cid string) (port string, err error) {
-	container, err := cm.dockerInspect(cid)
+func (dm *DockerManager) getLambdaPort(cid string) (port string, err error) {
+	container, err := dm.dockerInspect(cid)
 	if err != nil {
-		return "", cm.dockerError(cid, err)
+		return "", dm.dockerError(cid, err)
 	}
 
 	container_port := docker.Port("8080/tcp")
 	ports := container.NetworkSettings.Ports[container_port]
 	if len(ports) == 0 {
 		err := fmt.Errorf("could not lookup host port for %v", container_port)
-		return "", cm.dockerError(cid, err)
+		return "", dm.dockerError(cid, err)
 	} else if len(ports) > 1 {
 		err := fmt.Errorf("multiple host port mapping to %v", container_port)
-		return "", cm.dockerError(cid, err)
+		return "", dm.dockerError(cid, err)
 	}
 	port = ports[0].HostPort
 
@@ -348,15 +348,15 @@ func (cm *DockerManager) getLambdaPort(cid string) (port string, err error) {
 	return port, nil
 }
 
-func (cm *DockerManager) Dump() {
+func (dm *DockerManager) Dump() {
 	opts := docker.ListContainersOptions{All: true}
-	containers, err := cm.client.ListContainers(opts)
+	containers, err := dm.client.ListContainers(opts)
 	if err != nil {
 		log.Fatal("Could not get container list")
 	}
 	log.Printf("=====================================\n")
 	for idx, info := range containers {
-		container, err := cm.dockerInspect(info.ID)
+		container, err := dm.dockerInspect(info.ID)
 		if err != nil {
 			log.Fatal("Could not get container")
 		}
@@ -369,30 +369,30 @@ func (cm *DockerManager) Dump() {
 	log.Printf("=====================================\n")
 	log.Println()
 	log.Printf("====== Docker Operation Stats =======\n")
-	log.Printf("\tcreate: \t%fms\n", cm.createTimer.AverageMs())
-	log.Printf("\tinspect: \t%fms\n", cm.inspectTimer.AverageMs())
-	log.Printf("\tlogs: \t%fms\n", cm.logTimer.AverageMs())
-	log.Printf("\tpause: \t\t%fms\n", cm.pauseTimer.AverageMs())
-	log.Printf("\tpull: \t\t%fms\n", cm.pullTimer.AverageMs())
-	log.Printf("\tremove: \t%fms\n", cm.removeTimer.AverageMs())
-	log.Printf("\trestart: \t%fms\n", cm.restartTimer.AverageMs())
-	log.Printf("\trestart: \t%fms\n", cm.restartTimer.AverageMs())
-	log.Printf("\tunpause: \t%fms\n", cm.unpauseTimer.AverageMs())
+	log.Printf("\tcreate: \t%fms\n", dm.createTimer.AverageMs())
+	log.Printf("\tinspect: \t%fms\n", dm.inspectTimer.AverageMs())
+	log.Printf("\tlogs: \t%fms\n", dm.logTimer.AverageMs())
+	log.Printf("\tpause: \t\t%fms\n", dm.pauseTimer.AverageMs())
+	log.Printf("\tpull: \t\t%fms\n", dm.pullTimer.AverageMs())
+	log.Printf("\tremove: \t%fms\n", dm.removeTimer.AverageMs())
+	log.Printf("\trestart: \t%fms\n", dm.restartTimer.AverageMs())
+	log.Printf("\trestart: \t%fms\n", dm.restartTimer.AverageMs())
+	log.Printf("\tunpause: \t%fms\n", dm.unpauseTimer.AverageMs())
 	log.Printf("=====================================\n")
 }
 
-func (cm *DockerManager) Client() *docker.Client {
-	return cm.client
+func (dm *DockerManager) Client() *docker.Client {
+	return dm.client
 }
 
-func (cm *DockerManager) initTimers() {
-	cm.createTimer = turnip.NewTurnip()
-	cm.inspectTimer = turnip.NewTurnip()
-	cm.pauseTimer = turnip.NewTurnip()
-	cm.pullTimer = turnip.NewTurnip()
-	cm.removeTimer = turnip.NewTurnip()
-	cm.restartTimer = turnip.NewTurnip()
-	cm.startTimer = turnip.NewTurnip()
-	cm.unpauseTimer = turnip.NewTurnip()
-	cm.logTimer = turnip.NewTurnip()
+func (dm *DockerManager) initTimers() {
+	dm.createTimer = turnip.NewTurnip()
+	dm.inspectTimer = turnip.NewTurnip()
+	dm.pauseTimer = turnip.NewTurnip()
+	dm.pullTimer = turnip.NewTurnip()
+	dm.removeTimer = turnip.NewTurnip()
+	dm.restartTimer = turnip.NewTurnip()
+	dm.startTimer = turnip.NewTurnip()
+	dm.unpauseTimer = turnip.NewTurnip()
+	dm.logTimer = turnip.NewTurnip()
 }
