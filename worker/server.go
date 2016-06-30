@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -14,6 +15,11 @@ import (
 	"github.com/open-lambda/open-lambda/worker/sandbox"
 	"github.com/phonyphonecall/turnip"
 )
+
+type Config struct {
+	RegistryHost string `json:"registry_host"`
+	RegistryPort string `json:"registry_port"`
+}
 
 type Server struct {
 	manager  sandbox.SandboxManager
@@ -241,15 +247,25 @@ func getUrlComponents(r *http.Request) []string {
 }
 
 func main() {
-	if len(os.Args) < 3 {
-		log.Fatalf("usage: %s <registry hostname> <registry port>\n", os.Args[0])
+	// parse config file
+	if len(os.Args) != 2 {
+		log.Fatalf("usage: %s <json-config>\n", os.Args[0])
+	}
+	config_raw, err := ioutil.ReadFile(os.Args[1])
+	if err != nil {
+		log.Fatalf("could not open config: %v\n", err.Error())
+	}
+	var config Config
+	if err := json.Unmarshal(config_raw, &config); err != nil {
+		log.Fatalf("could not parse config: %v\n", err.Error())
 	}
 
+	// start serving
 	docker_host, ok := os.LookupEnv("OL_DOCKER_HOST")
 	if !ok {
 		docker_host = ""
 	}
-	server, err := NewServer(os.Args[1], os.Args[2], docker_host)
+	server, err := NewServer(config.RegistryHost, config.RegistryPort, docker_host)
 	if err != nil {
 		log.Fatal(err)
 	}

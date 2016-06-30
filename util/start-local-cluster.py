@@ -116,7 +116,7 @@ def main():
 
         wrjs(config_path, config)
         volumes = [('/sys/fs/cgroup', '/sys/fs/cgroup'),
-                   (config_path, '/open-lambda-config.js')]
+                   (config_path, '/open-lambda/config.json')]
         c = 'docker run -d --privileged <VOLUMES> -p 0:%s lambda-node' % WORKER_PORT
         c = c.replace('<VOLUMES>', ' '.join(['-v %s:%s'%(host,guest)
                                              for host,guest in volumes]))
