@@ -1,3 +1,4 @@
 {
+  "db": "rethinkdb",
   "debug": true
 }

@@ -2,9 +2,6 @@
     "distribution": "ubuntu",
     "pip": [
         "Flask",
-        "rethinkdb",
-        "marisa-trie"
-    ],
-    "add":["info.tar.gz"]
-    
+        "rethinkdb"
+    ]
 }
