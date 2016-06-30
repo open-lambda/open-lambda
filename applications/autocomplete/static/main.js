@@ -38,9 +38,12 @@ function checkenter(e) {
     else if (e.charCode == 32) {
         clearsuggs();
     }
-    else {
+    else if (e.keyCode >= 65 && e.keyCode < 90){
         $("#text").keyup(function() {
             keystroke()});
+    }
+    else {
+        clearsuggs();
     }
 }
 function completeword(s) {

@@ -16,7 +16,7 @@ def makeDB(host):
     r.db_create(AC).run(conn)
     r.db(AC).table_create(WORDS, primary_key = WORD).run(conn)
     ra = {WORD: None, FREQ: None}
-    f = open(os.path.join(SCRIPT_DIR, "words2CSV.txt"), 'r')
+    f = open(os.path.join(SCRIPT_DIR, "wordsCSV.txt"), 'r')
     for line in f:
         line = line.strip()
         linesplit = line.split(',')
