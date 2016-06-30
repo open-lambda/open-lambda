@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 import os, sys, time, json
 
+CONFIG_PATH = '/open-lambda/config.json' # provided as docker volume
+
 def get_config():
-    path = '/open-lambda-config.js'
+    path = CONFIG_PATH
     if not os.path.exists(path):
         return {}
     with open(path) as f:
@@ -44,10 +46,7 @@ def main():
     cmd(c + ' &')
 
     # start lambda worker
-    c = ('/open-lambda/bin/worker <REGISTRY_HOST> <REGISTRY_PORT>')
-    cmd(c.replace('<REGISTRY_HOST>', config.get('registry_host', 'localhost'))
-        .replace('<REGISTRY_PORT>', config.get('registry_port', '5000')))
-
+    cmd('/open-lambda/bin/worker ' + CONFIG_PATH)
 
 if __name__ == '__main__':
     main()
