@@ -48,8 +48,32 @@ func NewDockerManager(opts *config.Config) (manager *DockerManager) {
 	return manager
 }
 
-func (dm *DockerManager) Create(name string) Sandbox {
-	return &DockerSandbox{name: name, mgr: dm}
+func (dm *DockerManager) Create(name string) (Sandbox, error) {
+	internalAppPort := map[docker.Port]struct{}{"8080/tcp": {}}
+	portBindings := map[docker.Port][]docker.PortBinding{
+		"8080/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}}}
+
+	container, err := dm.client.CreateContainer(
+		docker.CreateContainerOptions{
+			Config: &docker.Config{
+				Image:        name,
+				AttachStdout: true,
+				AttachStderr: true,
+				ExposedPorts: internalAppPort,
+			},
+			HostConfig: &docker.HostConfig{
+				PortBindings:    portBindings,
+				PublishAllPorts: true,
+			},
+		},
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	sandbox := &DockerSandbox{name: name, container: container, mgr: dm}
+	return sandbox, nil
 }
 
 func (dm *DockerManager) Pull(name string) error {
@@ -145,47 +169,6 @@ func (dm *DockerManager) pullAndCreate(img string, args []string) (container *do
 	}
 
 	return container, nil
-}
-
-// Will ensure given image is running
-// returns the port of the runnning container
-func (dm *DockerManager) dockerMakeReady(img string) (port string, err error) {
-	// TODO: decide on one default lambda entry path
-	container, err := dm.pullAndCreate(img, []string{})
-	if err != nil {
-		if err != docker.ErrContainerAlreadyExists {
-			// Unhandled error
-			return "", err
-		}
-
-		// make sure container is up
-		cid := img
-		container, err = dm.dockerInspect(cid)
-		if err != nil {
-			return "", err
-		}
-		if container.State.Paused {
-			// unpause
-			if err = dm.dockerUnpause(container.ID); err != nil {
-				return "", err
-			}
-		} else if !container.State.Running {
-			// restart a stopped/crashed container
-			if err = dm.dockerRestart(container.ID); err != nil {
-				return "", err
-			}
-		}
-	} else {
-		if err = dm.dockerStart(container); err != nil {
-			return "", err
-		}
-	}
-
-	port, err = dm.getLambdaPort(img)
-	if err != nil {
-		return "", err
-	}
-	return port, nil
 }
 
 func (dm *DockerManager) dockerKill(id string) (err error) {

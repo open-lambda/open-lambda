@@ -88,9 +88,8 @@ func (h *Handler) RunStart() (port string, err error) {
 
 	// create sandbox if needed
 	if h.sandbox == nil {
-		sandbox := h.hset.sm.Create(h.name)
-		// TODO(tyler): combine MakeReady with Create
-		if err := sandbox.MakeReady(); err != nil {
+		sandbox, err := h.hset.sm.Create(h.name)
+		if err != nil {
 			return "", err
 		}
 		h.sandbox = sandbox
