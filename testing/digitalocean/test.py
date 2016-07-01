@@ -70,6 +70,8 @@ def main():
 
         time.sleep(3)
 
+    time.sleep(10) # give SSH some time
+
     hosts = [ip]
     client = ParallelSSHClient(hosts)
 
