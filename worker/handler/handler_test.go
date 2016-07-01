@@ -7,25 +7,26 @@ import (
 	"testing"
 	"time"
 
+	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/handler/state"
 	"github.com/open-lambda/open-lambda/worker/sandbox"
 )
-
-type MockSandboxManager struct{}
-
-func (MockSandboxManager) Create(name string) sandbox.Sandbox {
-	return nil
-}
 
 func NewDockerManager() (manager *sandbox.DockerManager) {
 	reg := os.Getenv("TEST_REGISTRY")
 	log.Printf("Use registry %v", reg)
 	components := strings.Split(reg, ":")
-	return sandbox.NewDockerManager(components[0], components[1])
+	opts := &config.Config{
+		Registry_host:      components[0],
+		Registry_port:      components[1],
+		Skip_pull_existing: true,
+	}
+	return sandbox.NewDockerManager(opts)
 }
 
 func TestHandlerLookupSame(t *testing.T) {
-	handlers := NewHandlerSet(HandlerSetOpts{Cm: MockSandboxManager{}})
+	sm := NewDockerManager()
+	handlers := NewHandlerSet(HandlerSetOpts{Sm: sm})
 	a1 := handlers.Get("a")
 	a2 := handlers.Get("a")
 	if a1 != a2 {
@@ -34,7 +35,8 @@ func TestHandlerLookupSame(t *testing.T) {
 }
 
 func TestHandlerLookupDiff(t *testing.T) {
-	handlers := NewHandlerSet(HandlerSetOpts{Cm: MockSandboxManager{}})
+	sm := NewDockerManager()
+	handlers := NewHandlerSet(HandlerSetOpts{Sm: sm})
 	a := handlers.Get("a")
 	b := handlers.Get("b")
 	if a == b {
@@ -43,12 +45,12 @@ func TestHandlerLookupDiff(t *testing.T) {
 }
 
 func TestHandlerHandlerPull(t *testing.T) {
-	cm := NewDockerManager()
-	handlers := NewHandlerSet(HandlerSetOpts{Cm: cm})
+	sm := NewDockerManager()
+	handlers := NewHandlerSet(HandlerSetOpts{Sm: sm})
 	name := "nonlocal"
 
 	// sandboxs should initially not be pulled
-	exists, err := cm.DockerImageExists(name)
+	exists, err := sm.DockerImageExists(name)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -59,7 +61,7 @@ func TestHandlerHandlerPull(t *testing.T) {
 	h := handlers.Get(name)
 
 	// Get SHOULD NOT trigger pull
-	exists, err = cm.DockerImageExists(name)
+	exists, err = sm.DockerImageExists(name)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -70,7 +72,7 @@ func TestHandlerHandlerPull(t *testing.T) {
 	h.RunStart()
 
 	// Run SHOULD trigger pull
-	exists, err = cm.DockerImageExists(name)
+	exists, err = sm.DockerImageExists(name)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -89,8 +91,8 @@ func GetState(t *testing.T, h *Handler) state.HandlerState {
 
 func TestHandlerRunCountOne(t *testing.T) {
 	lru := NewHandlerLRU(1)
-	cm := NewDockerManager()
-	handlers := NewHandlerSet(HandlerSetOpts{Cm: cm, Lru: lru})
+	sm := NewDockerManager()
+	handlers := NewHandlerSet(HandlerSetOpts{Sm: sm, Lru: lru})
 	h := handlers.Get("hello2")
 
 	h.RunStart()
@@ -108,13 +110,17 @@ func TestHandlerRunCountOne(t *testing.T) {
 
 func TestHandlerRunCountMany(t *testing.T) {
 	lru := NewHandlerLRU(1)
-	cm := NewDockerManager()
-	handlers := NewHandlerSet(HandlerSetOpts{Cm: cm, Lru: lru})
+	sm := NewDockerManager()
+	handlers := NewHandlerSet(HandlerSetOpts{Sm: sm, Lru: lru})
 	h := handlers.Get("hello2")
 	count := 10
 
 	for i := 0; i < count; i++ {
-		h.RunStart()
+		log.Printf("Starting %v\n", i+1)
+		_, err := h.RunStart()
+		if err != nil {
+			t.Fatalf("RunStart failed with %v", err.Error())
+		}
 		s := GetState(t, h)
 		if !(s == state.Running) {
 			t.Fatalf("Unexpected state: %v", s.String())
@@ -122,6 +128,7 @@ func TestHandlerRunCountMany(t *testing.T) {
 	}
 
 	for i := 0; i < count; i++ {
+		log.Printf("Finishing %v\n", i+1)
 		h.RunFinish()
 		s := GetState(t, h)
 		if i == count-1 {
@@ -138,8 +145,8 @@ func TestHandlerRunCountMany(t *testing.T) {
 
 func TestHandlerEvict(t *testing.T) {
 	lru := NewHandlerLRU(0)
-	cm := NewDockerManager()
-	handlers := NewHandlerSet(HandlerSetOpts{Cm: cm, Lru: lru})
+	sm := NewDockerManager()
+	handlers := NewHandlerSet(HandlerSetOpts{Sm: sm, Lru: lru})
 	h := handlers.Get("hello2")
 	h.RunStart()
 	h.RunFinish()

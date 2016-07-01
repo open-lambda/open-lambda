@@ -11,25 +11,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/handler"
 	"github.com/open-lambda/open-lambda/worker/sandbox"
 	"github.com/phonyphonecall/turnip"
 )
 
-type Config struct {
-	RegistryHost string `json:"registry_host"`
-	RegistryPort string `json:"registry_port"`
-}
-
 type Server struct {
-	manager  sandbox.SandboxManager
-	handlers *handler.HandlerSet
-
-	// config options
-	registry_host string
-	registry_port string
-	docker_host   string
-
+	manager     sandbox.SandboxManager
+	config      *config.Config
+	handlers    *handler.HandlerSet
 	lambdaTimer *turnip.Turnip
 }
 
@@ -42,52 +33,48 @@ func newHttpErr(msg string, code int) *httpErr {
 	return &httpErr{msg: msg, code: code}
 }
 
-func NewServer(
-	registry_host string,
-	registry_port string,
-	docker_host string) (*Server, error) {
+func NewServer(config *config.Config) (*Server, error) {
+	// TODO(tyler): move defaults to config module
 
 	// registry
-	if registry_host == "" {
-		registry_host = "localhost"
-		log.Printf("Using '%v' for registry_host", registry_host)
+	if config.Registry_host == "" {
+		config.Registry_host = "localhost"
+		log.Printf("Using '%v' for registry_host", config.Registry_host)
 	}
 
-	if registry_port == "" {
-		registry_port = "5000"
-		log.Printf("Using '%v' for registry_port", registry_port)
+	if config.Registry_port == "" {
+		config.Registry_port = "5000"
+		log.Printf("Using '%v' for registry_port", config.Registry_port)
 	}
 
 	// daemon
-	cm := sandbox.NewDockerManager(registry_host, registry_port)
-	if docker_host == "" {
-		endpoint := cm.Client().Endpoint()
+	sm := sandbox.NewDockerManager(config)
+	if config.Docker_host == "" {
+		endpoint := sm.Client().Endpoint()
 		local := "unix://"
 		nonLocal := "https://"
 		if strings.HasPrefix(endpoint, local) {
-			docker_host = "localhost"
+			config.Docker_host = "localhost"
 		} else if strings.HasPrefix(endpoint, nonLocal) {
 			start := strings.Index(endpoint, nonLocal) + len([]rune(nonLocal))
 			end := strings.LastIndex(endpoint, ":")
-			docker_host = endpoint[start:end]
+			config.Docker_host = endpoint[start:end]
 		} else {
 			return nil, fmt.Errorf("please specify a docker host!")
 		}
-		log.Printf("Using '%v' for docker_host", docker_host)
+		log.Printf("Using '%v' for Docker host", config.Docker_host)
 	}
 
 	// create server
 	opts := handler.HandlerSetOpts{
-		Cm:  cm,
+		Sm:  sm,
 		Lru: handler.NewHandlerLRU(100), // TODO(tyler)
 	}
 	server := &Server{
-		registry_host: registry_host,
-		registry_port: registry_port,
-		docker_host:   docker_host,
-		manager:       cm,
-		handlers:      handler.NewHandlerSet(opts),
-		lambdaTimer:   turnip.NewTurnip(),
+		manager:     sm,
+		config:      config,
+		handlers:    handler.NewHandlerSet(opts),
+		lambdaTimer: turnip.NewTurnip(),
 	}
 
 	return server, nil
@@ -110,7 +97,7 @@ func (s *Server) ForwardToSandbox(handler *handler.Handler, r *http.Request, inp
 	// forward request to sandbox.  r and w are the server
 	// request and response respectively.  r2 and w2 are the
 	// sandbox request and response respectively.
-	host := fmt.Sprintf("%s:%s", s.docker_host, port)
+	host := fmt.Sprintf("%s:%s", s.config.Docker_host, port)
 	url := fmt.Sprintf("http://%s%s", host, r.URL.Path)
 	// log.Printf("proxying request to %s\n", url)
 
@@ -255,17 +242,13 @@ func main() {
 	if err != nil {
 		log.Fatalf("could not open config: %v\n", err.Error())
 	}
-	var config Config
+	var config config.Config
 	if err := json.Unmarshal(config_raw, &config); err != nil {
 		log.Fatalf("could not parse config: %v\n", err.Error())
 	}
 
 	// start serving
-	docker_host, ok := os.LookupEnv("OL_DOCKER_HOST")
-	if !ok {
-		docker_host = ""
-	}
-	server, err := NewServer(config.RegistryHost, config.RegistryPort, docker_host)
+	server, err := NewServer(&config)
 	if err != nil {
 		log.Fatal(err)
 	}

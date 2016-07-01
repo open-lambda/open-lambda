@@ -2,6 +2,7 @@ package sandbox
 
 import (
 	"bytes"
+	"fmt"
 
 	"github.com/open-lambda/open-lambda/worker/handler/state"
 )
@@ -13,26 +14,37 @@ type DockerSandbox struct {
 
 // Runs any preperation to get the container ready to run
 func (s *DockerSandbox) MakeReady() (err error) {
-	// make sure image is pulled
-	imgExists, err := s.mgr.DockerImageExists(s.name)
-	if err != nil {
-		return err
-	}
-	if !imgExists {
-		if err := s.mgr.dockerPull(s.name); err != nil {
-			return err
-		}
-	}
-
-	// make sure container is created
+	// Make sure container doesn't already exist
+	//
+	// TODO(tyler): get rid of this case by decoupling container names from image
 	contExists, err := s.mgr.dockerContainerExists(s.name)
 	if err != nil {
 		return err
 	}
-	if !contExists {
-		if _, err := s.mgr.dockerCreate(s.name, []string{}); err != nil {
-			return err
+
+	if contExists {
+		c, err := s.mgr.dockerInspect(s.name)
+		if err != nil {
+			panic(fmt.Sprintf("could not inspect %v", s.name))
 		}
+		if c.State.Paused {
+			if err = s.mgr.dockerUnpause(c.ID); err != nil {
+				panic(fmt.Sprintf("could not unpause %v", s.name))
+			}
+		}
+		if c.State.Running {
+			if err = s.mgr.dockerKill(c.ID); err != nil {
+				panic(fmt.Sprintf("could not kill %v", s.name))
+			}
+		}
+		if err := s.mgr.dockerRemove(c); err != nil {
+			panic(fmt.Sprintf("could not kill %v", s.name))
+		}
+	}
+
+	// create container
+	if _, err := s.mgr.dockerCreate(s.name, []string{}); err != nil {
+		return err
 	}
 
 	return nil

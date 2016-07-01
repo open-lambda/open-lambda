@@ -3,30 +3,32 @@ package handler
 import (
 	"log"
 	"sync"
+	"time"
 
 	"github.com/open-lambda/open-lambda/worker/handler/state"
 	"github.com/open-lambda/open-lambda/worker/sandbox"
 )
 
 type HandlerSetOpts struct {
-	Cm  sandbox.SandboxManager
+	Sm  sandbox.SandboxManager
 	Lru *HandlerLRU
 }
 
 type HandlerSet struct {
 	mutex    sync.Mutex
 	handlers map[string]*Handler
-	cm       sandbox.SandboxManager
+	sm       sandbox.SandboxManager
 	lru      *HandlerLRU
 }
 
 type Handler struct {
-	mutex   sync.Mutex
-	hset    *HandlerSet
-	name    string
-	sandbox sandbox.Sandbox
-	state   state.HandlerState
-	runners int
+	mutex    sync.Mutex
+	hset     *HandlerSet
+	name     string
+	sandbox  sandbox.Sandbox
+	lastPull *time.Time
+	state    state.HandlerState
+	runners  int
 }
 
 func NewHandlerSet(opts HandlerSetOpts) (handlerSet *HandlerSet) {
@@ -36,7 +38,7 @@ func NewHandlerSet(opts HandlerSetOpts) (handlerSet *HandlerSet) {
 
 	return &HandlerSet{
 		handlers: make(map[string]*Handler),
-		cm:       opts.Cm,
+		sm:       opts.Sm,
 		lru:      opts.Lru,
 	}
 }
@@ -51,7 +53,6 @@ func (h *HandlerSet) Get(name string) *Handler {
 		handler = &Handler{
 			hset:    h,
 			name:    name,
-			sandbox: h.cm.Create(name),
 			state:   state.Unitialized,
 			runners: 0,
 		}
@@ -75,8 +76,25 @@ func (h *Handler) RunStart() (port string, err error) {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
-	if err := h.maybeInit(); err != nil {
-		return "", err
+	// get code if needed
+	if h.lastPull == nil {
+		err = h.hset.sm.Pull(h.name)
+		if err != nil {
+			return "", err
+		}
+		now := time.Now()
+		h.lastPull = &now
+	}
+
+	// create sandbox if needed
+	if h.sandbox == nil {
+		sandbox := h.hset.sm.Create(h.name)
+		// TODO(tyler): combine MakeReady with Create
+		if err := sandbox.MakeReady(); err != nil {
+			return "", err
+		}
+		h.sandbox = sandbox
+		h.state = state.Stopped
 	}
 
 	// are we the first?
@@ -139,22 +157,4 @@ func (h *Handler) StopIfPaused() {
 
 func (h *Handler) Sandbox() sandbox.Sandbox {
 	return h.sandbox
-}
-
-// assume lock held.  Make sure image is pulled, and determine whether
-// sandbox is running.
-func (h *Handler) maybeInit() (err error) {
-	if h.state != state.Unitialized {
-		return nil
-	}
-
-	err = h.sandbox.MakeReady()
-	if err != nil {
-		return err
-	}
-	if h.state, err = h.sandbox.State(); err != nil {
-		return err
-	}
-
-	return nil
 }

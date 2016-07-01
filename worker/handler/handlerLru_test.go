@@ -7,7 +7,7 @@ import (
 func TestLRU(t *testing.T) {
 	lru := NewHandlerLRU(0)
 	opts := HandlerSetOpts{
-		Cm:  MockSandboxManager{},
+		Sm:  NewDockerManager(),
 		Lru: lru,
 	}
 	handlers := NewHandlerSet(opts)

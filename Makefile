@@ -35,7 +35,7 @@ bin/worker : $(GO_FILES)
 
 # create cluster for testing
 test-cluster : imgs/lambda-node
-	./util/stop-local-cluster.py -c $(TEST_CLUSTER) --if-running
+	./util/stop-local-cluster.py -c $(TEST_CLUSTER) --if-running --force
 	./util/start-local-cluster.py -c $(TEST_CLUSTER) --skip-db-wait
 
 # run go unit tests in initialized environment

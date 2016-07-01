@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/open-lambda/open-lambda/worker/config"
 )
 
 var server *Server
@@ -18,7 +20,8 @@ func init() {
 }
 
 func RunServer() *Server {
-	server, err := NewServer("", "", "")
+	config := &config.Config{Skip_pull_existing: true}
+	server, err := NewServer(config)
 	if err != nil {
 		log.Fatal(err)
 	}

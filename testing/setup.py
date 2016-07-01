@@ -25,6 +25,10 @@ def main():
              app_name,
              os.path.join(SCRIPT_DIR, 'lambdas', config)))
 
+    # cleanup aliased containers too
+    docker_clean_container('hello2')
+    docker_clean_container('nonlocal')
+
     print '='*40
 
     # create an application that is only in the registry

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	docker "github.com/fsouza/go-dockerclient"
+	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/phonyphonecall/turnip"
 )
 
@@ -17,6 +18,7 @@ type DockerManager struct {
 	client *docker.Client
 
 	registryName string
+	opts         *config.Config
 
 	// timers
 	createTimer  *turnip.Turnip
@@ -30,7 +32,7 @@ type DockerManager struct {
 	logTimer     *turnip.Turnip
 }
 
-func NewDockerManager(host string, port string) (manager *DockerManager) {
+func NewDockerManager(opts *config.Config) (manager *DockerManager) {
 	manager = new(DockerManager)
 
 	// NOTE: This requires that users have pre-configured the environement a docker daemon
@@ -40,13 +42,38 @@ func NewDockerManager(host string, port string) (manager *DockerManager) {
 		manager.client = c
 	}
 
-	manager.registryName = fmt.Sprintf("%s:%s", host, port)
+	manager.opts = opts
+	manager.registryName = fmt.Sprintf("%s:%s", opts.Registry_host, opts.Registry_port)
 	manager.initTimers()
 	return manager
 }
 
 func (dm *DockerManager) Create(name string) Sandbox {
 	return &DockerSandbox{name: name, mgr: dm}
+}
+
+func (dm *DockerManager) Pull(name string) error {
+	// delete if it exists, so we can pull a new one
+	imgExists, err := dm.DockerImageExists(name)
+	if err != nil {
+		return err
+	}
+	if imgExists {
+		if dm.opts.Skip_pull_existing {
+			return nil
+		}
+		opts := docker.RemoveImageOptions{Force: true}
+		if err := dm.client.RemoveImageExtended(name, opts); err != nil {
+			return err
+		}
+	}
+
+	// pull new code
+	if err := dm.dockerPull(name); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (dm *DockerManager) dockerLogs(cid string, buf *bytes.Buffer) (err error) {
@@ -77,7 +104,15 @@ func (dm *DockerManager) dockerLogs(cid string, buf *bytes.Buffer) (err error) {
 }
 
 func (dm *DockerManager) dockerError(cid string, outer error) (err error) {
-	buf := bytes.NewBufferString(outer.Error())
+	buf := bytes.NewBufferString(outer.Error() + ".  ")
+
+	container, err := dm.dockerInspect(cid)
+	if err != nil {
+		buf.WriteString(fmt.Sprintf("Could not inspect container (%v).  ", err.Error()))
+	} else {
+		buf.WriteString(fmt.Sprintf("Container state is <%v>.  ", container.State.StateString()))
+	}
+
 	buf.WriteString(fmt.Sprintf("<--- Start handler container [%s] logs: --->\n", cid))
 
 	err = dm.dockerLogs(cid, buf)
@@ -153,13 +188,13 @@ func (dm *DockerManager) dockerMakeReady(img string) (port string, err error) {
 	return port, nil
 }
 
-func (dm *DockerManager) dockerKill(img string) (err error) {
+func (dm *DockerManager) dockerKill(id string) (err error) {
 	// TODO(tyler): is there any advantage to trying to stop
 	// before killing?  (i.e., use SIGTERM instead SIGKILL)
-	opts := docker.KillContainerOptions{ID: img}
+	opts := docker.KillContainerOptions{ID: id}
 	if err = dm.client.KillContainer(opts); err != nil {
 		log.Printf("failed to kill container with error %v\n", err)
-		return dm.dockerError(img, err)
+		return dm.dockerError(id, err)
 	}
 	return nil
 }
