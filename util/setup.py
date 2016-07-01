@@ -4,12 +4,17 @@ from common import *
 
 NGINX_EXAMPLE = 'docker run -d -p 80:80 -v %s:/usr/share/nginx/html:ro nginx'
 def main():
-    if len(sys.argv) == 2 and (sys.argv[1] == 'help' or sys.argv[1] == '-h'):
-        print "setup.py takes two arguments: the application directory of"
-        print "of the app you want to start and the lambda function of that"
-        print "app. For example, setup.py pychat chat.py"
+    if  len(sys.argv) == 1 or (len(sys.argv) == 2 and (sys.argv[1] == 'help' or sys.argv[1] == '-h' or sys.argv[1] == '--help')):
+        print "setup.py takes two arguments: the application directory of the app you want to start and the lambda function of that app. For example, python setup.py pychat chat.py"
+        print "Additional arguments can be used to specify other python scripts that need to run to setup an app. For example, the autocomplete app needs a script to set up the word database, so run python setup.py autocomplete autocomplete.py makeDB.py. "
+        print "These scripts will be run after the lambda is made and pushed"
+        print "APP" + '\t\t\t' + "COMMAND"
+        print "pychat" + '\t       ' + " ./setup.py pychat chat.py"
+        print "pyocr" + '\t\t' + "./setup.py pyocr ocr.py"
+        print "pytix" + '\t\t' + "./setup.py pytix tix.py"
+        print "autocomplete" + '\t' + "./setup.py autocomplete autocomplete.py makeDB.py"
         sys.exit()
-    if len(sys.argv) != 3:
+    if len(sys.argv) < 3:
         print "You need to specify an application directory and lambda function"
         sys.exit()
     appNames = os.listdir(os.path.join(SCRIPT_DIR, "..",  "applications"))
@@ -17,10 +22,14 @@ def main():
         print "That is not an application directory. Go to /applications."
         sys.exit()
     app_dir = os.path.join( SCRIPT_DIR, "..", "applications", sys.argv[1])
-    app_files =  [z for z in os.listdir(app_dir) if os.path.isfile(os.path.join(app_dir, sys.argv[2]))]   
+    app_files =  [z for z in os.listdir(app_dir) if os.path.isfile(os.path.join(app_dir, z))]   
     if sys.argv[2] not in app_files:
         print "That file is not in this directory"
         sys.exit()
+    for i in range(3, len(sys.argv)):
+        if sys.argv[i] not in app_files:
+            print "One of your additional files is not the app directory"
+            sys.exit()
 
     lambdaFn = sys.argv[2]
     app_name = ''.join(random.choice(string.ascii_lowercase) for _ in range(12))
@@ -41,15 +50,15 @@ def main():
     if 'environment.json' in app_files:
         builder = builder + ' -e %s' %(os.path.join(app_dir, 'environment.json'))
 
-    run(builder)
+    run(builder, True)
 
     # push image
     print '='*40
     print 'Pushing image'
     registry = rdjs(os.path.join(cluster_dir, 'registry.json'))
     img = 'localhost:%s/%s' % (registry['host_port'], app_name)
-    run('docker tag -f %s %s' % (app_name, img))
-    run('docker push ' + img)
+    run('docker tag -f %s %s' % (app_name, img), True)
+    run('docker push ' + img, True)
 
     # setup config
     balancer = rdjs(os.path.join(cluster_dir, 'loadbalancer-1.json'))
@@ -58,6 +67,15 @@ def main():
            (balancer['host_ip'], balancer['host_port'], app_name))
     wrjs(config_file, {'url': url})
 
+    #run additional scripts
+    for j in range(3, len(sys.argv)):
+        spath = os.path.join(app_dir, sys.argv[j])
+        spath = "python " + spath
+        print '='*40
+        print "running " + sys.argv[j]
+        run(spath, True)
+
+            
     # directions
     print '='*40
     print 'Consider serving the app with nginx as follows:'

@@ -17,7 +17,7 @@ def makeDB(host):
     conn = r.connect(host, 28015)
     dbs = r.db_list().run(conn)
     if AC in dbs:
-        return 'initialized'
+        return 'already there'
     r.db_create(AC).run(conn)
     r.db(AC).table_create(WORDS, primary_key = LINE).run(conn)
     r.db(AC).table_create(PREFS, primary_key = PREF).run(conn)

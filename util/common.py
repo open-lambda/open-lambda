@@ -8,8 +8,8 @@ ddict = collections.defaultdict
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 TRACE_RUN = False
 
-def run(cmd):
-    if TRACE_RUN:
+def run(cmd, printFlag = TRACE_RUN):
+    if printFlag:
         print 'EXEC ' + cmd
     return subprocess.check_output(cmd, shell=True)
 
