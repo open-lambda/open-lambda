@@ -1,6 +1,5 @@
 #!/usr/bin/python
 import os, requests, time, json
-from pssh import ParallelSSHClient
 
 API = "https://api.digitalocean.com/v2/droplets"
 DROPLET_NAME = "ol-tester"
@@ -70,20 +69,15 @@ def main():
 
         time.sleep(3)
 
-    time.sleep(10) # give SSH some time
-
-    hosts = [ip]
-    client = ParallelSSHClient(hosts)
-
-    client.copy_file('./test.sh', '/tmp/test.sh')
+    time.sleep(30) # give SSH some time
 
     url = 'https://raw.githubusercontent.com/open-lambda/open-lambda/master/testing/digitalocean/test.sh'
-    output = client.run_command('wget %s; bash test.sh' % url, sudo=True)
-    output = output.values()[0]
-    for l in output["stdout"]:
-        print l
-    for l in output["stderr"]:
-        print l
+    cmds = 'wget %s; bash test.sh' % url
+    ssh = 'echo "<CMDS>" | ssh -o "StrictHostKeyChecking no" root@<IP>'
+    ssh = ssh.replace('<CMDS>', cmds).replace('<IP>', ip)
+    print 'RUN ' + ssh
+    rv = os.system(ssh)
+    assert(rv == 0)
 
     # make sure we cleanup everything!
     kill()
