@@ -41,14 +41,14 @@ def docker_status(name):
         return 'none'
 
 def run(cmd, quiet=False):
-    err = None
-    if quiet:
-        err = open('/dev/null')
     if TRACE_RUN:
         print 'EXEC ' + cmd
-    rv = subprocess.check_output(cmd, shell=True, stderr=err)
-    if err != None:
+    if quiet:
+        err = open('/dev/null')
+        rv = subprocess.check_output(cmd, shell=True, stderr=err)
         err.close()
+    else:
+        rv = subprocess.check_output(cmd, shell=True)
     return rv
 
 def run_js(cmd, quiet=False):
