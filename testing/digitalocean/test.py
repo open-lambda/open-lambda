@@ -71,8 +71,12 @@ def main():
 
     time.sleep(30) # give SSH some time
 
-    url = 'https://raw.githubusercontent.com/open-lambda/open-lambda/master/testing/digitalocean/test.sh'
-    cmds = 'wget %s; bash test.sh' % url
+    scp = 'scp -o "StrictHostKeyChecking no" test.sh root@%s:/tmp' % ip
+    print 'RUN ' + scp
+    rv = os.system(scp)
+    assert(rv == 0)
+
+    cmds = 'bash /tmp/test.sh'
     ssh = 'echo "<CMDS>" | ssh -o "StrictHostKeyChecking no" root@<IP>'
     ssh = ssh.replace('<CMDS>', cmds).replace('<IP>', ip)
     print 'RUN ' + ssh
