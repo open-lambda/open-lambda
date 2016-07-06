@@ -59,9 +59,7 @@ def main():
            (balancer['host_ip'], balancer['host_port'], app_name))
     wrjs(config_file, {'url': url})
 
-    #run additional scripts, if there are any
-    print '='*40
-    
+    # run additional scripts, if there are any
     if "init.py" in app_files:
         print '='*40
         print "Running init.py"

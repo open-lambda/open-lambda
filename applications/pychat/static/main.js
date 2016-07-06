@@ -30,9 +30,15 @@ function updates(ts) {
       html_error = data.error.replace(/\n/g, '<br/>');
       $("#comments").html("Error: <br/><br/>" + html_error + "<br/><br/>Consider refreshing.")
     } else {
-      //$("#comments").html(data.result.msg);
-      $("#comments").append(data.result.msg + "<br/>");
-      updates(data.result.ts);
+      var ts = 0;
+      for (var i = 0, len = data.result.length; i < len; i++) {
+	row = data.result[i];
+	$("#comments").append(row.msg + "<br/>");
+	if (row.ts > ts) {
+	  ts = row.ts;
+	}
+      }
+      updates(ts);
     }
   });
 }
