@@ -51,40 +51,9 @@ def main():
     cluster_dir = os.path.join(SCRIPT_DIR, args.cluster)
 
     if os.path.exists(cluster_dir):
-        running = False
-        for filename in os.listdir(cluster_dir):
-            path = os.path.join(cluster_dir, filename)
-            if os.path.isdir(path):
-                print "Removing unexpected directory: [%s]" % filename
-                shutil.rmtree(path, ignore_errors=True)
-                continue
-            if not filename.endswith('.json'):
-                print "Removing unexpected non-json file: [%s]" % filename
-                os.remove(path)
-                continue
-
-            try: 
-                info = rdjs(path)
-            except ValueError as e:
-                print "Removing invalid '.json' file: [%s]" % filename
-                os.remove(path)
-                continue
-                
-            cid = info['cid']
-            cmd = 'docker inspect -f {{.State.Running}} %s' % cid
-	    try:
-            	r = run(cmd).strip()
-		if r == 'true':
-		    running = True
-	    except subprocess.CalledProcessError as e:
-		print "Encountered unexpected worker file [%s]. Use stop-local-cluster.py to properly stop cluster." % filename 
-
-
-        if running:
-            print 'Cluster already running!'
-            sys.exit(1)
-        else:
-            shutil.rmtree(cluster_dir, ignore_errors=True)
+        print 'Cluster already running!'
+        print 'Use stop-local-cluster.py to clean up.'
+        sys.exit(1)
 
     os.mkdir(cluster_dir)
 
@@ -127,7 +96,6 @@ def main():
         config['host_port'] = lookup_host_port(cid, WORKER_PORT)
         wrjs(config_path, config, atomic=True)
 
-        info_path = os.path.join(cluster_dir, 'worker-info-%d.json' % i)
         print 'started worker %s:%s' % (config['ip'], WORKER_PORT)
         workers.append(config)
 
@@ -156,7 +124,9 @@ def main():
     print '='*40
 
     # wait for rethinkdb
-    if not args.skip_db_wait:
+    if args.skip_db_wait:
+        print "don't wait for rethinkdb"
+    else:
         print 'To continue without waiting for the DB, use ' + SKIP_DB
         for i in range(10):
             try:

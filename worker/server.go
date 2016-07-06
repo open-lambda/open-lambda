@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -34,38 +33,8 @@ func newHttpErr(msg string, code int) *httpErr {
 }
 
 func NewServer(config *config.Config) (*Server, error) {
-	// TODO(tyler): move defaults to config module
-
-	// registry
-	if config.Registry_host == "" {
-		config.Registry_host = "localhost"
-		log.Printf("Using '%v' for registry_host", config.Registry_host)
-	}
-
-	if config.Registry_port == "" {
-		config.Registry_port = "5000"
-		log.Printf("Using '%v' for registry_port", config.Registry_port)
-	}
-
-	// daemon
-	sm := sandbox.NewDockerManager(config)
-	if config.Docker_host == "" {
-		endpoint := sm.Client().Endpoint()
-		local := "unix://"
-		nonLocal := "https://"
-		if strings.HasPrefix(endpoint, local) {
-			config.Docker_host = "localhost"
-		} else if strings.HasPrefix(endpoint, nonLocal) {
-			start := strings.Index(endpoint, nonLocal) + len([]rune(nonLocal))
-			end := strings.LastIndex(endpoint, ":")
-			config.Docker_host = endpoint[start:end]
-		} else {
-			return nil, fmt.Errorf("please specify a docker host!")
-		}
-		log.Printf("Using '%v' for Docker host", config.Docker_host)
-	}
-
 	// create server
+	sm := sandbox.NewDockerManager(config)
 	opts := handler.HandlerSetOpts{
 		Sm:  sm,
 		Lru: handler.NewHandlerLRU(100), // TODO(tyler)
@@ -238,17 +207,16 @@ func main() {
 	if len(os.Args) != 2 {
 		log.Fatalf("usage: %s <json-config>\n", os.Args[0])
 	}
-	config_raw, err := ioutil.ReadFile(os.Args[1])
+
+	log.Printf("Call ParseConfig\n")
+
+	conf, err := config.ParseConfig(os.Args[1])
 	if err != nil {
-		log.Fatalf("could not open config: %v\n", err.Error())
-	}
-	var config config.Config
-	if err := json.Unmarshal(config_raw, &config); err != nil {
-		log.Fatalf("could not parse config: %v\n", err.Error())
+		log.Fatal(err)
 	}
 
 	// start serving
-	server, err := NewServer(&config)
+	server, err := NewServer(conf)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -31,7 +31,7 @@ def main():
         .replace('<STORAGE_DRIVER>', STORAGE_DRIVER).replace('<GRAPH>', GRAPH)
         .replace('<REGISTRY_HOST>', config.get('registry_host', 'localhost'))
         .replace('<REGISTRY_PORT>', config.get('registry_port', '5000')))
-    # wait up to 5 seconds for startup
+    # wait up to 5 seconds for docker startup
     for i in range(5):
         if os.path.exists(PID_FILE):
             break

@@ -17,8 +17,8 @@ def main():
     print 'POST ' + url
     args = {"op": "init"}
     r = requests.post(url, data=json.dumps(args), headers=HEADERS)
+    print 'RESP ' + r.text
     r = r.json()
-    print 'RESP ' + str(r)
     if r.get('result', None) == 'created':
         print 'PASS'
     else:
