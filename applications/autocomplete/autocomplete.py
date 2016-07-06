@@ -24,6 +24,10 @@ def findMaxFreq(prefrange, currmax, conn, poss):
 def keystroke(conn, event):
     prefix = event['pref']
     prefix = prefix.lower()
+    if prefix == '' or prefix =='"' or prefix == '(':
+        return [];
+    elif prefix[0:1] == '"' or prefix[0:1] == '(':
+        prefix = prefix[1:]
     lower = prefix + "a"
     upper = prefix + "zzzzzzzzzzzzzz"
     loweru = unicode(lower)

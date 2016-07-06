@@ -1,5 +1,5 @@
 import rethinkdb as r
-import os, os.path
+import os, os.path, argparse
 from common import *
 AC = 'ac' # DB
 WORDS = 'words' # TABLE
@@ -29,8 +29,10 @@ def makeDB(host):
     f.close()
     return 'initialized'
 
-
-cluster_dir = os.path.join(SCRIPT_DIR, "..", "..","util", "cluster")
+parser = argparse.ArgumentParser()
+parser.add_argument('--cluster', '-c')
+args = parser.parse_args()
+cluster_dir = os.path.join(SCRIPT_DIR, "..", "..","util", args.cluster)
 worker0 = rdjs(os.path.join(cluster_dir, 'worker-0.json'))
 msg = makeDB(worker0['ip'])
 print msg

@@ -8,7 +8,6 @@ def main():
     parser.add_argument('--cluster', '-c', default='cluster')
     parser.add_argument('--appdir', '-d', default='')
     parser.add_argument('--appfile', '-f', default='')
-    parser.add_argument('--scripts', '-s',  default='', nargs='*')
     args = parser.parse_args()
 
     appNames = os.listdir(os.path.join(SCRIPT_DIR, "..",  "applications"))
@@ -20,10 +19,6 @@ def main():
     if args.appfile not in app_files:
         print "That file is not in this directory"
         sys.exit()
-    for a in args.scripts:
-        if a not in app_files:
-            print a + " is not in the "+  args.appdir + " application directory."
-            sys.exit()
 
     #print args.scripts
     #sys.exit()
@@ -66,17 +61,15 @@ def main():
 
     #run additional scripts, if there are any
     print '='*40
-    if args.scripts == '':
-        print "No additional scripts to run"
+    
+    if "init.py" in app_files:
+        print '='*40
+        print "Running init.py"
+        spath = os.path.join(app_dir, "init.py")
+        spath = "python " + spath + ' -c ' +  args.cluster
+        run(spath, True)
     else:
-        print "Running additional scripts"
-        for scr in args.scripts:
-            spath = os.path.join(app_dir, scr)
-            spath = "python " + spath
-            print '='*40
-            print "running " + scr
-            run(spath, True)
-
+        print "No init.py script to run"
 
             
     # directions
