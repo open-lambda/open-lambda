@@ -8,6 +8,7 @@ def main():
     parser.add_argument('--cluster', '-c', default='cluster')
     parser.add_argument('--appdir', '-d', default='')
     parser.add_argument('--appfile', '-f', default='')
+    parser.add_argument('--scripts', '-s',  default='', nargs='*')
     args = parser.parse_args()
 
     appNames = os.listdir(os.path.join(SCRIPT_DIR, "..",  "applications"))
@@ -19,6 +20,13 @@ def main():
     if args.appfile not in app_files:
         print "That file is not in this directory"
         sys.exit()
+    for a in args.scripts:
+        if a not in app_files:
+            print a + " is not in the "+  args.appdir + " application directory."
+            sys.exit()
+
+    #print args.scripts
+    #sys.exit()
 
     lambdaFn = args.appfile
     app_name = ''.join(random.choice(string.ascii_lowercase) for _ in range(12))
@@ -55,6 +63,21 @@ def main():
     url = ("http://%s:%s/runLambda/%s" %
            (balancer['host_ip'], balancer['host_port'], app_name))
     wrjs(config_file, {'url': url})
+
+    #run additional scripts, if there are any
+    print '='*40
+    if args.scripts == '':
+        print "No additional scripts to run"
+    else:
+        print "Running additional scripts"
+        for scr in args.scripts:
+            spath = os.path.join(app_dir, scr)
+            spath = "python " + spath
+            print '='*40
+            print "running " + scr
+            run(spath, True)
+
+
             
     # directions
     print '='*40
