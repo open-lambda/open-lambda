@@ -6,20 +6,6 @@ MSGS = 'messages' # TABLE
 TS   = 'ts'       # COLUMN
 MSG  = 'msg'      # COLUMN
 
-def init(conn, event):
-    # try to drop table (may or may not exist)
-    rv = ''
-    try:
-        r.db_drop(CHAT).run(conn)
-        rv = 'dropped, then created'
-    except:
-        rv = 'created'
-    r.db_create(CHAT).run(conn);
-    r.db(CHAT).table_create(MSGS).run(conn);
-    r.db(CHAT).table(MSGS).index_create(TS).run(conn)
-
-    return rv
-
 def msg(conn, event):
     ts = time.time()
     r.db(CHAT).table(MSGS).insert({MSG: event['msg'],
@@ -33,8 +19,7 @@ def updates(conn, event):
         return row['new_val']
 
 def handler(conn, event):
-    fn = {'init':    init,
-          'msg':     msg,
+    fn = {'msg':     msg,
           'updates': updates}.get(event['op'], None)
     if fn != None:
         try:

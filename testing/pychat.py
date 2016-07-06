@@ -15,14 +15,15 @@ def main():
 
     url = config['url']
     print 'POST ' + url
-    args = {"op": "init"}
+    args = {"op": "msg", "msg": "hello"}
     r = requests.post(url, data=json.dumps(args), headers=HEADERS)
     print 'RESP ' + r.text
     r = r.json()
-    if r.get('result', None) == 'created':
+    if r.get('result', '').startswith('insert'):
         print 'PASS'
     else:
         print 'FAIL'
+        sys.exit(1)
 
 if __name__ == '__main__':
     main()

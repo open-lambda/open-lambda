@@ -16,12 +16,6 @@ function lambda_post(data, callback) {
   });  
 }
 
-function clear() {
-  lambda_post({"op":"init"}, function(data){
-    // pass
-  });
-}
-
 function comment() {
   var msg = $("#comment").val();
   lambda_post({"op":"msg", "msg":msg}, function(data){
@@ -55,7 +49,6 @@ function main() {
 	if(e.keyCode==13)
 	  $('#submit').click();
       });
-      $("#clear").click(clear);
       $("#submit").click(comment);
       updates(0);
     })
