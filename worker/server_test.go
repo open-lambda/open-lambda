@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -20,8 +21,15 @@ func init() {
 }
 
 func RunServer() *Server {
-	config := &config.Config{Skip_pull_existing: true}
-	server, err := NewServer(config)
+	conf, err := config.ParseConfig(os.Getenv("WORKER_CONFIG"))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Printf("Set skip_pull_existing = true\n")
+	conf.Skip_pull_existing = true
+
+	server, err := NewServer(conf)
 	if err != nil {
 		log.Fatal(err)
 	}

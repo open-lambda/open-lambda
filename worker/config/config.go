@@ -28,7 +28,10 @@ func (c *Config) Dump() {
 }
 
 func (c *Config) defaults() error {
-	// registry
+	if c.Cluster_name == "" {
+		return fmt.Errorf("must specify cluster_name\n")
+	}
+
 	if c.Registry_host == "" {
 		return fmt.Errorf("must specify registry_host\n")
 	}
