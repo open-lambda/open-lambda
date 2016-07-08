@@ -79,7 +79,8 @@ def main():
         config_path = os.path.join(cluster_dir, 'worker-%d.json' % i)
         config = {'registry_host': registry_ip,
                   'registry_port': REGISTRY_PORT,
-                  'type': 'worker'}
+                  'type': 'worker',
+                  'cluster_name': args.cluster}
         if i > 0:
             config['rethinkdb_join'] = workers[0]['ip']+':29015'
 

@@ -11,6 +11,7 @@ import (
 )
 
 type Config struct {
+	Cluster_name  string `json:"cluster_name"`
 	Registry_host string `json:"registry_host"`
 	Registry_port string `json:"registry_port"`
 	Docker_host   string `json:"docker_host"`

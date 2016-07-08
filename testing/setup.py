@@ -1,8 +1,14 @@
 #!/usr/bin/env python
-import os, sys, random, string
+import os, sys, random, string, argparse
 from common import *
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--cluster', '-c', default='cluster')
+    args = parser.parse_args()
+
+    cluster_dir = os.path.join(SCRIPT_DIR, '..', 'util', args.cluster)
+
     apps = [
         ('hello', 'nodb.json'),
         ('echo', 'nodb.json'),
@@ -32,8 +38,8 @@ def main():
     print '='*40
 
     # create an application that is only in the registry
-    TEST_REGISTRY = os.environ['TEST_REGISTRY']
-    assert(len(TEST_REGISTRY) > 0)
+    registry_config = rdjs(os.path.join(cluster_dir, 'registry.json'))
+    TEST_REGISTRY = 'localhost:' + registry_config['host_port']
     print 'Push test images to ' + TEST_REGISTRY
 
     run('docker tag -f hello nonlocal')
@@ -42,6 +48,17 @@ def main():
     run('docker push %s/nonlocal' % TEST_REGISTRY)
     run('docker rmi -f nonlocal')
     run('docker rmi -f %s/nonlocal' % TEST_REGISTRY)
+
+    # generate config
+    print '='*40
+    path = os.path.join(SCRIPT_DIR, 'worker-config.json')
+    print 'writing config to ' + path
+    config = {
+        "cluster_name": args.cluster, 
+        "registry_host": "localhost", 
+        "registry_port": registry_config['host_port'], 
+    }
+    wrjs(path, config)
 
     w = 80
     print '='*w

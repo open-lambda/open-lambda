@@ -1,3 +1,4 @@
+PWD = $(shell pwd)
 WORKER:=worker
 WORKER_SRC:=worker/*.go
 
@@ -40,8 +41,8 @@ test-cluster : imgs/lambda-node
 
 # run go unit tests in initialized environment
 test : test-cluster
-	$(eval export TEST_REGISTRY := localhost:$(shell jq -r '.host_port' ./util/$(TEST_CLUSTER)/registry.json))
-	./testing/setup.py
+	$(eval export WORKER_CONFIG := $(PWD)/testing/worker-config.json)
+	./testing/setup.py --cluster=$(TEST_CLUSTER)
 	cd $(WORKER_DIR) && $(GO) get
 	cd $(WORKER_DIR) && $(GO) test . ./handler -v
 	./testing/pychat.py
