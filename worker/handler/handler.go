@@ -122,7 +122,7 @@ func (h *Handler) RunFinish() {
 
 	h.runners -= 1
 
-	// are we the first?
+	// are we the last?
 	if h.runners == 0 {
 		if err := h.sandbox.Pause(); err != nil {
 			// TODO(tyler): better way to handle this?  If
