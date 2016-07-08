@@ -9,7 +9,6 @@ apt-get -y install python-pip
 apt-get -y install python2.7-dev
 apt-get -y install curl
 apt-get -y install git
-apt-get -y install jq
 pip install netifaces
 pip install rethinkdb
 service docker restart
