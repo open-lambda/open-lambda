@@ -1,14 +1,15 @@
 var config;
-var prevReq;
+var requestNum;
 var currPref = '';
 function lambda_post(data, callback) {
   var url = config['url'];
-  prevReq = $.ajax({
+  $.ajax({
     type: "POST",
     url: url,
     contentType: "application/json; charset=utf-8",
     data: JSON.stringify(data),
     dataType: "json",
+    timeout: 1000,
     success: callback,
     failure: function(error) {
       $("#initmsg").html("Error: " + error + ".  Consider refreshing.")
@@ -56,6 +57,10 @@ function completeword(s) {
     $('#text').focus();
 }
 
+function log(last, curr) {
+    console.log(last, requestNum, curr);
+}
+    
 function keystroke() {
     var entries = $("#text").val();
     var words  = entries.split(' ');
@@ -65,23 +70,38 @@ function keystroke() {
         return;
     }
     if (lastword.localeCompare(currPref) != 0) {
+        var currReq;
+        currReq = ++requestNum;
+        //console.log("=====================")
+        //console.log("PRE REQUEST:", lastword);
+        //log(lastword, requestNum, currReq);
         currPref = lastword;
+        //console.log("SEND?:", lastword);
+        //log(lastword, requestNum, currReq);
+        if (currReq == requestNum) {
+            //console.log("SENT");
+            lambda_post({"op": "keystroke", "pref": lastword}, function(data){
+                try {
+                    //console.log("DISPLAY RESULTS?:", lastword)
+                    //log(lastword, requestNum, currReq)
+                    if (currReq == requestNum) {
+                        updatesuggs(data.result);
+                      //  console.log("YES");
+                    }
+                    else {
+                        //console.log("IGNORED");
+                        //clearsuggs();
+                    }
 
-        try{
-            prevReq.abort();
+                }
+                catch(err) {
+                    clearsuggs();
+                }
+            });
         }
-        catch(err){
-        };
-
-        lambda_post({"op": "keystroke", "pref": lastword}, function(data){
-            try {
-                prevReq = null;
-                updatesuggs(data.result);
-            }
-            catch(err) {
-                clearsuggs();
-            }
-        });
+        else {
+            //console.log("NOT SENT")
+        }
     }
 }
 function clearsuggs() {
@@ -105,9 +125,9 @@ function updatesuggs(suggs) {
     }
 }
 function main() {
+    requestNum = 0;
 
   $("#initmsg").html("ready");
-  //init();
   $.getJSON('config.json')
     .done(function(data) {
       config = data;

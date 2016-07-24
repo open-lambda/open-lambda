@@ -46,6 +46,7 @@ test : test-cluster
 	cd $(WORKER_DIR) && $(GO) get
 	cd $(WORKER_DIR) && $(GO) test . ./handler -v
 	./testing/pychat.py
+	./testing/autocomplete.py
 	./util/stop-local-cluster.py -c $(TEST_CLUSTER)
 
 .PHONY: clean
