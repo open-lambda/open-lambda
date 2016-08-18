@@ -1,6 +1,0 @@
-{
-  "cluster_name": "test_cluster",
-  "reg_cluster": [
-	  "127.0.0.1:28015"
-  ]
-}
