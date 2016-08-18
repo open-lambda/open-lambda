@@ -29,6 +29,7 @@ type Handler struct {
 	lastPull *time.Time
 	state    state.HandlerState
 	runners  int
+	code     []byte
 }
 
 func NewHandlerSet(opts HandlerSetOpts) (handlerSet *HandlerSet) {

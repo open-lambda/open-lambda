@@ -1,0 +1,10 @@
+{
+  "registry_port": "5000", 
+  "cid": "c9228d02cdb15345d362e58e825f773b5156b1c84f3f6a7bb18dbe030192411f", 
+  "ip": "172.17.0.3", 
+  "host_ip": "192.241.191.159", 
+  "cluster_name": "test_cluster", 
+  "registry_host": "172.17.0.2", 
+  "host_port": "32769", 
+  "type": "worker"
+}

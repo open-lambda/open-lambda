@@ -1,0 +1,5 @@
+{
+  "cluster_name": "test_cluster", 
+  "registry_host": "localhost", 
+  "registry_port": "32768"
+}

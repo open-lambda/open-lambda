@@ -11,10 +11,12 @@ import (
 )
 
 type Config struct {
-	Cluster_name  string `json:"cluster_name"`
-	Registry_host string `json:"registry_host"`
-	Registry_port string `json:"registry_port"`
-	Docker_host   string `json:"docker_host"`
+	Registry      string   `json:"registry"`
+	Cluster_name  string   `json:"cluster_name"`
+	Registry_host string   `json:"registry_host"`
+	Registry_port string   `json:"registry_port"`
+	Docker_host   string   `json:"docker_host"`
+	Reg_cluster   []string `json:"reg_cluster"`
 	// for unit testing to skip pull path
 	Skip_pull_existing bool `json:"Skip_pull_existing"`
 }
@@ -28,16 +30,22 @@ func (c *Config) Dump() {
 }
 
 func (c *Config) defaults() error {
-	if c.Cluster_name == "" {
-		return fmt.Errorf("must specify cluster_name\n")
+	if c.Registry == "docker" {
+		if c.Cluster_name == "" {
+			return fmt.Errorf("must specify cluster_name\n")
+		}
+
+		if c.Registry_host == "" {
+			return fmt.Errorf("must specify registry_host\n")
+		}
+
+		if c.Registry_port == "" {
+			return fmt.Errorf("must specify registry_port\n")
+		}
 	}
 
-	if c.Registry_host == "" {
-		return fmt.Errorf("must specify registry_host\n")
-	}
-
-	if c.Registry_port == "" {
-		return fmt.Errorf("must specify registry_port\n")
+	if c.Registry == "docker" && len(c.Reg_cluster) == 0 {
+		return fmt.Errorf("must specify reg_cluster")
 	}
 
 	// daemon

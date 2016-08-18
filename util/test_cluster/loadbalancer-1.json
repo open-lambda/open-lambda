@@ -1,0 +1,7 @@
+{
+  "host_port": "32770", 
+  "ip": "172.17.0.4", 
+  "type": "loadbalancer", 
+  "host_ip": "192.241.191.159", 
+  "cid": "d1732a886b757618b31e43ff6abd9f738c3ce4226bae005aa0698dae31284438"
+}
