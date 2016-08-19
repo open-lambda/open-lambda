@@ -36,32 +36,30 @@ def write_nginx_config(path, workers):
     with open(path, 'w') as fd:
 	fd.write(config)	
 
-def main():
-    host_ip = my_ip()
-    if host_ip == None:
-        print 'Could not find an IP using netifaces, using 127.0.0.1'
-        host_ip = '127.0.0.1'
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--workers', '-w', default='1')
-    parser.add_argument('--cluster', '-c', default='cluster')
-    parser.add_argument(SKIP_DB, default=False, action='store_true')
-    args = parser.parse_args()
+def make_cluster_dir():
+    global cluster_dir
 
-    # we'll greate a dir with a file describing each node in the cluster
     cluster_dir = os.path.join(SCRIPT_DIR, args.cluster)
 
     if os.path.exists(cluster_dir):
         print 'Cluster already running!'
         print 'Use stop-local-cluster.py to clean up.'
-        sys.exit(1)
 
     os.mkdir(cluster_dir)
 
-    # start registry
+def start_code_reg():
+    pass
+
+def start_docker_reg():
+    global registry_ip
+    global registry_port
+
     c = 'docker run -d -p 0:%s registry:2' % REGISTRY_PORT
     cid = run(c).strip()
+
     registry_ip = container_ip(cid)
     registry_port = lookup_host_port(cid, REGISTRY_PORT)
+
     config_path = os.path.join(cluster_dir, 'registry.json')
     config = {'cid': cid,
               'ip': registry_ip,
@@ -69,12 +67,15 @@ def main():
               'host_port': registry_port,
               'type': 'registry'}
     wrjs(config_path, config)
+
     print 'started registry %s:%s (or localhost:%s)' % (registry_ip, REGISTRY_PORT, registry_port)
     print '='*40
 
-    # start workers
-    workers = []
+def start_workers():
+    global workers
+
     assert(int(args.workers) > 0)
+    workers = []
     for i in range(int(args.workers)):
         config_path = os.path.join(cluster_dir, 'worker-%d.json' % i)
         config = {'registry_host': registry_ip,
@@ -102,7 +103,10 @@ def main():
 
     print '='*40
 
-    # start load-balancer
+def start_lb():
+    global balancer_ip
+    global balancer_port
+
     nginx_path = os.path.join(SCRIPT_DIR, 'nginx.config')
     write_nginx_config(nginx_path, workers)
 
@@ -124,23 +128,22 @@ def main():
     print 'started loadbalancer ' + balancer_ip + ':%s' % BALANCER_PORT
     print '='*40
 
-    # wait for rethinkdb
-    if args.skip_db_wait:
-        print "don't wait for rethinkdb"
-    else:
-        print 'To continue without waiting for the DB, use ' + SKIP_DB
-        for i in range(10):
-            try:
-                r.connect(workers[0]['ip'], 28015).repl()
-                up = len(list(r.db('rethinkdb').table('server_status').run()))
-                if up < len(workers):
-                    print '%d of %d rethinkdb instances are ready' % (up, len(workers))
-            except:
-                print 'waiting for first rethinkdb instance to come up'
-            time.sleep(1)
-        print 'all rethinkdb instances are ready'
+def rethinkdb_wait():
+    print 'To continue without waiting for the DB, use ' + SKIP_DB
+    for i in range(10):
+        try:
+            r.connect(workers[0]['ip'], 28015).repl()
+            up = len(list(r.db('rethinkdb').table('server_status').run()))
+            if up < len(workers):
+                print '%d of %d rethinkdb instances are ready' % (up, len(workers))
+        except:
+            print 'waiting for first rethinkdb instance to come up'
 
-    # print directions
+        time.sleep(1)
+
+    print 'all rethinkdb instances are ready'
+
+def print_directions():
     print '='*40
     print 'Push images to OpenLambda registry as follows (or similar):'
     print 'IMG=hello && docker tag $IMG localhost:%s/$IMG; docker push localhost:%s/$IMG' % (registry_port, registry_port)
@@ -157,6 +160,41 @@ def main():
     print "IMG=hello && curl -w \"\\n\" -X POST %s:%s/runLambda/$IMG -d '{}'" % (workers[-1]['ip'], WORKER_PORT)
     print 'OR'
     print "IMG=hello && curl -w \"\\n\" -X POST %s:%s/runLambda/$IMG -d '{}'" % (balancer_ip, balancer_port)
+
+def main():
+    global host_ip
+    global args
+
+    host_ip = my_ip()
+    if host_ip == None:
+        print 'Could not find an IP using netifaces, using 127.0.0.1'
+        host_ip = '127.0.0.1'
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--workers', '-w', default='1')
+    parser.add_argument('--cluster', '-c', default='cluster')
+    parser.add_argument('--registry', '-r', default='docker')
+    parser.add_argument(SKIP_DB, default=False, action='store_true')
+
+    args = parser.parse_args()
+
+    make_cluster_dir()
+
+    if args.registry == "code_reg":
+        start_code_reg()
+    else:
+        start_docker_reg()
+
+    start_workers() 
+
+    start_lb()
+
+    if args.skip_db_wait:
+        print "Not waiting for rethinkdb"
+    else:
+        rethinkdb_wait()
+
+    print_directions()
 
 if __name__ == '__main__':
     main()
