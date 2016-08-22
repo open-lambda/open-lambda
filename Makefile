@@ -36,8 +36,8 @@ bin/worker : $(GO_FILES)
 
 # create cluster for testing
 test-cluster : imgs/lambda-node
-	./util/stop-local-cluster.py -c $(TEST_CLUSTER) --if-running --force
-	./util/start-local-cluster.py -c $(TEST_CLUSTER) --skip-db-wait
+	./util/stop-cluster.py -c $(TEST_CLUSTER) --if-running --force
+	./util/start-cluster.py -c $(TEST_CLUSTER) --skip-db-wait
 
 # run go unit tests in initialized environment
 test : test-cluster
@@ -47,7 +47,7 @@ test : test-cluster
 	cd $(WORKER_DIR) && $(GO) test . ./handler -v
 	./testing/pychat.py
 	./testing/autocomplete.py
-	./util/stop-local-cluster.py -c $(TEST_CLUSTER)
+	./util/stop-cluster.py -c $(TEST_CLUSTER)
 
 .PHONY: clean
 clean :

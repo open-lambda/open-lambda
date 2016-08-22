@@ -14,14 +14,12 @@ def main():
     if args.appdir not in appNames:
         print "That is not an application directory. Go to /applications."
         sys.exit()
-    app_dir = os.path.join( SCRIPT_DIR, "..", "applications", args.appdir)
+
+    app_dir = os.path.join(SCRIPT_DIR, "..", "applications", args.appdir)
     app_files =  [z for z in os.listdir(app_dir) if os.path.isfile(os.path.join(app_dir, z))]   
     if args.appfile not in app_files:
         print "That file is not in this directory"
         sys.exit()
-
-    #print args.scripts
-    #sys.exit()
 
     lambdaFn = args.appfile
     app_name = ''.join(random.choice(string.ascii_lowercase) for _ in range(12))
