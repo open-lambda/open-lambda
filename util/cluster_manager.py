@@ -35,7 +35,7 @@ class Cluster:
 
         if os.path.exists(self.cluster_dir):
             print 'Cluster already running!'
-            print 'Use stop-local-cluster.py to clean up.'
+            print 'Use stop-cluster.py to clean up.'
             sys.exit(1)
 
         os.mkdir(self.cluster_dir)
@@ -45,10 +45,8 @@ class LocalCluster(Cluster):
         Cluster.__init__(self, numworkers, cluster, ports)
         self.host_ip = my_ip() 
 
-    def start_docker_reg(self):
-        c = 'docker run -d -p 0:%s registry:2' % self.internal_reg_port
-        cid = run(c).strip()
-
+    # TODO: specify type of registry
+    def write_reg(self, cid):
         self.registry_ip = container_ip(cid)
         self.registry_port = lookup_host_port(cid, self.internal_reg_port)
 
@@ -61,6 +59,37 @@ class LocalCluster(Cluster):
         wrjs(config_path, config)
 
         print 'Started registry "localhost:%s"' % self.registry_port
+
+    def start_olreg(self):
+        c = 'docker run -d -p 28015:28015 -p 29015:29015 rethinkdb rethinkdb --bind all'
+
+        # for subsequent hosts in cluster:
+        #c = 'docker run -d -p 28015:28015 -p 29015:29015 dockerfile/rethinkdb rethinkdb --bind all -j <first-host-ip>:29015'
+        cid = run(c).strip()
+
+        self.rethinkdb_ip = container_ip(cid)
+        self.rethinkdb_port = lookup_host_port(cid, 28015)
+
+        print 'Started rethinkdb container "%s:%s"' % (self.rethinkdb_ip, "28015")
+
+        config_path = os.path.join(self.cluster_dir, 'registry.json')
+        config = {'cid': cid,
+                  'ip': self.rethinkdb_ip,
+                  'host_ip': self.host_ip,
+                  'host_port': self.rethinkdb_port,
+                  'type': 'rethinkdb'}
+        wrjs(config_path, config)
+
+        c = 'docker run -d -p 0:%s olregistry /open-lambda/registry %s:%s' % (self.internal_reg_port, self.rethinkdb_ip, "28015")
+        cid = run(c).strip()
+
+        self.write_reg(cid)
+
+    def start_docker_reg(self):
+        c = 'docker run -d -p 0:%s registry:2' % self.internal_reg_port
+        cid = run(c).strip()
+
+        self.write_reg(cid)
 
     def start_workers(self):
         assert(int(self.numworkers) > 0)
@@ -135,6 +164,7 @@ class LocalCluster(Cluster):
 
         print 'All rethinkdb instances are ready'
 
+    # TODO: update directions for rethink registry
     def print_directions(self):
         print '='*40
         print 'Push images to OpenLambda registry as follows (or similar):'

@@ -32,8 +32,8 @@ def main():
     cluster.make_cluster_dir()
     print '='*40
 
-    if args.registry == "code_reg":
-        cluster.start_code_reg()
+    if args.registry == "olregistry":
+        cluster.start_olreg()
     else:
         cluster.start_docker_reg()
     print '='*40

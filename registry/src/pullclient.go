@@ -1,4 +1,4 @@
-package lbreg
+package olreg
 
 import r "github.com/open-lambda/code-registry/registry"
 

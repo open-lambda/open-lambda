@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	r "github.com/open-lambda/worker/registry"
+	r "github.com/open-lambda/open-lambda/worker/registry"
 )
 
 func main() {

@@ -5,7 +5,7 @@ import (
 	"io/ioutil"
 	"log"
 
-	r "github.com/open-lambda/worker/registry"
+	r "github.com/open-lambda/open-lambda/worker/registry"
 )
 
 func check(err error) {
@@ -19,10 +19,8 @@ func main() {
 
 	spull := r.InitPullClient(cluster)
 	fmt.Println("Running pullclient...")
-	files := spull.Pull("test")
-	handler := files.Handler
-	pb := sfiles.PB
+	handler := spull.Pull("test")
 
-	err = ioutil.WriteFile("handler.go", handler, 0644)
+	err := ioutil.WriteFile("handler.go", handler, 0644)
 	check(err)
 }
