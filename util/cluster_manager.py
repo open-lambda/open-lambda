@@ -54,33 +54,50 @@ class LocalCluster(Cluster):
         config = {'cid': cid,
                   'ip': self.registry_ip,
                   'host_ip': self.host_ip,
-                  'host_port': self.registry_port,
-                  'type': 'registry'}
+                  'host_port': self.registry_port, 'type': 'registry'}
         wrjs(config_path, config)
 
         print 'Started registry "localhost:%s"' % self.registry_port
 
-    def start_olreg(self):
+    def start_olreg(self, num):
+        nodes = []
         c = 'docker run -d -p 28015:28015 -p 29015:29015 rethinkdb rethinkdb --bind all'
-
-        # for subsequent hosts in cluster:
-        #c = 'docker run -d -p 28015:28015 -p 29015:29015 dockerfile/rethinkdb rethinkdb --bind all -j <first-host-ip>:29015'
         cid = run(c).strip()
+        cluster_ip = container_ip(cid)
+        cluster_port = lookup_host_port(cid, 28015)
+        nodes.append({'cid': cid,
+                    'ip': cluster_ip,
+                    'host_ip': self.host_ip,
+                    'host_port': cluster_port})
 
-        self.rethinkdb_ip = container_ip(cid)
-        self.rethinkdb_port = lookup_host_port(cid, 28015)
+        print 'Started rethinkdb instance "localhost:28015"'
+        print 40*'='
 
-        print 'Started rethinkdb container "%s:%s"' % (self.rethinkdb_ip, "28015")
+        for k in range(1, num):
+            client_port = 28015 + k
+            comm_port = 29015 + k
+            c = 'docker run -d -p %s:%s -p %s:%s rethinkdb rethinkdb --port-offset %s --bind all -j %s:29015' % (client_port, client_port, comm_port, comm_port, k, cluster_ip)
+            cid = run(c).strip()
+            host_port = lookup_host_port(cid, 28015+k)
+            nodes.append({'cid': cid,
+                        'ip': container_ip(cid),
+                        'host_ip': self.host_ip,
+                        'host_port': host_port})
 
-        config_path = os.path.join(self.cluster_dir, 'registry.json')
-        config = {'cid': cid,
-                  'ip': self.rethinkdb_ip,
-                  'host_ip': self.host_ip,
-                  'host_port': self.rethinkdb_port,
-                  'type': 'rethinkdb'}
+            print 'Started rethinkdb container "localhost:%s"' % host_port
+            print 40*'=' 
+
+        config_path = os.path.join(self.cluster_dir, 'rethinkdb.json')
+        config = {
+            'cluster': nodes,
+            'ip': nodes[0]['ip'],
+            'host_ip': self.host_ip,
+            'host_port': nodes[0]['host_port'],
+            'type': 'rethinkdb'
+        }
         wrjs(config_path, config)
 
-        c = 'docker run -d -p 0:%s olregistry /open-lambda/registry %s:%s' % (self.internal_reg_port, self.rethinkdb_ip, "28015")
+        c = 'docker run -d -p 0:%s olregistry /open-lambda/registry %s:%s' % (self.internal_reg_port, cluster_ip, cluster_port)
         cid = run(c).strip()
 
         self.write_reg(cid)
@@ -115,7 +132,7 @@ class LocalCluster(Cluster):
             config['host_port'] = lookup_host_port(cid, self.internal_worker_port)
             wrjs(config_path, config, atomic=True)
 
-            print 'Started worker "localhost:%s"' % config['host_port']
+            print 'Started worker container "localhost:%s"' % config['host_port']
             self.workers.append(config)
 
     def start_lb(self):
@@ -137,7 +154,7 @@ class LocalCluster(Cluster):
         config_path = os.path.join(self.cluster_dir, 'loadbalancer-%d.json' % 1)
         wrjs(config_path, config, atomic=True)
 
-        print 'Started loadbalancer "localhost:%s"' % self.balancer_port
+        print 'Started loadbalancer container "localhost:%s"' % self.balancer_port
 
     def write_nginx_config(self, path):
         config = 'http {\n\tupstream handlers {\n'
@@ -158,7 +175,7 @@ class LocalCluster(Cluster):
                 if up < len(self.workers):
                     print '%d of %d rethinkdb instances are ready' % (up, len(self.workers))
             except:
-                print 'waiting for first rethinkdb instance to come up'
+                print 'Waiting for first rethinkdb instance to come up'
 
             time.sleep(1)
 

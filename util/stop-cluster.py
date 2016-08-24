@@ -13,7 +13,6 @@ def main():
     cluster_dir = os.path.join(SCRIPT_DIR, args.cluster)
     if not os.path.exists(cluster_dir):
         if args.if_running:
-            # it's OK, we weren't assuming it was running
             sys.exit(0)
         else:
             print 'Cluster not running!'
@@ -25,6 +24,18 @@ def main():
             continue
         try:
             info = rdjs(path)
+            if info['type'] == 'rethinkdb':
+                for node in info['cluster']:
+                    try:
+                        run('docker kill '+node['cid'])
+                    except Exception as e:
+                        if args.force:
+                            print 'continue because force was used (cleanup may not be complete)'
+                        else:
+                            raise e
+                os.remove(path)
+                print 'killed ' + info['ip'] + ' (' + filename + ')'
+                continue
             cid = info['cid']
             if info['type'] == 'worker':
                 # need this script, otherwise it hangs if Docker inside

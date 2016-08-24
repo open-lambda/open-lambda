@@ -14,6 +14,7 @@ def main():
     parser.add_argument('--registry', '-r', default='docker')
     parser.add_argument(DB_WAIT, default=False, action='store_true')
     parser.add_argument('--remote', default=False, action='store_true')
+    parser.add_argument('--nrethink', default='1')
 
     global args
     args = parser.parse_args()
@@ -33,7 +34,7 @@ def main():
     print '='*40
 
     if args.registry == "olregistry":
-        cluster.start_olreg()
+        cluster.start_olreg(int(args.nrethink))
     else:
         cluster.start_docker_reg()
     print '='*40
