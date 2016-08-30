@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -33,8 +34,16 @@ func newHttpErr(msg string, code int) *httpErr {
 }
 
 func NewServer(config *config.Config) (*Server, error) {
+	var sm sandbox.SandboxManager
 	// create server
-	sm := sandbox.NewDockerManager(config)
+	if config.Registry == "docker" {
+		sm = sandbox.NewDockerManager(config)
+	} else if config.Registry == "olregistry" {
+		sm = sandbox.NewRegistryManager(config)
+	} else {
+		return nil, errors.New("Invalid 'registry' field in config")
+	}
+
 	opts := handler.HandlerSetOpts{
 		Sm:  sm,
 		Lru: handler.NewHandlerLRU(100), // TODO(tyler)

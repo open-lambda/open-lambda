@@ -43,7 +43,6 @@ func NewDockerManager(opts *config.Config) (manager *DockerManager) {
 	return manager
 }
 
-// use "UploadToContainer"
 func (dm *DockerManager) Create(name string) (Sandbox, error) {
 	internalAppPort := map[docker.Port]struct{}{"8080/tcp": {}}
 	portBindings := map[docker.Port][]docker.PortBinding{

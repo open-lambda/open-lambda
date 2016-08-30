@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import os, sys, time, json
+import os, sys, time, json, subprocess
 
 CONFIG_PATH = '/open-lambda/config.json' # provided as docker volume
 
@@ -44,6 +44,8 @@ def main():
     if join != None:
         c += ' --join ' + join
     cmd(c + ' &')
+
+    #cmd('docker pull eoakes/lambda:latest')
 
     # start lambda worker
     cmd('/open-lambda/bin/worker ' + CONFIG_PATH)

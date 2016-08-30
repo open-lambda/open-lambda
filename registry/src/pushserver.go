@@ -21,7 +21,7 @@ func (p FileProcessor) Process(name string, files map[string][]byte) ([]r.DBInse
 	return ret, nil
 }
 
-func InitPushServer(cluster []string) *r.PushServer {
+func InitPushServer(port int, cluster []string) *r.PushServer {
 	proc := FileProcessor{}
-	return r.InitPushServer(cluster, DATABASE, proc, SPORT, CHUNK_SIZE, TABLE)
+	return r.InitPushServer(cluster, DATABASE, proc, port, CHUNK_SIZE, TABLE)
 }

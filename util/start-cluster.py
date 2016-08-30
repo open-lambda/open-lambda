@@ -39,7 +39,7 @@ def main():
         cluster.start_docker_reg()
     print '='*40
 
-    cluster.start_workers() 
+    cluster.start_workers(args.registry) 
     print '='*40
 
     cluster.start_lb()

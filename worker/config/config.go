@@ -44,7 +44,7 @@ func (c *Config) defaults() error {
 		}
 	}
 
-	if c.Registry == "docker" && len(c.Reg_cluster) == 0 {
+	if c.Registry == "olregistry" && len(c.Reg_cluster) == 0 {
 		return fmt.Errorf("must specify reg_cluster")
 	}
 

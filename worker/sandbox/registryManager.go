@@ -1,8 +1,14 @@
 package sandbox
 
 import (
+	"archive/tar"
 	"bytes"
+	"fmt"
+	"io"
+	"io/ioutil"
 	"log"
+	"os"
+	"path/filepath"
 
 	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/phonyphonecall/turnip"
@@ -13,9 +19,9 @@ import (
 
 type RegistryManager struct {
 	// private
-	opts     *config.Config
-	reg      *r.PullClient
-	handlers map[string][]byte
+	opts        *config.Config
+	reg         *r.PullClient
+	handler_dir string
 
 	// public
 	dClient  *docker.Client
@@ -40,10 +46,14 @@ func NewRegistryManager(opts *config.Config) (manager *RegistryManager) {
 		manager.dClient = c
 	}
 
-	// TODO: trace config back to properly input cluster addresses
 	manager.reg = r.InitPullClient(opts.Reg_cluster)
 	manager.opts = opts
 	manager.initTimers()
+	manager.handler_dir = "/tmp/handlers/"
+	if err := os.Mkdir(manager.handler_dir, os.ModeDir); err != nil {
+		log.Fatal("failed to make handler directory: ", err)
+	}
+
 	return manager
 }
 
@@ -55,10 +65,13 @@ func (dm *RegistryManager) Create(name string) (Sandbox, error) {
 
 	log.Printf("Use CLUSTER = '%v'\n", dm.opts.Cluster_name)
 
+	handler := filepath.Join(dm.handler_dir, name)
+	volumes := []string{fmt.Sprintf("%s:%s", handler, "/handler/")}
+
 	container, err := dm.dClient.CreateContainer(
 		docker.CreateContainerOptions{
 			Config: &docker.Config{
-				Image:        "ubuntu:trusty", //TODO
+				Image:        "eoakes/lambda:latest",
 				AttachStdout: true,
 				AttachStderr: true,
 				ExposedPorts: internalAppPort,
@@ -67,21 +80,8 @@ func (dm *RegistryManager) Create(name string) (Sandbox, error) {
 			HostConfig: &docker.HostConfig{
 				PortBindings:    portBindings,
 				PublishAllPorts: true,
+				Binds:           volumes,
 			},
-		},
-	)
-
-	if err != nil {
-		return nil, err
-	}
-
-	r := bytes.NewReader(dm.handlers[name])
-
-	err = dm.dClient.UploadToContainer(container.ID,
-		docker.UploadToContainerOptions{
-			InputStream:          r,
-			Path:                 "/",
-			NoOverwriteDirNonDir: false, // TODO
 		},
 	)
 
@@ -93,10 +93,50 @@ func (dm *RegistryManager) Create(name string) (Sandbox, error) {
 	return sandbox, nil
 }
 
-// TODO: evict code (onto disk?)
 func (dm *RegistryManager) Pull(name string) error {
-	dm.handlers[name] = dm.reg.Pull(name)
-	// TODO: fix error handling
+	handler := dm.reg.Pull(name)
+
+	dir := filepath.Join(dm.handler_dir, name)
+	if err := os.Mkdir(dir, os.ModeDir); err != nil {
+		return err
+	}
+
+	file := filepath.Join(dir, "lambda_func.py")
+	return ioutil.WriteFile(file, handler, 0644)
+}
+
+func untar(tarball []byte, dir string) error {
+	r := bytes.NewReader(tarball)
+	tarReader := tar.NewReader(r)
+
+	for {
+		header, err := tarReader.Next()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return err
+		}
+
+		path := filepath.Join(dir, header.Name)
+		info := header.FileInfo()
+		if info.IsDir() {
+			if err = os.MkdirAll(path, info.Mode()); err != nil {
+				return err
+			}
+			continue
+		}
+
+		file, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, info.Mode())
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+		_, err = io.Copy(file, tarReader)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

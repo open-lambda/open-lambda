@@ -19,6 +19,7 @@ def updates(conn, event):
         wait(conn, ts)
         rows = list(r.db(CHAT).table(MSGS).filter(r.row[TS] > ts).run(conn))
         assert(len(rows) > 0)
+    
     rows.sort(key=lambda row: row[TS])
     return rows
 

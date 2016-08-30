@@ -57,6 +57,7 @@ def main():
         "cluster_name": args.cluster, 
         "registry_host": "localhost", 
         "registry_port": registry_config['host_port'], 
+        "registry": "docker"
     }
     wrjs(path, config)
 

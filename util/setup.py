@@ -21,7 +21,7 @@ def main():
         print "That file is not in this directory"
         sys.exit()
 
-    lambdaFn = args.appfile
+    lambdaFn = os.path.join(app_dir, args.appfile)
     app_name = ''.join(random.choice(string.ascii_lowercase) for _ in range(12))
     static_dir = os.path.join(app_dir, 'static')
     root_dir = os.path.join(app_dir, '..', '..')
@@ -30,25 +30,32 @@ def main():
     if not os.path.exists(cluster_dir):
         return 'cluster not running'
 
-    # build image
-    print '='*40
-    print 'Building image'
-    builder = os.path.join(builder_dir, 'builder.py')
-    builder = builder + ' -n %s -l %s' %(app_name, os.path.join(app_dir, lambdaFn))
-    if 'lambda-config.json' in app_files:
-        builder = builder + ' -c %s' %(os.path.join(app_dir, 'lambda-config.json'))
-    if 'environment.json' in app_files:
-        builder = builder + ' -e %s' %(os.path.join(app_dir, 'environment.json'))
 
-    run(builder, True)
-
-    # push image
-    print '='*40
-    print 'Pushing image'
     registry = rdjs(os.path.join(cluster_dir, 'registry.json'))
-    img = 'localhost:%s/%s' % (registry['host_port'], app_name)
-    run('docker tag -f %s %s' % (app_name, img), True)
-    run('docker push ' + img, True)
+
+    if registry['type'] == 'docker':
+        # build image
+        print '='*40
+        print 'Building image'
+        builder = os.path.join(builder_dir, 'builder.py')
+        builder = builder + ' -n %s -l %s' %(app_name, lambdaFn)
+        if 'lambda-config.json' in app_files:
+            builder = builder + ' -c %s' %(os.path.join(app_dir, 'lambda-config.json'))
+        if 'environment.json' in app_files:
+            builder = builder + ' -e %s' %(os.path.join(app_dir, 'environment.json'))
+
+        run(builder, True)
+
+        # push image
+        print '='*40
+        print 'Pushing image'
+        img = 'localhost:%s/%s' % (registry['host_port'], app_name)
+        run('docker tag -f %s %s' % (app_name, img), True)
+        run('docker push ' + img, True)
+    else:
+        rethinkdb = rdjs(os.path.join(cluster_dir, 'rethinkdb.json'))
+        cmd = '%s/../util/regpush %s:%s %s %s' % (SCRIPT_DIR, registry['host_ip'], registry['host_port'], app_name, lambdaFn)
+        run(cmd, True)
 
     # setup config
     balancer = rdjs(os.path.join(cluster_dir, 'loadbalancer-1.json'))

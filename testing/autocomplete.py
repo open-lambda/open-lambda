@@ -10,7 +10,7 @@ def main():
     url = config['url']
     print 'POST ' + url
     data_to_post = json.dumps({"op":"keystroke", "pref":"ab"})
-    r = requests.post(url, data = data_to_post, timeout = 30)
+    r = requests.post(url, data=data_to_post, timeout = 30)
     print "RESP " + r.text
     r = r.json()
     if r['result'] == ["about", "above", "able", "ability", "absence"]:

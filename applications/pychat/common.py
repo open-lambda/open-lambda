@@ -128,7 +128,7 @@ def parse_tab_colon_tree(data, typ=float):
 
 def key_replace(orig={}, replace={}, recursive=False):
     for k1,k2 in replace.iteritems():
-        if k1 in orig:
+        if k1 in orig: 
             v = orig.pop(k1)
             orig[k2] = v
     if recursive:
