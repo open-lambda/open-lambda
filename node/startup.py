@@ -45,7 +45,7 @@ def main():
         c += ' --join ' + join
     cmd(c + ' &')
 
-    #cmd('docker pull eoakes/lambda:latest')
+    cmd('docker pull eoakes/lambda:latest')
 
     # start lambda worker
     cmd('/open-lambda/bin/worker ' + CONFIG_PATH)
