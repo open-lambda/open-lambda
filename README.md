@@ -14,7 +14,7 @@ Grab and extract the open-lambda source package from github
 wget https://github.com/open-lambda/open-lambda/archive/v0.1.0.tar.gz 
 ```
 
-Use the startup script to install requirements, build the project.
+Use the startup script to install requirements, build the project using the Makefile.
 
 ```
 cd open-lambda-0.1.0
