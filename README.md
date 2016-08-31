@@ -4,7 +4,7 @@ OpenLambda is a project dedicated to bringing the Lambda ("serverless") computin
 
 ## Getting Started
 
-These instructions will get you a copy of the project up and running on your local machine for development and testing purposes.
+These instructions will get you a copy of the project up and running in your environment for development and testing purposes. Because Docker requires root privileges and can consume a lot of disk space in the root directory, it is recommended to use OpenLambda in a virtual environment.
 
 ### Installation
 
