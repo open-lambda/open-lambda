@@ -11,10 +11,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--workers', '-w', default='1')
     parser.add_argument('--cluster', '-c', default='cluster')
-    parser.add_argument('--registry', '-r', default='docker')
     parser.add_argument(DB_WAIT, default=False, action='store_true')
-    parser.add_argument('--remote', default=False, action='store_true')
+    parser.add_argument('--olregistry', default=False, action='store_true')
     parser.add_argument('--nrethink', default='1')
+
+    # TODO
+    parser.add_argument('--remote', default=False, action='store_true')
 
     global args
     args = parser.parse_args()
@@ -33,7 +35,7 @@ def main():
     cluster.make_cluster_dir()
     print '='*40
 
-    if args.registry == "olregistry":
+    if args.olregistry:
         cluster.start_olreg(int(args.nrethink))
     else:
         cluster.start_docker_reg()
