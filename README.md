@@ -60,6 +60,28 @@ Explain what these tests test and why
 Give an example
 ```
 
+## Architecture
+
+Diagram of overall architecture coming soon.
+
+### Load Balancers
+
+All RPC requests to the system are issued directly to a load balancer. There, the load balancing policy selects a worker to handle the request, and proxies it.
+
+Currently, we are using an Nginx instance for load balancing, with simple round-robin scheduling. We hope to soon experiment with more interesting load balancing policies, as the Lambda model prompts many interesting locality questions.
+
+### Registry
+
+The registry is a shared code store for all of the registered handlers for RPCs. Workers pull code from this registry when they do not have the handler locally. This is often the slowest part of executing an RPC, which makes directing requests to a worker which has the handler locally an important consideration.
+
+There are currently two implemented registries for use with OpenLambda, the Docker registry and our native [code registry](https://github.com/open-lambda/code-registry).
+
+### Workers
+
+### Sandboxes
+
+
+
 ## Built With
 
 * Docker
@@ -75,7 +97,8 @@ Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduc
 
 * **Tyler Harter** - *Initial work* - [tylerharter](https://github.com/tylerharter)
 
-See also the list of [contributors](https://github.com/your/project/contributors) who participated in this project.
+
+See also the list of [contributors](https://github.com/open-lambda/open-lambda/contributors) who participated in this project.
 
 ## License
 
