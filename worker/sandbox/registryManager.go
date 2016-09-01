@@ -1,13 +1,15 @@
 package sandbox
 
 import (
-	"archive/tar"
-	"bytes"
+	//"archive/tar"
+	//"bytes"
+	//"compress/gzip"
+	//"io"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/open-lambda/open-lambda/worker/config"
@@ -96,13 +98,48 @@ func (dm *RegistryManager) Create(name string) (Sandbox, error) {
 func (dm *RegistryManager) Pull(name string) error {
 	handler := dm.reg.Pull(name)
 
+	file := filepath.Join("/tmp", fmt.Sprintf("%s.tar.gz", name))
+	defer os.Remove(file)
+	err := ioutil.WriteFile(file, handler, 0644)
+	if err != nil {
+		return err
+	}
+
+	/*
+		tar, err := ungzip(handler)
+		if err != nil {
+			return err
+		}
+	*/
+
 	dir := filepath.Join(dm.handler_dir, name)
 	if err := os.Mkdir(dir, os.ModeDir); err != nil {
 		return err
 	}
 
-	file := filepath.Join(dir, "lambda_func.py")
-	return ioutil.WriteFile(file, handler, 0644)
+	return untar(file, dir)
+}
+
+// Pipe in handler file instead of writing it
+func untar(file string, dest string) error {
+	cmd := exec.Command("tar", "-xvzf", file, "--directory", dest)
+	return cmd.Run()
+}
+
+/*
+func ungzip(source []byte) ([]byte, error) {
+	r := bytes.NewReader(source)
+
+	archive, err := gzip.NewReader(r)
+	if err != nil {
+		return nil, err
+	}
+	defer archive.Close()
+
+	var out bytes.Buffer
+
+	_, err = io.Copy(&out, archive)
+	return nil, err
 }
 
 func untar(tarball []byte, dir string) error {
@@ -130,15 +167,16 @@ func untar(tarball []byte, dir string) error {
 		if err != nil {
 			return err
 		}
-		defer file.Close()
 		_, err = io.Copy(file, tarReader)
 		if err != nil {
 			return err
 		}
+		file.Close()
 	}
 
 	return nil
 }
+*/
 
 func (dm *RegistryManager) Dump() {
 	opts := docker.ListContainersOptions{All: true}
