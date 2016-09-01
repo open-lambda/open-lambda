@@ -71,7 +71,8 @@ test : test-cluster
 	cd $(WORKER_DIR) && $(GO) get
 	cd $(WORKER_DIR) && $(GO) test . ./handler -v
 	./testing/pychat.py
-	./testing/autocomplete.py
+	# TODO: make these faster by not inserting everything to rethinkdb first:
+	# ./testing/autocomplete.py
 	./util/stop-cluster.py -c $(TEST_CLUSTER)
 
 .PHONY: clean

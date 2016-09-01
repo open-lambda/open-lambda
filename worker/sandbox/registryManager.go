@@ -14,7 +14,7 @@ import (
 	"github.com/phonyphonecall/turnip"
 
 	docker "github.com/fsouza/go-dockerclient"
-	r "github.com/open-lambda/open-lambda/worker/registry"
+	r "github.com/open-lambda/open-lambda/registry/src"
 )
 
 type RegistryManager struct {
