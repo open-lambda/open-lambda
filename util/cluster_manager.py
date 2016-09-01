@@ -109,7 +109,12 @@ class LocalCluster(Cluster):
 
         self.write_reg(cid, 'docker')
 
-    def start_workers(self, registry):
+    def start_workers(self, olregistry):
+        if olregistry:
+            registry = "olregistry"
+        else:
+            registry = "docker"
+
         assert(int(self.numworkers) > 0)
         for i in range(int(self.numworkers)):
             config_path = os.path.join(self.cluster_dir, 'worker-%d.json' % i)
