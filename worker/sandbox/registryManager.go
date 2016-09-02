@@ -1,12 +1,8 @@
 package sandbox
 
 import (
-	//"archive/tar"
-	//"bytes"
-	//"compress/gzip"
-	//"io"
+	"bytes"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -96,87 +92,19 @@ func (dm *RegistryManager) Create(name string) (Sandbox, error) {
 }
 
 func (dm *RegistryManager) Pull(name string) error {
-	handler := dm.reg.Pull(name)
-
-	file := filepath.Join("/tmp", fmt.Sprintf("%s.tar.gz", name))
-	defer os.Remove(file)
-	err := ioutil.WriteFile(file, handler, 0644)
-	if err != nil {
-		return err
-	}
-
-	/*
-		tar, err := ungzip(handler)
-		if err != nil {
-			return err
-		}
-	*/
-
 	dir := filepath.Join(dm.handler_dir, name)
 	if err := os.Mkdir(dir, os.ModeDir); err != nil {
 		return err
 	}
 
-	return untar(file, dir)
-}
+	handler := dm.reg.Pull(name)
+	r := bytes.NewReader(handler)
 
-// Pipe in handler file instead of writing it
-func untar(file string, dest string) error {
-	cmd := exec.Command("tar", "-xvzf", file, "--directory", dest)
+	cmd := exec.Command("tar", "-xvzf", "-", "--directory", dir)
+	cmd.Stdin = r
 	return cmd.Run()
+
 }
-
-/*
-func ungzip(source []byte) ([]byte, error) {
-	r := bytes.NewReader(source)
-
-	archive, err := gzip.NewReader(r)
-	if err != nil {
-		return nil, err
-	}
-	defer archive.Close()
-
-	var out bytes.Buffer
-
-	_, err = io.Copy(&out, archive)
-	return nil, err
-}
-
-func untar(tarball []byte, dir string) error {
-	r := bytes.NewReader(tarball)
-	tarReader := tar.NewReader(r)
-
-	for {
-		header, err := tarReader.Next()
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return err
-		}
-
-		path := filepath.Join(dir, header.Name)
-		info := header.FileInfo()
-		if info.IsDir() {
-			if err = os.MkdirAll(path, info.Mode()); err != nil {
-				return err
-			}
-			continue
-		}
-
-		file, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, info.Mode())
-		if err != nil {
-			return err
-		}
-		_, err = io.Copy(file, tarReader)
-		if err != nil {
-			return err
-		}
-		file.Close()
-	}
-
-	return nil
-}
-*/
 
 func (dm *RegistryManager) Dump() {
 	opts := docker.ListContainersOptions{All: true}
