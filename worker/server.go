@@ -164,7 +164,7 @@ func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 
 // RunLambda expects POST requests like this:
 //
-// curl -X POST localhost:8080/runLambda/<lambda-name> -d '{}'
+// curl -X POST localhost:8090/runLambda/<lambda-name> -d '{}'
 func (s *Server) RunLambda(w http.ResponseWriter, r *http.Request) {
 	// write response headers
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -231,5 +231,5 @@ func main() {
 	}
 
 	http.HandleFunc("/runLambda/", server.RunLambda)
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(http.ListenAndServe(":8090", nil))
 }

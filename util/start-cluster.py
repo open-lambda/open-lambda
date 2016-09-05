@@ -4,7 +4,7 @@ from cluster_manager import *
 
 DB_WAIT = '--skip-db-wait'
 REGISTRY_PORT = '5000'
-WORKER_PORT =   '8080'
+WORKER_PORT =   '8090'
 BALANCER_PORT = '85'
 
 def main():
