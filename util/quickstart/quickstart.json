@@ -1,0 +1,6 @@
+{
+  "registry": "olregistry", 
+  "reg_cluster": [
+    "localhost:28015"
+  ]
+}
