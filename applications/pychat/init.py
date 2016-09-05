@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import os, sys, argparse
 import rethinkdb as r
-from chat import *
+from lambda_func import *
 from common import *
 
 def main():
@@ -22,6 +22,7 @@ def main():
         r.db_drop(CHAT).run(conn)
         print 'dropped old table'
     except:
+        print "couldn't drop old table"
         pass
     print r.db_create(CHAT).run(conn);
     print r.db(CHAT).table_create(MSGS).run(conn);

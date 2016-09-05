@@ -1,25 +1,21 @@
 #!/usr/bin/env python
-import os, sys, random, string, requests
+import os, sys, random, string, requests, time
 from common import *
-
-HEADERS = {
-    "Content-Type": "application/json"
-}
 
 def main():
     setup = os.path.join(SCRIPT_DIR, '..', 'util', 'setup.py')
-    print run(setup+' -c test_cluster -d pychat -f chat.py')
+    print run(setup+' -c test_cluster -d pychat -f handler.tar.gz')
 
     path = os.path.join(SCRIPT_DIR, '..', 'applications', 'pychat', 'static', 'config.json')
     config = rdjs(path)
 
     url = config['url']
     print 'POST ' + url
-    args = {"op": "msg", "msg": "hello"}
-    r = requests.post(url, data=json.dumps(args), headers=HEADERS)
+    args = json.dumps({"op": "msg", "msg": "hello"})
+    r = requests.post(url, data=args, timeout=30)
     print 'RESP ' + r.text
     r = r.json()
-    if r.get('result', '').startswith('insert'):
+    if r['result'].startswith('insert'):
         print 'PASS'
     else:
         print 'FAIL'

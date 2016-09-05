@@ -26,6 +26,7 @@ func RunServer() *Server {
 		log.Fatal(err)
 	}
 
+	log.Printf(conf.Registry)
 	log.Printf("Set skip_pull_existing = true\n")
 	conf.Skip_pull_existing = true
 

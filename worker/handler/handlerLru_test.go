@@ -7,7 +7,7 @@ import (
 func TestLRU(t *testing.T) {
 	lru := NewHandlerLRU(0)
 	opts := HandlerSetOpts{
-		Sm:  NewDockerManager(),
+		Sm:  NewRegistryManager(),
 		Lru: lru,
 	}
 	handlers := NewHandlerSet(opts)

@@ -118,7 +118,8 @@ class LocalCluster(Cluster):
         assert(int(self.numworkers) > 0)
         for i in range(int(self.numworkers)):
             config_path = os.path.join(self.cluster_dir, 'worker-%d.json' % i)
-            config = {'registry_host': self.registry_ip,
+            config = {'worker_port': self.internal_worker_port,
+                      'registry_host': self.registry_ip,
                       'registry_port': self.internal_reg_port,
                       'type': 'worker',
                       'cluster_name': self.cluster,

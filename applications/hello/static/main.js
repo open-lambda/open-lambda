@@ -17,9 +17,9 @@ function lambda_post(data, callback) {
 }
 
 function echo() {
-  var msg = $("#msg").val();
-  $("#msg").val("");
-  lambda_post({"op":"hello", "msg":msg}, function(data){
+  var name = $("#name").val();
+  $("#name").val("");
+  lambda_post({"name":name}, function(data){
     alert(data.result);
   });
 }

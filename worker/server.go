@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -41,9 +42,16 @@ func NewServer(config *config.Config) (*Server, error) {
 	} else if config.Registry == "olregistry" {
 		sm = sandbox.NewRegistryManager(config)
 	} else if config.Registry == "local" {
+		conf_dir, err := filepath.Abs(filepath.Dir(os.Args[1]))
+		if err != nil {
+			return nil, err
+		}
+
+		config.Reg_dir = filepath.Join(conf_dir, config.Reg_dir)
+
 		sm = sandbox.NewLocalManager(config)
 	} else {
-		return nil, errors.New("Invalid 'registry' field in config")
+		return nil, errors.New("invalid 'registry' field in config")
 	}
 
 	opts := handler.HandlerSetOpts{
@@ -233,5 +241,6 @@ func main() {
 	}
 
 	http.HandleFunc("/runLambda/", server.RunLambda)
-	log.Fatal(http.ListenAndServe(":8090", nil))
+	port := fmt.Sprintf(":%s", conf.Worker_port)
+	log.Fatal(http.ListenAndServe(port, nil))
 }

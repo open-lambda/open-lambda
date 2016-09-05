@@ -1,4 +1,5 @@
 {
   "registry": "local", 
-  "reg_dir": "/root/open-lambda/util/quickstart/handlers"
+  "reg_dir": "handlers",
+  "worker_port": "8080"
 }

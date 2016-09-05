@@ -47,9 +47,16 @@ func NewRegistryManager(opts *config.Config) (manager *RegistryManager) {
 	manager.reg = r.InitPullClient(opts.Reg_cluster)
 	manager.opts = opts
 	manager.initTimers()
-	manager.handler_dir = "/tmp/handlers/"
+	manager.handler_dir = "/tmp/olhandlers/"
 	if err := os.Mkdir(manager.handler_dir, os.ModeDir); err != nil {
-		log.Fatal("failed to make handler directory: ", err)
+		err = os.RemoveAll(manager.handler_dir)
+		if err != nil {
+			log.Fatal("failed to remove old handler directory: ", err)
+		}
+		err = os.Mkdir(manager.handler_dir, os.ModeDir)
+		if err != nil {
+			log.Fatal("failed to create handler directory: ", err)
+		}
 	}
 
 	return manager
@@ -104,6 +111,16 @@ func (rm *RegistryManager) Pull(name string) error {
 	cmd.Stdin = r
 	return cmd.Run()
 
+}
+
+func (rm *RegistryManager) HandlerPresent(name string) (bool, error) {
+	dir := filepath.Join(rm.handler_dir, name)
+	_, err := os.Stat(dir)
+	if err != nil {
+		return false, nil
+	}
+
+	return true, nil
 }
 
 func (rm *RegistryManager) Dump() {

@@ -21,6 +21,7 @@ type Config struct {
 	// local
 	Reg_dir string `json:"reg_dir"`
 
+	Worker_port string `json:"worker_port"`
 	Docker_host string `json:"docker_host"`
 	// for unit testing to skip pull path
 	Skip_pull_existing bool `json:"Skip_pull_existing"`
@@ -35,6 +36,9 @@ func (c *Config) Dump() {
 }
 
 func (c *Config) defaults() error {
+	if c.Worker_port == "" {
+		c.Worker_port = "8080"
+	}
 	if c.Registry == "docker" {
 		if c.Cluster_name == "" {
 			return fmt.Errorf("must specify cluster_name\n")
