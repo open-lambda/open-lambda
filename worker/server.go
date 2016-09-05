@@ -40,6 +40,8 @@ func NewServer(config *config.Config) (*Server, error) {
 		sm = sandbox.NewDockerManager(config)
 	} else if config.Registry == "olregistry" {
 		sm = sandbox.NewRegistryManager(config)
+	} else if config.Registry == "local" {
+		sm = sandbox.NewLocalManager(config)
 	} else {
 		return nil, errors.New("Invalid 'registry' field in config")
 	}

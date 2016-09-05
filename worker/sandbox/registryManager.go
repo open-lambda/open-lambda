@@ -55,18 +55,18 @@ func NewRegistryManager(opts *config.Config) (manager *RegistryManager) {
 	return manager
 }
 
-func (dm *RegistryManager) Create(name string) (Sandbox, error) {
+func (rm *RegistryManager) Create(name string) (Sandbox, error) {
 	internalAppPort := map[docker.Port]struct{}{"8080/tcp": {}}
 	portBindings := map[docker.Port][]docker.PortBinding{
 		"8080/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}}}
-	labels := map[string]string{"openlambda.cluster": dm.opts.Cluster_name}
+	labels := map[string]string{"openlambda.cluster": rm.opts.Cluster_name}
 
-	log.Printf("Use CLUSTER = '%v'\n", dm.opts.Cluster_name)
+	log.Printf("Use CLUSTER = '%v'\n", rm.opts.Cluster_name)
 
-	handler := filepath.Join(dm.handler_dir, name)
+	handler := filepath.Join(rm.handler_dir, name)
 	volumes := []string{fmt.Sprintf("%s:%s", handler, "/handler/")}
 
-	container, err := dm.dClient.CreateContainer(
+	container, err := rm.dClient.CreateContainer(
 		docker.CreateContainerOptions{
 			Config: &docker.Config{
 				Image:        "eoakes/lambda:latest",
@@ -87,17 +87,17 @@ func (dm *RegistryManager) Create(name string) (Sandbox, error) {
 		return nil, err
 	}
 
-	sandbox := &DockerSandbox{name: name, container: container, mgr: dm}
+	sandbox := &DockerSandbox{name: name, container: container, mgr: rm}
 	return sandbox, nil
 }
 
-func (dm *RegistryManager) Pull(name string) error {
-	dir := filepath.Join(dm.handler_dir, name)
+func (rm *RegistryManager) Pull(name string) error {
+	dir := filepath.Join(rm.handler_dir, name)
 	if err := os.Mkdir(dir, os.ModeDir); err != nil {
 		return err
 	}
 
-	handler := dm.reg.Pull(name)
+	handler := rm.reg.Pull(name)
 	r := bytes.NewReader(handler)
 
 	cmd := exec.Command("tar", "-xvzf", "-", "--directory", dir)
@@ -106,15 +106,15 @@ func (dm *RegistryManager) Pull(name string) error {
 
 }
 
-func (dm *RegistryManager) Dump() {
+func (rm *RegistryManager) Dump() {
 	opts := docker.ListContainersOptions{All: true}
-	containers, err := dm.dClient.ListContainers(opts)
+	containers, err := rm.dClient.ListContainers(opts)
 	if err != nil {
 		log.Fatal("Could not get container list")
 	}
 	log.Printf("=====================================\n")
 	for idx, info := range containers {
-		container, err := dm.dClient.InspectContainer(info.ID)
+		container, err := rm.dClient.InspectContainer(info.ID)
 		if err != nil {
 			log.Fatal("Could not get container")
 		}
@@ -127,66 +127,66 @@ func (dm *RegistryManager) Dump() {
 	log.Printf("=====================================\n")
 	log.Println()
 	log.Printf("====== Docker Operation Stats =======\n")
-	log.Printf("\tcreate: \t%fms\n", dm.createT.AverageMs())
-	log.Printf("\tinspect: \t%fms\n", dm.inspectT.AverageMs())
-	log.Printf("\tlogs: \t%fms\n", dm.logT.AverageMs())
-	log.Printf("\tpause: \t\t%fms\n", dm.pauseT.AverageMs())
-	log.Printf("\tpull: \t\t%fms\n", dm.pullT.AverageMs())
-	log.Printf("\tremove: \t%fms\n", dm.removeT.AverageMs())
-	log.Printf("\trestart: \t%fms\n", dm.restartT.AverageMs())
-	log.Printf("\trestart: \t%fms\n", dm.restartT.AverageMs())
-	log.Printf("\tunpause: \t%fms\n", dm.unpauseT.AverageMs())
+	log.Printf("\tcreate: \t%fms\n", rm.createT.AverageMs())
+	log.Printf("\tinspect: \t%fms\n", rm.inspectT.AverageMs())
+	log.Printf("\tlogs: \t%fms\n", rm.logT.AverageMs())
+	log.Printf("\tpause: \t\t%fms\n", rm.pauseT.AverageMs())
+	log.Printf("\tpull: \t\t%fms\n", rm.pullT.AverageMs())
+	log.Printf("\tremove: \t%fms\n", rm.removeT.AverageMs())
+	log.Printf("\trestart: \t%fms\n", rm.restartT.AverageMs())
+	log.Printf("\trestart: \t%fms\n", rm.restartT.AverageMs())
+	log.Printf("\tunpause: \t%fms\n", rm.unpauseT.AverageMs())
 	log.Printf("=====================================\n")
 }
 
-func (dm *RegistryManager) initTimers() {
-	dm.createT = turnip.NewTurnip()
-	dm.inspectT = turnip.NewTurnip()
-	dm.pauseT = turnip.NewTurnip()
-	dm.pullT = turnip.NewTurnip()
-	dm.removeT = turnip.NewTurnip()
-	dm.restartT = turnip.NewTurnip()
-	dm.startT = turnip.NewTurnip()
-	dm.unpauseT = turnip.NewTurnip()
-	dm.logT = turnip.NewTurnip()
+func (rm *RegistryManager) initTimers() {
+	rm.createT = turnip.NewTurnip()
+	rm.inspectT = turnip.NewTurnip()
+	rm.pauseT = turnip.NewTurnip()
+	rm.pullT = turnip.NewTurnip()
+	rm.removeT = turnip.NewTurnip()
+	rm.restartT = turnip.NewTurnip()
+	rm.startT = turnip.NewTurnip()
+	rm.unpauseT = turnip.NewTurnip()
+	rm.logT = turnip.NewTurnip()
 }
 
-func (dm *RegistryManager) client() *docker.Client {
-	return dm.dClient
+func (rm *RegistryManager) client() *docker.Client {
+	return rm.dClient
 }
 
-func (dm *RegistryManager) createTimer() *turnip.Turnip {
-	return dm.createT
+func (rm *RegistryManager) createTimer() *turnip.Turnip {
+	return rm.createT
 }
 
-func (dm *RegistryManager) inspectTimer() *turnip.Turnip {
-	return dm.inspectT
+func (rm *RegistryManager) inspectTimer() *turnip.Turnip {
+	return rm.inspectT
 }
 
-func (dm *RegistryManager) pauseTimer() *turnip.Turnip {
-	return dm.pauseT
+func (rm *RegistryManager) pauseTimer() *turnip.Turnip {
+	return rm.pauseT
 }
 
-func (dm *RegistryManager) pullTimer() *turnip.Turnip {
-	return dm.pullT
+func (rm *RegistryManager) pullTimer() *turnip.Turnip {
+	return rm.pullT
 }
 
-func (dm *RegistryManager) removeTimer() *turnip.Turnip {
-	return dm.removeT
+func (rm *RegistryManager) removeTimer() *turnip.Turnip {
+	return rm.removeT
 }
 
-func (dm *RegistryManager) restartTimer() *turnip.Turnip {
-	return dm.restartT
+func (rm *RegistryManager) restartTimer() *turnip.Turnip {
+	return rm.restartT
 }
 
-func (dm *RegistryManager) startTimer() *turnip.Turnip {
-	return dm.startT
+func (rm *RegistryManager) startTimer() *turnip.Turnip {
+	return rm.startT
 }
 
-func (dm *RegistryManager) unpauseTimer() *turnip.Turnip {
-	return dm.unpauseT
+func (rm *RegistryManager) unpauseTimer() *turnip.Turnip {
+	return rm.unpauseT
 }
 
-func (dm *RegistryManager) logTimer() *turnip.Turnip {
-	return dm.logT
+func (rm *RegistryManager) logTimer() *turnip.Turnip {
+	return rm.logT
 }

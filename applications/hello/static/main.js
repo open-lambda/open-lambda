@@ -16,14 +16,19 @@ function lambda_post(data, callback) {
   });  
 }
 
+function echo() {
+  var msg = $("#msg").val();
+  $("#msg").val("");
+  lambda_post({"op":"hello", "msg":msg}, function(data){
+    alert(data.result);
+  });
+}
+
 function main() {
+  $("#submit").click(echo);
   $.getJSON('config.json')
     .done(function(data) {
       config = data;
-      $("#hello").html("");
-      lambda_post({"op":"hello"}, function(data){
-	$("#hello").html(data.result);
-      });
     })
     .fail(function( jqxhr, textStatus, error ) {
       $("#comments").html("Error: " + error + ".  Consider refreshing.")

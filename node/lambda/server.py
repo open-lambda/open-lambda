@@ -28,7 +28,11 @@ def init():
             host, port = addr.split('//')[-1].split(':')
         else:
             host, port = get_default_gateway_linux(), '28015'
-        db_conn = rethinkdb.connect(host, int(port))
+        try:
+            db_conn = rethinkdb.connect(host, int(port))
+        except:
+            print "connection to rethinkdb failed"
+
     initialized = True
 
 # source: http://stackoverflow.com/a/6556951

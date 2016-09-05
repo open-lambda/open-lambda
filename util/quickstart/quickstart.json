@@ -1,6 +1,4 @@
 {
-  "registry": "olregistry", 
-  "reg_cluster": [
-    "localhost:28015"
-  ]
+  "registry": "local", 
+  "reg_dir": "/root/open-lambda/util/quickstart/handlers"
 }

@@ -11,12 +11,17 @@ import (
 )
 
 type Config struct {
-	Registry      string   `json:"registry"`
-	Cluster_name  string   `json:"cluster_name"`
-	Registry_host string   `json:"registry_host"`
-	Registry_port string   `json:"registry_port"`
-	Docker_host   string   `json:"docker_host"`
-	Reg_cluster   []string `json:"reg_cluster"`
+	Registry string `json:"registry"`
+	// docker
+	Cluster_name  string `json:"cluster_name"`
+	Registry_host string `json:"registry_host"`
+	Registry_port string `json:"registry_port"`
+	// olregistry
+	Reg_cluster []string `json:"reg_cluster"`
+	// local
+	Reg_dir string `json:"reg_dir"`
+
+	Docker_host string `json:"docker_host"`
 	// for unit testing to skip pull path
 	Skip_pull_existing bool `json:"Skip_pull_existing"`
 }
@@ -46,6 +51,10 @@ func (c *Config) defaults() error {
 
 	if c.Registry == "olregistry" && len(c.Reg_cluster) == 0 {
 		return fmt.Errorf("must specify reg_cluster")
+	}
+
+	if c.Registry == "local" && c.Reg_dir == "" {
+		return fmt.Errorf("must specify local registry directory")
 	}
 
 	// daemon
