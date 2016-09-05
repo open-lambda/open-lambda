@@ -65,7 +65,7 @@ function keystroke() {
     var entries = $("#text").val();
     var words  = entries.split(' ');
     var lastword = words[words.length - 1];
-    if (lastword.contains("'")) {
+    if (lastword.includes("'")) {
         clearsuggs();
         return;
     }
