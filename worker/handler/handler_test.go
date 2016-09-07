@@ -11,7 +11,7 @@ import (
 	"github.com/open-lambda/open-lambda/worker/sandbox"
 )
 
-func NewRegistryManager() (manager *sandbox.RegistryManager) {
+func NewDockerManager() (manager *sandbox.DockerManager) {
 	conf, err := config.ParseConfig(os.Getenv("WORKER_CONFIG"))
 	if err != nil {
 		log.Fatal(err)
@@ -20,11 +20,11 @@ func NewRegistryManager() (manager *sandbox.RegistryManager) {
 	log.Printf("Set skip_pull_existing = true\n")
 	conf.Skip_pull_existing = true
 
-	return sandbox.NewRegistryManager(conf)
+	return sandbox.NewDockerManager(conf)
 }
 
 func TestHandlerLookupSame(t *testing.T) {
-	sm := NewRegistryManager()
+	sm := NewDockerManager()
 	handlers := NewHandlerSet(HandlerSetOpts{Sm: sm})
 	a1 := handlers.Get("a")
 	a2 := handlers.Get("a")
@@ -34,7 +34,7 @@ func TestHandlerLookupSame(t *testing.T) {
 }
 
 func TestHandlerLookupDiff(t *testing.T) {
-	sm := NewRegistryManager()
+	sm := NewDockerManager()
 	handlers := NewHandlerSet(HandlerSetOpts{Sm: sm})
 	a := handlers.Get("a")
 	b := handlers.Get("b")
@@ -44,26 +44,26 @@ func TestHandlerLookupDiff(t *testing.T) {
 }
 
 func TestHandlerHandlerPull(t *testing.T) {
-	sm := NewRegistryManager()
+	sm := NewDockerManager()
 	handlers := NewHandlerSet(HandlerSetOpts{Sm: sm})
-	name := "hello"
+	name := "nonlocal"
 
-	present, err := sm.HandlerPresent(name)
+	exists, err := sm.DockerImageExists(name)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	if present {
+	if exists {
 		t.Fatalf("make sure %s is not pulled before test", name)
 	}
 
 	h := handlers.Get(name)
 
 	// Get SHOULD NOT trigger pull
-	present, err = sm.HandlerPresent(name)
+	exists, err = sm.DockerImageExists(name)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	if present {
+	if exists {
 		t.Fatalf("Get should not pull %s", name)
 	}
 
@@ -73,11 +73,11 @@ func TestHandlerHandlerPull(t *testing.T) {
 	}
 
 	// Run SHOULD trigger pull
-	present, err = sm.HandlerPresent(name)
+	exists, err = sm.DockerImageExists(name)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	if !present {
+	if !exists {
 		t.Fatalf("Lambda %s not started by run", name)
 	}
 }
@@ -92,7 +92,7 @@ func GetState(t *testing.T, h *Handler) state.HandlerState {
 
 func TestHandlerRunCountOne(t *testing.T) {
 	lru := NewHandlerLRU(1)
-	sm := NewRegistryManager()
+	sm := NewDockerManager()
 	handlers := NewHandlerSet(HandlerSetOpts{Sm: sm, Lru: lru})
 	h := handlers.Get("hello2")
 
@@ -114,7 +114,7 @@ func TestHandlerRunCountOne(t *testing.T) {
 
 func TestHandlerRunCountMany(t *testing.T) {
 	lru := NewHandlerLRU(1)
-	sm := NewRegistryManager()
+	sm := NewDockerManager()
 	handlers := NewHandlerSet(HandlerSetOpts{Sm: sm, Lru: lru})
 	h := handlers.Get("hello2")
 	count := 10
@@ -149,7 +149,7 @@ func TestHandlerRunCountMany(t *testing.T) {
 
 func TestHandlerEvict(t *testing.T) {
 	lru := NewHandlerLRU(0)
-	sm := NewRegistryManager()
+	sm := NewDockerManager()
 	handlers := NewHandlerSet(HandlerSetOpts{Sm: sm, Lru: lru})
 	h := handlers.Get("hello2")
 	_, err := h.RunStart()

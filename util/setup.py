@@ -54,7 +54,7 @@ def main():
         run('docker push ' + img, True)
     else:
         rethinkdb = rdjs(os.path.join(cluster_dir, 'rethinkdb.json'))
-        cmd = '%s/../util/regpush %s:%s %s %s' % (SCRIPT_DIR, registry['host_ip'], registry['host_port'], app_name, lambdaFn)
+        cmd = '%s/bin/regpush %s:%s %s %s' % (root_dir, registry['host_ip'], registry['host_port'], app_name, lambdaFn)
         run(cmd, True)
 
     # setup config

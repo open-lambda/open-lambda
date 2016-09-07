@@ -4,7 +4,7 @@ from common import *
 
 def main():
     setup = os.path.join(SCRIPT_DIR, '..', 'util', 'setup.py')
-    print run(setup + ' -c test_cluster -d autocomplete -f handler.tar.gz')
+    print run(setup + ' -c test_cluster -d autocomplete -f autocomplete.py')
 
     path = os.path.join(SCRIPT_DIR, '..', 'applications', 'autocomplete', 'static', 'config.json')
     config = rdjs(path)

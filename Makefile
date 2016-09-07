@@ -16,18 +16,11 @@ WORKER_DIR = $(GO_PATH)/src/github.com/open-lambda/open-lambda/worker
 REG_DIR = $(GO_PATH)/src/github.com/open-lambda/open-lambda/registry
 
 .PHONY: all
-all : .git/hooks/pre-commit util/regpush imgs/lambda-node imgs/olregistry
+all : .git/hooks/pre-commit bin/regpush imgs/lambda-node imgs/olregistry
 	docker pull eoakes/lambda:latest
-	docker pull rethinkdb:latest
-	docker pull nginx:latest
 
 .git/hooks/pre-commit: util/pre-commit
 	cp util/pre-commit .git/hooks/pre-commit
-
-util/regpush : util/regpush.go
-	cd $(UTIL_DIR) && $(GO) get
-	cd $(UTIL_DIR) && $(GO) build -o regpush
-	cp $(UTIL_DIR)/regpush util/
 
 # OL worker container, with OL server, Docker, and RethinkDB
 imgs/lambda-node : bin/worker node/Dockerfile node/startup.py node/kill.py node/lambda/Dockerfile
@@ -36,9 +29,9 @@ imgs/lambda-node : bin/worker node/Dockerfile node/startup.py node/kill.py node/
 	docker build -t lambda-node node
 	touch imgs/lambda-node
 
-imgs/olregistry : bin/registry registry/Dockerfile registry/pushserver.go
+imgs/olregistry : bin/pushserver registry/Dockerfile registry/pushserver.go
 	mkdir -p $(REG_BIN)
-	cp bin/registry $(REG_BIN)/registry
+	cp bin/pushserver $(REG_BIN)/pushserver
 	docker build -t olregistry registry
 	touch imgs/olregistry
 
@@ -50,18 +43,24 @@ bin/worker : $(WORKER_GO_FILES)
 	cp $(GO_PATH)/bin/worker ./bin
 
 # OL registry server
-bin/registry : $(REG_GO_FILES)
-	cd $(REG_DIR) && $(GO) get
-	cd $(REG_DIR) && $(GO) install
+bin/pushserver : $(REG_GO_FILES)
+	cd $(REG_DIR) && $(GO) get -tags 'pushserver'
+	cd $(REG_DIR) && $(GO) build pushserver.go
+	mkdir -p registry/bin
+	cp $(REG_DIR)/pushserver ./bin
+
+bin/regpush : registry/regpush.go
+	cd $(REG_DIR) && $(GO) get -tags 'regpush'
+	cd $(REG_DIR) && $(GO) build regpush.go
 	mkdir -p bin
-	cp $(GO_PATH)/bin/registry ./bin
+	cp $(REG_DIR)/regpush ./bin
 
 .PHONY: test test-cluster
 
 # create cluster for testing
 test-cluster : imgs/lambda-node
 	./util/stop-cluster.py -c $(TEST_CLUSTER) --if-running --force
-	./util/start-cluster.py -c $(TEST_CLUSTER) --olregistry --skip-db-wait
+	./util/start-cluster.py -c $(TEST_CLUSTER) --skip-db-wait
 
 # run go unit tests in initialized environment
 test : test-cluster
@@ -69,12 +68,13 @@ test : test-cluster
 	cd $(WORKER_DIR) && $(GO) get
 	cd $(WORKER_DIR) && $(GO) test . ./handler -v
 	# TODO: make this faster by not inserting everything to rethinkdb first:
-	./testing/autocomplete.py
 	./testing/pychat.py
+	#./testing/autocomplete.py
 	./util/stop-cluster.py -c $(TEST_CLUSTER)
 
 .PHONY: clean
 clean :
 	rm -rf bin
+	rm -rf registry/bin
 	rm -f imgs/lambda-node
 	rm -f imgs/olregistry

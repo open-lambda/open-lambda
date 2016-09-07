@@ -98,7 +98,7 @@ class LocalCluster(Cluster):
         }
         wrjs(config_path, config)
 
-        c = 'docker run -d -p 0:%s olregistry /open-lambda/registry %s %s:%s' % (self.internal_reg_port, self.internal_reg_port, cluster_ip, cluster_port)
+        c = 'docker run -d -p 0:%s olregistry /open-lambda/bin/pushserver %s %s:%s' % (self.internal_reg_port, self.internal_reg_port, cluster_ip, cluster_port)
         cid = run(c).strip()
 
         self.write_reg(cid, 'olregistry')
@@ -154,7 +154,7 @@ class LocalCluster(Cluster):
         nginx_path = os.path.join(self.script_dir, 'nginx.config')
 
         self.write_nginx_config(nginx_path)
-        c = 'docker run -p 0:%s -v %s:/etc/nginx/nginx.conf:ro -d nginx' % (self.internal_lb_port, nginx_path)
+        c = 'docker run -p 0:%s -v %s:/etc/nginx/nginx.conf:ro -d nginx:1.11.1' % (self.internal_lb_port, nginx_path)
         cid = run(c).strip()
 
         self.balancer_ip = container_ip(cid)

@@ -1,3 +1,5 @@
+// +build pushserver
+
 package main
 
 import (

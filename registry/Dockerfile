@@ -3,8 +3,7 @@ FROM ubuntu:trusty
 RUN apt-get update -y
 
 # OL REGISTRY SERVER
-COPY bin /open-lambda/
+COPY bin/pushserver /open-lambda/bin/pushserver
 
 # TODO: doesn't seem to work?
-# INIT
 #ENTRYPOINT ["/openlambda/bin/pushserver"]
