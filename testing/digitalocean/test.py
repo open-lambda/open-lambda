@@ -1,5 +1,5 @@
 #!/usr/bin/python
-import os, requests, time, json
+import os, requests, time, json, argparse
 
 API = "https://api.digitalocean.com/v2/droplets"
 DROPLET_NAME = "ol-tester"
@@ -43,6 +43,16 @@ def lookup(droplet_id):
     return r.json()['droplet']
     
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--quickstart', default=False, action='store_true')
+    args = parser.parse_args()
+
+    global TEST_SCRIPT
+    if args.quickstart:
+        TEST_SCRIPT = "qs_test.sh"
+    else:
+        TEST_SCRIPT = "test.sh"
+
     # cleanup just in case
     kill()
 
@@ -71,12 +81,12 @@ def main():
 
     time.sleep(30) # give SSH some time
 
-    scp = 'scp -o "StrictHostKeyChecking no" test.sh root@%s:/tmp' % ip
+    scp = 'scp -o "StrictHostKeyChecking no" %s root@%s:/tmp' % (TEST_SCRIPT, ip)
     print 'RUN ' + scp
     rv = os.system(scp)
     assert(rv == 0)
 
-    cmds = 'bash /tmp/test.sh'
+    cmds = 'bash /tmp/%s' % TEST_SCRIPT
     ssh = 'echo "<CMDS>" | ssh -o "StrictHostKeyChecking no" root@<IP>'
     ssh = ssh.replace('<CMDS>', cmds).replace('<IP>', ip)
     print 'RUN ' + ssh
