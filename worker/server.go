@@ -176,8 +176,6 @@ func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 //
 // curl -X POST localhost:8080/runLambda/<lambda-name> -d '{}'
 func (s *Server) RunLambda(w http.ResponseWriter, r *http.Request) {
-	log.Printf("hit RunLambda\n")
-	fmt.Printf("hit RunLambda\n")
 	// write response headers
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods",
@@ -229,14 +227,14 @@ func main() {
 		log.Fatalf("usage: %s <json-config>\n", os.Args[0])
 	}
 
-	log.Printf("Call ParseConfig\n")
-
+	log.Printf("Parse config\n")
 	conf, err := config.ParseConfig(os.Args[1])
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// start serving
+	log.Printf("Create server\n")
 	server, err := NewServer(conf)
 	if err != nil {
 		log.Fatal(err)
@@ -244,5 +242,6 @@ func main() {
 
 	http.HandleFunc("/runLambda/", server.RunLambda)
 	port := fmt.Sprintf(":%s", conf.Worker_port)
+	log.Printf("Start listening\n")
 	log.Fatal(http.ListenAndServe(port, nil))
 }

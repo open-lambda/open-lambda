@@ -49,8 +49,6 @@ func (dm *DockerManager) Create(name string) (Sandbox, error) {
 		"8080/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}}}
 	labels := map[string]string{"openlambda.cluster": dm.opts.Cluster_name}
 
-	log.Printf("Use CLUSTER = '%v'\n", dm.opts.Cluster_name)
-
 	container, err := dm.dClient.CreateContainer(
 		docker.CreateContainerOptions{
 			Config: &docker.Config{

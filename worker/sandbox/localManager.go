@@ -53,8 +53,6 @@ func (lm *LocalManager) Create(name string) (Sandbox, error) {
 		"8080/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}}}
 	labels := map[string]string{"openlambda.cluster": lm.opts.Cluster_name}
 
-	log.Printf("Use CLUSTER = '%v'\n", lm.opts.Cluster_name)
-
 	handler := filepath.Join(lm.handler_dir, name)
 	volumes := []string{fmt.Sprintf("%s:%s", handler, "/handler/")}
 

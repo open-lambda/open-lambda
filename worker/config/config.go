@@ -100,7 +100,6 @@ func ParseConfig(path string) (*Config, error) {
 	if err := config.defaults(); err != nil {
 		return nil, err
 	}
-	config.Dump()
 
 	return &config, nil
 }
