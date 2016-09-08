@@ -92,6 +92,7 @@ func (s *Server) ForwardToSandbox(handler *handler.Handler, r *http.Request, inp
 	// TODO(tyler): some sort of smarter backoff.  Or, a better
 	// way to detect a started sandbox.
 	max_tries := 10
+	errors := []error{}
 	for tries := 1; ; tries++ {
 		r2, err := http.NewRequest(r.Method, url, bytes.NewReader(input))
 		if err != nil {
@@ -104,13 +105,16 @@ func (s *Server) ForwardToSandbox(handler *handler.Handler, r *http.Request, inp
 		client := &http.Client{}
 		w2, err := client.Do(r2)
 		if err != nil {
-			log.Printf("request to sandbox failed with %v\n", err)
+			errors = append(errors, err)
 			if tries == max_tries {
+				log.Printf("Forwarding request to container failed after %v tries\n", max_tries)
+				for i, item := range errors {
+					log.Printf("Attempt %v: %v\n", i, item.Error())
+				}
 				return nil, nil, newHttpErr(
 					err.Error(),
 					http.StatusInternalServerError)
 			}
-			log.Printf("retry request\n")
 			time.Sleep(time.Duration(tries*100) * time.Millisecond)
 			continue
 		}
