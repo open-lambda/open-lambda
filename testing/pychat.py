@@ -12,7 +12,6 @@ def main():
     url = config['url']
     print 'POST ' + url
     args = json.dumps({"op": "msg", "msg": "hello"})
-    print run(cmd, False)
     r = requests.post(url, data=args)
     print 'RESP ' + r.text
     r = r.json()
