@@ -16,11 +16,8 @@ WORKER_DIR = $(GO_PATH)/src/github.com/open-lambda/open-lambda/worker
 REG_DIR = $(GO_PATH)/src/github.com/open-lambda/open-lambda/registry
 
 .PHONY: all
-all : .git/hooks/pre-commit bin/regpush imgs/lambda-node imgs/olregistry
+all : bin/regpush imgs/lambda-node imgs/olregistry
 	docker pull eoakes/lambda:latest
-
-.git/hooks/pre-commit: util/pre-commit
-	cp util/pre-commit .git/hooks/pre-commit
 
 # OL worker container, with OL server, Docker, and RethinkDB
 imgs/lambda-node : bin/worker node/Dockerfile node/startup.py node/kill.py node/lambda/Dockerfile
