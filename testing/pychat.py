@@ -17,10 +17,10 @@ def main():
     r = r.json()
     if r['result'].startswith('insert'):
         print 'PASS'
+        sys.exit(0)
     else:
         print 'FAIL'
         sys.exit(1)
-    sys.exit(1)
 
 if __name__ == '__main__':
     main()

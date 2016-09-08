@@ -65,11 +65,8 @@ test-cluster : imgs/lambda-node
 # run go unit tests in initialized environment
 test : test-cluster
 	$(eval export WORKER_CONFIG := $(PWD)/testing/worker-config.json) ./testing/setup.py --cluster=$(TEST_CLUSTER)
-	cd $(WORKER_DIR) && $(GO) get
 	cd $(WORKER_DIR) && $(GO) test . ./handler -v
-	# TODO: make this faster by not inserting everything to rethinkdb first:
 	./testing/pychat.py
-	#./testing/autocomplete.py
 	./util/stop-cluster.py -c $(TEST_CLUSTER)
 
 .PHONY: clean
