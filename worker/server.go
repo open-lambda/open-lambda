@@ -180,6 +180,8 @@ func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 //
 // curl -X POST localhost:8080/runLambda/<lambda-name> -d '{}'
 func (s *Server) RunLambda(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Receive request to %s\n", r.URL.Path)
+
 	// write response headers
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods",
