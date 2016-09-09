@@ -73,5 +73,4 @@ test : test-cluster
 clean :
 	rm -rf bin
 	rm -rf registry/bin
-	rm -f imgs/lambda-node
-	rm -f imgs/olregistry
+	rm -f imgs/*
