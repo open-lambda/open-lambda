@@ -175,7 +175,7 @@ class LocalCluster(Cluster):
         config = 'http {\n\tupstream handlers {\n'
 
         for worker in self.workers:
-            config += '\t\tserver %s:%s;\n' % (worker['host_ip'], worker['host_port'])
+            config += '\t\tserver %s:%s;\n' % (worker['ip'], worker['worker_port'])
 
         config += '\t}\n\tserver {\n\t\tlisten %s;\n\t\tlocation / {\n\t\t\tproxy_pass http://handlers;\n\t\t}\n\t}\n}\nevents{}' % self.internal_lb_port
 
