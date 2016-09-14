@@ -1,7 +1,12 @@
 var config;
 
 function lambda_post(data, callback) {
-  var url = config['url']
+  var url = config['url'];
+  // replace host with window.location.hostname
+  var host = /(.*:\/\/|^)([^\/]+)/.exec(url)[2];
+  var port = host.split(':')[1];
+  port = port == undefined ? "" : ":" + port;
+  url = url.replace(host, window.location.hostname+port);
 
   $.ajax({
     type: "POST",
