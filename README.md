@@ -95,10 +95,11 @@ Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduc
 
 ## Authors
 
-* **Tyler Harter** - *Initial work* - [tylerharter](https://github.com/tylerharter)
+* Scott Hendrickson [phonyphonecall](https://github.com/phonyphonecall)
+* Ed Oakes [edoakes](https://github.com/edoakes)
+* Tyler Harter [tylerharter](https://github.com/tylerharter)
 
-
-See also the list of [contributors](https://github.com/open-lambda/open-lambda/contributors) who participated in this project.
+See also the complete list of [contributors](https://github.com/open-lambda/open-lambda/contributors) who participated in this project.
 
 ## License
 
