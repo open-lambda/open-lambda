@@ -6,25 +6,12 @@ import (
 
 	docker "github.com/fsouza/go-dockerclient"
 	"github.com/open-lambda/open-lambda/worker/config"
-	"github.com/phonyphonecall/turnip"
 )
 
 type DockerManager struct {
-	// private
 	registryName string
 	opts         *config.Config
-
-	// public
-	dClient  *docker.Client
-	createT  *turnip.Turnip
-	pauseT   *turnip.Turnip
-	unpauseT *turnip.Turnip
-	pullT    *turnip.Turnip
-	restartT *turnip.Turnip
-	inspectT *turnip.Turnip
-	startT   *turnip.Turnip
-	removeT  *turnip.Turnip
-	logT     *turnip.Turnip
+	dClient      *docker.Client
 }
 
 func NewDockerManager(opts *config.Config) (manager *DockerManager) {
@@ -39,7 +26,6 @@ func NewDockerManager(opts *config.Config) (manager *DockerManager) {
 
 	manager.opts = opts
 	manager.registryName = fmt.Sprintf("%s:%s", opts.Registry_host, opts.Registry_port)
-	manager.initTimers()
 	return manager
 }
 
@@ -98,7 +84,6 @@ func (dm *DockerManager) Pull(name string) error {
 }
 
 func (dm *DockerManager) dockerPull(img string) error {
-	dm.pullT.Start()
 	err := dm.dClient.PullImage(
 		docker.PullImageOptions{
 			Repository: dm.registryName + "/" + img,
@@ -107,7 +92,6 @@ func (dm *DockerManager) dockerPull(img string) error {
 		},
 		docker.AuthConfiguration{},
 	)
-	dm.pullT.Stop()
 
 	if err != nil {
 		return fmt.Errorf("failed to pull '%v' from %v registry\n", img, dm.registryName)
@@ -153,69 +137,8 @@ func (dm *DockerManager) Dump() {
 			container.ID[:8],
 			container.State.String())
 	}
-	log.Printf("=====================================\n")
-	log.Println()
-	log.Printf("====== Docker Operation Stats =======\n")
-	log.Printf("\tcreate: \t%fms\n", dm.createT.AverageMs())
-	log.Printf("\tinspect: \t%fms\n", dm.inspectT.AverageMs())
-	log.Printf("\tlogs: \t%fms\n", dm.logT.AverageMs())
-	log.Printf("\tpause: \t\t%fms\n", dm.pauseT.AverageMs())
-	log.Printf("\tpull: \t\t%fms\n", dm.pullT.AverageMs())
-	log.Printf("\tremove: \t%fms\n", dm.removeT.AverageMs())
-	log.Printf("\trestart: \t%fms\n", dm.restartT.AverageMs())
-	log.Printf("\trestart: \t%fms\n", dm.restartT.AverageMs())
-	log.Printf("\tunpause: \t%fms\n", dm.unpauseT.AverageMs())
-	log.Printf("=====================================\n")
-}
-
-func (dm *DockerManager) initTimers() {
-	dm.createT = turnip.NewTurnip()
-	dm.inspectT = turnip.NewTurnip()
-	dm.pauseT = turnip.NewTurnip()
-	dm.pullT = turnip.NewTurnip()
-	dm.removeT = turnip.NewTurnip()
-	dm.restartT = turnip.NewTurnip()
-	dm.startT = turnip.NewTurnip()
-	dm.unpauseT = turnip.NewTurnip()
-	dm.logT = turnip.NewTurnip()
 }
 
 func (dm *DockerManager) client() *docker.Client {
 	return dm.dClient
-}
-
-func (dm *DockerManager) createTimer() *turnip.Turnip {
-	return dm.createT
-}
-
-func (dm *DockerManager) inspectTimer() *turnip.Turnip {
-	return dm.inspectT
-}
-
-func (dm *DockerManager) pauseTimer() *turnip.Turnip {
-	return dm.pauseT
-}
-
-func (dm *DockerManager) pullTimer() *turnip.Turnip {
-	return dm.pullT
-}
-
-func (dm *DockerManager) removeTimer() *turnip.Turnip {
-	return dm.removeT
-}
-
-func (dm *DockerManager) restartTimer() *turnip.Turnip {
-	return dm.restartT
-}
-
-func (dm *DockerManager) startTimer() *turnip.Turnip {
-	return dm.startT
-}
-
-func (dm *DockerManager) unpauseTimer() *turnip.Turnip {
-	return dm.unpauseT
-}
-
-func (dm *DockerManager) logTimer() *turnip.Turnip {
-	return dm.logT
 }

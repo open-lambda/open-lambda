@@ -15,14 +15,12 @@ import (
 	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/handler"
 	"github.com/open-lambda/open-lambda/worker/sandbox"
-	"github.com/phonyphonecall/turnip"
 )
 
 type Server struct {
-	manager     sandbox.SandboxManager
-	config      *config.Config
-	handlers    *handler.HandlerSet
-	lambdaTimer *turnip.Turnip
+	manager  sandbox.SandboxManager
+	config   *config.Config
+	handlers *handler.HandlerSet
 }
 
 type httpErr struct {
@@ -59,10 +57,9 @@ func NewServer(config *config.Config) (*Server, error) {
 		Lru: handler.NewHandlerLRU(100), // TODO(tyler)
 	}
 	server := &Server{
-		manager:     sm,
-		config:      config,
-		handlers:    handler.NewHandlerSet(opts),
-		lambdaTimer: turnip.NewTurnip(),
+		manager:  sm,
+		config:   config,
+		handlers: handler.NewHandlerSet(opts),
 	}
 
 	return server, nil
@@ -192,21 +189,12 @@ func (s *Server) RunLambda(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "OPTIONS" {
 		w.WriteHeader(200)
 	} else {
-		s.lambdaTimer.Start()
 		if err := s.RunLambdaErr(w, r); err != nil {
 			log.Printf("could not handle request: %s\n", err.msg)
 			http.Error(w, err.msg, err.code)
 		}
-		s.lambdaTimer.Stop()
-
 	}
 
-}
-
-func (s *Server) Dump() {
-	log.Printf("============ Server Stats ===========\n")
-	log.Printf("\tlambda: \t%fms\n", s.lambdaTimer.AverageMs())
-	log.Printf("=====================================\n")
 }
 
 // Parses request URL into its "/" delimated components

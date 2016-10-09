@@ -8,30 +8,16 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/open-lambda/open-lambda/worker/config"
-	"github.com/phonyphonecall/turnip"
-
 	docker "github.com/fsouza/go-dockerclient"
 	r "github.com/open-lambda/open-lambda/registry/src"
+	"github.com/open-lambda/open-lambda/worker/config"
 )
 
 type RegistryManager struct {
-	// private
 	opts        *config.Config
 	reg         *r.PullClient
 	handler_dir string
-
-	// public
-	dClient  *docker.Client
-	createT  *turnip.Turnip
-	pauseT   *turnip.Turnip
-	unpauseT *turnip.Turnip
-	pullT    *turnip.Turnip
-	restartT *turnip.Turnip
-	inspectT *turnip.Turnip
-	startT   *turnip.Turnip
-	removeT  *turnip.Turnip
-	logT     *turnip.Turnip
+	dClient     *docker.Client
 }
 
 func NewRegistryManager(opts *config.Config) (manager *RegistryManager) {
@@ -46,7 +32,6 @@ func NewRegistryManager(opts *config.Config) (manager *RegistryManager) {
 
 	manager.reg = r.InitPullClient(opts.Reg_cluster)
 	manager.opts = opts
-	manager.initTimers()
 	manager.handler_dir = "/tmp/olhandlers/"
 	if err := os.Mkdir(manager.handler_dir, os.ModeDir); err != nil {
 		err = os.RemoveAll(manager.handler_dir)
@@ -139,69 +124,8 @@ func (rm *RegistryManager) Dump() {
 			container.ID[:8],
 			container.State.String())
 	}
-	log.Printf("=====================================\n")
-	log.Println()
-	log.Printf("====== Docker Operation Stats =======\n")
-	log.Printf("\tcreate: \t%fms\n", rm.createT.AverageMs())
-	log.Printf("\tinspect: \t%fms\n", rm.inspectT.AverageMs())
-	log.Printf("\tlogs: \t%fms\n", rm.logT.AverageMs())
-	log.Printf("\tpause: \t\t%fms\n", rm.pauseT.AverageMs())
-	log.Printf("\tpull: \t\t%fms\n", rm.pullT.AverageMs())
-	log.Printf("\tremove: \t%fms\n", rm.removeT.AverageMs())
-	log.Printf("\trestart: \t%fms\n", rm.restartT.AverageMs())
-	log.Printf("\trestart: \t%fms\n", rm.restartT.AverageMs())
-	log.Printf("\tunpause: \t%fms\n", rm.unpauseT.AverageMs())
-	log.Printf("=====================================\n")
-}
-
-func (rm *RegistryManager) initTimers() {
-	rm.createT = turnip.NewTurnip()
-	rm.inspectT = turnip.NewTurnip()
-	rm.pauseT = turnip.NewTurnip()
-	rm.pullT = turnip.NewTurnip()
-	rm.removeT = turnip.NewTurnip()
-	rm.restartT = turnip.NewTurnip()
-	rm.startT = turnip.NewTurnip()
-	rm.unpauseT = turnip.NewTurnip()
-	rm.logT = turnip.NewTurnip()
 }
 
 func (rm *RegistryManager) client() *docker.Client {
 	return rm.dClient
-}
-
-func (rm *RegistryManager) createTimer() *turnip.Turnip {
-	return rm.createT
-}
-
-func (rm *RegistryManager) inspectTimer() *turnip.Turnip {
-	return rm.inspectT
-}
-
-func (rm *RegistryManager) pauseTimer() *turnip.Turnip {
-	return rm.pauseT
-}
-
-func (rm *RegistryManager) pullTimer() *turnip.Turnip {
-	return rm.pullT
-}
-
-func (rm *RegistryManager) removeTimer() *turnip.Turnip {
-	return rm.removeT
-}
-
-func (rm *RegistryManager) restartTimer() *turnip.Turnip {
-	return rm.restartT
-}
-
-func (rm *RegistryManager) startTimer() *turnip.Turnip {
-	return rm.startT
-}
-
-func (rm *RegistryManager) unpauseTimer() *turnip.Turnip {
-	return rm.unpauseT
-}
-
-func (rm *RegistryManager) logTimer() *turnip.Turnip {
-	return rm.logT
 }

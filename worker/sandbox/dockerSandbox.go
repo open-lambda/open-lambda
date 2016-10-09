@@ -39,8 +39,6 @@ func (s *DockerSandbox) dockerError(outer error) (err error) {
 }
 
 func (s *DockerSandbox) InspectUpdate() error {
-	s.mgr.inspectTimer().Start()
-	defer s.mgr.inspectTimer().Stop()
 	container, err := s.mgr.client().InspectContainer(s.container.ID)
 	if err != nil {
 		return err
@@ -91,8 +89,6 @@ func (s *DockerSandbox) Port() (port string, err error) {
 
 // Starts a given container
 func (s *DockerSandbox) Start() error {
-	s.mgr.startTimer().Start()
-	defer s.mgr.startTimer().Stop()
 	if err := s.mgr.client().StartContainer(s.container.ID, s.container.HostConfig); err != nil {
 		log.Printf("failed to start container with err %v\n", err)
 		return s.dockerError(err)
@@ -115,8 +111,7 @@ func (s *DockerSandbox) Stop() error {
 
 // Pauses a given container
 func (s *DockerSandbox) Pause() error {
-	s.mgr.pauseTimer().Start()
-	defer s.mgr.pauseTimer().Stop()
+
 	if err := s.mgr.client().PauseContainer(s.container.ID); err != nil {
 		log.Printf("failed to pause container with error %v\n", err)
 		return s.dockerError(err)
@@ -127,8 +122,6 @@ func (s *DockerSandbox) Pause() error {
 
 // Unpauses a given container
 func (s *DockerSandbox) Unpause() error {
-	s.mgr.unpauseTimer().Start()
-	defer s.mgr.unpauseTimer().Stop()
 	if err := s.mgr.client().UnpauseContainer(s.container.ID); err != nil {
 		log.Printf("failed to unpause container %s with err %v\n", s.name, err)
 		return s.dockerError(err)
@@ -152,9 +145,6 @@ func (s *DockerSandbox) Remove() error {
 
 // Return recent log output for container
 func (s *DockerSandbox) Logs() (string, error) {
-	s.mgr.logTimer().Start()
-	defer s.mgr.logTimer().Stop()
-
 	buf := &bytes.Buffer{}
 	err := s.mgr.client().Logs(docker.LogsOptions{
 		Container:         s.container.ID,

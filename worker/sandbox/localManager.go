@@ -7,27 +7,14 @@ import (
 	"path/filepath"
 
 	"github.com/open-lambda/open-lambda/worker/config"
-	"github.com/phonyphonecall/turnip"
 
 	docker "github.com/fsouza/go-dockerclient"
 )
 
 type LocalManager struct {
-	// private
 	opts        *config.Config
 	handler_dir string
-
-	// public
-	dClient  *docker.Client
-	createT  *turnip.Turnip
-	pauseT   *turnip.Turnip
-	unpauseT *turnip.Turnip
-	pullT    *turnip.Turnip
-	restartT *turnip.Turnip
-	inspectT *turnip.Turnip
-	startT   *turnip.Turnip
-	removeT  *turnip.Turnip
-	logT     *turnip.Turnip
+	dClient     *docker.Client
 }
 
 func NewLocalManager(opts *config.Config) (manager *LocalManager) {
@@ -41,7 +28,6 @@ func NewLocalManager(opts *config.Config) (manager *LocalManager) {
 	}
 
 	manager.opts = opts
-	manager.initTimers()
 	manager.handler_dir = opts.Reg_dir
 
 	return manager
@@ -107,69 +93,8 @@ func (lm *LocalManager) Dump() {
 			container.ID[:8],
 			container.State.String())
 	}
-	log.Printf("=====================================\n")
-	log.Println()
-	log.Printf("====== Docker Operation Stats =======\n")
-	log.Printf("\tcreate: \t%fms\n", lm.createT.AverageMs())
-	log.Printf("\tinspect: \t%fms\n", lm.inspectT.AverageMs())
-	log.Printf("\tlogs: \t%fms\n", lm.logT.AverageMs())
-	log.Printf("\tpause: \t\t%fms\n", lm.pauseT.AverageMs())
-	log.Printf("\tpull: \t\t%fms\n", lm.pullT.AverageMs())
-	log.Printf("\tremove: \t%fms\n", lm.removeT.AverageMs())
-	log.Printf("\trestart: \t%fms\n", lm.restartT.AverageMs())
-	log.Printf("\trestart: \t%fms\n", lm.restartT.AverageMs())
-	log.Printf("\tunpause: \t%fms\n", lm.unpauseT.AverageMs())
-	log.Printf("=====================================\n")
-}
-
-func (lm *LocalManager) initTimers() {
-	lm.createT = turnip.NewTurnip()
-	lm.inspectT = turnip.NewTurnip()
-	lm.pauseT = turnip.NewTurnip()
-	lm.pullT = turnip.NewTurnip()
-	lm.removeT = turnip.NewTurnip()
-	lm.restartT = turnip.NewTurnip()
-	lm.startT = turnip.NewTurnip()
-	lm.unpauseT = turnip.NewTurnip()
-	lm.logT = turnip.NewTurnip()
 }
 
 func (lm *LocalManager) client() *docker.Client {
 	return lm.dClient
-}
-
-func (lm *LocalManager) createTimer() *turnip.Turnip {
-	return lm.createT
-}
-
-func (lm *LocalManager) inspectTimer() *turnip.Turnip {
-	return lm.inspectT
-}
-
-func (lm *LocalManager) pauseTimer() *turnip.Turnip {
-	return lm.pauseT
-}
-
-func (lm *LocalManager) pullTimer() *turnip.Turnip {
-	return lm.pullT
-}
-
-func (lm *LocalManager) removeTimer() *turnip.Turnip {
-	return lm.removeT
-}
-
-func (lm *LocalManager) restartTimer() *turnip.Turnip {
-	return lm.restartT
-}
-
-func (lm *LocalManager) startTimer() *turnip.Turnip {
-	return lm.startT
-}
-
-func (lm *LocalManager) unpauseTimer() *turnip.Turnip {
-	return lm.unpauseT
-}
-
-func (lm *LocalManager) logTimer() *turnip.Turnip {
-	return lm.logT
 }
