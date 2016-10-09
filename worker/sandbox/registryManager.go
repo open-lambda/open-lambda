@@ -14,24 +14,15 @@ import (
 )
 
 type RegistryManager struct {
-	opts        *config.Config
+	DockerManagerBase
 	reg         *r.PullClient
 	handler_dir string
-	dClient     *docker.Client
 }
 
 func NewRegistryManager(opts *config.Config) (manager *RegistryManager) {
 	manager = new(RegistryManager)
-
-	// NOTE: This requires that users have pre-configured the environement a docker daemon
-	if c, err := docker.NewClientFromEnv(); err != nil {
-		log.Fatal("failed to get docker client: ", err)
-	} else {
-		manager.dClient = c
-	}
-
+	manager.DockerManagerBase.init(opts)
 	manager.reg = r.InitPullClient(opts.Reg_cluster)
-	manager.opts = opts
 	manager.handler_dir = "/tmp/olhandlers/"
 	if err := os.Mkdir(manager.handler_dir, os.ModeDir); err != nil {
 		err = os.RemoveAll(manager.handler_dir)
@@ -56,7 +47,7 @@ func (rm *RegistryManager) Create(name string) (Sandbox, error) {
 	handler := filepath.Join(rm.handler_dir, name)
 	volumes := []string{fmt.Sprintf("%s:%s", handler, "/handler/")}
 
-	container, err := rm.dClient.CreateContainer(
+	container, err := rm.client().CreateContainer(
 		docker.CreateContainerOptions{
 			Config: &docker.Config{
 				Image:        "eoakes/lambda:latest",
@@ -104,28 +95,4 @@ func (rm *RegistryManager) HandlerPresent(name string) (bool, error) {
 	}
 
 	return true, nil
-}
-
-func (rm *RegistryManager) Dump() {
-	opts := docker.ListContainersOptions{All: true}
-	containers, err := rm.dClient.ListContainers(opts)
-	if err != nil {
-		log.Fatal("Could not get container list")
-	}
-	log.Printf("=====================================\n")
-	for idx, info := range containers {
-		container, err := rm.dClient.InspectContainer(info.ID)
-		if err != nil {
-			log.Fatal("Could not get container")
-		}
-
-		log.Printf("CONTAINER %d: %v, %v, %v\n", idx,
-			info.Image,
-			container.ID[:8],
-			container.State.String())
-	}
-}
-
-func (rm *RegistryManager) client() *docker.Client {
-	return rm.dClient
 }

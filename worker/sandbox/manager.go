@@ -7,5 +7,10 @@ import (
 type SandboxManager interface {
 	Create(name string) (Sandbox, error)
 	Pull(name string) error
+}
+
+type DockerSandboxManager interface {
+	Create(name string) (Sandbox, error)
+	Pull(name string) error
 	client() *docker.Client
 }

@@ -15,7 +15,7 @@ import (
 type DockerSandbox struct {
 	name      string
 	container *docker.Container
-	mgr       SandboxManager
+	mgr       DockerSandboxManager
 }
 
 func (s *DockerSandbox) dockerError(outer error) (err error) {
