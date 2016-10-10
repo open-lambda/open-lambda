@@ -23,7 +23,7 @@ func NewRegistryManager(opts *config.Config) (manager *RegistryManager) {
 	manager = new(RegistryManager)
 	manager.DockerManagerBase.init(opts)
 	manager.reg = r.InitPullClient(opts.Reg_cluster)
-	manager.handler_dir = "/tmp/olhandlers/"
+	manager.handler_dir = "/var/tmp/olhandlers/"
 	if err := os.Mkdir(manager.handler_dir, os.ModeDir); err != nil {
 		err = os.RemoveAll(manager.handler_dir)
 		if err != nil {
