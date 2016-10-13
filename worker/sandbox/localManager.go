@@ -26,7 +26,6 @@ func (lm *LocalManager) Create(name string) (Sandbox, error) {
 	internalAppPort := map[docker.Port]struct{}{"8080/tcp": {}}
 	portBindings := map[docker.Port][]docker.PortBinding{
 		"8080/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}}}
-	labels := map[string]string{"openlambda.cluster": lm.opts.Cluster_name}
 
 	handler := filepath.Join(lm.handler_dir, name)
 	volumes := []string{fmt.Sprintf("%s:%s", handler, "/handler/")}
@@ -38,7 +37,7 @@ func (lm *LocalManager) Create(name string) (Sandbox, error) {
 				AttachStdout: true,
 				AttachStderr: true,
 				ExposedPorts: internalAppPort,
-				Labels:       labels,
+				Labels:       lm.docker_labels(),
 			},
 			HostConfig: &docker.HostConfig{
 				PortBindings:    portBindings,

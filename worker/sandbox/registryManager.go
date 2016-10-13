@@ -42,7 +42,6 @@ func (rm *RegistryManager) Create(name string) (Sandbox, error) {
 	internalAppPort := map[docker.Port]struct{}{"8080/tcp": {}}
 	portBindings := map[docker.Port][]docker.PortBinding{
 		"8080/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}}}
-	labels := map[string]string{"openlambda.cluster": rm.opts.Cluster_name}
 
 	handler := filepath.Join(rm.handler_dir, name)
 	volumes := []string{fmt.Sprintf("%s:%s", handler, "/handler/")}
@@ -54,7 +53,7 @@ func (rm *RegistryManager) Create(name string) (Sandbox, error) {
 				AttachStdout: true,
 				AttachStderr: true,
 				ExposedPorts: internalAppPort,
-				Labels:       labels,
+				Labels:       rm.docker_labels(),
 			},
 			HostConfig: &docker.HostConfig{
 				PortBindings:    portBindings,

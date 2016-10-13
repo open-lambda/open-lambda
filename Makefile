@@ -14,6 +14,7 @@ GO_PATH = hack/go
 UTIL_DIR = $(GO_PATH)/src/github.com/open-lambda/open-lambda/util
 WORKER_DIR = $(GO_PATH)/src/github.com/open-lambda/open-lambda/worker
 REG_DIR = $(GO_PATH)/src/github.com/open-lambda/open-lambda/registry
+ADMIN_DIR = $(GO_PATH)/src/github.com/open-lambda/open-lambda/worker/admin
 
 .PHONY: all
 all : .git/hooks/pre-commit bin/regpush imgs/lambda-node imgs/olregistry
@@ -41,6 +42,12 @@ bin/worker : $(WORKER_GO_FILES)
 	cd $(WORKER_DIR) && $(GO) install
 	mkdir -p bin
 	cp $(GO_PATH)/bin/worker ./bin
+
+bin/admin : $(WORKER_GO_FILES)
+	cd $(ADMIN_DIR) && $(GO) get
+	cd $(ADMIN_DIR) && $(GO) install
+	mkdir -p bin
+	cp $(GO_PATH)/bin/admin ./bin
 
 # OL registry server
 bin/pushserver : $(REG_GO_FILES)

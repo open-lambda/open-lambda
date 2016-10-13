@@ -234,8 +234,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	http.HandleFunc("/runLambda/", server.RunLambda)
+	run_path := "/runLambda/"
+	http.HandleFunc(run_path, server.RunLambda)
 	port := fmt.Sprintf(":%s", conf.Worker_port)
-	log.Printf("Start listening\n")
+	log.Printf("Listening on localhost%s%s%s\n", port, run_path, "<lambda>")
 	log.Fatal(http.ListenAndServe(port, nil))
 }

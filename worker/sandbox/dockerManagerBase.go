@@ -7,6 +7,12 @@ import (
 	"github.com/open-lambda/open-lambda/worker/config"
 )
 
+const (
+	DOCKER_LABEL_CLUSTER = "ol.cluster"
+	DOCKER_LABEL_TYPE    = "ol.type"
+	SANDBOX              = "sandbox"
+)
+
 type DockerManagerBase struct {
 	opts    *config.Config
 	dClient *docker.Client
@@ -21,6 +27,13 @@ func (manager *DockerManagerBase) init(opts *config.Config) {
 	}
 
 	manager.opts = opts
+}
+
+func (dm *DockerManagerBase) docker_labels() map[string]string {
+	labels := map[string]string{}
+	labels[DOCKER_LABEL_CLUSTER] = dm.opts.Cluster_name
+	labels[DOCKER_LABEL_TYPE] = SANDBOX
+	return labels
 }
 
 func (dm *DockerManagerBase) client() *docker.Client {

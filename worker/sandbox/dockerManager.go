@@ -24,7 +24,6 @@ func (dm *DockerManager) Create(name string) (Sandbox, error) {
 	internalAppPort := map[docker.Port]struct{}{"8080/tcp": {}}
 	portBindings := map[docker.Port][]docker.PortBinding{
 		"8080/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}}}
-	labels := map[string]string{"openlambda.cluster": dm.opts.Cluster_name}
 
 	container, err := dm.client().CreateContainer(
 		docker.CreateContainerOptions{
@@ -33,7 +32,7 @@ func (dm *DockerManager) Create(name string) (Sandbox, error) {
 				AttachStdout: true,
 				AttachStderr: true,
 				ExposedPorts: internalAppPort,
-				Labels:       labels,
+				Labels:       dm.docker_labels(),
 			},
 			HostConfig: &docker.HostConfig{
 				PortBindings:    portBindings,

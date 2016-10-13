@@ -39,11 +39,12 @@ func (c *Config) defaults() error {
 	if c.Worker_port == "" {
 		c.Worker_port = "8080"
 	}
-	if c.Registry == "docker" {
-		if c.Cluster_name == "" {
-			return fmt.Errorf("must specify cluster_name\n")
-		}
 
+	if c.Cluster_name == "" {
+		c.Cluster_name = "default"
+	}
+
+	if c.Registry == "docker" {
 		if c.Registry_host == "" {
 			return fmt.Errorf("must specify registry_host\n")
 		}
@@ -51,13 +52,9 @@ func (c *Config) defaults() error {
 		if c.Registry_port == "" {
 			return fmt.Errorf("must specify registry_port\n")
 		}
-	}
-
-	if c.Registry == "olregistry" && len(c.Reg_cluster) == 0 {
+	} else if c.Registry == "olregistry" && len(c.Reg_cluster) == 0 {
 		return fmt.Errorf("must specify reg_cluster")
-	}
-
-	if c.Registry == "local" && c.Reg_dir == "" {
+	} else if c.Registry == "local" && c.Reg_dir == "" {
 		return fmt.Errorf("must specify local registry directory")
 	}
 
