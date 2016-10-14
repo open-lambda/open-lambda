@@ -72,7 +72,7 @@ test-cluster : imgs/lambda-node
 # run go unit tests in initialized environment
 test : test-cluster
 	$(eval export WORKER_CONFIG := $(PWD)/testing/worker-config.json) ./testing/setup.py --cluster=$(TEST_CLUSTER)
-	cd $(WORKER_DIR) && $(GO) test . ./handler -v
+	cd $(WORKER_DIR) && $(GO) test ./server ./handler -v
 	./testing/pychat.py
 	./util/stop-cluster.py -c $(TEST_CLUSTER)
 

@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"bytes"
@@ -40,6 +40,7 @@ func NewServer(config *config.Config) (*Server, error) {
 	} else if config.Registry == "olregistry" {
 		sm = sandbox.NewRegistryManager(config)
 	} else if config.Registry == "local" {
+		// TODO: add config for this
 		conf_dir, err := filepath.Abs(filepath.Dir(os.Args[1]))
 		if err != nil {
 			return nil, err
@@ -215,14 +216,9 @@ func getUrlComponents(r *http.Request) []string {
 	return components
 }
 
-func main() {
-	// parse config file
-	if len(os.Args) != 2 {
-		log.Fatalf("usage: %s <json-config>\n", os.Args[0])
-	}
-
+func Main(config_path string) {
 	log.Printf("Parse config\n")
-	conf, err := config.ParseConfig(os.Args[1])
+	conf, err := config.ParseConfig(config_path)
 	if err != nil {
 		log.Fatal(err)
 	}
