@@ -20,7 +20,7 @@ function echo() {
   var name = $("#name").val();
   $("#name").val("");
   lambda_post({"name":name}, function(data){
-    alert(data.result);
+    alert(data);
   });
 }
 
