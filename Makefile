@@ -17,7 +17,7 @@ REG_DIR = $(GO_PATH)/src/github.com/open-lambda/open-lambda/registry
 ADMIN_DIR = $(GO_PATH)/src/github.com/open-lambda/open-lambda/worker/admin
 
 .PHONY: all
-all : .git/hooks/pre-commit bin/regpush imgs/lambda-node imgs/olregistry
+all : .git/hooks/pre-commit bin/regpush imgs/olregistry imgs/lambda-node
 	docker pull eoakes/lambda:latest
 
 .git/hooks/pre-commit: util/pre-commit
@@ -80,4 +80,5 @@ test : test-cluster
 clean :
 	rm -rf bin
 	rm -rf registry/bin
-	rm -f imgs/*
+	rm -f imgs/lambda-node
+	rm -f imgs/olregistry
