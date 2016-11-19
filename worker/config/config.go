@@ -35,6 +35,14 @@ func (c *Config) Dump() {
 	log.Printf("CONFIG = %v\n", string(s))
 }
 
+func (c *Config) DumpStr() string {
+	s, err := json.MarshalIndent(c, "", "\t")
+	if err != nil {
+		panic(err)
+	}
+	return string(s)
+}
+
 func (c *Config) Save(path string) error {
 	s, err := json.MarshalIndent(c, "", "\t")
 	if err != nil {

@@ -52,7 +52,11 @@ func (args *CmdArgs) LogPath(name string) string {
 }
 
 func (args *CmdArgs) ConfigPath(name string) string {
-	return path.Join(*args.cluster, "config", name)
+	return path.Join(*args.cluster, "config", name+".json")
+}
+
+func (args *CmdArgs) TemplatePath() string {
+	return args.ConfigPath("template")
 }
 
 func (args *CmdArgs) RegistryPath() string {
@@ -138,15 +142,31 @@ func (admin *Admin) new_cluster() error {
 		return err
 	}
 
+	if err := os.Mkdir(args.RegistryPath(), 0700); err != nil {
+		return err
+	}
+
+	// config dir and template
 	if err := os.Mkdir(path.Join(*args.cluster, "config"), 0700); err != nil {
 		return err
 	}
-
-	if err := os.Mkdir(path.Join(*args.cluster, "registry"), 0700); err != nil {
+	c := &config.Config{
+		Worker_port:  "?",
+		Cluster_name: *args.cluster,
+		Registry:     "local",
+		Reg_dir:      args.RegistryPath(),
+	}
+	if err := c.Defaults(); err != nil {
+		return err
+	}
+	if err := c.Save(args.TemplatePath()); err != nil {
 		return err
 	}
 
-	fmt.Printf("%s\n", *args.cluster)
+	fmt.Printf("Cluster Directory: %s\n\n", *args.cluster)
+	fmt.Printf("Worker Defaults: \n%s\n\n", c.DumpStr())
+	fmt.Printf("You may now start a cluster using the \"workers\" command\n")
+
 	return nil
 }
 
@@ -262,16 +282,17 @@ func (admin *Admin) worker() error {
 func (admin *Admin) workers() error {
 	args := NewCmdArgs()
 	foreach := args.flags.Bool("foreach", false, "start one worker per db instance")
-	// count := args.flags.Int("count", 1, "specify number of workers to start")
+	portbase := args.flags.Int("port", 8080, "port range [port, port+n) will be used for workers")
+	n := args.flags.Int("n", 1, "specify number of workers to start")
 	args.Parse(true)
-
-	nodes, err := admin.cluster_nodes(*args.cluster)
-	if err != nil {
-		return err
-	}
 
 	worker_confs := []*config.Config{}
 	if *foreach {
+		nodes, err := admin.cluster_nodes(*args.cluster)
+		if err != nil {
+			return err
+		}
+
 		// start one worker per db shard
 		for _, cid := range nodes["db"] {
 			container, err := admin.client.InspectContainer(cid)
@@ -279,27 +300,28 @@ func (admin *Admin) workers() error {
 				return err
 			}
 
-			fmt.Printf("%v\n", container.NetworkSettings.IPAddress)
+			fmt.Printf("DB node: %v\n", container.NetworkSettings.IPAddress)
 
-			c := &config.Config{}
-			c.Registry = "local"
-			c.Reg_dir = args.RegistryPath()
-			if err := c.Defaults(); err != nil {
+			c, err := config.ParseConfig(args.TemplatePath())
+			if err != nil {
 				return err
 			}
 			worker_confs = append(worker_confs, c)
 		}
 	} else {
 		// TODO: start fixed number of workers
+		fmt.Printf("Start %d workers\n", n)
 		log.Fatal("-count not implement yet.  Use -foreach.")
 	}
 
 	for i, conf := range worker_confs {
-		conf_path := args.ConfigPath(fmt.Sprintf("worker-%d.json", i))
+		conf_path := args.ConfigPath(fmt.Sprintf("worker-%d", i))
+		conf.Worker_port = fmt.Sprintf("%d", *portbase+i)
 		if err := conf.Save(conf_path); err != nil {
 			return err
 		}
 
+		// stdout+stderr both go to log
 		log_path := args.LogPath(fmt.Sprintf("worker-%d.out", i))
 		f, err := os.Create(log_path)
 		if err != nil {
