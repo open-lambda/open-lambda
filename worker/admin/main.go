@@ -309,9 +309,13 @@ func (admin *Admin) workers() error {
 			worker_confs = append(worker_confs, c)
 		}
 	} else {
-		// TODO: start fixed number of workers
-		fmt.Printf("Start %d workers\n", n)
-		log.Fatal("-count not implement yet.  Use -foreach.")
+		for i := 0; i < *n; i++ {
+			c, err := config.ParseConfig(args.TemplatePath())
+			if err != nil {
+				return err
+			}
+			worker_confs = append(worker_confs, c)
+		}
 	}
 
 	for i, conf := range worker_confs {
