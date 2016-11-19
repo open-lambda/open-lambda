@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"path"
@@ -49,6 +50,10 @@ func (args *CmdArgs) Parse(require_cluster bool) {
 
 func (args *CmdArgs) LogPath(name string) string {
 	return path.Join(*args.cluster, "logs", name)
+}
+
+func (args *CmdArgs) PidPath(name string) string {
+	return path.Join(*args.cluster, "logs", name+".pid")
 }
 
 func (args *CmdArgs) ConfigPath(name string) string {
@@ -343,7 +348,13 @@ func (admin *Admin) workers() error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("Started worker [pid %d], log at %s\n", proc.Pid, log_path)
+
+		pidpath := args.PidPath(fmt.Sprintf("worker-%d", i))
+		if err := ioutil.WriteFile(pidpath, []byte(fmt.Sprintf("%d", proc.Pid)), 0644); err != nil {
+			return err
+		}
+
+		fmt.Printf("Started worker: pid %d, port %s, log at %s\n", proc.Pid, conf.Worker_port, log_path)
 	}
 
 	return nil
