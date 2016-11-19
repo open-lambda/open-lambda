@@ -7,9 +7,11 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	docker "github.com/fsouza/go-dockerclient"
+	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/sandbox"
 	"github.com/open-lambda/open-lambda/worker/server"
 )
@@ -49,6 +51,14 @@ func (args *CmdArgs) LogPath(name string) string {
 	return path.Join(*args.cluster, "logs", name)
 }
 
+func (args *CmdArgs) ConfigPath(name string) string {
+	return path.Join(*args.cluster, "config", name)
+}
+
+func (args *CmdArgs) RegistryPath() string {
+	return path.Join(*args.cluster, "registry")
+}
+
 type AdminFn func() error
 
 func NewAdmin() *Admin {
@@ -80,12 +90,38 @@ func (admin *Admin) command(cmd string) {
 	}
 }
 
+func (admin *Admin) cluster_nodes(cluster string) (map[string]([]string), error) {
+	client := admin.client
+	nodes := map[string]([]string){}
+
+	containers, err := client.ListContainers(docker.ListContainersOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	for _, container := range containers {
+		if container.Labels[sandbox.DOCKER_LABEL_CLUSTER] == cluster {
+			cid := container.ID
+			type_label := container.Labels[sandbox.DOCKER_LABEL_TYPE]
+			nodes[type_label] = append(nodes[type_label], cid)
+		}
+	}
+
+	return nodes, nil
+}
+
 func (admin *Admin) help() error {
 	fmt.Printf("Run %v <command> <args>\n", os.Args[0])
 	fmt.Printf("\n")
 	fmt.Printf("Commands:\n")
-	for command, _ := range admin.fns {
-		fmt.Printf("  %v\n", command)
+	cmds := make([]string, 0, len(admin.fns))
+	for cmd := range admin.fns {
+		cmds = append(cmds, cmd)
+	}
+	sort.Strings(cmds)
+
+	for _, cmd := range cmds {
+		fmt.Printf("  %v\n", cmd)
 	}
 	return nil
 }
@@ -102,21 +138,28 @@ func (admin *Admin) new_cluster() error {
 		return err
 	}
 
+	if err := os.Mkdir(path.Join(*args.cluster, "config"), 0700); err != nil {
+		return err
+	}
+
+	if err := os.Mkdir(path.Join(*args.cluster, "registry"), 0700); err != nil {
+		return err
+	}
+
 	fmt.Printf("%s\n", *args.cluster)
 	return nil
 }
 
 func (admin *Admin) status() error {
-	flags := flag.NewFlagSet("flag", flag.ExitOnError)
-	cluster_rel := flags.String("cluster", "", "give a cluster directory")
-	flags.Parse(os.Args[2:])
+	args := NewCmdArgs()
+	args.Parse(false)
 
 	containers1, err := admin.client.ListContainers(docker.ListContainersOptions{})
 	if err != nil {
 		return err
 	}
 
-	if *cluster_rel == "" {
+	if *args.cluster == "" {
 		other := 0
 		node_counts := map[string]int{}
 
@@ -137,13 +180,9 @@ func (admin *Admin) status() error {
 		fmt.Printf("\n")
 		fmt.Printf("For info about a specific cluster, use -cluster=<cluster-name>\n")
 	} else {
-		cluster, err := filepath.Abs(*cluster_rel)
-		if err != nil {
-			return err
-		}
-		fmt.Printf("Nodes in %s cluster:\n", cluster)
+		fmt.Printf("Nodes in %s cluster:\n", *args.cluster)
 		for _, containers2 := range containers1 {
-			if containers2.Labels[sandbox.DOCKER_LABEL_CLUSTER] == cluster {
+			if containers2.Labels[sandbox.DOCKER_LABEL_CLUSTER] == *args.cluster {
 				name := containers2.Names[0]
 				oltype := containers2.Labels[sandbox.DOCKER_LABEL_TYPE]
 				fmt.Printf("  <%s> (%s)\n", name, oltype)
@@ -155,24 +194,13 @@ func (admin *Admin) status() error {
 }
 
 func (admin *Admin) rethinkdb() error {
+	args := NewCmdArgs()
+	count := args.flags.Int("count", 1, "specify number of nodes to start")
+	args.Parse(true)
+
 	client := admin.client
-	flags := flag.NewFlagSet("flag", flag.ExitOnError)
-	cluster_rel := flags.String("cluster", "", "give a cluster directory")
-	count := flags.Int("count", 1, "specify number of nodes to start")
-	flags.Parse(os.Args[2:])
-
-	if *cluster_rel == "" {
-		fmt.Printf("Please specify a cluster\n")
-		return nil
-	}
-
-	cluster, err := filepath.Abs(*cluster_rel)
-	if err != nil {
-		return err
-	}
-
 	labels := map[string]string{}
-	labels[sandbox.DOCKER_LABEL_CLUSTER] = cluster
+	labels[sandbox.DOCKER_LABEL_CLUSTER] = *args.cluster
 	labels[sandbox.DOCKER_LABEL_TYPE] = "db"
 
 	var first_container *docker.Container
@@ -219,33 +247,61 @@ func (admin *Admin) rethinkdb() error {
 
 func (admin *Admin) worker() error {
 	flags := flag.NewFlagSet("flag", flag.ExitOnError)
-	config := flags.String("config", "", "give a json config file")
+	conf := flags.String("config", "", "give a json config file")
 	flags.Parse(os.Args[2:])
 
-	if *config == "" {
+	if *conf == "" {
 		fmt.Printf("Please specify a json config file\n")
 		return nil
 	}
 
-	server.Main(*config)
-
+	server.Main(*conf)
 	return nil
 }
 
 func (admin *Admin) workers() error {
 	args := NewCmdArgs()
-	config := args.flags.String("config", "", "give a json config file")
-	count := args.flags.Int("count", 1, "specify number of workers to start")
+	foreach := args.flags.Bool("foreach", false, "start one worker per db instance")
+	// count := args.flags.Int("count", 1, "specify number of workers to start")
 	args.Parse(true)
 
-	if *config == "" {
-		fmt.Printf("Please specify a json config file\n")
-		return nil
+	nodes, err := admin.cluster_nodes(*args.cluster)
+	if err != nil {
+		return err
 	}
 
-	for i := 0; i < *count; i++ {
-		logpath := args.LogPath(fmt.Sprintf("worker-%d.out", i))
-		f, err := os.Create(logpath)
+	worker_confs := []*config.Config{}
+	if *foreach {
+		// start one worker per db shard
+		for _, cid := range nodes["db"] {
+			container, err := admin.client.InspectContainer(cid)
+			if err != nil {
+				return err
+			}
+
+			fmt.Printf("%v\n", container.NetworkSettings.IPAddress)
+
+			c := &config.Config{}
+			c.Registry = "local"
+			c.Reg_dir = args.RegistryPath()
+			if err := c.Defaults(); err != nil {
+				return err
+			}
+			worker_confs = append(worker_confs, c)
+		}
+	} else {
+		// TODO: start fixed number of workers
+		log.Fatal("-count not implement yet.  Use -foreach.")
+	}
+
+	for i, conf := range worker_confs {
+		conf_path := args.ConfigPath(fmt.Sprintf("worker-%d.json", i))
+		if err := conf.Save(conf_path); err != nil {
+			return err
+		}
+
+		log_path := args.LogPath(fmt.Sprintf("worker-%d.out", i))
+		f, err := os.Create(log_path)
 		if err != nil {
 			return err
 		}
@@ -255,40 +311,30 @@ func (admin *Admin) workers() error {
 		cmd := []string{
 			os.Args[0],
 			"worker",
-			"-config=" + *config,
+			"-config=" + conf_path,
 		}
 		proc, err := os.StartProcess(os.Args[0], cmd, &attr)
 		if err != nil {
 			return err
 		}
-		fmt.Printf("Started worker [pid %d], log at %s\n", proc.Pid, logpath)
+		fmt.Printf("Started worker [pid %d], log at %s\n", proc.Pid, log_path)
 	}
 
 	return nil
 }
 
 func (admin *Admin) kill() error {
+	args := NewCmdArgs()
+	args.Parse(true)
+
 	client := admin.client
-	flags := flag.NewFlagSet("flag", flag.ExitOnError)
-	cluster_rel := flags.String("cluster", "", "give a cluster directory")
-	flags.Parse(os.Args[2:])
-
-	if *cluster_rel == "" {
-		fmt.Printf("Please specify a cluster\n")
-		return nil
-	}
-	cluster, err := filepath.Abs(*cluster_rel)
-	if err != nil {
-		return err
-	}
-
 	containers1, err := client.ListContainers(docker.ListContainersOptions{})
 	if err != nil {
 		return err
 	}
 
 	for _, containers2 := range containers1 {
-		if containers2.Labels[sandbox.DOCKER_LABEL_CLUSTER] == cluster {
+		if containers2.Labels[sandbox.DOCKER_LABEL_CLUSTER] == *args.cluster {
 			cid := containers2.ID
 			container, err := client.InspectContainer(cid)
 			if err != nil {
