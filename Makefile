@@ -73,7 +73,6 @@ test-cluster : imgs/lambda-node
 test : test-cluster
 	$(eval export WORKER_CONFIG := $(PWD)/testing/worker-config.json) ./testing/setup.py --cluster=$(TEST_CLUSTER)
 	cd $(WORKER_DIR) && $(GO) test ./server ./handler -v
-	./testing/pychat.py
 	./util/stop-cluster.py -c $(TEST_CLUSTER)
 
 .PHONY: clean
