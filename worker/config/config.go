@@ -35,7 +35,15 @@ func (c *Config) Dump() {
 	log.Printf("CONFIG = %v\n", string(s))
 }
 
-func (c *Config) defaults() error {
+func (c *Config) Save(path string) error {
+	s, err := json.MarshalIndent(c, "", "\t")
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(path, s, 0644)
+}
+
+func (c *Config) Defaults() error {
 	if c.Worker_port == "" {
 		c.Worker_port = "8080"
 	}
@@ -94,7 +102,7 @@ func ParseConfig(path string) (*Config, error) {
 		return nil, fmt.Errorf("could not parse config (%v): %v\n", path, err.Error())
 	}
 
-	if err := config.defaults(); err != nil {
+	if err := config.Defaults(); err != nil {
 		return nil, err
 	}
 
