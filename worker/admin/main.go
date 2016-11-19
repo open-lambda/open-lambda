@@ -9,6 +9,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	docker "github.com/fsouza/go-dockerclient"
@@ -365,29 +366,62 @@ func (admin *Admin) kill() error {
 	args.Parse(true)
 
 	client := admin.client
-	containers1, err := client.ListContainers(docker.ListContainersOptions{})
+
+	nodes, err := admin.cluster_nodes(*args.cluster)
 	if err != nil {
 		return err
 	}
 
-	for _, containers2 := range containers1 {
-		if containers2.Labels[sandbox.DOCKER_LABEL_CLUSTER] == *args.cluster {
-			cid := containers2.ID
+	// kill containers in cluster
+	for typ, cids := range nodes {
+		for _, cid := range cids {
 			container, err := client.InspectContainer(cid)
 			if err != nil {
 				return err
 			}
+
 			if container.State.Paused {
-				fmt.Printf("Unpause container %v\n", cid)
+				fmt.Printf("Unpause container %v (%s)\n", cid, typ)
 				if err := client.UnpauseContainer(cid); err != nil {
-					return err
+					fmt.Printf("%s\n", err.Error())
+					fmt.Printf("Failed to unpause container %v (%s).  May require manual cleanup.\n", cid, typ)
 				}
 			}
 
-			fmt.Printf("Kill container %v\n", cid)
+			fmt.Printf("Kill container %v (%s)\n", cid, typ)
 			opts := docker.KillContainerOptions{ID: cid}
 			if err := client.KillContainer(opts); err != nil {
+				fmt.Printf("%s\n", err.Error())
+				fmt.Printf("Failed to kill container %v (%s).  May require manual cleanup.\n", cid, typ)
+			}
+		}
+	}
+
+	// kill worker processes in cluster
+	logs, err := ioutil.ReadDir(path.Join(*args.cluster, "logs"))
+	if err != nil {
+		return err
+	}
+	for _, fi := range logs {
+		if strings.HasSuffix(fi.Name(), ".pid") {
+			data, err := ioutil.ReadFile(args.LogPath(fi.Name()))
+			if err != nil {
 				return err
+			}
+			pidstr := string(data)
+			pid, err := strconv.Atoi(pidstr)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("Kill worker process with PID %d\n", pid)
+			p, err := os.FindProcess(pid)
+			if err != nil {
+				fmt.Printf("%s\n", err.Error())
+				fmt.Printf("Failed to find worker process with PID %d.  May require manual cleanup.\n", pid)
+			}
+			if err := p.Kill(); err != nil {
+				fmt.Printf("%s\n", err.Error())
+				fmt.Printf("Failed to kill process with PID %d.  May require manual cleanup.\n", pid)
 			}
 		}
 	}
