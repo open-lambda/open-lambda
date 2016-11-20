@@ -265,13 +265,33 @@ func (admin *Admin) status() error {
 
 func (admin *Admin) rethinkdb() error {
 	args := NewCmdArgs()
-	count := args.flags.Int("count", 1, "specify number of nodes to start")
+	count := args.flags.Int("n", 1, "specify number of nodes to start")
 	args.Parse(true)
 
 	client := admin.client
 	labels := map[string]string{}
 	labels[sandbox.DOCKER_LABEL_CLUSTER] = *args.cluster
 	labels[sandbox.DOCKER_LABEL_TYPE] = "db"
+
+	image := "rethinkdb"
+
+	// pull if not local
+	_, err := admin.client.InspectImage(image)
+	if err == docker.ErrNoSuchImage {
+		fmt.Printf("Pulling RethinkDB image...\n")
+		err := admin.client.PullImage(
+			docker.PullImageOptions{
+				Repository: image,
+				Tag:        "latest", // TODO: fixed version?
+			},
+			docker.AuthConfiguration{},
+		)
+		if err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
 
 	var first_container *docker.Container
 
@@ -289,7 +309,7 @@ func (admin *Admin) rethinkdb() error {
 			docker.CreateContainerOptions{
 				Config: &docker.Config{
 					Cmd:    cmd,
-					Image:  "rethinkdb",
+					Image:  image,
 					Labels: labels,
 				},
 			},
