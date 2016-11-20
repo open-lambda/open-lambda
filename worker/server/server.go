@@ -188,7 +188,7 @@ func (s *Server) RunLambda(w http.ResponseWriter, r *http.Request) {
 		"Content-Type, Content-Range, Content-Disposition, Content-Description, X-Requested-With")
 
 	if r.Method == "OPTIONS" {
-		w.WriteHeader(200)
+		w.WriteHeader(http.StatusOK)
 	} else {
 		if err := s.RunLambdaErr(w, r); err != nil {
 			log.Printf("could not handle request: %s\n", err.msg)
@@ -196,6 +196,16 @@ func (s *Server) RunLambda(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+}
+
+func (s *Server) Status(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Receive request to %s\n", r.URL.Path)
+
+	wbody := []byte("ready")
+	if _, err := w.Write(wbody); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+	w.WriteHeader(http.StatusOK)
 }
 
 // Parses request URL into its "/" delimated components
@@ -230,9 +240,12 @@ func Main(config_path string) {
 		log.Fatal(err)
 	}
 
-	run_path := "/runLambda/"
-	http.HandleFunc(run_path, server.RunLambda)
 	port := fmt.Sprintf(":%s", conf.Worker_port)
-	log.Printf("Listening on localhost%s%s%s\n", port, run_path, "<lambda>")
+	run_path := "/runLambda/"
+	status_path := "/status/"
+	http.HandleFunc(run_path, server.RunLambda)
+	http.HandleFunc(status_path, server.Status)
+	log.Printf("Execute handler by POSTing to localhost%s%s%s\n", port, run_path, "<lambda>")
+	log.Printf("Get status by sending request to localhost%s%s%s\n", port, status_path)
 	log.Fatal(http.ListenAndServe(port, nil))
 }

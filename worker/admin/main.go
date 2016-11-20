@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
 	"path"
 	"path/filepath"
@@ -17,6 +18,12 @@ import (
 	"github.com/open-lambda/open-lambda/worker/sandbox"
 	"github.com/open-lambda/open-lambda/worker/server"
 )
+
+// TODO: notes about setup process
+// TODO: notes about creating a directory in local
+// TODO: docker registry setup
+// TODO: load balancer setup
+// TODO: pass through DB config to workers
 
 type Admin struct {
 	client *docker.Client
@@ -80,7 +87,7 @@ func NewAdmin() *Admin {
 	}
 
 	admin.fns["help"] = admin.help
-	admin.fns["new-cluster"] = admin.new_cluster
+	admin.fns["new"] = admin.new_cluster
 	admin.fns["status"] = admin.status
 	admin.fns["rethinkdb"] = admin.rethinkdb
 	admin.fns["worker"] = admin.worker
@@ -180,12 +187,12 @@ func (admin *Admin) status() error {
 	args := NewCmdArgs()
 	args.Parse(false)
 
-	containers1, err := admin.client.ListContainers(docker.ListContainersOptions{})
-	if err != nil {
-		return err
-	}
-
 	if *args.cluster == "" {
+		containers1, err := admin.client.ListContainers(docker.ListContainersOptions{})
+		if err != nil {
+			return err
+		}
+
 		other := 0
 		node_counts := map[string]int{}
 
@@ -199,19 +206,56 @@ func (admin *Admin) status() error {
 		}
 
 		fmt.Printf("%d container(s) without OpenLambda labels\n\n", other)
-		fmt.Printf("%d cluster(s):\n", len(node_counts))
 		for cluster_name, count := range node_counts {
-			fmt.Printf("  <%s> (%d nodes)\n", cluster_name, count)
+			fmt.Printf("%d container(s) belonging to cluster <%s>\n", count, cluster_name)
 		}
 		fmt.Printf("\n")
-		fmt.Printf("For info about a specific cluster, use -cluster=<cluster-name>\n")
+		fmt.Printf("Other clusters with no containers may exist without being listed.\n")
+		fmt.Printf("\n")
+		fmt.Printf("For info about a specific cluster, use -cluster=<cluster-dir>\n")
 	} else {
-		fmt.Printf("Nodes in %s cluster:\n", *args.cluster)
-		for _, containers2 := range containers1 {
-			if containers2.Labels[sandbox.DOCKER_LABEL_CLUSTER] == *args.cluster {
-				name := containers2.Names[0]
-				oltype := containers2.Labels[sandbox.DOCKER_LABEL_TYPE]
-				fmt.Printf("  <%s> (%s)\n", name, oltype)
+		// print worker connection info
+		logs, err := ioutil.ReadDir(path.Join(*args.cluster, "logs"))
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Worker Pings:\n")
+		for _, fi := range logs {
+			if strings.HasSuffix(fi.Name(), ".pid") {
+				name := fi.Name()[:len(fi.Name())-4]
+				c, err := config.ParseConfig(args.ConfigPath(name))
+				if err != nil {
+					return err
+				}
+
+				url := fmt.Sprintf("http://localhost:%s/status", c.Worker_port)
+				response, err := http.Get(url)
+				if err != nil {
+					fmt.Printf("  Could not send GET to %s\n", url)
+					continue
+				}
+				defer response.Body.Close()
+				body, err := ioutil.ReadAll(response.Body)
+				if err != nil {
+					fmt.Printf("  Failed to read body from GET to %s\n", url)
+					continue
+				}
+				fmt.Printf("  %s => %s [%s]\n", url, body, response.Status)
+			}
+		}
+		fmt.Printf("\n")
+
+		// print containers
+		fmt.Printf("Cluster containers:\n")
+		nodes, err := admin.cluster_nodes(*args.cluster)
+		if err != nil {
+			return err
+		}
+
+		for typ, cids := range nodes {
+			fmt.Printf("  %s containers:\n", typ)
+			for _, cid := range cids {
+				fmt.Printf("    %s:\n", cid)
 			}
 		}
 	}
