@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"path"
+	"path/filepath"
 	"strings"
 
 	docker "github.com/fsouza/go-dockerclient"
 )
 
 type Config struct {
+	path     string // where was config file loaded from?
 	Registry string `json:"registry"`
 	// docker
 	Cluster_name  string `json:"cluster_name"`
@@ -70,8 +73,21 @@ func (c *Config) Defaults() error {
 		}
 	} else if c.Registry == "olregistry" && len(c.Reg_cluster) == 0 {
 		return fmt.Errorf("must specify reg_cluster")
-	} else if c.Registry == "local" && c.Reg_dir == "" {
-		return fmt.Errorf("must specify local registry directory")
+	} else if c.Registry == "local" {
+		if c.Reg_dir == "" {
+			return fmt.Errorf("must specify local registry directory")
+		}
+
+		if !path.IsAbs(c.Reg_dir) {
+			if c.path == "" {
+				return fmt.Errorf("Reg_dir cannot be relative, unless config is loaded from file")
+			}
+			path, err := filepath.Abs(path.Join(path.Dir(c.path), c.Reg_dir))
+			if err != nil {
+				return err
+			}
+			c.Reg_dir = path
+		}
 	}
 
 	// daemon
@@ -110,6 +126,7 @@ func ParseConfig(path string) (*Config, error) {
 		return nil, fmt.Errorf("could not parse config (%v): %v\n", path, err.Error())
 	}
 
+	config.path = path
 	if err := config.Defaults(); err != nil {
 		return nil, err
 	}

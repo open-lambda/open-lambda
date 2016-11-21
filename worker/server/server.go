@@ -7,8 +7,6 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -40,14 +38,6 @@ func NewServer(config *config.Config) (*Server, error) {
 	} else if config.Registry == "olregistry" {
 		sm = sandbox.NewRegistryManager(config)
 	} else if config.Registry == "local" {
-		// TODO: add config for this
-		conf_dir, err := filepath.Abs(filepath.Dir(os.Args[1]))
-		if err != nil {
-			return nil, err
-		}
-
-		config.Reg_dir = filepath.Join(conf_dir, config.Reg_dir)
-
 		sm = sandbox.NewLocalManager(config)
 	} else {
 		return nil, errors.New("invalid 'registry' field in config")
@@ -246,6 +236,6 @@ func Main(config_path string) {
 	http.HandleFunc(run_path, server.RunLambda)
 	http.HandleFunc(status_path, server.Status)
 	log.Printf("Execute handler by POSTing to localhost%s%s%s\n", port, run_path, "<lambda>")
-	log.Printf("Get status by sending request to localhost%s%s%s\n", port, status_path)
+	log.Printf("Get status by sending request to localhost%s%s\n", port, status_path)
 	log.Fatal(http.ListenAndServe(port, nil))
 }

@@ -59,3 +59,14 @@ func (dm *DockerManagerBase) Dump() {
 			container.State.String())
 	}
 }
+
+// Left public for handler tests. Consider refactor
+func (dm *DockerManagerBase) DockerImageExists(img_name string) (bool, error) {
+	_, err := dm.dClient.InspectImage(img_name)
+	if err == docker.ErrNoSuchImage {
+		return false, nil
+	} else if err != nil {
+		return false, err
+	}
+	return true, nil
+}

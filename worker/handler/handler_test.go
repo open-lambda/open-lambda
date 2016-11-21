@@ -11,7 +11,7 @@ import (
 	"github.com/open-lambda/open-lambda/worker/sandbox"
 )
 
-func NewDockerManager() (manager *sandbox.DockerManager) {
+func NewManager() (manager *sandbox.LocalManager) {
 	conf, err := config.ParseConfig(os.Getenv("WORKER_CONFIG"))
 	if err != nil {
 		log.Fatal(err)
@@ -20,11 +20,11 @@ func NewDockerManager() (manager *sandbox.DockerManager) {
 	log.Printf("Set skip_pull_existing = true\n")
 	conf.Skip_pull_existing = true
 
-	return sandbox.NewDockerManager(conf)
+	return sandbox.NewLocalManager(conf)
 }
 
 func TestHandlerLookupSame(t *testing.T) {
-	sm := NewDockerManager()
+	sm := NewManager()
 	handlers := NewHandlerSet(HandlerSetOpts{Sm: sm})
 	a1 := handlers.Get("a")
 	a2 := handlers.Get("a")
@@ -34,7 +34,7 @@ func TestHandlerLookupSame(t *testing.T) {
 }
 
 func TestHandlerLookupDiff(t *testing.T) {
-	sm := NewDockerManager()
+	sm := NewManager()
 	handlers := NewHandlerSet(HandlerSetOpts{Sm: sm})
 	a := handlers.Get("a")
 	b := handlers.Get("b")
@@ -44,7 +44,9 @@ func TestHandlerLookupDiff(t *testing.T) {
 }
 
 func TestHandlerHandlerPull(t *testing.T) {
-	sm := NewDockerManager()
+	t.Skip("TestHandlerHandlerPull does not work with local registry mode")
+
+	sm := NewManager()
 	handlers := NewHandlerSet(HandlerSetOpts{Sm: sm})
 	name := "nonlocal"
 
@@ -69,7 +71,7 @@ func TestHandlerHandlerPull(t *testing.T) {
 
 	_, err = h.RunStart()
 	if err != nil {
-		t.Fatalf("RunStart failed with %v", err.Error())
+		t.Fatalf("RunStart failed with: %v", err.Error())
 	}
 
 	// Run SHOULD trigger pull
@@ -92,13 +94,13 @@ func GetState(t *testing.T, h *Handler) state.HandlerState {
 
 func TestHandlerRunCountOne(t *testing.T) {
 	lru := NewHandlerLRU(1)
-	sm := NewDockerManager()
+	sm := NewManager()
 	handlers := NewHandlerSet(HandlerSetOpts{Sm: sm, Lru: lru})
 	h := handlers.Get("hello2")
 
 	_, err := h.RunStart()
 	if err != nil {
-		t.Fatalf("RunStart failed with %v", err.Error())
+		t.Fatalf("RunStart failed with: %v", err.Error())
 	}
 	s := GetState(t, h)
 	if !(s == state.Running) {
@@ -114,7 +116,7 @@ func TestHandlerRunCountOne(t *testing.T) {
 
 func TestHandlerRunCountMany(t *testing.T) {
 	lru := NewHandlerLRU(1)
-	sm := NewDockerManager()
+	sm := NewManager()
 	handlers := NewHandlerSet(HandlerSetOpts{Sm: sm, Lru: lru})
 	h := handlers.Get("hello2")
 	count := 10
@@ -123,7 +125,7 @@ func TestHandlerRunCountMany(t *testing.T) {
 		log.Printf("Starting %v\n", i+1)
 		_, err := h.RunStart()
 		if err != nil {
-			t.Fatalf("RunStart failed with %v", err.Error())
+			t.Fatalf("RunStart failed with: %v", err.Error())
 		}
 		s := GetState(t, h)
 		if !(s == state.Running) {
@@ -149,12 +151,12 @@ func TestHandlerRunCountMany(t *testing.T) {
 
 func TestHandlerEvict(t *testing.T) {
 	lru := NewHandlerLRU(0)
-	sm := NewDockerManager()
+	sm := NewManager()
 	handlers := NewHandlerSet(HandlerSetOpts{Sm: sm, Lru: lru})
 	h := handlers.Get("hello2")
 	_, err := h.RunStart()
 	if err != nil {
-		t.Fatalf("RunStart failed with %v", err.Error())
+		t.Fatalf("RunStart failed with: %v", err.Error())
 	}
 	h.RunFinish()
 	s := GetState(t, h)

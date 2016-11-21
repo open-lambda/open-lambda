@@ -97,14 +97,3 @@ func (dm *DockerManager) dockerPull(img string) error {
 
 	return nil
 }
-
-// Left public for handler tests. Consider refactor
-func (dm *DockerManager) DockerImageExists(img_name string) (bool, error) {
-	_, err := dm.client().InspectImage(img_name)
-	if err == docker.ErrNoSuchImage {
-		return false, nil
-	} else if err != nil {
-		return false, err
-	}
-	return true, nil
-}

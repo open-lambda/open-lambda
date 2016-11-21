@@ -17,8 +17,7 @@ REG_DIR = $(GO_PATH)/src/github.com/open-lambda/open-lambda/registry
 ADMIN_DIR = $(GO_PATH)/src/github.com/open-lambda/open-lambda/worker/admin
 
 .PHONY: all
-all : .git/hooks/pre-commit bin/regpush imgs/olregistry imgs/lambda-node
-	docker pull eoakes/lambda:latest
+all : .git/hooks/pre-commit bin/regpush imgs/olregistry imgs/lambda
 
 .git/hooks/pre-commit: util/pre-commit
 	cp util/pre-commit .git/hooks/pre-commit
@@ -29,6 +28,10 @@ imgs/lambda-node : bin/worker node/Dockerfile node/startup.py node/kill.py node/
 	cp bin/worker $(NODE_BIN)/worker
 	docker build -t lambda-node node
 	touch imgs/lambda-node
+
+imgs/lambda :
+	docker pull eoakes/lambda:latest
+	touch imgs/lambda
 
 imgs/olregistry : bin/pushserver registry/Dockerfile registry/pushserver.go
 	mkdir -p $(REG_BIN)
@@ -62,18 +65,15 @@ bin/regpush : registry/regpush.go
 	mkdir -p bin
 	cp $(REG_DIR)/regpush ./bin
 
-.PHONY: test test-cluster
+.PHONY: test test-config
 
-# create cluster for testing
-test-cluster : imgs/lambda-node
-	./util/stop-cluster.py -c $(TEST_CLUSTER) --if-running --force
-	./util/start-cluster.py -c $(TEST_CLUSTER) --skip-db-wait
+test-config :
+	$(eval export WORKER_CONFIG := $(PWD)/testing/worker-config.json)
 
 # run go unit tests in initialized environment
-test : test-cluster
-	$(eval export WORKER_CONFIG := $(PWD)/testing/worker-config.json) ./testing/setup.py --cluster=$(TEST_CLUSTER)
-	cd $(WORKER_DIR) && $(GO) test ./server ./handler -v
-	./util/stop-cluster.py -c $(TEST_CLUSTER)
+test : test-config imgs/lambda
+	cd $(WORKER_DIR) && $(GO) test ./handler -v
+	cd $(WORKER_DIR) && $(GO) test ./server -v
 
 .PHONY: clean
 clean :
