@@ -15,11 +15,17 @@ type LocalManager struct {
 	handler_dir string
 }
 
-func NewLocalManager(opts *config.Config) (manager *LocalManager) {
+func NewLocalManager(opts *config.Config) (manager *LocalManager, err error) {
 	manager = new(LocalManager)
 	manager.DockerManagerBase.init(opts)
 	manager.handler_dir = opts.Reg_dir
-	return manager
+	exists, err := manager.DockerImageExists(BASE_IMAGE)
+	if err != nil {
+		return nil, err
+	} else if !exists {
+		return nil, fmt.Errorf("Docker image %s does not exist", BASE_IMAGE)
+	}
+	return manager, nil
 }
 
 func (lm *LocalManager) Create(name string) (Sandbox, error) {
@@ -33,7 +39,7 @@ func (lm *LocalManager) Create(name string) (Sandbox, error) {
 	container, err := lm.client().CreateContainer(
 		docker.CreateContainerOptions{
 			Config: &docker.Config{
-				Image:        "eoakes/lambda:latest",
+				Image:        BASE_IMAGE,
 				AttachStdout: true,
 				AttachStderr: true,
 				ExposedPorts: internalAppPort,

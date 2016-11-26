@@ -32,15 +32,19 @@ func newHttpErr(msg string, code int) *httpErr {
 
 func NewServer(config *config.Config) (*Server, error) {
 	var sm sandbox.SandboxManager
+	var err error
 	// create server
 	if config.Registry == "docker" {
-		sm = sandbox.NewDockerManager(config)
+		sm, err = sandbox.NewDockerManager(config)
 	} else if config.Registry == "olregistry" {
-		sm = sandbox.NewRegistryManager(config)
+		sm, err = sandbox.NewRegistryManager(config)
 	} else if config.Registry == "local" {
-		sm = sandbox.NewLocalManager(config)
+		sm, err = sandbox.NewLocalManager(config)
 	} else {
 		return nil, errors.New("invalid 'registry' field in config")
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	opts := handler.HandlerSetOpts{

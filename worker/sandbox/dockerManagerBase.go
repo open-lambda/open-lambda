@@ -11,6 +11,7 @@ const (
 	DOCKER_LABEL_CLUSTER = "ol.cluster"
 	DOCKER_LABEL_TYPE    = "ol.type"
 	SANDBOX              = "sandbox"
+	BASE_IMAGE           = "lambda"
 )
 
 type DockerManagerBase struct {

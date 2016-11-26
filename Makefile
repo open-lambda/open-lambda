@@ -30,7 +30,7 @@ imgs/lambda-node : bin/worker node/Dockerfile node/startup.py node/kill.py node/
 	touch imgs/lambda-node
 
 imgs/lambda :
-	docker pull eoakes/lambda:latest
+	docker build node/lambda -t lambda
 	touch imgs/lambda
 
 imgs/olregistry : bin/pushserver registry/Dockerfile registry/pushserver.go

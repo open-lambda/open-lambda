@@ -19,7 +19,7 @@ type RegistryManager struct {
 	handler_dir string
 }
 
-func NewRegistryManager(opts *config.Config) (manager *RegistryManager) {
+func NewRegistryManager(opts *config.Config) (manager *RegistryManager, err error) {
 	manager = new(RegistryManager)
 	manager.DockerManagerBase.init(opts)
 	manager.reg = r.InitPullClient(opts.Reg_cluster)
@@ -34,8 +34,14 @@ func NewRegistryManager(opts *config.Config) (manager *RegistryManager) {
 			log.Fatal("failed to create handler directory: ", err)
 		}
 	}
+	exists, err := manager.DockerImageExists(BASE_IMAGE)
+	if err != nil {
+		return nil, err
+	} else if !exists {
+		return nil, fmt.Errorf("Docker image %s does not exist", BASE_IMAGE)
+	}
 
-	return manager
+	return manager, nil
 }
 
 func (rm *RegistryManager) Create(name string) (Sandbox, error) {
@@ -49,7 +55,7 @@ func (rm *RegistryManager) Create(name string) (Sandbox, error) {
 	container, err := rm.client().CreateContainer(
 		docker.CreateContainerOptions{
 			Config: &docker.Config{
-				Image:        "eoakes/lambda:latest",
+				Image:        BASE_IMAGE,
 				AttachStdout: true,
 				AttachStderr: true,
 				ExposedPorts: internalAppPort,

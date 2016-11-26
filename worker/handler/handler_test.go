@@ -20,7 +20,11 @@ func NewManager() (manager *sandbox.LocalManager) {
 	log.Printf("Set skip_pull_existing = true\n")
 	conf.Skip_pull_existing = true
 
-	return sandbox.NewLocalManager(conf)
+	manager, err = sandbox.NewLocalManager(conf)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return manager
 }
 
 func TestHandlerLookupSame(t *testing.T) {

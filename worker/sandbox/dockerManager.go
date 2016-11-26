@@ -13,11 +13,11 @@ type DockerManager struct {
 	registryName string
 }
 
-func NewDockerManager(opts *config.Config) (manager *DockerManager) {
+func NewDockerManager(opts *config.Config) (manager *DockerManager, err error) {
 	manager = new(DockerManager)
 	manager.DockerManagerBase.init(opts)
 	manager.registryName = fmt.Sprintf("%s:%s", opts.Registry_host, opts.Registry_port)
-	return manager
+	return manager, nil
 }
 
 func (dm *DockerManager) Create(name string) (Sandbox, error) {
