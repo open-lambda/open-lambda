@@ -199,7 +199,6 @@ func (s *Server) Status(w http.ResponseWriter, r *http.Request) {
 	if _, err := w.Write(wbody); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
-	w.WriteHeader(http.StatusOK)
 }
 
 // Parses request URL into its "/" delimated components
@@ -236,7 +235,7 @@ func Main(config_path string) {
 
 	port := fmt.Sprintf(":%s", conf.Worker_port)
 	run_path := "/runLambda/"
-	status_path := "/status/"
+	status_path := "/status"
 	http.HandleFunc(run_path, server.RunLambda)
 	http.HandleFunc(status_path, server.Status)
 	log.Printf("Execute handler by POSTing to localhost%s%s%s\n", port, run_path, "<lambda>")
