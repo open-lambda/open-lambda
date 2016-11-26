@@ -22,7 +22,6 @@ import (
 // TODO: notes about setup process
 // TODO: notes about creating a directory in local
 // TODO: docker registry setup
-// TODO: load balancer setup
 // TODO: pass through DB config to workers
 
 type Admin struct {
@@ -66,10 +65,6 @@ func (args *CmdArgs) PidPath(name string) string {
 
 func (args *CmdArgs) ConfigPath(name string) string {
 	return path.Join(*args.cluster, "config", name+".json")
-}
-
-func (args *CmdArgs) NginxPath() string {
-	return path.Join(*args.cluster, "config", "nginx.conf")
 }
 
 func (args *CmdArgs) TemplatePath() string {
@@ -357,7 +352,7 @@ func (admin *Admin) worker() error {
 func (admin *Admin) workers() error {
 	args := NewCmdArgs()
 	foreach := args.flags.Bool("foreach", false, "start one worker per db instance")
-	portbase := args.flags.Int("port", 8080, "port range [port, port+n) will be used for workers")
+	portbase := args.flags.Int("port", 8080, "port range [port, port+n) will be used for containers")
 	n := args.flags.Int("n", 1, "specify number of workers to start")
 	args.Parse(true)
 
@@ -432,13 +427,15 @@ func (admin *Admin) workers() error {
 
 func (admin *Admin) nginx() error {
 	args := NewCmdArgs()
+	portbase := args.flags.Int("port", 9080, "port range [port, port+n) will be used for workers")
+	n := args.flags.Int("n", 1, "specify number of workers to start")
 	args.Parse(true)
 
 	image := "nginx"
 	client := admin.client
 	labels := map[string]string{}
 	labels[sandbox.DOCKER_LABEL_CLUSTER] = *args.cluster
-	labels[sandbox.DOCKER_LABEL_TYPE] = "db"
+	labels[sandbox.DOCKER_LABEL_TYPE] = "balancer"
 
 	// pull if not local
 	_, err := admin.client.InspectImage(image)
@@ -458,7 +455,7 @@ func (admin *Admin) nginx() error {
 		return err
 	}
 
-	// create config file
+	// config template
 	nginx_conf := strings.Join([]string{
 		"http {\n",
 		"	upstream workers {\n",
@@ -483,7 +480,7 @@ func (admin *Admin) nginx() error {
 		"	}\n",
 		"\n",
 		"	server {\n",
-		"		listen 80;\n",
+		"		listen %d;\n",
 		"		location / {\n",
 		"			proxy_pass http://workers;\n",
 		"		}\n",
@@ -494,30 +491,41 @@ func (admin *Admin) nginx() error {
 		"	worker_connections 1024;\n",
 		"}\n",
 	}, "")
-	path := args.NginxPath()
-	if err := ioutil.WriteFile(path, []byte(nginx_conf), 0644); err != nil {
-		return err
-	}
 
-	// create and start container
-	container, err := client.CreateContainer(
-		docker.CreateContainerOptions{
-			Config: &docker.Config{
-				Image:  image,
-				Labels: labels,
+	// start containers
+	for i := 0; i < *n; i++ {
+		port := *portbase + i
+		path := path.Join(*args.cluster, "config", fmt.Sprintf("nginx-%d.conf", i))
+		if err := ioutil.WriteFile(path, []byte(fmt.Sprintf(nginx_conf, port)), 0644); err != nil {
+			return err
+		}
+
+		// create and start container
+		container, err := client.CreateContainer(
+			docker.CreateContainerOptions{
+				Config: &docker.Config{
+					Image:  image,
+					Labels: labels,
+				},
+				HostConfig: &docker.HostConfig{
+					Binds:       []string{fmt.Sprintf("%s:%s", path, "/etc/nginx/nginx.conf")},
+					NetworkMode: "host",
+				},
 			},
-		},
-	)
-	if err != nil {
-		return err
-	}
-	// TODO(tyler): passing HostConfig seems to be going away with
-	// the latest versions of the Docker API:
-	// https://godoc.org/github.com/fsouza/go-dockerclient#Client.StartContainer.
-	// We may need to do something to make sure the load balancer
-	// runs in host mode.
-	if err := client.StartContainer(container.ID, container.HostConfig); err != nil {
-		return err
+		)
+		if err != nil {
+			return err
+		}
+		// TODO(tyler): passing HostConfig seems to be going away with
+		// the latest versions of the Docker API:
+		// https://godoc.org/github.com/fsouza/go-dockerclient#Client.StartContainer.
+		// We may need to do something to make sure the load balancer
+		// runs in host mode.
+		if err := client.StartContainer(container.ID, container.HostConfig); err != nil {
+			return err
+		}
+
+		fmt.Printf("nginx listening on localhost:%d\n", port)
 	}
 
 	return nil
