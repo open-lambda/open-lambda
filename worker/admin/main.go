@@ -68,6 +68,10 @@ func (args *CmdArgs) ConfigPath(name string) string {
 	return path.Join(*args.cluster, "config", name+".json")
 }
 
+func (args *CmdArgs) NginxPath() string {
+	return path.Join(*args.cluster, "config", "nginx.conf")
+}
+
 func (args *CmdArgs) TemplatePath() string {
 	return args.ConfigPath("template")
 }
@@ -92,6 +96,7 @@ func NewAdmin() *Admin {
 	admin.fns["rethinkdb"] = admin.rethinkdb
 	admin.fns["worker"] = admin.worker
 	admin.fns["workers"] = admin.workers
+	admin.fns["nginx"] = admin.nginx
 	admin.fns["kill"] = admin.kill
 	return &admin
 }
@@ -420,6 +425,99 @@ func (admin *Admin) workers() error {
 		}
 
 		fmt.Printf("Started worker: pid %d, port %s, log at %s\n", proc.Pid, conf.Worker_port, log_path)
+	}
+
+	return nil
+}
+
+func (admin *Admin) nginx() error {
+	args := NewCmdArgs()
+	args.Parse(true)
+
+	image := "nginx"
+	client := admin.client
+	labels := map[string]string{}
+	labels[sandbox.DOCKER_LABEL_CLUSTER] = *args.cluster
+	labels[sandbox.DOCKER_LABEL_TYPE] = "db"
+
+	// pull if not local
+	_, err := admin.client.InspectImage(image)
+	if err == docker.ErrNoSuchImage {
+		fmt.Printf("Pulling nginx image...\n")
+		err := admin.client.PullImage(
+			docker.PullImageOptions{
+				Repository: image,
+				Tag:        "latest", // TODO: fixed version?
+			},
+			docker.AuthConfiguration{},
+		)
+		if err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
+
+	// create config file
+	nginx_conf := strings.Join([]string{
+		"http {\n",
+		"	upstream workers {\n",
+	}, "")
+
+	logs, err := ioutil.ReadDir(path.Join(*args.cluster, "logs"))
+	if err != nil {
+		return err
+	}
+	for _, fi := range logs {
+		if strings.HasSuffix(fi.Name(), ".pid") {
+			name := fi.Name()[:len(fi.Name())-4]
+			c, err := config.ParseConfig(args.ConfigPath(name))
+			if err != nil {
+				return err
+			}
+			line := fmt.Sprintf("		server localhost:%s;\n", c.Worker_port)
+			nginx_conf += line
+		}
+	}
+	nginx_conf += strings.Join([]string{
+		"	}\n",
+		"\n",
+		"	server {\n",
+		"		listen 80;\n",
+		"		location / {\n",
+		"			proxy_pass http://workers;\n",
+		"		}\n",
+		"	}\n",
+		"}\n",
+		"\n",
+		"events {\n",
+		"	worker_connections 1024;\n",
+		"}\n",
+	}, "")
+	path := args.NginxPath()
+	if err := ioutil.WriteFile(path, []byte(nginx_conf), 0644); err != nil {
+		return err
+	}
+
+	// create and start container
+	container, err := client.CreateContainer(
+		docker.CreateContainerOptions{
+			Config: &docker.Config{
+				Image:  image,
+				Labels: labels,
+			},
+		},
+	)
+	if err != nil {
+		return err
+	}
+	// TODO(tyler): passing HostConfig seems to be going away with
+	// the latest versions of the Docker API:
+	// https://godoc.org/github.com/fsouza/go-dockerclient#Client.StartContainer.
+	// We may need to do something to make sure the load balancer
+	// runs in host mode.
+	if err := client.StartContainer(container.ID, container.HostConfig); err != nil {
+		return err
 	}
 
 	return nil
