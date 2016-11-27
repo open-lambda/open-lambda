@@ -20,8 +20,7 @@ def init():
     if initialized:
         return
     sys.stdout = sys.stderr # flask supresses stdout :(
-    with open('config.json') as f:
-        config = json.loads(f.read())
+    config = json.loads(os.environ['ol.config'])
     if config.get('db', None) == 'rethinkdb':
         addr = os.environ.get('RETHINKDB_PORT_28015_TCP', None)
         if addr != None:
@@ -63,8 +62,8 @@ def flask_post(path):
         return (traceback.format_exc(), 500) # internal error
 
 def main():
-    with open('config.json') as f:
-        config = json.loads(f.read())
+    config = json.loads(os.environ['ol.config'])
+    print 'CONFIG: %s' % str(config)
     procs = config.get('processes', PROCESSES_DEFAULT)
     print 'Starting %d flask processes' % procs
     app.run(processes=procs, host='0.0.0.0', port=PORT)

@@ -164,10 +164,11 @@ func (admin *Admin) new_cluster() error {
 		return err
 	}
 	c := &config.Config{
-		Worker_port:  "?",
-		Cluster_name: *args.cluster,
-		Registry:     "local",
-		Reg_dir:      args.RegistryPath(),
+		Worker_port:    "?",
+		Cluster_name:   *args.cluster,
+		Registry:       "local",
+		Reg_dir:        args.RegistryPath(),
+		Sandbox_config: map[string]interface{}{"processes": 10},
 	}
 	if err := c.Defaults(); err != nil {
 		return err
@@ -376,6 +377,8 @@ func (admin *Admin) workers() error {
 			if err != nil {
 				return err
 			}
+			sandbox_config := c.Sandbox_config.(map[string]interface{})
+			sandbox_config["db"] = "rethinkdb"
 			worker_confs = append(worker_confs, c)
 		}
 	} else {

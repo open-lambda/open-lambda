@@ -44,6 +44,7 @@ func (lm *LocalManager) Create(name string) (Sandbox, error) {
 				AttachStderr: true,
 				ExposedPorts: internalAppPort,
 				Labels:       lm.docker_labels(),
+				Env:          lm.env,
 			},
 			HostConfig: &docker.HostConfig{
 				PortBindings:    portBindings,

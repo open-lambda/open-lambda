@@ -28,6 +28,17 @@ type Config struct {
 	Docker_host string `json:"docker_host"`
 	// for unit testing to skip pull path
 	Skip_pull_existing bool `json:"Skip_pull_existing"`
+
+	// pass through to sandbox envirenment variable
+	Sandbox_config interface{} `json:"sandbox_config"`
+}
+
+func (c *Config) SandboxConfJson() string {
+	s, err := json.Marshal(c.Sandbox_config)
+	if err != nil {
+		panic(err)
+	}
+	return string(s)
 }
 
 func (c *Config) Dump() {

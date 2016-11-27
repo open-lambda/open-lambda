@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"fmt"
 	"log"
 
 	docker "github.com/fsouza/go-dockerclient"
@@ -17,6 +18,7 @@ const (
 type DockerManagerBase struct {
 	opts    *config.Config
 	dClient *docker.Client
+	env     []string
 }
 
 func (manager *DockerManagerBase) init(opts *config.Config) {
@@ -26,6 +28,7 @@ func (manager *DockerManagerBase) init(opts *config.Config) {
 	} else {
 		manager.dClient = c
 	}
+	manager.env = []string{fmt.Sprintf("ol.config=%s", opts.SandboxConfJson())}
 
 	manager.opts = opts
 }

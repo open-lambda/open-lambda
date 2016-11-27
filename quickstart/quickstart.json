@@ -1,5 +1,6 @@
 {
-  "registry": "local", 
-  "reg_dir": "handlers",
-  "worker_port": "8080"
+    "registry": "local",
+    "reg_dir": "handlers",
+    "worker_port": "8080",
+    "sandbox_config": {"processes": 10}
 }

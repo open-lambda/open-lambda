@@ -60,6 +60,7 @@ func (rm *RegistryManager) Create(name string) (Sandbox, error) {
 				AttachStderr: true,
 				ExposedPorts: internalAppPort,
 				Labels:       rm.docker_labels(),
+				Env:          rm.env,
 			},
 			HostConfig: &docker.HostConfig{
 				PortBindings:    portBindings,

@@ -10,6 +10,5 @@ RUN pip install rethinkdb
 
 # SERVER SCRIPT
 COPY server.py /
-COPY config.json /
 
 CMD ["python", "/server.py"]

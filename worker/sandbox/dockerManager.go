@@ -33,6 +33,7 @@ func (dm *DockerManager) Create(name string) (Sandbox, error) {
 				AttachStderr: true,
 				ExposedPorts: internalAppPort,
 				Labels:       dm.docker_labels(),
+				Env:          dm.env,
 			},
 			HostConfig: &docker.HostConfig{
 				PortBindings:    portBindings,
