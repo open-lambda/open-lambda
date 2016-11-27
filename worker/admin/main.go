@@ -379,6 +379,8 @@ func (admin *Admin) workers() error {
 			}
 			sandbox_config := c.Sandbox_config.(map[string]interface{})
 			sandbox_config["db"] = "rethinkdb"
+			sandbox_config["rethinkdb.host"] = container.NetworkSettings.IPAddress
+			sandbox_config["rethinkdb.port"] = 28015
 			worker_confs = append(worker_confs, c)
 		}
 	} else {

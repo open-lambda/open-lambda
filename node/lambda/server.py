@@ -22,28 +22,11 @@ def init():
     sys.stdout = sys.stderr # flask supresses stdout :(
     config = json.loads(os.environ['ol.config'])
     if config.get('db', None) == 'rethinkdb':
-        addr = os.environ.get('RETHINKDB_PORT_28015_TCP', None)
-        if addr != None:
-            host, port = addr.split('//')[-1].split(':')
-        else:
-            host, port = get_default_gateway_linux(), '28015'
-        try:
-            db_conn = rethinkdb.connect(host, int(port))
-        except:
-            print "connection to rethinkdb failed"
-
+        host = config.get('rethinkdb.host', 'localhost')
+        port = config.get('rethinkdb.port', 28015)
+        print 'Connect to %s:%d' % (host, port)
+        db_conn = rethinkdb.connect(host, port)
     initialized = True
-
-# source: http://stackoverflow.com/a/6556951
-def get_default_gateway_linux():
-    """Read the default gateway directly from /proc."""
-    with open("/proc/net/route") as fh:
-        for line in fh:
-            fields = line.strip().split()
-            if fields[1] != '00000000' or not int(fields[3], 16) & 2:
-                continue
-
-            return socket.inet_ntoa(struct.pack("<L", int(fields[2], 16)))
 
 # catch everything
 @app.route('/', defaults={'path': ''}, methods=['POST'])
