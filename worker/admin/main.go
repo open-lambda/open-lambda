@@ -22,7 +22,6 @@ import (
 // TODO: notes about setup process
 // TODO: notes about creating a directory in local
 // TODO: docker registry setup
-// TODO: pass through DB config to workers
 
 type Admin struct {
 	client *docker.Client
@@ -256,7 +255,11 @@ func (admin *Admin) status() error {
 		for typ, cids := range nodes {
 			fmt.Printf("  %s containers:\n", typ)
 			for _, cid := range cids {
-				fmt.Printf("    %s:\n", cid)
+				container, err := admin.client.InspectContainer(cid)
+				if err != nil {
+					return err
+				}
+				fmt.Printf("    %s [%s] => %s\n", container.Name, container.Config.Image, container.State.StateString())
 			}
 		}
 	}
