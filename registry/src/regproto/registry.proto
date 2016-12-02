@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package regproto;
+
+service Registry {
+	rpc Push(stream Chunk) returns (Received) {}
+}
+
+// Chunk of a file
+message Chunk {
+	//TODO AuthToken auth = 1;
+	string file_type = 1;
+	string name = 2;
+	bytes data = 3;
+}
+
+// Acknowledgement - maybe stream this for partial upload recovery
+// Do we need this or can we just use gRPC errors?
+message Received {
+	bool received = 1;
+}

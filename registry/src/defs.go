@@ -1,21 +1,49 @@
-package olreg
+package registry
 
 import (
-	r "github.com/open-lambda/code-registry/registry"
-)
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/grpclog"
 
-const (
-	CHUNK_SIZE = 1024
-	DATABASE   = "olregistry"
-	HANDLER    = "handler"
-	SPORT      = 10000
-	TABLE      = "handlers"
+	pb "github.com/open-lambda/open-lambda/registry/src/regproto"
+	r "gopkg.in/dancannon/gorethink.v2"
 )
 
 type PushClient struct {
-	Client *r.PushClient
+	ServerAddr string
+	ChunkSize  int
+	Conn       pb.RegistryClient
+}
+
+type PushClientFile struct {
+	Name string
+	Type string
+}
+
+type PushServer struct {
+	Port      int
+	ChunkSize int
+	Conn      *r.Session // sessions are thread safe?
+	Processor FileProcessor
+}
+
+// files: map of filetype -> file
+type FileProcessor interface {
+	Process(name string, files map[string][]byte) ([]DBInsert, error)
+}
+
+type DBInsert struct {
+	Table string
+	Data  *map[string]interface{}
 }
 
 type PullClient struct {
-	Client *r.PullClient
+	Type  string
+	Conn  *r.Session
+	Table string
+}
+
+func grpcCheck(err error) {
+	if err != nil {
+		grpclog.Fatal(grpc.ErrorDesc(err))
+	}
 }
