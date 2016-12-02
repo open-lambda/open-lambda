@@ -40,7 +40,10 @@
 .vagrant
 
 # Built stuff
-/hack/go
+/hack/go/bin
 /imgs
 /util/cluster
 /bin
+/registry/bin
+/registry/pushserver
+/registry/regpush
