@@ -1,9 +1,0 @@
-{
-	"distribution": "ubuntu",
-	"pip": [
-		"Flask",
-		"rethinkdb"
-	],
-	"apt":["ghostscript"],
-	"add":["tesseract-lambda.tar.gz"]
-}

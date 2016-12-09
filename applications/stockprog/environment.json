@@ -1,8 +1,0 @@
-{
-    "distribution": "ubuntu",
-    "pip": [
-        "Flask",
-        "rethinkdb",
-        "googlefinance"
-    ]
-}
