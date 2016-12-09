@@ -92,7 +92,7 @@ func (rm *RegistryManager) Pull(name string) error {
 	}
 
 	pfiles := rm.pullclient.Pull(name)
-	handler := files[HANDLER].([]byte)
+	handler := pfiles[HANDLER].([]byte)
 	r := bytes.NewReader(handler)
 
 	cmd := exec.Command("tar", "-xvzf", "-", "--directory", dir)

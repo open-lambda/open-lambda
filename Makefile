@@ -17,7 +17,7 @@ REG_DIR = $(GO_PATH)/src/github.com/open-lambda/open-lambda/registry
 ADMIN_DIR = $(GO_PATH)/src/github.com/open-lambda/open-lambda/worker/admin
 
 .PHONY: all
-all : .git/hooks/pre-commit bin/regpush imgs/olregistry imgs/lambda
+all : .git/hooks/pre-commit bin/regpush imgs/olregistry imgs/lambda bin/admin
 
 .git/hooks/pre-commit: util/pre-commit
 	cp util/pre-commit .git/hooks/pre-commit
