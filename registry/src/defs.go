@@ -8,6 +8,13 @@ import (
 	r "gopkg.in/dancannon/gorethink.v2"
 )
 
+const (
+	CHUNK_SIZE = 1024
+	DATABASE   = "olregistry"
+	HANDLER    = "handler"
+	TABLE      = "handlers"
+)
+
 type PushClient struct {
 	ServerAddr string
 	ChunkSize  int

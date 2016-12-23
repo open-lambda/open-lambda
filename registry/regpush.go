@@ -9,11 +9,6 @@ import (
 	r "github.com/open-lambda/open-lambda/registry/src"
 )
 
-const (
-	CHUNK_SIZE = 1024
-	HANDLER    = "handler"
-)
-
 func main() {
 	if len(os.Args) != 4 {
 		log.Fatal("Usage: pushserver <server_ip> <name> <file>")
@@ -22,8 +17,8 @@ func main() {
 	name := os.Args[2]
 	fname := os.Args[3]
 
-	pushc := r.InitPushClient(server_ip, CHUNK_SIZE)
+	pushc := r.InitPushClient(server_ip, r.CHUNK_SIZE)
 
-	handler := r.PushClientFile{Name: fname, Type: HANDLER}
+	handler := r.PushClientFile{Name: fname, Type: r.HANDLER}
 	pushc.Push(name, handler)
 }

@@ -13,12 +13,6 @@ import (
 	"github.com/open-lambda/open-lambda/worker/config"
 )
 
-const (
-	DATABASE = "olregistry"
-	TABLE    = "handlers"
-	HANDLER  = "handler"
-)
-
 type RegistryManager struct {
 	DockerManagerBase
 	pullclient  *r.PullClient
@@ -28,7 +22,7 @@ type RegistryManager struct {
 func NewRegistryManager(opts *config.Config) (manager *RegistryManager, err error) {
 	manager = new(RegistryManager)
 	manager.DockerManagerBase.init(opts)
-	manager.pullclient = r.InitPullClient(opts.Reg_cluster, DATABASE, TABLE)
+	manager.pullclient = r.InitPullClient(opts.Reg_cluster, r.DATABASE, r.TABLE)
 	manager.handler_dir = "/var/tmp/olhandlers/"
 
 	if err := os.Mkdir(manager.handler_dir, os.ModeDir); err != nil {
@@ -92,7 +86,7 @@ func (rm *RegistryManager) Pull(name string) error {
 	}
 
 	pfiles := rm.pullclient.Pull(name)
-	handler := pfiles[HANDLER].([]byte)
+	handler := pfiles[r.HANDLER].([]byte)
 	r := bytes.NewReader(handler)
 
 	cmd := exec.Command("tar", "-xvzf", "-", "--directory", dir)

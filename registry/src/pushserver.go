@@ -3,6 +3,7 @@ package registry
 import (
 	"fmt"
 	"io"
+	"log"
 	"net"
 
 	"google.golang.org/grpc"
@@ -40,6 +41,7 @@ func (s *PushServer) Push(stream pb.Registry_PushServer) error {
 				grpclog.Fatal("Empty push request or name field")
 			}
 
+			log.Printf("Save %v chunk(s)\n", name)
 			err = s.processAndStore(name, files)
 			if err != nil {
 				return err

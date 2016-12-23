@@ -10,23 +10,16 @@ import (
 	r "github.com/open-lambda/open-lambda/registry/src"
 )
 
-const (
-	CHUNK_SIZE = 1024
-	DATABASE   = "olregistry"
-	HANDLER    = "handler"
-	TABLE      = "handlers"
-)
-
 type FileProcessor struct{}
 
 func (p FileProcessor) Process(name string, files map[string][]byte) ([]r.DBInsert, error) {
 	ret := make([]r.DBInsert, 0)
 	f := map[string]interface{}{
 		"id":      name,
-		"handler": files[HANDLER],
+		"handler": files[r.HANDLER],
 	}
 	insert := r.DBInsert{
-		Table: TABLE,
+		Table: r.TABLE,
 		Data:  &f,
 	}
 	ret = append(ret, insert)
@@ -36,7 +29,7 @@ func (p FileProcessor) Process(name string, files map[string][]byte) ([]r.DBInse
 
 func InitPushServer(port int, cluster []string) *r.PushServer {
 	proc := FileProcessor{}
-	return r.InitPushServer(cluster, DATABASE, proc, port, CHUNK_SIZE, TABLE)
+	return r.InitPushServer(cluster, r.DATABASE, proc, port, r.CHUNK_SIZE, r.TABLE)
 }
 
 func main() {
