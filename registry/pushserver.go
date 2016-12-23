@@ -1,12 +1,6 @@
-// +build pushserver
-
-package main
+package registry
 
 import (
-	"log"
-	"os"
-	"strconv"
-
 	r "github.com/open-lambda/open-lambda/registry/src"
 )
 
@@ -30,18 +24,4 @@ func (p FileProcessor) Process(name string, files map[string][]byte) ([]r.DBInse
 func InitPushServer(port int, cluster []string) *r.PushServer {
 	proc := FileProcessor{}
 	return r.InitPushServer(cluster, r.DATABASE, proc, port, r.CHUNK_SIZE, r.TABLE)
-}
-
-func main() {
-	if len(os.Args) < 3 {
-		log.Fatal("Usage: pushserver <port> <cluster_ip1> <cluster_ip2>...")
-	}
-
-	port, err := strconv.Atoi(os.Args[1])
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	pushs := InitPushServer(port, os.Args[2:])
-	pushs.Run()
 }

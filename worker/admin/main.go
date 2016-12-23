@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	docker "github.com/fsouza/go-dockerclient"
+	"github.com/open-lambda/open-lambda/registry"
 	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/sandbox"
 	"github.com/open-lambda/open-lambda/worker/server"
@@ -92,6 +93,8 @@ func NewAdmin() *Admin {
 	admin.fns["workers"] = admin.workers
 	admin.fns["nginx"] = admin.nginx
 	admin.fns["kill"] = admin.kill
+	admin.fns["olstore"] = admin.olstore
+	admin.fns["upload"] = admin.upload
 	return &admin
 }
 
@@ -604,6 +607,49 @@ func (admin *Admin) kill() error {
 		}
 	}
 
+	return nil
+}
+
+func (admin *Admin) olstore() error {
+	args := NewCmdArgs()
+	port := args.flags.Int("port", 8080, "port to push/pull lambdas")
+	args.Parse(true)
+
+	nodes, err := admin.cluster_nodes(*args.cluster)
+	if err != nil {
+		return err
+	}
+
+	ips := []string{}
+	for _, cid := range nodes["db"] {
+		container, err := admin.client.InspectContainer(cid)
+		if err != nil {
+			return err
+		}
+
+		ips = append(ips, container.NetworkSettings.IPAddress)
+	}
+
+	if len(ips) == 0 {
+		fmt.Printf("No rethinkdb instances running this cluster\n")
+		return nil
+	}
+
+	fmt.Printf("Port: %v\n", port)
+	fmt.Printf("IPs: %v\n", ips)
+
+	pushs := registry.InitPushServer(*port, ips)
+	pushs.Run()
+	return fmt.Errorf("Push Server Crashed\n")
+}
+
+func (admin *Admin) upload() error {
+	args := NewCmdArgs()
+	server := args.flags.String("server", "", "olstore addr")
+	name := args.flags.String("name", "", "handler name")
+	fname := args.flags.String("file", "", "file path")
+	args.Parse(false)
+	registry.Push(*server, *name, *fname)
 	return nil
 }
 
