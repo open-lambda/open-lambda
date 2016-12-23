@@ -89,10 +89,11 @@ func NewAdmin() *Admin {
 	admin.fns["new"] = admin.new_cluster
 	admin.fns["status"] = admin.status
 	admin.fns["rethinkdb"] = admin.rethinkdb
-	admin.fns["worker"] = admin.worker
+	admin.fns["worker-exec"] = admin.worker_exec
 	admin.fns["workers"] = admin.workers
 	admin.fns["nginx"] = admin.nginx
 	admin.fns["kill"] = admin.kill
+	admin.fns["olstore-exec"] = admin.olstore_exec
 	admin.fns["olstore"] = admin.olstore
 	admin.fns["upload"] = admin.upload
 	return &admin
@@ -342,7 +343,7 @@ func (admin *Admin) rethinkdb() error {
 	return nil
 }
 
-func (admin *Admin) worker() error {
+func (admin *Admin) worker_exec() error {
 	flags := flag.NewFlagSet("flag", flag.ExitOnError)
 	conf := flags.String("config", "", "give a json config file")
 	flags.Parse(os.Args[2:])
@@ -417,7 +418,7 @@ func (admin *Admin) workers() error {
 		}
 		cmd := []string{
 			os.Args[0],
-			"worker",
+			"worker-exec",
 			"-config=" + conf_path,
 		}
 		proc, err := os.StartProcess(os.Args[0], cmd, &attr)
@@ -610,11 +611,23 @@ func (admin *Admin) kill() error {
 	return nil
 }
 
+func (admin *Admin) olstore_exec() error {
+	flags := flag.NewFlagSet("flag", flag.ExitOnError)
+	port := flags.Int("port", 7080, "port to push/pull lambdas")
+	ips := flags.String("ips", "", "comma-separated rethinkdb addrs")
+	flags.Parse(os.Args[2:])
+
+	pushs := registry.InitPushServer(*port, strings.Split(*ips, ","))
+	pushs.Run()
+	return fmt.Errorf("Push Server Crashed\n")
+}
+
 func (admin *Admin) olstore() error {
 	args := NewCmdArgs()
-	port := args.flags.Int("port", 8080, "port to push/pull lambdas")
+	port := args.flags.Int("port", 7080, "port to push/pull lambdas")
 	args.Parse(true)
 
+	// get rethinkdb addrs
 	nodes, err := admin.cluster_nodes(*args.cluster)
 	if err != nil {
 		return err
@@ -635,12 +648,33 @@ func (admin *Admin) olstore() error {
 		return nil
 	}
 
-	fmt.Printf("Port: %v\n", port)
-	fmt.Printf("IPs: %v\n", ips)
+	// stdout+stderr both go to log
+	log_path := args.LogPath(fmt.Sprintf("olstore.out"))
+	f, err := os.Create(log_path)
+	if err != nil {
+		return err
+	}
+	attr := os.ProcAttr{
+		Files: []*os.File{nil, f, f},
+	}
+	cmd := []string{
+		os.Args[0],
+		"olstore-exec",
+		"-ips=" + strings.Join(ips, ","),
+		fmt.Sprintf("-port=%v", *port),
+	}
+	proc, err := os.StartProcess(os.Args[0], cmd, &attr)
+	if err != nil {
+		return err
+	}
 
-	pushs := registry.InitPushServer(*port, ips)
-	pushs.Run()
-	return fmt.Errorf("Push Server Crashed\n")
+	pidpath := args.PidPath("olstore")
+	if err := ioutil.WriteFile(pidpath, []byte(fmt.Sprintf("%d", proc.Pid)), 0644); err != nil {
+		return err
+	}
+
+	fmt.Printf("Started olstore: pid %d, port %v, log at %s\n", proc.Pid, *port, log_path)
+	return nil
 }
 
 func (admin *Admin) upload() error {
