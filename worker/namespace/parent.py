@@ -1,5 +1,3 @@
-#TODO make sure listening on the pipe blocks correctly, better error handling
-
 import os, sys, ns, time
 from subprocess import check_output
 
@@ -10,16 +8,16 @@ def handler(args, path):
     try:
         ret = lambda_func(args)
     except:
-        ret = json.dumps{'error': 'handler execution failed with args: %s' % args}
+        ret = json.dumps('"error": "handler execution failed"')
     
-    with open(path) as pipe:
-        pipe.write(ret)
+    with open(path) as fifo:
+        fifo.write(ret)
 
 def listen(path):
     args = ""
-    with open(path) as pipe:
+    with open(path) as fifo:
         while True:
-            data = pipe.read()
+            data = fifo.read()
             if len(data) == 0:
                 break
             args += data
@@ -27,21 +25,19 @@ def listen(path):
     return args
 
 def main(pid, inpath, outpath):
-    # parent never exits
     while True:
         args = listen(inpath)
-
         r = forkenter(pid)
+
+        # child escapes
         if r == 0:
-            break       # grandchild escapes
-        elif r < 0:
-            sys.exit(0) # child dies quietly
+            break
 
     handler(args, outpath)
 
 if __name__ == '__main__':
     if len(sys.argv) < 3:
-        print('Usage: test.py <ns_pid> <input_pipe> <output_pipe>')
+        print('Usage: parent.py <ns_pid> <input_fifo> <output_fifo>')
         sys.exit(1)
     else:
-        main(sys.argv[1], sys.argv[2] sys.argv[3])
+        main(sys.argv[1], sys.argv[2], sys.argv[3])
