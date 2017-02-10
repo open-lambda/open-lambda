@@ -1,4 +1,4 @@
-import os, sys, ns, time
+import os, sys, ns, json
 from subprocess import check_output
 
 sys.path.append('/handler') # assume submitted .py file is /handler/lambda_func
@@ -6,12 +6,12 @@ sys.path.append('/handler') # assume submitted .py file is /handler/lambda_func
 def handler(args, path):
     import lambda_func
     try:
-        ret = lambda_func(args)
-    except:
-        ret = json.dumps('"error": "handler execution failed"')
+        ret = lambda_func.handler(None, json.loads(args))
+    except Exception as e:
+        ret = json.dumps({"error": "handler execution failed: %s" % str(e)})
     
-    with open(path) as fifo:
-        fifo.write(ret)
+    with open(path, 'wb') as fifo:
+        fifo.write(ret+'\n')
 
 def listen(path):
     args = ""
@@ -25,13 +25,15 @@ def listen(path):
     return args
 
 def main(pid, inpath, outpath):
+    cwd = os.getcwd()
     while True:
         args = listen(inpath)
-        r = forkenter(pid)
+        r = ns.forkenter(pid)
 
         # child escapes
         if r == 0:
             break
+        os.chdir(cwd)
 
     handler(args, outpath)
 
