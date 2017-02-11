@@ -2,7 +2,7 @@
 
 Manages lambdas using the OpenLambda registry (built on RethinkDB).
 
-Creates lambda containers using the generic base image defined in 
+Creates lambda containers using the generic base image defined in
 dockerManagerBase.go (BASE_IMAGE)
 
 Handler code is mapped into the container by attaching a directory
@@ -91,7 +91,7 @@ func (rm *RegistryManager) Create(name string) (Sandbox, error) {
 		return nil, err
 	}
 
-	sandbox := &DockerSandbox{name: name, container: container, mgr: rm}
+	sandbox := &DockerSandbox{name: name, container: container, client: rm.client()}
 	return sandbox, nil
 }
 

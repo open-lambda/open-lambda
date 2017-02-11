@@ -24,7 +24,7 @@ import (
 type DockerSandbox struct {
 	name      string
 	container *docker.Container
-	mgr       DockerSandboxManager
+	client    *docker.Client
 }
 
 func (s *DockerSandbox) dockerError(outer error) (err error) {
@@ -48,7 +48,7 @@ func (s *DockerSandbox) dockerError(outer error) (err error) {
 }
 
 func (s *DockerSandbox) InspectUpdate() error {
-	container, err := s.mgr.client().InspectContainer(s.container.ID)
+	container, err := s.client.InspectContainer(s.container.ID)
 	if err != nil {
 		return err
 	}
@@ -101,7 +101,7 @@ func (s *DockerSandbox) Port() (port string, err error) {
 
 /* Starts the container */
 func (s *DockerSandbox) Start() error {
-	if err := s.mgr.client().StartContainer(s.container.ID, s.container.HostConfig); err != nil {
+	if err := s.client.StartContainer(s.container.ID, s.container.HostConfig); err != nil {
 		log.Printf("failed to start container with err %v\n", err)
 		return s.dockerError(err)
 	}
@@ -114,7 +114,7 @@ func (s *DockerSandbox) Stop() error {
 	// TODO(tyler): is there any advantage to trying to stop
 	// before killing?  (i.e., use SIGTERM instead SIGKILL)
 	opts := docker.KillContainerOptions{ID: s.container.ID}
-	if err := s.mgr.client().KillContainer(opts); err != nil {
+	if err := s.client.KillContainer(opts); err != nil {
 		log.Printf("failed to kill container with error %v\n", err)
 		return s.dockerError(err)
 	}
@@ -125,7 +125,7 @@ func (s *DockerSandbox) Stop() error {
 /* Pauses the container */
 func (s *DockerSandbox) Pause() error {
 
-	if err := s.mgr.client().PauseContainer(s.container.ID); err != nil {
+	if err := s.client.PauseContainer(s.container.ID); err != nil {
 		log.Printf("failed to pause container with error %v\n", err)
 		return s.dockerError(err)
 	}
@@ -135,7 +135,7 @@ func (s *DockerSandbox) Pause() error {
 
 /* Unpauses the container */
 func (s *DockerSandbox) Unpause() error {
-	if err := s.mgr.client().UnpauseContainer(s.container.ID); err != nil {
+	if err := s.client.UnpauseContainer(s.container.ID); err != nil {
 		log.Printf("failed to unpause container %s with err %v\n", s.name, err)
 		return s.dockerError(err)
 	}
@@ -145,7 +145,7 @@ func (s *DockerSandbox) Unpause() error {
 
 /* Frees all resources associated with the lambda (stops the container if necessary) */
 func (s *DockerSandbox) Remove() error {
-	if err := s.mgr.client().RemoveContainer(docker.RemoveContainerOptions{
+	if err := s.client.RemoveContainer(docker.RemoveContainerOptions{
 		ID: s.container.ID,
 	}); err != nil {
 		log.Printf("failed to rm container with err %v", err)
@@ -158,7 +158,7 @@ func (s *DockerSandbox) Remove() error {
 /* Return log output for the container */
 func (s *DockerSandbox) Logs() (string, error) {
 	buf := &bytes.Buffer{}
-	err := s.mgr.client().Logs(docker.LogsOptions{
+	err := s.client.Logs(docker.LogsOptions{
 		Container:         s.container.ID,
 		OutputStream:      buf,
 		ErrorStream:       buf,

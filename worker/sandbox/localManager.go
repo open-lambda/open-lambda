@@ -57,7 +57,7 @@ func (lm *LocalManager) Create(name string) (Sandbox, error) {
 		return nil, err
 	}
 
-	sandbox := &DockerSandbox{name: name, container: container, mgr: lm}
+	sandbox := &DockerSandbox{name: name, container: container, client: lm.client()}
 
 	return sandbox, nil
 }

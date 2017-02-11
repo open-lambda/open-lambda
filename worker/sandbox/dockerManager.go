@@ -46,7 +46,7 @@ func (dm *DockerManager) Create(name string) (Sandbox, error) {
 		return nil, err
 	}
 
-	sandbox := &DockerSandbox{name: name, container: container, mgr: dm}
+	sandbox := &DockerSandbox{name: name, container: container, client: dm.client()}
 	return sandbox, nil
 }
 
