@@ -1,3 +1,12 @@
+/*
+
+Provides the mechanism for managing a given Docker container-based lambda.
+
+Must be paired with a DockerSandboxManager which handles pulling handler
+code, initializing containers, etc.
+
+*/
+
 package sandbox
 
 import (
@@ -44,6 +53,7 @@ func (s *DockerSandbox) InspectUpdate() error {
 		return err
 	}
 	s.container = container
+
 	return nil
 }
 
@@ -61,6 +71,7 @@ func (s *DockerSandbox) State() (hstate state.HandlerState, err error) {
 	} else {
 		hstate = state.Stopped
 	}
+
 	return hstate, nil
 }
 
@@ -84,10 +95,11 @@ func (s *DockerSandbox) Port() (port string, err error) {
 	if strings.HasPrefix(port, "unix") {
 		port = strings.Split(port, ":")[1]
 	}
+
 	return port, nil
 }
 
-// Starts a given container
+/* Starts the container */
 func (s *DockerSandbox) Start() error {
 	if err := s.mgr.client().StartContainer(s.container.ID, s.container.HostConfig); err != nil {
 		log.Printf("failed to start container with err %v\n", err)
@@ -97,7 +109,7 @@ func (s *DockerSandbox) Start() error {
 	return nil
 }
 
-// Stops a given container
+/* Stops the container */
 func (s *DockerSandbox) Stop() error {
 	// TODO(tyler): is there any advantage to trying to stop
 	// before killing?  (i.e., use SIGTERM instead SIGKILL)
@@ -106,10 +118,11 @@ func (s *DockerSandbox) Stop() error {
 		log.Printf("failed to kill container with error %v\n", err)
 		return s.dockerError(err)
 	}
+
 	return nil
 }
 
-// Pauses a given container
+/* Pauses the container */
 func (s *DockerSandbox) Pause() error {
 
 	if err := s.mgr.client().PauseContainer(s.container.ID); err != nil {
@@ -120,7 +133,7 @@ func (s *DockerSandbox) Pause() error {
 	return nil
 }
 
-// Unpauses a given container
+/* Unpauses the container */
 func (s *DockerSandbox) Unpause() error {
 	if err := s.mgr.client().UnpauseContainer(s.container.ID); err != nil {
 		log.Printf("failed to unpause container %s with err %v\n", s.name, err)
@@ -130,8 +143,7 @@ func (s *DockerSandbox) Unpause() error {
 	return nil
 }
 
-// Frees all resources associated with a given lambda
-// Will stop if needed
+/* Frees all resources associated with the lambda (stops the container if necessary) */
 func (s *DockerSandbox) Remove() error {
 	if err := s.mgr.client().RemoveContainer(docker.RemoveContainerOptions{
 		ID: s.container.ID,
@@ -143,7 +155,7 @@ func (s *DockerSandbox) Remove() error {
 	return nil
 }
 
-// Return recent log output for container
+/* Return log output for the container */
 func (s *DockerSandbox) Logs() (string, error) {
 	buf := &bytes.Buffer{}
 	err := s.mgr.client().Logs(docker.LogsOptions{

@@ -1,3 +1,15 @@
+/*
+
+Manages lambdas using the OpenLambda registry (built on RethinkDB).
+
+Creates lambda containers using the generic base image defined in 
+dockerManagerBase.go (BASE_IMAGE)
+
+Handler code is mapped into the container by attaching a directory
+(<handler_dir>/<lambda_name>) when the container is started.
+
+*/
+
 package sandbox
 
 import (
@@ -25,6 +37,8 @@ func NewRegistryManager(opts *config.Config) (manager *RegistryManager, err erro
 	manager.pullclient = r.InitPullClient(opts.Reg_cluster, r.DATABASE, r.TABLE)
 	manager.handler_dir = "/var/tmp/olhandlers/"
 
+	// Initialize a directory for the handler code. This directory is
+	// mapped into the lambda container in RegistryManager.Create
 	if err := os.Mkdir(manager.handler_dir, os.ModeDir); err != nil {
 		err = os.RemoveAll(manager.handler_dir)
 		if err != nil {
@@ -35,6 +49,8 @@ func NewRegistryManager(opts *config.Config) (manager *RegistryManager, err erro
 			log.Fatal("failed to create handler directory: ", err)
 		}
 	}
+
+	// Check that we have the base image for the lambda containers
 	exists, err := manager.DockerImageExists(BASE_IMAGE)
 	if err != nil {
 		return nil, err
@@ -66,7 +82,7 @@ func (rm *RegistryManager) Create(name string) (Sandbox, error) {
 			HostConfig: &docker.HostConfig{
 				PortBindings:    portBindings,
 				PublishAllPorts: true,
-				Binds:           volumes,
+				Binds:           volumes, // attach handler code
 			},
 		},
 	)
@@ -89,6 +105,7 @@ func (rm *RegistryManager) Pull(name string) error {
 	handler := pfiles[r.HANDLER].([]byte)
 	r := bytes.NewReader(handler)
 
+	// TODO: try to uncompress without execing - faster?
 	cmd := exec.Command("tar", "-xvzf", "-", "--directory", dir)
 	cmd.Stdin = r
 	return cmd.Run()

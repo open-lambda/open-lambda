@@ -5,9 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/open-lambda/open-lambda/worker/config"
-
 	docker "github.com/fsouza/go-dockerclient"
+	"github.com/open-lambda/open-lambda/worker/config"
 )
 
 type LocalManager struct {
@@ -59,6 +58,7 @@ func (lm *LocalManager) Create(name string) (Sandbox, error) {
 	}
 
 	sandbox := &DockerSandbox{name: name, container: container, mgr: lm}
+
 	return sandbox, nil
 }
 

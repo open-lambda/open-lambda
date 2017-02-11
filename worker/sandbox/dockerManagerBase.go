@@ -1,3 +1,10 @@
+/*
+
+Defines common variables and functions to be shared
+by managers which managing Docker containers.
+
+*/
+
 package sandbox
 
 import (
@@ -22,7 +29,7 @@ type DockerManagerBase struct {
 }
 
 func (manager *DockerManagerBase) init(opts *config.Config) {
-	// NOTE: This requires that users have pre-configured the environement a docker daemon
+	// NOTE: This requires a running docker daemon on the host
 	if c, err := docker.NewClientFromEnv(); err != nil {
 		log.Fatal("failed to get docker client: ", err)
 	} else {

@@ -1,3 +1,10 @@
+/*
+
+Defines the sandbox interface. This interface abstracts all mechanisms
+surrounding a given sandbox type (Docker container, cgroup, etc).
+
+*/
+
 package sandbox
 
 import "github.com/open-lambda/open-lambda/worker/handler/state"
@@ -16,7 +23,7 @@ type Sandbox interface {
 	Unpause() error
 
 	// Frees all resources associated with a given lambda
-	// Will stop if needed
+	// (will stop if needed)
 	Remove() error
 
 	// Return recent log output for sandbox
