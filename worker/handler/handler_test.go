@@ -8,10 +8,10 @@ import (
 
 	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/handler/state"
-	"github.com/open-lambda/open-lambda/worker/sandbox"
+	"github.com/open-lambda/open-lambda/worker/manager"
 )
 
-func NewManager() (manager *sandbox.LocalManager) {
+func NewManager() (m *manager.LocalManager) {
 	conf, err := config.ParseConfig(os.Getenv("WORKER_CONFIG"))
 	if err != nil {
 		log.Fatal(err)
@@ -20,11 +20,12 @@ func NewManager() (manager *sandbox.LocalManager) {
 	log.Printf("Set skip_pull_existing = true\n")
 	conf.Skip_pull_existing = true
 
-	manager, err = sandbox.NewLocalManager(conf)
+	m, err = manager.NewLocalManager(conf)
 	if err != nil {
 		log.Fatal(err)
 	}
-	return manager
+
+	return m
 }
 
 func TestHandlerLookupSame(t *testing.T) {

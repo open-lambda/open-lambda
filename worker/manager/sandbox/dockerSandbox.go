@@ -27,6 +27,10 @@ type DockerSandbox struct {
 	client    *docker.Client
 }
 
+func NewDockerSandbox(name string, container *docker.Container, client *docker.Client) *DockerSandbox {
+	return &DockerSandbox{name: name, container: container, client: client}
+}
+
 func (s *DockerSandbox) dockerError(outer error) (err error) {
 	buf := bytes.NewBufferString(outer.Error() + ".  ")
 

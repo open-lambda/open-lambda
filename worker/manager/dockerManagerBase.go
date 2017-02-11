@@ -5,7 +5,7 @@ by managers which managing Docker containers.
 
 */
 
-package sandbox
+package manager
 
 import (
 	"fmt"

@@ -1,11 +1,11 @@
+package sandbox
+
 /*
 
 Defines the sandbox interface. This interface abstracts all mechanisms
 surrounding a given sandbox type (Docker container, cgroup, etc).
 
 */
-
-package sandbox
 
 import "github.com/open-lambda/open-lambda/worker/handler/state"
 

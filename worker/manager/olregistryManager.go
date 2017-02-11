@@ -1,16 +1,16 @@
+package manager
+
 /*
 
 Manages lambdas using the OpenLambda registry (built on RethinkDB).
 
 Creates lambda containers using the generic base image defined in
-dockerManagerBase.go (BASE_IMAGE)
+dockerManagerBase.go (BASE_IMAGE).
 
 Handler code is mapped into the container by attaching a directory
 (<handler_dir>/<lambda_name>) when the container is started.
 
 */
-
-package sandbox
 
 import (
 	"bytes"
@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 
 	docker "github.com/fsouza/go-dockerclient"
+	sb "github.com/open-lambda/open-lambda/worker/manager/sandbox"
 	r "github.com/open-lambda/open-lambda/registry/src"
 	"github.com/open-lambda/open-lambda/worker/config"
 )
@@ -61,7 +62,7 @@ func NewRegistryManager(opts *config.Config) (manager *RegistryManager, err erro
 	return manager, nil
 }
 
-func (rm *RegistryManager) Create(name string) (Sandbox, error) {
+func (rm *RegistryManager) Create(name string) (sb.Sandbox, error) {
 	internalAppPort := map[docker.Port]struct{}{"8080/tcp": {}}
 	portBindings := map[docker.Port][]docker.PortBinding{
 		"8080/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}}}
@@ -91,7 +92,8 @@ func (rm *RegistryManager) Create(name string) (Sandbox, error) {
 		return nil, err
 	}
 
-	sandbox := &DockerSandbox{name: name, container: container, client: rm.client()}
+	sandbox := sb.NewDockerSandbox(name, container, rm.client())
+
 	return sandbox, nil
 }
 

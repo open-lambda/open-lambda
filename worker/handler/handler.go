@@ -6,18 +6,19 @@ import (
 	"time"
 
 	"github.com/open-lambda/open-lambda/worker/handler/state"
-	"github.com/open-lambda/open-lambda/worker/sandbox"
+	"github.com/open-lambda/open-lambda/worker/manager"
+	"github.com/open-lambda/open-lambda/worker/manager/sandbox"
 )
 
 type HandlerSetOpts struct {
-	Sm  sandbox.SandboxManager
+	Sm  manager.SandboxManager
 	Lru *HandlerLRU
 }
 
 type HandlerSet struct {
 	mutex    sync.Mutex
 	handlers map[string]*Handler
-	sm       sandbox.SandboxManager
+	sm       manager.SandboxManager
 	lru      *HandlerLRU
 }
 

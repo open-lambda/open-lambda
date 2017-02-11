@@ -1,10 +1,20 @@
-package sandbox
+package manager
+
+/*
+
+Manages lambdas using the Docker registry.
+
+Each lambda endpoint must have an associated container image
+in the registry, named with its ID.
+
+*/
 
 import (
 	"fmt"
 	"log"
 
 	docker "github.com/fsouza/go-dockerclient"
+	sb "github.com/open-lambda/open-lambda/worker/manager/sandbox"
 	"github.com/open-lambda/open-lambda/worker/config"
 )
 
@@ -20,7 +30,7 @@ func NewDockerManager(opts *config.Config) (manager *DockerManager, err error) {
 	return manager, nil
 }
 
-func (dm *DockerManager) Create(name string) (Sandbox, error) {
+func (dm *DockerManager) Create(name string) (sb.Sandbox, error) {
 	internalAppPort := map[docker.Port]struct{}{"8080/tcp": {}}
 	portBindings := map[docker.Port][]docker.PortBinding{
 		"8080/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}}}
@@ -46,7 +56,7 @@ func (dm *DockerManager) Create(name string) (Sandbox, error) {
 		return nil, err
 	}
 
-	sandbox := &DockerSandbox{name: name, container: container, client: dm.client()}
+	sandbox := sb.NewDockerSandbox(name, container, dm.client())
 	return sandbox, nil
 }
 

@@ -12,11 +12,11 @@ import (
 
 	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/handler"
-	"github.com/open-lambda/open-lambda/worker/sandbox"
+	"github.com/open-lambda/open-lambda/worker/manager"
 )
 
 type Server struct {
-	manager  sandbox.SandboxManager
+	manager  manager.SandboxManager
 	config   *config.Config
 	handlers *handler.HandlerSet
 }
@@ -31,18 +31,20 @@ func newHttpErr(msg string, code int) *httpErr {
 }
 
 func NewServer(config *config.Config) (*Server, error) {
-	var sm sandbox.SandboxManager
+	var sm manager.SandboxManager
 	var err error
-	// create server
+
+	// Create manager according to config
 	if config.Registry == "docker" {
-		sm, err = sandbox.NewDockerManager(config)
+		sm, err = manager.NewDockerManager(config)
 	} else if config.Registry == "olregistry" {
-		sm, err = sandbox.NewRegistryManager(config)
+		sm, err = manager.NewRegistryManager(config)
 	} else if config.Registry == "local" {
-		sm, err = sandbox.NewLocalManager(config)
+		sm, err = manager.NewLocalManager(config)
 	} else {
 		return nil, errors.New("invalid 'registry' field in config")
 	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +62,7 @@ func NewServer(config *config.Config) (*Server, error) {
 	return server, nil
 }
 
-func (s *Server) Manager() sandbox.SandboxManager {
+func (s *Server) Manager() manager.SandboxManager {
 	return s.manager
 }
 

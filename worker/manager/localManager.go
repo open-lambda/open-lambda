@@ -1,4 +1,16 @@
-package sandbox
+package manager
+
+/*
+
+Manages lambdas using a "local registry" (directory containing handlers).
+
+Creates lambda containers using the generic base image defined in
+dockerManagerBase.go (BASE_IMAGE).
+
+Handler code is mapped into the container by attaching a directory
+(<handler_dir>/<lambda_name>) when the container is started.
+
+*/
 
 import (
 	"fmt"
@@ -6,6 +18,7 @@ import (
 	"path/filepath"
 
 	docker "github.com/fsouza/go-dockerclient"
+	sb "github.com/open-lambda/open-lambda/worker/manager/sandbox"
 	"github.com/open-lambda/open-lambda/worker/config"
 )
 
@@ -27,7 +40,7 @@ func NewLocalManager(opts *config.Config) (manager *LocalManager, err error) {
 	return manager, nil
 }
 
-func (lm *LocalManager) Create(name string) (Sandbox, error) {
+func (lm *LocalManager) Create(name string) (sb.Sandbox, error) {
 	internalAppPort := map[docker.Port]struct{}{"8080/tcp": {}}
 	portBindings := map[docker.Port][]docker.PortBinding{
 		"8080/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}}}
@@ -57,7 +70,7 @@ func (lm *LocalManager) Create(name string) (Sandbox, error) {
 		return nil, err
 	}
 
-	sandbox := &DockerSandbox{name: name, container: container, client: lm.client()}
+	sandbox := sb.NewDockerSandbox(name, container, lm.client())
 
 	return sandbox, nil
 }
