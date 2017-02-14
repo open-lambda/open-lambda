@@ -59,6 +59,10 @@ func (args *CmdArgs) LogPath(name string) string {
 	return path.Join(*args.cluster, "logs", name)
 }
 
+func (args *CmdArgs) WorkerPath(name string) string {
+	return path.Join(*args.cluster, "workers", name)
+}
+
 func (args *CmdArgs) PidPath(name string) string {
 	return path.Join(*args.cluster, "logs", name+".pid")
 }
@@ -158,6 +162,10 @@ func (admin *Admin) new_cluster() error {
 		return err
 	}
 
+	if err := os.Mkdir(path.Join(*args.cluster, "workers"), 0700); err != nil {
+		return err
+	}
+
 	if err := os.Mkdir(args.RegistryPath(), 0700); err != nil {
 		return err
 	}
@@ -171,6 +179,7 @@ func (admin *Admin) new_cluster() error {
 		Cluster_name:   *args.cluster,
 		Registry:       "local",
 		Reg_dir:        args.RegistryPath(),
+		Worker_dir:     args.WorkerPath("default"),
 		Sandbox_config: map[string]interface{}{"processes": 10},
 	}
 	if err := c.Defaults(); err != nil {
@@ -403,6 +412,10 @@ func (admin *Admin) workers() error {
 	for i, conf := range worker_confs {
 		conf_path := args.ConfigPath(fmt.Sprintf("worker-%d", i))
 		conf.Worker_port = fmt.Sprintf("%d", *portbase+i)
+		conf.Worker_dir = args.WorkerPath(fmt.Sprintf("worker-%d", i))
+		if err := os.Mkdir(conf.Worker_dir, 0700); err != nil {
+			return err
+		}
 		if err := conf.Save(conf_path); err != nil {
 			return err
 		}

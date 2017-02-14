@@ -18,8 +18,8 @@ import (
 	"path/filepath"
 
 	docker "github.com/fsouza/go-dockerclient"
-	sb "github.com/open-lambda/open-lambda/worker/manager/sandbox"
 	"github.com/open-lambda/open-lambda/worker/config"
+	sb "github.com/open-lambda/open-lambda/worker/manager/sandbox"
 )
 
 type LocalManager struct {
@@ -40,14 +40,17 @@ func NewLocalManager(opts *config.Config) (manager *LocalManager, err error) {
 	return manager, nil
 }
 
-func (lm *LocalManager) Create(name string) (sb.Sandbox, error) {
+func (lm *LocalManager) Create(name string, sandbox_dir string) (sb.Sandbox, error) {
 	internalAppPort := map[docker.Port]struct{}{"8080/tcp": {}}
 	portBindings := map[docker.Port][]docker.PortBinding{
 		"8080/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}}}
 
 	handler := filepath.Join(lm.handler_dir, name)
-	volumes := []string{fmt.Sprintf("%s:%s", handler, "/handler/")}
+	volumes := []string{
+		fmt.Sprintf("%s:%s", handler, "/handler/"),
+		fmt.Sprintf("%s:%s", sandbox_dir, "/host/")}
 
+	// TODO: shouldn't this go insider NewDockerSandbox?
 	container, err := lm.client().CreateContainer(
 		docker.CreateContainerOptions{
 			Config: &docker.Config{
@@ -70,7 +73,7 @@ func (lm *LocalManager) Create(name string) (sb.Sandbox, error) {
 		return nil, err
 	}
 
-	sandbox := sb.NewDockerSandbox(name, container, lm.client())
+	sandbox := sb.NewDockerSandbox(name, sandbox_dir, container, lm.client())
 
 	return sandbox, nil
 }

@@ -50,8 +50,9 @@ func NewServer(config *config.Config) (*Server, error) {
 	}
 
 	opts := handler.HandlerSetOpts{
-		Sm:  sm,
-		Lru: handler.NewHandlerLRU(100), // TODO(tyler)
+		Sm:     sm,
+		Config: config,
+		Lru:    handler.NewHandlerLRU(100), // TODO(tyler)
 	}
 	server := &Server{
 		manager:  sm,
@@ -67,7 +68,7 @@ func (s *Server) Manager() manager.SandboxManager {
 }
 
 func (s *Server) ForwardToSandbox(handler *handler.Handler, r *http.Request, input []byte) ([]byte, *http.Response, *httpErr) {
-	port, err := handler.RunStart()
+	channel, err := handler.RunStart()
 	if err != nil {
 		return nil, nil, newHttpErr(
 			err.Error(),
@@ -79,9 +80,7 @@ func (s *Server) ForwardToSandbox(handler *handler.Handler, r *http.Request, inp
 	// forward request to sandbox.  r and w are the server
 	// request and response respectively.  r2 and w2 are the
 	// sandbox request and response respectively.
-	host := fmt.Sprintf("%s:%s", s.config.Docker_host, port)
-	url := fmt.Sprintf("http://%s%s", host, r.URL.Path)
-	// log.Printf("proxying request to %s\n", url)
+	url := fmt.Sprintf("%s%s", channel.Url, r.URL.Path)
 
 	// TODO(tyler): some sort of smarter backoff.  Or, a better
 	// way to detect a started sandbox.
@@ -96,7 +95,7 @@ func (s *Server) ForwardToSandbox(handler *handler.Handler, r *http.Request, inp
 		}
 
 		r2.Header.Set("Content-Type", r.Header.Get("Content-Type"))
-		client := &http.Client{}
+		client := &http.Client{Transport: &channel.Transport}
 		w2, err := client.Do(r2)
 		if err != nil {
 			errors = append(errors, err)

@@ -18,7 +18,7 @@ all : .git/hooks/pre-commit imgs/lambda bin/admin
 .git/hooks/pre-commit: util/pre-commit
 	cp util/pre-commit .git/hooks/pre-commit
 
-imgs/lambda :
+imgs/lambda : node/lambda/server.py
 	docker build node/lambda -t lambda
 	touch imgs/lambda
 

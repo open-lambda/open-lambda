@@ -17,12 +17,12 @@ import (
 )
 
 type SandboxManager interface {
-	Create(name string) (sb.Sandbox, error)
+	Create(name string, sandbox_dir string) (sb.Sandbox, error)
 	Pull(name string) error
 }
 
 type DockerSandboxManager interface {
-	Create(name string) (sb.Sandbox, error)
+	Create(name string, sandbox_dir string) (sb.Sandbox, error)
 	Pull(name string) error
 	client() *docker.Client
 }

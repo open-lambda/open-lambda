@@ -2,23 +2,28 @@ package handler
 
 import (
 	"log"
+	"os"
+	"path"
 	"sync"
 	"time"
 
+	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/handler/state"
 	"github.com/open-lambda/open-lambda/worker/manager"
 	"github.com/open-lambda/open-lambda/worker/manager/sandbox"
 )
 
 type HandlerSetOpts struct {
-	Sm  manager.SandboxManager
-	Lru *HandlerLRU
+	Sm     manager.SandboxManager
+	Config *config.Config
+	Lru    *HandlerLRU
 }
 
 type HandlerSet struct {
 	mutex    sync.Mutex
 	handlers map[string]*Handler
 	sm       manager.SandboxManager
+	config   *config.Config
 	lru      *HandlerLRU
 }
 
@@ -41,6 +46,7 @@ func NewHandlerSet(opts HandlerSetOpts) (handlerSet *HandlerSet) {
 	return &HandlerSet{
 		handlers: make(map[string]*Handler),
 		sm:       opts.Sm,
+		config:   opts.Config,
 		lru:      opts.Lru,
 	}
 }
@@ -74,7 +80,7 @@ func (h *HandlerSet) Dump() {
 	}
 }
 
-func (h *Handler) RunStart() (port string, err error) {
+func (h *Handler) RunStart() (ch *sandbox.SandboxChannel, err error) {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
@@ -82,7 +88,7 @@ func (h *Handler) RunStart() (port string, err error) {
 	if h.lastPull == nil {
 		err = h.hset.sm.Pull(h.name)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		now := time.Now()
 		h.lastPull = &now
@@ -90,9 +96,14 @@ func (h *Handler) RunStart() (port string, err error) {
 
 	// create sandbox if needed
 	if h.sandbox == nil {
-		sandbox, err := h.hset.sm.Create(h.name)
+		sandbox_dir := path.Join(h.hset.config.Worker_dir, "handlers", h.name, "sandbox")
+		if err := os.MkdirAll(sandbox_dir, 0666); err != nil {
+			return nil, err
+		}
+
+		sandbox, err := h.hset.sm.Create(h.name, sandbox_dir)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		h.sandbox = sandbox
 		h.state = state.Stopped
@@ -102,11 +113,11 @@ func (h *Handler) RunStart() (port string, err error) {
 	if h.runners == 0 {
 		if h.state == state.Stopped {
 			if err := h.sandbox.Start(); err != nil {
-				return "", err
+				return nil, err
 			}
 		} else if h.state == state.Paused {
 			if err := h.sandbox.Unpause(); err != nil {
-				return "", err
+				return nil, err
 			}
 		}
 		h.state = state.Running
@@ -115,7 +126,7 @@ func (h *Handler) RunStart() (port string, err error) {
 
 	h.runners += 1
 
-	return h.sandbox.Port()
+	return h.sandbox.Channel()
 }
 
 func (h *Handler) RunFinish() {

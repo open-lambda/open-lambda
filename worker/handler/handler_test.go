@@ -11,16 +11,21 @@ import (
 	"github.com/open-lambda/open-lambda/worker/manager"
 )
 
-func NewManager() (m *manager.LocalManager) {
+func getConf() *config.Config {
 	conf, err := config.ParseConfig(os.Getenv("WORKER_CONFIG"))
 	if err != nil {
 		log.Fatal(err)
 	}
+	return conf
+}
+
+func NewManager() *manager.LocalManager {
+	conf := getConf()
 
 	log.Printf("Set skip_pull_existing = true\n")
 	conf.Skip_pull_existing = true
 
-	m, err = manager.NewLocalManager(conf)
+	m, err := manager.NewLocalManager(conf)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -30,7 +35,7 @@ func NewManager() (m *manager.LocalManager) {
 
 func TestHandlerLookupSame(t *testing.T) {
 	sm := NewManager()
-	handlers := NewHandlerSet(HandlerSetOpts{Sm: sm})
+	handlers := NewHandlerSet(HandlerSetOpts{Sm: sm, Config: getConf()})
 	a1 := handlers.Get("a")
 	a2 := handlers.Get("a")
 	if a1 != a2 {
@@ -40,7 +45,7 @@ func TestHandlerLookupSame(t *testing.T) {
 
 func TestHandlerLookupDiff(t *testing.T) {
 	sm := NewManager()
-	handlers := NewHandlerSet(HandlerSetOpts{Sm: sm})
+	handlers := NewHandlerSet(HandlerSetOpts{Sm: sm, Config: getConf()})
 	a := handlers.Get("a")
 	b := handlers.Get("b")
 	if a == b {
@@ -52,7 +57,7 @@ func TestHandlerHandlerPull(t *testing.T) {
 	t.Skip("TestHandlerHandlerPull does not work with local registry mode")
 
 	sm := NewManager()
-	handlers := NewHandlerSet(HandlerSetOpts{Sm: sm})
+	handlers := NewHandlerSet(HandlerSetOpts{Sm: sm, Config: getConf()})
 	name := "nonlocal"
 
 	exists, err := sm.DockerImageExists(name)
@@ -100,7 +105,7 @@ func GetState(t *testing.T, h *Handler) state.HandlerState {
 func TestHandlerRunCountOne(t *testing.T) {
 	lru := NewHandlerLRU(1)
 	sm := NewManager()
-	handlers := NewHandlerSet(HandlerSetOpts{Sm: sm, Lru: lru})
+	handlers := NewHandlerSet(HandlerSetOpts{Sm: sm, Lru: lru, Config: getConf()})
 	h := handlers.Get("hello2")
 
 	_, err := h.RunStart()
@@ -122,7 +127,7 @@ func TestHandlerRunCountOne(t *testing.T) {
 func TestHandlerRunCountMany(t *testing.T) {
 	lru := NewHandlerLRU(1)
 	sm := NewManager()
-	handlers := NewHandlerSet(HandlerSetOpts{Sm: sm, Lru: lru})
+	handlers := NewHandlerSet(HandlerSetOpts{Sm: sm, Lru: lru, Config: getConf()})
 	h := handlers.Get("hello2")
 	count := 10
 
@@ -157,7 +162,7 @@ func TestHandlerRunCountMany(t *testing.T) {
 func TestHandlerEvict(t *testing.T) {
 	lru := NewHandlerLRU(0)
 	sm := NewManager()
-	handlers := NewHandlerSet(HandlerSetOpts{Sm: sm, Lru: lru})
+	handlers := NewHandlerSet(HandlerSetOpts{Sm: sm, Lru: lru, Config: getConf()})
 	h := handlers.Get("hello2")
 	_, err := h.RunStart()
 	if err != nil {

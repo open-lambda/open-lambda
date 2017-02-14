@@ -7,6 +7,7 @@ RUN pip install --upgrade pip
 RUN pip install virtualenv
 RUN pip install Flask
 RUN pip install rethinkdb
+RUN pip install tornado
 
 # SERVER SCRIPT
 COPY server.py /

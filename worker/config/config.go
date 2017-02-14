@@ -15,17 +15,21 @@ import (
 type Config struct {
 	path     string // where was config file loaded from?
 	Registry string `json:"registry"`
+
 	// docker
 	Cluster_name  string `json:"cluster_name"`
 	Registry_host string `json:"registry_host"`
 	Registry_port string `json:"registry_port"`
+
 	// olregistry
 	Reg_cluster []string `json:"reg_cluster"`
-	// local
-	Reg_dir string `json:"reg_dir"`
 
+	// local
+	Reg_dir     string `json:"reg_dir"`
+	Worker_dir  string `json:"worker_dir"`
 	Worker_port string `json:"worker_port"`
 	Docker_host string `json:"docker_host"`
+
 	// for unit testing to skip pull path
 	Skip_pull_existing bool `json:"Skip_pull_existing"`
 
@@ -99,6 +103,22 @@ func (c *Config) Defaults() error {
 			}
 			c.Reg_dir = path
 		}
+	}
+
+	// worker dir
+	if c.Worker_dir == "" {
+		return fmt.Errorf("must specify local worker directory")
+	}
+
+	if !path.IsAbs(c.Worker_dir) {
+		if c.path == "" {
+			return fmt.Errorf("Worker_dir cannot be relative, unless config is loaded from file")
+		}
+		path, err := filepath.Abs(path.Join(path.Dir(c.path), c.Worker_dir))
+		if err != nil {
+			return err
+		}
+		c.Worker_dir = path
 	}
 
 	// daemon

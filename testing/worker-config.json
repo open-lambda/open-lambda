@@ -3,5 +3,6 @@
     "worker_port": "8080",
     "reg_dir": "handlers",
     "registry": "local",
+    "worker_dir": "test_worker",
     "sandbox_config": {"processes": 10}
 }

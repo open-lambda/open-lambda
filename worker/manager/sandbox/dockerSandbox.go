@@ -11,9 +11,13 @@ package sandbox
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	"net"
+	"net/http"
+	"path"
 	"strings"
 	"time"
 
@@ -22,13 +26,20 @@ import (
 )
 
 type DockerSandbox struct {
-	name      string
-	container *docker.Container
-	client    *docker.Client
+	name        string
+	sandbox_dir string
+	container   *docker.Container
+	client      *docker.Client
 }
 
-func NewDockerSandbox(name string, container *docker.Container, client *docker.Client) *DockerSandbox {
-	return &DockerSandbox{name: name, container: container, client: client}
+func NewDockerSandbox(name string, sandbox_dir string, container *docker.Container, client *docker.Client) *DockerSandbox {
+	sandbox := &DockerSandbox{
+		name:        name,
+		sandbox_dir: sandbox_dir,
+		container:   container,
+		client:      client,
+	}
+	return sandbox
 }
 
 func (s *DockerSandbox) dockerError(outer error) (err error) {
@@ -79,28 +90,54 @@ func (s *DockerSandbox) State() (hstate state.HandlerState, err error) {
 	return hstate, nil
 }
 
-func (s *DockerSandbox) Port() (port string, err error) {
+func (s *DockerSandbox) Channel() (channel *SandboxChannel, err error) {
 	if err := s.InspectUpdate(); err != nil {
-		return "", s.dockerError(err)
+		return nil, s.dockerError(err)
+	}
+
+	var env docker.Env
+	env = s.container.Config.Env
+
+	if env.Exists("ol.config") {
+		var conf map[string]interface{}
+		if err := json.Unmarshal([]byte(env.Get("ol.config")), &conf); err != nil {
+			return nil, err
+		}
+
+		if val, exists := conf["sock_file"]; exists {
+			switch val := val.(type) {
+			default:
+				return nil, fmt.Errorf("sock_file must be a string")
+			case string:
+				dial := func(proto, addr string) (net.Conn, error) {
+					return net.Dial("unix", path.Join(s.sandbox_dir, val))
+				}
+				tr := http.Transport{Dial: dial}
+
+				// the server name doesn't matter since we have a sock file
+				return &SandboxChannel{Url: "http://container", Transport: tr}, nil
+			}
+		}
 	}
 
 	container_port := docker.Port("8080/tcp")
 	ports := s.container.NetworkSettings.Ports[container_port]
 	if len(ports) == 0 {
 		err := fmt.Errorf("could not lookup host port for %v", container_port)
-		return "", s.dockerError(err)
+		return nil, s.dockerError(err)
 	} else if len(ports) > 1 {
 		err := fmt.Errorf("multiple host port mapping to %v", container_port)
-		return "", s.dockerError(err)
+		return nil, s.dockerError(err)
 	}
-	port = ports[0].HostPort
+	port := ports[0].HostPort
 
 	// on unix systems, port is given as "unix:port", this removes the prefix
 	if strings.HasPrefix(port, "unix") {
 		port = strings.Split(port, ":")[1]
 	}
 
-	return port, nil
+	url := fmt.Sprintf("http://localhost:%s", port)
+	return &SandboxChannel{Url: url}, nil
 }
 
 /* Starts the container */

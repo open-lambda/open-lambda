@@ -21,9 +21,9 @@ import (
 	"path/filepath"
 
 	docker "github.com/fsouza/go-dockerclient"
-	sb "github.com/open-lambda/open-lambda/worker/manager/sandbox"
 	r "github.com/open-lambda/open-lambda/registry/src"
 	"github.com/open-lambda/open-lambda/worker/config"
+	sb "github.com/open-lambda/open-lambda/worker/manager/sandbox"
 )
 
 type RegistryManager struct {
@@ -62,13 +62,15 @@ func NewRegistryManager(opts *config.Config) (manager *RegistryManager, err erro
 	return manager, nil
 }
 
-func (rm *RegistryManager) Create(name string) (sb.Sandbox, error) {
+func (rm *RegistryManager) Create(name string, sandbox_dir string) (sb.Sandbox, error) {
 	internalAppPort := map[docker.Port]struct{}{"8080/tcp": {}}
 	portBindings := map[docker.Port][]docker.PortBinding{
 		"8080/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}}}
 
 	handler := filepath.Join(rm.handler_dir, name)
-	volumes := []string{fmt.Sprintf("%s:%s", handler, "/handler/")}
+	volumes := []string{
+		fmt.Sprintf("%s:%s", handler, "/handler/"),
+		fmt.Sprintf("%s:%s", sandbox_dir, "/host/")}
 
 	container, err := rm.client().CreateContainer(
 		docker.CreateContainerOptions{
@@ -92,7 +94,7 @@ func (rm *RegistryManager) Create(name string) (sb.Sandbox, error) {
 		return nil, err
 	}
 
-	sandbox := sb.NewDockerSandbox(name, container, rm.client())
+	sandbox := sb.NewDockerSandbox(name, sandbox_dir, container, rm.client())
 
 	return sandbox, nil
 }
