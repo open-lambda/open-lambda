@@ -8,7 +8,7 @@ import (
 
 	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/handler/state"
-	"github.com/open-lambda/open-lambda/worker/manager"
+	sbmanager "github.com/open-lambda/open-lambda/worker/sandbox-manager"
 )
 
 func getConf() *config.Config {
@@ -19,13 +19,13 @@ func getConf() *config.Config {
 	return conf
 }
 
-func NewManager() *manager.LocalManager {
+func NewManager() *sbmanager.LocalManager {
 	conf := getConf()
 
 	log.Printf("Set skip_pull_existing = true\n")
 	conf.Skip_pull_existing = true
 
-	m, err := manager.NewLocalManager(conf)
+	m, err := sbmanager.NewLocalManager(conf)
 	if err != nil {
 		log.Fatal(err)
 	}

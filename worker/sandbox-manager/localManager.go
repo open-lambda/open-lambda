@@ -18,8 +18,8 @@ import (
 	"path/filepath"
 
 	docker "github.com/fsouza/go-dockerclient"
+	sb "github.com/open-lambda/open-lambda/worker/sandbox"
 	"github.com/open-lambda/open-lambda/worker/config"
-	sb "github.com/open-lambda/open-lambda/worker/manager/sandbox"
 )
 
 type LocalManager struct {

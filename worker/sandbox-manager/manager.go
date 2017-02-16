@@ -13,7 +13,7 @@ for managing an individual sandbox.
 
 import (
 	docker "github.com/fsouza/go-dockerclient"
-	sb "github.com/open-lambda/open-lambda/worker/manager/sandbox"
+	sb "github.com/open-lambda/open-lambda/worker/sandbox"
 )
 
 type SandboxManager interface {

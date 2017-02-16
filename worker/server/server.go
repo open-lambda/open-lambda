@@ -10,13 +10,13 @@ import (
 	"strings"
 	"time"
 
+	sbmanager "github.com/open-lambda/open-lambda/worker/sandbox-manager"
 	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/handler"
-	"github.com/open-lambda/open-lambda/worker/manager"
 )
 
 type Server struct {
-	manager  manager.SandboxManager
+	sbmanager  sbmanager.SandboxManager
 	config   *config.Config
 	handlers *handler.HandlerSet
 }
@@ -31,16 +31,16 @@ func newHttpErr(msg string, code int) *httpErr {
 }
 
 func NewServer(config *config.Config) (*Server, error) {
-	var sm manager.SandboxManager
+	var sm sbmanager.SandboxManager
 	var err error
 
-	// Create manager according to config
+	// Create sbmanager according to config
 	if config.Registry == "docker" {
-		sm, err = manager.NewDockerManager(config)
+		sm, err = sbmanager.NewDockerManager(config)
 	} else if config.Registry == "olregistry" {
-		sm, err = manager.NewRegistryManager(config)
+		sm, err = sbmanager.NewRegistryManager(config)
 	} else if config.Registry == "local" {
-		sm, err = manager.NewLocalManager(config)
+		sm, err = sbmanager.NewLocalManager(config)
 	} else {
 		return nil, errors.New("invalid 'registry' field in config")
 	}
@@ -55,7 +55,7 @@ func NewServer(config *config.Config) (*Server, error) {
 		Lru:    handler.NewHandlerLRU(100), // TODO(tyler)
 	}
 	server := &Server{
-		manager:  sm,
+		sbmanager:  sm,
 		config:   config,
 		handlers: handler.NewHandlerSet(opts),
 	}
@@ -63,8 +63,8 @@ func NewServer(config *config.Config) (*Server, error) {
 	return server, nil
 }
 
-func (s *Server) Manager() manager.SandboxManager {
-	return s.manager
+func (s *Server) Manager() sbmanager.SandboxManager {
+	return s.sbmanager
 }
 
 func (s *Server) ForwardToSandbox(handler *handler.Handler, r *http.Request, input []byte) ([]byte, *http.Response, *httpErr) {

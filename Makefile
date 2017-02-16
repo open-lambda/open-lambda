@@ -41,5 +41,5 @@ test : test-config imgs/lambda
 clean :
 	rm -rf bin
 	rm -rf registry/bin
-	rm -f imgs/lambda-node
+	rm -f imgs/lambda
 	rm -f imgs/olregistry

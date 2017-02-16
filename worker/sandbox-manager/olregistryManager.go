@@ -21,9 +21,9 @@ import (
 	"path/filepath"
 
 	docker "github.com/fsouza/go-dockerclient"
+	sb "github.com/open-lambda/open-lambda/worker/sandbox"
 	r "github.com/open-lambda/open-lambda/registry/src"
 	"github.com/open-lambda/open-lambda/worker/config"
-	sb "github.com/open-lambda/open-lambda/worker/manager/sandbox"
 )
 
 type RegistryManager struct {

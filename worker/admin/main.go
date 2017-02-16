@@ -14,9 +14,10 @@ import (
 	"strings"
 
 	docker "github.com/fsouza/go-dockerclient"
+	sbmanager "github.com/open-lambda/open-lambda/worker/sandbox-manager"
+
 	"github.com/open-lambda/open-lambda/registry"
 	"github.com/open-lambda/open-lambda/worker/config"
-	"github.com/open-lambda/open-lambda/worker/manager"
 	"github.com/open-lambda/open-lambda/worker/server"
 )
 
@@ -124,9 +125,9 @@ func (admin *Admin) cluster_nodes(cluster string) (map[string]([]string), error)
 	}
 
 	for _, container := range containers {
-		if container.Labels[manager.DOCKER_LABEL_CLUSTER] == cluster {
+		if container.Labels[sbmanager.DOCKER_LABEL_CLUSTER] == cluster {
 			cid := container.ID
-			type_label := container.Labels[manager.DOCKER_LABEL_TYPE]
+			type_label := container.Labels[sbmanager.DOCKER_LABEL_TYPE]
 			nodes[type_label] = append(nodes[type_label], cid)
 		}
 	}
@@ -210,7 +211,7 @@ func (admin *Admin) status() error {
 		node_counts := map[string]int{}
 
 		for _, containers2 := range containers1 {
-			label := containers2.Labels[manager.DOCKER_LABEL_CLUSTER]
+			label := containers2.Labels[sbmanager.DOCKER_LABEL_CLUSTER]
 			if label != "" {
 				node_counts[label] += 1
 			} else {
@@ -287,8 +288,8 @@ func (admin *Admin) rethinkdb() error {
 
 	client := admin.client
 	labels := map[string]string{}
-	labels[manager.DOCKER_LABEL_CLUSTER] = *args.cluster
-	labels[manager.DOCKER_LABEL_TYPE] = "db"
+	labels[sbmanager.DOCKER_LABEL_CLUSTER] = *args.cluster
+	labels[sbmanager.DOCKER_LABEL_TYPE] = "db"
 
 	image := "rethinkdb"
 
@@ -459,8 +460,8 @@ func (admin *Admin) nginx() error {
 	image := "nginx"
 	client := admin.client
 	labels := map[string]string{}
-	labels[manager.DOCKER_LABEL_CLUSTER] = *args.cluster
-	labels[manager.DOCKER_LABEL_TYPE] = "balancer"
+	labels[sbmanager.DOCKER_LABEL_CLUSTER] = *args.cluster
+	labels[sbmanager.DOCKER_LABEL_TYPE] = "balancer"
 
 	// pull if not local
 	_, err := admin.client.InspectImage(image)

@@ -7,14 +7,14 @@ import (
 	"sync"
 	"time"
 
+	sbmanager "github.com/open-lambda/open-lambda/worker/sandbox-manager"
 	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/handler/state"
-	"github.com/open-lambda/open-lambda/worker/manager"
-	"github.com/open-lambda/open-lambda/worker/manager/sandbox"
+	"github.com/open-lambda/open-lambda/worker/sandbox"
 )
 
 type HandlerSetOpts struct {
-	Sm     manager.SandboxManager
+	Sm     sbmanager.SandboxManager
 	Config *config.Config
 	Lru    *HandlerLRU
 }
@@ -22,7 +22,7 @@ type HandlerSetOpts struct {
 type HandlerSet struct {
 	mutex    sync.Mutex
 	handlers map[string]*Handler
-	sm       manager.SandboxManager
+	sm       sbmanager.SandboxManager
 	config   *config.Config
 	lru      *HandlerLRU
 }
