@@ -28,7 +28,7 @@ import (
 type DockerSandbox struct {
 	name        string
 	sandbox_dir string
-        nspid       int
+	nspid       int
 	container   *docker.Container
 	client      *docker.Client
 }
@@ -37,7 +37,7 @@ func NewDockerSandbox(name string, sandbox_dir string, nspid int, container *doc
 	sandbox := &DockerSandbox{
 		name:        name,
 		sandbox_dir: sandbox_dir,
-                nspid:       nspid,
+		nspid:       nspid,
 		container:   container,
 		client:      client,
 	}

@@ -59,10 +59,10 @@ func (dm *DockerManager) Create(name string, sandbox_dir string) (sb.Sandbox, er
 		return nil, err
 	}
 
-        nspid, err := dm.getNsPid(container)
-        if err != nil {
-                return nil, err
-        }
+	nspid, err := dm.getNsPid(container)
+	if err != nil {
+		return nil, err
+	}
 
 	sandbox := sb.NewDockerSandbox(name, sandbox_dir, nspid, container, dm.client())
 

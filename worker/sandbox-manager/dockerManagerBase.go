@@ -48,7 +48,7 @@ func (dm *DockerManagerBase) docker_labels() map[string]string {
 }
 
 func (dm *DockerManagerBase) getNsPid(container *docker.Container) (int, error) {
-        return 0, nil
+	return 0, nil
 }
 
 func (dm *DockerManagerBase) client() *docker.Client {

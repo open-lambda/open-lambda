@@ -1,7 +1,6 @@
 PWD = $(shell pwd)
 
 CLIENT_BIN:=worker/prof/client/client
-NODE_BIN:=node/bin
 LAMBDA_BIN=lambda/bin
 REG_BIN:=registry/bin
 
@@ -18,8 +17,8 @@ all : .git/hooks/pre-commit imgs/lambda bin/admin
 .git/hooks/pre-commit: util/pre-commit
 	cp util/pre-commit .git/hooks/pre-commit
 
-imgs/lambda : node/lambda/server.py
-	docker build node/lambda -t lambda
+imgs/lambda : lambda/Dockerfile lambda/server.py
+	docker build lambda -t lambda
 	touch imgs/lambda
 
 bin/admin : $(WORKER_GO_FILES)

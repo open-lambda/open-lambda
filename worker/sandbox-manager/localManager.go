@@ -72,10 +72,10 @@ func (lm *LocalManager) Create(name string, sandbox_dir string) (sb.Sandbox, err
 		return nil, err
 	}
 
-        nspid, err := lm.getNsPid(container)
-        if err != nil {
-                return nil, err
-        }
+	nspid, err := lm.getNsPid(container)
+	if err != nil {
+		return nil, err
+	}
 
 	sandbox := sb.NewDockerSandbox(name, sandbox_dir, nspid, container, lm.client())
 
