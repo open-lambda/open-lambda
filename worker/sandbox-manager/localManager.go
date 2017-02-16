@@ -18,8 +18,8 @@ import (
 	"path/filepath"
 
 	docker "github.com/fsouza/go-dockerclient"
-	sb "github.com/open-lambda/open-lambda/worker/sandbox"
 	"github.com/open-lambda/open-lambda/worker/config"
+	sb "github.com/open-lambda/open-lambda/worker/sandbox"
 )
 
 type LocalManager struct {
@@ -50,7 +50,6 @@ func (lm *LocalManager) Create(name string, sandbox_dir string) (sb.Sandbox, err
 		fmt.Sprintf("%s:%s", handler, "/handler/"),
 		fmt.Sprintf("%s:%s", sandbox_dir, "/host/")}
 
-	// TODO: shouldn't this go insider NewDockerSandbox?
 	container, err := lm.client().CreateContainer(
 		docker.CreateContainerOptions{
 			Config: &docker.Config{
@@ -73,7 +72,12 @@ func (lm *LocalManager) Create(name string, sandbox_dir string) (sb.Sandbox, err
 		return nil, err
 	}
 
-	sandbox := sb.NewDockerSandbox(name, sandbox_dir, container, lm.client())
+        nspid, err := lm.getNsPid(container)
+        if err != nil {
+                return nil, err
+        }
+
+	sandbox := sb.NewDockerSandbox(name, sandbox_dir, nspid, container, lm.client())
 
 	return sandbox, nil
 }

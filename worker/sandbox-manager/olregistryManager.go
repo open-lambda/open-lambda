@@ -21,9 +21,9 @@ import (
 	"path/filepath"
 
 	docker "github.com/fsouza/go-dockerclient"
-	sb "github.com/open-lambda/open-lambda/worker/sandbox"
 	r "github.com/open-lambda/open-lambda/registry/src"
 	"github.com/open-lambda/open-lambda/worker/config"
+	sb "github.com/open-lambda/open-lambda/worker/sandbox"
 )
 
 type RegistryManager struct {
@@ -94,7 +94,12 @@ func (rm *RegistryManager) Create(name string, sandbox_dir string) (sb.Sandbox, 
 		return nil, err
 	}
 
-	sandbox := sb.NewDockerSandbox(name, sandbox_dir, container, rm.client())
+        nspid, err := rm.getNsPid(container)
+        if err != nil {
+                return nil, err
+        }
+
+	sandbox := sb.NewDockerSandbox(name, sandbox_dir, nspid, container, rm.client())
 
 	return sandbox, nil
 }

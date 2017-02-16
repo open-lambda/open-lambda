@@ -28,14 +28,16 @@ import (
 type DockerSandbox struct {
 	name        string
 	sandbox_dir string
+        nspid       int
 	container   *docker.Container
 	client      *docker.Client
 }
 
-func NewDockerSandbox(name string, sandbox_dir string, container *docker.Container, client *docker.Client) *DockerSandbox {
+func NewDockerSandbox(name string, sandbox_dir string, nspid int, container *docker.Container, client *docker.Client) *DockerSandbox {
 	sandbox := &DockerSandbox{
 		name:        name,
 		sandbox_dir: sandbox_dir,
+                nspid:       nspid,
 		container:   container,
 		client:      client,
 	}

@@ -10,15 +10,15 @@ import (
 	"strings"
 	"time"
 
-	sbmanager "github.com/open-lambda/open-lambda/worker/sandbox-manager"
 	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/handler"
+	sbmanager "github.com/open-lambda/open-lambda/worker/sandbox-manager"
 )
 
 type Server struct {
-	sbmanager  sbmanager.SandboxManager
-	config   *config.Config
-	handlers *handler.HandlerSet
+	sbmanager sbmanager.SandboxManager
+	config    *config.Config
+	handlers  *handler.HandlerSet
 }
 
 type httpErr struct {
@@ -55,9 +55,9 @@ func NewServer(config *config.Config) (*Server, error) {
 		Lru:    handler.NewHandlerLRU(100), // TODO(tyler)
 	}
 	server := &Server{
-		sbmanager:  sm,
-		config:   config,
-		handlers: handler.NewHandlerSet(opts),
+		sbmanager: sm,
+		config:    config,
+		handlers:  handler.NewHandlerSet(opts),
 	}
 
 	return server, nil

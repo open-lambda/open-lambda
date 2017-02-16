@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
-	sbmanager "github.com/open-lambda/open-lambda/worker/sandbox-manager"
 	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/handler/state"
 	"github.com/open-lambda/open-lambda/worker/sandbox"
+	sbmanager "github.com/open-lambda/open-lambda/worker/sandbox-manager"
 )
 
 type HandlerSetOpts struct {
