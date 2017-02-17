@@ -78,6 +78,7 @@ func (rm *RegistryManager) Create(name string, sandbox_dir string) (sb.Sandbox, 
 				Image:        BASE_IMAGE,
 				AttachStdout: true,
 				AttachStderr: true,
+				OpenStdin:    true,
 				ExposedPorts: internalAppPort,
 				Labels:       rm.docker_labels(),
 				Env:          rm.env,
@@ -94,12 +95,7 @@ func (rm *RegistryManager) Create(name string, sandbox_dir string) (sb.Sandbox, 
 		return nil, err
 	}
 
-	nspid, err := rm.getNsPid(container)
-	if err != nil {
-		return nil, err
-	}
-
-	sandbox := sb.NewDockerSandbox(name, sandbox_dir, nspid, container, rm.client())
+	sandbox := sb.NewDockerSandbox(name, sandbox_dir, container, rm.client(), rm.opts)
 
 	return sandbox, nil
 }

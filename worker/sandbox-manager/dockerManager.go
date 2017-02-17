@@ -12,6 +12,8 @@ in the registry, named with its ID.
 import (
 	"fmt"
 	"log"
+	"path/filepath"
+	"syscall"
 
 	docker "github.com/fsouza/go-dockerclient"
 	"github.com/open-lambda/open-lambda/worker/config"
@@ -35,7 +37,14 @@ func (dm *DockerManager) Create(name string, sandbox_dir string) (sb.Sandbox, er
 	portBindings := map[docker.Port][]docker.PortBinding{
 		"8080/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}}}
 
-	volumes := []string{fmt.Sprintf("%s:%s", sandbox_dir, "/host/")}
+	lambdaPipe := filepath.Join(dm.opts.Worker_dir, "pipes", name+".pipe")
+	if err := syscall.Mkfifo(lambdaPipe, 0666); err != nil {
+		return nil, err
+	}
+
+	volumes := []string{
+		fmt.Sprintf("%s:%s", sandbox_dir, "/host/"),
+		fmt.Sprintf("%s:%s", lambdaPipe, "/pipe")}
 
 	container, err := dm.client().CreateContainer(
 		docker.CreateContainerOptions{
@@ -43,6 +52,7 @@ func (dm *DockerManager) Create(name string, sandbox_dir string) (sb.Sandbox, er
 				Image:        name,
 				AttachStdout: true,
 				AttachStderr: true,
+				OpenStdin:    true,
 				ExposedPorts: internalAppPort,
 				Labels:       dm.docker_labels(),
 				Env:          dm.env,
@@ -59,12 +69,7 @@ func (dm *DockerManager) Create(name string, sandbox_dir string) (sb.Sandbox, er
 		return nil, err
 	}
 
-	nspid, err := dm.getNsPid(container)
-	if err != nil {
-		return nil, err
-	}
-
-	sandbox := sb.NewDockerSandbox(name, sandbox_dir, nspid, container, dm.client())
+	sandbox := sb.NewDockerSandbox(name, sandbox_dir, container, dm.client(), dm.opts)
 
 	return sandbox, nil
 }

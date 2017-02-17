@@ -17,29 +17,32 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
 	docker "github.com/fsouza/go-dockerclient"
+	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/handler/state"
 )
 
 type DockerSandbox struct {
 	name        string
 	sandbox_dir string
-	nspid       int
 	container   *docker.Container
 	client      *docker.Client
+	config      *config.Config
 }
 
-func NewDockerSandbox(name string, sandbox_dir string, nspid int, container *docker.Container, client *docker.Client) *DockerSandbox {
+func NewDockerSandbox(name string, sandbox_dir string, container *docker.Container, client *docker.Client, config *config.Config) *DockerSandbox {
 	sandbox := &DockerSandbox{
 		name:        name,
 		sandbox_dir: sandbox_dir,
-		nspid:       nspid,
 		container:   container,
 		client:      client,
+		config:      config,
 	}
 	return sandbox
 }
@@ -144,9 +147,29 @@ func (s *DockerSandbox) Channel() (channel *SandboxChannel, err error) {
 
 /* Starts the container */
 func (s *DockerSandbox) Start() error {
-	if err := s.client.StartContainer(s.container.ID, s.container.HostConfig); err != nil {
+	if err := s.client.StartContainer(s.container.ID, nil); err != nil {
 		log.Printf("failed to start container with err %v\n", err)
 		return s.dockerError(err)
+	}
+	container, err := s.client.InspectContainer(s.container.ID)
+	if err != nil {
+		log.Printf("failed to inpect container with err %v\n", err)
+		return s.dockerError(err)
+	}
+	s.container = container
+	nspid := s.container.State.Pid
+
+	pipePath := filepath.Join(s.config.Worker_dir, "lambda_server.pipe")
+	pipe, err := os.OpenFile(pipePath, os.O_WRONLY, os.ModeNamedPipe)
+	if err != nil {
+		return err
+	}
+	defer pipe.Close()
+
+	// Request forkenter on lambda server
+	initMsg := fmt.Sprintf("%d\n%s", nspid, s.config.SandboxConfJson())
+	if _, err := pipe.WriteString(initMsg); err != nil {
+		return err
 	}
 
 	return nil

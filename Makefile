@@ -12,12 +12,17 @@ WORKER_DIR = $(GO_PATH)/src/github.com/open-lambda/open-lambda/worker
 ADMIN_DIR = $(GO_PATH)/src/github.com/open-lambda/open-lambda/worker/admin
 
 .PHONY: all
-all : .git/hooks/pre-commit imgs/lambda bin/admin
+all : .git/hooks/pre-commit lambda_server imgs/lambda bin/admin
 
 .git/hooks/pre-commit: util/pre-commit
 	cp util/pre-commit .git/hooks/pre-commit
 
-imgs/lambda : lambda/Dockerfile lambda/server.py
+.PHONY: lambda_server
+lambda_server :
+	${MAKE} -C lambda
+
+imgs/lambda : lambda/Dockerfile lambda/init.c
+	gcc -O3 -o lambda/init lambda/init.c
 	docker build lambda -t lambda
 	touch imgs/lambda
 

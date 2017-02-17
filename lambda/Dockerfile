@@ -8,8 +8,3 @@ RUN pip install virtualenv
 RUN pip install Flask
 RUN pip install rethinkdb
 RUN pip install tornado
-
-# SERVER SCRIPT
-COPY server.py /
-
-CMD ["python", "/server.py"]

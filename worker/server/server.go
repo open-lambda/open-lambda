@@ -7,7 +7,11 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
+	"path"
+	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/open-lambda/open-lambda/worker/config"
@@ -45,6 +49,29 @@ func NewServer(config *config.Config) (*Server, error) {
 		return nil, errors.New("invalid 'registry' field in config")
 	}
 
+	if err != nil {
+		return nil, err
+	}
+
+	// Create named pipe to communicate with pre-initialized Python interpreter
+	pipePath := path.Join(config.Worker_dir, "lambda_server.pipe")
+	err = syscall.Mkfifo(pipePath, 0666)
+	if err != nil {
+		return nil, err
+	}
+	// Find the location of the server.py script (TODO: better way to do this?)
+	root, err := filepath.Abs(filepath.Dir(os.Args[0]))
+	if err != nil {
+		return nil, err
+	}
+	fmt.Print(root)
+	scriptPath := path.Join(filepath.Dir(root), "lambda", "server.py")
+	args := []string{"/usr/bin/python", scriptPath, pipePath}
+	// TODO: how can lambda server print to stdout after forked?
+	attr := os.ProcAttr{
+		Files: []*os.File{nil, os.Stdout, os.Stderr},
+	}
+	_, err = os.StartProcess(args[0], args, &attr)
 	if err != nil {
 		return nil, err
 	}

@@ -54,11 +54,14 @@ func (lm *LocalManager) Create(name string, sandbox_dir string) (sb.Sandbox, err
 		docker.CreateContainerOptions{
 			Config: &docker.Config{
 				Image:        BASE_IMAGE,
+				AttachStdin:  true,
 				AttachStdout: true,
 				AttachStderr: true,
+				OpenStdin:    true,
 				ExposedPorts: internalAppPort,
 				Labels:       lm.docker_labels(),
 				Env:          lm.env,
+				Tty:          true,
 			},
 			HostConfig: &docker.HostConfig{
 				PortBindings:    portBindings,
@@ -72,12 +75,7 @@ func (lm *LocalManager) Create(name string, sandbox_dir string) (sb.Sandbox, err
 		return nil, err
 	}
 
-	nspid, err := lm.getNsPid(container)
-	if err != nil {
-		return nil, err
-	}
-
-	sandbox := sb.NewDockerSandbox(name, sandbox_dir, nspid, container, lm.client())
+	sandbox := sb.NewDockerSandbox(name, sandbox_dir, container, lm.client(), lm.opts)
 
 	return sandbox, nil
 }
