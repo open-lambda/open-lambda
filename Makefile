@@ -5,11 +5,14 @@ LAMBDA_BIN=lambda/bin
 REG_BIN:=registry/bin
 
 WORKER_GO_FILES = $(shell find worker/ -name '*.go')
+LAMBDA_FILES = $(shell find lambda/)
 
 GO = $(abspath ./hack/go.sh)
 GO_PATH = hack/go
 WORKER_DIR = $(GO_PATH)/src/github.com/open-lambda/open-lambda/worker
 ADMIN_DIR = $(GO_PATH)/src/github.com/open-lambda/open-lambda/worker/admin
+
+LAMBDA_DIR = $(abspath ./lambda)
 
 .PHONY: all
 all : .git/hooks/pre-commit imgs/lambda bin/admin
@@ -17,7 +20,8 @@ all : .git/hooks/pre-commit imgs/lambda bin/admin
 .git/hooks/pre-commit: util/pre-commit
 	cp util/pre-commit .git/hooks/pre-commit
 
-imgs/lambda : lambda/Dockerfile lambda/server.py
+imgs/lambda : $(LAMBDA_FILES)
+	cd $(LAMBDA_DIR) && gcc getolpid.c -o getolpid
 	docker build lambda -t lambda
 	touch imgs/lambda
 
