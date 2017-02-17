@@ -7,7 +7,10 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/open-lambda/open-lambda/worker/config"
@@ -45,6 +48,36 @@ func NewServer(config *config.Config) (*Server, error) {
 		return nil, errors.New("invalid 'registry' field in config")
 	}
 
+	if err != nil {
+		return nil, err
+	}
+
+	// Create directory for pipes communicating with lambdas
+	if err := os.Mkdir(filepath.Join(config.Worker_dir, "pipes"), 0700); err != nil {
+		return nil, err
+	}
+
+	// Create named pipe to communicate with pre-initialized Python interpreter
+	pipePath := filepath.Join(config.Worker_dir, "parent.pipe")
+	err = syscall.Mkfifo(pipePath, 0666)
+	if err != nil {
+		return nil, err
+	}
+
+	// Find the location of the server.py script (TODO: better way to do this?)
+	root, err := filepath.Abs(filepath.Dir(os.Args[0]))
+	if err != nil {
+		return nil, err
+	}
+	fmt.Print(root)
+	scriptPath := path.Join(filepath.Dir(root), "lambda", "server.py")
+	args := []string{"/usr/bin/python", scriptPath, pipePath}
+	// TODO: how can lambda server print to stdout after forked?
+	attr := os.ProcAttr{
+		Files: []*os.File{nil, os.Stdout, os.Stderr},
+	}
+
+	_, err = os.StartProcess(args[0], args, &attr)
 	if err != nil {
 		return nil, err
 	}
@@ -152,15 +185,32 @@ func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 	}
 
 	// forward to sandbox
+	// handler := s.handlers.Get(img)
+	// wbody, w2, err := s.ForwardToSandbox(handler, r, rbody)
+	// if err != nil {
+	// 	return err
+	// }
+
 	handler := s.handlers.Get(img)
-	wbody, w2, err := s.ForwardToSandbox(handler, r, rbody)
+	_, err := handler.RunStart()
 	if err != nil {
-		return err
+		return newHttpErr(err.Error(), http.StatusInternalServerError)
+	}
+	defer handler.RunFinish()
+
+	pipePath := path.Join(s.config.Worker_dir, "pipes", img+".pipe")
+	lambdaPipe, err := os.OpenFile(pipePath, os.O_RDWR, os.ModeNamedPipe)
+	if err != nil {
+		return newHttpErr(err.Error(), http.StatusInternalServerError)
+	}
+	lambdaPipe.Write(rbody)
+
+	output, err := ioutil.ReadAll(lambdaPipe)
+	if err != nil {
+		return newHttpErr(err.Error(), http.StatusInternalServerError)
 	}
 
-	w.WriteHeader(w2.StatusCode)
-
-	if _, err := w.Write(wbody); err != nil {
+	if _, err := w.Write(output); err != nil {
 		return newHttpErr(
 			err.Error(),
 			http.StatusInternalServerError)
