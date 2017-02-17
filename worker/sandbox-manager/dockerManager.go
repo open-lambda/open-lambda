@@ -12,6 +12,9 @@ in the registry, named with its ID.
 import (
 	"fmt"
 	"log"
+	"path/filepath"
+	"os"
+	"syscall"
 
 	docker "github.com/fsouza/go-dockerclient"
 	"github.com/open-lambda/open-lambda/worker/config"
@@ -35,7 +38,14 @@ func (dm *DockerManager) Create(name string, sandbox_dir string) (sb.Sandbox, er
 	portBindings := map[docker.Port][]docker.PortBinding{
 		"8080/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}}}
 
-	volumes := []string{fmt.Sprintf("%s:%s", sandbox_dir, "/host/")}
+	lambdaPipe := filepath.Join(dm.opts.Worker_dir, "pipes", name + ".pipe")
+	if err := syscall.Mkfifo(lambdaPipe, 0666); err != nil {
+		return nil, err
+	}
+
+	volumes := []string{
+		fmt.Sprintf("%s:%s", sandbox_dir, "/host/"),
+		fmt.Sprintf("%s:%s", lambdaPipe, "/pipe")}
 
 	container, err := dm.client().CreateContainer(
 		docker.CreateContainerOptions{
@@ -61,6 +71,18 @@ func (dm *DockerManager) Create(name string, sandbox_dir string) (sb.Sandbox, er
 
 	nspid, err := dm.getNsPid(container)
 	if err != nil {
+		return nil, err
+	}
+
+	pipePath := filepath.Join(dm.opts.Worker_dir, "parent")
+	pipe, err := os.OpenFile(pipePath, os.O_RDWR, os.ModeNamedPipe)
+	if err != nil {
+		return nil, err
+	}
+	defer pipe.Close()
+
+	// Request forkenter on pre-initialized Python interpreter
+	if _, err := pipe.WriteString(fmt.Sprintf("%d", nspid)); err != nil {
 		return nil, err
 	}
 

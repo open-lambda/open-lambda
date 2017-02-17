@@ -1,17 +1,15 @@
 import os, sys, ns, json
-from subprocess import check_output
 
 sys.path.append('/handler') # assume submitted .py file is /handler/lambda_func
 
 def handler(args, path):
-    import lambda_func
     try:
         ret = lambda_func.handler(None, json.loads(args))
     except Exception as e:
         ret = json.dumps({"error": "handler execution failed: %s" % str(e)})
     
     with open(path, 'wb') as fifo:
-        fifo.write(ret+'\n')
+        fifo.write(ret)
 
 def listen(path):
     args = ""
@@ -21,25 +19,30 @@ def listen(path):
             if len(data) == 0:
                 break
             args += data
-
     return args
 
-def main(pid, inpath, outpath):
-    cwd = os.getcwd()
+def main(hfifo, cfifo):
+    # change to absolute path in case cwd changed during forkenter
+    hfifo = os.path.abspath(hfifo)
+
+    # listen to forkenter request from worker
     while True:
-        args = listen(inpath)
+        pid = listen(hfifo)
         r = ns.forkenter(pid)
 
         # child escapes
         if r == 0:
             break
-        os.chdir(cwd)
 
-    handler(args, outpath)
+    import lambda_func
+    # listen to requests to run handler
+    while True:
+        args = listen(cfifo)
+        handler(args, cfifo)
 
 if __name__ == '__main__':
-    if len(sys.argv) < 3:
-        print('Usage: parent.py <ns_pid> <input_fifo> <output_fifo>')
+    if len(sys.argv) < 2:
+        print('Usage: parent.py <host_fifo> <container_fifo>')
         sys.exit(1)
     else:
-        main(sys.argv[1], sys.argv[2], sys.argv[3])
+        main(sys.argv[1], sys.argv[2])
