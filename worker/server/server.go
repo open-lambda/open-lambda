@@ -7,11 +7,11 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"strings"
-	"time"
 	"os"
 	"path"
+	"strings"
 	"syscall"
+	"time"
 
 	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/handler"
@@ -72,7 +72,7 @@ func NewServer(config *config.Config) (*Server, error) {
 	// Pipe for each lambda is always mapped to /pipe inside the container
 	args := []string{"/usr/bin/python", scriptPath, pipePath, "/pipe"}
 	attr := os.ProcAttr{
-		Files : []*os.File{nil, nil, nil},
+		Files: []*os.File{nil, nil, nil},
 	}
 	// TODO: Maybe check if the process is running?
 	_, err = os.StartProcess("/usr/bin/python", args, &attr)
@@ -196,7 +196,7 @@ func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 	}
 	defer handler.RunFinish()
 
-	pipePath := path.Join(s.config.Worker_dir, "pipes", img + ".pipe")
+	pipePath := path.Join(s.config.Worker_dir, "pipes", img+".pipe")
 	lambdaPipe, err := os.OpenFile(pipePath, os.O_RDWR, os.ModeNamedPipe)
 	if err != nil {
 		return newHttpErr(err.Error(), http.StatusInternalServerError)

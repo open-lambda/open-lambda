@@ -46,7 +46,7 @@ func (lm *LocalManager) Create(name string, sandbox_dir string) (sb.Sandbox, err
 	portBindings := map[docker.Port][]docker.PortBinding{
 		"8080/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}}}
 
-	lambdaPipe := filepath.Join(lm.opts.Worker_dir, "pipes", name + ".pipe")
+	lambdaPipe := filepath.Join(lm.opts.Worker_dir, "pipes", name+".pipe")
 	if err := syscall.Mkfifo(lambdaPipe, 0666); err != nil {
 		return nil, err
 	}
