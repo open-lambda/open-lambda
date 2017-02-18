@@ -41,7 +41,7 @@ func initManager(config *config.Config) (sm sbmanager.SandboxManager, err error)
 		return nil, errors.New("invalid 'registry' field in config")
 	}
 
-        return sm, nil
+	return sm, nil
 }
 
 func NewServer(config *config.Config) (*Server, error) {
@@ -52,26 +52,25 @@ func NewServer(config *config.Config) (*Server, error) {
 		return nil, err
 	}
 
+	/*
+		// Find the location of the server.py script (TODO: better way to do this?)
+		root, err := filepath.Abs(filepath.Dir(os.Args[0]))
+		if err != nil {
+			return nil, err
+		}
 
-/*
-	// Find the location of the server.py script (TODO: better way to do this?)
-	root, err := filepath.Abs(filepath.Dir(os.Args[0]))
-	if err != nil {
-		return nil, err
-	}
+		scriptPath := filepath.Join(filepath.Dir(root), "lambda", "server.py")
+		args := []string{"/usr/bin/python", scriptPath, pipePath}
 
-	scriptPath := filepath.Join(filepath.Dir(root), "lambda", "server.py")
-	args := []string{"/usr/bin/python", scriptPath, pipePath}
+		attr := os.ProcAttr{
+			Files: []*os.File{nil, os.Stdout, os.Stderr},
+		}
 
-	attr := os.ProcAttr{
-		Files: []*os.File{nil, os.Stdout, os.Stderr},
-	}
-
-	_, err = os.StartProcess(args[0], args, &attr)
-	if err != nil {
-		return nil, err
-	}
-*/
+		_, err = os.StartProcess(args[0], args, &attr)
+		if err != nil {
+			return nil, err
+		}
+	*/
 
 	opts := handler.HandlerSetOpts{
 		Sm:     sm,
@@ -182,7 +181,7 @@ func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 		return err
 	}
 
-        w.WriteHeader(w2.StatusCode)
+	w.WriteHeader(w2.StatusCode)
 
 	if _, err := w.Write(wbody); err != nil {
 		return newHttpErr(
