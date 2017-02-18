@@ -19,12 +19,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"syscall"
 
-	docker "github.com/fsouza/go-dockerclient"
-	sb "github.com/open-lambda/open-lambda/worker/sandbox"
 	r "github.com/open-lambda/open-lambda/registry/src"
 	"github.com/open-lambda/open-lambda/worker/config"
+	sb "github.com/open-lambda/open-lambda/worker/sandbox"
 )
 
 type RegistryManager struct {
@@ -69,10 +67,10 @@ func (rm *RegistryManager) Create(name string, sandbox_dir string) (sb.Sandbox, 
 		fmt.Sprintf("%s:%s", handler, "/handler/"),
 		fmt.Sprintf("%s:%s", sandbox_dir, "/host/")}
 
-        sandbox, err := rm.create(name, sandbox_dir, BASE_IMAGE, volumes)
-        if err != nil {
-            return nil, err
-        }
+	sandbox, err := rm.create(name, sandbox_dir, BASE_IMAGE, volumes)
+	if err != nil {
+		return nil, err
+	}
 
 	return sandbox, nil
 }

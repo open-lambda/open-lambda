@@ -7,8 +7,3 @@ RUN pip install --upgrade pip
 RUN pip install virtualenv
 RUN pip install rethinkdb
 RUN pip install tornado
-
-# for getting namespace pid and forkenter
-COPY init /
-
-CMD ["./init"]

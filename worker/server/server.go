@@ -7,10 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/open-lambda/open-lambda/worker/config"
@@ -33,11 +30,7 @@ func newHttpErr(msg string, code int) *httpErr {
 	return &httpErr{msg: msg, code: code}
 }
 
-func NewServer(config *config.Config) (*Server, error) {
-	var sm sbmanager.SandboxManager
-	var err error
-
-	// Create sbmanager according to config
+func initManager(config *config.Config) (sm sbmanager.SandboxManager, err error) {
 	if config.Registry == "docker" {
 		sm, err = sbmanager.NewDockerManager(config)
 	} else if config.Registry == "olregistry" {
@@ -48,31 +41,28 @@ func NewServer(config *config.Config) (*Server, error) {
 		return nil, errors.New("invalid 'registry' field in config")
 	}
 
+        return sm, nil
+}
+
+func NewServer(config *config.Config) (*Server, error) {
+	var err error
+
+	sm, err := initManager(config)
 	if err != nil {
 		return nil, err
 	}
 
-	// Create directory for pipes communicating with lambdas
-	if err := os.Mkdir(filepath.Join(config.Worker_dir, "pipes"), 0700); err != nil {
-		return nil, err
-	}
 
-	// Create named pipe to communicate with pre-initialized Python interpreter
-	pipePath := filepath.Join(config.Worker_dir, "parent.pipe")
-	err = syscall.Mkfifo(pipePath, 0666)
-	if err != nil {
-		return nil, err
-	}
-
+/*
 	// Find the location of the server.py script (TODO: better way to do this?)
 	root, err := filepath.Abs(filepath.Dir(os.Args[0]))
 	if err != nil {
 		return nil, err
 	}
-	fmt.Print(root)
-	scriptPath := path.Join(filepath.Dir(root), "lambda", "server.py")
+
+	scriptPath := filepath.Join(filepath.Dir(root), "lambda", "server.py")
 	args := []string{"/usr/bin/python", scriptPath, pipePath}
-	// TODO: how can lambda server print to stdout after forked?
+
 	attr := os.ProcAttr{
 		Files: []*os.File{nil, os.Stdout, os.Stderr},
 	}
@@ -81,6 +71,7 @@ func NewServer(config *config.Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+*/
 
 	opts := handler.HandlerSetOpts{
 		Sm:     sm,
@@ -185,32 +176,15 @@ func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 	}
 
 	// forward to sandbox
-	// handler := s.handlers.Get(img)
-	// wbody, w2, err := s.ForwardToSandbox(handler, r, rbody)
-	// if err != nil {
-	// 	return err
-	// }
-
 	handler := s.handlers.Get(img)
-	_, err := handler.RunStart()
+	wbody, w2, err := s.ForwardToSandbox(handler, r, rbody)
 	if err != nil {
-		return newHttpErr(err.Error(), http.StatusInternalServerError)
-	}
-	defer handler.RunFinish()
-
-	pipePath := path.Join(s.config.Worker_dir, "pipes", img+".pipe")
-	lambdaPipe, err := os.OpenFile(pipePath, os.O_RDWR, os.ModeNamedPipe)
-	if err != nil {
-		return newHttpErr(err.Error(), http.StatusInternalServerError)
-	}
-	lambdaPipe.Write(rbody)
-
-	output, err := ioutil.ReadAll(lambdaPipe)
-	if err != nil {
-		return newHttpErr(err.Error(), http.StatusInternalServerError)
+		return err
 	}
 
-	if _, err := w.Write(output); err != nil {
+        w.WriteHeader(w2.StatusCode)
+
+	if _, err := w.Write(wbody); err != nil {
 		return newHttpErr(
 			err.Error(),
 			http.StatusInternalServerError)

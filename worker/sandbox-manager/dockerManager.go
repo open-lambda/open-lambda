@@ -12,12 +12,6 @@ in the registry, named with its ID.
 import (
 	"fmt"
 	"log"
-<<<<<<< HEAD
-	"os"
-=======
->>>>>>> 586a11e29ada15a3b142f722386c06bd0541e45b
-	"path/filepath"
-	"syscall"
 
 	docker "github.com/fsouza/go-dockerclient"
 	"github.com/open-lambda/open-lambda/worker/config"
@@ -37,14 +31,13 @@ func NewDockerManager(opts *config.Config) (manager *DockerManager, err error) {
 }
 
 func (dm *DockerManager) Create(name string, sandbox_dir string) (sb.Sandbox, error) {
-	handler := filepath.Join(rm.handler_dir, name)
 	volumes := []string{
 		fmt.Sprintf("%s:%s", sandbox_dir, "/host/")}
 
-        sandbox, err := rm.create(name, sandbox_dir, name, volumes)
-        if err != nil {
-            return nil, err
-        }
+	sandbox, err := dm.create(name, sandbox_dir, name, volumes)
+	if err != nil {
+		return nil, err
+	}
 
 	return sandbox, nil
 }
