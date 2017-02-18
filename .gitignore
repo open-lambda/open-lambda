@@ -48,3 +48,4 @@
 /registry/pushserver
 /registry/regpush
 /lambda/getolpid
+/lambda/init

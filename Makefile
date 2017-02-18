@@ -46,3 +46,4 @@ clean :
 	rm -rf registry/bin
 	rm -f imgs/lambda
 	rm -f imgs/olregistry
+	${MAKE} -C lambda clean
