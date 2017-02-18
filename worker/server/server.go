@@ -8,7 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -53,29 +53,31 @@ func NewServer(config *config.Config) (*Server, error) {
 	}
 
 	// Create directory for pipes communicating with lambdas
-	if err := os.Mkdir(path.Join(config.Worker_dir, "pipes"), 0700); err != nil {
+	if err := os.Mkdir(filepath.Join(config.Worker_dir, "pipes"), 0700); err != nil {
 		return nil, err
 	}
 
 	// Create named pipe to communicate with pre-initialized Python interpreter
-	pipePath := path.Join(config.Worker_dir, "parent.pipe")
+	pipePath := filepath.Join(config.Worker_dir, "parent.pipe")
 	err = syscall.Mkfifo(pipePath, 0666)
 	if err != nil {
 		return nil, err
 	}
-	// Find the location of the parent.py script (TODO: better way to do this?)
-	pwd, err := os.Getwd()
+
+	// Find the location of the server.py script (TODO: better way to do this?)
+	root, err := filepath.Abs(filepath.Dir(os.Args[0]))
 	if err != nil {
 		return nil, err
 	}
-	scriptPath := path.Join(path.Dir(pwd), "worker", "namespace", "parent.py")
-	// Pipe for each lambda is always mapped to /pipe inside the container
-	args := []string{"/usr/bin/python", scriptPath, pipePath, "/pipe"}
+	fmt.Print(root)
+	scriptPath := path.Join(filepath.Dir(root), "lambda", "server.py")
+	args := []string{"/usr/bin/python", scriptPath, pipePath}
+	// TODO: how can lambda server print to stdout after forked?
 	attr := os.ProcAttr{
-		Files: []*os.File{nil, nil, nil},
+		Files: []*os.File{nil, os.Stdout, os.Stderr},
 	}
-	// TODO: Maybe check if the process is running?
-	_, err = os.StartProcess("/usr/bin/python", args, &attr)
+
+	_, err = os.StartProcess(args[0], args, &attr)
 	if err != nil {
 		return nil, err
 	}

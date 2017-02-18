@@ -22,9 +22,9 @@ import (
 	"syscall"
 
 	docker "github.com/fsouza/go-dockerclient"
+	sb "github.com/open-lambda/open-lambda/worker/sandbox"
 	r "github.com/open-lambda/open-lambda/registry/src"
 	"github.com/open-lambda/open-lambda/worker/config"
-	sb "github.com/open-lambda/open-lambda/worker/sandbox"
 )
 
 type RegistryManager struct {
@@ -33,92 +33,46 @@ type RegistryManager struct {
 	handler_dir string
 }
 
-func NewRegistryManager(opts *config.Config) (manager *RegistryManager, err error) {
-	manager = new(RegistryManager)
-	manager.DockerManagerBase.init(opts)
-	manager.pullclient = r.InitPullClient(opts.Reg_cluster, r.DATABASE, r.TABLE)
-	manager.handler_dir = "/var/tmp/olhandlers/"
+func NewRegistryManager(opts *config.Config) (rm *RegistryManager, err error) {
+	rm = new(RegistryManager)
+	rm.DockerManagerBase.init(opts)
+	rm.pullclient = r.InitPullClient(opts.Reg_cluster, r.DATABASE, r.TABLE)
+	rm.handler_dir = "/var/tmp/olhandlers/"
 
 	// Initialize a directory for the handler code. This directory is
 	// mapped into the lambda container in RegistryManager.Create
-	if err := os.Mkdir(manager.handler_dir, os.ModeDir); err != nil {
-		err = os.RemoveAll(manager.handler_dir)
+	if err := os.Mkdir(rm.handler_dir, os.ModeDir); err != nil {
+		err = os.RemoveAll(rm.handler_dir)
 		if err != nil {
 			log.Fatal("failed to remove old handler directory: ", err)
 		}
-		err = os.Mkdir(manager.handler_dir, os.ModeDir)
+		err = os.Mkdir(rm.handler_dir, os.ModeDir)
 		if err != nil {
 			log.Fatal("failed to create handler directory: ", err)
 		}
 	}
 
 	// Check that we have the base image for the lambda containers
-	exists, err := manager.DockerImageExists(BASE_IMAGE)
+	exists, err := rm.DockerImageExists(BASE_IMAGE)
 	if err != nil {
 		return nil, err
 	} else if !exists {
 		return nil, fmt.Errorf("Docker image %s does not exist", BASE_IMAGE)
 	}
 
-	return manager, nil
+	return rm, nil
 }
 
 func (rm *RegistryManager) Create(name string, sandbox_dir string) (sb.Sandbox, error) {
-	internalAppPort := map[docker.Port]struct{}{"8080/tcp": {}}
-	portBindings := map[docker.Port][]docker.PortBinding{
-		"8080/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}}}
-
-	lambdaPipe := filepath.Join(rm.opts.Worker_dir, "pipes", name+".pipe")
-	if err := syscall.Mkfifo(lambdaPipe, 0666); err != nil {
-		return nil, err
-	}
-
 	handler := filepath.Join(rm.handler_dir, name)
 	volumes := []string{
 		fmt.Sprintf("%s:%s", handler, "/handler/"),
-		fmt.Sprintf("%s:%s", sandbox_dir, "/host/"),
-		fmt.Sprintf("%s:%s", lambdaPipe, "/pipe")}
+		fmt.Sprintf("%s:%s", sandbox_dir, "/host/")}
 
-	container, err := rm.client().CreateContainer(
-		docker.CreateContainerOptions{
-			Config: &docker.Config{
-				Image:        BASE_IMAGE,
-				AttachStdout: true,
-				AttachStderr: true,
-				ExposedPorts: internalAppPort,
-				Labels:       rm.docker_labels(),
-				Env:          rm.env,
-			},
-			HostConfig: &docker.HostConfig{
-				PortBindings:    portBindings,
-				PublishAllPorts: true,
-				Binds:           volumes, // attach handler code
-			},
-		},
-	)
-
-	if err != nil {
-		return nil, err
-	}
-
-	nspid, err := rm.getNsPid(container)
-	if err != nil {
-		return nil, err
-	}
-
-	pipePath := filepath.Join(rm.opts.Worker_dir, "parent")
-	pipe, err := os.OpenFile(pipePath, os.O_RDWR, os.ModeNamedPipe)
-	if err != nil {
-		return nil, err
-	}
-	defer pipe.Close()
-
-	// Request forkenter on pre-initialized Python interpreter
-	if _, err := pipe.WriteString(fmt.Sprintf("%d", nspid)); err != nil {
-		return nil, err
-	}
-
-	sandbox := sb.NewDockerSandbox(name, sandbox_dir, nspid, container, rm.client())
+        sandbox, err := rm.create(name, sandbox_dir, BASE_IMAGE, volumes)
+        if err != nil {
+            return nil, err
+        }
 
 	return sandbox, nil
 }

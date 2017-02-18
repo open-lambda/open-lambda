@@ -1,0 +1,15 @@
+{
+	"registry": "local",
+	"cluster_name": "/home/ubuntu/open-lambda/1",
+	"registry_host": "",
+	"registry_port": "",
+	"reg_cluster": null,
+	"reg_dir": "/home/ubuntu/open-lambda/1/registry",
+	"worker_dir": "/home/ubuntu/open-lambda/1/workers/worker-0",
+	"worker_port": "8080",
+	"docker_host": "localhost",
+	"Skip_pull_existing": false,
+	"sandbox_config": {
+		"processes": 10
+	}
+}

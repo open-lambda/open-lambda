@@ -28,16 +28,48 @@ type DockerManagerBase struct {
 	env     []string
 }
 
-func (manager *DockerManagerBase) init(opts *config.Config) {
+func (dm *DockerManagerBase) init(opts *config.Config) {
 	// NOTE: This requires a running docker daemon on the host
 	if c, err := docker.NewClientFromEnv(); err != nil {
 		log.Fatal("failed to get docker client: ", err)
 	} else {
-		manager.dClient = c
+		dm.dClient = c
 	}
-	manager.env = []string{fmt.Sprintf("ol.config=%s", opts.SandboxConfJson())}
+	dm.env = []string{fmt.Sprintf("ol.config=%s", opts.SandboxConfJson())}
 
-	manager.opts = opts
+	dm.opts = opts
+}
+
+func (dm *DockerManagerBase) create(name string, sandbox_dir string, image string, volumes []string) (sb.Sandbox, error) {
+	internalAppPort := map[docker.Port]struct{}{"8080/tcp": {}}
+	portBindings := map[docker.Port][]docker.PortBinding{
+		"8080/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}}}
+
+	container, err := dm.client().CreateContainer(
+		docker.CreateContainerOptions{
+			Config: &docker.Config{
+				Image:        image,
+				AttachStdout: true, //TODO: why do we need these?
+				AttachStderr: true,
+				ExposedPorts: internalAppPort,
+				Labels:       dm.docker_labels(),
+				Env:          dm.env,
+			},
+			HostConfig: &docker.HostConfig{
+				PortBindings:    portBindings,
+				PublishAllPorts: true,
+				Binds:           volumes,
+			},
+		},
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	sandbox := dm.NewDockerSandbox(name, sandbox_dir, container, rm.client(), rm.opts)
+
+	return sandbox, nil
 }
 
 func (dm *DockerManagerBase) docker_labels() map[string]string {
@@ -45,10 +77,6 @@ func (dm *DockerManagerBase) docker_labels() map[string]string {
 	labels[DOCKER_LABEL_CLUSTER] = dm.opts.Cluster_name
 	labels[DOCKER_LABEL_TYPE] = SANDBOX
 	return labels
-}
-
-func (dm *DockerManagerBase) getNsPid(container *docker.Container) (int, error) {
-	return 0, nil
 }
 
 func (dm *DockerManagerBase) client() *docker.Client {
