@@ -47,3 +47,4 @@
 /registry/bin
 /registry/pushserver
 /registry/regpush
+/lambda/getolpid

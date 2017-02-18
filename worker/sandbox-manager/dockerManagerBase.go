@@ -12,6 +12,7 @@ import (
 	"log"
 
 	docker "github.com/fsouza/go-dockerclient"
+        sb "github.com/open-lambda/open-lambda/worker/sandbox"
 	"github.com/open-lambda/open-lambda/worker/config"
 )
 
@@ -67,7 +68,7 @@ func (dm *DockerManagerBase) create(name string, sandbox_dir string, image strin
 		return nil, err
 	}
 
-	sandbox := dm.NewDockerSandbox(name, sandbox_dir, container, rm.client(), rm.opts)
+	sandbox := sb.NewDockerSandbox(name, sandbox_dir, container, dm.client(), dm.opts)
 
 	return sandbox, nil
 }

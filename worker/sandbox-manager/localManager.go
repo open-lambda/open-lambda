@@ -16,9 +16,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"syscall"
 
-	docker "github.com/fsouza/go-dockerclient"
 	"github.com/open-lambda/open-lambda/worker/config"
 	sb "github.com/open-lambda/open-lambda/worker/sandbox"
 )
@@ -42,15 +40,15 @@ func NewLocalManager(opts *config.Config) (manager *LocalManager, err error) {
 }
 
 func (lm *LocalManager) Create(name string, sandbox_dir string) (sb.Sandbox, error) {
-	handler := filepath.Join(rm.handler_dir, name)
+	handler := filepath.Join(lm.handler_dir, name)
 	volumes := []string{
 		fmt.Sprintf("%s:%s", handler, "/handler/"),
 		fmt.Sprintf("%s:%s", sandbox_dir, "/host/")}
 
-        sandbox, err := lm.create(name, sandbox_dir, BASE_IMAGE, volumes)
-        if err != nil {
-            return nil, err
-        }
+	sandbox, err := lm.create(name, sandbox_dir, BASE_IMAGE, volumes)
+	if err != nil {
+		return nil, err
+	}
 
 	return sandbox, nil
 }
