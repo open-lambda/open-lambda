@@ -1,6 +1,6 @@
 #!/usr/bin/python
 import ns
-import traceback, json, socket, struct, os, sys, socket, threading
+import traceback, json, socket, struct, os, sys, socket
 import rethinkdb
 import tornado.ioloop
 import tornado.web
@@ -9,37 +9,12 @@ import tornado.netutil
 import time
 
 PROCESSES_DEFAULT = 10 # TODO: IS TORNADO MULTI-THREADED (processed) BY DEFAULT?
-PORT = 8080
-initialized = False
-config = None
 db_conn = None
 
-tornado_app = tornado.web.Application([
-    (r".*", SockFileHandler),
-])
-
-# run once per process
-def init():
-    global initialized, config, db_conn
-    if initialized:
-        return
-
-    if config.get('db', None) == 'rethinkdb':
-        host = config.get('rethinkdb.host', 'localhost')
-        port = config.get('rethinkdb.port', 28015)
-        print 'Connect to %s:%d' % (host, port)
-        db_conn = rethinkdb.connect(host, port)
-    initialized = True
-
-    # assume user handler code is /handler/lambda_func.py
-    sys.path.append('/handler')
-    import lambda_func 
-
-class SockFileHandler(tornado.web.RequestHandler):
-    # POST header for actual requests
+class ChildHandler(tornado.web.RequestHandler):
+    # POST data for actual requests
     def post(self):
         try:
-            init()
             data = self.request.body
             try:
                 event = json.loads(data)
@@ -54,8 +29,9 @@ class SockFileHandler(tornado.web.RequestHandler):
             self.set_status(500) # internal error
             self.write(traceback.format_exc())
 
-    # GET header for forkenter
-    def get(self):
+class ParentHandler(tornado.web.RequestHandler):
+    # POST nspid and new sockfile to listen on
+    def post(self):
         try:
             data = self.request.body
             try:
@@ -66,25 +42,64 @@ class SockFileHandler(tornado.web.RequestHandler):
                 self.write('malformed forkenter request: "%s"' % str(data))
                 return
 
-            ns.forkenter(forkconf['pid'])
+            ns.forkenter(forkconf['nspid'])
+
+            child_init(forkconf['db'])
+            child_listen(forkconf['sock_file'])
 
         except Exception:
             self.set_status(500)
             self.write('failed to forkenter with request: "%s"' % str(data))
             self.write(traceback.format_exc())
 
+def child_init(db):
+    global db_conn
 
-def listen():
-    server = tornado.httpserver.HTTPServer(tornado_app)
-    socket = tornado.netutil.bind_unix_socket('/host/' + config['sock_file'])
+    if db == 'rethinkdb':
+        host = config.get('rethinkdb.host', 'localhost')
+        port = config.get('rethinkdb.port', 28015)
+        print 'Connect to %s:%d' % (host, port)
+        db_conn = rethinkdb.connect(host, port)
+
+    # assume user handler code is /handler/lambda_func.py
+    sys.path.append('/handler')
+    import lambda_func 
+
+child_app = tornado.web.Application([
+    (r".*", ChildHandler),
+])
+
+def child_listen(sock_file):
+    tornado.ioloop.IOLoop.instance().stop()
+
+    server = tornado.httpserver.HTTPServer(child_app)
+    socket = tornado.netutil.bind_unix_socket('/host/%s' % sock_file)
     server.add_socket(socket)
     tornado.ioloop.IOLoop.instance().start()
 
+    return
+
+parent_app = tornado.web.Application([
+    (r".*", ParentHandler),
+])
+
+def parent_listen(sock_file):
+    server = tornado.httpserver.HTTPServer(parent_app)
+    socket = tornado.netutil.bind_unix_socket('/host/%s' % sock_file) # should probably be in different dir?
+    server.add_socket(socket)
+    tornado.ioloop.IOLoop.instance().start()
+
+    return
+
 def main():
+    if len(sys.argv) != 2:
+        print('Usage: %s <sock_file>' % sys.argv[0])
+        sys.exit(1)
+
     try:
-        listen()
+        parent_listen(sys.argv[1])
     except Exception as e:
-        print(e)
+        print('Failed to listen on %s with:\n%s' % (sys.argv[1], e))
 
 if __name__ == '__main__':
     main()

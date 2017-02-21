@@ -1,4 +1,4 @@
-package manager
+package sbmanager
 
 /*
 
@@ -42,8 +42,8 @@ func NewLocalManager(opts *config.Config) (manager *LocalManager, err error) {
 func (lm *LocalManager) Create(name string, sandbox_dir string) (sb.Sandbox, error) {
 	handler := filepath.Join(lm.handler_dir, name)
 	volumes := []string{
-		fmt.Sprintf("%s:%s", handler, "/handler/"),
-		fmt.Sprintf("%s:%s", sandbox_dir, "/host/")}
+		fmt.Sprintf("%s:%s:ro", handler, "/handler/:ro"),
+		fmt.Sprintf("%s:%s:ro", sandbox_dir, "/host/:ro")}
 
 	sandbox, err := lm.create(name, sandbox_dir, BASE_IMAGE, volumes)
 	if err != nil {

@@ -9,12 +9,14 @@ import (
 
 	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/handler/state"
+	pmanager "github.com/open-lambda/open-lambda/worker/pool-manager"
 	"github.com/open-lambda/open-lambda/worker/sandbox"
 	sbmanager "github.com/open-lambda/open-lambda/worker/sandbox-manager"
 )
 
 type HandlerSetOpts struct {
 	Sm     sbmanager.SandboxManager
+	Pm     pmanager.PoolManager
 	Config *config.Config
 	Lru    *HandlerLRU
 }
@@ -23,6 +25,7 @@ type HandlerSet struct {
 	mutex    sync.Mutex
 	handlers map[string]*Handler
 	sm       sbmanager.SandboxManager
+	pm       pmanager.PoolManager
 	config   *config.Config
 	lru      *HandlerLRU
 }
@@ -36,6 +39,7 @@ type Handler struct {
 	state    state.HandlerState
 	runners  int
 	code     []byte
+	imports  []string //TODO: need these
 }
 
 func NewHandlerSet(opts HandlerSetOpts) (handlerSet *HandlerSet) {
@@ -46,6 +50,7 @@ func NewHandlerSet(opts HandlerSetOpts) (handlerSet *HandlerSet) {
 	return &HandlerSet{
 		handlers: make(map[string]*Handler),
 		sm:       opts.Sm,
+		pm:       opts.Pm,
 		config:   opts.Config,
 		lru:      opts.Lru,
 	}
@@ -105,6 +110,12 @@ func (h *Handler) RunStart() (ch *sandbox.SandboxChannel, err error) {
 		if err != nil {
 			return nil, err
 		}
+
+		// forkenter a handler server into sandbox if needed
+		if h.pm != nil {
+			pm.ForkEnter(sandbox, sandbox_dir)
+		}
+
 		h.sandbox = sandbox
 		h.state = state.Stopped
 	}

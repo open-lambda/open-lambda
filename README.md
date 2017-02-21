@@ -2,7 +2,7 @@
 
 OpenLambda is an Apache-licensed serverless computing project, written
 in Go and based on Linux containers.  One of the goals of OpenLambda
-is to enable exploration of new approaches serverless computing.  Our
+is to enable exploration of new approaches to serverless computing.  Our
 research agenda is described in more detail in a [HotCloud '16
 paper](https://www.usenix.org/system/files/conference/hotcloud16/hotcloud16_hendrickson.pdf)
 
