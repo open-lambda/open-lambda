@@ -16,7 +16,7 @@ import (
 )
 
 type Server struct {
-	sbmanager sbmanager.SandboxManager
+	sbmanager sbmanager.SandboxManager // why do we need this?
 	config    *config.Config
 	handlers  *handler.HandlerSet
 }
@@ -30,7 +30,16 @@ func newHttpErr(msg string, code int) *httpErr {
 	return &httpErr{msg: msg, code: code}
 }
 
-func initManager(config *config.Config) (sm sbmanager.SandboxManager, err error) {
+//TODO: improve this
+func initPManager(config *config.Config) (pm pmanager.PoolManager, err error) {
+	if config.Pool == "basic" {
+		pm, err = pmanager.NewBasicManager(config)
+	} else {
+		pm = nil
+	}
+}
+
+func initSBManager(config *config.Config) (sm sbmanager.SandboxManager, err error) {
 	if config.Registry == "docker" {
 		sm, err = sbmanager.NewDockerManager(config)
 	} else if config.Registry == "olregistry" {
@@ -47,7 +56,12 @@ func initManager(config *config.Config) (sm sbmanager.SandboxManager, err error)
 func NewServer(config *config.Config) (*Server, error) {
 	var err error
 
-	sm, err := initManager(config)
+	sm, err := initSBManager(config)
+	if err != nil {
+		return nil, err
+	}
+
+	sm, err := initSBManager(config)
 	if err != nil {
 		return nil, err
 	}
@@ -74,6 +88,7 @@ func NewServer(config *config.Config) (*Server, error) {
 
 	opts := handler.HandlerSetOpts{
 		Sm:     sm,
+		Pm:     pm,
 		Config: config,
 		Lru:    handler.NewHandlerLRU(100), // TODO(tyler)
 	}

@@ -159,19 +159,6 @@ func (s *DockerSandbox) Start() error {
 	s.container = container
 	nspid := s.container.State.Pid
 
-	pipePath := filepath.Join(s.config.Worker_dir, "lambda_server.pipe")
-	pipe, err := os.OpenFile(pipePath, os.O_WRONLY, os.ModeNamedPipe)
-	if err != nil {
-		return err
-	}
-	defer pipe.Close()
-
-	// Request forkenter on lambda server
-	initMsg := fmt.Sprintf("%d\n%s", nspid, s.config.SandboxConfJson())
-	if _, err := pipe.WriteString(initMsg); err != nil {
-		return err
-	}
-
 	return nil
 }
 

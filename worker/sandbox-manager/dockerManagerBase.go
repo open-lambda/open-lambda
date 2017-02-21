@@ -1,11 +1,11 @@
+package sbmanager
+
 /*
 
 Defines common variables and functions to be shared
 by managers which managing Docker containers.
 
 */
-
-package manager
 
 import (
 	"fmt"
