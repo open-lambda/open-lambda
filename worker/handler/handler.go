@@ -13,12 +13,15 @@ import (
 	sbmanager "github.com/open-lambda/open-lambda/worker/sandbox-manager"
 )
 
+// HandlerSetOpts wraps parameters necessary to create a HandlerSet.
 type HandlerSetOpts struct {
 	Sm     sbmanager.SandboxManager
 	Config *config.Config
 	Lru    *HandlerLRU
 }
 
+// HandlerSet represents a collection of Handlers of a worker server. It
+// manages the Handler by HandlerLRU.
 type HandlerSet struct {
 	mutex    sync.Mutex
 	handlers map[string]*Handler
@@ -27,6 +30,9 @@ type HandlerSet struct {
 	lru      *HandlerLRU
 }
 
+// Handler handles requests to run a lambda on a worker server. It handles
+// concurrency and communicates with the sandbox manager to change the
+// state of the container that servers the lambda.
 type Handler struct {
 	mutex    sync.Mutex
 	hset     *HandlerSet
@@ -38,6 +44,7 @@ type Handler struct {
 	code     []byte
 }
 
+// NewHandlerSet creates an empty HandlerSet
 func NewHandlerSet(opts HandlerSetOpts) (handlerSet *HandlerSet) {
 	if opts.Lru == nil {
 		opts.Lru = NewHandlerLRU(0)
@@ -51,7 +58,7 @@ func NewHandlerSet(opts HandlerSetOpts) (handlerSet *HandlerSet) {
 	}
 }
 
-// always return a Handler, creating one if necessarily.
+// Get always returns a Handler, creating one if necessarily.
 func (h *HandlerSet) Get(name string) *Handler {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
@@ -70,6 +77,7 @@ func (h *HandlerSet) Get(name string) *Handler {
 	return handler
 }
 
+// Dump prints the name and state of the Handlers currently in the HandlerSet.
 func (h *HandlerSet) Dump() {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
@@ -80,6 +88,9 @@ func (h *HandlerSet) Dump() {
 	}
 }
 
+// RunStart runs the lambda handled by this Handler. It checks if the code has
+// been pulled, sandbox been created, and sandbox been started. The channel of
+// the sandbox of this lambda is returned.
 func (h *Handler) RunStart() (ch *sandbox.SandboxChannel, err error) {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
@@ -129,6 +140,9 @@ func (h *Handler) RunStart() (ch *sandbox.SandboxChannel, err error) {
 	return h.sandbox.Channel()
 }
 
+// RunFinish notifies that a request to run the lambda has completed. If no
+// request is being run in its sandbox, sandbox will be paused and the handler
+// be added to the HandlerLRU.
 func (h *Handler) RunFinish() {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
@@ -148,6 +162,7 @@ func (h *Handler) RunFinish() {
 	}
 }
 
+// StopIfPaused stops the sandbox if it is paused.
 func (h *Handler) StopIfPaused() {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
@@ -167,6 +182,7 @@ func (h *Handler) StopIfPaused() {
 	}
 }
 
+// Sandbox returns the sandbox of this Handler.
 func (h *Handler) Sandbox() sandbox.Sandbox {
 	return h.sandbox
 }
