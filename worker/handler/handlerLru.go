@@ -6,8 +6,10 @@ import (
 	"sync"
 )
 
+// HandlerLRU manages a list of stopped Handlers with the LRU policy.
 type HandlerLRU struct {
-	mutex  sync.Mutex
+	mutex sync.Mutex
+	// use a linked list and a map to achieve a linked-map
 	hmap   map[*Handler]*list.Element
 	hqueue *list.List // front is recent
 	// TODO(tyler): set hard limit to prevent new containers from starting?
@@ -15,6 +17,8 @@ type HandlerLRU struct {
 	soft_cond  *sync.Cond
 }
 
+// NewHandlerLRU creates a HandlerLRU with a given soft_limit and starts the
+// evictor in a go routine.
 func NewHandlerLRU(soft_limit int) *HandlerLRU {
 	lru := &HandlerLRU{
 		hmap:       make(map[*Handler]*list.Element),
@@ -27,6 +31,7 @@ func NewHandlerLRU(soft_limit int) *HandlerLRU {
 	return lru
 }
 
+// Len gets the number of Handlers in the LRU list.
 func (lru *HandlerLRU) Len() int {
 	if lru.hqueue.Len() != len(lru.hmap) {
 		panic("length mismatch")
@@ -34,6 +39,9 @@ func (lru *HandlerLRU) Len() int {
 	return lru.hqueue.Len()
 }
 
+// Add adds a Handler into the LRU list. If the resulting length of the list is
+// greater than the soft limit, the evictor will be notified. It is an error to
+// add a Handler to the list more than once.
 func (lru *HandlerLRU) Add(handler *Handler) {
 	lru.mutex.Lock()
 	defer lru.mutex.Unlock()
@@ -49,6 +57,7 @@ func (lru *HandlerLRU) Add(handler *Handler) {
 	}
 }
 
+// Remove removes a Handler from the LRU list if exists.
 func (lru *HandlerLRU) Remove(handler *Handler) {
 	lru.mutex.Lock()
 	defer lru.mutex.Unlock()
@@ -62,6 +71,8 @@ func (lru *HandlerLRU) Remove(handler *Handler) {
 	}
 }
 
+// Evictor waits on signal that the number of Handlers in the LRU list exceeds
+// the soft limit, and tries to stop the LRU handlers until the limit is met.
 func (lru *HandlerLRU) Evictor() {
 	lru.mutex.Lock()
 	defer lru.mutex.Unlock()
@@ -87,6 +98,8 @@ func (lru *HandlerLRU) Evictor() {
 	}
 }
 
+// Dump prints the Handler names in the LRU list from most recent to least
+// recent.
 func (lru *HandlerLRU) Dump() {
 	lru.mutex.Lock()
 	defer lru.mutex.Unlock()
