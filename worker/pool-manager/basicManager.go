@@ -13,111 +13,102 @@ Handler code is mapped into the container by attaching a directory
 */
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"log"
-	"math/rand"
-	"net"
-	"net/http"
+    "time"
+    "runtime"
 	"os"
 	"os/exec"
+	"math/rand"
 	"path/filepath"
-	"time"
-
-	"github.com/tv42/httpunix"
 
 	"github.com/open-lambda/open-lambda/worker/config"
 	sb "github.com/open-lambda/open-lambda/worker/sandbox"
 )
 
 type ForkServer struct {
-	packages []string
-	client   *http.Client
+	//packages []string TODO
+	fifo     *os.File
 }
 
 type BasicManager struct {
-	servers []ForkServer
+	servers []*ForkServer
 }
 
-func NewForkServer(sock_path string) (fs *ForkServer, err error) {
-	err = runLambdaServer(sock_path)
+func NewForkServer(fifoPath string) (fs *ForkServer, err error) {
+    fifo, err := os.OpenFile(fifoPath, os.O_CREATE|os.O_RDWR, os.ModeNamedPipe)
 	if err != nil {
 		return nil, err
 	}
 
-	t := &httpunix.Transport{
-		DialTimeout:           100 * time.Millisecond,
-		RequestTimeout:        1 * time.Second,
-		ResponseHeaderTimeout: 1 * time.Second,
-	}
-	// registers a URL location? - first param probably wrong
-	t.RegisterLocation("forkenter", sock_path)
+    if err = runLambdaServer(fifoPath); err != nil {
+        return nil, err
+    }
 
-	fs = new(ForkServer)
-	fs.client = &http.Client{
-		Transport: u,
-	}
+    fs = &ForkServer{fifo: fifo}
 
 	return fs, nil
 }
 
 func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
-	sock_dir := "/olsocks"
-	err = os.Mkdir(sock_dir, os.ModeDir)
-	if err != nil {
-		return nil, err
-	}
+	fifoDir := "/tmp/olpipes" // TODO: tmp?
+    if _, err = os.Stat(fifoDir); os.IsNotExist(err) {
+        if err = os.Mkdir(fifoDir, os.ModeDir); err != nil {
+            return nil, err
+        }
+    }
 
 	// TODO: make number of servers configurable
-	var servers [3]ForkServer
-	for k := range 5 {
-		sock_path := filepath.join(sock_dir, fmt.Sprintf("ol-%d.sock", k))
-		sock_file, err := os.OpenFile(sock_path, os.O_RDWR|os.O_CREATE, os.ModeSocket)
+	servers := make([]*ForkServer, 5, 5)
+	for k := 0; k < 5; k++ {
+		fifoPath := filepath.Join(fifoDir, fmt.Sprintf("ol-%d.pipe", k))
 		if err != nil {
 			return nil, err
 		}
 
-		servers[k] = NewForkServer(sock_path)
+        fs, err := NewForkServer(fifoPath)
+        if err != nil {
+            return nil, err
+        }
 
+		servers[k] = fs
 	}
 
-	bm = new(BasicManager)
-	bm.servers = servers
+    bm = &BasicManager{
+        servers: servers,
+    }
 
 	return bm, nil
 }
 
-func (bm *BasicManager) ForkEnter(sandbox, sandbox_dir) (err error) {
-	sock_path := filepath.join(sandbox_dir, "ol.sock")
-	_, err := os.OpenFile(sock_path, os.O_RDWR|os.O_CREATE, os.ModeSocket)
-	if err != nil {
-		return err
-	}
-
+func (bm *BasicManager) ForkEnter(sandbox sb.Sandbox) (err error) {
 	fs := bm.chooseRandom()
 
-	body := map[string]string{"nspid": sandbox.nspid, "sock_file": sock_path}
-	json_body, err := json.Marshal(body)
-	if err != nil {
-		return err
-	}
+    msg := fmt.Sprintf("%d", sandbox.NSPid())
+    if _, err := fs.fifo.WriteString(msg); err != nil{
+        return err
+    }
 
-	resp, err := client.Post("http+unix://forkenter", "application/json", bytes.NewBuffer(json_body))
-	if err != nil {
-		return err
-	}
-
-	//TODO: check response?
+	//TODO: respond?
+    return nil
 }
 
 func (bm *BasicManager) chooseRandom() (server *ForkServer) {
-	rand.Seed(time.Now().Unix())
-	n := rand.Int() % len(bm.servers)
+    rand.Seed(time.Now().Unix())
+    k := rand.Int() % len(bm.servers)
 
-	return servers[n]
+	return bm.servers[k]
 }
 
-func runLambdaServer(sock_path string) (err error) {
-	//TODO
+// start the python interpreter, listening on passed pipe
+func runLambdaServer(fifoPath string) (err error) {
+    _, absPath, _, _ := runtime.Caller(1)
+    relPath := "../../../../../../../../../lambda/server.py" // disgusting path from this file in hack to server script
+    serverPath := filepath.Join(absPath, relPath)
+
+    cmd := exec.Command("/usr/bin/python", serverPath, fifoPath)
+    if err := cmd.Start(); err != nil {
+        return err
+    }
+
+    return nil
 }

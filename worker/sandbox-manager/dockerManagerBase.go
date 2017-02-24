@@ -43,7 +43,7 @@ func (dm *DockerManagerBase) init(opts *config.Config) {
 
 func (dm *DockerManagerBase) create(name string, sandbox_dir string, image string, volumes []string) (sb.Sandbox, error) {
 	internalAppPort := map[docker.Port]struct{}{"8080/tcp": {}}
-	portBindings := map[docker.Port][]docker.PortBinding{
+	portBindings := map[docker.Port][]docker.PortBinding{ //TODO: don't need these with sockets
 		"8080/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}}}
 
 	container, err := dm.client().CreateContainer(

@@ -13,6 +13,7 @@ import (
 	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/handler"
 	sbmanager "github.com/open-lambda/open-lambda/worker/sandbox-manager"
+    pmanager "github.com/open-lambda/open-lambda/worker/pool-manager"
 )
 
 type Server struct {
@@ -30,13 +31,16 @@ func newHttpErr(msg string, code int) *httpErr {
 	return &httpErr{msg: msg, code: code}
 }
 
-//TODO: improve this
 func initPManager(config *config.Config) (pm pmanager.PoolManager, err error) {
 	if config.Pool == "basic" {
-		pm, err = pmanager.NewBasicManager(config)
+		if pm, err = pmanager.NewBasicManager(config); err != nil {
+            return nil, err
+        }
 	} else {
 		pm = nil
 	}
+
+    return pm, nil
 }
 
 func initSBManager(config *config.Config) (sm sbmanager.SandboxManager, err error) {
@@ -61,30 +65,10 @@ func NewServer(config *config.Config) (*Server, error) {
 		return nil, err
 	}
 
-	sm, err := initSBManager(config)
+	pm, err := initPManager(config)
 	if err != nil {
 		return nil, err
 	}
-
-	/*
-		// Find the location of the server.py script (TODO: better way to do this?)
-		root, err := filepath.Abs(filepath.Dir(os.Args[0]))
-		if err != nil {
-			return nil, err
-		}
-
-		scriptPath := filepath.Join(filepath.Dir(root), "lambda", "server.py")
-		args := []string{"/usr/bin/python", scriptPath, pipePath}
-
-		attr := os.ProcAttr{
-			Files: []*os.File{nil, os.Stdout, os.Stderr},
-		}
-
-		_, err = os.StartProcess(args[0], args, &attr)
-		if err != nil {
-			return nil, err
-		}
-	*/
 
 	opts := handler.HandlerSetOpts{
 		Sm:     sm,

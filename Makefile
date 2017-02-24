@@ -20,8 +20,6 @@ all : .git/hooks/pre-commit imgs/lambda bin/admin
 
 imgs/lambda : $(LAMBDA_FILES)
 	${MAKE} -C lambda
-	docker build -t lambda-fork -f lambda/Dockerfile-fork lambda
-	touch imgs/lambda-fork
 	docker build -t lambda lambda
 	touch imgs/lambda
 

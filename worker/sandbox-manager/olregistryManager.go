@@ -64,8 +64,8 @@ func NewRegistryManager(opts *config.Config) (rm *RegistryManager, err error) {
 func (rm *RegistryManager) Create(name string, sandbox_dir string) (sb.Sandbox, error) {
 	handler := filepath.Join(rm.handler_dir, name)
 	volumes := []string{
-		fmt.Sprintf("%s:%s:ro", handler, "/handler/"),
-		fmt.Sprintf("%s:%s:ro", sandbox_dir, "/host/")}
+		fmt.Sprintf("%s:%s", handler, "/handler/"),
+		fmt.Sprintf("%s:%s", sandbox_dir, "/host/")}
 
 	sandbox, err := rm.create(name, sandbox_dir, BASE_IMAGE, volumes)
 	if err != nil {

@@ -12,4 +12,4 @@ init: init.c
 
 clean:
 	rm -rf build/ ns.so
-	rm init
+	rm -f init

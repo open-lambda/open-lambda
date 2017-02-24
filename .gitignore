@@ -39,6 +39,7 @@
 *.swp
 
 .vagrant
+.sock
 
 # Built stuff
 /hack/go/bin
