@@ -80,7 +80,11 @@ func (args *CmdArgs) RegistryPath() string {
 	return path.Join(*args.cluster, "registry")
 }
 
-type AdminFn func() error
+type AdminFn struct {
+	fn       func() error
+	doc      string
+	doc_long string
+}
 
 func NewAdmin() *Admin {
 	admin := Admin{fns: map[string]AdminFn{}}
@@ -90,27 +94,91 @@ func NewAdmin() *Admin {
 		admin.client = client
 	}
 
-	admin.fns["help"] = admin.help
-	admin.fns["new"] = admin.new_cluster
-	admin.fns["status"] = admin.status
-	admin.fns["rethinkdb"] = admin.rethinkdb
-	admin.fns["worker-exec"] = admin.worker_exec
-	admin.fns["workers"] = admin.workers
-	admin.fns["nginx"] = admin.nginx
-	admin.fns["kill"] = admin.kill
-	admin.fns["olstore-exec"] = admin.olstore_exec
-	admin.fns["olstore"] = admin.olstore
-	admin.fns["upload"] = admin.upload
+	admin.fns["help"] = AdminFn{admin.help,
+		"Print usage",
+		strings.Join([]string{
+			"admin help [command]",
+			"List all commands or show details for one command.",
+		}, "\n\n"),
+	}
+	admin.fns["new"] = AdminFn{admin.new_cluster,
+		"Create a cluster",
+		strings.Join([]string{
+			"admin new -cluster=NAME",
+			"A directory of the given name will be created with internal directory structure initialized.",
+		}, "\n\n"),
+	}
+	admin.fns["status"] = AdminFn{admin.status,
+		"Print status of one or all clusters",
+		strings.Join([]string{
+			"admin status [-cluster=NAME]",
+			"If no cluster name is specified, number of containers of each cluster is printed; otherwise the connection information for all containers in the given cluster will be displayed.",
+		}, "\n\n"),
+	}
+	admin.fns["rethinkdb"] = AdminFn{admin.rethinkdb,
+		"Start one or more rethinkdb containers",
+		strings.Join([]string{
+			"admin rethinkdb -cluster=NAME [-n=NUM]",
+			"NUM rethinkdb containers will be started in cluster NAME. By default, NUM=1.",
+		}, "\n\n"),
+	}
+	admin.fns["worker-exec"] = AdminFn{admin.worker_exec,
+		"Start one worker with config",
+		strings.Join([]string{
+			"admin worker-exec -config=FILE",
+			"Start a worker with a JSON config file.",
+		}, "\n\n"),
+	}
+	admin.fns["workers"] = AdminFn{admin.workers,
+		"Start one or more workers",
+		strings.Join([]string{
+			"admin workers -cluster=NAME [-foreach] [-port=PORT] [-n=NUM]",
+			"Start one or more workers in cluster NAME. If foreach is set, one worker per database node will be started. [PORT,PORT+NUM) will be the range of port numbers for the newly created workers. By default, PORT=8080 and NUM=1.",
+		}, "\n\n"),
+	}
+	admin.fns["nginx"] = AdminFn{admin.nginx,
+		"Start one or more Nginx containers",
+		strings.Join([]string{
+			"admin nginx -cluster=NAME [-port=PORT] [-n=NUM]",
+			"Start one or more Nginx nodes in cluster NAME. [PORT,PORT+NUM) will be the range of port numbers for the newly created Nginx nodes. By default, PORT=9080 and NUM=1. Run this command after running some workers.",
+		}, "\n\n"),
+	}
+	admin.fns["kill"] = AdminFn{admin.kill,
+		"Kill containers and processes of a cluster",
+		strings.Join([]string{
+			"admin kill -cluster=NAME",
+		}, "\n\n"),
+	}
+	admin.fns["olstore-exec"] = AdminFn{admin.olstore_exec,
+		"Start one olstore",
+		strings.Join([]string{
+			"admin olstore-exec [-port=PORT] [-ips=ADDR1,ADDR2,...]",
+			"Start one olstore registry for storing lambda code. ips is a comma-separated list of rethinkdb IP addresses. By default, olstore listens on port 7080.",
+		}, "\n\n"),
+	}
+	admin.fns["olstore"] = AdminFn{admin.olstore,
+		"Start one olstore containers in a cluster",
+		strings.Join([]string{
+			"admin olstore -cluster=NAME [-port=PORT]",
+			"Starts an olstore that connected with all databases in the cluster NAME.",
+		}, "\n\n"),
+	}
+	admin.fns["upload"] = AdminFn{admin.upload,
+		"Upload a file to registry",
+		strings.Join([]string{"admin upload [-server=ADDR] [-name=HANDLER] [-file=PATH]",
+			"The file will be uploaded to the server at ADDDR, and it will be bound with the name HANDLER on the server.",
+		}, "\n\n"),
+	}
 	return &admin
 }
 
 func (admin *Admin) command(cmd string) {
-	fn := admin.fns[cmd]
-	if fn == nil {
+	fn, ok := admin.fns[cmd]
+	if !ok {
 		admin.help()
 		return
 	}
-	if err := fn(); err != nil {
+	if err := fn.fn(); err != nil {
 		log.Fatalf("Failed to run %v, %v\n", cmd, err)
 	}
 }
@@ -136,12 +204,18 @@ func (admin *Admin) cluster_nodes(cluster string) (map[string]([]string), error)
 }
 
 func (admin *Admin) help() error {
+	if len(os.Args) > 2 && os.Args[1] == "help" {
+		if fn, ok := admin.fns[os.Args[2]]; ok {
+			fmt.Printf("%s\n\n%s\n", fn.doc, fn.doc_long)
+			return nil
+		}
+	}
 	fmt.Printf("Run %v <command> <args>\n", os.Args[0])
 	fmt.Printf("\n")
 	fmt.Printf("Commands:\n")
 	cmds := make([]string, 0, len(admin.fns))
-	for cmd := range admin.fns {
-		cmds = append(cmds, cmd)
+	for cmd, fn := range admin.fns {
+		cmds = append(cmds, fmt.Sprintf("%-15s%s", cmd, fn.doc))
 	}
 	sort.Strings(cmds)
 
