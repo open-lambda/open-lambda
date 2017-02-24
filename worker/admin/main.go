@@ -491,6 +491,7 @@ func (admin *Admin) nginx() error {
 	if err != nil {
 		return err
 	}
+	num_workers := 0
 	for _, fi := range logs {
 		if strings.HasSuffix(fi.Name(), ".pid") {
 			name := fi.Name()[:len(fi.Name())-4]
@@ -500,7 +501,11 @@ func (admin *Admin) nginx() error {
 			}
 			line := fmt.Sprintf("		server localhost:%s;\n", c.Worker_port)
 			nginx_conf += line
+			num_workers += 1
 		}
+	}
+	if num_workers == 0 {
+		log.Fatal("No upstream worker found")
 	}
 	nginx_conf += strings.Join([]string{
 		"	}\n",
@@ -542,12 +547,7 @@ func (admin *Admin) nginx() error {
 		if err != nil {
 			return err
 		}
-		// TODO(tyler): passing HostConfig seems to be going away with
-		// the latest versions of the Docker API:
-		// https://godoc.org/github.com/fsouza/go-dockerclient#Client.StartContainer.
-		// We may need to do something to make sure the load balancer
-		// runs in host mode.
-		if err := client.StartContainer(container.ID, container.HostConfig); err != nil {
+		if err := client.StartContainer(container.ID, nil); err != nil {
 			return err
 		}
 
