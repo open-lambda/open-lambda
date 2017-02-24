@@ -9,8 +9,9 @@ import (
 
 	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/handler/state"
-	pmanager "github.com/open-lambda/open-lambda/worker/pool-manager"
 	"github.com/open-lambda/open-lambda/worker/sandbox"
+
+	pmanager "github.com/open-lambda/open-lambda/worker/pool-manager"
 	sbmanager "github.com/open-lambda/open-lambda/worker/sandbox-manager"
 )
 
@@ -39,7 +40,6 @@ type Handler struct {
 	state    state.HandlerState
 	runners  int
 	code     []byte
-	imports  []string //TODO: need these
 }
 
 func NewHandlerSet(opts HandlerSetOpts) (handlerSet *HandlerSet) {
@@ -112,8 +112,8 @@ func (h *Handler) RunStart() (ch *sandbox.SandboxChannel, err error) {
 		}
 
 		// forkenter a handler server into sandbox if needed
-		if h.pm != nil {
-			pm.ForkEnter(sandbox, sandbox_dir)
+		if h.hset.pm != nil {
+			h.hset.pm.ForkEnter(sandbox)
 		}
 
 		h.sandbox = sandbox

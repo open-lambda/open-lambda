@@ -11,16 +11,12 @@ package sandbox
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
-	"os"
-	"path"
 	"path/filepath"
-	"strings"
 	"time"
 
 	docker "github.com/fsouza/go-dockerclient"
@@ -31,6 +27,7 @@ import (
 type DockerSandbox struct {
 	name        string
 	sandbox_dir string
+    nspid       int
 	container   *docker.Container
 	client      *docker.Client
 	config      *config.Config
@@ -100,49 +97,13 @@ func (s *DockerSandbox) Channel() (channel *SandboxChannel, err error) {
 		return nil, s.dockerError(err)
 	}
 
-	var env docker.Env
-	env = s.container.Config.Env
+    dial := func(proto, addr string) (net.Conn, error) {
+        return net.Dial("unix", filepath.Join(s.sandbox_dir, "ol.sock"))
+    }
+    tr := http.Transport{Dial: dial}
 
-	if env.Exists("ol.config") {
-		var conf map[string]interface{}
-		if err := json.Unmarshal([]byte(env.Get("ol.config")), &conf); err != nil {
-			return nil, err
-		}
-
-		if val, exists := conf["sock_file"]; exists {
-			switch val := val.(type) {
-			default:
-				return nil, fmt.Errorf("sock_file must be a string")
-			case string:
-				dial := func(proto, addr string) (net.Conn, error) {
-					return net.Dial("unix", path.Join(s.sandbox_dir, val))
-				}
-				tr := http.Transport{Dial: dial}
-
-				// the server name doesn't matter since we have a sock file
-				return &SandboxChannel{Url: "http://container", Transport: tr}, nil
-			}
-		}
-	}
-
-	container_port := docker.Port("8080/tcp")
-	ports := s.container.NetworkSettings.Ports[container_port]
-	if len(ports) == 0 {
-		err := fmt.Errorf("could not lookup host port for %v", container_port)
-		return nil, s.dockerError(err)
-	} else if len(ports) > 1 {
-		err := fmt.Errorf("multiple host port mapping to %v", container_port)
-		return nil, s.dockerError(err)
-	}
-	port := ports[0].HostPort
-
-	// on unix systems, port is given as "unix:port", this removes the prefix
-	if strings.HasPrefix(port, "unix") {
-		port = strings.Split(port, ":")[1]
-	}
-
-	url := fmt.Sprintf("http://localhost:%s", port)
-	return &SandboxChannel{Url: url}, nil
+    // the server name doesn't matter since we have a sock file
+    return &SandboxChannel{Url: "http://container", Transport: tr}, nil
 }
 
 /* Starts the container */
@@ -157,7 +118,7 @@ func (s *DockerSandbox) Start() error {
 		return s.dockerError(err)
 	}
 	s.container = container
-	nspid := s.container.State.Pid
+    s.nspid = container.State.Pid
 
 	return nil
 }
@@ -231,4 +192,8 @@ func (s *DockerSandbox) Logs() (string, error) {
 	}
 
 	return buf.String(), nil
+}
+
+func (s *DockerSandbox) NSPid() (int) {
+    return s.nspid
 }
