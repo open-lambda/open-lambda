@@ -25,16 +25,19 @@ import (
 // TODO: notes about creating a directory in local
 // TODO: docker registry setup
 
+// Admin wraps a docker client and an array of functions
 type Admin struct {
 	client *docker.Client
 	fns    map[string]AdminFn
 }
 
+// CmdArgs reflects the command line arguments pass to the admin tool
 type CmdArgs struct {
 	flags   *flag.FlagSet
 	cluster *string
 }
 
+// NewCmdArgs returns a new CmdArgs instance with the cluster flag set
 func NewCmdArgs() *CmdArgs {
 	args := CmdArgs{}
 	args.flags = flag.NewFlagSet("flag", flag.ExitOnError)
@@ -42,6 +45,8 @@ func NewCmdArgs() *CmdArgs {
 	return &args
 }
 
+// Parse parses the command line arguments. If require_cluster is true but
+// the cluster flag is empty, program will exit with an error.
 func (args *CmdArgs) Parse(require_cluster bool) {
 	args.flags.Parse(os.Args[2:])
 
@@ -56,36 +61,47 @@ func (args *CmdArgs) Parse(require_cluster bool) {
 	}
 }
 
+// LogPath gets the logging directory of the cluster
 func (args *CmdArgs) LogPath(name string) string {
 	return path.Join(*args.cluster, "logs", name)
 }
 
+// WorkerPath gets the worker directory of the cluster
 func (args *CmdArgs) WorkerPath(name string) string {
 	return path.Join(*args.cluster, "workers", name)
 }
 
+// PidPath gets the path of the pid file of a process in the container
 func (args *CmdArgs) PidPath(name string) string {
 	return path.Join(*args.cluster, "logs", name+".pid")
 }
 
+// ConfigPath gets the path of a JSON config file in the cluster
 func (args *CmdArgs) ConfigPath(name string) string {
 	return path.Join(*args.cluster, "config", name+".json")
 }
 
+// TemplatePath gets the config template directory of the cluster
 func (args *CmdArgs) TemplatePath() string {
 	return args.ConfigPath("template")
 }
 
+// RegistryPath gets the registry directory of the cluster
 func (args *CmdArgs) RegistryPath() string {
 	return path.Join(*args.cluster, "registry")
 }
 
+// TODO find a better way to store doc of these commands
+// AdminFn represents a function of the admin tool that is callable
+// from the command line. It also wraps the doc of the command.
 type AdminFn struct {
 	fn       func() error
 	doc      string
 	doc_long string
 }
 
+// NewAdmin creates a new Admin instance with an initialized docker
+// client and an array of available functions.
 func NewAdmin() *Admin {
 	admin := Admin{fns: map[string]AdminFn{}}
 	if client, err := docker.NewClientFromEnv(); err != nil {
@@ -172,6 +188,8 @@ func NewAdmin() *Admin {
 	return &admin
 }
 
+// command invoke the function with name cmd of the admin tool.
+// If no such function is found, help is called.
 func (admin *Admin) command(cmd string) {
 	fn, ok := admin.fns[cmd]
 	if !ok {
@@ -183,6 +201,8 @@ func (admin *Admin) command(cmd string) {
 	}
 }
 
+// cluster_nodes finds all docker containers belongs to a cluster and returns
+// a mapping from the type of the container to its container ID.
 func (admin *Admin) cluster_nodes(cluster string) (map[string]([]string), error) {
 	client := admin.client
 	nodes := map[string]([]string){}
@@ -203,6 +223,10 @@ func (admin *Admin) cluster_nodes(cluster string) (map[string]([]string), error)
 	return nodes, nil
 }
 
+// help corresponds to the "help" command of the admin tool. If the admin tool
+// is run with illegal commands, or if help is called without argument, all
+// commands with their simple usage will be shown. If an existing command name
+// is provided to help, the detailed usage of that command will be shown.
 func (admin *Admin) help() error {
 	if len(os.Args) > 2 && os.Args[1] == "help" {
 		if fn, ok := admin.fns[os.Args[2]]; ok {
@@ -225,6 +249,10 @@ func (admin *Admin) help() error {
 	return nil
 }
 
+// new_cluster corresponds to the "new" command of the admin tool. It creates
+// a directory for the cluster, and initialize its internal directory structure.
+// A default config for the cluster is written to the template directory of the
+// cluster.
 func (admin *Admin) new_cluster() error {
 	args := NewCmdArgs()
 	args.Parse(true)
@@ -271,6 +299,10 @@ func (admin *Admin) new_cluster() error {
 	return nil
 }
 
+// status corresponds to the "status" command of the admin tool. If no cluster
+// is specified, it counts the number of docker containers of each cluster;
+// otherwise the connection information of each container in the specified
+// cluster will be displayed.
 func (admin *Admin) status() error {
 	args := NewCmdArgs()
 	args.Parse(false)
@@ -355,6 +387,8 @@ func (admin *Admin) status() error {
 	return nil
 }
 
+// rethinkdb corresponds to the "rethinkdb" command of the admin tool. It
+// starts n rethinkdb containers as specified by the command line argument.
 func (admin *Admin) rethinkdb() error {
 	args := NewCmdArgs()
 	count := args.flags.Int("n", 1, "specify number of nodes to start")
@@ -427,6 +461,8 @@ func (admin *Admin) rethinkdb() error {
 	return nil
 }
 
+// worker_exec corresponds to the "worker-exec" command of the admin tool.
+// It runs a worker server with a given config file.
 func (admin *Admin) worker_exec() error {
 	flags := flag.NewFlagSet("flag", flag.ExitOnError)
 	conf := flags.String("config", "", "give a json config file")
@@ -441,6 +477,14 @@ func (admin *Admin) worker_exec() error {
 	return nil
 }
 
+// workers corresponds to the "workers" command of the admin tool. If foreach
+// is set, it starts one worker for each db in this cluster; otherwise n workers
+// will be started as specified by the argument. These workers will be assigned
+// to a sequence of port numbers starting from the given port.
+//
+// The JSON config in the cluster template directory will be populated for each
+// worker, and their pid will be written to the log directory. worker_exec will
+// be called to run the worker processes.
 func (admin *Admin) workers() error {
 	args := NewCmdArgs()
 	foreach := args.flags.Bool("foreach", false, "start one worker per db instance")
@@ -525,6 +569,10 @@ func (admin *Admin) workers() error {
 	return nil
 }
 
+// nginx corresponds to the "nginx" command of the admin tool. It starts n
+// Nginx docker containers as specified by the command line argument. The
+// containers will be assigned with a sequence of port numbers starting
+// from the given port. Workers must be started before calling this functions.
 func (admin *Admin) nginx() error {
 	args := NewCmdArgs()
 	portbase := args.flags.Int("port", 9080, "port range [port, port+n) will be used for workers")
@@ -631,6 +679,8 @@ func (admin *Admin) nginx() error {
 	return nil
 }
 
+// kill corresponds to the "kill" command of the admin tool. It kills the
+// containers and worker processes of a cluster.
 func (admin *Admin) kill() error {
 	args := NewCmdArgs()
 	args.Parse(true)
@@ -699,6 +749,9 @@ func (admin *Admin) kill() error {
 	return nil
 }
 
+// olstore_exec corresponds to the "olstore-exec" command of the admin tool. It
+// starts an olstore that listens to a given port and connects with a list of
+// rethink db instances.
 func (admin *Admin) olstore_exec() error {
 	flags := flag.NewFlagSet("flag", flag.ExitOnError)
 	port := flags.Int("port", 7080, "port to push/pull lambdas")
@@ -710,6 +763,9 @@ func (admin *Admin) olstore_exec() error {
 	return fmt.Errorf("Push Server Crashed\n")
 }
 
+// olstore corresponds to the "olstore" commanf of the admin tool. It starts an
+// olstore that listens to a given port and connects with all rethink db
+// instances of the cluster. It calls olstore_exec to starts the olstore.
 func (admin *Admin) olstore() error {
 	args := NewCmdArgs()
 	port := args.flags.Int("port", 7080, "port to push/pull lambdas")
@@ -765,6 +821,8 @@ func (admin *Admin) olstore() error {
 	return nil
 }
 
+// uploads corresponds to the "upload" command of the admin tool. It uploads a
+// given file to a olstore and assigns it with a specific name.
 func (admin *Admin) upload() error {
 	args := NewCmdArgs()
 	server := args.flags.String("server", "", "olstore addr")
@@ -775,6 +833,7 @@ func (admin *Admin) upload() error {
 	return nil
 }
 
+// main runs the admin tool
 func main() {
 	admin := NewAdmin()
 	if len(os.Args) < 2 {
