@@ -12,6 +12,7 @@ import (
 	docker "github.com/fsouza/go-dockerclient"
 )
 
+// Config represents the configuration for a worker server.
 type Config struct {
 	path     string // where was config file loaded from?
 	Registry string `json:"registry"`
@@ -37,6 +38,7 @@ type Config struct {
 	Sandbox_config interface{} `json:"sandbox_config"`
 }
 
+// SandboxConfJson marshals the Sandbox_config of the Config into a JSON string.
 func (c *Config) SandboxConfJson() string {
 	s, err := json.Marshal(c.Sandbox_config)
 	if err != nil {
@@ -45,6 +47,7 @@ func (c *Config) SandboxConfJson() string {
 	return string(s)
 }
 
+// Dump prints the Config as a JSON string.
 func (c *Config) Dump() {
 	s, err := json.Marshal(c)
 	if err != nil {
@@ -53,6 +56,7 @@ func (c *Config) Dump() {
 	log.Printf("CONFIG = %v\n", string(s))
 }
 
+// DumpStr returns the Config as an indented JSON string.
 func (c *Config) DumpStr() string {
 	s, err := json.MarshalIndent(c, "", "\t")
 	if err != nil {
@@ -61,6 +65,7 @@ func (c *Config) DumpStr() string {
 	return string(s)
 }
 
+// Save writes the Config as an indented JSON to path with 644 mode.
 func (c *Config) Save(path string) error {
 	s, err := json.MarshalIndent(c, "", "\t")
 	if err != nil {
@@ -69,6 +74,8 @@ func (c *Config) Save(path string) error {
 	return ioutil.WriteFile(path, s, 0644)
 }
 
+// Defaults verifies the fields of Config are correct, and initializes some
+// if they are empty.
 func (c *Config) Defaults() error {
 	if c.Worker_port == "" {
 		c.Worker_port = "8080"
@@ -145,6 +152,8 @@ func (c *Config) Defaults() error {
 	return nil
 }
 
+// ParseConfig reads a file and tries to parse it as a JSON string to a Config
+// instance.
 func ParseConfig(path string) (*Config, error) {
 	config_raw, err := ioutil.ReadFile(path)
 	if err != nil {
