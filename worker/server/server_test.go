@@ -1,7 +1,7 @@
 package server
 
 import (
-        "fmt"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
+	docker "github.com/fsouza/go-dockerclient"
 	"github.com/open-lambda/open-lambda/worker/config"
 	sbmanager "github.com/open-lambda/open-lambda/worker/sandbox-manager"
-	docker "github.com/fsouza/go-dockerclient"
 )
 
 var server *Server
@@ -22,9 +22,9 @@ var docker_client *docker.Client
 
 func init() {
 	server = RunServer()
-        var err error
-        docker_client, err = docker.NewClientFromEnv()
-        if err != nil {
+	var err error
+	docker_client, err = docker.NewClientFromEnv()
+	if err != nil {
 		log.Fatal("failed to get docker client: ", err)
 	}
 }
@@ -79,46 +79,46 @@ func testReq(lambda_name string, post string) (string, error) {
 }
 
 func kill() {
-        containers, err := docker_client.ListContainers(docker.ListContainersOptions{})
+	containers, err := docker_client.ListContainers(docker.ListContainersOptions{})
 	if err != nil {
 		log.Fatal("failed to get docker container list: ", err)
 	}
 
 	for _, container := range containers {
-            if container.Labels[sbmanager.DOCKER_LABEL_CLUSTER] == server.config.Cluster_name {
-                cid := container.ID
-                typ := server.config.Cluster_name
+		if container.Labels[sbmanager.DOCKER_LABEL_CLUSTER] == server.config.Cluster_name {
+			cid := container.ID
+			typ := server.config.Cluster_name
 
-	        container_insp, err := docker_client.InspectContainer(cid)
-                if err != nil {
-		    log.Fatalf("failed to get inspect docker container ID %v: ", cid, err)
-	        }
+			container_insp, err := docker_client.InspectContainer(cid)
+			if err != nil {
+				log.Fatalf("failed to get inspect docker container ID %v: ", cid, err)
+			}
 
-                if container_insp.State.Paused {
-		    fmt.Printf("Unpause container %v (%s)\n", cid, typ)
-		    if err := docker_client.UnpauseContainer(cid); err != nil {
-			fmt.Printf("%s\n", err.Error())
-			fmt.Printf("Failed to unpause container %v (%s).  May require manual cleanup.\n", cid, typ)
-		    }
+			if container_insp.State.Paused {
+				fmt.Printf("Unpause container %v (%s)\n", cid, typ)
+				if err := docker_client.UnpauseContainer(cid); err != nil {
+					fmt.Printf("%s\n", err.Error())
+					fmt.Printf("Failed to unpause container %v (%s).  May require manual cleanup.\n", cid, typ)
+				}
+			}
+
+			fmt.Printf("Kill container %v (%s)\n", cid, typ)
+			opts := docker.KillContainerOptions{ID: cid}
+			if err := docker_client.KillContainer(opts); err != nil {
+				fmt.Printf("%s\n", err.Error())
+				fmt.Printf("Failed to kill container %v (%s).  May require manual cleanup.\n", cid, typ)
+			}
 		}
-
-		fmt.Printf("Kill container %v (%s)\n", cid, typ)
-		opts := docker.KillContainerOptions{ID: cid}
-		if err := docker_client.KillContainer(opts); err != nil {
-		    fmt.Printf("%s\n", err.Error())
-		    fmt.Printf("Failed to kill container %v (%s).  May require manual cleanup.\n", cid, typ)
-		}
-            }
-        }
+	}
 
 }
 
 func TestMain(m *testing.M) {
-        ret_val := m.Run()
-        fmt.Printf("\n========Cleaning========\n")
-        kill()
-        fmt.Printf("========================\n\n")
-        os.Exit(ret_val)
+	ret_val := m.Run()
+	fmt.Printf("\n========Cleaning========\n")
+	kill()
+	fmt.Printf("========================\n\n")
+	os.Exit(ret_val)
 }
 
 func TestHello(t *testing.T) {
