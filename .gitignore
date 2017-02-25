@@ -36,8 +36,10 @@
 *.tar
 
 *~
+*.swp
 
 .vagrant
+.sock
 
 # Built stuff
 /hack/go/bin
@@ -47,3 +49,5 @@
 /registry/bin
 /registry/pushserver
 /registry/regpush
+/lambda/getolpid
+/lambda/init

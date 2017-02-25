@@ -1,4 +1,4 @@
-package manager
+package sbmanager
 
 /*
 
@@ -31,40 +31,13 @@ func NewDockerManager(opts *config.Config) (manager *DockerManager, err error) {
 }
 
 func (dm *DockerManager) Create(name string, sandbox_dir string) (sb.Sandbox, error) {
-	internalAppPort := map[docker.Port]struct{}{"8080/tcp": {}}
-	portBindings := map[docker.Port][]docker.PortBinding{
-		"8080/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}}}
+	volumes := []string{
+		fmt.Sprintf("%s:%s", sandbox_dir, "/host/")}
 
-	volumes := []string{fmt.Sprintf("%s:%s", sandbox_dir, "/host/")}
-
-	container, err := dm.client().CreateContainer(
-		docker.CreateContainerOptions{
-			Config: &docker.Config{
-				Image:        name,
-				AttachStdout: true,
-				AttachStderr: true,
-				ExposedPorts: internalAppPort,
-				Labels:       dm.docker_labels(),
-				Env:          dm.env,
-			},
-			HostConfig: &docker.HostConfig{
-				PortBindings:    portBindings,
-				PublishAllPorts: true,
-				Binds:           volumes,
-			},
-		},
-	)
-
+	sandbox, err := dm.create(name, sandbox_dir, name, volumes)
 	if err != nil {
 		return nil, err
 	}
-
-	nspid, err := dm.getNsPid(container)
-	if err != nil {
-		return nil, err
-	}
-
-	sandbox := sb.NewDockerSandbox(name, sandbox_dir, nspid, container, dm.client())
 
 	return sandbox, nil
 }

@@ -10,12 +10,15 @@ import (
 	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/handler/state"
 	"github.com/open-lambda/open-lambda/worker/sandbox"
+
+	pmanager "github.com/open-lambda/open-lambda/worker/pool-manager"
 	sbmanager "github.com/open-lambda/open-lambda/worker/sandbox-manager"
 )
 
 // HandlerSetOpts wraps parameters necessary to create a HandlerSet.
 type HandlerSetOpts struct {
 	Sm     sbmanager.SandboxManager
+	Pm     pmanager.PoolManager
 	Config *config.Config
 	Lru    *HandlerLRU
 }
@@ -26,6 +29,7 @@ type HandlerSet struct {
 	mutex    sync.Mutex
 	handlers map[string]*Handler
 	sm       sbmanager.SandboxManager
+	pm       pmanager.PoolManager
 	config   *config.Config
 	lru      *HandlerLRU
 }
@@ -53,6 +57,7 @@ func NewHandlerSet(opts HandlerSetOpts) (handlerSet *HandlerSet) {
 	return &HandlerSet{
 		handlers: make(map[string]*Handler),
 		sm:       opts.Sm,
+		pm:       opts.Pm,
 		config:   opts.Config,
 		lru:      opts.Lru,
 	}
@@ -116,6 +121,14 @@ func (h *Handler) RunStart() (ch *sandbox.SandboxChannel, err error) {
 		if err != nil {
 			return nil, err
 		}
+
+		// forkenter a handler server into sandbox if needed
+		if h.hset.pm != nil {
+			if err = h.hset.pm.ForkEnter(sandbox); err != nil {
+				return nil, err
+			}
+		}
+
 		h.sandbox = sandbox
 		h.state = state.Stopped
 	}

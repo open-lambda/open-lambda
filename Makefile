@@ -5,7 +5,7 @@ LAMBDA_BIN=lambda/bin
 REG_BIN:=registry/bin
 
 WORKER_GO_FILES = $(shell find worker/ -name '*.go')
-LAMBDA_FILES = $(shell find lambda/)
+LAMBDA_FILES = $(shell find lambda)
 
 GO = $(abspath ./hack/go.sh)
 GO_PATH = hack/go
@@ -21,8 +21,8 @@ all : .git/hooks/pre-commit imgs/lambda bin/admin
 	cp util/pre-commit .git/hooks/pre-commit
 
 imgs/lambda : $(LAMBDA_FILES)
-	cd $(LAMBDA_DIR) && gcc getolpid.c -o getolpid
-	docker build lambda -t lambda
+	${MAKE} -C lambda
+	docker build -t lambda lambda
 	touch imgs/lambda
 
 bin/admin : $(WORKER_GO_FILES)
@@ -46,3 +46,4 @@ clean :
 	rm -rf registry/bin
 	rm -f imgs/lambda
 	rm -f imgs/olregistry
+	${MAKE} -C lambda clean

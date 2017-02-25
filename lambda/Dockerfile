@@ -9,7 +9,7 @@ RUN pip install Flask
 RUN pip install rethinkdb
 RUN pip install tornado
 
-# SERVER SCRIPT
 COPY server.py /
+COPY init /
 
 CMD ["python", "/server.py"]

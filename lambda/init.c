@@ -1,5 +1,4 @@
 #include <unistd.h>
-
-int main(void) {
+int main() {
     pause();
 }
