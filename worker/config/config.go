@@ -15,7 +15,7 @@ import (
 type Config struct {
 	path     string // where was config file loaded from?
 	Registry string `json:"registry"`
-    Pool     string `json:"pool"`
+	Pool     string `json:"pool"`
 
 	// docker
 	Cluster_name  string `json:"cluster_name"`
