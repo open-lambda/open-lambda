@@ -11,6 +11,7 @@ import ns
 
 
 SOCKET_PATH = "/host/ol.sock"
+PROCESSES_DEFAULT = 10
 initialized = False
 config = None
 db_conn = None
@@ -59,7 +60,7 @@ def lambda_server():
     socket = tornado.netutil.bind_unix_socket(SOCKET_PATH)
     server.add_socket(socket)
     tornado.ioloop.IOLoop.instance().start()
-    server.start(2)
+    server.start(PROCESSES_DEFAULT)
 
 # listen for fds to forkenter
 def fdlisten(path):

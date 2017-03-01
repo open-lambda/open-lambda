@@ -112,16 +112,14 @@ func (s *DockerSandbox) Start() error {
 		log.Printf("failed to start container with err %v\n", err)
 		return s.dockerError(err)
 	}
-	s.nspid = 0
-	for s.nspid == 0 {
-		container, err := s.client.InspectContainer(s.container.ID)
-		if err != nil {
-			log.Printf("failed to inpect container with err %v\n", err)
-			return s.dockerError(err)
-		}
-		s.container = container
-		s.nspid = container.State.Pid
+
+	container, err := s.client.InspectContainer(s.container.ID)
+	if err != nil {
+		log.Printf("failed to inpect container with err %v\n", err)
+		return s.dockerError(err)
 	}
+	s.container = container
+	s.nspid = container.State.Pid
 
 	return nil
 }

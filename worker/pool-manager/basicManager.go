@@ -13,6 +13,7 @@ Handler code is mapped into the container by attaching a directory
 */
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -76,11 +77,15 @@ func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
 func (bm *BasicManager) ForkEnter(sandbox sb.Sandbox) (err error) {
 	fs := bm.chooseRandom()
 
-	if err = sendFds(fs.sockPath, sandbox.NSPid()); err != nil {
+	docker_sb, ok := sandbox.(*sb.DockerSandbox)
+	if !ok {
+		return errors.New("forkenter only supported with DockerSandbox")
+	}
+
+	if err = sendFds(fs.sockPath, docker_sb.NSPid()); err != nil {
 		return err
 	}
 
-	//TODO: respond?
 	return nil
 }
 
