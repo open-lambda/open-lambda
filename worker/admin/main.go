@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"sort"
@@ -91,6 +92,12 @@ func (args *CmdArgs) RegistryPath() string {
 	return path.Join(*args.cluster, "registry")
 }
 
+// BasePath gets location for storing base handler files (e.g., Ubuntu
+// install files) for cgroup mode
+func (args *CmdArgs) BasePath() string {
+	return path.Join(*args.cluster, "base")
+}
+
 // TODO find a better way to store doc of these commands
 // AdminFn represents a function of the admin tool that is callable
 // from the command line. It also wraps the doc of the command.
@@ -163,6 +170,13 @@ func NewAdmin() *Admin {
 		"Kill containers and processes of a cluster",
 		strings.Join([]string{
 			"admin kill -cluster=NAME",
+		}, "\n\n"),
+	}
+	admin.fns["cgroup-mgr"] = AdminFn{admin.cgroup_mgr,
+		"Manage cgroups directly",
+		strings.Join([]string{
+			"admin cgroup-mgr -cluster=NAME",
+			"Use cgroups for sandboxing without using Docker.",
 		}, "\n\n"),
 	}
 	admin.fns["olstore-exec"] = AdminFn{admin.olstore_exec,
@@ -270,6 +284,10 @@ func (admin *Admin) new_cluster() error {
 	}
 
 	if err := os.Mkdir(args.RegistryPath(), 0700); err != nil {
+		return err
+	}
+
+	if err := os.Mkdir(args.BasePath(), 0700); err != nil {
 		return err
 	}
 
@@ -744,6 +762,98 @@ func (admin *Admin) kill() error {
 				fmt.Printf("Failed to kill process with PID %d.  May require manual cleanup.\n", pid)
 			}
 		}
+	}
+
+	return nil
+}
+
+// take a Docker image, and extract a flattened version to a local directory
+func (admin *Admin) dump_docker_image(image string, outdir string) error {
+	if err := os.Mkdir(outdir, 0700); err != nil {
+		return err
+	}
+
+	// we will pipe the output of "docker export" to "tar xf ..."
+	tar := exec.Command("tar", "xf", "-", "--directory", outdir)
+	writer, err := tar.StdinPipe()
+	tar.Stdout = os.Stdout
+	tar.Stderr = os.Stderr
+	if err != nil {
+		return err
+	}
+
+	// dump tar of base image async
+	err_chan := make(chan error)
+	go func() {
+		err_chan <- func() error {
+			client := admin.client
+			image := "lambda"
+			cmd := []string{"sleep", "infinity"}
+
+			container, err := client.CreateContainer(
+				docker.CreateContainerOptions{
+					Config: &docker.Config{
+						Cmd:   cmd,
+						Image: image,
+					},
+				},
+			)
+			if err != nil {
+				return err
+			}
+
+			opts := docker.ExportContainerOptions{
+				ID:           container.ID,
+				OutputStream: writer,
+			}
+			if err := client.ExportContainer(opts); err != nil {
+				return err
+			}
+			writer.Close()
+
+			return client.RemoveContainer(docker.RemoveContainerOptions{ID: container.ID})
+		}()
+	}()
+
+	tar_err := tar.Run()
+	export_err := <-err_chan
+
+	// log both errors
+	if export_err != nil {
+		fmt.Printf("Docker export failed: %v\n", tar_err.Error())
+	}
+	if tar_err != nil {
+		fmt.Printf("Tar failed: %v\n", tar_err.Error())
+	}
+
+	// return one of the errors (if any)
+	if export_err != nil {
+		return export_err
+	} else if tar_err != nil {
+		return tar_err
+	}
+	return nil
+}
+
+// manage cgroups directly
+func (admin *Admin) cgroup_mgr() error {
+	args := NewCmdArgs()
+	args.Parse(true)
+
+	// create a base directory to run cgroup containers
+	err := admin.dump_docker_image("lambda", path.Join(args.BasePath(), "lambda"))
+	if err != nil {
+		return err
+	}
+
+	// configure template to use cgroup containers
+	c, err := config.ParseConfig(args.TemplatePath())
+	if err != nil {
+		return err
+	}
+	c.Registry = "cgroup"
+	if err := c.Save(args.TemplatePath()); err != nil {
+		return err
 	}
 
 	return nil
