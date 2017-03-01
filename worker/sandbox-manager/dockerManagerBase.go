@@ -46,12 +46,12 @@ func (dm *DockerManagerBase) create(name string, sandbox_dir string, image strin
 	portBindings := map[docker.Port][]docker.PortBinding{ //TODO: don't need these with sockets
 		"8080/tcp": {{HostIP: "0.0.0.0", HostPort: "0"}}}
 
-    var cmd []string
-    if dm.opts.Pool == "" {
-        cmd = []string{"/server.py"}
-    } else {
-        cmd = []string{"/init"}
-    }
+	var cmd []string
+	if dm.opts.Pool == "" {
+		cmd = []string{"/server.py"}
+	} else {
+		cmd = []string{"/init"}
+	}
 
 	container, err := dm.client().CreateContainer(
 		docker.CreateContainerOptions{
