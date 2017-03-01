@@ -44,6 +44,6 @@ type Sandbox interface {
 	// What port can we use to forward requests?
 	Channel() (*SandboxChannel, error)
 
-    // What namespace do we enter?
-    NSPid() (int)
+	// What namespace do we enter?
+	NSPid() int
 }

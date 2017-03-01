@@ -12,8 +12,8 @@ import (
 
 	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/handler"
+	pmanager "github.com/open-lambda/open-lambda/worker/pool-manager"
 	sbmanager "github.com/open-lambda/open-lambda/worker/sandbox-manager"
-    pmanager "github.com/open-lambda/open-lambda/worker/pool-manager"
 )
 
 type Server struct {
@@ -34,13 +34,13 @@ func newHttpErr(msg string, code int) *httpErr {
 func initPManager(config *config.Config) (pm pmanager.PoolManager, err error) {
 	if config.Pool == "basic" {
 		if pm, err = pmanager.NewBasicManager(config); err != nil {
-            return nil, err
-        }
+			return nil, err
+		}
 	} else {
 		pm = nil
 	}
 
-    return pm, nil
+	return pm, nil
 }
 
 func initSBManager(config *config.Config) (sm sbmanager.SandboxManager, err error) {

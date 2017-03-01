@@ -111,11 +111,6 @@ func (h *Handler) RunStart() (ch *sandbox.SandboxChannel, err error) {
 			return nil, err
 		}
 
-		// forkenter a handler server into sandbox if needed
-		if h.hset.pm != nil {
-			h.hset.pm.ForkEnter(sandbox)
-		}
-
 		h.sandbox = sandbox
 		h.state = state.Stopped
 	}
@@ -126,6 +121,11 @@ func (h *Handler) RunStart() (ch *sandbox.SandboxChannel, err error) {
 			if err := h.sandbox.Start(); err != nil {
 				return nil, err
 			}
+
+            // forkenter a handler server into sandbox if needed
+            if h.hset.pm != nil {
+                h.hset.pm.ForkEnter(h.sandbox)
+            }
 		} else if h.state == state.Paused {
 			if err := h.sandbox.Unpause(); err != nil {
 				return nil, err

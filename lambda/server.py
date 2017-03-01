@@ -7,9 +7,10 @@ import tornado.httpserver
 import tornado.netutil
 from subprocess import check_output
 
+import ns
+
 
 SOCKET_PATH = "/host/ol.sock"
-PROCESSES_DEFAULT = 10
 initialized = False
 config = None
 db_conn = None
@@ -20,7 +21,6 @@ def init():
     if initialized:
         return
 
-    sys.stdout = sys.stderr # flask supresses stdout :(
     #config = json.loads(os.environ['ol.config'])
     #if config.get('db', None) == 'rethinkdb':
     #    host = config.get('rethinkdb.host', 'localhost')
@@ -54,40 +54,31 @@ tornado_app = tornado.web.Application([
 ])
 
 # listen on sock file with Tornado
-def listen_socket():
+def lambda_server():
     server = tornado.httpserver.HTTPServer(tornado_app)
     socket = tornado.netutil.bind_unix_socket(SOCKET_PATH)
     server.add_socket(socket)
     tornado.ioloop.IOLoop.instance().start()
+    server.start(2)
 
-def listen_fifo(fifo):
-    args = ""
-    while True: #TODO
-        data = fifo.read()
-        if len(data) == 0:
-            break
-        args += data
+# listen for fds to forkenter
+def fdlisten(path):
+    r = ns.fdlisten(path)
+    # parent
+    if r > 0:
+        print('Parent should never escape from fdlisten')
+        sys.exit(1)
 
-    return args
-
-# wait for NS to enter, listen on sock file
-def fork(path):
-    with open(path) as fifo:
-        while True:
-            pid = listen_fifo(fifo)
-
-            r = ns.forkenter(pid)
-            if r == 0:
-                break # child escapes
-
-    listen_socket()
+    # child
+    if r == 0:
+        lambda_server()
 
 if __name__ == '__main__':
     if len(sys.argv) == 1:
-        listen_socket()
+        lambda_server()
     elif len(sys.argv) == 2:
-        fork(os.path.abspath(sys.argv[1]))
+        fdlisten(os.path.abspath(sys.argv[1]))
     else:
         print('Usage (nofork): python %s' % sys.argv[0])
-        print('Usage (fork): python %s --fork <fifo>' % sys.argv[0])
+        print('Usage (fork): python %s <fifo>' % sys.argv[0])
         sys.exit(1)

@@ -27,7 +27,7 @@ import (
 type DockerSandbox struct {
 	name        string
 	sandbox_dir string
-    nspid       int
+	nspid       int
 	container   *docker.Container
 	client      *docker.Client
 	config      *config.Config
@@ -97,13 +97,13 @@ func (s *DockerSandbox) Channel() (channel *SandboxChannel, err error) {
 		return nil, s.dockerError(err)
 	}
 
-    dial := func(proto, addr string) (net.Conn, error) {
-        return net.Dial("unix", filepath.Join(s.sandbox_dir, "ol.sock"))
-    }
-    tr := http.Transport{Dial: dial}
+	dial := func(proto, addr string) (net.Conn, error) {
+		return net.Dial("unix", filepath.Join(s.sandbox_dir, "ol.sock"))
+	}
+	tr := http.Transport{Dial: dial}
 
-    // the server name doesn't matter since we have a sock file
-    return &SandboxChannel{Url: "http://container", Transport: tr}, nil
+	// the server name doesn't matter since we have a sock file
+	return &SandboxChannel{Url: "http://container", Transport: tr}, nil
 }
 
 /* Starts the container */
@@ -112,13 +112,16 @@ func (s *DockerSandbox) Start() error {
 		log.Printf("failed to start container with err %v\n", err)
 		return s.dockerError(err)
 	}
-	container, err := s.client.InspectContainer(s.container.ID)
-	if err != nil {
-		log.Printf("failed to inpect container with err %v\n", err)
-		return s.dockerError(err)
-	}
-	s.container = container
-    s.nspid = container.State.Pid
+    s.nspid = 0
+    for s.nspid == 0 {
+        container, err := s.client.InspectContainer(s.container.ID)
+        if err != nil {
+            log.Printf("failed to inpect container with err %v\n", err)
+            return s.dockerError(err)
+        }
+        s.container = container
+        s.nspid = container.State.Pid
+    }
 
 	return nil
 }
@@ -194,6 +197,6 @@ func (s *DockerSandbox) Logs() (string, error) {
 	return buf.String(), nil
 }
 
-func (s *DockerSandbox) NSPid() (int) {
-    return s.nspid
+func (s *DockerSandbox) NSPid() int {
+	return s.nspid
 }
