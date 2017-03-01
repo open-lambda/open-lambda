@@ -22,7 +22,7 @@ sendfd(int s, int fd)
 	struct cmsghdr *cmsg;
 	int n;
 	char cms[CMSG_SPACE(sizeof(int))];
-	
+
 	buf[0] = 0;
 	iov.iov_base = buf;
 	iov.iov_len = 1;
@@ -116,24 +116,24 @@ sendFds(char *sockPath, char *pid)
 */
 import "C"
 
-import(
-    "os"
-    "fmt"
+import (
+	"fmt"
+	"os"
 )
 
 const NUM_NS = 6
 
 func main() {
-    if len(os.Args) < 3 {
-        fmt.Printf("Usage: %s <sockfile> <pid>\n", os.Args[0])
-    }
+	if len(os.Args) < 3 {
+		fmt.Printf("Usage: %s <sockfile> <pid>\n", os.Args[0])
+	}
 
-    sockPath := os.Args[1]
-    targetPid := os.Args[2]
+	sockPath := os.Args[1]
+	targetPid := os.Args[2]
 
-    csock := C.CString(sockPath)
-    cpid := C.CString(targetPid)
+	csock := C.CString(sockPath)
+	cpid := C.CString(targetPid)
 
-    C.sendFds(csock, cpid)
+	C.sendFds(csock, cpid)
 
 }

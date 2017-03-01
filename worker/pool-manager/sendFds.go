@@ -21,7 +21,7 @@ sendfd(int s, int fd)
 	struct cmsghdr *cmsg;
 	int n;
 	char cms[CMSG_SPACE(sizeof(int))];
-	
+
 	buf[0] = 0;
 	iov.iov_base = buf;
 	iov.iov_len = 1;
@@ -110,20 +110,20 @@ sendFds(char *sockPath, char *pid)
 import "C"
 
 import (
-    "strconv"
-    "errors"
+	"errors"
+	"strconv"
 )
 
 func sendFds(sockPath string, targetPid int) (err error) {
-    strPid := strconv.Itoa(targetPid)
-    csock := C.CString(sockPath)
-    cpid := C.CString(strPid)
+	strPid := strconv.Itoa(targetPid)
+	csock := C.CString(sockPath)
+	cpid := C.CString(strPid)
 
-    //TODO: better error handling (err -> errno)
-    ret, err := C.sendFds(csock, cpid)
-    if ret < 0 {
-        return errors.New("sendFds C call failed")
-    }
+	//TODO: better error handling (err -> errno)
+	ret, err := C.sendFds(csock, cpid)
+	if ret < 0 {
+		return errors.New("sendFds C call failed")
+	}
 
-    return nil
+	return nil
 }

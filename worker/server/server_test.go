@@ -1,10 +1,10 @@
 package server
 
 import (
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
-    "fmt"
 	"net/http"
 	"os"
 	"strconv"

@@ -46,11 +46,11 @@ func NewForkServer(sockPath string) (fs *ForkServer, err error) {
 
 func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
 	sockDir := "/var/tmp/olsocks"
-    if err = os.MkdirAll(sockDir, os.ModeDir); err != nil {
-        return nil, err
-    }
+	if err = os.MkdirAll(sockDir, os.ModeDir); err != nil {
+		return nil, err
+	}
 
-    numServers := opts.Num_forkservers
+	numServers := opts.Num_forkservers
 	servers := make([]*ForkServer, numServers, numServers)
 	for k := 0; k < numServers; k++ {
 		sockPath := filepath.Join(sockDir, fmt.Sprintf("ol-%d.pipe", k))
@@ -76,7 +76,7 @@ func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
 func (bm *BasicManager) ForkEnter(sandbox sb.Sandbox) (err error) {
 	fs := bm.chooseRandom()
 
-    if err = sendFds(fs.sockPath, sandbox.NSPid()); err != nil {
+	if err = sendFds(fs.sockPath, sandbox.NSPid()); err != nil {
 		return err
 	}
 

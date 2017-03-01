@@ -55,7 +55,7 @@ func (dm *DockerManagerBase) create(name string, sandbox_dir string, image strin
 				ExposedPorts: internalAppPort,
 				Labels:       dm.docker_labels(),
 				Env:          dm.env,
-                Cmd:          []string{"/init"},
+				Cmd:          []string{"/init"},
 			},
 			HostConfig: &docker.HostConfig{
 				PortBindings:    portBindings,
