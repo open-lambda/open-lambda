@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -9,7 +8,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -19,192 +17,63 @@ import (
 	"github.com/open-lambda/open-lambda/registry"
 	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/server"
+	"github.com/urfave/cli"
 )
+
+var client *docker.Client
 
 // TODO: notes about setup process
 // TODO: notes about creating a directory in local
 // TODO: docker registry setup
 
-// Admin wraps a docker client and an array of functions
-type Admin struct {
-	client *docker.Client
-	fns    map[string]AdminFn
-}
-
-// CmdArgs reflects the command line arguments pass to the admin tool
-type CmdArgs struct {
-	flags   *flag.FlagSet
-	cluster *string
-}
-
-// NewCmdArgs returns a new CmdArgs instance with the cluster flag set
-func NewCmdArgs() *CmdArgs {
-	args := CmdArgs{}
-	args.flags = flag.NewFlagSet("flag", flag.ExitOnError)
-	args.cluster = args.flags.String("cluster", "", "give a cluster directory")
-	return &args
-}
-
-// Parse parses the command line arguments. If require_cluster is true but
-// the cluster flag is empty, program will exit with an error.
-func (args *CmdArgs) Parse(require_cluster bool) {
-	args.flags.Parse(os.Args[2:])
-
-	if *args.cluster != "" {
-		abscluster, err := filepath.Abs(*args.cluster)
-		*args.cluster = abscluster
-		if err != nil {
+// Parse parses the cluster name. If required is true but
+// the cluster name is empty, program will exit with an error.
+func parseCluster(cluster string, required bool) string {
+	if cluster != "" {
+		if abscluster, err := filepath.Abs(cluster); err != nil {
 			log.Fatal("failed to get abs cluster dir: ", err)
+		} else {
+			return abscluster
 		}
-	} else if require_cluster {
+	} else if required {
 		log.Fatal("please specify a cluster directory")
 	}
+	return cluster
 }
 
-// LogPath gets the logging directory of the cluster
-func (args *CmdArgs) LogPath(name string) string {
-	return path.Join(*args.cluster, "logs", name)
+// logPath gets the logging directory of the cluster
+func logPath(cluster string, name string) string {
+	return path.Join(cluster, "logs", name)
 }
 
-// WorkerPath gets the worker directory of the cluster
-func (args *CmdArgs) WorkerPath(name string) string {
-	return path.Join(*args.cluster, "workers", name)
+// workerPath gets the worker directory of the cluster
+func workerPath(cluster string, name string) string {
+	return path.Join(cluster, "workers", name)
 }
 
-// PidPath gets the path of the pid file of a process in the container
-func (args *CmdArgs) PidPath(name string) string {
-	return path.Join(*args.cluster, "logs", name+".pid")
+// pidPath gets the path of the pid file of a process in the container
+func pidPath(cluster string, name string) string {
+	return path.Join(cluster, "logs", name+".pid")
 }
 
-// ConfigPath gets the path of a JSON config file in the cluster
-func (args *CmdArgs) ConfigPath(name string) string {
-	return path.Join(*args.cluster, "config", name+".json")
+// configPath gets the path of a JSON config file in the cluster
+func configPath(cluster string, name string) string {
+	return path.Join(cluster, "config", name+".json")
 }
 
-// TemplatePath gets the config template directory of the cluster
-func (args *CmdArgs) TemplatePath() string {
-	return args.ConfigPath("template")
+// templatePath gets the config template directory of the cluster
+func templatePath(cluster string) string {
+	return configPath(cluster, "template")
 }
 
-// RegistryPath gets the registry directory of the cluster
-func (args *CmdArgs) RegistryPath() string {
-	return path.Join(*args.cluster, "registry")
+// registryPath gets the registry directory of the cluster
+func registryPath(cluster string) string {
+	return path.Join(cluster, "registry")
 }
 
-// TODO find a better way to store doc of these commands
-// AdminFn represents a function of the admin tool that is callable
-// from the command line. It also wraps the doc of the command.
-type AdminFn struct {
-	fn       func() error
-	doc      string
-	doc_long string
-}
-
-// NewAdmin creates a new Admin instance with an initialized docker
-// client and an array of available functions.
-func NewAdmin() *Admin {
-	admin := Admin{fns: map[string]AdminFn{}}
-	if client, err := docker.NewClientFromEnv(); err != nil {
-		log.Fatal("failed to get docker client: ", err)
-	} else {
-		admin.client = client
-	}
-
-	admin.fns["help"] = AdminFn{admin.help,
-		"Print usage",
-		strings.Join([]string{
-			"admin help [command]",
-			"List all commands or show details for one command.",
-		}, "\n\n"),
-	}
-	admin.fns["new"] = AdminFn{admin.new_cluster,
-		"Create a cluster",
-		strings.Join([]string{
-			"admin new -cluster=NAME",
-			"A directory of the given name will be created with internal directory structure initialized.",
-		}, "\n\n"),
-	}
-	admin.fns["status"] = AdminFn{admin.status,
-		"Print status of one or all clusters",
-		strings.Join([]string{
-			"admin status [-cluster=NAME]",
-			"If no cluster name is specified, number of containers of each cluster is printed; otherwise the connection information for all containers in the given cluster will be displayed.",
-		}, "\n\n"),
-	}
-	admin.fns["rethinkdb"] = AdminFn{admin.rethinkdb,
-		"Start one or more rethinkdb containers",
-		strings.Join([]string{
-			"admin rethinkdb -cluster=NAME [-n=NUM]",
-			"NUM rethinkdb containers will be started in cluster NAME. By default, NUM=1.",
-		}, "\n\n"),
-	}
-	admin.fns["worker-exec"] = AdminFn{admin.worker_exec,
-		"Start one worker with config",
-		strings.Join([]string{
-			"admin worker-exec -config=FILE",
-			"Start a worker with a JSON config file.",
-		}, "\n\n"),
-	}
-	admin.fns["workers"] = AdminFn{admin.workers,
-		"Start one or more workers",
-		strings.Join([]string{
-			"admin workers -cluster=NAME [-foreach] [-port=PORT] [-n=NUM]",
-			"Start one or more workers in cluster NAME. If foreach is set, one worker per database node will be started. [PORT,PORT+NUM) will be the range of port numbers for the newly created workers. By default, PORT=8080 and NUM=1.",
-		}, "\n\n"),
-	}
-	admin.fns["nginx"] = AdminFn{admin.nginx,
-		"Start one or more Nginx containers",
-		strings.Join([]string{
-			"admin nginx -cluster=NAME [-port=PORT] [-n=NUM]",
-			"Start one or more Nginx nodes in cluster NAME. [PORT,PORT+NUM) will be the range of port numbers for the newly created Nginx nodes. By default, PORT=9080 and NUM=1. Run this command after running some workers.",
-		}, "\n\n"),
-	}
-	admin.fns["kill"] = AdminFn{admin.kill,
-		"Kill containers and processes of a cluster",
-		strings.Join([]string{
-			"admin kill -cluster=NAME",
-		}, "\n\n"),
-	}
-	admin.fns["olstore-exec"] = AdminFn{admin.olstore_exec,
-		"Start one olstore",
-		strings.Join([]string{
-			"admin olstore-exec [-port=PORT] [-ips=ADDR1,ADDR2,...]",
-			"Start one olstore registry for storing lambda code. ips is a comma-separated list of rethinkdb IP addresses. By default, olstore listens on port 7080.",
-		}, "\n\n"),
-	}
-	admin.fns["olstore"] = AdminFn{admin.olstore,
-		"Start one olstore containers in a cluster",
-		strings.Join([]string{
-			"admin olstore -cluster=NAME [-port=PORT]",
-			"Starts an olstore that connected with all databases in the cluster NAME.",
-		}, "\n\n"),
-	}
-	admin.fns["upload"] = AdminFn{admin.upload,
-		"Upload a file to registry",
-		strings.Join([]string{"admin upload [-server=ADDR] [-name=HANDLER] [-file=PATH]",
-			"The file will be uploaded to the server at ADDDR, and it will be bound with the name HANDLER on the server.",
-		}, "\n\n"),
-	}
-	return &admin
-}
-
-// command invoke the function with name cmd of the admin tool.
-// If no such function is found, help is called.
-func (admin *Admin) command(cmd string) {
-	fn, ok := admin.fns[cmd]
-	if !ok {
-		admin.help()
-		return
-	}
-	if err := fn.fn(); err != nil {
-		log.Fatalf("Failed to run %v, %v\n", cmd, err)
-	}
-}
-
-// cluster_nodes finds all docker containers belongs to a cluster and returns
+// clusterNodes finds all docker containers belongs to a cluster and returns
 // a mapping from the type of the container to its container ID.
-func (admin *Admin) cluster_nodes(cluster string) (map[string]([]string), error) {
-	client := admin.client
+func clusterNodes(cluster string) (map[string]([]string), error) {
 	nodes := map[string]([]string){}
 
 	containers, err := client.ListContainers(docker.ListContainersOptions{})
@@ -223,92 +92,58 @@ func (admin *Admin) cluster_nodes(cluster string) (map[string]([]string), error)
 	return nodes, nil
 }
 
-// help corresponds to the "help" command of the admin tool. If the admin tool
-// is run with illegal commands, or if help is called without argument, all
-// commands with their simple usage will be shown. If an existing command name
-// is provided to help, the detailed usage of that command will be shown.
-func (admin *Admin) help() error {
-	if len(os.Args) > 2 && os.Args[1] == "help" {
-		if fn, ok := admin.fns[os.Args[2]]; ok {
-			fmt.Printf("%s\n\n%s\n", fn.doc, fn.doc_long)
-			return nil
-		}
-	}
-	fmt.Printf("Run %v <command> <args>\n", os.Args[0])
-	fmt.Printf("\n")
-	fmt.Printf("Commands:\n")
-	cmds := make([]string, 0, len(admin.fns))
-	for cmd, fn := range admin.fns {
-		cmds = append(cmds, fmt.Sprintf("%-15s%s", cmd, fn.doc))
-	}
-	sort.Strings(cmds)
+// newCluster corresponds to the "new" command of the admin tool.
+func newCluster(ctx *cli.Context) error {
+	cluster := parseCluster(ctx.String("cluster"), true)
 
-	for _, cmd := range cmds {
-		fmt.Printf("  %v\n", cmd)
-	}
-	return nil
-}
-
-// new_cluster corresponds to the "new" command of the admin tool. It creates
-// a directory for the cluster, and initialize its internal directory structure.
-// A default config for the cluster is written to the template directory of the
-// cluster.
-func (admin *Admin) new_cluster() error {
-	args := NewCmdArgs()
-	args.Parse(true)
-
-	if err := os.Mkdir(*args.cluster, 0700); err != nil {
+	if err := os.Mkdir(cluster, 0700); err != nil {
 		return err
 	}
 
-	if err := os.Mkdir(path.Join(*args.cluster, "logs"), 0700); err != nil {
+	if err := os.Mkdir(path.Join(cluster, "logs"), 0700); err != nil {
 		return err
 	}
 
-	if err := os.Mkdir(path.Join(*args.cluster, "workers"), 0700); err != nil {
+	if err := os.Mkdir(path.Join(cluster, "workers"), 0700); err != nil {
 		return err
 	}
 
-	if err := os.Mkdir(args.RegistryPath(), 0700); err != nil {
+	if err := os.Mkdir(registryPath(cluster), 0700); err != nil {
 		return err
 	}
 
 	// config dir and template
-	if err := os.Mkdir(path.Join(*args.cluster, "config"), 0700); err != nil {
+	if err := os.Mkdir(path.Join(cluster, "config"), 0700); err != nil {
 		return err
 	}
 	c := &config.Config{
 		Worker_port:    "?",
-		Cluster_name:   *args.cluster,
+		Cluster_name:   cluster,
 		Registry:       "local",
-		Reg_dir:        args.RegistryPath(),
-		Worker_dir:     args.WorkerPath("default"),
+		Reg_dir:        registryPath(cluster),
+		Worker_dir:     workerPath(cluster, "default"),
 		Sandbox_config: map[string]interface{}{"processes": 10},
 	}
 	if err := c.Defaults(); err != nil {
 		return err
 	}
-	if err := c.Save(args.TemplatePath()); err != nil {
+	if err := c.Save(templatePath(cluster)); err != nil {
 		return err
 	}
 
-	fmt.Printf("Cluster Directory: %s\n\n", *args.cluster)
+	fmt.Printf("Cluster Directory: %s\n\n", cluster)
 	fmt.Printf("Worker Defaults: \n%s\n\n", c.DumpStr())
 	fmt.Printf("You may now start a cluster using the \"workers\" command\n")
 
 	return nil
 }
 
-// status corresponds to the "status" command of the admin tool. If no cluster
-// is specified, it counts the number of docker containers of each cluster;
-// otherwise the connection information of each container in the specified
-// cluster will be displayed.
-func (admin *Admin) status() error {
-	args := NewCmdArgs()
-	args.Parse(false)
+// status corresponds to the "status" command of the admin tool.
+func status(ctx *cli.Context) error {
+	cluster := parseCluster(ctx.String("cluster"), false)
 
-	if *args.cluster == "" {
-		containers1, err := admin.client.ListContainers(docker.ListContainersOptions{})
+	if cluster == "" {
+		containers1, err := client.ListContainers(docker.ListContainersOptions{})
 		if err != nil {
 			return err
 		}
@@ -335,7 +170,7 @@ func (admin *Admin) status() error {
 		fmt.Printf("For info about a specific cluster, use -cluster=<cluster-dir>\n")
 	} else {
 		// print worker connection info
-		logs, err := ioutil.ReadDir(path.Join(*args.cluster, "logs"))
+		logs, err := ioutil.ReadDir(path.Join(cluster, "logs"))
 		if err != nil {
 			return err
 		}
@@ -343,7 +178,7 @@ func (admin *Admin) status() error {
 		for _, fi := range logs {
 			if strings.HasSuffix(fi.Name(), ".pid") {
 				name := fi.Name()[:len(fi.Name())-4]
-				c, err := config.ParseConfig(args.ConfigPath(name))
+				c, err := config.ParseConfig(configPath(cluster, name))
 				if err != nil {
 					return err
 				}
@@ -367,7 +202,7 @@ func (admin *Admin) status() error {
 
 		// print containers
 		fmt.Printf("Cluster containers:\n")
-		nodes, err := admin.cluster_nodes(*args.cluster)
+		nodes, err := clusterNodes(cluster)
 		if err != nil {
 			return err
 		}
@@ -375,7 +210,7 @@ func (admin *Admin) status() error {
 		for typ, cids := range nodes {
 			fmt.Printf("  %s containers:\n", typ)
 			for _, cid := range cids {
-				container, err := admin.client.InspectContainer(cid)
+				container, err := client.InspectContainer(cid)
 				if err != nil {
 					return err
 				}
@@ -387,25 +222,22 @@ func (admin *Admin) status() error {
 	return nil
 }
 
-// rethinkdb corresponds to the "rethinkdb" command of the admin tool. It
-// starts n rethinkdb containers as specified by the command line argument.
-func (admin *Admin) rethinkdb() error {
-	args := NewCmdArgs()
-	count := args.flags.Int("n", 1, "specify number of nodes to start")
-	args.Parse(true)
+// rethinkdb corresponds to the "rethinkdb" command of the admin tool.
+func rethinkdb(ctx *cli.Context) error {
+	cluster := parseCluster(ctx.String("cluster"), true)
+	count := ctx.Int("num-nodes")
 
-	client := admin.client
 	labels := map[string]string{}
-	labels[sbmanager.DOCKER_LABEL_CLUSTER] = *args.cluster
+	labels[sbmanager.DOCKER_LABEL_CLUSTER] = cluster
 	labels[sbmanager.DOCKER_LABEL_TYPE] = "db"
 
 	image := "rethinkdb"
 
 	// pull if not local
-	_, err := admin.client.InspectImage(image)
+	_, err := client.InspectImage(image)
 	if err == docker.ErrNoSuchImage {
 		fmt.Printf("Pulling RethinkDB image...\n")
-		err := admin.client.PullImage(
+		err := client.PullImage(
 			docker.PullImageOptions{
 				Repository: image,
 				Tag:        "latest", // TODO: fixed version?
@@ -421,7 +253,7 @@ func (admin *Admin) rethinkdb() error {
 
 	var first_container *docker.Container
 
-	for i := 0; i < *count; i++ {
+	for i := 0; i < count; i++ {
 		cmd := []string{"rethinkdb", "--bind", "all"}
 		if first_container != nil {
 			ip := first_container.NetworkSettings.IPAddress
@@ -462,53 +294,46 @@ func (admin *Admin) rethinkdb() error {
 }
 
 // worker_exec corresponds to the "worker-exec" command of the admin tool.
-// It runs a worker server with a given config file.
-func (admin *Admin) worker_exec() error {
-	flags := flag.NewFlagSet("flag", flag.ExitOnError)
-	conf := flags.String("config", "", "give a json config file")
-	flags.Parse(os.Args[2:])
+func worker_exec(ctx *cli.Context) error {
+	conf := ctx.String("config")
 
-	if *conf == "" {
+	if conf == "" {
 		fmt.Printf("Please specify a json config file\n")
 		return nil
 	}
 
-	server.Main(*conf)
+	server.Main(conf)
 	return nil
 }
 
-// workers corresponds to the "workers" command of the admin tool. If foreach
-// is set, it starts one worker for each db in this cluster; otherwise n workers
-// will be started as specified by the argument. These workers will be assigned
-// to a sequence of port numbers starting from the given port.
+// workers corresponds to the "workers" command of the admin tool.
 //
 // The JSON config in the cluster template directory will be populated for each
 // worker, and their pid will be written to the log directory. worker_exec will
 // be called to run the worker processes.
-func (admin *Admin) workers() error {
-	args := NewCmdArgs()
-	foreach := args.flags.Bool("foreach", false, "start one worker per db instance")
-	portbase := args.flags.Int("port", 8080, "port range [port, port+n) will be used for containers")
-	n := args.flags.Int("n", 1, "specify number of workers to start")
-	args.Parse(true)
+func workers(ctx *cli.Context) error {
+	cluster := parseCluster(ctx.String("cluster"), true)
+	foreach := ctx.Bool("foreach")
+	portbase := ctx.Int("port")
+	n := ctx.Int("num-workers")
 
 	worker_confs := []*config.Config{}
-	if *foreach {
-		nodes, err := admin.cluster_nodes(*args.cluster)
+	if foreach {
+		nodes, err := clusterNodes(cluster)
 		if err != nil {
 			return err
 		}
 
 		// start one worker per db shard
 		for _, cid := range nodes["db"] {
-			container, err := admin.client.InspectContainer(cid)
+			container, err := client.InspectContainer(cid)
 			if err != nil {
 				return err
 			}
 
 			fmt.Printf("DB node: %v\n", container.NetworkSettings.IPAddress)
 
-			c, err := config.ParseConfig(args.TemplatePath())
+			c, err := config.ParseConfig(templatePath(cluster))
 			if err != nil {
 				return err
 			}
@@ -519,8 +344,8 @@ func (admin *Admin) workers() error {
 			worker_confs = append(worker_confs, c)
 		}
 	} else {
-		for i := 0; i < *n; i++ {
-			c, err := config.ParseConfig(args.TemplatePath())
+		for i := 0; i < n; i++ {
+			c, err := config.ParseConfig(templatePath(cluster))
 			if err != nil {
 				return err
 			}
@@ -529,9 +354,9 @@ func (admin *Admin) workers() error {
 	}
 
 	for i, conf := range worker_confs {
-		conf_path := args.ConfigPath(fmt.Sprintf("worker-%d", i))
-		conf.Worker_port = fmt.Sprintf("%d", *portbase+i)
-		conf.Worker_dir = args.WorkerPath(fmt.Sprintf("worker-%d", i))
+		conf_path := configPath(cluster, fmt.Sprintf("worker-%d", i))
+		conf.Worker_port = fmt.Sprintf("%d", portbase+i)
+		conf.Worker_dir = workerPath(cluster, fmt.Sprintf("worker-%d", i))
 		if err := os.Mkdir(conf.Worker_dir, 0700); err != nil {
 			return err
 		}
@@ -540,7 +365,7 @@ func (admin *Admin) workers() error {
 		}
 
 		// stdout+stderr both go to log
-		log_path := args.LogPath(fmt.Sprintf("worker-%d.out", i))
+		log_path := logPath(cluster, fmt.Sprintf("worker-%d.out", i))
 		f, err := os.Create(log_path)
 		if err != nil {
 			return err
@@ -558,7 +383,7 @@ func (admin *Admin) workers() error {
 			return err
 		}
 
-		pidpath := args.PidPath(fmt.Sprintf("worker-%d", i))
+		pidpath := pidPath(cluster, fmt.Sprintf("worker-%d", i))
 		if err := ioutil.WriteFile(pidpath, []byte(fmt.Sprintf("%d", proc.Pid)), 0644); err != nil {
 			return err
 		}
@@ -569,27 +394,22 @@ func (admin *Admin) workers() error {
 	return nil
 }
 
-// nginx corresponds to the "nginx" command of the admin tool. It starts n
-// Nginx docker containers as specified by the command line argument. The
-// containers will be assigned with a sequence of port numbers starting
-// from the given port. Workers must be started before calling this functions.
-func (admin *Admin) nginx() error {
-	args := NewCmdArgs()
-	portbase := args.flags.Int("port", 9080, "port range [port, port+n) will be used for workers")
-	n := args.flags.Int("n", 1, "specify number of workers to start")
-	args.Parse(true)
+// nginx corresponds to the "nginx" command of the admin tool.
+func nginx(ctx *cli.Context) error {
+	cluster := parseCluster(ctx.String("cluster"), true)
+	portbase := ctx.Int("port")
+	n := ctx.Int("num-nodes")
 
 	image := "nginx"
-	client := admin.client
 	labels := map[string]string{}
-	labels[sbmanager.DOCKER_LABEL_CLUSTER] = *args.cluster
+	labels[sbmanager.DOCKER_LABEL_CLUSTER] = cluster
 	labels[sbmanager.DOCKER_LABEL_TYPE] = "balancer"
 
 	// pull if not local
-	_, err := admin.client.InspectImage(image)
+	_, err := client.InspectImage(image)
 	if err == docker.ErrNoSuchImage {
 		fmt.Printf("Pulling nginx image...\n")
-		err := admin.client.PullImage(
+		err := client.PullImage(
 			docker.PullImageOptions{
 				Repository: image,
 				Tag:        "latest", // TODO: fixed version?
@@ -609,7 +429,7 @@ func (admin *Admin) nginx() error {
 		"	upstream workers {\n",
 	}, "")
 
-	logs, err := ioutil.ReadDir(path.Join(*args.cluster, "logs"))
+	logs, err := ioutil.ReadDir(path.Join(cluster, "logs"))
 	if err != nil {
 		return err
 	}
@@ -617,7 +437,7 @@ func (admin *Admin) nginx() error {
 	for _, fi := range logs {
 		if strings.HasSuffix(fi.Name(), ".pid") {
 			name := fi.Name()[:len(fi.Name())-4]
-			c, err := config.ParseConfig(args.ConfigPath(name))
+			c, err := config.ParseConfig(configPath(cluster, name))
 			if err != nil {
 				return err
 			}
@@ -646,9 +466,9 @@ func (admin *Admin) nginx() error {
 	}, "")
 
 	// start containers
-	for i := 0; i < *n; i++ {
-		port := *portbase + i
-		path := path.Join(*args.cluster, "config", fmt.Sprintf("nginx-%d.conf", i))
+	for i := 0; i < n; i++ {
+		port := portbase + i
+		path := path.Join(cluster, "config", fmt.Sprintf("nginx-%d.conf", i))
 		if err := ioutil.WriteFile(path, []byte(fmt.Sprintf(nginx_conf, port)), 0644); err != nil {
 			return err
 		}
@@ -679,15 +499,11 @@ func (admin *Admin) nginx() error {
 	return nil
 }
 
-// kill corresponds to the "kill" command of the admin tool. It kills the
-// containers and worker processes of a cluster.
-func (admin *Admin) kill() error {
-	args := NewCmdArgs()
-	args.Parse(true)
+// kill corresponds to the "kill" command of the admin tool.
+func kill(ctx *cli.Context) error {
+	cluster := parseCluster(ctx.String("cluster"), true)
 
-	client := admin.client
-
-	nodes, err := admin.cluster_nodes(*args.cluster)
+	nodes, err := clusterNodes(cluster)
 	if err != nil {
 		return err
 	}
@@ -718,13 +534,13 @@ func (admin *Admin) kill() error {
 	}
 
 	// kill worker processes in cluster
-	logs, err := ioutil.ReadDir(path.Join(*args.cluster, "logs"))
+	logs, err := ioutil.ReadDir(path.Join(cluster, "logs"))
 	if err != nil {
 		return err
 	}
 	for _, fi := range logs {
 		if strings.HasSuffix(fi.Name(), ".pid") {
-			data, err := ioutil.ReadFile(args.LogPath(fi.Name()))
+			data, err := ioutil.ReadFile(logPath(cluster, fi.Name()))
 			if err != nil {
 				return err
 			}
@@ -749,16 +565,12 @@ func (admin *Admin) kill() error {
 	return nil
 }
 
-// olstore_exec corresponds to the "olstore-exec" command of the admin tool. It
-// starts an olstore that listens to a given port and connects with a list of
-// rethink db instances.
-func (admin *Admin) olstore_exec() error {
-	flags := flag.NewFlagSet("flag", flag.ExitOnError)
-	port := flags.Int("port", 7080, "port to push/pull lambdas")
-	ips := flags.String("ips", "", "comma-separated rethinkdb addrs")
-	flags.Parse(os.Args[2:])
+// olstore_exec corresponds to the "olstore-exec" command of the admin tool.
+func olstore_exec(ctx *cli.Context) error {
+	port := ctx.Int("port")
+	ips := ctx.String("ips")
 
-	pushs := registry.InitPushServer(*port, strings.Split(*ips, ","))
+	pushs := registry.InitPushServer(port, strings.Split(ips, ","))
 	pushs.Run()
 	return fmt.Errorf("Push Server Crashed\n")
 }
@@ -766,20 +578,19 @@ func (admin *Admin) olstore_exec() error {
 // olstore corresponds to the "olstore" commanf of the admin tool. It starts an
 // olstore that listens to a given port and connects with all rethink db
 // instances of the cluster. It calls olstore_exec to starts the olstore.
-func (admin *Admin) olstore() error {
-	args := NewCmdArgs()
-	port := args.flags.Int("port", 7080, "port to push/pull lambdas")
-	args.Parse(true)
+func olstore(ctx *cli.Context) error {
+	cluster := parseCluster(ctx.String("cluster"), true)
+	port := ctx.Int("port")
 
 	// get rethinkdb addrs
-	nodes, err := admin.cluster_nodes(*args.cluster)
+	nodes, err := clusterNodes(cluster)
 	if err != nil {
 		return err
 	}
 
 	ips := []string{}
 	for _, cid := range nodes["db"] {
-		container, err := admin.client.InspectContainer(cid)
+		container, err := client.InspectContainer(cid)
 		if err != nil {
 			return err
 		}
@@ -793,7 +604,7 @@ func (admin *Admin) olstore() error {
 	}
 
 	// stdout+stderr both go to log
-	log_path := args.LogPath(fmt.Sprintf("olstore.out"))
+	log_path := logPath(cluster, fmt.Sprintf("olstore.out"))
 	f, err := os.Create(log_path)
 	if err != nil {
 		return err
@@ -805,40 +616,212 @@ func (admin *Admin) olstore() error {
 		os.Args[0],
 		"olstore-exec",
 		"-ips=" + strings.Join(ips, ","),
-		fmt.Sprintf("-port=%v", *port),
+		fmt.Sprintf("-port=%v", port),
 	}
 	proc, err := os.StartProcess(os.Args[0], cmd, &attr)
 	if err != nil {
 		return err
 	}
 
-	pidpath := args.PidPath("olstore")
+	pidpath := pidPath(cluster, "olstore")
 	if err := ioutil.WriteFile(pidpath, []byte(fmt.Sprintf("%d", proc.Pid)), 0644); err != nil {
 		return err
 	}
 
-	fmt.Printf("Started olstore: pid %d, port %v, log at %s\n", proc.Pid, *port, log_path)
+	fmt.Printf("Started olstore: pid %d, port %v, log at %s\n", proc.Pid, port, log_path)
 	return nil
 }
 
-// uploads corresponds to the "upload" command of the admin tool. It uploads a
-// given file to a olstore and assigns it with a specific name.
-func (admin *Admin) upload() error {
-	args := NewCmdArgs()
-	server := args.flags.String("server", "", "olstore addr")
-	name := args.flags.String("name", "", "handler name")
-	fname := args.flags.String("file", "", "file path")
-	args.Parse(false)
-	registry.Push(*server, *name, *fname)
+// uploads corresponds to the "upload" command of the admin tool.
+func upload(ctx *cli.Context) error {
+	server := ctx.String("server")
+	name := ctx.String("name")
+	fname := ctx.String("file")
+	registry.Push(server, name, fname)
 	return nil
 }
 
 // main runs the admin tool
 func main() {
-	admin := NewAdmin()
-	if len(os.Args) < 2 {
-		admin.help()
-		os.Exit(1)
+	if c, err := docker.NewClientFromEnv(); err != nil {
+		log.Fatal("failed to get docker client: ", err)
+	} else {
+		client = c
 	}
-	admin.command(os.Args[1])
+
+	cli.CommandHelpTemplate = `NAME:
+   {{.HelpName}} - {{if .Description}}{{.Description}}{{else}}{{.Usage}}{{end}}
+USAGE:
+   {{if .UsageText}}{{.UsageText}}{{else}}{{.HelpName}} command{{if .VisibleFlags}} [command options]{{end}} {{if .ArgsUsage}}{{.ArgsUsage}}{{else}}[arguments...]{{end}}{{end}}
+COMMANDS:{{range .VisibleCategories}}{{if .Name}}
+   {{.Name}}:{{end}}{{range .VisibleCommands}}
+     {{join .Names ", "}}{{"\t"}}{{.Usage}}{{end}}
+{{end}}{{if .VisibleFlags}}
+OPTIONS:
+   {{range .VisibleFlags}}{{.}}
+   {{end}}{{end}}
+`
+	app := cli.NewApp()
+	app.Usage = "Admin tool for Open-Lambda"
+	app.UsageText = "admin COMMAND [ARG...]"
+	app.ArgsUsage = "ArgsUsage"
+	app.EnableBashCompletion = true
+	app.HideVersion = true
+	clusterFlag := cli.StringFlag{
+		Name:  "cluster",
+		Usage: "The `NAME` of the cluster directory",
+	}
+	app.Commands = []cli.Command{
+		cli.Command{
+			Name:        "new",
+			Usage:       "Create a cluster",
+			UsageText:   "admin new --cluseter=NAME",
+			Description: "A cluster directory of the given name will be created with internal structure initialized.",
+			Flags:       []cli.Flag{clusterFlag},
+			Action:      newCluster,
+		},
+		cli.Command{
+			Name:        "status",
+			Usage:       "Print status of one or all clusters",
+			UsageText:   "admin status [--cluster=NAME]",
+			Description: "If no cluster name is specified, number of containers of each cluster is printed; otherwise the connection information for all containers in the given cluster will be displayed.",
+			Flags:       []cli.Flag{clusterFlag},
+			Action:      status,
+		},
+		cli.Command{
+			Name:        "workers",
+			Usage:       "Start one or more worker servers",
+			UsageText:   "admin workers --cluster=NAME [--foreach] [-p|--port=PORT] [-n|--num-workers=NUM]",
+			Description: "Start one or more workers in cluster using the same config template.",
+			Flags: []cli.Flag{
+				clusterFlag,
+				cli.BoolFlag{
+					Name:  "foreach",
+					Usage: "Start one worker per db instance",
+				},
+				cli.IntFlag{
+					Name:  "port, p",
+					Usage: "Port range [`PORT`, `PORT`+n) will be used for workers",
+					Value: 8080,
+				},
+				cli.IntFlag{
+					Name:  "num-workers, n",
+					Usage: "To start `NUM` workers",
+					Value: 1,
+				},
+			},
+			Action: workers,
+		},
+		cli.Command{
+			Name:        "worker-exec",
+			Usage:       "Start one worker with config",
+			UsageText:   "admin worker-exec -c|--config=FILE",
+			Description: "Start a worker with a JSON config file.",
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:  "config, c",
+					Usage: "Load worker configuration from `FILE`",
+				},
+			},
+			Action: worker_exec,
+		},
+		cli.Command{
+			Name:        "rethinkdb",
+			Usage:       "Start one or more rethinkdb nodes",
+			UsageText:   "admin rethinkdb --cluster=NAME [-n|--num-nodes=NUM]",
+			Description: "A cluster of rethinkdb intances will be started with default ip and port (172.17.0.2:28015).",
+			Flags: []cli.Flag{
+				clusterFlag,
+				cli.IntFlag{
+					Name:  "num-nodes, n",
+					Usage: "To start `NUM` rethinkdb nodes",
+					Value: 1,
+				},
+			},
+			Action: rethinkdb,
+		},
+		cli.Command{
+			Name:        "nginx",
+			Usage:       "Start one or more Nginx containers",
+			UsageText:   "admin nginx --cluster=NAME [-p|--port=PORT] [-n|--num-nodes=NUM]",
+			Description: "Start one or more Nginx nodes in cluster. Run this command after starting some workers.",
+			Flags: []cli.Flag{
+				clusterFlag,
+				cli.IntFlag{
+					Name:  "port, p",
+					Usage: "Port range [`PORT`, `PORT`+n) will be used for containers",
+					Value: 9080,
+				},
+				cli.IntFlag{
+					Name:  "num-nodes, n",
+					Usage: "To start `NUM` Nginx nodes",
+					Value: 1,
+				},
+			},
+			Action: nginx,
+		},
+		cli.Command{
+			Name:        "olstore",
+			Usage:       "Start one olstore containers in a cluster",
+			UsageText:   "admin olstore --cluster=NAME [-p|--port=PORT]",
+			Description: "Start one olstore that connectes with all databases in the cluster.",
+			Flags: []cli.Flag{
+				clusterFlag,
+				cli.IntFlag{
+					Name:  "port, p",
+					Usage: "Push/pull lambdas at `PORT`",
+					Value: 7080,
+				},
+			},
+			Action: olstore,
+		},
+		cli.Command{
+			Name:        "olstore-exec",
+			Usage:       "Start one olstore",
+			UsageText:   "admin olstore-exec [-p|-port=PORT] [--ips=ADDRS]",
+			Description: "Start one olstore registry for storing lambda code.",
+			Flags: []cli.Flag{
+				cli.IntFlag{
+					Name:  "port, p",
+					Usage: "Push/pull lambdas at `PORT`",
+					Value: 7080,
+				},
+				cli.StringFlag{
+					Name:  "ips",
+					Usage: "comma-separated rethinkdb `ADDRS`",
+				},
+			},
+			Action: olstore_exec,
+		},
+		cli.Command{
+			Name:        "upload",
+			Usage:       "Upload a file to registry",
+			UsageText:   "admin upload --cluster=NAME [--server=ADDR] [--handler=NAME] [--file=PATH]",
+			Description: "Upload a file to registry. The file must be a compressed file.",
+			Flags: []cli.Flag{
+				clusterFlag,
+				cli.StringFlag{
+					Name:  "server",
+					Usage: "`ADDR` of olstore that receives the file",
+				},
+				cli.StringFlag{
+					Name:  "handler",
+					Usage: "`NAME` of the handler",
+				},
+				cli.StringFlag{
+					Name:  "file",
+					Usage: "`PATH` to the file",
+				},
+			},
+			Action: upload,
+		},
+		cli.Command{
+			Name:      "kill",
+			Usage:     "Kill containers and processes in a cluster",
+			UsageText: "admin kill --cluster=NAME",
+			Flags:     []cli.Flag{clusterFlag},
+			Action:    kill,
+		},
+	}
+	app.Run(os.Args)
 }
