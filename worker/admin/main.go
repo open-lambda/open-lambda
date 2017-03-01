@@ -786,8 +786,10 @@ func (admin *Admin) dump_docker_image(image string, outdir string) error {
 	err_chan := make(chan error)
 	go func() {
 		err_chan <- func() error {
+			defer writer.Close()
+
 			client := admin.client
-			image := "lambda"
+			image := image
 			cmd := []string{"sleep", "infinity"}
 
 			container, err := client.CreateContainer(
@@ -809,7 +811,6 @@ func (admin *Admin) dump_docker_image(image string, outdir string) error {
 			if err := client.ExportContainer(opts); err != nil {
 				return err
 			}
-			writer.Close()
 
 			return client.RemoveContainer(docker.RemoveContainerOptions{ID: container.ID})
 		}()
@@ -820,7 +821,7 @@ func (admin *Admin) dump_docker_image(image string, outdir string) error {
 
 	// log both errors
 	if export_err != nil {
-		fmt.Printf("Docker export failed: %v\n", tar_err.Error())
+		fmt.Printf("Docker export failed: %v\n", export_err.Error())
 	}
 	if tar_err != nil {
 		fmt.Printf("Tar failed: %v\n", tar_err.Error())
