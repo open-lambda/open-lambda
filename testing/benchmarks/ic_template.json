@@ -1,0 +1,9 @@
+{
+    "cluster_name": "ic",
+    "worker_port": "8080",
+    "reg_dir": "../registry",
+    "registry": "local",
+    "worker_dir": "test_worker",
+    "sandbox_config": {"processes": 10},
+    "pool": "basic"
+}
