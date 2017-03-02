@@ -28,7 +28,7 @@ import (
 
 type ForkServer struct {
 	//packages []string TODO
-	sockPath string
+	sockPath    string
 }
 
 type BasicManager struct {
@@ -54,7 +54,7 @@ func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
 	numServers := opts.Num_forkservers
 	servers := make([]*ForkServer, numServers, numServers)
 	for k := 0; k < numServers; k++ {
-		sockPath := filepath.Join(sockDir, fmt.Sprintf("ol-%d.pipe", k))
+		sockPath := filepath.Join(sockDir, fmt.Sprintf("ol-%d.sock", k))
 		if err != nil {
 			return nil, err
 		}
@@ -82,9 +82,16 @@ func (bm *BasicManager) ForkEnter(sandbox sb.Sandbox) (err error) {
 		return errors.New("forkenter only supported with DockerSandbox")
 	}
 
-	if err = sendFds(fs.sockPath, docker_sb.NSPid()); err != nil {
+    pid, err := sendFds(fs.sockPath, docker_sb.NSPid())
+	if err != nil {
 		return err
 	}
+
+    // change cgroup of spawned lambda server
+    err = docker_sb.CGroupEnter(pid)
+    if err != nil {
+        return err
+    }
 
 	return nil
 }
@@ -96,7 +103,7 @@ func (bm *BasicManager) chooseRandom() (server *ForkServer) {
 	return bm.servers[k]
 }
 
-// start the python interpreter, listening on passed pipe
+/* Start the lambda python server, listening on socket at sockPath */
 func runLambdaServer(sockPath string) (err error) {
 	_, absPath, _, _ := runtime.Caller(1)
 	relPath := "../../../../../../../../../lambda/server.py" // disgusting path from this file in hack dir to server script

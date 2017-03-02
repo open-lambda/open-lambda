@@ -108,5 +108,13 @@ sendFds(char *sockPath, char *pid)
         }
     }
 
+    int buf_len = 100;
+    char buf[100];
+    if((len = recv(s, buf, 100, 0)) < 0) {
+        perror("recv pid");
+    }
+
+    printf("%s", buf);
+
     return 0;
 }

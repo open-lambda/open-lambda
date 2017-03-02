@@ -12,6 +12,8 @@ package pmanager
 #include <sys/socket.h>
 #include <sys/un.h>
 
+char errmsg[1024];
+
 int
 sendfd(int s, int fd)
 {
@@ -39,14 +41,13 @@ sendfd(int s, int fd)
 	memmove(CMSG_DATA(cmsg), &fd, sizeof(int));
 
 	if((n = sendmsg(s, &msg, 0)) != iov.iov_len) {
-        perror("sendmsg");
         return -1;
     }
 
 	return 0;
 }
 
-int
+const char*
 sendFds(char *sockPath, char *pid)
 {
     char *path;
@@ -72,8 +73,8 @@ sendFds(char *sockPath, char *pid)
 
         nsfds[k] = open(path, O_RDONLY);
         if (nsfds[k] == -1) {
-            perror("open");
-            return -1;
+            sprintf(errmsg, "open: %s\n", strerror(errno));
+            return errmsg;
         }
     }
 
@@ -83,28 +84,41 @@ sendFds(char *sockPath, char *pid)
     struct sockaddr_un remote;
 
     if ((s = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
-        perror("socket");
-        return -1;
+        sprintf(errmsg, "socket: %s\n", strerror(errno));
+        return errmsg;
     }
 
     remote.sun_family = AF_UNIX;
     strcpy(remote.sun_path, sockPath);
     len = strlen(remote.sun_path) + sizeof(remote.sun_family);
     if (connect(s, (struct sockaddr *)&remote, len) == -1) {
-        perror("connect");
-        return -1;
+        sprintf(errmsg, "connect: %s\n", strerror(errno));
+        return errmsg;
     }
 
     // Send fds to server.
 
     for(k = 0; k < NUM_NS; k++) {
-        if ((ret = sendfd(s, nsfds[k])) == -1) {
-            perror("sendfd");
-            return -1;
+        if (sendfd(s, nsfds[k]) == -1) {
+            sprintf(errmsg, "sendfd: %s\n", strerror(errno));
+            return errmsg;
         }
     }
 
-    return 0;
+    int buf_len = 50;
+    static char buf[50];
+
+    if((len = recv(s, buf, 50, 0)) == -1) {
+        sprintf(errmsg, "recv: %s\n", strerror(errno));
+        return errmsg;
+    }
+
+    if(close(s) == -1) {
+        sprintf(errmsg, "close: %s\n", strerror(errno));
+        return errmsg;
+    }
+
+    return buf;
 }
 */
 import "C"
@@ -112,18 +126,26 @@ import "C"
 import (
 	"errors"
 	"strconv"
+    "fmt"
 )
 
-func sendFds(sockPath string, targetPid int) (err error) {
+/*
+Send the namespace file descriptors for the targetPid process
+to a lambda server listening on the unix socket at sockPath.
+
+Returns the PID of the spawned process upon success.
+*/
+
+func sendFds(sockPath string, targetPid int) (pid string, err error) {
 	strPid := strconv.Itoa(targetPid)
 	csock := C.CString(sockPath)
 	cpid := C.CString(strPid)
 
-	//TODO: better error handling (err -> errno)
 	ret, err := C.sendFds(csock, cpid)
-	if ret < 0 {
-		return errors.New("sendFds C call failed")
+    pid = C.GoString(ret)
+	if err != nil {
+		return "", errors.New(fmt.Sprintf("sendFds: %s", pid))
 	}
 
-	return nil
+	return pid, nil
 }

@@ -246,17 +246,40 @@ static PyObject *ns_fdlisten(PyObject *self, PyObject *args)
         r = fork();
         ret = Py_BuildValue("i", r);
 
-        /* Child returns in new namespaces */
+        /* Child closes connections returns in new namespaces */
 
         if (r == 0) {
+            if (close(s2) == -1) {
+                PyErr_SetString(PyExc_RuntimeError, "Child failed to close socket connection (s2).");
+                return NULL;
+            }
+
+            if (close(s) == -1) {
+                PyErr_SetString(PyExc_RuntimeError, "Child failed to close socket connection (s).");
+                return NULL;
+            }
+
             return ret;
         }
 
-        /* Parent reverts to original namespaces */
+        /* Parent responds with child PID and reverts to original namespaces */
+
+        char childpid[50];
+        sprintf(childpid, "%d", r);
+
+        if(send(s2, childpid, 50, 0) == -1) {
+            PyErr_SetString(PyExc_RuntimeError, "Parent failed to send child PID.");
+            return NULL;
+        }
+
+        if (close(s2) == -1) {
+            PyErr_SetString(PyExc_RuntimeError, "Parent failed to close socket connection (s2).");
+            return NULL;
+        }
 
         for(k = 0; k < NUM_NS; k++) {
             if (setns(oldns[k], 0) == -1) {
-                PyErr_SetString(PyExc_RuntimeError, "Failed to join original namespace.");
+                PyErr_SetString(PyExc_RuntimeError, "Parent failed to join original namespace.");
                 return NULL;
             }
         }

@@ -107,8 +107,22 @@ sendFds(char *sockPath, char *pid)
     for(k = 0; k < NUM_NS; k++) {
         if ((ret = sendfd(s, nsfds[k])) == -1) {
             perror("sendfd");
-            exit(1);
+            //exit(1);
         }
+    }
+
+    int buf_len = 50;
+    char buf[50];
+    printf("Listening...\n");
+    if((len = recv(s, buf, 50, 0)) == -1) {
+        printf("Failed.\n");
+        perror("recv pid");
+    }
+
+    printf("buffer: %s\n", buf);
+
+    if(close(s) == -1) {
+        perror("close socket");
     }
 
     return 0;

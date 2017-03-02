@@ -48,17 +48,15 @@ func (dm *DockerManagerBase) create(name string, sandbox_dir string, image strin
 
 	var cmd []string
 	if dm.opts.Pool == "" {
-		cmd = []string{"/server.py"}
+		cmd = []string{"/usr/bin/python", "/server.py"}
 	} else {
-		cmd = []string{"/init"}
+		cmd = []string{"/init"} // docker kill init doesn't work
 	}
 
 	container, err := dm.client().CreateContainer(
 		docker.CreateContainerOptions{
 			Config: &docker.Config{
 				Image:        image,
-				AttachStdout: true, //TODO: why do we need these?
-				AttachStderr: true,
 				ExposedPorts: internalAppPort,
 				Labels:       dm.docker_labels(),
 				Env:          dm.env,

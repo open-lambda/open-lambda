@@ -13,11 +13,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
 	"path/filepath"
-    "io/ioutil"
+    "os/exec"
 
 	docker "github.com/fsouza/go-dockerclient"
 	"github.com/open-lambda/open-lambda/worker/config"
@@ -31,6 +32,7 @@ type DockerSandbox struct {
 	container   *docker.Container
 	client      *docker.Client
 	config      *config.Config
+    controllers []string
 }
 
 func NewDockerSandbox(name string, sandbox_dir string, container *docker.Container, client *docker.Client, config *config.Config) *DockerSandbox {
@@ -40,6 +42,7 @@ func NewDockerSandbox(name string, sandbox_dir string, container *docker.Contain
 		container:   container,
 		client:      client,
 		config:      config,
+        controllers: []string{"memory", "cpu", "devices", "perf_event", "cpuset", "blkio", "pids", "freezer", "net_cls,net_prio", "hugetlb"},
 	}
 	return sandbox
 }
@@ -172,24 +175,38 @@ func (s *DockerSandbox) Remove() error {
 
 /* Return log output for the container */
 func (s *DockerSandbox) Logs() (string, error) {
-    stdout_path := filepath.Join(s.sandbox_dir, "stdout")
-    stderr_path := filepath.Join(s.sandbox_dir, "stderr")
+	stdout_path := filepath.Join(s.sandbox_dir, "stdout")
+	stderr_path := filepath.Join(s.sandbox_dir, "stderr")
 
-    stdout, err := ioutil.ReadFile(stdout_path)
-    if err != nil {
-        return "", err
-    }
+	stdout, err := ioutil.ReadFile(stdout_path)
+	if err != nil {
+		return "", err
+	}
 
-    stderr, err := ioutil.ReadFile(stderr_path)
-    if err != nil {
-        return "", err
-    }
+	stderr, err := ioutil.ReadFile(stderr_path)
+	if err != nil {
+		return "", err
+	}
 
-    stdout_hdr := fmt.Sprintf("Container (%s) stdout:", s.container.ID)
-    stderr_hdr := fmt.Sprintf("Container (%s) stderr:", s.container.ID)
-    ret := fmt.Sprintf("%s\n%s\n%s\n%s\n", stdout_hdr, stdout, stderr_hdr, stderr)
+	stdout_hdr := fmt.Sprintf("Container (%s) stdout:", s.container.ID)
+	stderr_hdr := fmt.Sprintf("Container (%s) stderr:", s.container.ID)
+	ret := fmt.Sprintf("%s\n%s\n%s\n%s\n", stdout_hdr, stdout, stderr_hdr, stderr)
 
 	return ret, nil
+}
+
+func (s *DockerSandbox) CGroupEnter(pid string) (err error) {
+    for _, c := range s.controllers {
+        cgroup := fmt.Sprintf("%s:docker/%s", c, s.container.ID)
+        cmd := exec.Command("cgclassify", "-g", cgroup, pid)
+
+        //TODO: Start() doesn't check output, should use Run()?
+        if err := cmd.Start(); err != nil {
+            return err
+        }
+    }
+
+    return nil
 }
 
 func (s *DockerSandbox) NSPid() int {

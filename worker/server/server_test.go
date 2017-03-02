@@ -116,6 +116,7 @@ func last_count(img string) int {
 			}
 		}
 	}
+
 	return 0
 }
 
@@ -130,7 +131,7 @@ func TestThreadPausing(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	count2 := last_count(img)
 	if count1 <= 0 {
-		log.Fatal(fmt.Sprintf("count1 isn't positive (%d)", count1))
+		log.Fatal(fmt.Sprintf("count1 isn't positive (%d) (logs working?)", count1))
 	}
 	if count2 != count1 {
 		log.Fatal(fmt.Sprintf("count1 (%d) != count2 (%d)", count1, count2))
