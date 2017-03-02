@@ -17,7 +17,7 @@ import (
 	"net"
 	"net/http"
 	"path/filepath"
-	"time"
+    "io/ioutil"
 
 	docker "github.com/fsouza/go-dockerclient"
 	"github.com/open-lambda/open-lambda/worker/config"
@@ -172,27 +172,24 @@ func (s *DockerSandbox) Remove() error {
 
 /* Return log output for the container */
 func (s *DockerSandbox) Logs() (string, error) {
-	buf := &bytes.Buffer{}
-	err := s.client.Logs(docker.LogsOptions{
-		Container:         s.container.ID,
-		OutputStream:      buf,
-		ErrorStream:       buf,
-		InactivityTimeout: time.Second,
-		Follow:            false,
-		Stdout:            true,
-		Stderr:            true,
-		Since:             0,
-		Timestamps:        false,
-		Tail:              "20",
-		RawTerminal:       false,
-	})
+    stdout_path := filepath.Join(s.sandbox_dir, "stdout")
+    stderr_path := filepath.Join(s.sandbox_dir, "stderr")
 
-	if err != nil {
-		log.Printf("failed to get logs for %s with err %v\n", s.name, err)
-		return "", err
-	}
+    stdout, err := ioutil.ReadFile(stdout_path)
+    if err != nil {
+        return "", err
+    }
 
-	return buf.String(), nil
+    stderr, err := ioutil.ReadFile(stderr_path)
+    if err != nil {
+        return "", err
+    }
+
+    stdout_hdr := fmt.Sprintf("Container (%s) stdout:", s.container.ID)
+    stderr_hdr := fmt.Sprintf("Container (%s) stderr:", s.container.ID)
+    ret := fmt.Sprintf("%s\n%s\n%s\n%s\n", stdout_hdr, stdout, stderr_hdr, stderr)
+
+	return ret, nil
 }
 
 func (s *DockerSandbox) NSPid() int {

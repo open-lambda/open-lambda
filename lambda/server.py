@@ -5,12 +5,13 @@ import tornado.ioloop
 import tornado.web
 import tornado.httpserver
 import tornado.netutil
-from subprocess import check_output
 
-import ns
+HOST_PATH = '/host'
+SOCK_PATH = '%s/ol.sock' % HOST_PATH
+STDOUT_PATH = '%s/stdout' % HOST_PATH
+STDERR_PATH = '%s/stderr' % HOST_PATH
 
 
-SOCKET_PATH = "/host/ol.sock"
 PROCESSES_DEFAULT = 10
 initialized = False
 config = None
@@ -22,6 +23,8 @@ def init():
     if initialized:
         return
 
+    sys.stdout = open(STDOUT_PATH, 'w')
+    sys.stderr = open(STDERR_PATH, 'w')
     #config = json.loads(os.environ['ol.config'])
     #if config.get('db', None) == 'rethinkdb':
     #    host = config.get('rethinkdb.host', 'localhost')
@@ -57,13 +60,15 @@ tornado_app = tornado.web.Application([
 # listen on sock file with Tornado
 def lambda_server():
     server = tornado.httpserver.HTTPServer(tornado_app)
-    socket = tornado.netutil.bind_unix_socket(SOCKET_PATH)
+    socket = tornado.netutil.bind_unix_socket(SOCK_PATH)
     server.add_socket(socket)
     tornado.ioloop.IOLoop.instance().start()
     server.start(PROCESSES_DEFAULT)
 
 # listen for fds to forkenter
 def fdlisten(path):
+    import ns
+
     r = ns.fdlisten(path)
     # parent
     if r > 0:
