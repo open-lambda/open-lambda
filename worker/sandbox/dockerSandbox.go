@@ -17,8 +17,8 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os/exec"
 	"path/filepath"
-    "os/exec"
 
 	docker "github.com/fsouza/go-dockerclient"
 	"github.com/open-lambda/open-lambda/worker/config"
@@ -32,7 +32,7 @@ type DockerSandbox struct {
 	container   *docker.Container
 	client      *docker.Client
 	config      *config.Config
-    controllers []string
+	controllers []string
 }
 
 func NewDockerSandbox(name string, sandbox_dir string, container *docker.Container, client *docker.Client, config *config.Config) *DockerSandbox {
@@ -42,8 +42,9 @@ func NewDockerSandbox(name string, sandbox_dir string, container *docker.Contain
 		container:   container,
 		client:      client,
 		config:      config,
-        controllers: []string{"memory", "cpu", "devices", "perf_event", "cpuset", "blkio", "pids", "freezer", "net_cls,net_prio", "hugetlb"},
+		controllers: []string{"name=systemd", "memory", "cpu", "devices", "perf_event", "cpuset", "blkio", "pids", "freezer", "net_cls,net_prio", "hugetlb"},
 	}
+
 	return sandbox
 }
 
@@ -196,17 +197,17 @@ func (s *DockerSandbox) Logs() (string, error) {
 }
 
 func (s *DockerSandbox) CGroupEnter(pid string) (err error) {
-    for _, c := range s.controllers {
-        cgroup := fmt.Sprintf("%s:docker/%s", c, s.container.ID)
-        cmd := exec.Command("cgclassify", "-g", cgroup, pid)
+	for _, c := range s.controllers {
+		cgroup := fmt.Sprintf("%s:/docker/%s", c, s.container.ID)
+		cmd := exec.Command("cgclassify", "--sticky", "-g", cgroup, pid)
 
-        //TODO: Start() doesn't check output, should use Run()?
-        if err := cmd.Start(); err != nil {
-            return err
-        }
-    }
+		//TODO: Start() doesn't check output, should use Run()?
+		if err := cmd.Start(); err != nil {
+			return err
+		}
+	}
 
-    return nil
+	return nil
 }
 
 func (s *DockerSandbox) NSPid() int {

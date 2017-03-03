@@ -125,8 +125,8 @@ import "C"
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
-    "fmt"
 )
 
 /*
@@ -142,7 +142,7 @@ func sendFds(sockPath string, targetPid int) (pid string, err error) {
 	cpid := C.CString(strPid)
 
 	ret, err := C.sendFds(csock, cpid)
-    pid = C.GoString(ret)
+	pid = C.GoString(ret)
 	if err != nil {
 		return "", errors.New(fmt.Sprintf("sendFds: %s", pid))
 	}

@@ -5,6 +5,7 @@ import tornado.ioloop
 import tornado.web
 import tornado.httpserver
 import tornado.netutil
+from subprocess import check_output
 
 HOST_PATH = '/host'
 SOCK_PATH = '%s/ol.sock' % HOST_PATH
@@ -25,6 +26,8 @@ def init():
 
     sys.stdout = open(STDOUT_PATH, 'w')
     sys.stderr = open(STDERR_PATH, 'w')
+
+    print check_output(['cat', '/proc/%s/cgroup' % os.getpid()])
     #config = json.loads(os.environ['ol.config'])
     #if config.get('db', None) == 'rethinkdb':
     #    host = config.get('rethinkdb.host', 'localhost')

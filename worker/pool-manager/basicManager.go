@@ -28,7 +28,7 @@ import (
 
 type ForkServer struct {
 	//packages []string TODO
-	sockPath    string
+	sockPath string
 }
 
 type BasicManager struct {
@@ -82,16 +82,16 @@ func (bm *BasicManager) ForkEnter(sandbox sb.Sandbox) (err error) {
 		return errors.New("forkenter only supported with DockerSandbox")
 	}
 
-    pid, err := sendFds(fs.sockPath, docker_sb.NSPid())
+	pid, err := sendFds(fs.sockPath, docker_sb.NSPid())
 	if err != nil {
 		return err
 	}
 
-    // change cgroup of spawned lambda server
-    err = docker_sb.CGroupEnter(pid)
-    if err != nil {
-        return err
-    }
+	// change cgroup of spawned lambda server
+	err = docker_sb.CGroupEnter(pid)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

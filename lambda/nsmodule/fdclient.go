@@ -119,7 +119,7 @@ sendFds(char *sockPath, char *pid)
         perror("recv pid");
     }
 
-    printf("buffer: %s\n", buf);
+    printf("child PID: %s\n", buf);
 
     if(close(s) == -1) {
         perror("close socket");
