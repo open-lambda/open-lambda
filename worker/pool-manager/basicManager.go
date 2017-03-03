@@ -28,45 +28,38 @@ import (
 
 type ForkServer struct {
 	//packages []string TODO
-	fifo *os.File
+	sockPath string
 }
 
 type BasicManager struct {
 	servers []*ForkServer
 }
 
-func NewForkServer(fifoPath string) (fs *ForkServer, err error) {
-	fifo, err := os.OpenFile(fifoPath, os.O_CREATE|os.O_RDWR, os.ModeNamedPipe)
-	if err != nil {
+func NewForkServer(sockPath string) (fs *ForkServer, err error) {
+	if err = runLambdaServer(sockPath); err != nil {
 		return nil, err
 	}
 
-	if err = runLambdaServer(fifoPath); err != nil {
-		return nil, err
-	}
-
-	fs = &ForkServer{fifo: fifo}
+	fs = &ForkServer{sockPath: sockPath}
 
 	return fs, nil
 }
 
 func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
-	fifoDir := "/tmp/olpipes" // TODO: tmp?
-	if _, err = os.Stat(fifoDir); os.IsNotExist(err) {
-		if err = os.Mkdir(fifoDir, os.ModeDir); err != nil {
-			return nil, err
-		}
+	sockDir := "/var/tmp/olsocks"
+	if err = os.MkdirAll(sockDir, os.ModeDir); err != nil {
+		return nil, err
 	}
 
-	// TODO: make number of servers configurable
-	servers := make([]*ForkServer, 5, 5)
-	for k := 0; k < 5; k++ {
-		fifoPath := filepath.Join(fifoDir, fmt.Sprintf("ol-%d.pipe", k))
+	numServers := opts.Num_forkservers
+	servers := make([]*ForkServer, numServers, numServers)
+	for k := 0; k < numServers; k++ {
+		sockPath := filepath.Join(sockDir, fmt.Sprintf("ol-%d.sock", k))
 		if err != nil {
 			return nil, err
 		}
 
-		fs, err := NewForkServer(fifoPath)
+		fs, err := NewForkServer(sockPath)
 		if err != nil {
 			return nil, err
 		}
@@ -86,14 +79,20 @@ func (bm *BasicManager) ForkEnter(sandbox sb.Sandbox) (err error) {
 
 	docker_sb, ok := sandbox.(*sb.DockerSandbox)
 	if !ok {
-		return errors.New("only supports forkenter into DockerSandbox")
+		return errors.New("forkenter only supported with DockerSandbox")
 	}
-	msg := fmt.Sprintf("%d", docker_sb.NSPid())
-	if _, err := fs.fifo.WriteString(msg); err != nil {
+
+	pid, err := sendFds(fs.sockPath, docker_sb.NSPid())
+	if err != nil {
 		return err
 	}
 
-	//TODO: respond?
+	// change cgroup of spawned lambda server
+	err = docker_sb.CGroupEnter(pid)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -104,13 +103,13 @@ func (bm *BasicManager) chooseRandom() (server *ForkServer) {
 	return bm.servers[k]
 }
 
-// start the python interpreter, listening on passed pipe
-func runLambdaServer(fifoPath string) (err error) {
+/* Start the lambda python server, listening on socket at sockPath */
+func runLambdaServer(sockPath string) (err error) {
 	_, absPath, _, _ := runtime.Caller(1)
-	relPath := "../../../../../../../../../lambda/server.py" // disgusting path from this file in hack to server script
+	relPath := "../../../../../../../../../lambda/server.py" // disgusting path from this file in hack dir to server script
 	serverPath := filepath.Join(absPath, relPath)
 
-	cmd := exec.Command("/usr/bin/python", serverPath, fifoPath)
+	cmd := exec.Command("/usr/bin/python", serverPath, sockPath)
 	if err := cmd.Start(); err != nil {
 		return err
 	}

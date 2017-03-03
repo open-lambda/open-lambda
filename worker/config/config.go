@@ -18,6 +18,9 @@ type Config struct {
 	Registry string `json:"registry"`
 	Pool     string `json:"pool"`
 
+	// pool options
+	Num_forkservers int `json:"num_forkservers"`
+
 	// docker
 	Cluster_name  string `json:"cluster_name"`
 	Registry_host string `json:"registry_host"`
@@ -78,12 +81,16 @@ func (c *Config) Save(path string) error {
 // Defaults verifies the fields of Config are correct, and initializes some
 // if they are empty.
 func (c *Config) Defaults() error {
+	if c.Cluster_name == "" {
+		c.Cluster_name = "default"
+	}
+
 	if c.Worker_port == "" {
 		c.Worker_port = "8080"
 	}
 
-	if c.Cluster_name == "" {
-		c.Cluster_name = "default"
+	if c.Num_forkservers == 0 {
+		c.Num_forkservers = 5
 	}
 
 	if c.Registry == "docker" {
