@@ -36,6 +36,7 @@ func (dm *DockerManagerBase) init(opts *config.Config) {
 	} else {
 		dm.dClient = c
 	}
+
 	dm.env = []string{fmt.Sprintf("ol.config=%s", opts.SandboxConfJson())}
 
 	dm.opts = opts

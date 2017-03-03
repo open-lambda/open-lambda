@@ -1,5 +1,5 @@
 #!/usr/bin/python
-import traceback, json, struct, os, sys, socket
+import traceback, json, sys, socket, os
 import rethinkdb
 import tornado.ioloop
 import tornado.web
@@ -27,13 +27,13 @@ def init():
     sys.stdout = open(STDOUT_PATH, 'w')
     sys.stderr = open(STDERR_PATH, 'w')
 
-    print check_output(['cat', '/proc/%s/cgroup' % os.getpid()])
-    #config = json.loads(os.environ['ol.config'])
-    #if config.get('db', None) == 'rethinkdb':
-    #    host = config.get('rethinkdb.host', 'localhost')
-    #    port = config.get('rethinkdb.port', 28015)
-    #    print 'Connect to %s:%d' % (host, port)
-    #    db_conn = rethinkdb.connect(host, port)
+    if len(sys.argv) == 1:
+        config = json.loads(os.environ['ol.config'])
+        if config.get('db', None) == 'rethinkdb':
+            host = config.get('rethinkdb.host', 'localhost')
+            port = config.get('rethinkdb.port', 28015)
+            print 'Connect to %s:%d' % (host, port)
+            db_conn = rethinkdb.connect(host, port)
 
     sys.path.append('/handler')
     import lambda_func # assume submitted .py file is /handler/lambda_func.py
@@ -86,7 +86,7 @@ if __name__ == '__main__':
     if len(sys.argv) == 1:
         lambda_server()
     elif len(sys.argv) == 2:
-        fdlisten(os.path.abspath(sys.argv[1]))
+        fdlisten(sys.argv[1])
     else:
         print('Usage (nofork): python %s' % sys.argv[0])
         print('Usage (fork): python %s <fifo>' % sys.argv[0])
