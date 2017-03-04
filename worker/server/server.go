@@ -13,24 +13,29 @@ import (
 	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/handler"
 	pmanager "github.com/open-lambda/open-lambda/worker/pool-manager"
-	sbmanager "github.com/open-lambda/open-lambda/worker/sandbox-manager"
+	"github.com/open-lambda/open-lambda/worker/registry"
+	"github.com/open-lambda/open-lambda/worker/sandbox"
 )
 
+// Server is a worker server that listens to run lambda requests and forward
+// these requests to its sandboxes.
 type Server struct {
-	sbmanager sbmanager.SandboxManager // why do we need this?
-	config    *config.Config
-	handlers  *handler.HandlerSet
+	config   *config.Config
+	handlers *handler.HandlerSet
 }
 
+// httpErr is a wrapper for an http error and the return code of the request.
 type httpErr struct {
 	msg  string
 	code int
 }
 
+// newHttpErr creates an httpErr.
 func newHttpErr(msg string, code int) *httpErr {
 	return &httpErr{msg: msg, code: code}
 }
 
+// initPManager creates a pool manager according to config.
 func initPManager(config *config.Config) (pm pmanager.PoolManager, err error) {
 	if config.Pool == "basic" {
 		if pm, err = pmanager.NewBasicManager(config); err != nil {
@@ -43,24 +48,34 @@ func initPManager(config *config.Config) (pm pmanager.PoolManager, err error) {
 	return pm, nil
 }
 
-func initSBManager(config *config.Config) (sm sbmanager.SandboxManager, err error) {
-	if config.Registry == "docker" {
-		sm, err = sbmanager.NewDockerManager(config)
-	} else if config.Registry == "olregistry" {
-		sm, err = sbmanager.NewRegistryManager(config)
+// initRegManager creates a registry manager according to config.
+func initRegManager(config *config.Config) (rm registry.RegistryManager, err error) {
+	if config.Registry == "olregistry" {
+		rm, err = registry.NewOLStoreManager(config)
 	} else if config.Registry == "local" {
-		sm, err = sbmanager.NewLocalManager(config)
+		rm, err = registry.NewLocalManager(config)
 	} else {
 		return nil, errors.New("invalid 'registry' field in config")
 	}
 
-	return sm, nil
+	return rm, nil
 }
 
+// initSBFactory creates a sandbox factory according to config.
+func initSBFactory(config *config.Config) (sf sandbox.SandboxFactory, err error) {
+	return sandbox.NewDockerSBFactory(config)
+}
+
+// NewServer creates a server.
 func NewServer(config *config.Config) (*Server, error) {
 	var err error
 
-	sm, err := initSBManager(config)
+	rm, err := initRegManager(config)
+	if err != nil {
+		return nil, err
+	}
+
+	sf, err := initSBFactory(config)
 	if err != nil {
 		return nil, err
 	}
@@ -71,24 +86,21 @@ func NewServer(config *config.Config) (*Server, error) {
 	}
 
 	opts := handler.HandlerSetOpts{
-		Sm:     sm,
+		Rm:     rm,
+		Sf:     sf,
 		Pm:     pm,
 		Config: config,
 		Lru:    handler.NewHandlerLRU(100), // TODO(tyler)
 	}
 	server := &Server{
-		sbmanager: sm,
-		config:    config,
-		handlers:  handler.NewHandlerSet(opts),
+		config:   config,
+		handlers: handler.NewHandlerSet(opts),
 	}
 
 	return server, nil
 }
 
-func (s *Server) Manager() sbmanager.SandboxManager {
-	return s.sbmanager
-}
-
+// ForwardToSandbox forwards a run lambda request to a sandbox.
 func (s *Server) ForwardToSandbox(handler *handler.Handler, r *http.Request, input []byte) ([]byte, *http.Response, *httpErr) {
 	channel, err := handler.RunStart()
 	if err != nil {
@@ -145,6 +157,7 @@ func (s *Server) ForwardToSandbox(handler *handler.Handler, r *http.Request, inp
 	}
 }
 
+// RunLambdaErr handles the run lambda request and return an http error if any.
 func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 	// components represent runLambda[0]/<name_of_sandbox>[1]/<extra_things>...
 	// ergo we want [1] for name of sandbox
@@ -215,6 +228,7 @@ func (s *Server) RunLambda(w http.ResponseWriter, r *http.Request) {
 
 }
 
+// Status writes "ready" to the response.
 func (s *Server) Status(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Receive request to %s\n", r.URL.Path)
 
@@ -224,7 +238,7 @@ func (s *Server) Status(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Parses request URL into its "/" delimated components
+// getUrlComponents parses request URL into its "/" delimated components
 func getUrlComponents(r *http.Request) []string {
 	path := r.URL.Path
 
@@ -242,6 +256,7 @@ func getUrlComponents(r *http.Request) []string {
 	return components
 }
 
+// Main starts a server.
 func Main(config_path string) {
 	log.Printf("Parse config\n")
 	conf, err := config.ParseConfig(config_path)

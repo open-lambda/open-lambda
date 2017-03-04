@@ -67,6 +67,9 @@ func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
 		servers[k] = fs
 	}
 
+	// TODO: find better way to wait for lambda server initialization
+	time.Sleep(time.Second)
+
 	bm = &BasicManager{
 		servers: servers,
 	}

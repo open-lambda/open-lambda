@@ -174,7 +174,7 @@ static PyObject *ns_fdlisten(PyObject *self, PyObject *args)
     ns[4] = "pid";
     ns[5] = "mnt";
 
-    /* Unpack pid from passed arguments */ 
+    /* Unpack socket path from passed arguments */ 
     if (!PyArg_ParseTuple(args, "s", &sockpath)) {
         PyErr_SetString(PyExc_RuntimeError, "Failed to parse arguments.");
         return NULL;

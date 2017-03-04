@@ -1,3 +1,5 @@
+// handler package implements a library for handling run lambda requests from
+// the worker server.
 package handler
 
 import (
@@ -9,15 +11,16 @@ import (
 
 	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/handler/state"
+	"github.com/open-lambda/open-lambda/worker/registry"
 	"github.com/open-lambda/open-lambda/worker/sandbox"
 
 	pmanager "github.com/open-lambda/open-lambda/worker/pool-manager"
-	sbmanager "github.com/open-lambda/open-lambda/worker/sandbox-manager"
 )
 
 // HandlerSetOpts wraps parameters necessary to create a HandlerSet.
 type HandlerSetOpts struct {
-	Sm     sbmanager.SandboxManager
+	Rm     registry.RegistryManager
+	Sf     sandbox.SandboxFactory
 	Pm     pmanager.PoolManager
 	Config *config.Config
 	Lru    *HandlerLRU
@@ -28,7 +31,8 @@ type HandlerSetOpts struct {
 type HandlerSet struct {
 	mutex    sync.Mutex
 	handlers map[string]*Handler
-	sm       sbmanager.SandboxManager
+	rm       registry.RegistryManager
+	sf       sandbox.SandboxFactory
 	pm       pmanager.PoolManager
 	config   *config.Config
 	lru      *HandlerLRU
@@ -46,6 +50,7 @@ type Handler struct {
 	state    state.HandlerState
 	runners  int
 	code     []byte
+	codeDir  string
 }
 
 // NewHandlerSet creates an empty HandlerSet
@@ -56,7 +61,8 @@ func NewHandlerSet(opts HandlerSetOpts) (handlerSet *HandlerSet) {
 
 	return &HandlerSet{
 		handlers: make(map[string]*Handler),
-		sm:       opts.Sm,
+		rm:       opts.Rm,
+		sf:       opts.Sf,
 		pm:       opts.Pm,
 		config:   opts.Config,
 		lru:      opts.Lru,
@@ -102,12 +108,13 @@ func (h *Handler) RunStart() (ch *sandbox.SandboxChannel, err error) {
 
 	// get code if needed
 	if h.lastPull == nil {
-		err = h.hset.sm.Pull(h.name)
+		codeDir, err := h.hset.rm.Pull(h.name)
 		if err != nil {
 			return nil, err
 		}
 		now := time.Now()
 		h.lastPull = &now
+		h.codeDir = codeDir
 	}
 
 	// create sandbox if needed
@@ -117,7 +124,7 @@ func (h *Handler) RunStart() (ch *sandbox.SandboxChannel, err error) {
 			return nil, err
 		}
 
-		sandbox, err := h.hset.sm.Create(h.name, sandbox_dir)
+		sandbox, err := h.hset.sf.Create(h.codeDir, sandbox_dir)
 		if err != nil {
 			return nil, err
 		}

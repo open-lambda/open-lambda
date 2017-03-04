@@ -6,10 +6,7 @@ import (
 
 func TestLRU(t *testing.T) {
 	lru := NewHandlerLRU(0)
-	opts := HandlerSetOpts{
-		Sm:  NewManager(),
-		Lru: lru,
-	}
+	opts := NewHandlerSetOpts()
 	handlers := NewHandlerSet(opts)
 	a := handlers.Get("a")
 

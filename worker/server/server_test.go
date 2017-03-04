@@ -14,7 +14,7 @@ import (
 
 	docker "github.com/fsouza/go-dockerclient"
 	"github.com/open-lambda/open-lambda/worker/config"
-	sbmanager "github.com/open-lambda/open-lambda/worker/sandbox-manager"
+	"github.com/open-lambda/open-lambda/worker/dockerutil"
 )
 
 var server *Server
@@ -85,7 +85,7 @@ func kill() {
 	}
 
 	for _, container := range containers {
-		if container.Labels[sbmanager.DOCKER_LABEL_CLUSTER] == server.config.Cluster_name {
+		if container.Labels[dockerutil.DOCKER_LABEL_CLUSTER] == server.config.Cluster_name {
 			cid := container.ID
 			typ := server.config.Cluster_name
 
