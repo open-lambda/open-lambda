@@ -32,7 +32,7 @@ type DockerSandbox struct {
 	container   *docker.Container
 	client      *docker.Client
 	config      *config.Config
-	controllers []string
+	controllers string
 }
 
 func NewDockerSandbox(name string, sandbox_dir string, container *docker.Container, client *docker.Client, config *config.Config) *DockerSandbox {
@@ -42,7 +42,8 @@ func NewDockerSandbox(name string, sandbox_dir string, container *docker.Contain
 		container:   container,
 		client:      client,
 		config:      config,
-		controllers: []string{"name=systemd", "memory", "cpu", "devices", "perf_event", "cpuset", "blkio", "pids", "freezer", "net_cls,net_prio", "hugetlb"},
+        // name=systemd?
+		controllers: "memory,cpu,devices,perf_event,cpuset,blkio,pids,freezer,net_cls,net_prio,hugetlb",
 	}
 
 	return sandbox
@@ -197,15 +198,12 @@ func (s *DockerSandbox) Logs() (string, error) {
 }
 
 func (s *DockerSandbox) CGroupEnter(pid string) (err error) {
-	for _, c := range s.controllers {
-		cgroup := fmt.Sprintf("%s:/docker/%s", c, s.container.ID)
-		cmd := exec.Command("cgclassify", "--sticky", "-g", cgroup, pid)
+    cgroup := fmt.Sprintf("%s:/docker/%s", s.controllers, s.container.ID)
+    cmd := exec.Command("cgclassify", "--sticky", "-g", cgroup, pid)
 
-		//TODO: Start() doesn't check output, should use Run()?
-		if err := cmd.Start(); err != nil {
-			return err
-		}
-	}
+    if err := cmd.Run(); err != nil {
+        return err
+    }
 
 	return nil
 }
