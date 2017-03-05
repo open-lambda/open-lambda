@@ -130,29 +130,32 @@ func (h *Handler) RunStart() (ch *sandbox.SandboxChannel, err error) {
 		}
 
 		h.sandbox = sandbox
-		h.state = state.Stopped
-	}
+		if h.state, err = sandbox.State(); err != nil {
+			return nil, err
+		}
 
-	// are we the first?
-	if h.runners == 0 {
+		// newly created sandbox could be in any state; let it run
 		if h.state == state.Stopped {
-			if err := h.sandbox.Start(); err != nil {
+			if err := sandbox.Start(); err != nil {
 				return nil, err
 			}
-
-			// forkenter a handler server into sandbox if needed
-			if h.hset.pm != nil {
-				h.hset.pm.ForkEnter(h.sandbox)
-			}
 		} else if h.state == state.Paused {
-			if err := h.sandbox.Unpause(); err != nil {
+			if err := sandbox.Unpause(); err != nil {
 				return nil, err
 			}
 		}
-		h.state = state.Running
+
+		if h.hset.pm != nil {
+			h.hset.pm.ForkEnter(h.sandbox)
+		}
+	} else if h.state == state.Paused { // unpause if paused
+		if err := h.sandbox.Unpause(); err != nil {
+			return nil, err
+		}
 		h.hset.lru.Remove(h)
 	}
 
+	h.state = state.Running
 	h.runners += 1
 
 	return h.sandbox.Channel()

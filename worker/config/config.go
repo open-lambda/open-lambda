@@ -31,6 +31,9 @@ type Config struct {
 	Worker_port string `json:"worker_port"`
 	Docker_host string `json:"docker_host"`
 
+	// sandbox factory
+	Sandbox_buffer int `json:"sandbox_buffer"`
+
 	// for unit testing to skip pull path
 	Skip_pull_existing bool `json:"Skip_pull_existing"`
 

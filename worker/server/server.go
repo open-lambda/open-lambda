@@ -63,7 +63,13 @@ func initRegManager(config *config.Config) (rm registry.RegistryManager, err err
 
 // initSBFactory creates a sandbox factory according to config.
 func initSBFactory(config *config.Config) (sf sandbox.SandboxFactory, err error) {
-	return sandbox.NewDockerSBFactory(config)
+	if df, err := sandbox.NewDockerSBFactory(config); err != nil {
+		return nil, err
+	} else if config.Sandbox_buffer == 0 {
+		return df, nil
+	} else {
+		return sandbox.NewBufferedSBFactory(config, df)
+	}
 }
 
 // NewServer creates a server.
