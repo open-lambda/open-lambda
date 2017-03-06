@@ -109,24 +109,28 @@ func (h *Handler) RunStart() (ch *sandbox.SandboxChannel, err error) {
 		now := time.Now()
 		h.lastPull = &now
 	}
-
 	// create sandbox if needed
 	if h.sandbox == nil {
 		sandbox_dir := path.Join(h.hset.config.Worker_dir, "handlers", h.name, "sandbox")
 		if err := os.MkdirAll(sandbox_dir, 0666); err != nil {
 			return nil, err
 		}
-
+		start := time.Now().UnixNano()
 		sandbox, err := h.hset.sm.Create(h.name, sandbox_dir)
 		if err != nil {
 			return nil, err
 		}
+		end := time.Now().UnixNano()
+		log.Printf("Time to create sandbox: %d ns\n", end-start)
 
 		// forkenter a handler server into sandbox if needed
 		if h.hset.pm != nil {
+			start := time.Now().UnixNano()
 			if err = h.hset.pm.ForkEnter(sandbox); err != nil {
 				return nil, err
 			}
+			end := time.Now().UnixNano()
+			log.Printf("Time to forkenter: %d ns\n", end-start)
 		}
 
 		h.sandbox = sandbox
@@ -136,13 +140,19 @@ func (h *Handler) RunStart() (ch *sandbox.SandboxChannel, err error) {
 	// are we the first?
 	if h.runners == 0 {
 		if h.state == state.Stopped {
+			start := time.Now().UnixNano()
 			if err := h.sandbox.Start(); err != nil {
 				return nil, err
 			}
+			end := time.Now().UnixNano()
+			log.Printf("Time to start container: %d ns\n", end-start)
 		} else if h.state == state.Paused {
+			start := time.Now().UnixNano()
 			if err := h.sandbox.Unpause(); err != nil {
 				return nil, err
 			}
+			end := time.Now().UnixNano()
+			log.Printf("Time to unpause container: %d ns\n", end-start)
 		}
 		h.state = state.Running
 		h.hset.lru.Remove(h)

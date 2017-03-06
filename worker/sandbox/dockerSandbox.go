@@ -20,6 +20,7 @@ import (
 	"time"
 
 	docker "github.com/fsouza/go-dockerclient"
+	"github.com/open-lambda/open-lambda/worker/benchmarker"
 	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/handler/state"
 )
@@ -108,10 +109,21 @@ func (s *DockerSandbox) Channel() (channel *SandboxChannel, err error) {
 
 /* Starts the container */
 func (s *DockerSandbox) Start() error {
+	b := benchmarker.GetBenchmarker()
+	var t *benchmarker.Timer
+	if b != nil {
+		t = b.CreateTimer("Start worker Docker Container", "ms")
+		t.Start()
+	}
+
 	if err := s.client.StartContainer(s.container.ID, nil); err != nil {
 		log.Printf("failed to start container with err %v\n", err)
 		return s.dockerError(err)
 	}
+	if t != nil {
+		t.End()
+	}
+
 	container, err := s.client.InspectContainer(s.container.ID)
 	if err != nil {
 		log.Printf("failed to inpect container with err %v\n", err)
@@ -149,9 +161,21 @@ func (s *DockerSandbox) Pause() error {
 
 /* Unpauses the container */
 func (s *DockerSandbox) Unpause() error {
+
+	b := benchmarker.GetBenchmarker()
+	var t *benchmarker.Timer
+	if b != nil {
+		t = b.CreateTimer("Unpause worker Docker container", "ms")
+		t.Start()
+	}
+
 	if err := s.client.UnpauseContainer(s.container.ID); err != nil {
 		log.Printf("failed to unpause container %s with err %v\n", s.name, err)
 		return s.dockerError(err)
+	}
+
+	if t != nil {
+		t.End()
 	}
 
 	return nil

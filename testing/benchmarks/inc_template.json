@@ -5,5 +5,6 @@
     "registry": "local",
     "worker_dir": "test_worker",
     "sandbox_config": {"processes": 10},
-    "pool": "basic"
+    "pool": "basic",
+    "benchmark_log": "./perf/inc.perf"
 }

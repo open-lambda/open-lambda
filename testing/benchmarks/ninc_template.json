@@ -4,5 +4,6 @@
   "reg_dir": "../registry",
   "registry": "local",
   "worker_dir": "test_worker",
-  "sandbox_config": {"processes": 10}
+  "sandbox_config": {"processes": 10},
+  "benchmark_log": "./perf/ninc.perf"
 }
