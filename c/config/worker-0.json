@@ -1,0 +1,17 @@
+{
+	"registry": "local",
+	"pool": "",
+	"cluster_name": "/home/kevin/Repositories/open-lambda/c",
+	"registry_host": "",
+	"registry_port": "",
+	"reg_cluster": null,
+	"reg_dir": "/home/kevin/Repositories/open-lambda/c/registry",
+	"worker_dir": "/home/kevin/Repositories/open-lambda/c/workers/worker-0",
+	"worker_port": "8080",
+	"docker_host": "localhost",
+	"Skip_pull_existing": false,
+	"sandbox_config": {
+		"processes": 10
+	},
+	"benchmark_log": "perf.out"
+}

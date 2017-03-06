@@ -6,6 +6,7 @@ apt-get -y install linux-image-extra-virtual
 apt-get -y install golang
 apt-get -y install docker.io
 apt-get -y install docker-engine
+apt-get -y install cgroup-tools
 
 apt-get -y install python-pip
 apt-get -y install python2.7-dev

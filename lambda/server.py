@@ -1,5 +1,5 @@
 #!/usr/bin/python
-import traceback, json, struct, os, sys, socket
+import traceback, json, sys, socket, os
 import rethinkdb
 import tornado.ioloop
 import tornado.web
@@ -7,8 +7,12 @@ import tornado.httpserver
 import tornado.netutil
 from subprocess import check_output
 
+HOST_PATH = '/host'
+SOCK_PATH = '%s/ol.sock' % HOST_PATH
+STDOUT_PATH = '%s/stdout' % HOST_PATH
+STDERR_PATH = '%s/stderr' % HOST_PATH
 
-SOCKET_PATH = "/host/ol.sock"
+
 PROCESSES_DEFAULT = 10
 initialized = False
 config = None
@@ -20,13 +24,16 @@ def init():
     if initialized:
         return
 
-    sys.stdout = sys.stderr # flask supresses stdout :(
-    #config = json.loads(os.environ['ol.config'])
-    #if config.get('db', None) == 'rethinkdb':
-    #    host = config.get('rethinkdb.host', 'localhost')
-    #    port = config.get('rethinkdb.port', 28015)
-    #    print 'Connect to %s:%d' % (host, port)
-    #    db_conn = rethinkdb.connect(host, port)
+    sys.stdout = open(STDOUT_PATH, 'w')
+    sys.stderr = open(STDERR_PATH, 'w')
+
+    if len(sys.argv) == 1:
+        config = json.loads(os.environ['ol.config'])
+        if config.get('db', None) == 'rethinkdb':
+            host = config.get('rethinkdb.host', 'localhost')
+            port = config.get('rethinkdb.port', 28015)
+            print 'Connect to %s:%d' % (host, port)
+            db_conn = rethinkdb.connect(host, port)
 
     sys.path.append('/handler')
     import lambda_func # assume submitted .py file is /handler/lambda_func.py
@@ -54,40 +61,33 @@ tornado_app = tornado.web.Application([
 ])
 
 # listen on sock file with Tornado
-def listen_socket():
+def lambda_server():
     server = tornado.httpserver.HTTPServer(tornado_app)
-    socket = tornado.netutil.bind_unix_socket(SOCKET_PATH)
+    socket = tornado.netutil.bind_unix_socket(SOCK_PATH)
     server.add_socket(socket)
     tornado.ioloop.IOLoop.instance().start()
+    server.start(PROCESSES_DEFAULT)
 
-def listen_fifo(fifo):
-    args = ""
-    while True: #TODO
-        data = fifo.read()
-        if len(data) == 0:
-            break
-        args += data
+# listen for fds to forkenter
+def fdlisten(path):
+    import ns
 
-    return args
+    r = ns.fdlisten(path)
+    # parent
+    if r > 0:
+        print('Parent should never escape from fdlisten')
+        sys.exit(1)
 
-# wait for NS to enter, listen on sock file
-def fork(path):
-    with open(path) as fifo:
-        while True:
-            pid = listen_fifo(fifo)
-
-            r = ns.forkenter(pid)
-            if r == 0:
-                break # child escapes
-
-    listen_socket()
+    # child
+    if r == 0:
+        lambda_server()
 
 if __name__ == '__main__':
     if len(sys.argv) == 1:
-        listen_socket()
+        lambda_server()
     elif len(sys.argv) == 2:
-        fork(os.path.abspath(sys.argv[1]))
+        fdlisten(sys.argv[1])
     else:
         print('Usage (nofork): python %s' % sys.argv[0])
-        print('Usage (fork): python %s --fork <fifo>' % sys.argv[0])
+        print('Usage (fork): python %s <fifo>' % sys.argv[0])
         sys.exit(1)

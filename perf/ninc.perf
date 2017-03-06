@@ -1,0 +1,11 @@
+Start worker Docker Container: 201 ms
+HTTP request to tornado server: 4446 us
+Unpause worker Docker Container: 14 ms
+HTTP request to tornado server: 1389 us
+Unpause worker Docker Container: 12 ms
+HTTP request to tornado server: 1397 us
+Unpause worker Docker Container: 10 ms
+HTTP request to tornado server: 1449 us
+Unpause worker Docker Container: 11 ms
+HTTP request to tornado server: 1664 us
+Unpause worker Docker Container: 10 ms
