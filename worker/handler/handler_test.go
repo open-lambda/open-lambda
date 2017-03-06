@@ -6,9 +6,12 @@ import (
 	"testing"
 	"time"
 
+	docker "github.com/fsouza/go-dockerclient"
 	"github.com/open-lambda/open-lambda/worker/config"
+	"github.com/open-lambda/open-lambda/worker/dockerutil"
 	"github.com/open-lambda/open-lambda/worker/handler/state"
-	sbmanager "github.com/open-lambda/open-lambda/worker/sandbox-manager"
+	"github.com/open-lambda/open-lambda/worker/registry"
+	"github.com/open-lambda/open-lambda/worker/sandbox"
 )
 
 func getConf() *config.Config {
@@ -19,23 +22,33 @@ func getConf() *config.Config {
 	return conf
 }
 
-func NewManager() *sbmanager.LocalManager {
+func getClient() *docker.Client {
+	c, err := docker.NewClientFromEnv()
+	if err != nil {
+		log.Fatal(err)
+	}
+	return c
+}
+
+func NewHandlerSetOpts() HandlerSetOpts {
 	conf := getConf()
 
 	log.Printf("Set skip_pull_existing = true\n")
 	conf.Skip_pull_existing = true
 
-	m, err := sbmanager.NewLocalManager(conf)
+	rm, err := registry.NewLocalManager(conf)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	return m
+	sf, err := sandbox.NewDockerSBFactory(conf)
+
+	opts := HandlerSetOpts{Rm: rm, Sf: sf, Config: conf}
+	return opts
 }
 
 func TestHandlerLookupSame(t *testing.T) {
-	sm := NewManager()
-	handlers := NewHandlerSet(HandlerSetOpts{Sm: sm, Config: getConf()})
+	handlers := NewHandlerSet(NewHandlerSetOpts())
 	a1 := handlers.Get("a")
 	a2 := handlers.Get("a")
 	if a1 != a2 {
@@ -44,8 +57,7 @@ func TestHandlerLookupSame(t *testing.T) {
 }
 
 func TestHandlerLookupDiff(t *testing.T) {
-	sm := NewManager()
-	handlers := NewHandlerSet(HandlerSetOpts{Sm: sm, Config: getConf()})
+	handlers := NewHandlerSet(NewHandlerSetOpts())
 	a := handlers.Get("a")
 	b := handlers.Get("b")
 	if a == b {
@@ -56,11 +68,10 @@ func TestHandlerLookupDiff(t *testing.T) {
 func TestHandlerHandlerPull(t *testing.T) {
 	t.Skip("TestHandlerHandlerPull does not work with local registry mode")
 
-	sm := NewManager()
-	handlers := NewHandlerSet(HandlerSetOpts{Sm: sm, Config: getConf()})
+	handlers := NewHandlerSet(NewHandlerSetOpts())
 	name := "nonlocal"
 
-	exists, err := sm.DockerImageExists(name)
+	exists, err := dockerutil.ImageExists(getClient(), name)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -71,7 +82,7 @@ func TestHandlerHandlerPull(t *testing.T) {
 	h := handlers.Get(name)
 
 	// Get SHOULD NOT trigger pull
-	exists, err = sm.DockerImageExists(name)
+	exists, err = dockerutil.ImageExists(getClient(), name)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -85,7 +96,7 @@ func TestHandlerHandlerPull(t *testing.T) {
 	}
 
 	// Run SHOULD trigger pull
-	exists, err = sm.DockerImageExists(name)
+	exists, err = dockerutil.ImageExists(getClient(), name)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -104,8 +115,9 @@ func GetState(t *testing.T, h *Handler) state.HandlerState {
 
 func TestHandlerRunCountOne(t *testing.T) {
 	lru := NewHandlerLRU(1)
-	sm := NewManager()
-	handlers := NewHandlerSet(HandlerSetOpts{Sm: sm, Lru: lru, Config: getConf()})
+	opts := NewHandlerSetOpts()
+	opts.Lru = lru
+	handlers := NewHandlerSet(opts)
 	h := handlers.Get("hello2")
 
 	_, err := h.RunStart()
@@ -126,8 +138,9 @@ func TestHandlerRunCountOne(t *testing.T) {
 
 func TestHandlerRunCountMany(t *testing.T) {
 	lru := NewHandlerLRU(1)
-	sm := NewManager()
-	handlers := NewHandlerSet(HandlerSetOpts{Sm: sm, Lru: lru, Config: getConf()})
+	opts := NewHandlerSetOpts()
+	opts.Lru = lru
+	handlers := NewHandlerSet(opts)
 	h := handlers.Get("hello2")
 	count := 10
 
@@ -161,8 +174,9 @@ func TestHandlerRunCountMany(t *testing.T) {
 
 func TestHandlerEvict(t *testing.T) {
 	lru := NewHandlerLRU(0)
-	sm := NewManager()
-	handlers := NewHandlerSet(HandlerSetOpts{Sm: sm, Lru: lru, Config: getConf()})
+	opts := NewHandlerSetOpts()
+	opts.Lru = lru
+	handlers := NewHandlerSet(opts)
 	h := handlers.Get("hello2")
 	_, err := h.RunStart()
 	if err != nil {

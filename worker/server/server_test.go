@@ -14,7 +14,7 @@ import (
 
 	docker "github.com/fsouza/go-dockerclient"
 	"github.com/open-lambda/open-lambda/worker/config"
-	sbmanager "github.com/open-lambda/open-lambda/worker/sandbox-manager"
+	"github.com/open-lambda/open-lambda/worker/dockerutil"
 )
 
 var server *Server
@@ -85,7 +85,7 @@ func kill() {
 	}
 
 	for _, container := range containers {
-		if container.Labels[sbmanager.DOCKER_LABEL_CLUSTER] == server.config.Cluster_name {
+		if container.Labels[dockerutil.DOCKER_LABEL_CLUSTER] == server.config.Cluster_name {
 			cid := container.ID
 			typ := server.config.Cluster_name
 
@@ -167,6 +167,7 @@ func last_count(img string) int {
 			}
 		}
 	}
+
 	return 0
 }
 
@@ -181,10 +182,10 @@ func TestThreadPausing(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	count2 := last_count(img)
 	if count1 <= 0 {
-		log.Fatal("count1 isn't positive")
+		log.Fatal(fmt.Sprintf("count1 isn't positive (%d) (logs working?)", count1))
 	}
 	if count2 != count1 {
-		log.Fatal("count1 != count2")
+		log.Fatal(fmt.Sprintf("count1 (%d) != count2 (%d)", count1, count2))
 	}
 }
 

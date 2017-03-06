@@ -1,3 +1,5 @@
+// handler package implements a library for handling run lambda requests from
+// the worker server.
 package handler
 
 import (
@@ -9,15 +11,16 @@ import (
 
 	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/handler/state"
+	"github.com/open-lambda/open-lambda/worker/registry"
 	"github.com/open-lambda/open-lambda/worker/sandbox"
 
 	pmanager "github.com/open-lambda/open-lambda/worker/pool-manager"
-	sbmanager "github.com/open-lambda/open-lambda/worker/sandbox-manager"
 )
 
 // HandlerSetOpts wraps parameters necessary to create a HandlerSet.
 type HandlerSetOpts struct {
-	Sm     sbmanager.SandboxManager
+	Rm     registry.RegistryManager
+	Sf     sandbox.SandboxFactory
 	Pm     pmanager.PoolManager
 	Config *config.Config
 	Lru    *HandlerLRU
@@ -28,7 +31,8 @@ type HandlerSetOpts struct {
 type HandlerSet struct {
 	mutex    sync.Mutex
 	handlers map[string]*Handler
-	sm       sbmanager.SandboxManager
+	rm       registry.RegistryManager
+	sf       sandbox.SandboxFactory
 	pm       pmanager.PoolManager
 	config   *config.Config
 	lru      *HandlerLRU
@@ -46,6 +50,7 @@ type Handler struct {
 	state    state.HandlerState
 	runners  int
 	code     []byte
+	codeDir  string
 }
 
 // NewHandlerSet creates an empty HandlerSet
@@ -56,7 +61,8 @@ func NewHandlerSet(opts HandlerSetOpts) (handlerSet *HandlerSet) {
 
 	return &HandlerSet{
 		handlers: make(map[string]*Handler),
-		sm:       opts.Sm,
+		rm:       opts.Rm,
+		sf:       opts.Sf,
 		pm:       opts.Pm,
 		config:   opts.Config,
 		lru:      opts.Lru,
@@ -102,62 +108,54 @@ func (h *Handler) RunStart() (ch *sandbox.SandboxChannel, err error) {
 
 	// get code if needed
 	if h.lastPull == nil {
-		err = h.hset.sm.Pull(h.name)
+		codeDir, err := h.hset.rm.Pull(h.name)
 		if err != nil {
 			return nil, err
 		}
 		now := time.Now()
 		h.lastPull = &now
+		h.codeDir = codeDir
 	}
+
 	// create sandbox if needed
 	if h.sandbox == nil {
 		sandbox_dir := path.Join(h.hset.config.Worker_dir, "handlers", h.name, "sandbox")
 		if err := os.MkdirAll(sandbox_dir, 0666); err != nil {
 			return nil, err
 		}
-		start := time.Now().UnixNano()
-		sandbox, err := h.hset.sm.Create(h.name, sandbox_dir)
+
+		sandbox, err := h.hset.sf.Create(h.codeDir, sandbox_dir)
 		if err != nil {
 			return nil, err
 		}
-		end := time.Now().UnixNano()
-		log.Printf("Time to create sandbox: %d ns\n", end-start)
-
-		// forkenter a handler server into sandbox if needed
-		if h.hset.pm != nil {
-			start := time.Now().UnixNano()
-			if err = h.hset.pm.ForkEnter(sandbox); err != nil {
-				return nil, err
-			}
-			end := time.Now().UnixNano()
-			log.Printf("Time to forkenter: %d ns\n", end-start)
-		}
 
 		h.sandbox = sandbox
-		h.state = state.Stopped
-	}
-
-	// are we the first?
-	if h.runners == 0 {
-		if h.state == state.Stopped {
-			start := time.Now().UnixNano()
-			if err := h.sandbox.Start(); err != nil {
-				return nil, err
-			}
-			end := time.Now().UnixNano()
-			log.Printf("Time to start container: %d ns\n", end-start)
-		} else if h.state == state.Paused {
-			start := time.Now().UnixNano()
-			if err := h.sandbox.Unpause(); err != nil {
-				return nil, err
-			}
-			end := time.Now().UnixNano()
-			log.Printf("Time to unpause container: %d ns\n", end-start)
+		if h.state, err = sandbox.State(); err != nil {
+			return nil, err
 		}
-		h.state = state.Running
+
+		// newly created sandbox could be in any state; let it run
+		if h.state == state.Stopped {
+			if err := sandbox.Start(); err != nil {
+				return nil, err
+			}
+		} else if h.state == state.Paused {
+			if err := sandbox.Unpause(); err != nil {
+				return nil, err
+			}
+		}
+
+		if h.hset.pm != nil {
+			h.hset.pm.ForkEnter(h.sandbox)
+		}
+	} else if h.state == state.Paused { // unpause if paused
+		if err := h.sandbox.Unpause(); err != nil {
+			return nil, err
+		}
 		h.hset.lru.Remove(h)
 	}
 
+	h.state = state.Running
 	h.runners += 1
 
 	return h.sandbox.Channel()

@@ -14,23 +14,25 @@ import (
 
 // Config represents the configuration for a worker server.
 type Config struct {
-	path     string // where was config file loaded from?
-	Registry string `json:"registry"`
-	Pool     string `json:"pool"`
+	path         string // where was config file loaded from?
+	Registry     string `json:"registry"`
+	Pool         string `json:"pool"`
+	Reg_dir      string `json:"reg_dir"` // store local copies of handler code
+	Cluster_name string `json:"cluster_name"`
 
-	// docker
-	Cluster_name  string `json:"cluster_name"`
-	Registry_host string `json:"registry_host"`
-	Registry_port string `json:"registry_port"`
+	// pool options
+	Num_forkservers int `json:"num_forkservers"`
 
 	// olregistry
 	Reg_cluster []string `json:"reg_cluster"`
 
-	// local
-	Reg_dir     string `json:"reg_dir"`
+	// sandbox
 	Worker_dir  string `json:"worker_dir"`
 	Worker_port string `json:"worker_port"`
 	Docker_host string `json:"docker_host"`
+
+	// sandbox factory
+	Sandbox_buffer int `json:"sandbox_buffer"`
 
 	// for unit testing to skip pull path
 	Skip_pull_existing bool `json:"Skip_pull_existing"`
@@ -81,39 +83,35 @@ func (c *Config) Save(path string) error {
 // Defaults verifies the fields of Config are correct, and initializes some
 // if they are empty.
 func (c *Config) Defaults() error {
-	if c.Worker_port == "" {
-		c.Worker_port = "8080"
-	}
-
 	if c.Cluster_name == "" {
 		c.Cluster_name = "default"
 	}
 
-	if c.Registry == "docker" {
-		if c.Registry_host == "" {
-			return fmt.Errorf("must specify registry_host\n")
-		}
+	if c.Worker_port == "" {
+		c.Worker_port = "8080"
+	}
 
-		if c.Registry_port == "" {
-			return fmt.Errorf("must specify registry_port\n")
-		}
-	} else if c.Registry == "olregistry" && len(c.Reg_cluster) == 0 {
+	if c.Num_forkservers == 0 {
+		c.Num_forkservers = 5
+	}
+
+	if c.Registry == "olregistry" && len(c.Reg_cluster) == 0 {
 		return fmt.Errorf("must specify reg_cluster")
-	} else if c.Registry == "local" {
-		if c.Reg_dir == "" {
-			return fmt.Errorf("must specify local registry directory")
-		}
+	}
 
-		if !path.IsAbs(c.Reg_dir) {
-			if c.path == "" {
-				return fmt.Errorf("Reg_dir cannot be relative, unless config is loaded from file")
-			}
-			path, err := filepath.Abs(path.Join(path.Dir(c.path), c.Reg_dir))
-			if err != nil {
-				return err
-			}
-			c.Reg_dir = path
+	if c.Reg_dir == "" {
+		return fmt.Errorf("must specify local registry directory")
+	}
+
+	if !path.IsAbs(c.Reg_dir) {
+		if c.path == "" {
+			return fmt.Errorf("Reg_dir cannot be relative, unless config is loaded from file")
 		}
+		path, err := filepath.Abs(path.Join(path.Dir(c.path), c.Reg_dir))
+		if err != nil {
+			return err
+		}
+		c.Reg_dir = path
 	}
 
 	// worker dir
