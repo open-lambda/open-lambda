@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/open-lambda/open-lambda/worker/benchmarker"
 	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/handler"
 	pmanager "github.com/open-lambda/open-lambda/worker/pool-manager"
@@ -109,6 +110,7 @@ func (s *Server) ForwardToSandbox(handler *handler.Handler, r *http.Request, inp
 	max_tries := 10
 	errors := []error{}
 	for tries := 1; ; tries++ {
+		start := time.Now().UnixNano()
 		r2, err := http.NewRequest(r.Method, url, bytes.NewReader(input))
 		if err != nil {
 			return nil, nil, newHttpErr(
@@ -116,8 +118,19 @@ func (s *Server) ForwardToSandbox(handler *handler.Handler, r *http.Request, inp
 				http.StatusInternalServerError)
 		}
 
+		b := benchmarker.GetBenchmarker()
+		var t *benchmarker.Timer
+		if b != nil {
+			t = b.CreateTimer("HTTP request to tornado server", "us")
+		}
+
 		r2.Header.Set("Content-Type", r.Header.Get("Content-Type"))
 		client := &http.Client{Transport: &channel.Transport}
+
+		if t != nil {
+			t.Start()
+		}
+
 		w2, err := client.Do(r2)
 		if err != nil {
 			errors = append(errors, err)
@@ -134,6 +147,12 @@ func (s *Server) ForwardToSandbox(handler *handler.Handler, r *http.Request, inp
 			continue
 		}
 
+		if t != nil {
+			t.End()
+		}
+
+		end := time.Now().UnixNano()
+		log.Printf("Time to run lambda: %d ns\n", end-start)
 		defer w2.Body.Close()
 		wbody, err := ioutil.ReadAll(w2.Body)
 		if err != nil {
@@ -254,6 +273,11 @@ func Main(config_path string) {
 	server, err := NewServer(conf)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	// setup benchmarking
+	if conf.Benchmark_file != "" {
+		benchmarker.CreateBenchmarkerSingleton(conf.Benchmark_file)
 	}
 
 	port := fmt.Sprintf(":%s", conf.Worker_port)
