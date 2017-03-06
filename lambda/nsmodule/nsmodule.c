@@ -154,8 +154,7 @@ static PyObject *ns_fdlisten(PyObject *self, PyObject *args)
     PyObject *ret;
     char *oldpath;
     char *sockpath;
-    int k;
-    int r;
+    int k, r;
 
     int ipid = getpid();
     int pidlen = floor(log10(abs(ipid)));
@@ -195,7 +194,7 @@ static PyObject *ns_fdlisten(PyObject *self, PyObject *args)
     }
 
 	int s, s2, len;
-    unsigned int t;
+	unsigned int t;
 	struct sockaddr_un local, remote;
 
 	if ((s = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
@@ -229,7 +228,7 @@ static PyObject *ns_fdlisten(PyObject *self, PyObject *args)
 		printf("Connected.\n");
 
         int nsfds[NUM_NS];
-        for(int k = 0; k < NUM_NS; k++) {
+        for(k = 0; k < NUM_NS; k++) {
             nsfds[k] = recvfd(s2);
             printf("Got fd: %d.\n", nsfds[k]);
         }
