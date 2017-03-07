@@ -13,7 +13,7 @@ import (
 	"strings"
 
 	docker "github.com/fsouza/go-dockerclient"
-	dutil"github.com/open-lambda/open-lambda/worker/dockerutil"
+	dutil "github.com/open-lambda/open-lambda/worker/dockerutil"
 
 	"github.com/open-lambda/open-lambda/registry"
 	"github.com/open-lambda/open-lambda/worker/config"

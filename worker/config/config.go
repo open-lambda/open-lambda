@@ -21,8 +21,8 @@ type Config struct {
 	Cluster_name string `json:"cluster_name"`
 
 	// pool options
-    Pool_dir        string `json:"pool_dir"`
-	Num_forkservers int `json:"num_forkservers"`
+	Pool_dir        string `json:"pool_dir"`
+	Num_forkservers int    `json:"num_forkservers"`
 
 	// olregistry
 	Reg_cluster []string `json:"reg_cluster"`
