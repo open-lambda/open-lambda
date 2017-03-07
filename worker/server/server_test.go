@@ -164,7 +164,7 @@ func last_count(img string) (int, error) {
 			if n, err := strconv.Atoi(parts[1]); err == nil {
 				return n, nil
 			} else {
-                return 0, err
+				return 0, err
 			}
 		}
 	}
@@ -180,17 +180,17 @@ func TestThreadPausing(t *testing.T) {
 	img := "thread_counter"
 	testReq(img, "null")
 
-	count1, err := last_count(img);
-    if err != nil {
-        t.Fatalf("Failed to get first count with: %v", err)
-    }
+	count1, err := last_count(img)
+	if err != nil {
+		t.Fatalf("Failed to get first count with: %v", err)
+	}
 
 	time.Sleep(100 * time.Millisecond)
 
 	count2, err := last_count(img)
-    if err != nil {
-        t.Fatalf("Failed to get second count with: %v", err)
-    }
+	if err != nil {
+		t.Fatalf("Failed to get second count with: %v", err)
+	}
 
 	if count1 <= 0 {
 		t.Fatalf("count1 isn't positive (%d) - logs working?", count1)

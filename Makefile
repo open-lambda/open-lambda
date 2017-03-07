@@ -46,6 +46,15 @@ test : test-config imgs/lambda
 	cd $(WORKER_DIR) && $(GO) test ./handler -v
 	cd $(WORKER_DIR) && $(GO) test ./server -v
 
+.PHONY: pooltest pooltest-config
+pooltest-config :
+	$(eval export WORKER_CONFIG := $(PWD)/testing/worker-config-pool.json)
+
+# run go unit tests in initialized environment
+pooltest : pooltest-config imgs/lambda imgs/server-pool
+	cd $(WORKER_DIR) && $(GO) test ./handler -v
+	cd $(WORKER_DIR) && $(GO) test ./server -v
+
 .PHONY: clean
 clean :
 	rm -rf bin
