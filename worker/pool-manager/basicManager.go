@@ -17,61 +17,56 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
-	"os/exec"
-	"path/filepath"
-	"runtime"
 	"time"
 
 	"github.com/open-lambda/open-lambda/worker/config"
 	sb "github.com/open-lambda/open-lambda/worker/sandbox"
+    dutil "github.com/open-lambda/open-lambda/worker/dockerutil"
+    docker "github.com/fsouza/go-dockerclient"
 )
 
 type ForkServer struct {
-	//packages []string TODO
 	sockPath string
+	packages []string
 }
 
 type BasicManager struct {
-	servers []*ForkServer
-}
-
-func NewForkServer(sockPath string) (fs *ForkServer, err error) {
-	if err = runLambdaServer(sockPath); err != nil {
-		return nil, err
-	}
-
-	fs = &ForkServer{sockPath: sockPath}
-
-	return fs, nil
+	servers  []*ForkServer
+    poolDir string
+    cid     string
 }
 
 func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
-	sockDir := "/var/tmp/olsocks"
-	if err = os.MkdirAll(sockDir, os.ModeDir); err != nil {
-		return nil, err
-	}
+    poolDir := opts.Pool_dir
+    numServers := opts.Num_forkservers
 
-	numServers := opts.Num_forkservers
-	servers := make([]*ForkServer, numServers, numServers)
-	for k := 0; k < numServers; k++ {
-		sockPath := filepath.Join(sockDir, fmt.Sprintf("ol-%d.sock", k))
-		if err != nil {
-			return nil, err
-		}
+    cid, err := initPoolContainer(poolDir, opts.Cluster_name, numServers)
+    if err != nil {
+        return nil, err
+    }
 
-		fs, err := NewForkServer(sockPath)
-		if err != nil {
-			return nil, err
-		}
+    servers := make([]*ForkServer, numServers, numServers)
+    for k := 0; k < numServers; k++ {
+        sockPath := fmt.Sprintf("%s/fs%d/fs.sock", poolDir, k)
 
-		servers[k] = fs
-	}
+        start := time.Now()
+        // wait up to 5s for server to initialize
+        for os.IsNotExist(err) {
+            _, err = os.Stat(sockPath);
+            if time.Since(start).Seconds() > 5 {
+                return nil, errors.New("forkservers failed to initialize")
+            }
+        }
 
-	// TODO: find better way to wait for lambda server initialization
-	time.Sleep(time.Second)
+        servers[k] = &ForkServer{
+            sockPath: sockPath,
+            packages: []string{},
+        }
+    }
 
 	bm = &BasicManager{
 		servers: servers,
+        cid:     cid,
 	}
 
 	return bm, nil
@@ -99,23 +94,54 @@ func (bm *BasicManager) ForkEnter(sandbox sb.Sandbox) (err error) {
 	return nil
 }
 
+func initPoolContainer(poolDir, clusterName string, numServers int) (cid string, err error) {
+    client, err := docker.NewClientFromEnv()
+    if err != nil {
+        return "", err
+    }
+
+	if err = os.MkdirAll(poolDir, os.ModeDir); err != nil {
+		return "", err
+	}
+
+    labels := map[string]string{
+        dutil.DOCKER_LABEL_CLUSTER: clusterName,
+        dutil.DOCKER_LABEL_TYPE:    dutil.POOL,
+    }
+
+    volumes := []string{
+        fmt.Sprintf("%s:%s", poolDir, "/host"),
+    }
+
+    caps := []string{"SYS_ADMIN"}
+
+    cmd := []string{"python", "/initservers.py", fmt.Sprintf("%d", numServers)}
+
+    container, err := client.CreateContainer(
+        docker.CreateContainerOptions{
+            Config: &docker.Config{
+                Image: dutil.POOL_IMAGE,
+                Labels: labels,
+                Cmd: cmd,
+            },
+            HostConfig: &docker.HostConfig{
+                Binds: volumes,
+                PidMode: "host",
+                CapAdd: caps,
+            },
+        },
+    )
+
+    if err := client.StartContainer(container.ID, nil); err != nil {
+        return "", err
+    }
+
+    return container.ID, nil
+}
+
 func (bm *BasicManager) chooseRandom() (server *ForkServer) {
 	rand.Seed(time.Now().Unix())
 	k := rand.Int() % len(bm.servers)
 
 	return bm.servers[k]
-}
-
-/* Start the lambda python server, listening on socket at sockPath */
-func runLambdaServer(sockPath string) (err error) {
-	_, absPath, _, _ := runtime.Caller(1)
-	relPath := "../../../../../../../../../lambda/server.py" // disgusting path from this file in hack dir to server script
-	serverPath := filepath.Join(absPath, relPath)
-
-	cmd := exec.Command("/usr/bin/python", serverPath, sockPath)
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-
-	return nil
 }

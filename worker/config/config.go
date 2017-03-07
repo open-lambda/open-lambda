@@ -21,6 +21,7 @@ type Config struct {
 	Cluster_name string `json:"cluster_name"`
 
 	// pool options
+    Pool_dir        string `json:"pool_dir"`
 	Num_forkservers int `json:"num_forkservers"`
 
 	// olregistry
@@ -89,7 +90,7 @@ func (c *Config) Defaults() error {
 	}
 
 	if c.Num_forkservers == 0 {
-		c.Num_forkservers = 5
+		c.Num_forkservers = 1
 	}
 
 	if c.Registry == "olregistry" && len(c.Reg_cluster) == 0 {
@@ -125,6 +126,22 @@ func (c *Config) Defaults() error {
 			return err
 		}
 		c.Worker_dir = path
+	}
+
+	// pool dir
+	if c.Pool_dir == "" && c.Pool != "" {
+		return fmt.Errorf("must specify local pool directory if using interpreter pool")
+	}
+
+	if !path.IsAbs(c.Pool_dir) {
+		if c.path == "" {
+			return fmt.Errorf("Pool_dir cannot be relative, unless config is loaded from file")
+		}
+		path, err := filepath.Abs(path.Join(path.Dir(c.path), c.Pool_dir))
+		if err != nil {
+			return err
+		}
+		c.Pool_dir = path
 	}
 
 	// daemon

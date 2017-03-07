@@ -6,6 +6,8 @@ import tornado.web
 import tornado.httpserver
 import tornado.netutil
 
+import ns
+
 HOST_PATH = '/host'
 SOCK_PATH = '%s/ol.sock' % HOST_PATH
 STDOUT_PATH = '%s/stdout' % HOST_PATH
@@ -17,31 +19,29 @@ initialized = False
 config = None
 db_conn = None
 
-# run once per process
+# run after forking into sandbox
 def init():
     global initialized, config, db_conn, lambda_func
-    if initialized:
-        return
 
     sys.stdout = open(STDOUT_PATH, 'w')
     sys.stderr = open(STDERR_PATH, 'w')
 
-    config = json.loads(os.environ['ol.config'])
-    if config.get('db', None) == 'rethinkdb':
-        host = config.get('rethinkdb.host', 'localhost')
-        port = config.get('rethinkdb.port', 28015)
-        print 'Connect to %s:%d' % (host, port)
-        db_conn = rethinkdb.connect(host, port)
-
+    # assume submitted .py file is /handler/lambda_func.py
     sys.path.append('/handler')
-    import lambda_func # assume submitted .py file is /handler/lambda_func.py
+    import lambda_func 
 
-    initialized = True
+    # need alternate config mechanism
+    if False:
+        config = json.loads(os.environ['ol.config'])
+        if config.get('db', None) == 'rethinkdb':
+            host = config.get('rethinkdb.host', 'localhost')
+            port = config.get('rethinkdb.port', 28015)
+            print 'Connect to %s:%d' % (host, port)
+            db_conn = rethinkdb.connect(host, port)
 
 class SockFileHandler(tornado.web.RequestHandler):
     def post(self):
         try:
-            init()
             data = self.request.body
             try :
                 event = json.loads(data)
@@ -66,5 +66,23 @@ def lambda_server():
     tornado.ioloop.IOLoop.instance().start()
     server.start(PROCESSES_DEFAULT)
 
+# listen for fds to forkenter
+def fdlisten(path):
+    r = ns.fdlisten(path)
+
+    # parent
+    if r > 0:
+        print('Parent should never escape from fdlisten')
+        sys.exit(1)
+
+    # child
+    if r == 0:
+        init()
+        lambda_server()
+
 if __name__ == '__main__':
-    lambda_server()
+    if len(sys.argv) != 2:
+        print('Usage: python %s <fifo>' % sys.argv[0])
+        sys.exit(1)
+
+    fdlisten(sys.argv[1])
