@@ -41,6 +41,16 @@ type Sandbox interface {
 	// Get current state
 	State() (state.HandlerState, error)
 
-	// What port can we use to forward requests?
+	// What communication channel can we use to forward requests?
 	Channel() (*SandboxChannel, error)
+}
+
+type ContainerSandbox interface {
+    Sandbox
+
+    // Put the passed process into the cgroups of the container
+    CGroupEnter(pid string) error
+
+    // PID of a process in the container's namespaces (for joining)
+    NSPid() string
 }
