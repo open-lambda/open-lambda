@@ -129,19 +129,21 @@ func (c *Config) Defaults() error {
 	}
 
 	// pool dir
-	if c.Pool_dir == "" && c.Pool != "" {
-		return fmt.Errorf("must specify local pool directory if using interpreter pool")
-	}
+	if c.Pool != "" {
+		if c.Pool_dir == "" {
+			return fmt.Errorf("must specify local pool directory if using interpreter pool")
+		}
 
-	if !path.IsAbs(c.Pool_dir) {
-		if c.path == "" {
-			return fmt.Errorf("Pool_dir cannot be relative, unless config is loaded from file")
+		if !path.IsAbs(c.Pool_dir) {
+			if c.path == "" {
+				return fmt.Errorf("Pool_dir cannot be relative, unless config is loaded from file")
+			}
+			path, err := filepath.Abs(path.Join(path.Dir(c.path), c.Pool_dir))
+			if err != nil {
+				return err
+			}
+			c.Pool_dir = path
 		}
-		path, err := filepath.Abs(path.Join(path.Dir(c.path), c.Pool_dir))
-		if err != nil {
-			return err
-		}
-		c.Pool_dir = path
 	}
 
 	// daemon
