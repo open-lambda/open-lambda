@@ -16,6 +16,7 @@ import (
 type Config struct {
 	path         string // where was config file loaded from?
 	Registry     string `json:"registry"`
+	Sandbox      string `json:"sandbox"`
 	Pool         string `json:"pool"`
 	Reg_dir      string `json:"reg_dir"` // store local copies of handler code
 	Cluster_name string `json:"cluster_name"`
@@ -28,9 +29,11 @@ type Config struct {
 	Reg_cluster []string `json:"reg_cluster"`
 
 	// sandbox
-	Worker_dir  string `json:"worker_dir"`
-	Worker_port string `json:"worker_port"`
-	Docker_host string `json:"docker_host"`
+	Worker_dir       string `json:"worker_dir"`
+	Cgroup_init_path string `json: "cgroup_init_path"`
+	Cgroup_base      string `json: "cgroup_base"`
+	Worker_port      string `json:"worker_port"`
+	Docker_host      string `json:"docker_host"`
 
 	// sandbox factory
 	Sandbox_buffer int `json:"sandbox_buffer"`
@@ -126,6 +129,41 @@ func (c *Config) Defaults() error {
 			return err
 		}
 		c.Worker_dir = path
+	}
+
+	// cgroup sandboxes require some extra settings
+	if c.Sandbox == "cgroup" {
+		// cgroup_init path
+		if c.Cgroup_init_path == "" {
+			return fmt.Errorf("must specify Cgroup_init_path")
+		}
+
+		if !path.IsAbs(c.Cgroup_init_path) {
+			if c.path == "" {
+				return fmt.Errorf("Cgroup_init_path cannot be relative, unless config is loaded from file")
+			}
+			path, err := filepath.Abs(path.Join(path.Dir(c.path), c.Cgroup_init_path))
+			if err != nil {
+				return err
+			}
+			c.Cgroup_init_path = path
+		}
+
+		// cgroup base path
+		if c.Cgroup_base == "" {
+			return fmt.Errorf("must specify Cgroup_base")
+		}
+
+		if !path.IsAbs(c.Cgroup_base) {
+			if c.path == "" {
+				return fmt.Errorf("Cgroup_base cannot be relative, unless config is loaded from file")
+			}
+			path, err := filepath.Abs(path.Join(path.Dir(c.path), c.Cgroup_base))
+			if err != nil {
+				return err
+			}
+			c.Cgroup_base = path
+		}
 	}
 
 	// pool dir

@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"strconv"
@@ -131,6 +130,7 @@ func newCluster(ctx *cli.Context) error {
 		Worker_port:    "?",
 		Cluster_name:   cluster,
 		Registry:       "local",
+		Sandbox:        "docker",
 		Reg_dir:        registryPath(cluster),
 		Worker_dir:     workerPath(cluster, "default"),
 		Sandbox_config: map[string]interface{}{"processes": 10},
@@ -576,79 +576,13 @@ func kill(ctx *cli.Context) error {
 	return nil
 }
 
-// take a Docker image, and extract a flattened version to a local directory
-func dump_docker_image(image string, outdir string) error {
-	if err := os.Mkdir(outdir, 0700); err != nil {
-		return err
-	}
-
-	// we will pipe the output of "docker export" to "tar xf ..."
-	tar := exec.Command("tar", "xf", "-", "--directory", outdir)
-	writer, err := tar.StdinPipe()
-	tar.Stdout = os.Stdout
-	tar.Stderr = os.Stderr
-	if err != nil {
-		return err
-	}
-
-	// dump tar of base image async
-	err_chan := make(chan error)
-	go func() {
-		err_chan <- func() error {
-			defer writer.Close()
-
-			cmd := []string{"sleep", "infinity"}
-
-			container, err := client.CreateContainer(
-				docker.CreateContainerOptions{
-					Config: &docker.Config{
-						Cmd:   cmd,
-						Image: image,
-					},
-				},
-			)
-			if err != nil {
-				return err
-			}
-
-			opts := docker.ExportContainerOptions{
-				ID:           container.ID,
-				OutputStream: writer,
-			}
-			if err := client.ExportContainer(opts); err != nil {
-				return err
-			}
-
-			return client.RemoveContainer(docker.RemoveContainerOptions{ID: container.ID})
-		}()
-	}()
-
-	tar_err := tar.Run()
-	export_err := <-err_chan
-
-	// log both errors
-	if export_err != nil {
-		fmt.Printf("Docker export failed: %v\n", export_err.Error())
-	}
-	if tar_err != nil {
-		fmt.Printf("Tar failed: %v\n", tar_err.Error())
-	}
-
-	// return one of the errors (if any)
-	if export_err != nil {
-		return export_err
-	} else if tar_err != nil {
-		return tar_err
-	}
-	return nil
-}
-
 // manage cgroups directly
-func cgroup_mgr(ctx *cli.Context) error {
+func cgroup_sandbox(ctx *cli.Context) error {
 	cluster := parseCluster(ctx.String("cluster"), true)
 
 	// create a base directory to run cgroup containers
-	err := dump_docker_image("lambda", path.Join(basePath(cluster), "lambda"))
+	baseDir := path.Join(basePath(cluster), "lambda")
+	err := dutil.DumpDockerImage(client, "lambda", baseDir)
 	if err != nil {
 		return err
 	}
@@ -658,7 +592,8 @@ func cgroup_mgr(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	c.Registry = "cgroup"
+	c.Sandbox = "cgroup"
+	c.Cgroup_base = baseDir
 	if err := c.Save(templatePath(cluster)); err != nil {
 		return err
 	}
@@ -917,14 +852,14 @@ OPTIONS:
 			Action: upload,
 		},
 		cli.Command{
-			Name:        "cgroup-mgr",
-			Usage:       "Use cgroup manager",
-			UsageText:   "admin cgroup-mgn --cluster=NAME",
+			Name:        "cgroup-sandbox",
+			Usage:       "Use cgroups directly",
+			UsageText:   "admin cgroup-sandbox --cluster=NAME",
 			Description: "Creates a root file system in the cluster directory and configures OpenLambda to use cgroup containers",
 			Flags: []cli.Flag{
 				clusterFlag,
 			},
-			Action: cgroup_mgr,
+			Action: cgroup_sandbox,
 		},
 		cli.Command{
 			Name:      "kill",
