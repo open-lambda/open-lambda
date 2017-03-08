@@ -1,34 +1,26 @@
 package pmanager
 
-/*
-
-Manages lambdas using the OpenLambda registry (built on RethinkDB).
-
-Creates lambda containers using the generic base image defined in
-dockerManagerBase.go (BASE_IMAGE).
-
-Handler code is mapped into the container by attaching a directory
-(<handler_dir>/<lambda_name>) when the container is started.
-
-*/
-
 import (
+	"bufio"
 	"errors"
 	"fmt"
-	"math/rand"
 	"os"
 	"time"
 
 	docker "github.com/fsouza/go-dockerclient"
-	"github.com/open-lambda/open-lambda/worker/config"
 	dutil "github.com/open-lambda/open-lambda/worker/dockerutil"
 	sb "github.com/open-lambda/open-lambda/worker/sandbox"
+
+	"github.com/open-lambda/open-lambda/worker/config"
+	"github.com/open-lambda/open-lambda/worker/pool-manager/policy"
 )
 
 type BasicManager struct {
-	servers []*ForkServer
+	servers []policy.ForkServer
 	poolDir string
 	cid     string
+	matcher policy.CacheMatcher
+	evictor policy.CacheEvictor
 }
 
 func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
@@ -40,7 +32,15 @@ func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
 		return nil, err
 	}
 
-	servers := make([]*ForkServer, numServers, numServers)
+	pidFile, err := os.Open(fmt.Sprintf("%s/fspids", poolDir))
+	if err != nil {
+		return nil, err
+	}
+	defer pidFile.Close()
+
+	scnr := bufio.NewScanner(pidFile)
+
+	servers := make([]policy.ForkServer, numServers, numServers)
 	for k := 0; k < numServers; k++ {
 		sockPath := fmt.Sprintf("%s/fs%d/fs.sock", poolDir, k)
 
@@ -53,25 +53,38 @@ func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
 			}
 		}
 
-		servers[k] = &ForkServer{
-			sockPath: sockPath,
-			packages: []string{},
+		if !scnr.Scan() {
+			return nil, errors.New("too few lines in fspid file")
+		}
+
+		fspid := scnr.Text()
+
+		if err := scnr.Err(); err != nil {
+			return nil, err
+		}
+
+		servers[k] = policy.ForkServer{
+			Pid:      fspid,
+			SockPath: sockPath,
+			Packages: []string{},
 		}
 	}
 
 	bm = &BasicManager{
 		servers: servers,
 		cid:     cid,
+		matcher: policy.NewRandomMatcher(servers),
+		evictor: policy.NewRandomEvictor(servers),
 	}
 
 	return bm, nil
 }
 
 func (bm *BasicManager) ForkEnter(sandbox sb.ContainerSandbox) (err error) {
-	fs := bm.chooseRandom()
+	fs, _ := bm.matcher.Match([]string{})
 
 	// signal interpreter to forkenter into sandbox's namespace
-	pid, err := sendFds(fs.sockPath, sandbox.NSPid())
+	pid, err := sendFds(fs.SockPath, sandbox.NSPid())
 	if err != nil {
 		return err
 	}
@@ -127,11 +140,4 @@ func initPoolContainer(poolDir, clusterName string, numServers int) (cid string,
 	}
 
 	return container.ID, nil
-}
-
-func (bm *BasicManager) chooseRandom() (server *ForkServer) {
-	rand.Seed(time.Now().Unix())
-	k := rand.Int() % len(bm.servers)
-
-	return bm.servers[k]
 }
