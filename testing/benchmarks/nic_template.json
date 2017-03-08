@@ -5,5 +5,6 @@
     "registry": "local",
     "worker_dir": "test_worker",
     "sandbox_config": {"processes": 10},
-    "benchmark_log": "./perf/nic.perf"
+    "benchmark_log": "./perf/nic.perf",
+    "num_forkservers": "2"
 }

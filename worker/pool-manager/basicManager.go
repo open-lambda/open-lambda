@@ -24,6 +24,8 @@ import (
 
 	"github.com/open-lambda/open-lambda/worker/config"
 	sb "github.com/open-lambda/open-lambda/worker/sandbox"
+
+	"github.com/open-lambda/open-lambda/worker/benchmarker"
 )
 
 type ForkServer struct {
@@ -85,9 +87,20 @@ func (bm *BasicManager) ForkEnter(sandbox sb.Sandbox) (err error) {
 		return errors.New("forkenter only supported with DockerSandbox")
 	}
 
+	b := benchmarker.GetBenchmarker()
+	var t *benchmarker.Timer
+	if b != nil {
+		t = b.CreateTimer("Unpause docker container", "ms")
+		t.Start()
+	}
+
 	pid, err := sendFds(fs.sockPath, docker_sb.NSPid())
 	if err != nil {
 		return err
+	}
+
+	if t != nil {
+		t.End()
 	}
 
 	// change cgroup of spawned lambda server

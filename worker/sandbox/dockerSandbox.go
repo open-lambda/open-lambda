@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 
 	docker "github.com/fsouza/go-dockerclient"
+	"github.com/open-lambda/open-lambda/worker/benchmarker"
 	"github.com/open-lambda/open-lambda/worker/handler/state"
 )
 
@@ -114,9 +115,20 @@ func (s *DockerSandbox) Channel() (channel *SandboxChannel, err error) {
 
 // Start starts the container.
 func (s *DockerSandbox) Start() error {
+	b := benchmarker.GetBenchmarker()
+	var t *benchmarker.Timer
+	if b != nil {
+		t = b.CreateTimer("Start docker container", "ms")
+		t.Start()
+	}
+
 	if err := s.client.StartContainer(s.container.ID, nil); err != nil {
 		log.Printf("failed to start container with err %v\n", err)
 		return s.dockerError(err)
+	}
+
+	if t != nil {
+		t.End()
 	}
 
 	container, err := s.client.InspectContainer(s.container.ID)
@@ -155,9 +167,20 @@ func (s *DockerSandbox) Pause() error {
 
 // Unpause unpauses the container.
 func (s *DockerSandbox) Unpause() error {
+	b := benchmarker.GetBenchmarker()
+	var t *benchmarker.Timer
+	if b != nil {
+		t = b.CreateTimer("Unpause docker container", "ms")
+		t.Start()
+	}
+
 	if err := s.client.UnpauseContainer(s.container.ID); err != nil {
 		log.Printf("failed to unpause container %s with err %v\n", s.container.Name, err)
 		return s.dockerError(err)
+	}
+
+	if t != nil {
+		t.End()
 	}
 
 	return nil
@@ -199,11 +222,25 @@ func (s *DockerSandbox) Logs() (string, error) {
 
 // CGroupEnter puts a process into the cgroup of this docker container.
 func (s *DockerSandbox) CGroupEnter(pid string) (err error) {
+	b := benchmarker.GetBenchmarker()
+	var t *benchmarker.Timer
+	if b != nil {
+		t = b.CreateTimer("cgclassify process into docker container", "ms")
+	}
+
 	cgroup := fmt.Sprintf("%s:/docker/%s", s.controllers, s.container.ID)
 	cmd := exec.Command("cgclassify", "--sticky", "-g", cgroup, pid)
 
+	if t != nil {
+		t.Start()
+	}
+
 	if err := cmd.Run(); err != nil {
 		return err
+	}
+
+	if t != nil {
+		t.End()
 	}
 
 	return nil

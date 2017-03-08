@@ -66,6 +66,7 @@ def benchmark(type, which_lambda, iterations):
     max = -1
     total_time = 0
     for i in range(0, iterations):
+        sleep(0.1)
         before = get_time_millis()
         run_lambda(which_lambda)
         after = get_time_millis()
@@ -99,3 +100,9 @@ res = benchmark(NO_INTERPRETERS_NO_CONTAINERS, 'numpy', ITERATIONS)
 
 # No container pool and interpreter pool
 res = benchmark(INTERPRETERS_NO_CONTAINERS, 'numpy', ITERATIONS)
+
+# container pool and no interpreter pool
+res = benchmark(NO_INTERPRETERS_CONTAINERS, 'numpy', ITERATIONS)
+
+# container pool and interpreter pool
+res = benchmark(INTERPRETERS_CONTAINERS, 'numpy', ITERATIONS)
