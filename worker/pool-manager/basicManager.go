@@ -70,7 +70,7 @@ func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
 func (bm *BasicManager) ForkEnter(sandbox sb.ContainerSandbox) (err error) {
 	fs := bm.chooseRandom()
 
-    // signal interpreter to forkenter into sandbox's namespace
+	// signal interpreter to forkenter into sandbox's namespace
 	pid, err := sendFds(fs.sockPath, sandbox.NSPid())
 	if err != nil {
 		return err

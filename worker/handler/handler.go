@@ -3,19 +3,19 @@
 package handler
 
 import (
+	"errors"
 	"log"
 	"os"
 	"path"
 	"sync"
 	"time"
-    "errors"
 
 	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/handler/state"
 	"github.com/open-lambda/open-lambda/worker/registry"
 
-	sb "github.com/open-lambda/open-lambda/worker/sandbox"
 	pmanager "github.com/open-lambda/open-lambda/worker/pool-manager"
+	sb "github.com/open-lambda/open-lambda/worker/sandbox"
 )
 
 // HandlerSetOpts wraps parameters necessary to create a HandlerSet.
@@ -147,10 +147,10 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 		}
 
 		if h.hset.pm != nil {
-            containerSB, ok := h.sandbox.(sb.ContainerSandbox)
-            if !ok {
-                return nil, errors.New("forkenter only supported with ContainerSandbox")
-            }
+			containerSB, ok := h.sandbox.(sb.ContainerSandbox)
+			if !ok {
+				return nil, errors.New("forkenter only supported with ContainerSandbox")
+			}
 
 			h.hset.pm.ForkEnter(containerSB)
 		}

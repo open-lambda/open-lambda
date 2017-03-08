@@ -46,11 +46,11 @@ type Sandbox interface {
 }
 
 type ContainerSandbox interface {
-    Sandbox
+	Sandbox
 
-    // Put the passed process into the cgroups of the container
-    CGroupEnter(pid string) error
+	// Put the passed process into the cgroups of the container
+	CGroupEnter(pid string) error
 
-    // PID of a process in the container's namespaces (for joining)
-    NSPid() string
+	// PID of a process in the container's namespaces (for joining)
+	NSPid() string
 }
