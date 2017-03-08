@@ -53,3 +53,4 @@
 /lambda/ns.so
 /lambda/fdclient
 /testing/test_worker
+/testing/test_pool

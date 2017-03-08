@@ -13,10 +13,10 @@ import (
 	"strings"
 
 	docker "github.com/fsouza/go-dockerclient"
+	dutil "github.com/open-lambda/open-lambda/worker/dockerutil"
 
 	"github.com/open-lambda/open-lambda/registry"
 	"github.com/open-lambda/open-lambda/worker/config"
-	"github.com/open-lambda/open-lambda/worker/dockerutil"
 	"github.com/open-lambda/open-lambda/worker/server"
 	"github.com/urfave/cli"
 )
@@ -89,9 +89,9 @@ func clusterNodes(cluster string) (map[string]([]string), error) {
 	}
 
 	for _, container := range containers {
-		if container.Labels[dockerutil.DOCKER_LABEL_CLUSTER] == cluster {
+		if container.Labels[dutil.DOCKER_LABEL_CLUSTER] == cluster {
 			cid := container.ID
-			type_label := container.Labels[dockerutil.DOCKER_LABEL_TYPE]
+			type_label := container.Labels[dutil.DOCKER_LABEL_TYPE]
 			nodes[type_label] = append(nodes[type_label], cid)
 		}
 	}
@@ -163,7 +163,7 @@ func status(ctx *cli.Context) error {
 		node_counts := map[string]int{}
 
 		for _, containers2 := range containers1 {
-			label := containers2.Labels[dockerutil.DOCKER_LABEL_CLUSTER]
+			label := containers2.Labels[dutil.DOCKER_LABEL_CLUSTER]
 			if label != "" {
 				node_counts[label] += 1
 			} else {
@@ -239,8 +239,8 @@ func rethinkdb(ctx *cli.Context) error {
 	count := ctx.Int("num-nodes")
 
 	labels := map[string]string{}
-	labels[dockerutil.DOCKER_LABEL_CLUSTER] = cluster
-	labels[dockerutil.DOCKER_LABEL_TYPE] = "db"
+	labels[dutil.DOCKER_LABEL_CLUSTER] = cluster
+	labels[dutil.DOCKER_LABEL_TYPE] = "db"
 
 	image := "rethinkdb"
 
@@ -413,8 +413,8 @@ func nginx(ctx *cli.Context) error {
 
 	image := "nginx"
 	labels := map[string]string{}
-	labels[dockerutil.DOCKER_LABEL_CLUSTER] = cluster
-	labels[dockerutil.DOCKER_LABEL_TYPE] = "balancer"
+	labels[dutil.DOCKER_LABEL_CLUSTER] = cluster
+	labels[dutil.DOCKER_LABEL_TYPE] = "balancer"
 
 	// pull if not local
 	_, err := client.InspectImage(image)

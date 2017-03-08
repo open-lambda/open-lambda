@@ -150,25 +150,26 @@ func TestEcho(t *testing.T) {
 	}
 }
 
-func last_count(img string) int {
+func last_count(img string) (int, error) {
 	logs, err := server.handlers.Get(img).Sandbox().Logs()
 	if err != nil {
-		log.Fatal(err.Error())
+		return 0, err
 	}
+
 	lines := strings.Split(logs, "\n")
 	for i := range lines {
 		line := lines[len(lines)-i-1]
 		parts := strings.Split(line, "=")
 		if parts[0] == "counter" {
 			if n, err := strconv.Atoi(parts[1]); err == nil {
-				return n
+				return n, nil
 			} else {
-				panic("not an int: " + parts[1])
+				return 0, err
 			}
 		}
 	}
 
-	return 0
+	return 0, nil
 }
 
 // thread_counter starts a backup thread that runs forever,
@@ -178,14 +179,24 @@ func last_count(img string) int {
 func TestThreadPausing(t *testing.T) {
 	img := "thread_counter"
 	testReq(img, "null")
-	count1 := last_count(img)
+
+	count1, err := last_count(img)
+	if err != nil {
+		t.Fatalf("Failed to get first count with: %v", err)
+	}
+
 	time.Sleep(100 * time.Millisecond)
-	count2 := last_count(img)
+
+	count2, err := last_count(img)
+	if err != nil {
+		t.Fatalf("Failed to get second count with: %v", err)
+	}
+
 	if count1 <= 0 {
-		log.Fatal(fmt.Sprintf("count1 isn't positive (%d) (logs working?)", count1))
+		t.Fatalf("count1 isn't positive (%d) - logs working?", count1)
 	}
 	if count2 != count1 {
-		log.Fatal(fmt.Sprintf("count1 (%d) != count2 (%d)", count1, count2))
+		t.Fatalf("count1 (%d) != count2 (%d)", count1, count2)
 	}
 }
 

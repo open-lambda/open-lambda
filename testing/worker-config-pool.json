@@ -4,6 +4,6 @@
     "reg_dir": "handlers",
     "registry": "local",
     "worker_dir": "test_worker",
-    "sandbox_config": {"processes": 10},
-    "pool": ""
+    "pool_dir": "test_pool",
+    "pool": "basic"
 }

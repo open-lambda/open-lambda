@@ -12,6 +12,8 @@ const (
 	DOCKER_LABEL_TYPE    = "ol.type"    // container type (sb, olstore, rethinkdb, etc)
 	SANDBOX              = "sandbox"
 	BASE_IMAGE           = "lambda"
+	POOL                 = "pool"
+	POOL_IMAGE           = "server-pool"
 )
 
 // ImageExists checks if an image of name exists.
