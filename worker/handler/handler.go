@@ -52,6 +52,8 @@ type Handler struct {
 	runners  int
 	code     []byte
 	codeDir  string
+    imports  []string
+    installs []string
 }
 
 // NewHandlerSet creates an empty HandlerSet
@@ -78,10 +80,12 @@ func (h *HandlerSet) Get(name string) *Handler {
 	handler := h.handlers[name]
 	if handler == nil {
 		handler = &Handler{
-			hset:    h,
-			name:    name,
-			state:   state.Unitialized,
-			runners: 0,
+			hset:     h,
+			name:     name,
+			state:    state.Unitialized,
+			runners:  0,
+            installs: []string{},
+            imports:  []string{},
 		}
 		h.handlers[name] = handler
 	}
@@ -109,13 +113,15 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 
 	// get code if needed
 	if h.lastPull == nil {
-		codeDir, err := h.hset.rm.Pull(h.name)
+		codeDir, imports, installs, err := h.hset.rm.Pull(h.name)
 		if err != nil {
 			return nil, err
 		}
 		now := time.Now()
 		h.lastPull = &now
 		h.codeDir = codeDir
+        h.imports = imports
+        h.installs = installs
 	}
 
 	// create sandbox if needed
@@ -152,7 +158,7 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 				return nil, errors.New("forkenter only supported with ContainerSandbox")
 			}
 
-			h.hset.pm.ForkEnter(containerSB)
+			h.hset.pm.ForkEnter(containerSB, h.imports)
 		}
 	} else if h.state == state.Paused { // unpause if paused
 		if err := h.sandbox.Unpause(); err != nil {

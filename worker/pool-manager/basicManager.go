@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"time"
+    "strings"
 
 	docker "github.com/fsouza/go-dockerclient"
 	dutil "github.com/open-lambda/open-lambda/worker/dockerutil"
@@ -32,7 +33,17 @@ func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
 		return nil, err
 	}
 
-	pidFile, err := os.Open(fmt.Sprintf("%s/fspids", poolDir))
+    pidPath := fmt.Sprintf("%s/fspids", poolDir)
+    // wait up to 5s for servers to spawn
+    start := time.Now()
+    for ok := true; ok; ok = os.IsNotExist(err) {
+        _, err = os.Stat(pidPath)
+        if time.Since(start).Seconds() > 5 {
+            return nil, errors.New("forkservers failed to spawn")
+        }
+    }
+
+	pidFile, err := os.Open(pidPath)
 	if err != nil {
 		return nil, err
 	}
@@ -44,9 +55,9 @@ func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
 	for k := 0; k < numServers; k++ {
 		sockPath := fmt.Sprintf("%s/fs%d/fs.sock", poolDir, k)
 
-		start := time.Now()
 		// wait up to 5s for server to initialize
-		for os.IsNotExist(err) {
+		start := time.Now()
+        for ok := true; ok; ok = os.IsNotExist(err) {
 			_, err = os.Stat(sockPath)
 			if time.Since(start).Seconds() > 5 {
 				return nil, errors.New("forkservers failed to initialize")
@@ -80,11 +91,11 @@ func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
 	return bm, nil
 }
 
-func (bm *BasicManager) ForkEnter(sandbox sb.ContainerSandbox) (err error) {
-	fs, _ := bm.matcher.Match([]string{})
+func (bm *BasicManager) ForkEnter(sandbox sb.ContainerSandbox, req_pkgs []string) (err error) {
+	fs, pkgs := bm.matcher.Match(req_pkgs)
 
 	// signal interpreter to forkenter into sandbox's namespace
-	pid, err := sendFds(fs.SockPath, sandbox.NSPid())
+	pid, err := sendFds(fs.SockPath, sandbox.NSPid(), strings.Join(pkgs, " "))
 	if err != nil {
 		return err
 	}

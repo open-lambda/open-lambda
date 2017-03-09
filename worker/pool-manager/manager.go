@@ -5,5 +5,5 @@ import (
 )
 
 type PoolManager interface {
-	ForkEnter(sandbox sb.ContainerSandbox) error
+	ForkEnter(sandbox sb.ContainerSandbox, req_pkgs []string) error
 }

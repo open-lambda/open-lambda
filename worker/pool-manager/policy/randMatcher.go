@@ -17,8 +17,8 @@ func NewRandomMatcher(servers []ForkServer) *RandomMatcher {
 	}
 }
 
-func (rm *RandomMatcher) Match(request_pkgs []string) (*ForkServer, []string) {
+func (rm *RandomMatcher) Match(req_pkgs []string) (*ForkServer, []string) {
 	k := rand.Int() % len(rm.servers)
 
-	return &rm.servers[k], nil
+	return &rm.servers[k], req_pkgs
 }

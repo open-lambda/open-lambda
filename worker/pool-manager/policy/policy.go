@@ -7,7 +7,7 @@ type ForkServer struct {
 }
 
 type CacheMatcher interface {
-	Match(request_pkgs []string) (*ForkServer, []string)
+	Match(req_pkgs []string) (*ForkServer, []string)
 }
 
 type CacheEvictor interface {

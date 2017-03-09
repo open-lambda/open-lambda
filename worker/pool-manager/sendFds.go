@@ -15,8 +15,7 @@ package pmanager
 char errmsg[1024];
 
 int
-sendfd(int s, int fd)
-{
+sendfd(int s, int fd) {
 	char buf[1];
 	struct iovec iov;
 	struct msghdr msg;
@@ -48,8 +47,7 @@ sendfd(int s, int fd)
 }
 
 const char*
-sendFds(char *sockPath, char *pid)
-{
+sendFds(char *sockPath, char *pid, char *pkgs) {
     char *path;
     int k;
 
@@ -105,7 +103,16 @@ sendFds(char *sockPath, char *pid)
         }
     }
 
-    int buf_len = 50;
+    // Send package string to server.
+
+    int buflen = 500;
+    if(send(s, pkgs, buflen, 0) == -1) {
+        sprintf(errmsg, "send: %s\n", strerror(errno));
+        return errmsg;
+    }
+
+    // Receive spawned PID from server.
+
     static char buf[50];
 
     if((len = recv(s, buf, 50, 0)) == -1) {
@@ -129,17 +136,21 @@ import (
 )
 
 /*
-Send the namespace file descriptors for the targetPid process
-to a lambda server listening on the unix socket at sockPath.
-
-Returns the PID of the spawned process upon success.
+ * Send the namespace file descriptors for the targetPid process
+ * and the passed package list to a lambda server listening on the
+ * unix socket at sockPath.
+ *
+ * The packages in pkgList are assumed to be whitespace-delimited.
+ *
+ * Returns the PID of the spawned process upon success.
 */
 
-func sendFds(sockPath, targetPid string) (pid string, err error) {
+func sendFds(sockPath, targetPid, pkgList string) (pid string, err error) {
 	csock := C.CString(sockPath)
 	cpid := C.CString(targetPid)
+    cpkgs := C.CString(pkgList)
 
-	ret, err := C.sendFds(csock, cpid)
+	ret, err := C.sendFds(csock, cpid, cpkgs)
 	pid = C.GoString(ret)
 	if err != nil {
 		return "", errors.New(fmt.Sprintf("sendFds: %s", pid))
