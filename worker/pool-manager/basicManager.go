@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
-    "strings"
 
 	docker "github.com/fsouza/go-dockerclient"
 	dutil "github.com/open-lambda/open-lambda/worker/dockerutil"
@@ -33,15 +33,15 @@ func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
 		return nil, err
 	}
 
-    pidPath := fmt.Sprintf("%s/fspids", poolDir)
-    // wait up to 5s for servers to spawn
-    start := time.Now()
-    for ok := true; ok; ok = os.IsNotExist(err) {
-        _, err = os.Stat(pidPath)
-        if time.Since(start).Seconds() > 5 {
-            return nil, errors.New("forkservers failed to spawn")
-        }
-    }
+	pidPath := fmt.Sprintf("%s/fspids", poolDir)
+	// wait up to 5s for servers to spawn
+	start := time.Now()
+	for ok := true; ok; ok = os.IsNotExist(err) {
+		_, err = os.Stat(pidPath)
+		if time.Since(start).Seconds() > 5 {
+			return nil, errors.New("forkservers failed to spawn")
+		}
+	}
 
 	pidFile, err := os.Open(pidPath)
 	if err != nil {
@@ -57,7 +57,7 @@ func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
 
 		// wait up to 5s for server to initialize
 		start := time.Now()
-        for ok := true; ok; ok = os.IsNotExist(err) {
+		for ok := true; ok; ok = os.IsNotExist(err) {
 			_, err = os.Stat(sockPath)
 			if time.Since(start).Seconds() > 5 {
 				return nil, errors.New("forkservers failed to initialize")

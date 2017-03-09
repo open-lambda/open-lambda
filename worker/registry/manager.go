@@ -1,14 +1,14 @@
 package registry
 
 import (
+	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
-    "bufio"
-    "errors"
-    "strings"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	r "github.com/open-lambda/open-lambda/registry/src"
 	"github.com/open-lambda/open-lambda/worker/config"
@@ -48,43 +48,43 @@ func (lm *LocalManager) Pull(name string) (string, []string, []string, error) {
 		return "", nil, nil, err
 	}
 
-    pkgPath := filepath.Join(handlerDir, "packages.txt")
-    _, err := os.Stat(pkgPath)
-    if os.IsNotExist(err) {
-        return handlerDir, []string{}, []string{}, nil
-    } else if err == nil {
-        imports, installs, err := parsePkgFile(pkgPath)
-        if err != nil {
-            return "", nil, nil, err
-        }
+	pkgPath := filepath.Join(handlerDir, "packages.txt")
+	_, err := os.Stat(pkgPath)
+	if os.IsNotExist(err) {
+		return handlerDir, []string{}, []string{}, nil
+	} else if err == nil {
+		imports, installs, err := parsePkgFile(pkgPath)
+		if err != nil {
+			return "", nil, nil, err
+		}
 
-        return handlerDir, imports, installs, nil
-    }
+		return handlerDir, imports, installs, nil
+	}
 
 	return "", nil, nil, err
 }
 
 func parsePkgFile(path string) (imports, installs []string, err error) {
-    file, err := os.Open(path)
-    if err != nil {
-        return nil, nil, err
-    }
-    defer file.Close()
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer file.Close()
 
-    scnr := bufio.NewScanner(file)
-    for scnr.Scan() {
-        split := strings.Split(scnr.Text(), ":")
-        if len(split) != 2 {
-            example := "Each line should be of the form: <import>:<install>"
-            errmsg := fmt.Sprintf("Malformed packages.txt file: %s\n%s", path, example)
-            return nil, nil, errors.New(errmsg)
-        }
+	scnr := bufio.NewScanner(file)
+	for scnr.Scan() {
+		split := strings.Split(scnr.Text(), ":")
+		if len(split) != 2 {
+			example := "Each line should be of the form: <import>:<install>"
+			errmsg := fmt.Sprintf("Malformed packages.txt file: %s\n%s", path, example)
+			return nil, nil, errors.New(errmsg)
+		}
 
-        imports = append(imports, split[0])
-        installs = append(installs, split[0])
-    }
+		imports = append(imports, split[0])
+		installs = append(installs, split[0])
+	}
 
-    return imports, installs, nil
+	return imports, installs, nil
 }
 
 // NewOLStoreManager creates an olstore manager.

@@ -52,8 +52,8 @@ type Handler struct {
 	runners  int
 	code     []byte
 	codeDir  string
-    imports  []string
-    installs []string
+	imports  []string
+	installs []string
 }
 
 // NewHandlerSet creates an empty HandlerSet
@@ -84,8 +84,8 @@ func (h *HandlerSet) Get(name string) *Handler {
 			name:     name,
 			state:    state.Unitialized,
 			runners:  0,
-            installs: []string{},
-            imports:  []string{},
+			installs: []string{},
+			imports:  []string{},
 		}
 		h.handlers[name] = handler
 	}
@@ -120,8 +120,8 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 		now := time.Now()
 		h.lastPull = &now
 		h.codeDir = codeDir
-        h.imports = imports
-        h.installs = installs
+		h.imports = imports
+		h.installs = installs
 	}
 
 	// create sandbox if needed

@@ -153,7 +153,7 @@ func main() {
 
 	csock := C.CString(sockPath)
 	cpid := C.CString(targetPid)
-    cstr := C.CString("threading subprocess")
+	cstr := C.CString("threading subprocess")
 
 	C.sendFds(csock, cpid, cstr)
 }

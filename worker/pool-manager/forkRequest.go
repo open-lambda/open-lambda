@@ -143,12 +143,12 @@ import (
  * The packages in pkgList are assumed to be whitespace-delimited.
  *
  * Returns the PID of the spawned process upon success.
-*/
+ */
 
 func sendFds(sockPath, targetPid, pkgList string) (pid string, err error) {
 	csock := C.CString(sockPath)
 	cpid := C.CString(targetPid)
-    cpkgs := C.CString(pkgList)
+	cpkgs := C.CString(pkgList)
 
 	ret, err := C.sendFds(csock, cpid, cpkgs)
 	pid = C.GoString(ret)
