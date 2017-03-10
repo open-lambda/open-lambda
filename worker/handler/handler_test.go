@@ -36,14 +36,14 @@ func NewHandlerSetOpts() HandlerSetOpts {
 	log.Printf("Set skip_pull_existing = true\n")
 	conf.Skip_pull_existing = true
 
-	rm, err := registry.NewLocalManager(conf)
+	regMgr, err := registry.NewLocalManager(conf)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	sf, err := sandbox.NewDockerSBFactory(conf)
+	sbFactory, err := sandbox.NewDockerSBFactory(conf)
 
-	opts := HandlerSetOpts{Rm: rm, Sf: sf, Config: conf}
+	opts := HandlerSetOpts{RegMgr: regMgr, SbFactory: sbFactory, Config: conf}
 	return opts
 }
 

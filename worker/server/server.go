@@ -91,27 +91,27 @@ func initSBFactory(config *config.Config) (sf sandbox.SandboxFactory, err error)
 func NewServer(config *config.Config) (*Server, error) {
 	var err error
 
-	rm, err := initRegManager(config)
+	regMgr, err := initRegManager(config)
 	if err != nil {
 		return nil, err
 	}
 
-	sf, err := initSBFactory(config)
+	sbFactory, err := initSBFactory(config)
 	if err != nil {
 		return nil, err
 	}
 
-	pm, err := initPManager(config)
+	poolMgr, err := initPManager(config)
 	if err != nil {
 		return nil, err
 	}
 
 	opts := handler.HandlerSetOpts{
-		Rm:     rm,
-		Sf:     sf,
-		Pm:     pm,
-		Config: config,
-		Lru:    handler.NewHandlerLRU(100), // TODO(tyler)
+		RegMgr:    regMgr,
+		SbFactory: sbFactory,
+		PoolMgr:   poolMgr,
+		Config:    config,
+		Lru:       handler.NewHandlerLRU(100), // TODO(tyler)
 	}
 	server := &Server{
 		config:   config,

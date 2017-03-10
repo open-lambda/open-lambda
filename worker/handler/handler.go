@@ -20,23 +20,23 @@ import (
 
 // HandlerSetOpts wraps parameters necessary to create a HandlerSet.
 type HandlerSetOpts struct {
-	Rm     registry.RegistryManager
-	Sf     sb.SandboxFactory
-	Pm     pmanager.PoolManager
-	Config *config.Config
-	Lru    *HandlerLRU
+	RegMgr    registry.RegistryManager
+	SbFactory sb.SandboxFactory
+	PoolMgr   pmanager.PoolManager
+	Config    *config.Config
+	Lru       *HandlerLRU
 }
 
 // HandlerSet represents a collection of Handlers of a worker server. It
 // manages the Handler by HandlerLRU.
 type HandlerSet struct {
-	mutex    sync.Mutex
-	handlers map[string]*Handler
-	rm       registry.RegistryManager
-	sf       sb.SandboxFactory
-	pm       pmanager.PoolManager
-	config   *config.Config
-	lru      *HandlerLRU
+	mutex     sync.Mutex
+	handlers  map[string]*Handler
+	regMgr    registry.RegistryManager
+	sbFactory sb.SandboxFactory
+	poolMgr   pmanager.PoolManager
+	config    *config.Config
+	lru       *HandlerLRU
 }
 
 // Handler handles requests to run a lambda on a worker server. It handles
@@ -61,12 +61,12 @@ func NewHandlerSet(opts HandlerSetOpts) (handlerSet *HandlerSet) {
 	}
 
 	return &HandlerSet{
-		handlers: make(map[string]*Handler),
-		rm:       opts.Rm,
-		sf:       opts.Sf,
-		pm:       opts.Pm,
-		config:   opts.Config,
-		lru:      opts.Lru,
+		handlers:  make(map[string]*Handler),
+		regMgr:    opts.RegMgr,
+		sbFactory: opts.SbFactory,
+		poolMgr:   opts.PoolMgr,
+		config:    opts.Config,
+		lru:       opts.Lru,
 	}
 }
 
@@ -109,7 +109,7 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 
 	// get code if needed
 	if h.lastPull == nil {
-		codeDir, err := h.hset.rm.Pull(h.name)
+		codeDir, err := h.hset.regMgr.Pull(h.name)
 		if err != nil {
 			return nil, err
 		}
@@ -125,7 +125,7 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 			return nil, err
 		}
 
-		sandbox, err := h.hset.sf.Create(h.codeDir, sandbox_dir)
+		sandbox, err := h.hset.sbFactory.Create(h.codeDir, sandbox_dir)
 		if err != nil {
 			return nil, err
 		}
@@ -146,13 +146,13 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 			}
 		}
 
-		if h.hset.pm != nil {
+		if h.hset.poolMgr != nil {
 			containerSB, ok := h.sandbox.(sb.ContainerSandbox)
 			if !ok {
 				return nil, errors.New("forkenter only supported with ContainerSandbox")
 			}
 
-			h.hset.pm.ForkEnter(containerSB)
+			h.hset.poolMgr.ForkEnter(containerSB)
 		}
 	} else if h.state == state.Paused { // unpause if paused
 		if err := h.sandbox.Unpause(); err != nil {
