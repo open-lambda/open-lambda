@@ -158,7 +158,7 @@ func TestEcho(t *testing.T) {
 }
 
 func last_count(img string) (int, error) {
-    h := server.handlers.Get(img)
+	h := server.handlers.Get(img)
 
 	logs, err := h.Sandbox().Logs()
 	if err != nil {

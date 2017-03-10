@@ -1,11 +1,11 @@
 package handler
 
 import (
+	"log"
+	"os"
 	"testing"
-    "os"
-    "log"
 
-    "github.com/open-lambda/open-lambda/worker/config"
+	"github.com/open-lambda/open-lambda/worker/config"
 )
 
 func getConf() *config.Config {
@@ -20,9 +20,9 @@ func getConf() *config.Config {
 func TestLRU(t *testing.T) {
 	lru := NewHandlerLRU(0)
 	handlers, err := NewHandlerSet(getConf(), lru)
-    if err != nil {
-        t.Fatalf(err.Error())
-    }
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
 
 	a := handlers.Get("a")
 

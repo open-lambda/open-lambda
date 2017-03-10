@@ -19,7 +19,7 @@ type Config struct {
 	Pool         string `json:"pool"`
 	Reg_dir      string `json:"reg_dir"` // store local copies of handler code
 	Cluster_name string `json:"cluster_name"`
-    Pip_mirror   string `json:"pip_mirror"`
+	Pip_mirror   string `json:"pip_mirror"`
 
 	// pool options
 	Pool_dir        string `json:"pool_dir"`
@@ -71,7 +71,8 @@ func (c *Config) DumpStr() string {
 }
 
 // Save writes the Config as an indented JSON to path with 644 mode.
-func (c *Config) Save(path string) error { s, err := json.MarshalIndent(c, "", "\t")
+func (c *Config) Save(path string) error {
+	s, err := json.MarshalIndent(c, "", "\t")
 	if err != nil {
 		return err
 	}

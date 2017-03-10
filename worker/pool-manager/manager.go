@@ -1,7 +1,7 @@
 package pmanager
 
 import (
-    "github.com/open-lambda/open-lambda/worker/config"
+	"github.com/open-lambda/open-lambda/worker/config"
 	sb "github.com/open-lambda/open-lambda/worker/sandbox"
 )
 

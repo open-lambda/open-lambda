@@ -93,9 +93,9 @@ func parsePkgFile(path string) (imports, installs []string, err error) {
 		}
 
 		imports = append(imports, split[0])
-        if split[1] != "" {
-            installs = append(installs, split[1])
-        }
+		if split[1] != "" {
+			installs = append(installs, split[1])
+		}
 	}
 
 	return imports, installs, nil
