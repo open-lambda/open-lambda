@@ -12,6 +12,7 @@ import (
 
 	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/handler/state"
+	"github.com/open-lambda/open-lambda/worker/pip-manager"
 	"github.com/open-lambda/open-lambda/worker/registry"
 
 	pmanager "github.com/open-lambda/open-lambda/worker/pool-manager"
@@ -36,38 +37,59 @@ type HandlerSet struct {
 	sbFactory sb.SandboxFactory
 	poolMgr   pmanager.PoolManager
 	config    *config.Config
+	installer pip.InstallManager
 	lru       *HandlerLRU
+	workerDir string
 }
 
 // Handler handles requests to run a lambda on a worker server. It handles
 // concurrency and communicates with the sandbox manager to change the
 // state of the container that servers the lambda.
 type Handler struct {
-	mutex    sync.Mutex
-	hset     *HandlerSet
-	name     string
-	sandbox  sb.Sandbox
-	lastPull *time.Time
-	state    state.HandlerState
-	runners  int
-	code     []byte
-	codeDir  string
+	mutex      sync.Mutex
+	hset       *HandlerSet
+	name       string
+	sandbox    sb.Sandbox
+	lastPull   *time.Time
+	state      state.HandlerState
+	runners    int
+	code       []byte
+	codeDir    string
+	imports    []string
+	installs   []string
+	sandboxDir string
 }
 
 // NewHandlerSet creates an empty HandlerSet
-func NewHandlerSet(opts HandlerSetOpts) (handlerSet *HandlerSet) {
-	if opts.Lru == nil {
-		opts.Lru = NewHandlerLRU(0)
+func NewHandlerSet(config *config.Config, lru *HandlerLRU) (handlerSet *HandlerSet, err error) {
+	rm, err := registry.InitRegistryManager(config)
+	if err != nil {
+		return nil, err
 	}
 
-	return &HandlerSet{
-		handlers:  make(map[string]*Handler),
-		regMgr:    opts.RegMgr,
-		sbFactory: opts.SbFactory,
-		poolMgr:   opts.PoolMgr,
-		config:    opts.Config,
-		lru:       opts.Lru,
+	sf, err := sb.InitSandboxFactory(config)
+	if err != nil {
+		return nil, err
 	}
+
+	pm, err := pmanager.InitPoolManager(config)
+	if err != nil {
+		return nil, err
+	}
+
+	installer := pip.NewInstaller(config)
+
+	handlerSet = &HandlerSet{
+		handlers:  make(map[string]*Handler),
+		regMgr:    rm,
+		sbFactory: sf,
+		poolMgr:   pm,
+		installer: installer,
+		lru:       lru,
+		workerDir: config.Worker_dir,
+	}
+
+	return handlerSet, nil
 }
 
 // Get always returns a Handler, creating one if necessarily.
@@ -77,11 +99,15 @@ func (h *HandlerSet) Get(name string) *Handler {
 
 	handler := h.handlers[name]
 	if handler == nil {
+		sandboxDir := path.Join(h.workerDir, "handlers", name, "sandbox")
 		handler = &Handler{
-			hset:    h,
-			name:    name,
-			state:   state.Unitialized,
-			runners: 0,
+			hset:       h,
+			name:       name,
+			state:      state.Unitialized,
+			runners:    0,
+			installs:   []string{},
+			imports:    []string{},
+			sandboxDir: sandboxDir,
 		}
 		h.handlers[name] = handler
 	}
@@ -109,23 +135,29 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 
 	// get code if needed
 	if h.lastPull == nil {
-		codeDir, err := h.hset.regMgr.Pull(h.name)
+		codeDir, imports, installs, err := h.hset.regMgr.Pull(h.name)
 		if err != nil {
 			return nil, err
 		}
+
 		now := time.Now()
 		h.lastPull = &now
 		h.codeDir = codeDir
+		h.imports = imports
+		h.installs = installs
+
+		if err = h.hset.installer.Install(installs); err != nil {
+			return nil, err
+		}
 	}
 
 	// create sandbox if needed
 	if h.sandbox == nil {
-		sandbox_dir := path.Join(h.hset.config.Worker_dir, "handlers", h.name, "sandbox")
-		if err := os.MkdirAll(sandbox_dir, 0666); err != nil {
+		if err := os.MkdirAll(h.sandboxDir, 0666); err != nil {
 			return nil, err
 		}
 
-		sandbox, err := h.hset.sbFactory.Create(h.codeDir, sandbox_dir)
+		sandbox, err := h.hset.sbFactory.Create(h.codeDir, h.sandboxDir)
 		if err != nil {
 			return nil, err
 		}
@@ -152,7 +184,7 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 				return nil, errors.New("forkenter only supported with ContainerSandbox")
 			}
 
-			h.hset.poolMgr.ForkEnter(containerSB)
+			h.hset.poolMgr.ForkEnter(containerSB, h.imports)
 		}
 	} else if h.state == state.Paused { // unpause if paused
 		if err := h.sandbox.Unpause(); err != nil {

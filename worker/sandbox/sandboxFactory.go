@@ -16,6 +16,16 @@ type SandboxFactory interface {
 	Create(handlerDir string, sandboxDir string) (sandbox Sandbox, err error)
 }
 
+func InitSandboxFactory(config *config.Config) (sf SandboxFactory, err error) {
+	if df, err := NewDockerSBFactory(config); err != nil {
+		return nil, err
+	} else if config.Sandbox_buffer == 0 {
+		return df, nil
+	} else {
+		return NewBufferedSBFactory(config, df)
+	}
+}
+
 // DockerSBFactory is a SandboxFactory that creats docker sandboxes.
 type DockerSBFactory struct {
 	client *docker.Client
