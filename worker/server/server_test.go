@@ -79,45 +79,17 @@ func testReq(lambda_name string, post string) (string, error) {
 }
 
 func kill() {
-	containers, err := docker_client.ListContainers(docker.ListContainersOptions{})
+	filters := map[string][]string{
+		"label": {fmt.Sprintf("%s=%s", dockerutil.DOCKER_LABEL_CLUSTER, server.config.Cluster_name)},
+	}
+	containers, err := docker_client.ListContainers(docker.ListContainersOptions{Filters: filters})
 	if err != nil {
 		log.Fatal("failed to get docker container list: ", err)
 	}
 
 	for _, container := range containers {
-		if container.Labels[dockerutil.DOCKER_LABEL_CLUSTER] == server.config.Cluster_name {
-			cid := container.ID
-			typ := server.config.Cluster_name
-
-			container_insp, err := docker_client.InspectContainer(cid)
-			if err != nil {
-				log.Fatalf("failed to get inspect docker container ID %v: ", cid, err)
-			}
-
-			if container_insp.State.Paused {
-				fmt.Printf("Unpause container %v (%s)\n", cid, typ)
-				if err := docker_client.UnpauseContainer(cid); err != nil {
-					fmt.Printf("%s\n", err.Error())
-					fmt.Printf("Failed to unpause container %v (%s).  May require manual cleanup.\n", cid, typ)
-				}
-			}
-
-			fmt.Printf("Kill container %v (%s)\n", cid, typ)
-			killopts := docker.KillContainerOptions{ID: cid}
-			if err := docker_client.KillContainer(killopts); err != nil {
-				fmt.Printf("%s\n", err.Error())
-				fmt.Printf("Failed to kill container %v (%s).  May require manual cleanup.\n", cid, typ)
-			}
-
-			fmt.Printf("Remove container %v (%s)\n", cid, typ)
-			rmopts := docker.RemoveContainerOptions{ID: cid}
-			if err := docker_client.RemoveContainer(rmopts); err != nil {
-				fmt.Printf("%s\n", err.Error())
-				fmt.Printf("Failed to remove container %v (%s).  May require manual cleanup.\n", cid, typ)
-			}
-		}
+		dockerutil.SafeRemove(docker_client, container.ID)
 	}
-
 }
 
 func TestMain(m *testing.M) {
