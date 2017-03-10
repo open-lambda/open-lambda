@@ -1,4 +1,5 @@
 {
+    "sandbox": "docker",
     "cluster_name": "nic",
     "worker_port": "8080",
     "reg_dir": "../registry",
@@ -6,5 +7,6 @@
     "worker_dir": "test_worker",
     "sandbox_config": {"processes": 10},
     "benchmark_log": "./perf/nic.perf",
-    "num_forkservers": "2"
+    "num_forkservers": 2,
+    "benchmark_file": "perf/nic.perf"
 }

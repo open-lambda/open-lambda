@@ -1,4 +1,5 @@
 {
+    "sandbox": "docker",
     "cluster_name": "ic",
     "worker_port": "8080",
     "reg_dir": "../registry",
@@ -7,5 +8,7 @@
     "sandbox_config": {"processes": 10},
     "pool": "basic",
     "benchmark_log": "./perf/ic.perf",
-    "num_forkservers": "2"
+    "num_forkservers": 2,
+    "pool_dir": "pool",
+    "benchmark_file": "perf/ic.perf"
 }

@@ -1,9 +1,22 @@
 {
-  "cluster_name": "ninc",
-  "worker_port": "8080",
-  "reg_dir": "../registry",
-  "registry": "local",
-  "worker_dir": "test_worker",
-  "sandbox_config": {"processes": 10},
-  "benchmark_log": "./perf/ninc.perf"
+	"registry": "local",
+	"sandbox": "docker",
+	"pool": "",
+	"reg_dir": "/home/kevin/Repositories/open-lambda/ninc/registry",
+	"cluster_name": "/home/kevin/Repositories/open-lambda/ninc",
+	"pool_dir": "",
+	"num_forkservers": 1,
+	"reg_cluster": null,
+	"worker_dir": "/home/kevin/Repositories/open-lambda/ninc/workers/default",
+	"Cgroup_init_path": "",
+	"Cgroup_base": "",
+	"worker_port": "?",
+	"docker_host": "localhost",
+	"sandbox_buffer": 0,
+	"Skip_pull_existing": false,
+	"sandbox_config": {
+		"processes": 10
+	},
+	"benchmark_log": "./perf/ninc.perf"
+
 }

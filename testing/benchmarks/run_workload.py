@@ -28,7 +28,7 @@ def clean_for_test(cluster_name):
     except Exception:
         pass
     try:
-        run('sudo docker kill $(docker ps -a -q)', quiet=True)
+        run('sudo docker rm $(docker ps -a -q)', quiet=True)
     except Exception:
         pass
 
@@ -84,7 +84,7 @@ def benchmark(type, which_lambda, iterations):
 NO_INTERPRETERS_NO_CONTAINERS = 'ninc'
 INTERPRETERS_NO_CONTAINERS = 'inc'
 NO_INTERPRETERS_CONTAINERS = 'nic'
-INTERPRETERS_CONTAINERS = 'nc'
+INTERPRETERS_CONTAINERS = 'ic'
 
 ITERATIONS = 5
 
@@ -95,14 +95,17 @@ except Exception:
 
 run('sudo mkdir perf')
 
+print os.getcwd()
+
+
 # No container pool and no interpreter pool
 res = benchmark(NO_INTERPRETERS_NO_CONTAINERS, 'numpy', ITERATIONS)
 
 # No container pool and interpreter pool
-res = benchmark(INTERPRETERS_NO_CONTAINERS, 'numpy', ITERATIONS)
+# res = benchmark(INTERPRETERS_NO_CONTAINERS, 'numpy', ITERATIONS)
 
 # container pool and no interpreter pool
-res = benchmark(NO_INTERPRETERS_CONTAINERS, 'numpy', ITERATIONS)
+# res = benchmark(NO_INTERPRETERS_CONTAINERS, 'numpy', ITERATIONS)
 
 # container pool and interpreter pool
-res = benchmark(INTERPRETERS_CONTAINERS, 'numpy', ITERATIONS)
+# res = benchmark(INTERPRETERS_CONTAINERS, 'numpy', ITERATIONS)

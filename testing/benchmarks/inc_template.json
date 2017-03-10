@@ -1,4 +1,5 @@
 {
+    "sandbox": "docker",
     "cluster_name": "inc",
     "worker_port": "8080",
     "reg_dir": "../registry",
@@ -6,5 +7,7 @@
     "worker_dir": "test_worker",
     "sandbox_config": {"processes": 10},
     "pool": "basic",
-    "benchmark_log": "./perf/inc.perf"
+    "benchmark_log": "./perf/inc.perf",
+    "pool_dir": "pool",
+    "benchmark_file": "perf/inc.perf"
 }

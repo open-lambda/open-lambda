@@ -208,6 +208,10 @@ func (c *Config) Defaults() error {
 		}
 	}
 
+	if c.Sandbox == "" {
+		c.Sandbox = "docker"
+	}
+
 	return nil
 }
 
