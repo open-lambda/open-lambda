@@ -13,6 +13,7 @@ import (
 	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/handler/state"
 	"github.com/open-lambda/open-lambda/worker/registry"
+    "github.com/open-lambda/open-lambda/worker/pip-manager"
 
 	pmanager "github.com/open-lambda/open-lambda/worker/pool-manager"
 	sb "github.com/open-lambda/open-lambda/worker/sandbox"
@@ -30,62 +31,82 @@ type HandlerSetOpts struct {
 // HandlerSet represents a collection of Handlers of a worker server. It
 // manages the Handler by HandlerLRU.
 type HandlerSet struct {
-	mutex    sync.Mutex
-	handlers map[string]*Handler
-	rm       registry.RegistryManager
-	sf       sb.SandboxFactory
-	pm       pmanager.PoolManager
-	config   *config.Config
-	lru      *HandlerLRU
+	mutex     sync.Mutex
+	handlers  map[string]*Handler
+	rm        registry.RegistryManager
+	sf        sb.SandboxFactory
+	pm        pmanager.PoolManager
+    installer pip.InstallManager
+	lru       *HandlerLRU
+    workerDir string
 }
 
 // Handler handles requests to run a lambda on a worker server. It handles
 // concurrency and communicates with the sandbox manager to change the
 // state of the container that servers the lambda.
 type Handler struct {
-	mutex    sync.Mutex
-	hset     *HandlerSet
-	name     string
-	sandbox  sb.Sandbox
-	lastPull *time.Time
-	state    state.HandlerState
-	runners  int
-	code     []byte
-	codeDir  string
-	imports  []string
-	installs []string
+	mutex      sync.Mutex
+	hset       *HandlerSet
+	name       string
+	sandbox    sb.Sandbox
+	lastPull   *time.Time
+	state      state.HandlerState
+	runners    int
+	code       []byte
+	codeDir    string
+	imports    []string
+	installs   []string
+    sandboxDir string
 }
 
 // NewHandlerSet creates an empty HandlerSet
-func NewHandlerSet(opts HandlerSetOpts) (handlerSet *HandlerSet) {
-	if opts.Lru == nil {
-		opts.Lru = NewHandlerLRU(0)
+func NewHandlerSet(config *config.Config, lru *HandlerLRU) (handlerSet *HandlerSet, err error) {
+    rm, err := registry.InitRegistryManager(config)
+    if err != nil {
+        return nil, err
+    }
+
+    sf, err := sb.InitSandboxFactory(config)
+    if err != nil {
+        return nil, err
+    }
+
+    pm, err := pmanager.InitPoolManager(config)
+    if err != nil {
+        return nil, err
+    }
+
+    installer := pip.NewInstaller(config)
+
+    handlerSet = &HandlerSet{
+		handlers: make(map[string]*Handler),
+		rm:        rm,
+		sf:        sf,
+		pm:        pm,
+        installer: installer,
+        lru:       lru,
+		workerDir: config.Worker_dir,
 	}
 
-	return &HandlerSet{
-		handlers: make(map[string]*Handler),
-		rm:       opts.Rm,
-		sf:       opts.Sf,
-		pm:       opts.Pm,
-		config:   opts.Config,
-		lru:      opts.Lru,
-	}
+    return handlerSet, nil
 }
 
 // Get always returns a Handler, creating one if necessarily.
-func (h *HandlerSet) Get(name string) *Handler {
+func (h *HandlerSet) Get(name string) (*Handler) {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
 	handler := h.handlers[name]
-	if handler == nil {
+	if handler  == nil {
+        sandboxDir := path.Join(h.workerDir, "handlers", name, "sandbox")
 		handler = &Handler{
-			hset:     h,
-			name:     name,
-			state:    state.Unitialized,
-			runners:  0,
-			installs: []string{},
-			imports:  []string{},
+			hset:       h,
+			name:       name,
+			state:      state.Unitialized,
+			runners:    0,
+			installs:   []string{},
+			imports:    []string{},
+            sandboxDir: sandboxDir,
 		}
 		h.handlers[name] = handler
 	}
@@ -122,16 +143,19 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 		h.codeDir = codeDir
 		h.imports = imports
 		h.installs = installs
-	}
+
+        if err = h.hset.installer.Install(installs); err != nil {
+            log.Printf("%v", installs)
+            return nil, err
+        }
+    }
 
 	// create sandbox if needed
 	if h.sandbox == nil {
-		sandbox_dir := path.Join(h.hset.config.Worker_dir, "handlers", h.name, "sandbox")
-		if err := os.MkdirAll(sandbox_dir, 0666); err != nil {
+		if err := os.MkdirAll(h.sandboxDir, 0666); err != nil {
 			return nil, err
 		}
-
-		sandbox, err := h.hset.sf.Create(h.codeDir, sandbox_dir)
+		sandbox, err := h.hset.sf.Create(h.codeDir, h.sandboxDir)
 		if err != nil {
 			return nil, err
 		}

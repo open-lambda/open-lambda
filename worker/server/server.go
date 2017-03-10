@@ -2,7 +2,6 @@ package server
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -12,9 +11,6 @@ import (
 
 	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/handler"
-	pmanager "github.com/open-lambda/open-lambda/worker/pool-manager"
-	"github.com/open-lambda/open-lambda/worker/registry"
-	"github.com/open-lambda/open-lambda/worker/sandbox"
 )
 
 // Server is a worker server that listens to run lambda requests and forward
@@ -35,72 +31,18 @@ func newHttpErr(msg string, code int) *httpErr {
 	return &httpErr{msg: msg, code: code}
 }
 
-// initPManager creates a pool manager according to config.
-func initPManager(config *config.Config) (pm pmanager.PoolManager, err error) {
-	if config.Pool == "basic" {
-		if pm, err = pmanager.NewBasicManager(config); err != nil {
-			return nil, err
-		}
-	} else {
-		pm = nil
-	}
-
-	return pm, nil
-}
-
-// initRegManager creates a registry manager according to config.
-func initRegManager(config *config.Config) (rm registry.RegistryManager, err error) {
-	if config.Registry == "olregistry" {
-		rm, err = registry.NewOLStoreManager(config)
-	} else if config.Registry == "local" {
-		rm, err = registry.NewLocalManager(config)
-	} else {
-		return nil, errors.New("invalid 'registry' field in config")
-	}
-
-	return rm, nil
-}
-
-// initSBFactory creates a sandbox factory according to config.
-func initSBFactory(config *config.Config) (sf sandbox.SandboxFactory, err error) {
-	if df, err := sandbox.NewDockerSBFactory(config); err != nil {
-		return nil, err
-	} else if config.Sandbox_buffer == 0 {
-		return df, nil
-	} else {
-		return sandbox.NewBufferedSBFactory(config, df)
-	}
-}
-
-// NewServer creates a server.
+// NewServer creates a server based on the passed config."
 func NewServer(config *config.Config) (*Server, error) {
-	var err error
+    lru := handler.NewHandlerLRU(100) //TODO: tyler
 
-	rm, err := initRegManager(config)
-	if err != nil {
-		return nil, err
-	}
+    handlers, err := handler.NewHandlerSet(config, lru)
+    if err != nil {
+        return nil, err
+    }
 
-	sf, err := initSBFactory(config)
-	if err != nil {
-		return nil, err
-	}
-
-	pm, err := initPManager(config)
-	if err != nil {
-		return nil, err
-	}
-
-	opts := handler.HandlerSetOpts{
-		Rm:     rm,
-		Sf:     sf,
-		Pm:     pm,
-		Config: config,
-		Lru:    handler.NewHandlerLRU(100), // TODO(tyler)
-	}
 	server := &Server{
 		config:   config,
-		handlers: handler.NewHandlerSet(opts),
+		handlers: handlers,
 	}
 
 	return server, nil
@@ -194,6 +136,7 @@ func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 
 	// forward to sandbox
 	handler := s.handlers.Get(img)
+
 	wbody, w2, err := s.ForwardToSandbox(handler, r, rbody)
 	if err != nil {
 		return err

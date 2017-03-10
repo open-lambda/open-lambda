@@ -2,25 +2,13 @@ package handler
 
 import (
 	"log"
-	"os"
 	"testing"
 	"time"
 
 	docker "github.com/fsouza/go-dockerclient"
-	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/dockerutil"
 	"github.com/open-lambda/open-lambda/worker/handler/state"
-	"github.com/open-lambda/open-lambda/worker/registry"
-	"github.com/open-lambda/open-lambda/worker/sandbox"
 )
-
-func getConf() *config.Config {
-	conf, err := config.ParseConfig(os.Getenv("WORKER_CONFIG"))
-	if err != nil {
-		log.Fatal(err)
-	}
-	return conf
-}
 
 func getClient() *docker.Client {
 	c, err := docker.NewClientFromEnv()
@@ -30,25 +18,11 @@ func getClient() *docker.Client {
 	return c
 }
 
-func NewHandlerSetOpts() HandlerSetOpts {
-	conf := getConf()
-
-	log.Printf("Set skip_pull_existing = true\n")
-	conf.Skip_pull_existing = true
-
-	rm, err := registry.NewLocalManager(conf)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	sf, err := sandbox.NewDockerSBFactory(conf)
-
-	opts := HandlerSetOpts{Rm: rm, Sf: sf, Config: conf}
-	return opts
-}
-
 func TestHandlerLookupSame(t *testing.T) {
-	handlers := NewHandlerSet(NewHandlerSetOpts())
+	handlers, err := NewHandlerSet(getConf(), NewHandlerLRU(0))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
 	a1 := handlers.Get("a")
 	a2 := handlers.Get("a")
 	if a1 != a2 {
@@ -57,7 +31,10 @@ func TestHandlerLookupSame(t *testing.T) {
 }
 
 func TestHandlerLookupDiff(t *testing.T) {
-	handlers := NewHandlerSet(NewHandlerSetOpts())
+	handlers, err := NewHandlerSet(getConf(), NewHandlerLRU(0))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
 	a := handlers.Get("a")
 	b := handlers.Get("b")
 	if a == b {
@@ -68,7 +45,10 @@ func TestHandlerLookupDiff(t *testing.T) {
 func TestHandlerHandlerPull(t *testing.T) {
 	t.Skip("TestHandlerHandlerPull does not work with local registry mode")
 
-	handlers := NewHandlerSet(NewHandlerSetOpts())
+	handlers, err := NewHandlerSet(getConf(), NewHandlerLRU(0))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
 	name := "nonlocal"
 
 	exists, err := dockerutil.ImageExists(getClient(), name)
@@ -115,12 +95,13 @@ func GetState(t *testing.T, h *Handler) state.HandlerState {
 
 func TestHandlerRunCountOne(t *testing.T) {
 	lru := NewHandlerLRU(1)
-	opts := NewHandlerSetOpts()
-	opts.Lru = lru
-	handlers := NewHandlerSet(opts)
+	handlers, err := NewHandlerSet(getConf(), lru)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
 	h := handlers.Get("hello2")
 
-	_, err := h.RunStart()
+	_, err = h.RunStart()
 	if err != nil {
 		t.Fatalf("RunStart failed with: %v", err.Error())
 	}
@@ -138,9 +119,10 @@ func TestHandlerRunCountOne(t *testing.T) {
 
 func TestHandlerRunCountMany(t *testing.T) {
 	lru := NewHandlerLRU(1)
-	opts := NewHandlerSetOpts()
-	opts.Lru = lru
-	handlers := NewHandlerSet(opts)
+	handlers, err := NewHandlerSet(getConf(), lru)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
 	h := handlers.Get("hello2")
 	count := 10
 
@@ -174,11 +156,12 @@ func TestHandlerRunCountMany(t *testing.T) {
 
 func TestHandlerEvict(t *testing.T) {
 	lru := NewHandlerLRU(0)
-	opts := NewHandlerSetOpts()
-	opts.Lru = lru
-	handlers := NewHandlerSet(opts)
+	handlers, err := NewHandlerSet(getConf(), lru)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
 	h := handlers.Get("hello2")
-	_, err := h.RunStart()
+	_, err = h.RunStart()
 	if err != nil {
 		t.Fatalf("RunStart failed with: %v", err.Error())
 	}

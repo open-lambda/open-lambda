@@ -19,6 +19,18 @@ type RegistryManager interface {
 	Pull(name string) (codeDir string, installs, imports []string, err error)
 }
 
+func InitRegistryManager(config *config.Config) (rm RegistryManager, err error) {
+	if config.Registry == "olregistry" {
+		rm, err = NewOLStoreManager(config)
+	} else if config.Registry == "local" {
+		rm, err = NewLocalManager(config)
+	} else {
+		return nil, errors.New("invalid 'registry' field in config")
+	}
+
+	return rm, nil
+}
+
 // LocalManager stores lambda code in a local directory.
 type LocalManager struct {
 	regDir string
@@ -81,7 +93,9 @@ func parsePkgFile(path string) (imports, installs []string, err error) {
 		}
 
 		imports = append(imports, split[0])
-		installs = append(installs, split[0])
+        if split[1] != "" {
+            installs = append(installs, split[1])
+        }
 	}
 
 	return imports, installs, nil
