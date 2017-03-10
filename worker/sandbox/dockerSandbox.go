@@ -28,7 +28,7 @@ import (
 // DockerSandbox is a sandbox inside a docker container.
 type DockerSandbox struct {
 	sandbox_dir string
-	nspid       int
+	nspid       string
 	container   *docker.Container
 	client      *docker.Client
 	controllers string
@@ -137,7 +137,7 @@ func (s *DockerSandbox) Start() error {
 		return s.dockerError(err)
 	}
 	s.container = container
-	s.nspid = container.State.Pid
+	s.nspid = fmt.Sprintf("%d", container.State.Pid)
 
 	return nil
 }
@@ -220,7 +220,7 @@ func (s *DockerSandbox) Logs() (string, error) {
 	return ret, nil
 }
 
-// CGroupEnter puts a process into the cgroup of this docker container.
+// Put the passed process into the cgroup of this docker container.
 func (s *DockerSandbox) CGroupEnter(pid string) (err error) {
 	b := benchmarker.GetBenchmarker()
 	var t *benchmarker.Timer
@@ -246,7 +246,7 @@ func (s *DockerSandbox) CGroupEnter(pid string) (err error) {
 	return nil
 }
 
-// NSPid returns the pid of the first process of this docker container.
-func (s *DockerSandbox) NSPid() int {
+// NSPid returns the pid of the first process of the docker container.
+func (s *DockerSandbox) NSPid() string {
 	return s.nspid
 }

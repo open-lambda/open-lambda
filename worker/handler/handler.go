@@ -3,6 +3,7 @@
 package handler
 
 import (
+	"errors"
 	"log"
 	"os"
 	"path"
@@ -12,15 +13,15 @@ import (
 	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/handler/state"
 	"github.com/open-lambda/open-lambda/worker/registry"
-	"github.com/open-lambda/open-lambda/worker/sandbox"
 
 	pmanager "github.com/open-lambda/open-lambda/worker/pool-manager"
+	sb "github.com/open-lambda/open-lambda/worker/sandbox"
 )
 
 // HandlerSetOpts wraps parameters necessary to create a HandlerSet.
 type HandlerSetOpts struct {
 	Rm     registry.RegistryManager
-	Sf     sandbox.SandboxFactory
+	Sf     sb.SandboxFactory
 	Pm     pmanager.PoolManager
 	Config *config.Config
 	Lru    *HandlerLRU
@@ -32,7 +33,7 @@ type HandlerSet struct {
 	mutex    sync.Mutex
 	handlers map[string]*Handler
 	rm       registry.RegistryManager
-	sf       sandbox.SandboxFactory
+	sf       sb.SandboxFactory
 	pm       pmanager.PoolManager
 	config   *config.Config
 	lru      *HandlerLRU
@@ -45,7 +46,7 @@ type Handler struct {
 	mutex    sync.Mutex
 	hset     *HandlerSet
 	name     string
-	sandbox  sandbox.Sandbox
+	sandbox  sb.Sandbox
 	lastPull *time.Time
 	state    state.HandlerState
 	runners  int
@@ -102,7 +103,7 @@ func (h *HandlerSet) Dump() {
 // RunStart runs the lambda handled by this Handler. It checks if the code has
 // been pulled, sandbox been created, and sandbox been started. The channel of
 // the sandbox of this lambda is returned.
-func (h *Handler) RunStart() (ch *sandbox.SandboxChannel, err error) {
+func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
@@ -146,7 +147,12 @@ func (h *Handler) RunStart() (ch *sandbox.SandboxChannel, err error) {
 		}
 
 		if h.hset.pm != nil {
-			h.hset.pm.ForkEnter(h.sandbox)
+			containerSB, ok := h.sandbox.(sb.ContainerSandbox)
+			if !ok {
+				return nil, errors.New("forkenter only supported with ContainerSandbox")
+			}
+
+			h.hset.pm.ForkEnter(containerSB)
 		}
 	} else if h.state == state.Paused { // unpause if paused
 		if err := h.sandbox.Unpause(); err != nil {
@@ -204,6 +210,6 @@ func (h *Handler) StopIfPaused() {
 }
 
 // Sandbox returns the sandbox of this Handler.
-func (h *Handler) Sandbox() sandbox.Sandbox {
+func (h *Handler) Sandbox() sb.Sandbox {
 	return h.sandbox
 }

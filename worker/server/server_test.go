@@ -103,10 +103,17 @@ func kill() {
 			}
 
 			fmt.Printf("Kill container %v (%s)\n", cid, typ)
-			opts := docker.KillContainerOptions{ID: cid}
-			if err := docker_client.KillContainer(opts); err != nil {
+			killopts := docker.KillContainerOptions{ID: cid}
+			if err := docker_client.KillContainer(killopts); err != nil {
 				fmt.Printf("%s\n", err.Error())
 				fmt.Printf("Failed to kill container %v (%s).  May require manual cleanup.\n", cid, typ)
+			}
+
+			fmt.Printf("Remove container %v (%s)\n", cid, typ)
+			rmopts := docker.RemoveContainerOptions{ID: cid}
+			if err := docker_client.RemoveContainer(rmopts); err != nil {
+				fmt.Printf("%s\n", err.Error())
+				fmt.Printf("Failed to remove container %v (%s).  May require manual cleanup.\n", cid, typ)
 			}
 		}
 	}

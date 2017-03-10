@@ -46,6 +46,17 @@ test : test-config imgs/lambda
 	cd $(WORKER_DIR) && $(GO) test ./handler -v
 	cd $(WORKER_DIR) && $(GO) test ./server -v
 
+cgroup/cgroup_init : cgroup/cgroup_init.c
+	${MAKE} -C cgroup
+
+# TODO: eventually merge this with default tests
+.PHONY: cgrouptest cgrouptest-config
+cgrouptest-config :
+	$(eval export WORKER_CONFIG := $(PWD)/testing/worker-config-cgroup.json)
+
+cgroup_test : cgrouptest-config imgs/lambda cgroup/cgroup_init
+	cd $(WORKER_DIR) && $(GO) test ./sandbox -v
+
 .PHONY: pooltest pooltest-config
 pooltest-config :
 	$(eval export WORKER_CONFIG := $(PWD)/testing/worker-config-pool.json)
@@ -61,5 +72,6 @@ clean :
 	rm -rf registry/bin
 	rm -f imgs/lambda imgs/server-pool imgs/olregistry
 	rm -rf testing/test_worker testing/test_pool
+	rm -f cgroup/cgroup_init
 	${MAKE} -C lambda clean
 	${MAKE} -C server-pool clean
