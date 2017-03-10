@@ -27,11 +27,6 @@ import (
 	"github.com/open-lambda/open-lambda/worker/benchmarker"
 )
 
-type ForkServer struct {
-	sockPath string
-	packages []string
-}
-
 type BasicManager struct {
 	servers []*ForkServer
 	poolDir string
@@ -74,7 +69,7 @@ func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
 	return bm, nil
 }
 
-func (bm *BasicManager) ForkEnter(sandbox sb.Sandbox) (err error) {
+func (bm *BasicManager) ForkEnter(sandbox sb.ContainerSandbox) (err error) {
 	fs := bm.chooseRandom()
 
 	docker_sb, ok := sandbox.(*sb.DockerSandbox)
@@ -89,7 +84,9 @@ func (bm *BasicManager) ForkEnter(sandbox sb.Sandbox) (err error) {
 		t.Start()
 	}
 
-	pid, err := sendFds(fs.sockPath, docker_sb.NSPid())
+	// signal interpreter to forkenter into sandbox's namespace
+	pid, err := sendFds(fs.sockPath, sandbox.NSPid())
+
 	if err != nil {
 		return err
 	}
@@ -99,8 +96,7 @@ func (bm *BasicManager) ForkEnter(sandbox sb.Sandbox) (err error) {
 	}
 
 	// change cgroup of spawned lambda server
-	err = docker_sb.CGroupEnter(pid)
-	if err != nil {
+	if err = sandbox.CGroupEnter(pid); err != nil {
 		return err
 	}
 

@@ -126,7 +126,6 @@ import "C"
 import (
 	"errors"
 	"fmt"
-	"strconv"
 )
 
 /*
@@ -136,10 +135,9 @@ to a lambda server listening on the unix socket at sockPath.
 Returns the PID of the spawned process upon success.
 */
 
-func sendFds(sockPath string, targetPid int) (pid string, err error) {
-	strPid := strconv.Itoa(targetPid)
+func sendFds(sockPath, targetPid string) (pid string, err error) {
 	csock := C.CString(sockPath)
-	cpid := C.CString(strPid)
+	cpid := C.CString(targetPid)
 
 	ret, err := C.sendFds(csock, cpid)
 	pid = C.GoString(ret)

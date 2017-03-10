@@ -57,6 +57,7 @@ func initRegManager(config *config.Config) (rm registry.RegistryManager, err err
 		rm, err = registry.NewLocalManager(config)
 	} else {
 		return nil, errors.New("invalid 'registry' field in config")
+		return nil, errors.New(fmt.Sprintf("invalid 'registry' field in config: %v", config.Registry))
 	}
 
 	return rm, nil
@@ -64,13 +65,27 @@ func initRegManager(config *config.Config) (rm registry.RegistryManager, err err
 
 // initSBFactory creates a sandbox factory according to config.
 func initSBFactory(config *config.Config) (sf sandbox.SandboxFactory, err error) {
-	if df, err := sandbox.NewDockerSBFactory(config); err != nil {
-		return nil, err
-	} else if config.Sandbox_buffer == 0 {
-		return df, nil
+	// create underlying sandbox factor
+	if config.Sandbox == "docker" {
+		sf, err = sandbox.NewDockerSBFactory(config)
+	} else if config.Sandbox == "cgroup" {
+		sf, err = sandbox.NewCgroupSBFactory(config)
 	} else {
-		return sandbox.NewBufferedSBFactory(config, df)
+		return nil, errors.New(fmt.Sprintf("invalid 'sandbox' field in config: %v", config.Sandbox))
 	}
+	if err != nil {
+		return nil, err
+	}
+
+	// wrap basic creator with container buffering layer
+	if config.Sandbox_buffer > 0 {
+		sf, err = sandbox.NewBufferedSBFactory(config, sf)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return sf, nil
 }
 
 // NewServer creates a server.
