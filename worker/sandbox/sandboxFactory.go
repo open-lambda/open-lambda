@@ -65,7 +65,7 @@ func NewDockerSBFactory(opts *config.Config) (*DockerSBFactory, error) {
 // Create creates a docker sandbox from the handler and sandbox directory.
 func (df *DockerSBFactory) Create(handlerDir string, sandboxDir string) (Sandbox, error) {
 	volumes := []string{
-		fmt.Sprintf("%s:%s:slave", handlerDir, "/handler"),
+		fmt.Sprintf("%s:%s:ro,slave", handlerDir, "/handler"),
 		fmt.Sprintf("%s:%s:slave", sandboxDir, "/host"),
 	}
 	container, err := df.client.CreateContainer(
