@@ -54,3 +54,4 @@
 /lambda/fdclient
 /testing/test_worker
 /testing/test_pool
+/cgroup/cgroup_init
