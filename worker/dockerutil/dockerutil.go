@@ -31,6 +31,49 @@ func ImageExists(client *docker.Client, name string) (bool, error) {
 	return true, nil
 }
 
+// SafeKill kills a docker container. Unpause if necessary.
+func SafeKill(client *docker.Client, cid string) error {
+	container_insp, err := client.InspectContainer(cid)
+	if err != nil {
+		return fmt.Errorf("failed to get inspect docker container ID %v: ", cid, err)
+	}
+
+	if container_insp.State.Dead {
+		fmt.Printf("Container %v already dead", cid)
+		return nil
+	}
+
+	if container_insp.State.Paused {
+		fmt.Printf("Unpause container %v\n", cid)
+		if err := client.UnpauseContainer(cid); err != nil {
+			return fmt.Errorf("failed to unpause container %v.  May require manual cleanup: ", cid, err)
+		}
+	}
+
+	fmt.Printf("Kill container %v\n", cid)
+	killopts := docker.KillContainerOptions{ID: cid}
+	if err := client.KillContainer(killopts); err != nil {
+		return fmt.Errorf("failed to kill container %v.  May require manual cleanup: ", cid, err)
+	}
+
+	return nil
+}
+
+// SafeRemove removes a docker container. Stop if necesary.
+func SafeRemove(client *docker.Client, cid string) error {
+	if err := SafeKill(client, cid); err != nil {
+		return err
+	}
+
+	fmt.Printf("Remove container %v\n", cid)
+	rmopts := docker.RemoveContainerOptions{ID: cid}
+	if err := client.RemoveContainer(rmopts); err != nil {
+		return fmt.Errorf("failed to remove container %v.  May require manual cleanup: ", cid, err)
+	}
+
+	return nil
+}
+
 // Prints the ID and state of all containers. Only for debugging.
 func Dump(client *docker.Client) {
 	opts := docker.ListContainersOptions{All: true}

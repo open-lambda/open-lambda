@@ -1,5 +1,5 @@
 #!/usr/bin/python
-import traceback, json, sys, socket, os
+import traceback, json, sys, socket, os, importlib
 import rethinkdb
 import tornado.ioloop
 import tornado.web
@@ -68,21 +68,23 @@ def lambda_server():
 
 # listen for fds to forkenter
 def fdlisten(path):
-    r = ns.fdlisten(path)
+    r = -1
+    # only child ever escapes the loop
+    while r != 0:
+        pkgs = ns.fdlisten(path)
 
-    # parent
-    if r > 0:
-        print('Parent should never escape from fdlisten')
-        sys.exit(1)
+        # import packages into global scope
+        for pkg in pkgs.split():
+            globals()[pkg] = importlib.import_module(pkg)
 
-    # child
-    if r == 0:
-        init()
-        lambda_server()
+        r = ns.forkenter()
+
+    init()
+    lambda_server()
 
 if __name__ == '__main__':
     if len(sys.argv) != 2:
-        print('Usage: python %s <fifo>' % sys.argv[0])
+        print('Usage: python %s <sock>' % sys.argv[0])
         sys.exit(1)
 
     fdlisten(sys.argv[1])

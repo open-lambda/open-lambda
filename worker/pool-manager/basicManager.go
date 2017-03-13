@@ -1,36 +1,27 @@
 package pmanager
 
-/*
-
-Manages lambdas using the OpenLambda registry (built on RethinkDB).
-
-Creates lambda containers using the generic base image defined in
-dockerManagerBase.go (BASE_IMAGE).
-
-Handler code is mapped into the container by attaching a directory
-(<handler_dir>/<lambda_name>) when the container is started.
-
-*/
-
 import (
+	"bufio"
 	"errors"
 	"fmt"
-	"math/rand"
 	"os"
+	"strings"
 	"time"
 
 	docker "github.com/fsouza/go-dockerclient"
-	"github.com/open-lambda/open-lambda/worker/config"
 	dutil "github.com/open-lambda/open-lambda/worker/dockerutil"
 	sb "github.com/open-lambda/open-lambda/worker/sandbox"
 
-	"github.com/open-lambda/open-lambda/worker/benchmarker"
+	"github.com/open-lambda/open-lambda/worker/config"
+	"github.com/open-lambda/open-lambda/worker/pool-manager/policy"
 )
 
 type BasicManager struct {
-	servers []*ForkServer
+	servers []policy.ForkServer
 	poolDir string
 	cid     string
+	matcher policy.CacheMatcher
+	evictor policy.CacheEvictor
 }
 
 func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
@@ -42,57 +33,71 @@ func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
 		return nil, err
 	}
 
-	servers := make([]*ForkServer, numServers, numServers)
+	pidPath := fmt.Sprintf("%s/fspids", poolDir)
+	// wait up to 5s for servers to spawn
+	start := time.Now()
+	for ok := true; ok; ok = os.IsNotExist(err) {
+		_, err = os.Stat(pidPath)
+		if time.Since(start).Seconds() > 5 {
+			return nil, errors.New("forkservers failed to spawn")
+		}
+	}
+
+	pidFile, err := os.Open(pidPath)
+	if err != nil {
+		return nil, err
+	}
+	defer pidFile.Close()
+
+	scnr := bufio.NewScanner(pidFile)
+
+	servers := make([]policy.ForkServer, numServers, numServers)
 	for k := 0; k < numServers; k++ {
 		sockPath := fmt.Sprintf("%s/fs%d/fs.sock", poolDir, k)
 
-		start := time.Now()
 		// wait up to 5s for server to initialize
-		for os.IsNotExist(err) {
+		start := time.Now()
+		for ok := true; ok; ok = os.IsNotExist(err) {
 			_, err = os.Stat(sockPath)
 			if time.Since(start).Seconds() > 5 {
 				return nil, errors.New("forkservers failed to initialize")
 			}
 		}
 
-		servers[k] = &ForkServer{
-			sockPath: sockPath,
-			packages: []string{},
+		if !scnr.Scan() {
+			return nil, errors.New("too few lines in fspid file")
+		}
+
+		fspid := scnr.Text()
+
+		if err := scnr.Err(); err != nil {
+			return nil, err
+		}
+
+		servers[k] = policy.ForkServer{
+			Pid:      fspid,
+			SockPath: sockPath,
+			Packages: []string{},
 		}
 	}
 
 	bm = &BasicManager{
 		servers: servers,
 		cid:     cid,
+		matcher: policy.NewRandomMatcher(servers),
+		evictor: policy.NewRandomEvictor(servers),
 	}
 
 	return bm, nil
 }
 
-func (bm *BasicManager) ForkEnter(sandbox sb.ContainerSandbox) (err error) {
-	fs := bm.chooseRandom()
-
-	docker_sb, ok := sandbox.(*sb.DockerSandbox)
-	if !ok {
-		return errors.New("forkenter only supported with DockerSandbox")
-	}
-
-	b := benchmarker.GetBenchmarker()
-	var t *benchmarker.Timer
-	if b != nil {
-		t = b.CreateTimer("Unpause docker container", "ms")
-		t.Start()
-	}
+func (bm *BasicManager) ForkEnter(sandbox sb.ContainerSandbox, req_pkgs []string) (err error) {
+	fs, pkgs := bm.matcher.Match(req_pkgs)
 
 	// signal interpreter to forkenter into sandbox's namespace
-	pid, err := sendFds(fs.sockPath, sandbox.NSPid())
-
+	pid, err := sendFds(fs.SockPath, sandbox.NSPid(), strings.Join(pkgs, " "))
 	if err != nil {
 		return err
-	}
-
-	if t != nil {
-		t.End()
 	}
 
 	// change cgroup of spawned lambda server
@@ -146,11 +151,4 @@ func initPoolContainer(poolDir, clusterName string, numServers int) (cid string,
 	}
 
 	return container.ID, nil
-}
-
-func (bm *BasicManager) chooseRandom() (server *ForkServer) {
-	rand.Seed(time.Now().Unix())
-	k := rand.Int() % len(bm.servers)
-
-	return bm.servers[k]
 }

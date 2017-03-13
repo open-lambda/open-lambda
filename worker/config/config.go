@@ -20,6 +20,7 @@ type Config struct {
 	Pool         string `json:"pool"`
 	Reg_dir      string `json:"reg_dir"` // store local copies of handler code
 	Cluster_name string `json:"cluster_name"`
+	Pip_mirror   string `json:"pip_mirror"`
 
 	// pool options
 	Pool_dir        string `json:"pool_dir"`
