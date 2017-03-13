@@ -47,7 +47,7 @@ sendfd(int s, int fd)
 }
 
 int
-sendFds(char *sockPath, char *pid)
+sendFds(char *sockPath, char *pid, char *pkgs)
 {
     char *path;
     int k;
@@ -100,7 +100,6 @@ sendFds(char *sockPath, char *pid)
     printf("Connected.\n");
 
     // Send fds to server.
-
     printf("Sending fds.\n");
 
     for(k = 0; k < NUM_NS; k++) {
@@ -110,15 +109,23 @@ sendFds(char *sockPath, char *pid)
         }
     }
 
-    int buf_len = 50;
-    char buf[50];
+    int buflen = 500;
+    // Send package string to server.
+    printf("Sending package string.\n");
+    if(send(s, pkgs, buflen, 0) == -1) {
+        printf("Sending package string failed.\n");
+        exit(1);
+    }
+
+    buflen = 50;
+    char pidbuf[buflen];
     printf("Listening...\n");
-    if((len = recv(s, buf, 50, 0)) == -1) {
+    if((len = recv(s, pidbuf, 50, 0)) == -1) {
         printf("Failed.\n");
         perror("recv pid");
     }
 
-    printf("child PID: %s\n", buf);
+    printf("child PID: %s\n", pidbuf);
 
     if(close(s) == -1) {
         perror("close socket");
@@ -146,7 +153,7 @@ func main() {
 
 	csock := C.CString(sockPath)
 	cpid := C.CString(targetPid)
+	cstr := C.CString("threading subprocess")
 
-	C.sendFds(csock, cpid)
-
+	C.sendFds(csock, cpid, cstr)
 }

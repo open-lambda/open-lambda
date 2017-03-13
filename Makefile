@@ -54,7 +54,7 @@ cgroup/cgroup_init : cgroup/cgroup_init.c
 cgrouptest-config :
 	$(eval export WORKER_CONFIG := $(PWD)/testing/worker-config-cgroup.json)
 
-cgroup_test : cgrouptest-config imgs/lambda cgroup/cgroup_init
+cgrouptest : cgrouptest-config imgs/lambda cgroup/cgroup_init
 	cd $(WORKER_DIR) && $(GO) test ./sandbox -v
 
 .PHONY: pooltest pooltest-config

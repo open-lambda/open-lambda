@@ -2,7 +2,6 @@ package server
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -10,12 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/open-lambda/open-lambda/worker/benchmarker"
 	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/handler"
-	pmanager "github.com/open-lambda/open-lambda/worker/pool-manager"
-	"github.com/open-lambda/open-lambda/worker/registry"
-	"github.com/open-lambda/open-lambda/worker/sandbox"
 )
 
 // Server is a worker server that listens to run lambda requests and forward
@@ -36,87 +31,18 @@ func newHttpErr(msg string, code int) *httpErr {
 	return &httpErr{msg: msg, code: code}
 }
 
-// initPManager creates a pool manager according to config.
-func initPManager(config *config.Config) (pm pmanager.PoolManager, err error) {
-	if config.Pool == "basic" {
-		if pm, err = pmanager.NewBasicManager(config); err != nil {
-			return nil, err
-		}
-	} else {
-		pm = nil
-	}
-
-	return pm, nil
-}
-
-// initRegManager creates a registry manager according to config.
-func initRegManager(config *config.Config) (rm registry.RegistryManager, err error) {
-	if config.Registry == "olregistry" {
-		rm, err = registry.NewOLStoreManager(config)
-	} else if config.Registry == "local" {
-		rm, err = registry.NewLocalManager(config)
-	} else {
-		return nil, errors.New("invalid 'registry' field in config")
-		return nil, errors.New(fmt.Sprintf("invalid 'registry' field in config: %v", config.Registry))
-	}
-
-	return rm, nil
-}
-
-// initSBFactory creates a sandbox factory according to config.
-func initSBFactory(config *config.Config) (sf sandbox.SandboxFactory, err error) {
-	// create underlying sandbox factor
-	if config.Sandbox == "docker" {
-		sf, err = sandbox.NewDockerSBFactory(config)
-	} else if config.Sandbox == "cgroup" {
-		sf, err = sandbox.NewCgroupSBFactory(config)
-	} else {
-		return nil, errors.New(fmt.Sprintf("invalid 'sandbox' field in config: %v", config.Sandbox))
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	// wrap basic creator with container buffering layer
-	if config.Sandbox_buffer > 0 {
-		sf, err = sandbox.NewBufferedSBFactory(config, sf)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return sf, nil
-}
-
-// NewServer creates a server.
+// NewServer creates a server based on the passed config."
 func NewServer(config *config.Config) (*Server, error) {
-	var err error
+	lru := handler.NewHandlerLRU(100) //TODO: tyler
 
-	rm, err := initRegManager(config)
+	handlers, err := handler.NewHandlerSet(config, lru)
 	if err != nil {
 		return nil, err
 	}
 
-	sf, err := initSBFactory(config)
-	if err != nil {
-		return nil, err
-	}
-
-	pm, err := initPManager(config)
-	if err != nil {
-		return nil, err
-	}
-
-	opts := handler.HandlerSetOpts{
-		Rm:     rm,
-		Sf:     sf,
-		Pm:     pm,
-		Config: config,
-		Lru:    handler.NewHandlerLRU(100), // TODO(tyler)
-	}
 	server := &Server{
 		config:   config,
-		handlers: handler.NewHandlerSet(opts),
+		handlers: handlers,
 	}
 
 	return server, nil
@@ -143,7 +69,6 @@ func (s *Server) ForwardToSandbox(handler *handler.Handler, r *http.Request, inp
 	max_tries := 10
 	errors := []error{}
 	for tries := 1; ; tries++ {
-		start := time.Now().UnixNano()
 		r2, err := http.NewRequest(r.Method, url, bytes.NewReader(input))
 		if err != nil {
 			return nil, nil, newHttpErr(
@@ -151,19 +76,8 @@ func (s *Server) ForwardToSandbox(handler *handler.Handler, r *http.Request, inp
 				http.StatusInternalServerError)
 		}
 
-		b := benchmarker.GetBenchmarker()
-		var t *benchmarker.Timer
-		if b != nil {
-			t = b.CreateTimer("HTTP request to tornado server", "us")
-		}
-
 		r2.Header.Set("Content-Type", r.Header.Get("Content-Type"))
 		client := &http.Client{Transport: &channel.Transport}
-
-		if t != nil {
-			t.Start()
-		}
-
 		w2, err := client.Do(r2)
 		if err != nil {
 			errors = append(errors, err)
@@ -180,12 +94,6 @@ func (s *Server) ForwardToSandbox(handler *handler.Handler, r *http.Request, inp
 			continue
 		}
 
-		if t != nil {
-			t.End()
-		}
-
-		end := time.Now().UnixNano()
-		log.Printf("Time to run lambda: %d ns\n", end-start)
 		defer w2.Body.Close()
 		wbody, err := ioutil.ReadAll(w2.Body)
 		if err != nil {
@@ -228,6 +136,7 @@ func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 
 	// forward to sandbox
 	handler := s.handlers.Get(img)
+
 	wbody, w2, err := s.ForwardToSandbox(handler, r, rbody)
 	if err != nil {
 		return err
@@ -309,11 +218,6 @@ func Main(config_path string) {
 	server, err := NewServer(conf)
 	if err != nil {
 		log.Fatal(err)
-	}
-
-	// setup benchmarking
-	if conf.Benchmark_file != "" {
-		benchmarker.CreateBenchmarkerSingleton(conf.Benchmark_file)
 	}
 
 	port := fmt.Sprintf(":%s", conf.Worker_port)
