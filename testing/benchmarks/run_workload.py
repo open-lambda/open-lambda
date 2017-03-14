@@ -99,13 +99,13 @@ print os.getcwd()
 
 
 # No container pool and no interpreter pool
-res = benchmark(NO_INTERPRETERS_NO_CONTAINERS, 'numpy', ITERATIONS)
+res = benchmark(NO_INTERPRETERS_NO_CONTAINERS, 'hello', ITERATIONS)
 
 # No container pool and interpreter pool
-# res = benchmark(INTERPRETERS_NO_CONTAINERS, 'numpy', ITERATIONS)
+res = benchmark(INTERPRETERS_NO_CONTAINERS, 'hello', ITERATIONS)
 
 # container pool and no interpreter pool
-# res = benchmark(NO_INTERPRETERS_CONTAINERS, 'numpy', ITERATIONS)
+# res = benchmark(NO_INTERPRETERS_CONTAINERS, 'hello', ITERATIONS)
 
 # container pool and interpreter pool
-# res = benchmark(INTERPRETERS_CONTAINERS, 'numpy', ITERATIONS)
+# res = benchmark(INTERPRETERS_CONTAINERS, 'hello', ITERATIONS)

@@ -157,11 +157,19 @@ func (s *DockerSandbox) Stop() error {
 
 // Pause pauses the container.
 func (s *DockerSandbox) Pause() error {
+	b := benchmarker.GetBenchmarker()
+	var t *benchmarker.Timer
+	if b != nil {
+		t = b.CreateTimer("Pause docker container", "ms")
+		t.Start()
+	}
 	if err := s.client.PauseContainer(s.container.ID); err != nil {
 		log.Printf("failed to pause container with error %v\n", err)
 		return s.dockerError(err)
 	}
-
+	if t != nil {
+		t.End()
+	}
 	return nil
 }
 
@@ -225,7 +233,7 @@ func (s *DockerSandbox) CGroupEnter(pid string) (err error) {
 	b := benchmarker.GetBenchmarker()
 	var t *benchmarker.Timer
 	if b != nil {
-		t = b.CreateTimer("cgclassify process into docker container", "ms")
+		t = b.CreateTimer("cgclassify process into docker container", "us")
 	}
 
 	cgroup := fmt.Sprintf("%s:/docker/%s", s.controllers, s.container.ID)
@@ -236,6 +244,9 @@ func (s *DockerSandbox) CGroupEnter(pid string) (err error) {
 	}
 
 	if err := cmd.Run(); err != nil {
+		if t != nil {
+			t.End()
+		}
 		return err
 	}
 
