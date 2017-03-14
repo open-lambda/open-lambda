@@ -3,7 +3,7 @@ package policy
 type ForkServer struct {
 	Pid      string
 	SockPath string
-	Packages []string
+	Packages map[string]bool
 }
 
 type CacheMatcher interface {

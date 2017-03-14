@@ -77,14 +77,14 @@ func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
 		servers[k] = policy.ForkServer{
 			Pid:      fspid,
 			SockPath: sockPath,
-			Packages: []string{},
+			Packages: make(map[string]bool),
 		}
 	}
 
 	bm = &BasicManager{
 		servers: servers,
 		cid:     cid,
-		matcher: policy.NewRandomMatcher(servers),
+		matcher: policy.NewSubsetMatcher(servers),
 		evictor: policy.NewRandomEvictor(servers),
 	}
 
