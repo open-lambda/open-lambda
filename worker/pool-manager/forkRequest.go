@@ -133,6 +133,8 @@ import "C"
 import (
 	"errors"
 	"fmt"
+
+	"github.com/open-lambda/open-lambda/worker/benchmarker"
 )
 
 /*
@@ -146,11 +148,21 @@ import (
  */
 
 func sendFds(sockPath, targetPid, pkgList string) (pid string, err error) {
+	b := benchmarker.GetBenchmarker()
+	var t *benchmarker.Timer
+	if b != nil {
+		t = b.CreateTimer("send fds", "us")
+	}
 	csock := C.CString(sockPath)
 	cpid := C.CString(targetPid)
 	cpkgs := C.CString(pkgList)
-
+	if t != nil {
+		t.Start()
+	}
 	ret, err := C.sendFds(csock, cpid, cpkgs)
+	if t != nil {
+		t.End()
+	}
 	pid = C.GoString(ret)
 	if err != nil {
 		return "", errors.New(fmt.Sprintf("sendFds: %s", pid))
