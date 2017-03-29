@@ -7,36 +7,49 @@ import (
 	"log"
 	"path"
 	"path/filepath"
-	"strings"
-
-	docker "github.com/fsouza/go-dockerclient"
 )
 
 // Config represents the configuration for a worker server.
 type Config struct {
-	path         string // where was config file loaded from?
-	Registry     string `json:"registry"`
-	Sandbox      string `json:"sandbox"`
-	Pool         string `json:"pool"`
-	Reg_dir      string `json:"reg_dir"` // store local copies of handler code
+	// base path for path parameters in this config; must be non-empty if any
+	// path (e.g., Worker_dir) is relative
+	path string
+	// registry type: "local" or "olregistry"
+	Registry string `json:"registry"`
+	// sandbox type: "docker" or "cgroup"
+	// currently ignored as cgroup sandbox is not fully integrated
+	Sandbox string `json:"sandbox"`
+	// pool manager type: "basic" or ""
+	Pool string `json:"pool"`
+	// registry directory for storing local copies of handler code
+	Reg_dir string `json:"reg_dir"`
+	// name of the cluster
 	Cluster_name string `json:"cluster_name"`
-	Pip_mirror   string `json:"pip_mirror"`
+	// pip mirror address for installing python packages
+	Pip_mirror string `json:"pip_mirror"`
 
 	// pool options
-	Pool_dir        string `json:"pool_dir"`
-	Num_forkservers int    `json:"num_forkservers"`
+	// directory storing socket files for each forked server
+	Pool_dir string `json:"pool_dir"`
+	// number of forked servers in the pool
+	Num_forkservers int `json:"num_forkservers"`
 
-	// olregistry
+	// olregistry options
+	// addresses of olregistry cluster
 	Reg_cluster []string `json:"reg_cluster"`
 
-	// sandbox
-	Worker_dir       string `json:"worker_dir"`
+	// sandbox options
+	// worker directory, which contains handler code, pid file, logs, etc.
+	Worker_dir string `json:"worker_dir"`
+	// initialization path for cgroup sandbox; currently ignored
 	Cgroup_init_path string `json: "cgroup_init_path"`
-	Cgroup_base      string `json: "cgroup_base"`
-	Worker_port      string `json:"worker_port"`
-	Docker_host      string `json:"docker_host"`
+	// base path for cgroup sandbox; currently ignored
+	Cgroup_base string `json: "cgroup_base"`
+	// port the worker server listens to
+	Worker_port string `json:"worker_port"`
 
-	// sandbox factory
+	// sandbox factory options
+	// number of sandbox buffers; if zero, no buffer will be used
 	Sandbox_buffer int `json:"sandbox_buffer"`
 
 	// for unit testing to skip pull path
@@ -182,27 +195,6 @@ func (c *Config) Defaults() error {
 				return err
 			}
 			c.Pool_dir = path
-		}
-	}
-
-	// daemon
-	if c.Docker_host == "" {
-		client, err := docker.NewClientFromEnv()
-		if err != nil {
-			return fmt.Errorf("failed to get docker client: ", err)
-		}
-
-		endpoint := client.Endpoint()
-		local := "unix://"
-		nonLocal := "https://"
-		if strings.HasPrefix(endpoint, local) {
-			c.Docker_host = "localhost"
-		} else if strings.HasPrefix(endpoint, nonLocal) {
-			start := strings.Index(endpoint, nonLocal) + len([]rune(nonLocal))
-			end := strings.LastIndex(endpoint, ":")
-			c.Docker_host = endpoint[start:end]
-		} else {
-			return fmt.Errorf("please specify a valid docker host!")
 		}
 	}
 

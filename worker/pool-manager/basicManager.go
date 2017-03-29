@@ -100,10 +100,10 @@ func (bm *BasicManager) ForkEnter(sandbox sb.ContainerSandbox, req_pkgs []string
 		return err
 	}
 
-    // remember what we've cached
-    for k := 0; k < len(pkgs); k++ {
-        fs.Packages[pkgs[k]] = true
-    }
+	// remember what we've cached
+	for k := 0; k < len(pkgs); k++ {
+		fs.Packages[pkgs[k]] = true
+	}
 
 	// change cgroup of spawned lambda server
 	if err = sandbox.CGroupEnter(pid); err != nil {
