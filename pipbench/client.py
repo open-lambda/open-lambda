@@ -1,6 +1,9 @@
 import argparse
 import requests
 import json
+import os
+import tarfile
+import shutil
 
 
 '''
@@ -34,33 +37,45 @@ def generate_package(num_assets, asset_size, install_cpu, install_mem, import_cp
         package_name = r.json()['packageName']
         return package_name
 
-def generate_handler_file(packages, handler_name):
+def generate_handler_file(handler_name, packages):
     # todo this needs to actually upload the handler to the store
     handler_contents = ''
     for p in packages:
         handler_contents += 'import ' + p + '\n'
-    f = open(handler_name, 'w')
+    f = open(handler_name + '/lambda_func.py', 'w')
     f.write(handler_contents)
     f.close()
 
-def generate_requirements(packages):
+def generate_requirements(handler_name, packages):
     # todo this needs to actually upload the handler to the store
     handler_contents = ''
     for p in packages:
         handler_contents += p + '\n'
-    f = open('requirements.txt', 'w')
+    f = open(handler_name + '/' + 'requirements.txt', 'w')
     f.write(handler_contents)
     f.close()
 
+def zip(handler_name):
+    tar = tarfile.open(handler_name + ".tar.gz", "w:gz")
+    tar.add(handler_name)
+    tar.close()
+
+def cleanup(handler_name):
+    shutil.rmtree(handler_name)
 
 parser = argparse.ArgumentParser(description='Generate a handler')
 parser.add_argument('-imports-mean', default=10)
 parser.add_argument('-imports-scale', default=1)
-parser.add_argument('-handler-name', default='pip_bench_handler.py')
-
+parser.add_argument('-handler-name', default='pip_bench_handler')
 args = parser.parse_args()
+
+if not os.path.exists(args.handler_name):
+    os.makedirs(args.handler_name)
+
 packages = generate_packages(args.imports_mean, args.imports_scale)
-generate_handler_file(packages, args.handler_name)
-generate_requirements(packages)
-print('Created handler ' + args.handler_name + ' and requirements.txt successfully')
+generate_handler_file(args.handler_name, packages)
+generate_requirements(args.handler_name, packages)
+zip(args.handler_name)
+cleanup(args.handler_name)
+print('Created handler zip ' + args.handler_name + ' successfully')
 
