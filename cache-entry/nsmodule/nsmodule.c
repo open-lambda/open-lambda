@@ -263,10 +263,12 @@ static PyObject *ns_forkenter(PyObject *self, PyObject *args) {
             return NULL;
         }
 
+        initialized = 0;
+
         return ret;
     }
 
-    /* Parent responds with child PID and reverts to original namespaces */
+    /* Parent responds with child PID and returns in original namespaces */
 
     char childpid[100];
     sprintf(childpid, "%d", r);

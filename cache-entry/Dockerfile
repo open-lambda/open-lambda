@@ -8,8 +8,9 @@ RUN pip install virtualenv
 RUN pip install rethinkdb
 RUN pip install tornado
 
+COPY init /
 COPY ns.so /
 COPY server.py /
-COPY initservers.py /
+COPY initroot.py /
 
-CMD ["python", "/initservers.py"]
+CMD ["python", "/initroot.py"]

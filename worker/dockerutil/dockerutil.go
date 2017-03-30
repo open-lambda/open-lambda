@@ -17,7 +17,7 @@ const (
 	SANDBOX              = "sandbox"
 	BASE_IMAGE           = "lambda"
 	POOL                 = "pool"
-	POOL_IMAGE           = "server-pool"
+	CACHE_IMAGE          = "cache-entry"
 )
 
 // ImageExists checks if an image of name exists.

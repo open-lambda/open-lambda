@@ -5,11 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
-	docker "github.com/fsouza/go-dockerclient"
-	dutil "github.com/open-lambda/open-lambda/worker/dockerutil"
 	sb "github.com/open-lambda/open-lambda/worker/sandbox"
 
 	"github.com/open-lambda/open-lambda/worker/config"
@@ -17,93 +14,48 @@ import (
 )
 
 type BasicManager struct {
+	factory *BufferedCacheFactory
+	cluster string
 	servers []policy.ForkServer
-	poolDir string
-	cid     string
 	matcher policy.CacheMatcher
 	evictor policy.CacheEvictor
+	seq     int
 }
 
+// TODO: remove opts.Num_forkservers from config
 func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
-	poolDir := opts.Pool_dir
-	numServers := opts.Num_forkservers
-
-	cid, err := initPoolContainer(poolDir, opts.Cluster_name, numServers)
-	if err != nil {
-		return nil, err
-	}
-
-	pidPath := fmt.Sprintf("%s/fspids", poolDir)
-	// wait up to 5s for servers to spawn
-	start := time.Now()
-	for ok := true; ok; ok = os.IsNotExist(err) {
-		_, err = os.Stat(pidPath)
-		if time.Since(start).Seconds() > 5 {
-			return nil, errors.New("forkservers failed to spawn")
-		}
-	}
-
-	pidFile, err := os.Open(pidPath)
-	if err != nil {
-		return nil, err
-	}
-	defer pidFile.Close()
-
-	scnr := bufio.NewScanner(pidFile)
-
-	servers := make([]policy.ForkServer, numServers, numServers)
-	for k := 0; k < numServers; k++ {
-		sockPath := fmt.Sprintf("%s/fs%d/fs.sock", poolDir, k)
-
-		// wait up to 5s for server to initialize
-		start := time.Now()
-		for ok := true; ok; ok = os.IsNotExist(err) {
-			_, err = os.Stat(sockPath)
-			if time.Since(start).Seconds() > 5 {
-				return nil, errors.New("forkservers failed to initialize")
-			}
-		}
-
-		if !scnr.Scan() {
-			return nil, errors.New("too few lines in fspid file")
-		}
-
-		fspid := scnr.Text()
-
-		if err := scnr.Err(); err != nil {
-			return nil, err
-		}
-
-		servers[k] = policy.ForkServer{
-			Pid:      fspid,
-			SockPath: sockPath,
-			Packages: make(map[string]bool),
-		}
-	}
-
+	servers := make([]policy.ForkServer, 0, 0)
 	bm = &BasicManager{
+		cluster: opts.Cluster_name,
 		servers: servers,
-		cid:     cid,
-		matcher: policy.NewSubsetMatcher(servers),
-		evictor: policy.NewRandomEvictor(servers),
+		matcher: policy.NewSubsetMatcher(),
+		evictor: policy.NewRandomEvictor(),
+		seq:     0,
+	}
+
+	if err = bm.initCacheRoot(opts.Pool_dir); err != nil {
+		return nil, err
 	}
 
 	return bm, nil
 }
 
-func (bm *BasicManager) ForkEnter(sandbox sb.ContainerSandbox, req_pkgs []string) (err error) {
-	fs, pkgs := bm.matcher.Match(req_pkgs)
+func (bm *BasicManager) Provision(sandbox sb.ContainerSandbox, pkgs []string) (err error) {
+	fs, toCache := bm.matcher.Match(bm.servers, pkgs)
+
+	// make new cache entry if necessary
+	if len(toCache) != 0 {
+		fs, err = bm.newCacheEntry(fs, toCache)
+		if err != nil {
+			return err
+		}
+	}
 
 	// signal interpreter to forkenter into sandbox's namespace
-	pid, err := sendFds(fs.SockPath, sandbox.NSPid(), strings.Join(pkgs, " "))
+	pid, err := forkRequest(fs.SockPath, sandbox.NSPid(), pkgs, true)
 	if err != nil {
 		return err
 	}
-
-    // remember what we've cached
-    for k := 0; k < len(pkgs); k++ {
-        fs.Packages[pkgs[k]] = true
-    }
 
 	// change cgroup of spawned lambda server
 	if err = sandbox.CGroupEnter(pid); err != nil {
@@ -113,47 +65,93 @@ func (bm *BasicManager) ForkEnter(sandbox sb.ContainerSandbox, req_pkgs []string
 	return nil
 }
 
-func initPoolContainer(poolDir, clusterName string, numServers int) (cid string, err error) {
-	client, err := docker.NewClientFromEnv()
+func (bm *BasicManager) newCacheEntry(fs *policy.ForkServer, toCache []string) (*policy.ForkServer, error) {
+	// make hashset of packages for new entry
+	pkgs := make(map[string]bool)
+	for key, val := range fs.Packages {
+		pkgs[key] = val
+	}
+	for k := 0; k < len(toCache); k++ {
+		pkgs[toCache[k]] = true
+	}
+
+	// get container for new entry
+	sandbox, dir, err := bm.factory.Create()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	if err = os.MkdirAll(poolDir, os.ModeDir); err != nil {
-		return "", err
+	// signal interpreter to forkenter into sandbox's namespace
+	pid, err := forkRequest(fs.SockPath, sandbox.NSPid(), toCache, false)
+	if err != nil {
+		return nil, err
 	}
 
-	labels := map[string]string{
-		dutil.DOCKER_LABEL_CLUSTER: clusterName,
-		dutil.DOCKER_LABEL_TYPE:    dutil.POOL,
+	sockPath := fmt.Sprintf("%s/fs.sock", dir)
+
+	// wait up to 5s for server to initialize
+	start := time.Now()
+	for ok := true; ok; ok = os.IsNotExist(err) {
+		_, err = os.Stat(sockPath)
+		if time.Since(start).Seconds() > 5 {
+			return nil, errors.New(fmt.Sprintf("forkserver %d failed to initialize after 5s", bm.seq))
+		}
 	}
 
-	volumes := []string{
-		fmt.Sprintf("%s:%s", poolDir, "/host"),
+	// TODO: cache entry cgroups?
+
+	newFs := policy.ForkServer{
+		Sandbox:  sandbox,
+		Pid:      pid,
+		SockPath: sockPath,
+		Packages: pkgs,
 	}
 
-	caps := []string{"SYS_ADMIN"}
+	bm.servers = append(bm.servers, newFs)
+	bm.seq++
 
-	cmd := []string{"python", "/initservers.py", fmt.Sprintf("%d", numServers)}
+	return &newFs, nil
+}
 
-	container, err := client.CreateContainer(
-		docker.CreateContainerOptions{
-			Config: &docker.Config{
-				Image:  dutil.POOL_IMAGE,
-				Labels: labels,
-				Cmd:    cmd,
-			},
-			HostConfig: &docker.HostConfig{
-				Binds:   volumes,
-				PidMode: "host",
-				CapAdd:  caps,
-			},
-		},
-	)
+func (bm *BasicManager) initCacheRoot(poolDir string) (err error) {
+	factory, rootSB, rootDir, err := InitCacheFactory(poolDir, bm.cluster, 2) //TODO: buffer
+	if err != nil {
+		return err
+	}
+	bm.factory = factory
 
-	if err := client.StartContainer(container.ID, nil); err != nil {
-		return "", err
+	// wait up to 5s for root server to spawn
+	pidPath := fmt.Sprintf("%s/pid", rootDir)
+	start := time.Now()
+	for ok := true; ok; ok = os.IsNotExist(err) {
+		_, err = os.Stat(pidPath)
+		if time.Since(start).Seconds() > 5 {
+			return errors.New("root forkserver failed to start after 5s")
+		}
 	}
 
-	return container.ID, nil
+	pidFile, err := os.Open(pidPath)
+	if err != nil {
+		return err
+	}
+	defer pidFile.Close()
+
+	scnr := bufio.NewScanner(pidFile)
+	scnr.Scan()
+	pid := scnr.Text()
+
+	if err := scnr.Err(); err != nil {
+		return err
+	}
+
+	fs := policy.ForkServer{
+		Sandbox:  rootSB,
+		Pid:      pid,
+		SockPath: fmt.Sprintf("%s/fs.sock", rootDir),
+		Packages: make(map[string]bool),
+	}
+
+	bm.servers = append(bm.servers, fs)
+
+	return nil
 }

@@ -23,8 +23,7 @@ db_conn = None
 def init():
     global initialized, config, db_conn, lambda_func
 
-    sys.stdout = open(STDOUT_PATH, 'w')
-    sys.stderr = open(STDERR_PATH, 'w')
+    redirect()
 
     # assume submitted .py file is /handler/lambda_func.py
     sys.path.append('/handler')
@@ -68,19 +67,35 @@ def lambda_server():
 
 # listen for fds to forkenter
 def fdlisten(path):
+    signal = "cache"
     r = -1
-    # only child ever escapes the loop
-    while r != 0:
-        pkgs = ns.fdlisten(path)
+    # only child meant to serve ever escapes the loop
+    while r != 0 or signal == "cache":
+        sys.stdout.flush()
+        if r == 0:
+            redirect()
 
+        pkgs = ns.fdlisten(path).split()
         # import packages into global scope
-        for pkg in pkgs.split():
-            globals()[pkg] = importlib.import_module(pkg)
+        for k, pkg in enumerate(pkgs):
+            if k < len(pkgs)-1:
+                globals()[pkg] = importlib.import_module(pkg)
+                print("importing: %s" % pkg)
+            else:
+                signal = pkg
+                print("signal: %s" % signal)
 
+        sys.stdout.flush()
         r = ns.forkenter()
 
+    print("%s escaped" % r)
+    sys.stdout.flush()
     init()
     lambda_server()
+
+def redirect():
+    sys.stdout = open(STDOUT_PATH, 'w')
+    sys.stderr = open(STDERR_PATH, 'w')
 
 if __name__ == '__main__':
     if len(sys.argv) != 2:

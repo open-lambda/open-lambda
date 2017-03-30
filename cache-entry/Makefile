@@ -1,6 +1,9 @@
 .PHONY: all
 
-all: ns.so
+all: init ns.so
+
+init: init.c
+	gcc -O2 -o init init.c
 
 ns.so: nsmodule/nsmodule.c nsmodule/setup.py 
 	cd nsmodule && python setup.py build_ext --inplace

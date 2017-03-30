@@ -6,19 +6,16 @@ import (
 )
 
 type RandomEvictor struct {
-	servers []ForkServer
 }
 
-func NewRandomEvictor(servers []ForkServer) (re *RandomEvictor) {
+func NewRandomEvictor() (re *RandomEvictor) {
 	rand.Seed(time.Now().Unix())
 
-	return &RandomEvictor{
-		servers: servers,
-	}
+	return &RandomEvictor{}
 }
 
-func (re *RandomEvictor) Evict() error {
-	_ = rand.Int() % len(re.servers)
+func (re *RandomEvictor) Evict(servers []ForkServer) error {
+	_ = rand.Int() % len(servers)
 	//TODO: actually evict
 
 	return nil

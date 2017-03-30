@@ -184,7 +184,7 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 				return nil, errors.New("forkenter only supported with ContainerSandbox")
 			}
 
-			h.hset.poolMgr.ForkEnter(containerSB, h.imports)
+			h.hset.poolMgr.Provision(containerSB, h.imports)
 		}
 	} else if h.state == state.Paused { // unpause if paused
 		if err := h.sandbox.Unpause(); err != nil {

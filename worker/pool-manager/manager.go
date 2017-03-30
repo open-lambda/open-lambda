@@ -6,7 +6,7 @@ import (
 )
 
 type PoolManager interface {
-	ForkEnter(sandbox sb.ContainerSandbox, req_pkgs []string) error
+	Provision(sandbox sb.ContainerSandbox, req_pkgs []string) error
 }
 
 func InitPoolManager(config *config.Config) (pm PoolManager, err error) {

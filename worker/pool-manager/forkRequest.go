@@ -133,6 +133,7 @@ import "C"
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 /*
@@ -145,10 +146,19 @@ import (
  * Returns the PID of the spawned process upon success.
  */
 
-func sendFds(sockPath, targetPid, pkgList string) (pid string, err error) {
+func forkRequest(sockPath, targetPid string, pkgList []string, handler bool) (pid string, err error) {
+	var signal string
+	if handler {
+		signal = "serve"
+	} else {
+		signal = "cache"
+	}
+
+	pkgStr := strings.Join(append(pkgList, signal), " ")
+
 	csock := C.CString(sockPath)
 	cpid := C.CString(targetPid)
-	cpkgs := C.CString(pkgList)
+	cpkgs := C.CString(pkgStr)
 
 	ret, err := C.sendFds(csock, cpid, cpkgs)
 	pid = C.GoString(ret)
