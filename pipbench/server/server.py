@@ -72,17 +72,16 @@ def get_package_name():
 
 class PackageResource:
     def on_post(self, req, res):
-        print('hit')
         body = req.stream.read(req.content_length or 0)
         if body == 0:
             res.body = 'No body provided'
             res.status = falcon.HTTP_400
             return
         package_spec = json.loads(body.decode("utf-8"))
-        print(package_spec)
         name = get_package_name()
         # create package
-        print('creating package with name ' + name)
+        print('Creating package ' + name + '...')
+        print(package_spec)
         try:
             os.makedirs(packages_dir + '/' + name)
             os.makedirs(packages_dir + '/' + name + '/' + name)
@@ -96,7 +95,7 @@ class PackageResource:
             tar.close()
             shutil.rmtree(name)
             os.chdir('..')
-            print('package created')
+            print('Package ' + name + ' created')
         except Exception as e:
             print(e)
             res.status = falcon.HTTP_500
