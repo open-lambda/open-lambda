@@ -50,6 +50,13 @@ def generate_handler_file(handler_name, packages):
     handler_contents = ''
     for p in packages:
         handler_contents += 'import ' + p + '\n'
+    handler_contents += str.format('''
+def handler(conn, event):
+    try:
+        return "Hello from {0}"
+    except Exception as e:
+        return {{'error': str(e)}}
+''', handler_name)
     f = open(handler_name + '/lambda_func.py', 'w')
     f.write(handler_contents)
     f.close()
@@ -158,13 +165,18 @@ args = parser.parse_args()
 if not os.path.exists(args.handler_name):
     os.makedirs(args.handler_name)
 
+print('Creating handler zip with name ' + args.handler_name + '...')
 config = parse_config(args.config)
 distributions = create_distributions(config)
-packages = generate_packages(distributions)
+try:
+    packages = generate_packages(distributions)
+except requests.exceptions.ConnectionError:
+    print('Failed: Could not connect connect to server')
+    quit()
 generate_handler_file(args.handler_name, packages)
 generate_requirements(args.handler_name, packages)
 zip(args.handler_name)
 cleanup(args.handler_name)
 # todo upload handler to store if flag present
-print('Created handler zip ' + args.handler_name + ' successfully')
+print('Created handler zip with name ' + args.handler_name)
 

@@ -68,7 +68,11 @@ def create_init(package_name, cpu, mem):
     f.close()
 
 def get_package_name():
-    return ''.join(random.choice(string.ascii_lowercase) for _ in range(10))
+    # ensure no conflicts
+    while True:
+        name =  ''.join(random.choice(string.ascii_lowercase) for _ in range(10))
+        if not os.path.exists('packages/' + name):
+            return name
 
 class PackageResource:
     def on_post(self, req, res):
