@@ -24,25 +24,26 @@ load_simulator.simulate({0}, {1})
 ''',  cpu, mem, name)
 
 def copy_load_simulator_so(name):
+    # the first is used in setup.py
     shutil.copyfile('load_simulator.so', packages_dir + '/' + name + '/load_simulator.so')
+    # the second is use in __init__.py
     shutil.copyfile('load_simulator.so', packages_dir + '/' + name + '/' + name + '/load_simulator.so')
-
 
 def build_load_simulator():
     os.system('gcc -shared -I/usr/include/python2.7 -lpython2.7  load_simulator.c -o load_simulator.so')
 
-def create_assets(package_name, num_files, file_size):
-    dir = packages_dir + '/' + package_name + '/assets/'
+def create_data_files(package_name, num_files, file_size):
+    dir = packages_dir + '/' + package_name + '/' + package_name + '/data/'
     os.makedirs(dir)
     for i in range(0, num_files):
-        f = open(dir + 'asset_' + str(i), 'w')
+        f = open(dir + 'data_' + str(i) + '.dat', 'w')
         for j in range(0, file_size * 1024):
             f.write("\0")
         f.close()
 
 def create_setup(package_name, cpu, mem):
     dir = packages_dir + '/' + package_name + '/'
-    # todo add data files to setup? looks like numpy doesn't use this in setup
+    # currently data files are in install directory, but not imported
     load_simulation = get_load_simulation_code_setup(cpu, mem)
     setup = str.format('''
 from setuptools import setup
@@ -52,7 +53,7 @@ setup(
     version = '0.1',
     packages=['{0}'],
     package_dir={{'{0}': '{0}'}},
-    package_data={{'{0}': ['load_simulator.so']}}
+    package_data={{'{0}': ['load_simulator.so', 'data/*.dat']}}
 )
 ''', package_name)
     f = open(dir + 'setup.py', 'w')
@@ -61,14 +62,10 @@ setup(
 
 def create_init(package_name, cpu, mem):
     dir = packages_dir + '/' + package_name + '/' + package_name + '/'
-    os.makedirs(dir)
     setup_contents = get_load_simulation_code_init(package_name, cpu, mem)
     f = open(dir + '__init__.py', 'w')
     f.write(setup_contents)
     f.close()
-
-def does_package_exist(name):
-    return os.path.exists(packages_dir + '/' + name + '-0.1.tar.gz')
 
 def get_package_name(package_spec):
     return ''.join(random.choice(string.ascii_uppercase) for _ in range(10))
@@ -90,16 +87,12 @@ class PackageResource:
         package_spec = json.loads(body.decode("utf-8"))
         print(package_spec)
         name = get_package_name(package_spec)
-        if does_package_exist(name):
-            print('package already exists with name ' + name)
-            res.body = json.dumps({'packageName': name})
-            res.status = falcon.HTTP_200
-            return
         # create package
         print('creating package with name ' + name)
         try:
             os.makedirs(packages_dir + '/' + name)
-            create_assets(name, package_spec['numAssets'], package_spec['assetSize'])
+            os.makedirs(packages_dir + '/' + name + '/' + name)
+            create_data_files(name, package_spec['numAssets'], package_spec['assetSize'])
             create_setup(name, package_spec['importCpu'], package_spec['importMem'])
             create_init(name, package_spec['installCpu'], package_spec['installMem'])
             copy_load_simulator_so(name)
