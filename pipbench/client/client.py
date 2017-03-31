@@ -16,8 +16,8 @@ that uses the packages, and uploads it to the store.
 def generate_packages(imports_mean, imports_scale):
     num_imports = 5
     packages = []
-    for i in range(0, num_imports):
-        new_package_name = generate_package(5, 5, 5, 5, 5, 5)
+    for i in range(0, 1):
+        new_package_name = generate_package(5, 5, 1000000000, 1000000, 1000000000, 1000000)
         packages.append(new_package_name)
     return packages
 

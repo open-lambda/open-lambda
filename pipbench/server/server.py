@@ -6,6 +6,21 @@ import string
 import tarfile
 import shutil
 
+
+def get_load_simulation_code(cpu, mem):
+    return str.format('''
+import load_simulator
+
+
+load_simulator.simulate({0}, {1})
+''',  cpu, mem)
+
+def copy_load_simulator_so(name):
+    shutil.copyfile('load_simulator.so', packages_dir + '/' + name + '/load_simulator.so')
+
+def build_load_simulator():
+    os.system('gcc -shared -I/usr/include/python2.7 -lpython2.7  load_simulator.c -o load_simulator.so')
+
 def create_assets(package_name, num_files, file_size):
     dir = packages_dir + '/' + package_name + '/assets/'
     os.makedirs(dir)
@@ -15,49 +30,38 @@ def create_assets(package_name, num_files, file_size):
             f.write("\0")
         f.close()
 
-
 def create_setup(package_name, cpu, mem):
     dir = packages_dir + '/' + package_name + '/'
-    # todo use c code
     # todo add data files to setup? looks like numpy doesn't use this in setup
-    setup_contents = '''
+    load_simulation = get_load_simulation_code(cpu, mem)
+    setup = str.format('''
 from setuptools import setup
 
 setup(
-    name = ''' + "'" + package_name + "'," + '''
+    name = '{0}',
     version = '0.1',
+    packages=['{0}'],
+    package_dir={{'{0}': '{0}'}}
 )
-'''
-    for i in range(0, cpu):
-        setup_contents += '''
-if True == True:
-    pass
-'''
+''', package_name)
     f = open(dir + 'setup.py', 'w')
-    f.write(setup_contents)
+    f.write(load_simulation + setup)
     f.close()
 
 def create_init(package_name, cpu, mem):
-    dir = packages_dir + '/' + package_name + '/' + package_name
+    dir = packages_dir + '/' + package_name + '/' + package_name + '/'
     os.makedirs(dir)
-    # todo use c code
-    setup_contents = ''
-    for i in range(0, cpu):
-        setup_contents += '''
-if True == True:
-    pass
-'''
+    setup_contents = get_load_simulation_code(cpu, mem)
     f = open(dir + '__init__.py', 'w')
     f.write(setup_contents)
     f.close()
 
 def does_package_exist(name):
-    return os.path.exists(packages_dir + '/' + name)
+    return os.path.exists(packages_dir + '/' + name + '-0.1.tar.gz')
 
 def get_package_name(package_spec):
-    return 'a'
-    #return 'p' + str(package_spec['numAssets']) + 'x' + str(package_spec['assetSize']) + 'x' + str(package_spec['installCpu']) + 'x' \
-     #      + str(package_spec['installMem']) + 'x' + str(package_spec['importCpu']) + 'x' + str(package_spec['importMem'])
+    return 'sdfg45sdfg654sdfg654sdfgsdf'#'p' + str(package_spec['numAssets']) + 'x' + str(package_spec['assetSize']) + 'x' + str(package_spec['installCpu']) + 'x' \
+           #+ str(package_spec['installMem']) + 'x' + str(package_spec['importCpu']) + 'x' + str(package_spec['importMem'])
 
 class MockedPackageResource:
     def on_post(self, req, res):
@@ -75,18 +79,18 @@ class PackageResource:
             return
         package_spec = json.loads(body.decode("utf-8"))
         print(package_spec)
-        print(type(package_spec))
         name = get_package_name(package_spec)
-        if does_package_exist(name):
+        '''if does_package_exist(name):
             print('package already exists with name ' + name)
             res.body = json.dumps({'packageName': name})
             res.status = falcon.HTTP_200
-            return
-        # create package since it doesn't exist
+            return'''
+        # create package
         print('creating package with name ' + name)
         try:
             os.makedirs(packages_dir + '/' + name)
             create_assets(name, package_spec['numAssets'], package_spec['assetSize'])
+            copy_load_simulator_so(name)
             create_setup(name, package_spec['importCpu'], package_spec['importMem'])
             create_init(name, package_spec['installCpu'], package_spec['installMem'])
             tar = tarfile.open(packages_dir + '/' + name + "-0.1.tar.gz", "w:gz")
@@ -95,6 +99,7 @@ class PackageResource:
             tar.close()
             shutil.rmtree(name)
             os.chdir('..')
+            print('package created')
         except Exception as e:
             print(e)
             res.status = falcon.HTTP_500
@@ -107,6 +112,9 @@ packages_dir = 'packages'
 # create mirror dir if not found
 if not os.path.exists(packages_dir):
     os.makedirs(packages_dir)
+
+# make sure load simulator shared library exists
+build_load_simulator()
 
 # setup server endpoint
 package_resource = PackageResource()
