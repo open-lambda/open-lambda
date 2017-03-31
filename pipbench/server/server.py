@@ -52,7 +52,7 @@ setup(
     version = '0.1',
     packages=['{0}'],
     package_dir={{'{0}': '{0}'}},
-    py_modules= ['{0}.load_simulator']
+    package_data={{'{0}': ['load_simulator.so']}}
 )
 ''', package_name)
     f = open(dir + 'setup.py', 'w')
