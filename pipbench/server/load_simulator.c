@@ -18,7 +18,6 @@ simulate(PyObject *self, PyObject *args) {
     }
 
     free(p);
-    printf("Load Simulator Completed\n");
     return Py_BuildValue("");
 }
 
