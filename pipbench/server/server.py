@@ -32,13 +32,13 @@ def copy_load_simulator_so(name):
 def build_load_simulator():
     os.system('gcc -shared -I/usr/include/python2.7 -lpython2.7  load_simulator.c -o load_simulator.so')
 
-def create_data_files(package_name, num_files, file_size):
+def create_data_files(package_name, file_sizes):
     dir = packages_dir + '/' + package_name + '/' + package_name + '/data/'
     os.makedirs(dir)
-    for i in range(0, num_files):
+    for i in range(0, len(file_sizes)):
         f = open(dir + 'data_' + str(i) + '.dat', 'w')
-        for j in range(0, file_size * 1024):
-            f.write("\0")
+        for j in range(0, file_sizes[i] * 1024):
+            f.write(random.choice(string.ascii_letters + string.digits))
         f.close()
 
 def create_setup(package_name, cpu, mem):
@@ -67,14 +67,8 @@ def create_init(package_name, cpu, mem):
     f.write(setup_contents)
     f.close()
 
-def get_package_name(package_spec):
-    return ''.join(random.choice(string.ascii_uppercase) for _ in range(10))
-
-class MockedPackageResource:
-    def on_post(self, req, res):
-        print('hit')
-        res.body = json.dumps({'packageName': ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(10)) })
-
+def get_package_name():
+    return ''.join(random.choice(string.ascii_lowercase) for _ in range(10))
 
 class PackageResource:
     def on_post(self, req, res):
@@ -86,13 +80,13 @@ class PackageResource:
             return
         package_spec = json.loads(body.decode("utf-8"))
         print(package_spec)
-        name = get_package_name(package_spec)
+        name = get_package_name()
         # create package
         print('creating package with name ' + name)
         try:
             os.makedirs(packages_dir + '/' + name)
             os.makedirs(packages_dir + '/' + name + '/' + name)
-            create_data_files(name, package_spec['numAssets'], package_spec['assetSize'])
+            create_data_files(name, package_spec['dataFiles'])
             create_setup(name, package_spec['importCpu'], package_spec['importMem'])
             create_init(name, package_spec['installCpu'], package_spec['installMem'])
             copy_load_simulator_so(name)
