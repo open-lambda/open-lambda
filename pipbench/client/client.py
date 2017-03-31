@@ -4,7 +4,8 @@ import json
 import os
 import tarfile
 import shutil
-
+import numpy
+import math
 
 '''
 PipBench client
@@ -14,10 +15,19 @@ that uses the packages, and uploads it to the store.
 '''
 
 def generate_packages(imports_mean, imports_scale):
-    num_imports = 5
+    num_imports = math.ceil(numpy.random.normal(imports_mean, imports_scale))
+
     packages = []
-    for i in range(0, 1):
-        new_package_name = generate_package(5, 5, 1000000000, 1000000, 1000000000, 1000000)
+    for i in range(0, num_imports):
+        # todo parametrize these distributions
+        num_files = math.ceil(numpy.random.normal(5))
+        file_sizes_KB = math.ceil(numpy.random.normal(50))
+        setup_cpu = math.ceil(numpy.random.normal(1000000000))
+        setup_mem_B = math.ceil(numpy.random.normal(1000000))
+        init_cpu = math.ceil(numpy.random.normal(1000000000))
+        init_mem_B = math.ceil(numpy.random.normal(1000000))
+
+        new_package_name = generate_package(num_files, file_sizes_KB, setup_cpu, setup_mem_B, init_cpu, init_mem_B)
         packages.append(new_package_name)
     return packages
 
@@ -38,7 +48,6 @@ def generate_package(num_assets, asset_size, install_cpu, install_mem, import_cp
         return package_name
 
 def generate_handler_file(handler_name, packages):
-    # todo this needs to actually upload the handler to the store
     handler_contents = ''
     for p in packages:
         handler_contents += 'import ' + p + '\n'
@@ -47,7 +56,6 @@ def generate_handler_file(handler_name, packages):
     f.close()
 
 def generate_requirements(handler_name, packages):
-    # todo this needs to actually upload the handler to the store
     handler_contents = ''
     for p in packages:
         handler_contents += p + '\n'
@@ -64,18 +72,19 @@ def cleanup(handler_name):
     shutil.rmtree(handler_name)
 
 parser = argparse.ArgumentParser(description='Generate a handler')
-parser.add_argument('-imports-mean', default=10)
-parser.add_argument('-imports-scale', default=1)
+parser.add_argument('-imports-mean', default=5.0)
+parser.add_argument('-imports-scale', default=1.0)
 parser.add_argument('-handler-name', default='pip_bench_handler')
 args = parser.parse_args()
 
 if not os.path.exists(args.handler_name):
     os.makedirs(args.handler_name)
 
-packages = generate_packages(args.imports_mean, args.imports_scale)
+packages = generate_packages(float(args.imports_mean), float(args.imports_scale))
 generate_handler_file(args.handler_name, packages)
 generate_requirements(args.handler_name, packages)
 zip(args.handler_name)
 cleanup(args.handler_name)
+# todo upload handler to store if flag present
 print('Created handler zip ' + args.handler_name + ' successfully')
 

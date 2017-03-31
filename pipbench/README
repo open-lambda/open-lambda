@@ -1,0 +1,13 @@
+To run the server:
+python3 server/start_server.py
+This starts a PyPi mirror and the PipBench http server which can create pacakges and add them
+to the mirror
+
+To create a package:
+python3 client/client.py -handler-name <name>
+This will create a <name>.tar.gz that can be uploaded to the registry to be used by a worker
+
+TODO the worker will need to call:
+pip install --extra-index-url http://localhost:8080/simple/ <package name>
+Otherwise we won't actually look in our pip mirror for the packages, and will
+instead make a request to PyPi itself
