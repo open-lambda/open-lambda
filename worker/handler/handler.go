@@ -12,7 +12,6 @@ import (
 
 	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/handler/state"
-	"github.com/open-lambda/open-lambda/worker/pip-manager"
 	"github.com/open-lambda/open-lambda/worker/registry"
 
 	pmanager "github.com/open-lambda/open-lambda/worker/pool-manager"
@@ -37,7 +36,6 @@ type HandlerSet struct {
 	sbFactory sb.SandboxFactory
 	poolMgr   pmanager.PoolManager
 	config    *config.Config
-	installer pip.InstallManager
 	lru       *HandlerLRU
 	workerDir string
 }
@@ -56,7 +54,6 @@ type Handler struct {
 	code       []byte
 	codeDir    string
 	imports    []string
-	installs   []string
 	sandboxDir string
 }
 
@@ -77,14 +74,11 @@ func NewHandlerSet(config *config.Config, lru *HandlerLRU) (handlerSet *HandlerS
 		return nil, err
 	}
 
-	installer := pip.NewInstaller(config)
-
 	handlerSet = &HandlerSet{
 		handlers:  make(map[string]*Handler),
 		regMgr:    rm,
 		sbFactory: sf,
 		poolMgr:   pm,
-		installer: installer,
 		lru:       lru,
 		workerDir: config.Worker_dir,
 	}
@@ -105,7 +99,6 @@ func (h *HandlerSet) Get(name string) *Handler {
 			name:       name,
 			state:      state.Unitialized,
 			runners:    0,
-			installs:   []string{},
 			imports:    []string{},
 			sandboxDir: sandboxDir,
 		}
@@ -135,7 +128,7 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 
 	// get code if needed
 	if h.lastPull == nil {
-		codeDir, imports, installs, err := h.hset.regMgr.Pull(h.name)
+		codeDir, imports, err := h.hset.regMgr.Pull(h.name)
 		if err != nil {
 			return nil, err
 		}
@@ -144,11 +137,6 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 		h.lastPull = &now
 		h.codeDir = codeDir
 		h.imports = imports
-		h.installs = installs
-
-		if err = h.hset.installer.Install(installs); err != nil {
-			return nil, err
-		}
 	}
 
 	// create sandbox if needed
