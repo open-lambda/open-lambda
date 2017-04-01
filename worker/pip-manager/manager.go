@@ -1,4 +1,4 @@
-package pip
+package pipmanager
 
 import (
 	"os/exec"
@@ -7,11 +7,11 @@ import (
 )
 
 /*
- * InstallManager is the interface for installing pip packages locally.
+ * PipManager is the interface for installing pip packages locally.
  * The manager installs to the worker host from an optional pip mirror.
  */
 
-type InstallManager interface {
+type PipManager interface {
 	Install(pkgs []string) error
 }
 

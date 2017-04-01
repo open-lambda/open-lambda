@@ -1,5 +1,5 @@
 #!/usr/bin/python
-import traceback, json, sys, socket, os, importlib
+import traceback, json, sys, socket, os, importlib, pip
 import rethinkdb
 import tornado.ioloop
 import tornado.web
@@ -18,6 +18,7 @@ PROCESSES_DEFAULT = 10
 initialized = False
 config = None
 db_conn = None
+installed = {}
 
 # run after forking into sandbox
 def init():
@@ -57,6 +58,14 @@ tornado_app = tornado.web.Application([
     (r".*", SockFileHandler),
 ])
 
+def install(pkg):
+    global installed, mirror
+    if not pkg in installed:
+        if mirror:
+            pip.main(['install', '-i', mirror, pkg_path])
+        else:
+            pip.main(['install', pkg_path])
+
 # listen on sock file with Tornado
 def lambda_server():
     server = tornado.httpserver.HTTPServer(tornado_app)
@@ -79,8 +88,13 @@ def fdlisten(path):
         # import packages into global scope
         for k, pkg in enumerate(pkgs):
             if k < len(pkgs)-1:
-                globals()[pkg] = importlib.import_module(pkg)
-                print("importing: %s" % pkg)
+                split = pkg.split(':')
+                try:
+                    install(pkg[1])
+                    globals()[pkg] = importlib.import_module(pkg)
+                    print("importing %s" % pkg)
+                except Exception as e:
+                    print('failed to install %s with: %s' % (pkg[1], e))
             else:
                 signal = pkg
                 print("signal: %s" % signal)
@@ -98,8 +112,13 @@ def redirect():
     sys.stderr = open(STDERR_PATH, 'w')
 
 if __name__ == '__main__':
-    if len(sys.argv) != 2:
-        print('Usage: python %s <sock>' % sys.argv[0])
+    if len(sys.argv) < 2 or len(sys.argv) > 3:
+        print('Usage: python %s <sock> or python %s <sock> <pip_mirror>' % (sys.argv[0], sys.argv[0]))
         sys.exit(1)
+
+    try:
+        mirror = sys.argv[2]
+    except:
+        mirror = None
 
     fdlisten(sys.argv[1])
