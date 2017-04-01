@@ -1,0 +1,11 @@
+{
+    "registry": "local",
+    "sandbox": "docker",
+    "reg_dir": "/home/ubuntu/open-lambda/inc/registry",
+    "cluster_name": "/home/ubuntu/open-lambda/inc",
+    "pool_dir": "/home/ubuntu/open-lambda/inc_pool",
+    "worker_dir": "/home/ubuntu/open-lambda/inc/workers/default",
+    "benchmark_log": "./perf/inc.perf",
+    "pool": "basic",
+    "pool_dir": "/home/ubuntu/open-lambda/inc/pool"
+}

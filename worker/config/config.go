@@ -57,6 +57,9 @@ type Config struct {
 
 	// pass through to sandbox envirenment variable
 	Sandbox_config interface{} `json:"sandbox_config"`
+
+	// write benchmark times to separate log file
+	Benchmark_file string `json:"benchmark_log"`
 }
 
 // SandboxConfJson marshals the Sandbox_config of the Config into a JSON string.
