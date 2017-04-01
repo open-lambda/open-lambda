@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/open-lambda/open-lambda/worker/benchmarker"
 	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/handler"
 )
@@ -69,6 +70,12 @@ func (s *Server) ForwardToSandbox(handler *handler.Handler, r *http.Request, inp
 	max_tries := 10
 	errors := []error{}
 	for tries := 1; ; tries++ {
+		b := benchmarker.GetBenchmarker()
+		var t *benchmarker.Timer
+		if b != nil {
+			t = b.CreateTimer("lambda request", "us")
+		}
+
 		r2, err := http.NewRequest(r.Method, url, bytes.NewReader(input))
 		if err != nil {
 			return nil, nil, newHttpErr(
@@ -78,7 +85,13 @@ func (s *Server) ForwardToSandbox(handler *handler.Handler, r *http.Request, inp
 
 		r2.Header.Set("Content-Type", r.Header.Get("Content-Type"))
 		client := &http.Client{Transport: &channel.Transport}
+		if t != nil {
+			t.Start()
+		}
 		w2, err := client.Do(r2)
+		if t != nil {
+			t.End()
+		}
 		if err != nil {
 			errors = append(errors, err)
 			if tries == max_tries {
@@ -219,7 +232,9 @@ func Main(config_path string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-
+	if conf.Benchmark_file != "" {
+		benchmarker.CreateBenchmarkerSingleton(conf.Benchmark_file)
+	}
 	port := fmt.Sprintf(":%s", conf.Worker_port)
 	run_path := "/runLambda/"
 	status_path := "/status"

@@ -40,6 +40,7 @@
 
 .vagrant
 .sock
+.idea
 
 # Built stuff
 /hack/go/bin

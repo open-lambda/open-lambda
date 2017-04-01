@@ -134,6 +134,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/open-lambda/open-lambda/worker/benchmarker"
 )
 
 /*
@@ -147,6 +149,16 @@ import (
  */
 
 func forkRequest(sockPath, targetPid string, pkgList []string, handler bool) (pid string, err error) {
+	b := benchmarker.GetBenchmarker()
+	var t *benchmarker.Timer
+	if b != nil {
+		t = b.CreateTimer("send fds", "us")
+	}
+
+	if t != nil {
+		t.Start()
+	}
+
 	var signal string
 	if handler {
 		signal = "serve"
@@ -161,6 +173,9 @@ func forkRequest(sockPath, targetPid string, pkgList []string, handler bool) (pi
 	cpkgs := C.CString(pkgStr)
 
 	ret, err := C.sendFds(csock, cpid, cpkgs)
+	if t != nil {
+		t.End()
+	}
 	pid = C.GoString(ret)
 	if err != nil {
 		return "", errors.New(fmt.Sprintf("sendFds: %s", pid))
