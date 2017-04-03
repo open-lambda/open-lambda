@@ -1,5 +1,5 @@
 from time import time, sleep
-import collections, os, sys, math, json, subprocess
+import collections, os, sys, math, json, subprocess, shutil
 
 TRACE_RUN = False
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -15,7 +15,7 @@ def run(cmd, quiet=False):
         rv = subprocess.check_output(cmd, shell=True)
     return rv
 
-def debug_clean(cluster_name):
+def debug_clean():
     try:
         run('sudo kill `sudo lsof -t -i:8080`', quiet=True)
     except Exception:
@@ -43,18 +43,44 @@ def clean_for_test(cluster_name):
     except Exception:
         pass
 
+def get_default_config(cluster_name):
+    return {
+        "registry": "local",
+        "sandbox": "docker",
+        "reg_dir": "../registry",
+        "cluster_name": "%s" % cluster_name,
+        "worker_dir": "workers/default",
+        "benchmark_log": "./perf/%s.perf" % cluster_name,
+        "sandbox_buffer": 0,
+        "num_forkservers": 1
+    }
+
+def add_interpreter_pool(config, num_forkservers, pool, pool_dir):
+    config['num_forkservers'] = num_forkservers
+    config['pool'] = pool
+    config['pool_dir'] = pool_dir
+    return config
+
+def add_container_pool(config, sandbox_buffer):
+    config['sandbox_buffer'] = sandbox_buffer
+    return config
 
 def get_time_millis():
     return int(round(time() * 1000))
 
-def setup_cluster(cluster_name):
+def setup_cluster(cluster_name, config):
+    # Create cluster
     run('sudo %s/../../bin/admin new -cluster %s/%s' % (SCRIPT_DIR, SCRIPT_DIR, cluster_name))
-    run('sudo cp %s/%s_template.json %s/%s/config/template.json' % (SCRIPT_DIR, cluster_name, SCRIPT_DIR, cluster_name))
+    # Write worker config
+    worker_template_f = open('%s/%s/config/template.json' % (SCRIPT_DIR, cluster_name), 'w')
+    json.dump(config, worker_template_f)
+    worker_template_f.close()
+    # Start worker
     run('sudo %s/../../bin/admin workers -cluster=%s/%s' % (SCRIPT_DIR, SCRIPT_DIR, cluster_name))
 
-    run('sudo cp -r %s/../../quickstart/handlers/hello %s/%s/registry/hello' % (SCRIPT_DIR, SCRIPT_DIR, cluster_name))
-    run('sudo cp -r %s/../../quickstart/handlers/hello %s/%s/registry/numpy' % (SCRIPT_DIR, SCRIPT_DIR, cluster_name))
-
+def copy_handlers(cluster_name):
+    shutil.rmtree('%s/%s/registry' % (SCRIPT_DIR, cluster_name))
+    shutil.copytree(SCRIPT_DIR + '/handlers', '%s/%s/registry' % (SCRIPT_DIR, cluster_name))
 
 def run_lambda(which):
     # If this throws an error it is most likely a race condition where the worker has not fully started yet
@@ -63,47 +89,36 @@ def run_lambda(which):
     elif which == 'numpy':
         run('curl -X POST localhost:8080/runLambda/numpy -d \'{"name": "Alice"}\'', quiet=True)
 
-def interpreters_no_containers():
-    pass
-
-def benchmark(type, which_lambda, iterations):
-    clean_for_test(type)
-    #debug_clean(type)
-    setup_cluster(type)
+def benchmark(cluster_name, config, which_lambda, iterations):
+    clean_for_test(cluster_name)
+    #debug_clean()
+    setup_cluster(cluster_name, config)
+    copy_handlers(cluster_name)
     sleep(1)
 
     for i in range(0, iterations):
-        print('try req for '+ type)
+        print('try req for '+ cluster_name)
         run_lambda(which_lambda)
 
     sleep(1)
-    clean_for_test(type)
-    #debug_clean(type)
+    clean_for_test(cluster_name)
+    #debug_clean()
 
+if not os.path.exists('perf'):
+    os.makedirs('perf')
 
-# do no change these unless you also change config file cluster_name and their file names
-NO_INTERPRETERS_NO_CONTAINERS = 'ninc'
-INTERPRETERS_NO_CONTAINERS = 'inc'
-NO_INTERPRETERS_CONTAINERS = 'nic'
-INTERPRETERS_CONTAINERS = 'ic'
+config = get_default_config('ninc')
+benchmark('ninc', config, 'hello', 5)
 
-ITERATIONS = 5
+config = get_default_config('inc')
+config = add_interpreter_pool(config, num_forkservers=1, pool='basic', pool_dir='inc/pool')
+benchmark('inc', config, 'hello', 5)
 
-try:
-    run('sudo rm -rf perf')
-except Exception:
-    pass
+config = get_default_config('nic')
+config = add_container_pool(config, 5)
+benchmark('nic', config, 'hello', 5)
 
-run('sudo mkdir perf')
-
-# No container pool and no interpreter pool
-benchmark(NO_INTERPRETERS_NO_CONTAINERS, 'hello', ITERATIONS)
-
-# No container pool and interpreter pool
-benchmark(INTERPRETERS_NO_CONTAINERS, 'hello', ITERATIONS)
-
-# container pool and no interpreter pool
-benchmark(NO_INTERPRETERS_CONTAINERS, 'hello', ITERATIONS)
-
-# container pool and interpreter pool
-benchmark(INTERPRETERS_CONTAINERS, 'hello', ITERATIONS)
+config = get_default_config('ic')
+config = add_interpreter_pool(config, num_forkservers=1, pool='basic', pool_dir='ic/pool')
+config = add_container_pool(config, 5)
+benchmark('ic', config, 'hello', 5)
