@@ -15,13 +15,9 @@ def run(cmd, quiet=False):
         rv = subprocess.check_output(cmd, shell=True)
     return rv
 
-def clean_for_test(cluster_name):
+def debug_clean(cluster_name):
     try:
-        run('sudo %s/../../bin/admin kill -cluster=%s' % (SCRIPT_DIR, cluster_name), quiet=True)
-    except Exception:
-        pass
-    try:
-        run('sudo rm -rf ' + cluster_name, quiet=True)
+        run('sudo kill `sudo lsof -t -i:8080`', quiet=True)
     except Exception:
         pass
     try:
@@ -29,22 +25,35 @@ def clean_for_test(cluster_name):
     except Exception:
         pass
     try:
+        run('sudo docker kill $(docker ps -a -q)', quiet=True)
+    except Exception:
+        pass
+    try:
         run('sudo docker rm $(docker ps -a -q)', quiet=True)
     except Exception:
         pass
+
+def clean_for_test(cluster_name):
+    try:
+        run('sudo %s/../../bin/admin kill -cluster=%s/%s' % (SCRIPT_DIR, SCRIPT_DIR, cluster_name), quiet=True)
+    except Exception:
+        pass
+    try:
+        run('sudo rm -rf %s/%s' % (SCRIPT_DIR, cluster_name), quiet=True)
+    except Exception:
+        pass
+
 
 def get_time_millis():
     return int(round(time() * 1000))
 
 def setup_cluster(cluster_name):
-    try:
-        run('sudo ./bin/admin new -cluster ' + cluster_name)
-    except Exception:
-        pass
-    run('sudo cp %s %s_template.json ./%s/config/template.json' % (SCRIPT_DIR, cluster_name, cluster_name))
-    run('sudo %s/../../bin/admin workers -cluster=%s' % (SCRIPT_DIR, cluster_name))
-    run('sudo cp -r ./quickstart/handlers/hello ./' + cluster_name + '/registry/hello')
-    run('sudo cp -r ./testing/handlers/numpy ./' + cluster_name + '/registry/numpy')
+    run('sudo %s/../../bin/admin new -cluster %s/%s' % (SCRIPT_DIR, SCRIPT_DIR, cluster_name))
+    run('sudo cp %s/%s_template.json %s/%s/config/template.json' % (SCRIPT_DIR, cluster_name, SCRIPT_DIR, cluster_name))
+    run('sudo %s/../../bin/admin workers -cluster=%s/%s' % (SCRIPT_DIR, SCRIPT_DIR, cluster_name))
+
+    run('sudo cp -r %s/../../quickstart/handlers/hello %s/%s/registry/hello' % (SCRIPT_DIR, SCRIPT_DIR, cluster_name))
+    run('sudo cp -r %s/../../quickstart/handlers/hello %s/%s/registry/numpy' % (SCRIPT_DIR, SCRIPT_DIR, cluster_name))
 
 
 def run_lambda(which):
@@ -59,27 +68,18 @@ def interpreters_no_containers():
 
 def benchmark(type, which_lambda, iterations):
     clean_for_test(type)
-    sleep(1)
+    #debug_clean(type)
     setup_cluster(type)
     sleep(1)
 
-    min = 100000
-    max = -1
-    total_time = 0
     for i in range(0, iterations):
-        sleep(0.1)
-        before = get_time_millis()
+        print('try req for '+ type)
         run_lambda(which_lambda)
-        after = get_time_millis()
-        iter_time = after - before
-        total_time += iter_time
-        if iter_time < min:
-            min = iter_time
-        if iter_time > max:
-            max = iter_time
+
+    sleep(1)
     clean_for_test(type)
-    avg = int(round(total_time / iterations))
-    return {'min': min, 'max': max, 'avg': avg}
+    #debug_clean(type)
+
 
 # do no change these unless you also change config file cluster_name and their file names
 NO_INTERPRETERS_NO_CONTAINERS = 'ninc'
@@ -96,17 +96,14 @@ except Exception:
 
 run('sudo mkdir perf')
 
-print os.getcwd()
-
-
 # No container pool and no interpreter pool
-res = benchmark(NO_INTERPRETERS_NO_CONTAINERS, 'hello', ITERATIONS)
+benchmark(NO_INTERPRETERS_NO_CONTAINERS, 'hello', ITERATIONS)
 
 # No container pool and interpreter pool
-res = benchmark(INTERPRETERS_NO_CONTAINERS, 'hello', ITERATIONS)
+benchmark(INTERPRETERS_NO_CONTAINERS, 'hello', ITERATIONS)
 
 # container pool and no interpreter pool
-# res = benchmark(NO_INTERPRETERS_CONTAINERS, 'hello', ITERATIONS)
+benchmark(NO_INTERPRETERS_CONTAINERS, 'hello', ITERATIONS)
 
 # container pool and interpreter pool
-# res = benchmark(INTERPRETERS_CONTAINERS, 'hello', ITERATIONS)
+benchmark(INTERPRETERS_CONTAINERS, 'hello', ITERATIONS)

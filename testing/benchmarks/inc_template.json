@@ -1,11 +1,11 @@
 {
     "registry": "local",
     "sandbox": "docker",
-    "reg_dir": "/home/ubuntu/open-lambda/inc/registry",
-    "cluster_name": "/home/ubuntu/open-lambda/inc",
-    "pool_dir": "/home/ubuntu/open-lambda/inc_pool",
-    "worker_dir": "/home/ubuntu/open-lambda/inc/workers/default",
+    "reg_dir": "../registry",
+    "cluster_name": "inc",
+    "num_forkservers": 1,
+    "worker_dir": "workers/default",
     "benchmark_log": "./perf/inc.perf",
     "pool": "basic",
-    "pool_dir": "/home/ubuntu/open-lambda/inc/pool"
+    "pool_dir": "inc/pool"
 }

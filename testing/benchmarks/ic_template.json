@@ -1,13 +1,12 @@
 {
 	"registry": "local",
 	"sandbox": "docker",
-	"reg_dir": "/home/ubuntu/open-lambda/ninc/registry",
-	"cluster_name": "/home/ubuntu/open-lambda/ninc",
+	"reg_dir": "../registry",
+	"cluster_name": "ic",
 	"num_forkservers": 1,
-	"worker_dir": "/home/ubuntu/open-lambda/ninc/workers/default",
-	"sandbox_buffer": 0,
-	"benchmark_log": "/home/ubuntu/open-lambda/perf/ninc.perf",
-	"sandbox_buffer": 5
+	"worker_dir": "workers/default",
+	"benchmark_log": "./perf/ic.perf",
+	"sandbox_buffer": 5,
     "pool": "basic",
-    "pool_dir": "/home/ubuntu/open-lambda/inc/pool"
+    "pool_dir": "ic/pool"
 }
