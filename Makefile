@@ -14,6 +14,7 @@ WORKER_DIR = $(GO_PATH)/src/github.com/open-lambda/open-lambda/worker
 ADMIN_DIR = $(GO_PATH)/src/github.com/open-lambda/open-lambda/worker/admin
 
 LAMBDA_DIR = $(abspath ./lambda)
+PIPBENCH_DIR = $(abspath ./pipbench)
 
 .PHONY: all
 all : .git/hooks/pre-commit imgs/lambda imgs/server-pool bin/admin
@@ -66,6 +67,22 @@ pooltest : pooltest-config imgs/lambda imgs/server-pool
 	cd $(WORKER_DIR) && $(GO) test ./handler -v
 	cd $(WORKER_DIR) && $(GO) test ./server -v
 
+.PHONY: pipbench-server-dependencies pipbench-server-setup pipbench-server pipbench-server-stop pipbench-client
+pipbench-server-dependencies:
+	cd $(PIPBENCH_DIR) && ./setup.sh
+
+pipbench-server-setup:
+	cd $(PIPBENCH_DIR)/server && python3 setup_server.py &
+
+pipbench-server:
+	cd $(PIPBENCH_DIR)/server && python3 start_server.py &
+
+pipbench-server-stop:
+	cd $(PIPBENCH_DIR)/server && python3 stop_server.py &
+
+pipbench-client:
+	cd $(PIPBENCH_DIR)/client && python3 client.py
+
 .PHONY: clean
 clean :
 	rm -rf bin
@@ -75,3 +92,4 @@ clean :
 	rm -f cgroup/cgroup_init
 	${MAKE} -C lambda clean
 	${MAKE} -C server-pool clean
+

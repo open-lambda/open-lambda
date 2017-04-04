@@ -7,12 +7,14 @@ import tarfile
 import shutil
 
 
+LOGGING = True
+
 def get_load_simulation_code_setup(cpu, mem):
     return str.format('''
 import load_simulator
 
 
-load_simulator.simulate({0}, {1})
+load_simulator.simulate_install({0}, {1})
 ''',  cpu, mem)
 
 def get_load_simulation_code_init(name, cpu, mem):
@@ -20,7 +22,7 @@ def get_load_simulation_code_init(name, cpu, mem):
 import {2}.load_simulator
 
 
-load_simulator.simulate({0}, {1})
+p = load_simulator.simulate_import({0}, {1})
 ''',  cpu, mem, name)
 
 def copy_load_simulator_so(name):
@@ -28,9 +30,6 @@ def copy_load_simulator_so(name):
     shutil.copyfile('load_simulator.so', packages_dir + '/' + name + '/load_simulator.so')
     # the second is use in __init__.py
     shutil.copyfile('load_simulator.so', packages_dir + '/' + name + '/' + name + '/load_simulator.so')
-
-def build_load_simulator():
-    os.system('gcc -shared -I/usr/include/python2.7 -lpython2.7  load_simulator.c -o load_simulator.so')
 
 def create_data_files(package_name, file_sizes):
     dir = packages_dir + '/' + package_name + '/' + package_name + '/data/'
@@ -84,8 +83,9 @@ class PackageResource:
         package_spec = json.loads(body.decode("utf-8"))
         name = get_package_name()
         # create package
-        print('Creating package ' + name + '...')
-        print(package_spec)
+        if LOGGING:
+            print('Creating package ' + name + '...')
+            print(package_spec)
         try:
             os.makedirs(packages_dir + '/' + name)
             os.makedirs(packages_dir + '/' + name + '/' + name)
@@ -99,7 +99,8 @@ class PackageResource:
             tar.close()
             shutil.rmtree(name)
             os.chdir('..')
-            print('Package ' + name + ' created')
+            if LOGGING:
+                print('Package ' + name + ' created')
         except Exception as e:
             print(e)
             res.status = falcon.HTTP_500
@@ -107,16 +108,17 @@ class PackageResource:
         res.body = json.dumps({'packageName': name})
         res.status = falcon.HTTP_200
 
+LOGGING = False
 packages_dir = 'packages'
 
 # create mirror dir if not found
 if not os.path.exists(packages_dir):
     os.makedirs(packages_dir)
 
-# make sure load simulator shared library exists
-build_load_simulator()
-
 # setup server endpoint
 package_resource = PackageResource()
 app = falcon.API()
 app.add_route('/package', package_resource)
+
+
+

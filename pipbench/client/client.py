@@ -105,8 +105,8 @@ def parse_config(config_file_name):
                 },
                 "mem": {
                     "dist": "normal",
-                    "loc": 1000000.0,
-                    "scale": 10000.0
+                    "loc": 10000.0,
+                    "scale": 10.0
                 }
             },
             "import": {
@@ -117,8 +117,8 @@ def parse_config(config_file_name):
                 },
                 "mem": {
                     "dist": "normal",
-                    "loc": 1000000.0,
-                    "scale": 10000.0
+                    "loc": 10000.0,
+                    "scale": 10.0
                 }
             }
         }
