@@ -1,9 +1,0 @@
-{
-	"registry": "local",
-	"sandbox": "docker",
-	"reg_dir": "../registry",
-	"cluster_name": "nic",
-	"worker_dir": "workers/default",
-	"benchmark_log": "./perf/nic.perf",
-	"sandbox_buffer": 5
-}

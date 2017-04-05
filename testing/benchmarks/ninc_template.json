@@ -1,8 +1,0 @@
-{
-	"registry": "local",
-	"sandbox": "docker",
-	"reg_dir": "../registry",
-	"cluster_name": "ninc",
-	"worker_dir": "workers/default",
-	"benchmark_log": "./perf/ninc.perf"
-}

@@ -1,0 +1,30 @@
+To start a cluster without an interpreter pool or container pool
+python3 cluster_util.py --start -cluster <cluster name>
+
+To add an interpreter pool, add flag
+-interpreter-pool <type>
+Where type is: basic
+
+To add an container pool, add flag
+-container-pool <num>
+Where num is the value used for sandbox buffer
+
+To kill a cluster
+python3 cluster_util.py --stop -cluster <cluster name>
+
+To kill a cluster and also remove its the directory
+python3 cluster_util.py --stop --remove -cluster <cluster name>
+
+To nuke all docker containers and the worker process
+python3 cluster_util.py --stop-all
+
+
+To run a workload
+python3 run_workload.py -config <config file> -cluster <cluster name>
+
+To use a regex to populate handler groups
+-handler-dir handlers
+
+To actually copy the handlers to the cluster registry
+--copy-handlers
+Note: This deletes all other handlers in that registry

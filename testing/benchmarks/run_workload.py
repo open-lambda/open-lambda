@@ -1,12 +1,25 @@
-from time import time, sleep
-import collections, os, sys, math, json, subprocess, shutil
+import time, collections, os, sys, math, json, subprocess, shutil, re, random, argparse, numpy
 
 TRACE_RUN = False
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 
+class Distribution:
+    def __init__(self, dist, dist_args):
+        self.dist = dist
+        self.dist_args = dist_args
+
+    def sample(self):
+        dist = getattr(numpy.random, self.dist)
+        return abs(math.ceil(dist(**self.dist_args)))
+
+def distribution_factory(dist_spec):
+    dist = dist_spec['dist']
+    dist_spec.pop('dist')
+    return Distribution(dist, dist_spec)
+
 def run(cmd, quiet=False):
     if TRACE_RUN:
-        print 'EXEC ' + cmd
+        print('EXEC ' + cmd)
     if quiet:
         err = open('/dev/null')
         rv = subprocess.check_output(cmd, shell=True, stderr=err)
@@ -15,110 +28,107 @@ def run(cmd, quiet=False):
         rv = subprocess.check_output(cmd, shell=True)
     return rv
 
-def debug_clean():
-    try:
-        run('sudo kill `sudo lsof -t -i:8080`', quiet=True)
-    except Exception:
-        pass
-    try:
-        run('sudo docker unpause $(docker ps -a -q)', quiet=True)
-    except Exception:
-        pass
-    try:
-        run('sudo docker kill $(docker ps -a -q)', quiet=True)
-    except Exception:
-        pass
-    try:
-        run('sudo docker rm $(docker ps -a -q)', quiet=True)
-    except Exception:
-        pass
+def copy_handlers(cluster_name, handler_dir):
+    shutil.rmtree('%s/%s/registry' % (SCRIPT_DIR, cluster_name))
+    shutil.copytree('%s/%s' % (SCRIPT_DIR, handler_dir), '%s/%s/registry' % (SCRIPT_DIR, cluster_name))
 
-def clean_for_test(cluster_name):
-    try:
-        run('sudo %s/../../bin/admin kill -cluster=%s/%s' % (SCRIPT_DIR, SCRIPT_DIR, cluster_name), quiet=True)
-    except Exception:
-        pass
-    try:
-        run('sudo rm -rf %s/%s' % (SCRIPT_DIR, cluster_name), quiet=True)
-    except Exception:
-        pass
-
-def get_default_config(cluster_name):
-    return {
-        "registry": "local",
-        "sandbox": "docker",
-        "reg_dir": "../registry",
-        "cluster_name": "%s" % cluster_name,
-        "worker_dir": "workers/default",
-        "benchmark_log": "./perf/%s.perf" % cluster_name,
-        "sandbox_buffer": 0,
-        "num_forkservers": 1
-    }
-
-def add_interpreter_pool(config, num_forkservers, pool, pool_dir):
-    config['num_forkservers'] = num_forkservers
-    config['pool'] = pool
-    config['pool_dir'] = pool_dir
-    return config
-
-def add_container_pool(config, sandbox_buffer):
-    config['sandbox_buffer'] = sandbox_buffer
-    return config
+def run_handler(handler_name):
+    run('curl -X POST localhost:8080/runLambda/%s -d \'{"name": "Alice"}\'' % handler_name, quiet=True)
 
 def get_time_millis():
-    return int(round(time() * 1000))
+    return round(time.clock() * 1000)
 
-def setup_cluster(cluster_name, config):
-    # Create cluster
-    run('sudo %s/../../bin/admin new -cluster %s/%s' % (SCRIPT_DIR, SCRIPT_DIR, cluster_name))
-    # Write worker config
-    worker_template_f = open('%s/%s/config/template.json' % (SCRIPT_DIR, cluster_name), 'w')
-    json.dump(config, worker_template_f)
-    worker_template_f.close()
-    # Start worker
-    run('sudo %s/../../bin/admin workers -cluster=%s/%s' % (SCRIPT_DIR, SCRIPT_DIR, cluster_name))
+def parse_config(config_file_name, handler_dir):
+    if config_file_name is None:
+        return {
+            "cycles": 10, # amount
+            "cycleInterval": 5, # time between cycle starts in ms
+            "handlerGroups": [
+                {
+                    "groupName": "hello",
+                    "runSample": {
+                        "dist": "normal",
+                        "loc": 5.0,
+                        "scale": 1.0
+                    },
+                    "runFloor": 0.80,
+                    "runAmount": {
+                        "dist": "normal",
+                        "loc": 10.0,
+                        "scale": 5.0
+                    },
+                    # handlerRegex
+                    "handlers": [
 
-def copy_handlers(cluster_name):
-    shutil.rmtree('%s/%s/registry' % (SCRIPT_DIR, cluster_name))
-    shutil.copytree(SCRIPT_DIR + '/handlers', '%s/%s/registry' % (SCRIPT_DIR, cluster_name))
+                    ]
+                }
+            ]
+        }
+    else:
+        f = open(config_file_name, 'r')
+        config = json.load(f)
+        # if handlerRegex present populate handlers[] from it
+        for handler_group in config["handlerGroups"]:
+            # construct distributions
+            handler_group["runSample"] = distribution_factory(handler_group["runSample"])
+            handler_group["runAmount"] = distribution_factory(handler_group["runAmount"])
+            # find handlers that belong to group if necessary
+            if "handlerRegex" in handler_group:
+                matched_handlers = []
+                ro = re.compile(handler_group["handlerRegex"])
+                present_handlers = os.listdir('%s/%s' % (SCRIPT_DIR, handler_dir))
+                for handler_name in present_handlers:
+                    if ro.match(handler_name):
+                        matched_handlers.append(handler_name)
+                handler_group["handlers"] = matched_handlers
 
-def run_lambda(which):
-    # If this throws an error it is most likely a race condition where the worker has not fully started yet
-    if which == 'hello':
-        run('curl -X POST localhost:8080/runLambda/hello -d \'{"name": "Alice"}\'', quiet=True)
-    elif which == 'numpy':
-        run('curl -X POST localhost:8080/runLambda/numpy -d \'{"name": "Alice"}\'', quiet=True)
+        return config
 
-def benchmark(cluster_name, config, which_lambda, iterations):
-    clean_for_test(cluster_name)
-    #debug_clean()
-    setup_cluster(cluster_name, config)
-    copy_handlers(cluster_name)
-    sleep(1)
+def benchmark(config, verbose):
+    if verbose:
+        print('Running for %d cycles with an interval of time %d ms' % (config["cycles"], config["cycleInterval"]))
+    for i in range(0, config["cycles"]):
+        if verbose:
+            print('Cycle %d:' % (i + 1))
+        start_time = get_time_millis()
+        for handler_group in config["handlerGroups"]:
+            if handler_group["runSample"].sample() < handler_group["runFloor"]:
+                num_to_run = handler_group["runAmount"].sample()
+                for j in range(0, num_to_run):
+                    handlers = handler_group["handlers"]
+                    num_hanlders = len(handlers)
+                    handler_to_run = handlers[random.randint(0, num_hanlders - 1)]
+                    if verbose:
+                        print('Making request to handler %s' % handler_to_run)
+                    run_handler(handler_to_run)
+        end_time = get_time_millis()
 
-    for i in range(0, iterations):
-        print('try req for '+ cluster_name)
-        run_lambda(which_lambda)
+        if end_time - start_time < config["cycleInterval"]:
+            time.sleep((end_time - start_time) / 1000)
 
-    sleep(1)
-    clean_for_test(cluster_name)
-    #debug_clean()
 
-if not os.path.exists('perf'):
-    os.makedirs('perf')
+parser = argparse.ArgumentParser(description='Start a cluster')
+parser.add_argument('-cluster', default=None)
+parser.add_argument('-config', default=None)
+parser.add_argument('-handler-dir', default=None)
+parser.add_argument('--copy-handlers', action='store_true')
+parser.add_argument('--verbose', action='store_true')
+args = parser.parse_args()
 
-config = get_default_config('ninc')
-benchmark('ninc', config, 'hello', 5)
+if args.copy_handlers:
+    if not args.cluster:
+        print('Must specify cluster name if copying handlers')
+        exit()
+    if args.verbose:
+        print('Copying handlers')
+    if not args.handler_dir:
+        print('Must specify handler directory')
+    copy_handlers(args.cluster, args.handler_dir)
 
-config = get_default_config('inc')
-config = add_interpreter_pool(config, num_forkservers=1, pool='basic', pool_dir='inc/pool')
-benchmark('inc', config, 'hello', 5)
-
-config = get_default_config('nic')
-config = add_container_pool(config, 5)
-benchmark('nic', config, 'hello', 5)
-
-config = get_default_config('ic')
-config = add_interpreter_pool(config, num_forkservers=1, pool='basic', pool_dir='ic/pool')
-config = add_container_pool(config, 5)
-benchmark('ic', config, 'hello', 5)
+if args.verbose:
+    print('Parsing config')
+config = parse_config(args.config, args.handler_dir)
+if args.verbose:
+    print(config)
+    print('Benchmarking...')
+benchmark(config, args.verbose)
