@@ -124,6 +124,9 @@ func (s *DockerSandbox) Start() error {
 
 	if err := s.client.StartContainer(s.container.ID, nil); err != nil {
 		log.Printf("failed to start container with err %v\n", err)
+		if t != nil {
+			t.Error("Failed to start docker container")
+		}
 		return s.dockerError(err)
 	}
 
@@ -165,6 +168,9 @@ func (s *DockerSandbox) Pause() error {
 	}
 	if err := s.client.PauseContainer(s.container.ID); err != nil {
 		log.Printf("failed to pause container with error %v\n", err)
+		if t != nil {
+			t.Error("Failed to pause docker container")
+		}
 		return s.dockerError(err)
 	}
 	if t != nil {
@@ -184,6 +190,9 @@ func (s *DockerSandbox) Unpause() error {
 
 	if err := s.client.UnpauseContainer(s.container.ID); err != nil {
 		log.Printf("failed to unpause container %s with err %v\n", s.container.Name, err)
+		if t != nil {
+			t.Error("Failed to unpause docker container")
+		}
 		return s.dockerError(err)
 	}
 
@@ -245,7 +254,7 @@ func (s *DockerSandbox) CGroupEnter(pid string) (err error) {
 
 	if err := cmd.Run(); err != nil {
 		if t != nil {
-			t.End()
+			t.Error("Failed to run cgclassify")
 		}
 		return err
 	}
