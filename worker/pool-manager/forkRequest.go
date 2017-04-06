@@ -174,7 +174,11 @@ func forkRequest(sockPath, targetPid string, pkgList []string, handler bool) (pi
 
 	ret, err := C.sendFds(csock, cpid, cpkgs)
 	if t != nil {
-		t.End()
+		if err == nil {
+			t.End()
+		} else {
+			t.Error("Send Fds Failed")
+		}
 	}
 	pid = C.GoString(ret)
 	if err != nil {

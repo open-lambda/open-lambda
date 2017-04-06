@@ -27,3 +27,14 @@ func (t *Timer) End() {
 	}
 	fmt.Fprintf(t.logfile, "%s: %d %s\n", t.name, diff, t.unit)
 }
+
+func (t *Timer) Error(message string) {
+	end_time := time.Now().UnixNano()
+	diff := end_time - t.start_time
+	if t.unit == "us" {
+		diff /= 1000
+	} else if t.unit == "ms" {
+		diff /= 1000000
+	}
+	fmt.Fprintf(t.logfile, "ERROR:%s %d %s\n", message, diff, t.unit)
+}

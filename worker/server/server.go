@@ -89,10 +89,10 @@ func (s *Server) ForwardToSandbox(handler *handler.Handler, r *http.Request, inp
 			t.Start()
 		}
 		w2, err := client.Do(r2)
-		if t != nil {
-			t.End()
-		}
 		if err != nil {
+			if t != nil {
+				t.Error("Request Failed")
+			}
 			errors = append(errors, err)
 			if tries == max_tries {
 				log.Printf("Forwarding request to container failed after %v tries\n", max_tries)
@@ -105,6 +105,10 @@ func (s *Server) ForwardToSandbox(handler *handler.Handler, r *http.Request, inp
 			}
 			time.Sleep(time.Duration(tries*100) * time.Millisecond)
 			continue
+		} else {
+			if t != nil {
+				t.End()
+			}
 		}
 
 		defer w2.Body.Close()
