@@ -54,6 +54,7 @@ def get_default_config(cluster_name):
         "benchmark_log": "./perf/%s.perf" % cluster_name,
         "sandbox_buffer": 0,
         "sandbox_config": {},
+        "pip_mirror": "http://0.0.0.0:9199/simple/"
     }
 
 def add_interpreter_pool(config, pool, pool_dir):
@@ -91,6 +92,7 @@ parser.add_argument('--stop-all', action='store_true')
 parser.add_argument('--start', action='store_true')
 parser.add_argument('-interpreter-pool', default=None)
 parser.add_argument('-container-pool', default=None)
+parser.add_argument('--pipbench', action='store_true')
 args = parser.parse_args()
 
 if args.stop_all:
@@ -121,6 +123,8 @@ if args.start:
         config = add_interpreter_pool(config, args.interpreter_pool, pool_dir)
     if args.container_pool is not None:
         config = add_container_pool(config, args.container_pool)
+    if args.pipbench:
+        config = add_pipbench(config)
     setup_cluster(args.cluster, config)
     print('Cluster %s started' % args.cluster)
 else :
