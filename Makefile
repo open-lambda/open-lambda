@@ -80,9 +80,6 @@ pipbench-server:
 pipbench-server-stop:
 	cd $(PIPBENCH_DIR)/server && python3 stop_server.py &
 
-pipbench-client:
-	cd $(PIPBENCH_DIR)/client && python3 client.py
-
 .PHONY: clean
 clean :
 	rm -rf bin

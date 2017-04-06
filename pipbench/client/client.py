@@ -46,7 +46,7 @@ def generate_package(data_files, install_cpu, install_mem, import_cpu, import_me
         package_name = r.json()['packageName']
         return package_name
 
-def generate_handler_file(handler_name, packages):
+def generate_handler_file(handler_dir, handler_name, packages):
     handler_contents = ''
     for p in packages:
         handler_contents += 'import ' + p + '\n'
@@ -57,15 +57,15 @@ def handler(conn, event):
     except Exception as e:
         return {{'error': str(e)}}
 ''', handler_name)
-    f = open(handler_name + '/lambda_func.py', 'w')
+    f = open('%s/%s/lambda_func.py' % (handler_dir, handler_name), 'w')
     f.write(handler_contents)
     f.close()
 
-def generate_requirements(handler_name, packages):
+def generate_requirements(handler_dir, handler_name, packages):
     handler_contents = ''
     for p in packages:
-        handler_contents += p + '\n'
-    f = open(handler_name + '/' + 'requirements.txt', 'w')
+        handler_contents += '%s:%s\n' % (p, p)
+    f = open('%s/%s/packages.txt' % (handler_dir, handler_name), 'w')
     f.write(handler_contents)
     f.close()
 
@@ -159,13 +159,23 @@ def create_distributions(config):
 
 parser = argparse.ArgumentParser(description='Generate a handler')
 parser.add_argument('-config', default=None)
-parser.add_argument('-handler-name', default='pip_bench_handler')
+parser.add_argument('-handler-name', default=None)
+parser.add_argument('-handler-dir', default=None)
 args = parser.parse_args()
 
-if not os.path.exists(args.handler_name):
-    os.makedirs(args.handler_name)
+if not os.path.exists(args.handler_dir):
+    os.makedirs(args.handler_dir)
 
-print('Creating handler zip with name ' + args.handler_name + '...')
+os.makedirs('%s/%s' % (args.handler_dir, args.handler_name))
+
+if args.handler_dir is None:
+    print('Specify a handler directory')
+    exit()
+
+if args.handler_name is None:
+    print('Specify a handler name')
+    exit()
+
 config = parse_config(args.config)
 distributions = create_distributions(config)
 try:
@@ -173,10 +183,9 @@ try:
 except requests.exceptions.ConnectionError:
     print('Failed: Could not connect connect to server')
     quit()
-generate_handler_file(args.handler_name, packages)
-generate_requirements(args.handler_name, packages)
-zip(args.handler_name)
-cleanup(args.handler_name)
-# todo upload handler to store if flag present
+generate_handler_file(args.handler_dir, args.handler_name, packages)
+generate_requirements(args.handler_dir, args.handler_name, packages)
+#zip(args.handler_name)
+#cleanup(args.handler_name)
 print('Created handler zip with name ' + args.handler_name)
 
