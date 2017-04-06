@@ -34,8 +34,8 @@ simulate_import(PyObject *self, PyObject *args) {
     for (long i = 0; i < cpu_units; i++) {
         j++;
     }
-    PyObject * p = (PyObject *) PyMem_Malloc(mem_bytes);
-    return p;
+    char * p = malloc(mem_bytes);
+    return Py_BuildValue("s#", p, mem_bytes);
 }
 
 static PyMethodDef LoadSimulatorMethods[] =
