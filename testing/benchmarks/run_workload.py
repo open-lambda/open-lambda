@@ -1,4 +1,15 @@
-import time, collections, os, sys, math, json, subprocess, shutil, re, random, argparse, numpy
+import time
+import os
+import math
+import json
+import subprocess
+import shutil
+import re
+import random
+import argparse
+import numpy
+import grequests
+
 
 TRACE_RUN = False
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -32,8 +43,14 @@ def copy_handlers(cluster_name, handler_dir):
     shutil.rmtree('%s/%s/registry' % (SCRIPT_DIR, cluster_name))
     shutil.copytree('%s/%s' % (SCRIPT_DIR, handler_dir), '%s/%s/registry' % (SCRIPT_DIR, cluster_name))
 
-def run_handler(handler_name):
-    run('curl -X POST localhost:8080/runLambda/%s -d \'{"name": "Alice"}\'' % handler_name, quiet=True)
+def handler_response(res):
+    print('Received res')
+
+def get_async_action_item(handler_name):
+    headers = {'Content-Type': 'application/json'}
+    return grequests.post('http://localhost:8080/runLambda/%s' % handler_name, headers=headers, data=json.dumps({
+        "name": "Alice"
+    }), hooks={'response': handler_response})
 
 def get_time_millis():
     return round(time.clock() * 1000)
@@ -91,6 +108,7 @@ def benchmark(config, verbose):
         if verbose:
             print('Cycle %d:' % (i + 1))
         start_time = get_time_millis()
+        handler_async_actions = []
         for handler_group in config["handlerGroups"]:
             if handler_group["runSample"].sample() < handler_group["runFloor"]:
                 num_to_run = handler_group["runAmount"].sample()
@@ -99,10 +117,11 @@ def benchmark(config, verbose):
                     num_hanlders = len(handlers)
                     handler_to_run = handlers[random.randint(0, num_hanlders - 1)]
                     if verbose:
-                        print('Making request to handler %s' % handler_to_run)
-                    run_handler(handler_to_run)
+                        print('Create request action to handler %s' % handler_to_run)
+                    handler_async_actions.append(get_async_action_item(handler_to_run))
+        # Run requests
+        grequests.map(handler_async_actions)
         end_time = get_time_millis()
-
         if end_time - start_time < config["cycleInterval"]:
             time.sleep((end_time - start_time) / 1000)
 
