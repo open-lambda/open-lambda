@@ -1,0 +1,20 @@
+NOTES:
+- The client and server use python3, but the packages and load_simulator shared library are built for python 2.7
+
+Setup:
+Run setup.sh to ensure you have the pip packages needed
+
+To run the server:
+python3 server/start_server.py
+This starts a PyPi mirror and the PipBench http server which can create pacakges and add them
+to the mirror
+
+To create a package:
+python3 client/client.py -handler-name <name>
+This will create a <name>.tar.gz that can be uploaded to the registry to be used by a worker
+
+To install a package
+pip2 install --extra-index-url http://localhost:8080/simple/ <package name>
+
+To install from a generated requirements.txt:
+pip2 install -r test1/requirements.txt  --index-url http://localhost:9199/simple/
