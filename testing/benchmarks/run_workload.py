@@ -9,7 +9,8 @@ import random
 import argparse
 import numpy
 import grequests
-
+import requests
+import multiprocessing
 
 TRACE_RUN = False
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -43,14 +44,30 @@ def copy_handlers(cluster_name, handler_dir):
     shutil.rmtree('%s/%s/registry' % (SCRIPT_DIR, cluster_name))
     shutil.copytree('%s/%s' % (SCRIPT_DIR, handler_dir), '%s/%s/registry' % (SCRIPT_DIR, cluster_name))
 
-def handler_response(res):
+def handle_async_request_response(res):
     print('Received res')
 
-def get_async_action_item(handler_name):
+def get_async_request_obj(handler_name):
     headers = {'Content-Type': 'application/json'}
     return grequests.post('http://localhost:8080/runLambda/%s' % handler_name, headers=headers, data=json.dumps({
         "name": "Alice"
-    }), hooks={'response': handler_response})
+    }), hooks={'response': handle_async_request_response})
+
+def make_blocking_request(handler_name):
+    print('PID %d' % os.getpid())
+    headers = {'Content-Type': 'application/json'}
+    return requests.post('http://localhost:8080/runLambda/%s' % handler_name, headers=headers, data=json.dumps({
+        "name": "Alice"
+    }))
+
+def fork_and_make_request(handler_name):
+    p = multiprocessing.Process(target=make_blocking_request, args=(handler_name,))
+    start_time = get_time_millis()
+    p.start()
+    p.join()
+    end_time = get_time_millis()
+    print('Request took %d ms' % (end_time - start_time))
+    return p
 
 def get_time_millis():
     return round(time.clock() * 1000)
@@ -104,24 +121,30 @@ def parse_config(config_file_name, handler_dir):
 def benchmark(config, verbose):
     if verbose:
         print('Running for %d cycles with an interval of time %d ms' % (config["cycles"], config["cycleInterval"]))
+    children = []
+    num_requests = 0
     for i in range(0, config["cycles"]):
         if verbose:
             print('Cycle %d:' % (i + 1))
         start_time = get_time_millis()
-        handler_async_actions = []
         for handler_group in config["handlerGroups"]:
-            if handler_group["runSample"].sample() < handler_group["runFloor"]:
-                num_to_run = handler_group["runAmount"].sample()
-                for j in range(0, num_to_run):
-                    handlers = handler_group["handlers"]
-                    num_hanlders = len(handlers)
-                    handler_to_run = handlers[random.randint(0, num_hanlders - 1)]
-                    if verbose:
-                        print('Create request action to handler %s' % handler_to_run)
-                    handler_async_actions.append(get_async_action_item(handler_to_run))
-        # Run requests
-        grequests.map(handler_async_actions)
+            num_to_run = handler_group["runAmount"].sample()
+            for j in range(0, num_to_run):
+                handlers = handler_group["handlers"]
+                num_hanlders = len(handlers)
+                handler_to_run = handlers[random.randint(0, num_hanlders - 1)]
+                if verbose:
+                    print('Create request to handler %s' % handler_to_run)
+                if num_requests % 100 == 0 and num_requests != 0:
+                    for k in range(0, 100):
+                        children[k].join()
+                    children = []
+                children.append(fork_and_make_request(handler_to_run))
+                num_requests += 1
+                print(num_requests)
         end_time = get_time_millis()
+        if verbose:
+            print('Cycle took %d ms' % (end_time - start_time))
         if end_time - start_time < config["cycleInterval"]:
             time.sleep((end_time - start_time) / 1000)
 
@@ -134,20 +157,21 @@ parser.add_argument('--copy-handlers', action='store_true')
 parser.add_argument('--verbose', action='store_true')
 args = parser.parse_args()
 
-if args.copy_handlers:
-    if not args.cluster:
-        print('Must specify cluster name if copying handlers')
-        exit()
-    if args.verbose:
-        print('Copying handlers')
-    if not args.handler_dir:
-        print('Must specify handler directory')
-    copy_handlers(args.cluster, args.handler_dir)
+if __name__ == '__main__':
+    if args.copy_handlers:
+        if not args.cluster:
+            print('Must specify cluster name if copying handlers')
+            exit()
+        if args.verbose:
+            print('Copying handlers')
+        if not args.handler_dir:
+            print('Must specify handler directory')
+        copy_handlers(args.cluster, args.handler_dir)
 
-if args.verbose:
-    print('Parsing config')
-config = parse_config(args.config, args.handler_dir)
-if args.verbose:
-    print(config)
-    print('Benchmarking...')
-benchmark(config, args.verbose)
+    if args.verbose:
+        print('Parsing config')
+    config = parse_config(args.config, args.handler_dir)
+    if args.verbose:
+        print(config)
+        print('Benchmarking...')
+    benchmark(config, args.verbose)
