@@ -38,6 +38,7 @@ type HandlerSet struct {
 	config    *config.Config
 	lru       *HandlerLRU
 	workerDir string
+	pipMirror string
 }
 
 // Handler handles requests to run a lambda on a worker server. It handles
@@ -53,7 +54,7 @@ type Handler struct {
 	runners    int
 	code       []byte
 	codeDir    string
-	imports    []string
+	pkgs       []string
 	sandboxDir string
 }
 
@@ -81,6 +82,7 @@ func NewHandlerSet(config *config.Config, lru *HandlerLRU) (handlerSet *HandlerS
 		poolMgr:   pm,
 		lru:       lru,
 		workerDir: config.Worker_dir,
+		pipMirror: config.Pip_mirror,
 	}
 
 	return handlerSet, nil
@@ -99,7 +101,7 @@ func (h *HandlerSet) Get(name string) *Handler {
 			name:       name,
 			state:      state.Unitialized,
 			runners:    0,
-			imports:    []string{},
+			pkgs:       []string{},
 			sandboxDir: sandboxDir,
 		}
 		h.handlers[name] = handler
@@ -128,7 +130,7 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 
 	// get code if needed
 	if h.lastPull == nil {
-		codeDir, imports, err := h.hset.regMgr.Pull(h.name)
+		codeDir, pkgs, err := h.hset.regMgr.Pull(h.name)
 		if err != nil {
 			return nil, err
 		}
@@ -136,7 +138,7 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 		now := time.Now()
 		h.lastPull = &now
 		h.codeDir = codeDir
-		h.imports = imports
+		h.pkgs = pkgs
 	}
 
 	// create sandbox if needed
@@ -145,7 +147,7 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 			return nil, err
 		}
 
-		sandbox, err := h.hset.sbFactory.Create(h.codeDir, h.sandboxDir)
+		sandbox, err := h.hset.sbFactory.Create(h.codeDir, h.sandboxDir, h.hset.pipMirror)
 		if err != nil {
 			return nil, err
 		}
@@ -172,7 +174,16 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 				return nil, errors.New("forkenter only supported with ContainerSandbox")
 			}
 
-			h.hset.poolMgr.Provision(containerSB, h.imports)
+			h.hset.poolMgr.Provision(containerSB, h.sandboxDir, h.pkgs)
+		} else if len(h.pkgs) > 0 {
+			containerSB, ok := h.sandbox.(sb.ContainerSandbox)
+			if !ok {
+				return nil, errors.New("pip installs only supported with ContainerSandbox")
+			}
+			err := containerSB.Install(h.pkgs)
+			if err != nil {
+				return nil, err
+			}
 		}
 	} else if h.state == state.Paused { // unpause if paused
 		if err := h.sandbox.Unpause(); err != nil {
