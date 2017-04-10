@@ -89,5 +89,4 @@ clean :
 	rm -f cgroup/cgroup_init
 	${MAKE} -C lambda clean
 	${MAKE} -C cache-entry clean
-	${MAKE} -C server-pool clean
 
