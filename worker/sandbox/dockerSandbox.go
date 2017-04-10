@@ -40,7 +40,6 @@ func NewDockerSandbox(sandbox_dir string, container *docker.Container, client *d
 		sandbox_dir: sandbox_dir,
 		container:   container,
 		client:      client,
-		// name=systemd?
 		controllers: "memory,cpu,devices,perf_event,cpuset,blkio,pids,freezer,net_cls,net_prio,hugetlb",
 	}
 

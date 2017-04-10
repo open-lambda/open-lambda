@@ -129,6 +129,16 @@ func TestEcho(t *testing.T) {
 	}
 }
 
+func TestInstall(t *testing.T) {
+	recv, err := testReq("install", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if recv != "imported" {
+		t.Fatalf("Expected 'imported' from Install but got back '%v'\n", recv)
+	}
+}
+
 func last_count(img string) (int, error) {
 	h := server.handlers.Get(img)
 

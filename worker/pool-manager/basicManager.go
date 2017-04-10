@@ -22,7 +22,6 @@ type BasicManager struct {
 	seq     int
 }
 
-// TODO: remove opts.Num_forkservers from config
 func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
 	servers := make([]policy.ForkServer, 0, 0)
 	bm = &BasicManager{
@@ -52,7 +51,7 @@ func (bm *BasicManager) Provision(sandbox sb.ContainerSandbox, pkgs []string) (e
 	}
 
 	// signal interpreter to forkenter into sandbox's namespace
-	pid, err := forkRequest(fs.SockPath, sandbox.NSPid(), pkgs, true)
+	pid, err := forkRequest(fs.SockPath, sandbox.NSPid(), []string{}, true)
 	if err != nil {
 		return err
 	}
