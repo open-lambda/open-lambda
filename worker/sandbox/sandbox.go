@@ -53,4 +53,7 @@ type ContainerSandbox interface {
 
 	// PID of a process in the container's namespaces (for joining)
 	NSPid() string
+
+	// Install the passed pip packages to the container.
+	Install(pkgs []string) error
 }

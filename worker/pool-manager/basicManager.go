@@ -39,7 +39,7 @@ func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
 	return bm, nil
 }
 
-func (bm *BasicManager) Provision(sandbox sb.ContainerSandbox, pkgs []string) (err error) {
+func (bm *BasicManager) Provision(sandbox sb.ContainerSandbox, dir string, pkgs []string) (err error) {
 	fs, toCache := bm.matcher.Match(bm.servers, pkgs)
 
 	// make new cache entry if necessary
@@ -59,6 +59,17 @@ func (bm *BasicManager) Provision(sandbox sb.ContainerSandbox, pkgs []string) (e
 	// change cgroup of spawned lambda server
 	if err = sandbox.CGroupEnter(pid); err != nil {
 		return err
+	}
+
+	sockPath := fmt.Sprintf("%s/ol.sock", dir)
+
+	// wait up to 15s for server to initialize
+	start := time.Now()
+	for ok := true; ok; ok = os.IsNotExist(err) {
+		_, err = os.Stat(sockPath)
+		if time.Since(start).Seconds() > 15 {
+			return errors.New(fmt.Sprintf("handler server failed to initialize after 15s"))
+		}
 	}
 
 	return nil
@@ -88,12 +99,12 @@ func (bm *BasicManager) newCacheEntry(fs *policy.ForkServer, toCache []string) (
 
 	sockPath := fmt.Sprintf("%s/fs.sock", dir)
 
-	// wait up to 5s for server to initialize
+	// wait up to 15s for server to initialize
 	start := time.Now()
 	for ok := true; ok; ok = os.IsNotExist(err) {
 		_, err = os.Stat(sockPath)
-		if time.Since(start).Seconds() > 5 {
-			return nil, errors.New(fmt.Sprintf("forkserver %d failed to initialize after 5s", bm.seq))
+		if time.Since(start).Seconds() > 15 {
+			return nil, errors.New(fmt.Sprintf("cache server %d failed to initialize after 15s", bm.seq))
 		}
 	}
 
