@@ -57,7 +57,7 @@ def match_packages_and_handlers(handlers_to_packages, total_counts, targets, tar
             if total_counts[package] < targets[package]:
                 p = package
                 break
-
+        print(i)
         while True:
             j = numpy.random.random_integers(0, num_handlers - 1)
             handler = all_handlers[j]
@@ -104,7 +104,7 @@ def create_distributions(config):
 def parse_config(config_file_name):
     if config_file_name is None:
         return {
-            "num_handlers": 1000,
+            "num_handlers": 4000,
             "load": {
                 "cpu": {
                     "dist": "normal",
@@ -149,11 +149,13 @@ def write_actual_package_frequencies(total_counts):
     for p in total_counts:
         frequencies += '%s,%d\n' % (p, total_counts[p])
 
-    f = open('import_distribution.csv', 'w')
+    f = open('handler_import_distribution.csv', 'w')
     f.write(frequencies)
     f.close()
 
 if __name__ == '__main__':
+    os.system('gcc -shared -I/usr/include/python2.7 -lpython2.7  load_simulator.c -o load_simulator.so')
+
     handlers_dir = 'handlers'
     packages_dir = 'packages'
     if not os.path.exists(handlers_dir):
@@ -169,7 +171,7 @@ if __name__ == '__main__':
     targets = {}
     all_packages = get_list_of_packages(packages_dir, total_counts)
     target_total = create_target_counts(config, total_counts, targets)
-    print('Distributing %d imports of %d packages across %d handlers' %(target_total, len(all_packages), 1000))
+    print('Distributing %d imports of %d packages across %d handlers' %(target_total, len(all_packages), config['num_handlers']))
     generate_handlers(config, handlers_dir, total_counts, targets, target_total, all_packages)
     '''bad_total = 0
     for p in total_counts:
