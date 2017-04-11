@@ -214,7 +214,7 @@ def parse_distributions(config):
     return config
 
 if __name__ == '__main__':
-    os.system('gcc -shared -I/usr/include/python2.7 -lpython2.7  load_simulator.c -o load_simulator.so')
+    os.system('gcc -fPIC -shared -I/usr/include/python2.7 -lpython2.7  load_simulator.c -o load_simulator.so')
 
     packages_dir = 'packages'
 
