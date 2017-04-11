@@ -154,7 +154,7 @@ def write_actual_package_frequencies(total_counts):
     f.close()
 
 if __name__ == '__main__':
-    os.system('gcc -shared -I/usr/include/python2.7 -lpython2.7  load_simulator.c -o load_simulator.so')
+    os.system('gcc -fPIC -shared -I/usr/include/python2.7 -lpython2.7  load_simulator.c -o load_simulator.so')
 
     handlers_dir = 'handlers'
     packages_dir = 'packages'
