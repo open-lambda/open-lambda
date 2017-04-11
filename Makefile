@@ -67,19 +67,6 @@ pooltest : pooltest-config imgs/lambda imgs/cache-entry
 	cd $(WORKER_DIR) && $(GO) test ./handler -v
 	cd $(WORKER_DIR) && $(GO) test ./server -v
 
-.PHONY: pipbench-server-dependencies pipbench-server-setup pipbench-server pipbench-server-stop pipbench-client
-pipbench-server-dependencies:
-	cd $(PIPBENCH_DIR) && ./setup.sh
-
-pipbench-server-setup:
-	cd $(PIPBENCH_DIR)/server && python3 setup_server.py &
-
-pipbench-server:
-	cd $(PIPBENCH_DIR)/server && python3 start_server.py &
-
-pipbench-server-stop:
-	cd $(PIPBENCH_DIR)/server && python3 stop_server.py &
-
 .PHONY: clean
 clean :
 	rm -rf bin
