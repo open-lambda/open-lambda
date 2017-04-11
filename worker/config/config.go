@@ -31,8 +31,6 @@ type Config struct {
 	// pool options
 	// directory storing socket files for each forked server
 	Pool_dir string `json:"pool_dir"`
-	// number of forked servers in the pool
-	Num_forkservers int `json:"num_forkservers"`
 
 	// olregistry options
 	// addresses of olregistry cluster
@@ -107,10 +105,6 @@ func (c *Config) Defaults() error {
 
 	if c.Worker_port == "" {
 		c.Worker_port = "8080"
-	}
-
-	if c.Num_forkservers == 0 {
-		c.Num_forkservers = 1
 	}
 
 	if c.Registry == "olregistry" && len(c.Reg_cluster) == 0 {

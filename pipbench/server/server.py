@@ -120,5 +120,3 @@ package_resource = PackageResource()
 app = falcon.API()
 app.add_route('/package', package_resource)
 
-
-

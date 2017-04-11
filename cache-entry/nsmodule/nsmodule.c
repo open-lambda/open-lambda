@@ -7,10 +7,12 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/wait.h>
 #include <signal.h>
 
 /* Python C wrapper declarations */
 
+static PyObject *ns_reset(PyObject *self, PyObject *args);
 static PyObject *ns_fdlisten(PyObject *self, PyObject *args);
 static PyObject *ns_forkenter(PyObject *self, PyObject *args);
 
@@ -19,6 +21,8 @@ static PyMethodDef NsMethods[] = {
      "Create a socket at the passed path, listen for FDs on it, and forkenter."},
     {"forkenter", ns_forkenter, METH_VARARGS,
      "Fork a child into the namespace defined by the global namespace file descriptor array."},
+    {"reset", ns_reset, METH_VARARGS,
+     "Reset global variables."},
      {NULL, NULL, 0, NULL}
 };
 
@@ -88,9 +92,6 @@ int initOldNS(void) {
 int initSock(char *sockpath) {
 	int len;
 	struct sockaddr_un local;
-
-    /* Prevent zombie child processes */
-    signal(SIGCHLD, SIG_IGN);
 
 	if ((sock = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
 		perror("socket");
@@ -162,6 +163,30 @@ int recvfd(int sock) {
  *
  * Returns the package list for importing in Python interpreter.
  */
+static PyObject *ns_reset(PyObject *self, PyObject *args) {
+    PyObject *ret;
+    if (!initialized) {
+        PyErr_SetString(PyExc_RuntimeError, "Trying to reset but never initialized.");
+        return NULL;
+    } else {
+        sock = 0;
+        conn = 0;
+        memset(oldns, 0, sizeof(oldns));
+        memset(newns, 0, sizeof(newns));
+        initialized = 0;
+    }
+
+    ret = Py_BuildValue("i", 0);
+    return ret;
+}
+
+/*  
+ * Listens on unix domain socket at the passed path, receiving
+ * 6 file descriptors followed by a string with a whitespace-
+ * delimited list of packages to import.
+ *
+ * Returns the package list for importing in Python interpreter.
+ */
 static PyObject *ns_fdlisten(PyObject *self, PyObject *args) {
 	struct sockaddr_un remote;
     int k, len, buflen;
@@ -176,15 +201,19 @@ static PyObject *ns_fdlisten(PyObject *self, PyObject *args) {
             return NULL;
         }
 
-        /* Remember original namespace fds */
+/*
+        / Remember original namespace fds /
         if(initOldNS() == -1) {
             PyErr_SetString(PyExc_RuntimeError, "Failed to open original namespace file.");
             return NULL;
         }
+*/
 
         /* Bind socket */
+        printf("BIND SOCKET\n");
+        fflush(stdout);
         if(initSock(sockpath) == -1) {
-            PyErr_SetString(PyExc_RuntimeError, "Failed to open original namespace file.");
+            PyErr_SetString(PyExc_RuntimeError, "Failed to initialize socket.");
             return NULL;
         }
 
@@ -196,21 +225,18 @@ static PyObject *ns_fdlisten(PyObject *self, PyObject *args) {
         return NULL;
 	}
 
-    printf("Waiting for a connection...\n");
     t = sizeof(remote);
     if ((conn = accept(sock, (struct sockaddr *)&remote, &t)) == -1) {
         PyErr_SetString(PyExc_RuntimeError, "Accepting connection from socket failed.");
         return NULL;
     }
 
-    printf("Connected.\n");
-
+    printf("Receive fds:");
     for(k = 0; k < NUM_NS; k++) {
         newns[k] = recvfd(conn);
-        printf("Got fd: %d.\n", newns[k]);
+        printf(" %d", newns[k]);
     }
-
-    printf("Got %d fds, listening for packages string.\n", NUM_NS);
+    printf("\n");
 
     buflen = 500;
     char buf[buflen];
@@ -218,6 +244,8 @@ static PyObject *ns_fdlisten(PyObject *self, PyObject *args) {
         PyErr_SetString(PyExc_RuntimeError, "Receiving package string from socket failed.");
         return NULL;
     }
+
+    printf("Receive packages string: \"%s\"\n", buf);
 
     ret = Py_BuildValue("s", buf);
     return ret;
@@ -238,21 +266,78 @@ static PyObject *ns_fdlisten(PyObject *self, PyObject *args) {
  */
 static PyObject *ns_forkenter(PyObject *self, PyObject *args) {
     PyObject *ret;
-    int k, r;
+    int pipefd[2];
+    char childpid[50];
+    int k, r, status, gc_pid;
 
-    for(k = 0; k < NUM_NS; k++) {
-        if (setns(newns[k], 0) == -1) {
-            PyErr_SetString(PyExc_RuntimeError, "setns failed. Couldn't join new namespace.");
-            return NULL;
-        }
+    /* Prevent zombie child processes by double-forking */
+
+    gc_pid = 0;
+    if(pipe(pipefd) < 0) {
+        PyErr_SetString(PyExc_RuntimeError, "Create pipe failed.");
+        return NULL;
     }
 
-    r = fork();
-    ret = Py_BuildValue("i", r);
+    fflush(stdout);
+    fflush(stderr);
+    /* Original process */
+    if ((r = fork())) {
+        close(pipefd[1]); // close pipe write fd
 
-    /* Child closes connections returns in new namespaces */
+        // read grandchild pid from pipe (blocks)
+        if(read(pipefd[0], &gc_pid, sizeof(gc_pid)) < 0) {
+            PyErr_SetString(PyExc_RuntimeError, "Read from PID pipe failed.");
+            return NULL;
+        }
 
-    if (r == 0) {
+        // close pipe read fd and wait for child to die
+        close(pipefd[0]); // close pipe read fd
+        waitpid(r, &status, 0); // wait for child to die
+
+    /* Child process */
+    } else if (!r) {
+        // join the passed namespaces
+        for(k = 0; k < NUM_NS; k++) {
+            if (setns(newns[k], 0) == -1) {
+                PyErr_SetString(PyExc_RuntimeError, "setns failed. Couldn't join new namespace.");
+                return NULL;
+            }
+        }
+
+        /* Child process */
+        if ((gc_pid = fork())) {
+            close(pipefd[0]); // close pipe read fd
+
+            // write grandchild pid to pipe
+            if(write(pipefd[1], &gc_pid, sizeof(gc_pid)) < 0) {
+                PyErr_SetString(PyExc_RuntimeError, "Write to PID pipe failed.");
+                return NULL;
+            }
+
+            // close pipe write fd and die
+            close(pipefd[1]);
+            exit(0);
+
+        /* Grandchild process */
+        } else if (!gc_pid) {
+            // just close pipe fds
+            close(pipefd[0]);
+            close(pipefd[1]);
+        } else {
+            PyErr_SetString(PyExc_RuntimeError, "Second fork failed.");
+            return NULL;
+        }
+    } else {
+        PyErr_SetString(PyExc_RuntimeError, "First fork failed.");
+        return NULL;
+    }
+
+    ret = Py_BuildValue("i", gc_pid);
+
+    /* Grandchild closes connections returns in new namespaces */
+
+    if (!gc_pid) {
+        /*
         if (close(conn) == -1) {
             PyErr_SetString(PyExc_RuntimeError, "Child failed to close socket connection (s2).");
             return NULL;
@@ -262,16 +347,14 @@ static PyObject *ns_forkenter(PyObject *self, PyObject *args) {
             PyErr_SetString(PyExc_RuntimeError, "Child failed to close socket connection (s).");
             return NULL;
         }
-
-        initialized = 0;
+        */
 
         return ret;
     }
 
-    /* Parent responds with child PID and returns in original namespaces */
+    /* Parent responds with grandchild PID and returns in original namespaces */
 
-    char childpid[100];
-    sprintf(childpid, "%d", r);
+    sprintf(childpid, "%d", gc_pid);
 
     if(send(conn, childpid, 50, 0) == -1) {
         PyErr_SetString(PyExc_RuntimeError, "Parent failed to send child PID.");
@@ -283,12 +366,14 @@ static PyObject *ns_forkenter(PyObject *self, PyObject *args) {
         return NULL;
     }
 
+/*
     for(k = 0; k < NUM_NS; k++) {
         if (setns(oldns[k], 0) == -1) {
             PyErr_SetString(PyExc_RuntimeError, "Parent failed to join original namespace.");
             return NULL;
         }
     }	
+*/
 
     return ret;
 }
