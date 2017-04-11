@@ -62,11 +62,7 @@ def make_blocking_request(handler_name):
 
 def fork_and_make_request(handler_name):
     p = multiprocessing.Process(target=make_blocking_request, args=(handler_name,))
-    start_time = get_time_millis()
     p.start()
-    p.join()
-    end_time = get_time_millis()
-    print('Request took %d ms' % (end_time - start_time))
     return p
 
 def get_time_millis():
@@ -85,7 +81,6 @@ def parse_config(config_file_name, handler_dir):
                         "loc": 5.0,
                         "scale": 1.0
                     },
-                    "runFloor": 0.80,
                     "runAmount": {
                         "dist": "normal",
                         "loc": 10.0,
@@ -114,9 +109,14 @@ def parse_config(config_file_name, handler_dir):
                 for handler_name in present_handlers:
                     if ro.match(handler_name):
                         matched_handlers.append(handler_name)
+                print(len(matched_handlers))
                 handler_group["handlers"] = matched_handlers
 
         return config
+
+def cleanup_children(children):
+    for k in range(0, len(children)):
+        children[k].join()
 
 def benchmark(config, verbose):
     if verbose:
@@ -128,25 +128,26 @@ def benchmark(config, verbose):
             print('Cycle %d:' % (i + 1))
         start_time = get_time_millis()
         for handler_group in config["handlerGroups"]:
-            num_to_run = handler_group["runAmount"].sample()
-            for j in range(0, num_to_run):
-                handlers = handler_group["handlers"]
-                num_hanlders = len(handlers)
-                handler_to_run = handlers[random.randint(0, num_hanlders - 1)]
-                if verbose:
-                    print('Create request to handler %s' % handler_to_run)
-                if num_requests % 100 == 0 and num_requests != 0:
-                    for k in range(0, 100):
-                        children[k].join()
-                    children = []
-                children.append(fork_and_make_request(handler_to_run))
-                num_requests += 1
-                print(num_requests)
+            if numpy.random.random() < config["runSample"].sample():
+                num_to_run = handler_group["runAmount"].sample()
+                for j in range(0, num_to_run):
+                    handlers = handler_group["handlers"]
+                    num_hanlders = len(handlers)
+                    handler_to_run = handlers[random.randint(0, num_hanlders - 1)]
+                    if verbose:
+                        print('Create request to handler %s' % handler_to_run)
+                    if num_requests % 100 == 0 and num_requests != 0:
+                        cleanup_children(children)
+                        children = []
+                    children.append(fork_and_make_request(handler_to_run))
+                    num_requests += 1
+                    print(num_requests)
         end_time = get_time_millis()
         if verbose:
             print('Cycle took %d ms' % (end_time - start_time))
         if end_time - start_time < config["cycleInterval"]:
             time.sleep((end_time - start_time) / 1000)
+        cleanup_children(children)
 
 
 parser = argparse.ArgumentParser(description='Start a cluster')
