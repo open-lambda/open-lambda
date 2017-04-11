@@ -32,16 +32,22 @@ type DockerSandbox struct {
 	container   *docker.Container
 	client      *docker.Client
 	controllers string
+	tr          http.Transport
 }
 
 // NewDockerSandbox creates a DockerSandbox.
 func NewDockerSandbox(sandbox_dir string, container *docker.Container, client *docker.Client) *DockerSandbox {
+	dial := func(proto, addr string) (net.Conn, error) {
+		return net.Dial("unix", filepath.Join(sandbox_dir, "ol.sock"))
+	}
+	tr := http.Transport{Dial: dial, DisableKeepAlives: true}
 	sandbox := &DockerSandbox{
 		sandbox_dir: sandbox_dir,
 		container:   container,
 		client:      client,
 		// name=systemd?
 		controllers: "memory,cpu,devices,perf_event,cpuset,blkio,pids,freezer,net_cls,net_prio,hugetlb",
+		tr:          tr,
 	}
 
 	return sandbox
@@ -103,14 +109,8 @@ func (s *DockerSandbox) Channel() (channel *SandboxChannel, err error) {
 	if err := s.InspectUpdate(); err != nil {
 		return nil, s.dockerError(err)
 	}
-
-	dial := func(proto, addr string) (net.Conn, error) {
-		return net.Dial("unix", filepath.Join(s.sandbox_dir, "ol.sock"))
-	}
-	tr := http.Transport{Dial: dial}
-
 	// the server name doesn't matter since we have a sock file
-	return &SandboxChannel{Url: "http://container", Transport: tr}, nil
+	return &SandboxChannel{Url: "http://container", Transport: s.tr}, nil
 }
 
 // Start starts the container.
