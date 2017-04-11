@@ -6,6 +6,8 @@ RUN apt-get -y install python python-pip build-essential
 RUN pip install --upgrade pip
 RUN pip install rethinkdb
 RUN pip install tornado
+RUN apt-get -y update
+RUN apt-get -y install linux-tools-4.4.0-72-generic
 
 COPY server.py /
 COPY init /
