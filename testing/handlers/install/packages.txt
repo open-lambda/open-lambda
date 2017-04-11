@@ -1,0 +1,3 @@
+jedi:jedi
+django:django
+requests:requests

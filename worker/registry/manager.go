@@ -15,7 +15,7 @@ import (
 
 // RegistryManager is the common interface for lambda code pulling functions.
 type RegistryManager interface {
-	Pull(name string) (codeDir string, imports []string, err error)
+	Pull(name string) (codeDir string, pkgs []string, err error)
 }
 
 func InitRegistryManager(config *config.Config) (rm RegistryManager, err error) {
@@ -64,30 +64,15 @@ func (lm *LocalManager) Pull(name string) (string, []string, error) {
 	if os.IsNotExist(err) {
 		return handlerDir, []string{}, nil
 	} else if err == nil {
-		imports, err := parsePkgFile(pkgPath)
+		pkgs, err := parsePkgFile(pkgPath)
 		if err != nil {
 			return "", nil, err
 		}
 
-		return handlerDir, imports, nil
+		return handlerDir, pkgs, nil
 	}
 
 	return "", nil, err
-}
-
-func parsePkgFile(path string) (imports []string, err error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	scnr := bufio.NewScanner(file)
-	for scnr.Scan() {
-		imports = append(imports, scnr.Text())
-	}
-
-	return imports, nil
 }
 
 // NewOLStoreManager creates an olstore manager.
@@ -115,5 +100,33 @@ func (om *OLStoreManager) Pull(name string) (string, []string, error) {
 		return "", nil, fmt.Errorf("%s: %s", err, string(output))
 	}
 
-	return handlerDir, []string{}, nil //TODO: actually get the packages
+	pkgPath := filepath.Join(handlerDir, "packages.txt")
+	_, err := os.Stat(pkgPath)
+	if os.IsNotExist(err) {
+		return handlerDir, []string{}, nil
+	} else if err == nil {
+		pkgs, err := parsePkgFile(pkgPath)
+		if err != nil {
+			return "", nil, err
+		}
+
+		return handlerDir, pkgs, nil
+	}
+
+	return "", nil, err
+}
+
+func parsePkgFile(path string) (pkgs []string, err error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	scnr := bufio.NewScanner(file)
+	for scnr.Scan() {
+		pkgs = append(pkgs, scnr.Text())
+	}
+
+	return pkgs, nil
 }

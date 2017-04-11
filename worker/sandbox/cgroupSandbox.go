@@ -107,3 +107,8 @@ func (s *CgroupSandbox) Logs() (string, error) {
 func (s *CgroupSandbox) NSPid() int {
 	return s.nspid
 }
+
+func (s *CgroupSandbox) Install(pkgs []string) error {
+	//TODO(tyler)
+	return nil
+}

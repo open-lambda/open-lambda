@@ -85,7 +85,7 @@ func (cf *CacheFactory) Create(sandboxDir string, cmd []string) (*sb.DockerSandb
 		return nil, err
 	}
 
-	sandbox := sb.NewDockerSandbox(sandboxDir, container, cf.client)
+	sandbox := sb.NewDockerSandbox(sandboxDir, "", container, cf.client)
 	return sandbox, nil
 }
 

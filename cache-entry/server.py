@@ -5,6 +5,7 @@ import tornado.ioloop
 import tornado.web
 import tornado.httpserver
 import tornado.netutil
+from subprocess import check_output
 
 import ns
 
@@ -23,8 +24,6 @@ installed = {}
 # run after forking into sandbox
 def init():
     global initialized, config, db_conn, lambda_func
-
-    redirect()
 
     # assume submitted .py file is /handler/lambda_func.py
     sys.path.append('/handler')
@@ -60,11 +59,17 @@ tornado_app = tornado.web.Application([
 
 def install(pkg):
     global installed, mirror
-    if not pkg in installed:
-        if mirror:
-            pip.main(['install', '-i', mirror, pkg_path])
-        else:
-            pip.main(['install', pkg_path])
+    if pkg in installed:
+        return
+
+    if mirror:
+        #ret = pip.main(['install', '-i', mirror, pkg])
+        check_output(['pip', 'install', '-i', pkg])
+    else:
+        #ret = pip.main(['install', pkg])
+        check_output(['pip', 'install', pkg])
+
+    installed[pkg] = True
 
 # listen on sock file with Tornado
 def lambda_server():
@@ -78,36 +83,58 @@ def lambda_server():
 def fdlisten(path):
     signal = "cache"
     r = -1
+    count = 0
     # only child meant to serve ever escapes the loop
     while r != 0 or signal == "cache":
+        if r == 0:
+            print('RESET')
+            sys.stdout.flush()
+            ns.reset()
+
+        print('LISTENING')
         sys.stdout.flush()
+        pkgs = ns.fdlisten(path).split()
+
+        r = ns.forkenter()
         if r == 0:
             redirect()
+            # install & import packages
+            for k, pkg in enumerate(pkgs):
+                if k < len(pkgs)-1:
+                    split = pkg.split(':')
+                    if split[1] != '':
+                        print('installing: %s' % split[1])
+                        try:
+                            install(split[1])
+                        except Exception as e: 
+                            print('install %s failed with: %s' % (split[1], e))
 
-        pkgs = ns.fdlisten(path).split()
-        # import packages into global scope
-        for k, pkg in enumerate(pkgs):
-            if k < len(pkgs)-1:
-                split = pkg.split(':')
-                try:
-                    install(pkg[1])
-                    globals()[pkg] = importlib.import_module(pkg)
-                    print("importing %s" % pkg)
-                except Exception as e:
-                    print('failed to install %s with: %s' % (pkg[1], e))
-            else:
-                signal = pkg
-                print("signal: %s" % signal)
+                        sys.stdout.flush()
+                        sys.stderr.flush()
 
+                    print('importing: %s' % split[0])
+                    try:
+                        globals()[split[0]] = importlib.import_module(split[0])
+                    except Exception as e:
+                        print('failed to import %s with: %s' % (split[0], e))
+
+                else:
+                    signal = pkg
+                    print("signal: %s" % signal)
+
+        print('')
         sys.stdout.flush()
-        r = ns.forkenter()
 
-    print("%s escaped" % r)
+        count += 1
+
+    print('SERVING HANDLERS')
     sys.stdout.flush()
     init()
     lambda_server()
 
 def redirect():
+    sys.stdout.close()
+    sys.stderr.close()
     sys.stdout = open(STDOUT_PATH, 'w')
     sys.stderr = open(STDERR_PATH, 'w')
 
