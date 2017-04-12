@@ -10,13 +10,13 @@ import (
 	sb "github.com/open-lambda/open-lambda/worker/sandbox"
 )
 
-func InitCacheFactory(poolDir, cluster string, buffer int) (cf *BufferedCacheFactory, root *sb.DockerSandbox, rootDir string, err error) {
-	cf, root, rootDir, err = NewBufferedCacheFactory(poolDir, cluster, buffer)
+func InitCacheFactory(poolDir, cluster string, buffer int) (cf *BufferedCacheFactory, root *sb.DockerSandbox, rootDir, rootCID string, err error) {
+	cf, root, rootDir, rootCID, err = NewBufferedCacheFactory(poolDir, cluster, buffer)
 	if err != nil {
-		return nil, nil, "", err
+		return nil, nil, "", "", err
 	}
 
-	return cf, root, rootDir, nil
+	return cf, root, rootDir, rootCID, nil
 }
 
 // CacheFactory is a SandboxFactory that creates docker sandboxes for the cache.
@@ -62,7 +62,7 @@ func NewCacheFactory(cluster string) (*CacheFactory, error) {
 }
 
 // Create creates a docker sandbox from the pool directory.
-func (cf *CacheFactory) Create(sandboxDir string, cmd []string) (*sb.DockerSandbox, error) {
+func (cf *CacheFactory) Create(sandboxDir string, cmd []string) (*sb.DockerSandbox, string, error) {
 	volumes := []string{
 		fmt.Sprintf("%s:%s", sandboxDir, "/host"),
 	}
@@ -82,19 +82,19 @@ func (cf *CacheFactory) Create(sandboxDir string, cmd []string) (*sb.DockerSandb
 		},
 	)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	sandbox := sb.NewDockerSandbox(sandboxDir, "", container, cf.client)
-	return sandbox, nil
+	return sandbox, container.ID, nil
 }
 
 // NewBufferedCacheFactory creates a BufferedCacheFactory and starts a go routine to
 // fill the sandbox buffer.
-func NewBufferedCacheFactory(poolDir, cluster string, buffer int) (*BufferedCacheFactory, *sb.DockerSandbox, string, error) {
+func NewBufferedCacheFactory(poolDir, cluster string, buffer int) (*BufferedCacheFactory, *sb.DockerSandbox, string, string, error) {
 	delegate, err := NewCacheFactory(cluster)
 	if err != nil {
-		return nil, nil, "", err
+		return nil, nil, "", "", err
 	}
 
 	bf := &BufferedCacheFactory{
@@ -105,20 +105,20 @@ func NewBufferedCacheFactory(poolDir, cluster string, buffer int) (*BufferedCach
 	}
 
 	if err := os.MkdirAll(poolDir, os.ModeDir); err != nil {
-		return nil, nil, "", fmt.Errorf("failed to create pool directory at %s: %v", poolDir, err)
+		return nil, nil, "", "", fmt.Errorf("failed to create pool directory at %s: %v", poolDir, err)
 	}
 
 	// create the root container
 	rootDir := filepath.Join(bf.dir, "root")
 	if err := os.MkdirAll(rootDir, os.ModeDir); err != nil {
-		return nil, nil, "", fmt.Errorf("failed to create cache entry directory at %s: %v", poolDir, err)
+		return nil, nil, "", "", fmt.Errorf("failed to create cache entry directory at %s: %v", poolDir, err)
 	}
 
-	root, err := bf.delegate.Create(rootDir, []string{"python", "initroot.py"})
+	root, rootCID, err := bf.delegate.Create(rootDir, []string{"python", "initroot.py"})
 	if err != nil {
-		return nil, nil, "", fmt.Errorf("failed to create cache entry sandbox: %v", err)
+		return nil, nil, "", "", fmt.Errorf("failed to create cache entry sandbox: %v", err)
 	} else if err := root.Start(); err != nil {
-		return nil, nil, "", fmt.Errorf("failed to start cache entry sandbox: %v", err)
+		return nil, nil, "", "", fmt.Errorf("failed to start cache entry sandbox: %v", err)
 	}
 
 	// fill the sandbox buffer
@@ -129,7 +129,7 @@ func NewBufferedCacheFactory(poolDir, cluster string, buffer int) (*BufferedCach
 			if err := os.MkdirAll(sandboxDir, os.ModeDir); err != nil {
 				bf.buffer <- nil
 				bf.errors <- err
-			} else if sandbox, err := bf.delegate.Create(sandboxDir, []string{"/init"}); err != nil {
+			} else if sandbox, _, err := bf.delegate.Create(sandboxDir, []string{"/init"}); err != nil {
 				bf.buffer <- nil
 				bf.errors <- err
 			} else if err := sandbox.Start(); err != nil {
@@ -146,7 +146,7 @@ func NewBufferedCacheFactory(poolDir, cluster string, buffer int) (*BufferedCach
 		}
 	}()
 
-	return bf, root, rootDir, nil
+	return bf, root, rootDir, rootCID, nil
 }
 
 // Returns a sandbox ready for a cache interpreter

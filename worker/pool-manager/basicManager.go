@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	sb "github.com/open-lambda/open-lambda/worker/sandbox"
@@ -18,8 +19,8 @@ type BasicManager struct {
 	cluster string
 	servers []policy.ForkServer
 	matcher policy.CacheMatcher
-	evictor policy.CacheEvictor
 	seq     int
+	mutex   sync.Mutex
 }
 
 func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
@@ -28,18 +29,33 @@ func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
 		cluster: opts.Cluster_name,
 		servers: servers,
 		matcher: policy.NewSubsetMatcher(),
-		evictor: policy.NewRandomEvictor(),
 		seq:     0,
 	}
 
-	if err = bm.initCacheRoot(opts.Pool_dir); err != nil {
+	rootCID, err := bm.initCacheRoot(opts.Pool_dir)
+	if err != nil {
 		return nil, err
 	}
+
+	e, err := policy.NewEvictor("", rootCID, 1000)
+	if err != nil {
+		return nil, err
+	}
+
+	go func(bm *BasicManager) {
+		for {
+			time.Sleep(50 * time.Millisecond)
+			bm.servers = e.CheckUsage(bm.servers, &bm.mutex)
+		}
+	}(bm)
 
 	return bm, nil
 }
 
 func (bm *BasicManager) Provision(sandbox sb.ContainerSandbox, dir string, pkgs []string) (err error) {
+	bm.mutex.Lock()
+	defer bm.mutex.Unlock()
+
 	fs, toCache := bm.matcher.Match(bm.servers, pkgs)
 
 	// make new cache entry if necessary
@@ -49,6 +65,9 @@ func (bm *BasicManager) Provision(sandbox sb.ContainerSandbox, dir string, pkgs 
 			return err
 		}
 	}
+
+	// keep track of number of hits
+	fs.Hit()
 
 	// signal interpreter to forkenter into sandbox's namespace
 	pid, err := forkRequest(fs.SockPath, sandbox.NSPid(), []string{}, true)
@@ -67,8 +86,8 @@ func (bm *BasicManager) Provision(sandbox sb.ContainerSandbox, dir string, pkgs 
 	start := time.Now()
 	for ok := true; ok; ok = os.IsNotExist(err) {
 		_, err = os.Stat(sockPath)
-		if time.Since(start).Seconds() > 15 {
-			return errors.New(fmt.Sprintf("handler server failed to initialize after 15s"))
+		if time.Since(start).Seconds() > 10 {
+			return errors.New(fmt.Sprintf("handler server failed to initialize after 10s"))
 		}
 	}
 
@@ -103,19 +122,22 @@ func (bm *BasicManager) newCacheEntry(fs *policy.ForkServer, toCache []string) (
 	start := time.Now()
 	for ok := true; ok; ok = os.IsNotExist(err) {
 		_, err = os.Stat(sockPath)
-		if time.Since(start).Seconds() > 15 {
-			return nil, errors.New(fmt.Sprintf("cache server %d failed to initialize after 15s", bm.seq))
+		if time.Since(start).Seconds() > 30 {
+			return nil, errors.New(fmt.Sprintf("cache server %d failed to initialize after 30s", bm.seq))
 		}
 	}
-
-	// TODO: cache entry cgroups?
 
 	newFs := policy.ForkServer{
 		Sandbox:  sandbox,
 		Pid:      pid,
 		SockPath: sockPath,
 		Packages: pkgs,
+		Hits:     0,
+		Parent:   fs,
+		Children: 0,
 	}
+
+	fs.Children += 1
 
 	bm.servers = append(bm.servers, newFs)
 	bm.seq++
@@ -123,10 +145,10 @@ func (bm *BasicManager) newCacheEntry(fs *policy.ForkServer, toCache []string) (
 	return &newFs, nil
 }
 
-func (bm *BasicManager) initCacheRoot(poolDir string) (err error) {
-	factory, rootSB, rootDir, err := InitCacheFactory(poolDir, bm.cluster, 2) //TODO: buffer
+func (bm *BasicManager) initCacheRoot(poolDir string) (rootCID string, err error) {
+	factory, rootSB, rootDir, rootCID, err := InitCacheFactory(poolDir, bm.cluster, 2) //TODO: buffer
 	if err != nil {
-		return err
+		return "", err
 	}
 	bm.factory = factory
 
@@ -136,13 +158,13 @@ func (bm *BasicManager) initCacheRoot(poolDir string) (err error) {
 	for ok := true; ok; ok = os.IsNotExist(err) {
 		_, err = os.Stat(pidPath)
 		if time.Since(start).Seconds() > 5 {
-			return errors.New("root forkserver failed to start after 5s")
+			return "", errors.New("root forkserver failed to start after 5s")
 		}
 	}
 
 	pidFile, err := os.Open(pidPath)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer pidFile.Close()
 
@@ -151,7 +173,7 @@ func (bm *BasicManager) initCacheRoot(poolDir string) (err error) {
 	pid := scnr.Text()
 
 	if err := scnr.Err(); err != nil {
-		return err
+		return "", err
 	}
 
 	fs := policy.ForkServer{
@@ -159,9 +181,12 @@ func (bm *BasicManager) initCacheRoot(poolDir string) (err error) {
 		Pid:      pid,
 		SockPath: fmt.Sprintf("%s/fs.sock", rootDir),
 		Packages: make(map[string]bool),
+		Hits:     0,
+		Parent:   nil,
+		Children: 0,
 	}
 
 	bm.servers = append(bm.servers, fs)
 
-	return nil
+	return rootCID, nil
 }
