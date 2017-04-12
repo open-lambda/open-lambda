@@ -1,10 +1,14 @@
+import sys
 import os
 import random
 import string
 import tarfile
 import shutil
 import numpy
-import math
+from helper_modules.distribution import distribution_factory
+import json
+from helper_modules.package import Package
+
 
 def get_load_simulation_code_setup(cpu, mem):
     return str.format('''
@@ -14,6 +18,7 @@ import load_simulator
 load_simulator.simulate_install({0}, {1})
 ''',  cpu, mem)
 
+
 def get_load_simulation_code_init(name, cpu, mem):
     return str.format('''
 import {2}.load_simulator
@@ -22,13 +27,15 @@ import {2}.load_simulator
 p = load_simulator.simulate_import({0}, {1})
 ''',  cpu, mem, name)
 
-def copy_load_simulator_so(name):
-    # the first is used in setup.py
-    shutil.copyfile('load_simulator.so', packages_dir + '/' + name + '/load_simulator.so')
-    # the second is use in __init__.py
-    shutil.copyfile('load_simulator.so', packages_dir + '/' + name + '/' + name + '/load_simulator.so')
 
-def create_data_files(package_name, file_sizes):
+def copy_load_simulator_so(packages_dir, package_name):
+    # the first is used in setup.py
+    shutil.copyfile('load_simulator.so', packages_dir + '/' + package_name + '/load_simulator.so')
+    # the second is use in __init__.py
+    shutil.copyfile('load_simulator.so', packages_dir + '/' + package_name + '/' + package_name + '/load_simulator.so')
+
+
+def create_data_files(packages_dir, package_name, file_sizes):
     dir = packages_dir + '/' + package_name + '/' + package_name + '/data/'
     os.makedirs(dir)
     for i in range(0, len(file_sizes)):
@@ -37,13 +44,14 @@ def create_data_files(package_name, file_sizes):
             f.write(random.choice(string.ascii_letters + string.digits))
         f.close()
 
-def create_setup(package_name, cpu, mem, deps):
+
+def create_setup(packages_dir, package_name, cpu, mem, deps):
     dir = packages_dir + '/' + package_name + '/'
     # currently data files are in install directory, but not imported
     load_simulation = get_load_simulation_code_setup(cpu, mem)
     deps_str = ''
     for d in deps:
-        deps_str += "        \'" + d + "\',\n"
+        deps_str += "        \'" + d.get_name() + "\',\n"
     setup = str.format('''
 from setuptools import setup
 
@@ -62,15 +70,17 @@ setup(
     f.write(load_simulation + setup)
     f.close()
 
-def create_init(package_name, cpu, mem, deps):
+
+def create_init(packages_dir, package_name, cpu, mem, deps):
     dir = packages_dir + '/' + package_name + '/' + package_name + '/'
     imports_str = ''
     for d in deps:
-        imports_str += 'import %s\n' % d
+        imports_str += 'import %s\n' % d.get_name()
     setup_contents = get_load_simulation_code_init(package_name, cpu, mem)
     f = open(dir + '__init__.py', 'w')
     f.write(imports_str + setup_contents)
     f.close()
+
 
 def get_package_name():
     # ensure no conflicts
@@ -79,87 +89,108 @@ def get_package_name():
         if not os.path.exists('packages/' + name):
             return name
 
-def add_dependencies(config, packages):
-    package_imports = {}
-    package_imports_nums = {}
+
+def dep_safety_rec(package, potential_dependency):
+    if package == potential_dependency:
+        return False
+    existing_deps = package.get_dependencies()
+    for dep in existing_deps:
+        if not is_safe_to_add_dependency(dep, potential_dependency):
+            return False
+    return True
+
+
+def is_safe_to_add_dependency(package, potential_dependency):
+    try:
+        return dep_safety_rec(package, potential_dependency)
+    except RecursionError:
+        return False
+
+
+def get_total_popularity(packages):
+    total_popularity = 0
     for p in packages:
-        package_imports[p] = []
-        package_imports_nums[p] = config['package_popularity'].sample()
+        total_popularity += p.get_popularity()
+    return total_popularity
 
-    most_used_pkgs_first = sorted(package_imports_nums, key=package_imports_nums.get, reverse=True)
 
-    for i in range(0, len(packages)):
-        num = package_imports_nums[most_used_pkgs_first[i]]
-        print('num ' + str(num))
-        used_by = 0
-        while used_by < num and used_by < len(packages) - i - 1:
-            pi = numpy.random.randint(i + 1, len(packages))
-            if most_used_pkgs_first[i] not in package_imports[most_used_pkgs_first[pi]]:
-                package_imports[most_used_pkgs_first[pi]].append(most_used_pkgs_first[i])
-                used_by += 1
-                print('added to ' + most_used_pkgs_first[pi])
+def create_dependency_tree(packages):
+    num_packages = len(packages)
+    total_popularity = get_total_popularity(packages)
 
-    return package_imports
+    for p in packages:
+        tries = 0
+        while p.should_add_more_dependencies() and tries < 10 * num_packages:
+            tries += 1
+            # get a dependency to try
+            i = numpy.random.randint(0, num_packages)
+            dep = packages[i]
+            # add with probability proportional to the popularity
+            if dep.get_popularity() / total_popularity > numpy.random.random() and is_safe_to_add_dependency(p, dep):
+                p.add_dependency(dep)
+                dep.add_reference()
+        print('real: %s target: %s' % (len(p.get_dependencies()), p.get_dependencies_target()))
+
 
 def generate_packages(config):
     packages = []
     num_packages = config['num_packages']
     for i in range(0, num_packages):
-        packages.append(get_package_name())
-    package_deps = add_dependencies(config, packages)
-
-    k = 0
-    for p in packages:
-        k += 1
-        print('Creating package %d: %s' % (k, p))
-        package_spec = {}
+        name = get_package_name()
         num_files = config['data_files']['num'].sample()
-        package_spec["data_files"] = []
+        data_file_sizes = []
         for j in range(0, num_files):
-            package_spec["data_files"].append(config['data_files']['size'].sample()) # in KB
-        package_spec["install_cpu"] = config['install']['cpu'].sample()
-        package_spec["install_mem"] = config['install']['mem'].sample()
-        package_spec["import_cpu"] = config['import']['cpu'].sample()
-        package_spec["import_mem"] = config['import']['mem'].sample()
-        package_spec["dependencies"] = package_deps[p]
-        create_package(package_spec, p)
+            data_file_sizes.append(config['data_files']['size'].sample()) # in KB
+        install_cpu_time = config['install']['cpu'].sample()
+        install_mem = config['install']['mem'].sample()
+        import_cpu_time = config['import']['cpu'].sample()
+        import_cpu_mem = config['import']['mem'].sample()
+        num_dependencies = config['num_dependencies'].sample()
+        popularity = config['popularity'].sample()
+        new_package = Package(name, data_file_sizes, install_cpu_time, install_mem, import_cpu_time, import_cpu_mem,
+                              num_dependencies, popularity)
+        packages.append(new_package)
     return packages
 
-def create_package(package_spec, name):
-    os.makedirs(packages_dir + '/' + name)
-    os.makedirs(packages_dir + '/' + name + '/' + name)
-    create_data_files(name, package_spec['data_files'])
-    create_setup(name, package_spec['install_cpu'], package_spec['install_mem'], package_spec['dependencies'])
-    create_init(name, package_spec['import_cpu'], package_spec['import_mem'], package_spec['dependencies'])
-    copy_load_simulator_so(name)
-    tar = tarfile.open(packages_dir + '/' + name + "-0.1.tar.gz", "w:gz")
+
+def write_packages(packages_dir, packages):
+    for p in packages:
+        write_package(packages_dir, p)
+
+
+def write_package(packages_dir, package):
+    # create package directories
+    os.makedirs('%s/%s' % (packages_dir, package.get_name()))
+    os.makedirs('%s/%s/%s' % (packages_dir, package.get_name(), package.get_name()))
+    # create contents
+    create_data_files(packages_dir, package.get_name(), package.get_data_file_sizes())
+    create_setup(packages_dir, package.get_name(), package.get_install_cpu_time(), package.get_install_mem(),
+                 package.get_dependencies())
+    create_init(packages_dir, package.get_name(), package.get_import_cpu_time(), package.get_import_mem(),
+                package.get_dependencies())
+    copy_load_simulator_so(packages_dir, package.get_name())
+    # tarball and zip
+    tar = tarfile.open(packages_dir + '/' + package.get_name() + "-0.1.tar.gz", "w:gz")
     os.chdir(packages_dir)
-    tar.add( name)
+    tar.add(package.get_name())
     tar.close()
-    shutil.rmtree(name)
+    # remove unzipped package directory
+    shutil.rmtree(package.get_name())
     os.chdir('..')
 
-class Distribution:
-    def __init__(self, dist, dist_args):
-        self.dist = dist
-        self.dist_args = dist_args
-
-    def sample(self):
-        dist = getattr(numpy.random, self.dist)
-        return abs(math.ceil(dist(**self.dist_args)))
-
-def distribution_factory(dist_spec):
-    dist = dist_spec['dist']
-    dist_spec.pop('dist')
-    return Distribution(dist, dist_spec)
 
 def parse_config(config_file_name):
     if config_file_name is None:
-        return {
+        config = {
             "num_packages": 1000,
-            "package_popularity": {
+            "popularity": {
                 "dist": "zipf",
                 "a": 2
+            },
+            "num_dependencies": {
+                "dist": "normal",
+                "loc": 2.0,
+                "scale": 2.0
             },
             "data_files": {
                 "num": {
@@ -201,10 +232,10 @@ def parse_config(config_file_name):
     else:
         f = open(config_file_name, 'r')
         config = json.load(f)
-        return config
 
-def parse_distributions(config):
-    config['package_popularity'] = distribution_factory(config['package_popularity'])
+    # configure distributions
+    config['popularity'] = distribution_factory(config['popularity'])
+    config['num_dependencies'] = distribution_factory(config['num_dependencies'])
     config['data_files']['num'] = distribution_factory(config['data_files']['num'])
     config['data_files']['size'] = distribution_factory(config['data_files']['size'])
     config['install']['cpu'] = distribution_factory(config['install']['cpu'])
@@ -213,16 +244,37 @@ def parse_distributions(config):
     config['import']['mem'] = distribution_factory(config['import']['mem'])
     return config
 
-if __name__ == '__main__':
-    os.system('gcc -fPIC -shared -I/usr/include/python2.7 -lpython2.7  load_simulator.c -o load_simulator.so')
 
+def write_popularity_distribution(packages):
+    contents = ''
+    for p in packages:
+        contents += '%s,%d\n' % (p.get_name(), p.get_reference_count())
+    f = open('package_popularity.csv', 'w')
+    f.write(contents)
+    f.close()
+
+
+def main():
     packages_dir = 'packages'
-
-    config = parse_config(None)
-    config = parse_distributions(config)
-    generate_packages(config)
 
     # create mirror dir if not found
     if not os.path.exists(packages_dir):
         os.makedirs(packages_dir)
 
+    # ensure we have the load simulator binary
+    os.system('gcc -fPIC -shared -I/usr/include/python2.7 -lpython2.7  load_simulator.c -o load_simulator.so')
+
+    config = parse_config(None)
+    print('Creating packages...')
+    packages = generate_packages(config)
+    print('Generating dependency tree...')
+    create_dependency_tree(packages)
+    print('Writing out packages....')
+    write_packages(packages_dir, packages)
+    print('Writing out popularity distribution...')
+    write_popularity_distribution(packages)
+    print('Done')
+
+
+if __name__ == '__main__':
+    main()
