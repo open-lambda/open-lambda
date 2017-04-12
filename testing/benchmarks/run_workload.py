@@ -128,7 +128,7 @@ def benchmark(config, verbose):
             print('Cycle %d:' % (i + 1))
         start_time = get_time_millis()
         for handler_group in config["handlerGroups"]:
-            if numpy.random.random() < config["runSample"].sample():
+            if numpy.random.random() < handler_group["runSample"].sample():
                 num_to_run = handler_group["runAmount"].sample()
                 for j in range(0, num_to_run):
                     handlers = handler_group["handlers"]
