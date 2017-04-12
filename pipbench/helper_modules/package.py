@@ -1,6 +1,6 @@
 class Package:
-    def __init__(self, name, data_file_sizes, install_cpu_time, install_mem, import_cpu_time, import_mem,
-                 dependencies_target, popularity):
+    def __init__(self, name, popularity, dependencies_target=None, data_file_sizes=None, install_cpu_time=None,
+                 install_mem=None, import_cpu_time=None, import_mem=None):
         self.name = name
         self.dependencies_target = dependencies_target
         self.dependencies = []

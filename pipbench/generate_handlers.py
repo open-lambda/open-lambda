@@ -1,12 +1,16 @@
 import os
 import numpy
-import math
 import numpy
+import json
+from helper_modules.distribution import distribution_factory
+from helper_modules.handler import Handler
+from helper_modules.package import Package
 
-def write_lambda_func(handler_dir, handler_name, packages):
+
+def write_lambda_func(handlers_dir, handler_name, packages):
     handler_contents = ''
     for p in packages:
-        handler_contents += 'import ' + p + '\n'
+        handler_contents += 'import ' + p.get_name() + '\n'
     handler_contents += str.format('''
 def handler(conn, event):
     try:
@@ -15,95 +19,66 @@ def handler(conn, event):
         return {{'error': str(e)}}
 ''', handler_name)
     os.makedirs('%s/%s' % (handlers_dir, handler_name))
-    f = open('%s/%s/lambda_func.py' % (handler_dir, handler_name), 'w')
+    f = open('%s/%s/lambda_func.py' % (handlers_dir, handler_name), 'w')
     f.write(handler_contents)
     f.close()
+
 
 def write_packages_txt(handler_dir, handler_name, packages):
     handler_contents = ''
     for p in packages:
-        handler_contents += '%s:%s\n' % (p, p)
+        handler_contents += '%s:%s\n' % (p.get_name(), p.get_name())
     f = open('%s/%s/packages.txt' % (handler_dir, handler_name), 'w')
     f.write(handler_contents)
     f.close()
 
-def get_next_package(total_counts, targets, packages):
-    while True:
-        i = numpy.random.random_integers(0, len(packages) - 1)
-        p = packages[i]
-        if total_counts[p] - targets[p] < 0:
-            total_counts[p] += 1
-            return p
 
-def get_packages_for_handler(num_handlers, handler_num, total_counts, targets, target_total, packages):
-    used_packages = []
-    num_packages_to_use = math.floor(target_total / num_handlers)
-    extra_num_needed = math.fmod(target_total, num_handlers)
-    extra_indicator = math.floor(num_handlers / extra_num_needed)
-    if math.fmod(handler_num, extra_indicator) == 0.0:
-        num_packages_to_use += 1
-    for i in range(0, num_packages_to_use):
-        p = get_next_package(total_counts, targets, packages)
-        used_packages.append(p)
-    return used_packages
-
-def match_packages_and_handlers(handlers_to_packages, total_counts, targets, target_total, all_handlers, all_packages):
-    num_handlers = len(all_handlers)
-    num_packages = len(all_packages)
-    ordered_package_names = sorted(targets, key=targets.get)
-    for i in range(0, target_total):
-        p = None
-        for package in ordered_package_names:
-            if total_counts[package] < targets[package]:
-                p = package
-                break
-        print(i)
-        while True:
-            j = numpy.random.random_integers(0, num_handlers - 1)
-            handler = all_handlers[j]
-
-            if total_counts[package] < targets[package] and package not in handlers_to_packages[handler]:
-                handlers_to_packages[handler].append(package)
-                total_counts[package] += 1
-                break
+def get_total_popularity(packages):
+    total_popularity = 0
+    for p in packages:
+        total_popularity += p.get_popularity()
+    return total_popularity
 
 
-def generate_handlers(config, handler_dir, total_counts, targets, target_total, all_packages):
-    name = 'a'
-    handlers_to_packages = {}
+def match_packages_and_handlers(handlers, packages):
+    num_packages = len(packages)
+    total_popularity = get_total_popularity(packages)
+
+    for h in handlers:
+        tries = 0
+        while h.should_add_more_dependencies() and tries < 10 * num_packages:
+            tries += 1
+            # find a package
+            i = numpy.random.randint(0, num_packages)
+            dep = packages[i]
+            # add with probability proportional to the popularity
+            if dep.get_popularity() / total_popularity:
+                h.add_dependency(dep)
+                dep.add_reference()
+
+
+def generate_handlers(config):
     handlers = []
     for i in range(0, config['num_handlers']):
-        handlers_to_packages[name + str(i)] = []
-        handlers.append(name + str(i))
-    match_packages_and_handlers(handlers_to_packages, total_counts, targets, target_total, handlers, all_packages)
-    for handler_name, packages in handlers_to_packages.items():
-        write_lambda_func(handler_dir, handler_name, packages)
-        write_packages_txt(handlers_dir, handler_name, packages)
+        num_deps = config["num_dependencies"].sample()
+        name = 'a%d' % i
+        handlers.append(Handler(name, num_deps))
+    return handlers
 
-class Distribution:
-    def __init__(self, dist, dist_args):
-        self.dist = dist
-        self.dist_args = dist_args
 
-    def sample(self):
-        dist = getattr(numpy.random, self.dist)
-        return abs(math.ceil(dist(**self.dist_args)))
+def write_handlers(handlers_dir, handlers):
+    for h in handlers:
+        write_handler(handlers_dir, h)
 
-def distribution_factory(dist_spec):
-    dist = dist_spec['dist']
-    dist_spec.pop('dist')
-    return Distribution(dist, dist_spec)
 
-def create_distributions(config):
-    config['load']['cpu'] = distribution_factory(config['load']['cpu'])
-    config['load']['mem'] = distribution_factory(config['load']['mem'])
-    config['package_popularity'] = distribution_factory(config['package_popularity'])
+def write_handler(handlers_dir, handler):
+    write_lambda_func(handlers_dir, handler.get_name(), handler.get_dependencies())
+    write_packages_txt(handlers_dir, handler.get_name(), handler.get_dependencies())
 
-    return config
 
 def parse_config(config_file_name):
     if config_file_name is None:
-        return {
+        config = {
             "num_handlers": 4000,
             "load": {
                 "cpu": {
@@ -120,44 +95,53 @@ def parse_config(config_file_name):
             "package_popularity": {
                 "dist": "zipf",
                 "a": 2
+            },
+            "num_dependencies": {
+                "dist": "normal",
+                "loc": 2.0,
+                "scale": 2.0
             }
         }
     else:
         f = open(config_file_name, 'r')
         config = json.load(f)
-        return config
 
-def get_list_of_packages(packages_dir, total_counts):
-    all_packages_tars = os.listdir('%s' % packages_dir)
-    all_packages_names = []
-    for p in all_packages_tars:
-        name = p.split('-')[0]
-        total_counts[name] = 0
-        all_packages_names.append(name)
-    return all_packages_names
+    config['load']['cpu'] = distribution_factory(config['load']['cpu'])
+    config['load']['mem'] = distribution_factory(config['load']['mem'])
+    config['package_popularity'] = distribution_factory(config['package_popularity'])
+    config['num_dependencies'] = distribution_factory(config['num_dependencies'])
 
-def create_target_counts(config, total_counts, targets):
-    sum = 0
-    for package_name in total_counts:
-        target = config['package_popularity'].sample()
-        sum += target
-        targets[package_name] = target
-    return sum
+    return config
 
-def write_actual_package_frequencies(total_counts):
+
+def get_list_of_packages():
+    packages = []
+    with open('package_popularity_real.csv', 'r') as f:
+        for line in f:
+            line_l = line.split(',')
+            # name,popularity
+            name = line_l[0]
+            popularity = int(line_l[1])
+            packages.append(Package(name, popularity))
+    return packages
+
+
+def write_handler_import_distribution(packages):
     frequencies = ''
-    for p in total_counts:
-        frequencies += '%s,%d\n' % (p, total_counts[p])
+    for p in packages:
+        frequencies += '%s,%d\n' % (p.get_name(), p.get_reference_count())
 
     f = open('handler_import_distribution.csv', 'w')
     f.write(frequencies)
     f.close()
 
-if __name__ == '__main__':
-    os.system('gcc -fPIC -shared -I/usr/include/python2.7 -lpython2.7  load_simulator.c -o load_simulator.so')
 
+def main():
     handlers_dir = 'handlers'
     packages_dir = 'packages'
+
+    os.system('gcc -fPIC -shared -I/usr/include/python2.7 -lpython2.7  load_simulator.c -o load_simulator.so')
+
     if not os.path.exists(handlers_dir):
         os.makedirs(handlers_dir)
 
@@ -166,15 +150,18 @@ if __name__ == '__main__':
         exit()
 
     config = parse_config(None)
-    config = create_distributions(config)
-    total_counts = {}
-    targets = {}
-    all_packages = get_list_of_packages(packages_dir, total_counts)
-    target_total = create_target_counts(config, total_counts, targets)
-    print('Distributing %d imports of %d packages across %d handlers' %(target_total, len(all_packages), config['num_handlers']))
-    generate_handlers(config, handlers_dir, total_counts, targets, target_total, all_packages)
-    '''bad_total = 0
-    for p in total_counts:
-        bad_total += math.fabs(total_counts[p] - targets[p])
-    print('bad match by %d packages from a target of %d' % (bad_total, target_total))'''
-    write_actual_package_frequencies(total_counts)
+    print('Reading in package popularity distribution...')
+    packages = get_list_of_packages()
+    print('Creating handlers...')
+    handlers = generate_handlers(config)
+    print('Adding dependencies to handlers...')
+    match_packages_and_handlers(handlers, packages)
+    print('Writing out handlers...')
+    write_handlers(handlers_dir, handlers)
+    print('Writing out handler import distribution...')
+    write_handler_import_distribution(packages)
+    print('Done')
+
+
+if __name__ == '__main__':
+    main()
