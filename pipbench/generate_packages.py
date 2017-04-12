@@ -129,7 +129,7 @@ def create_dependency_tree(packages):
             if dep.get_popularity() / total_popularity > numpy.random.random() and is_safe_to_add_dependency(p, dep):
                 p.add_dependency(dep)
                 dep.add_reference()
-        print('real: %s target: %s' % (len(p.get_dependencies()), p.get_dependencies_target()))
+        #print('real: %s target: %s' % (len(p.get_dependencies()), p.get_dependencies_target()))
 
 
 def generate_packages(config):
@@ -147,8 +147,8 @@ def generate_packages(config):
         import_cpu_mem = config['import']['mem'].sample()
         num_dependencies = config['num_dependencies'].sample()
         popularity = config['popularity'].sample()
-        new_package = Package(name, data_file_sizes, install_cpu_time, install_mem, import_cpu_time, import_cpu_mem,
-                              num_dependencies, popularity)
+        new_package = Package(name, popularity, num_dependencies, data_file_sizes, install_cpu_time, install_mem,
+                              import_cpu_time, import_cpu_mem)
         packages.append(new_package)
     return packages
 
@@ -189,8 +189,8 @@ def parse_config(config_file_name):
             },
             "num_dependencies": {
                 "dist": "normal",
-                "loc": 2.0,
-                "scale": 2.0
+                "loc": 0.0,
+                "scale": 0.5
             },
             "data_files": {
                 "num": {
@@ -245,14 +245,21 @@ def parse_config(config_file_name):
     return config
 
 
-def write_popularity_distribution(packages):
+def write_popularity_distribution_target(packages):
     contents = ''
     for p in packages:
-        contents += '%s,%d\n' % (p.get_name(), p.get_reference_count())
-    f = open('package_popularity.csv', 'w')
+        contents += '%s,%d\n' % (p.get_name(), p.get_popularity())
+    f = open('package_popularity_target.csv', 'w')
     f.write(contents)
     f.close()
 
+def write_popularity_distribution_real(packages):
+    contents = ''
+    for p in packages:
+        contents += '%s,%d\n' % (p.get_name(), p.get_reference_count())
+    f = open('package_popularity_real.csv', 'w')
+    f.write(contents)
+    f.close()
 
 def main():
     packages_dir = 'packages'
@@ -271,8 +278,10 @@ def main():
     create_dependency_tree(packages)
     print('Writing out packages....')
     write_packages(packages_dir, packages)
-    print('Writing out popularity distribution...')
-    write_popularity_distribution(packages)
+    print('Writing out popularity distribution target...')
+    write_popularity_distribution_target(packages)
+    print('Writing out popularity distribution real...')
+    write_popularity_distribution_real(packages)
     print('Done')
 
 
