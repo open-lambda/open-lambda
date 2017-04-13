@@ -8,6 +8,7 @@ RUN pip install rethinkdb
 RUN pip install tornado
 RUN apt-get -y update
 RUN apt-get -y install linux-tools-4.4.0-72-generic
+RUN apt-get -y install curl
 
 COPY server.py /
 COPY init /
