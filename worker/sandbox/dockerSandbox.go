@@ -33,12 +33,18 @@ type DockerSandbox struct {
 	container   *docker.Container
 	client      *docker.Client
 	controllers string
+	tr          http.Transport
 	installed   map[string]bool
 	pipcmd      []string
 }
 
 // NewDockerSandbox creates a DockerSandbox.
 func NewDockerSandbox(sandbox_dir, pipmirror string, container *docker.Container, client *docker.Client) *DockerSandbox {
+	dial := func(proto, addr string) (net.Conn, error) {
+		return net.Dial("unix", filepath.Join(sandbox_dir, "ol.sock"))
+	}
+	tr := http.Transport{Dial: dial, DisableKeepAlives: true}
+
 	cmd := []string{"pip", "install"}
 	if pipmirror != "" {
 		cmd = append(cmd, "-i", pipmirror)
@@ -49,6 +55,7 @@ func NewDockerSandbox(sandbox_dir, pipmirror string, container *docker.Container
 		container:   container,
 		client:      client,
 		controllers: "memory,cpu,devices,perf_event,cpuset,blkio,pids,freezer,net_cls,net_prio,hugetlb",
+		tr:          tr,
 		installed:   make(map[string]bool),
 		pipcmd:      cmd,
 	}
@@ -112,14 +119,8 @@ func (s *DockerSandbox) Channel() (channel *SandboxChannel, err error) {
 	if err := s.InspectUpdate(); err != nil {
 		return nil, s.dockerError(err)
 	}
-
-	dial := func(proto, addr string) (net.Conn, error) {
-		return net.Dial("unix", filepath.Join(s.sandbox_dir, "ol.sock"))
-	}
-	tr := http.Transport{Dial: dial}
-
 	// the server name doesn't matter since we have a sock file
-	return &SandboxChannel{Url: "http://container", Transport: tr}, nil
+	return &SandboxChannel{Url: "http://container", Transport: s.tr}, nil
 }
 
 // Start starts the container.

@@ -54,7 +54,7 @@ def get_default_config(cluster_name):
         "benchmark_log": "./perf/%s.perf" % cluster_name,
         "sandbox_buffer": 0,
         "sandbox_config": {},
-        "pip_mirror": "http://0.0.0.0:9199/simple/"
+        "pip_mirror": "localhost:9199"
     }
 
 def add_interpreter_pool(config, pool, pool_dir):
