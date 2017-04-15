@@ -11,6 +11,7 @@ import numpy
 import grequests
 import requests
 import multiprocessing
+import datetime
 
 TRACE_RUN = False
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -54,11 +55,17 @@ def get_async_request_obj(handler_name):
     }), hooks={'response': handle_async_request_response})
 
 def make_blocking_request(handler_name):
-    print('PID %d' % os.getpid())
     headers = {'Content-Type': 'application/json'}
-    return requests.post('http://localhost:8080/runLambda/%s' % handler_name, headers=headers, data=json.dumps({
+    start = get_time_millis()
+    print('making req')
+    r = requests.post('http://localhost:8080/runLambda/%s' % handler_name, headers=headers, data=json.dumps({
         "name": "Alice"
     }))
+    print('donw with req')
+    end = get_time_millis()
+    now = datetime.datetime.now()
+    result_str = '[%s] handler: %s status: %d in: %d ms' % ( datetime.datetime.isoformat(now), handler_name, r.status_code, end-start)
+    return result_str
 
 def fork_and_make_request(handler_name):
     p = multiprocessing.Process(target=make_blocking_request, args=(handler_name,))
@@ -66,7 +73,7 @@ def fork_and_make_request(handler_name):
     return p
 
 def get_time_millis():
-    return round(time.clock() * 1000)
+    return time.time() * 1000
 
 def parse_config(config_file_name, handler_dir):
     if config_file_name is None:
@@ -109,7 +116,6 @@ def parse_config(config_file_name, handler_dir):
                 for handler_name in present_handlers:
                     if ro.match(handler_name):
                         matched_handlers.append(handler_name)
-                print(len(matched_handlers))
                 handler_group["handlers"] = matched_handlers
 
         return config
@@ -118,47 +124,48 @@ def cleanup_children(children):
     for k in range(0, len(children)):
         children[k].join()
 
-def benchmark(config, verbose):
-    if verbose:
-        print('Running for %d cycles with an interval of time %d ms' % (config["cycles"], config["cycleInterval"]))
-    children = []
-    num_requests = 0
-    for i in range(0, config["cycles"]):
-        if verbose:
-            print('Cycle %d:' % (i + 1))
-        start_time = get_time_millis()
-        for handler_group in config["handlerGroups"]:
-            if numpy.random.random() < handler_group["runSample"].sample():
-                num_to_run = handler_group["runAmount"].sample()
-                for j in range(0, num_to_run):
-                    handlers = handler_group["handlers"]
-                    num_hanlders = len(handlers)
-                    handler_to_run = handlers[random.randint(0, num_hanlders - 1)]
-                    if verbose:
-                        print('Create request to handler %s' % handler_to_run)
-                    if num_requests % 100 == 0 and num_requests != 0:
-                        cleanup_children(children)
-                        children = []
-                    children.append(fork_and_make_request(handler_to_run))
-                    num_requests += 1
-                    print(num_requests)
-        end_time = get_time_millis()
-        if verbose:
-            print('Cycle took %d ms' % (end_time - start_time))
-        if end_time - start_time < config["cycleInterval"]:
-            time.sleep((end_time - start_time) / 1000)
-        cleanup_children(children)
+def request_runner(config, id):
+    print('Request runner %d started' % id)
+    with open('rr%d' % id, 'w') as f:
+        while True:
+            for handler_group in config["handlerGroups"]:
+                if numpy.random.random() < handler_group["runSample"].sample():
+                    num_to_run = handler_group["runAmount"].sample()
+                    for j in range(0, num_to_run):
+                        handlers = handler_group["handlers"]
+                        num_hanlders = len(handlers)
+                        handler_to_run = handlers[random.randint(0, num_hanlders - 1)]
+                        res_str = make_blocking_request(handler_to_run)
+                        print(res_str)
+                        f.write(res_str + '\n')
 
+def benchmark(config, num_minutes, num_req_runners):
+    req_runners = []
+    print('Creating %d request runners' % num_req_runners)
+    for i in range(0, num_req_runners):
+        p = multiprocessing.Process(target=request_runner, args=(config, i))
+        p.start()
+        req_runners.append(p)
+
+    start = time.clock()
+    while time.clock() - start < num_minutes * 60:
+        pass
+
+    for p in req_runners:
+        p.terminate()
+        p.join()
 
 parser = argparse.ArgumentParser(description='Start a cluster')
 parser.add_argument('-cluster', default=None)
 parser.add_argument('-config', default=None)
 parser.add_argument('-handler-dir', default=None)
+parser.add_argument('-request-runners', type=int, default=2)
+parser.add_argument('-run-minutes', type=int, default=5)
 parser.add_argument('--copy-handlers', action='store_true')
 parser.add_argument('--verbose', action='store_true')
 args = parser.parse_args()
 
-if __name__ == '__main__':
+def main():
     if args.copy_handlers:
         if not args.cluster:
             print('Must specify cluster name if copying handlers')
@@ -169,10 +176,12 @@ if __name__ == '__main__':
             print('Must specify handler directory')
         copy_handlers(args.cluster, args.handler_dir)
 
-    if args.verbose:
-        print('Parsing config')
+    print('Parsing config')
     config = parse_config(args.config, args.handler_dir)
     if args.verbose:
         print(config)
-        print('Benchmarking...')
-    benchmark(config, args.verbose)
+    print('Benchmarking...')
+    benchmark(config, args.run_minutes, args.request_runners)
+
+if __name__ == '__main__':
+    main()
