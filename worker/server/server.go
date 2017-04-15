@@ -89,7 +89,6 @@ func (s *Server) ForwardToSandbox(handler *handler.Handler, r *http.Request, inp
 			t.Start()
 		}
 		w2, err := client.Do(r2)
-		w2.Close = true
 		if err != nil {
 			if t != nil {
 				t.Error("Request Failed")

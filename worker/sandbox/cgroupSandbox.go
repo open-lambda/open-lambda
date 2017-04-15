@@ -108,7 +108,7 @@ func (s *CgroupSandbox) NSPid() int {
 	return s.nspid
 }
 
-func (s *CgroupSandbox) Install(pkgs []string) error {
+func (s *CgroupSandbox) DoInstalls() error {
 	//TODO(tyler)
 	return nil
 }

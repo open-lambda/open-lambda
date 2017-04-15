@@ -19,7 +19,6 @@ import (
 	"net/http"
 	"os/exec"
 	"path/filepath"
-	"strings"
 
 	docker "github.com/fsouza/go-dockerclient"
 	"github.com/open-lambda/open-lambda/worker/benchmarker"
@@ -35,7 +34,7 @@ type DockerSandbox struct {
 	controllers string
 	tr          http.Transport
 	installed   map[string]bool
-	pipcmd      []string
+    mirror      string
 }
 
 // NewDockerSandbox creates a DockerSandbox.
@@ -45,10 +44,6 @@ func NewDockerSandbox(sandbox_dir, pipmirror string, container *docker.Container
 	}
 	tr := http.Transport{Dial: dial, DisableKeepAlives: true}
 
-	cmd := []string{"pip", "install"}
-	if pipmirror != "" {
-		cmd = append(cmd, "-i", pipmirror)
-	}
 
 	sandbox := &DockerSandbox{
 		sandbox_dir: sandbox_dir,
@@ -57,7 +52,7 @@ func NewDockerSandbox(sandbox_dir, pipmirror string, container *docker.Container
 		controllers: "memory,cpu,devices,perf_event,cpuset,blkio,pids,freezer,net_cls,net_prio,hugetlb",
 		tr:          tr,
 		installed:   make(map[string]bool),
-		pipcmd:      cmd,
+        mirror:      pipmirror,
 	}
 
 	return sandbox
@@ -281,47 +276,37 @@ func (s *DockerSandbox) NSPid() string {
 	return s.nspid
 }
 
-func (s *DockerSandbox) Install(pkgs []string) error {
+func (s *DockerSandbox) DoInstalls() error {
 	execOpts := docker.CreateExecOptions{
 		AttachStdin:  false,
 		AttachStdout: false,
 		AttachStderr: false,
 		Container:    s.container.ID,
+        Cmd:          []string{"python", "/install.py"},
 	}
 
-	for _, pkg := range pkgs {
-		split := strings.Split(pkg, ":")
-		if len(split) != 2 {
-			return errors.New("malformed packages.txt file")
-		} else if split[1] != "" {
-			if _, ok := s.installed[split[1]]; !ok {
-				execOpts.Cmd = append(s.pipcmd, split[1])
-				exec, err := s.client.CreateExec(execOpts)
-				if err != nil {
-					return err
-				}
+    exec, err := s.client.CreateExec(execOpts)
+    if err != nil {
+        return err
+    }
 
-				if err := s.client.StartExec(exec.ID, docker.StartExecOptions{}); err != nil {
-					return err
-				}
+    if err := s.client.StartExec(exec.ID, docker.StartExecOptions{}); err != nil {
+        return err
+    }
 
-				done := false
-				for !done {
-					status, err := s.client.InspectExec(exec.ID)
-					if err != nil {
-						return err
-					}
-					if !status.Running {
-						if status.ExitCode != 0 {
-							return errors.New(fmt.Sprintf("installing %v failed", split[1]))
-						}
-						done = true
-					}
-				}
-				s.installed[split[1]] = true
-			}
-		}
-	}
+    done := false
+    for !done {
+        status, err := s.client.InspectExec(exec.ID)
+        if err != nil {
+            return err
+        }
+        if !status.Running {
+            if status.ExitCode != 0 {
+                return errors.New(fmt.Sprintf("installation failed for container: %s", s.container.ID))
+            }
+            done = true
+        }
+    }
 
 	return nil
 }
