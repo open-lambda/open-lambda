@@ -13,9 +13,9 @@ class Distribution:
             total = 0
             for v in self.dist_args['values']:
                 if v['weight'] + total > r and total < r:
-                     return int(v['value'])
+                     return abs(math.ceil(v['value']))
         elif self.dist == 'exact_value':
-            return self.dist_args['value']
+            return abs(math.ceil(self.dist_args['value']))
         else:
             dist = getattr(numpy.random, self.dist)
             return abs(math.ceil(dist(**self.dist_args)))
