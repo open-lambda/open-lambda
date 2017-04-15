@@ -1,0 +1,4 @@
+jedi:jedi
+numpy:numpy
+requests:requests
+six:six

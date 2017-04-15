@@ -22,7 +22,7 @@ def init():
     global initialized, config, db_conn, lambda_func
     if initialized:
         return
-
+    
     sys.stdout = open(STDOUT_PATH, 'w')
     sys.stderr = open(STDERR_PATH, 'w')
 

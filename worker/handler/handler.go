@@ -168,7 +168,15 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 			}
 		}
 
-		if h.hset.poolMgr != nil {
+		if h.hset.poolMgr == nil {
+			containerSB, ok := h.sandbox.(sb.ContainerSandbox)
+			if !ok {
+				return nil, errors.New("pip packages only supported with ContainerSandbox")
+			}
+            if err := containerSB.DoInstalls(); err != nil {
+                return nil, err
+            }
+		} else {
 			containerSB, ok := h.sandbox.(sb.ContainerSandbox)
 			if !ok {
 				return nil, errors.New("forkenter only supported with ContainerSandbox")
@@ -177,16 +185,7 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 			if err := h.hset.poolMgr.Provision(containerSB, h.sandboxDir, h.pkgs); err != nil {
 				return nil, err
 			}
-		} else if len(h.pkgs) > 0 {
-			containerSB, ok := h.sandbox.(sb.ContainerSandbox)
-			if !ok {
-				return nil, errors.New("pip installs only supported with ContainerSandbox")
-			}
-			err := containerSB.Install(h.pkgs)
-			if err != nil {
-				return nil, err
-			}
-		}
+        }
 	} else if h.state == state.Paused { // unpause if paused
 		if err := h.sandbox.Unpause(); err != nil {
 			return nil, err

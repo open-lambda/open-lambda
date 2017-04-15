@@ -1,0 +1,3 @@
+jedi:jedi
+numpy:numpy
+requests:requests

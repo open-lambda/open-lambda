@@ -130,14 +130,37 @@ func TestEcho(t *testing.T) {
 }
 
 func TestInstall(t *testing.T) {
+	expected := "\"imported\""
+
+    start := time.Now()
 	recv, err := testReq("install", "{}")
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := "\"imported\""
 	if recv != expected {
 		t.Fatalf("Expected 'imported' from Install but got back '%v'\n", recv)
 	}
+    log.Printf(fmt.Sprintf("install request took %s", time.Since(start)))
+
+    start = time.Now()
+	recv, err = testReq("install2", "{}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if recv != expected {
+		t.Fatalf("Expected 'imported' from Install but got back '%v'\n", recv)
+	}
+    log.Printf(fmt.Sprintf("install2 request took %s", time.Since(start)))
+
+    start = time.Now()
+	recv, err = testReq("install3", "{}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if recv != expected {
+		t.Fatalf("Expected 'imported' from Install but got back '%v'\n", recv)
+	}
+    log.Printf(fmt.Sprintf("install3 request took %s", time.Since(start)))
 }
 
 func last_count(img string) (int, error) {
