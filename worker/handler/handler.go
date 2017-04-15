@@ -173,9 +173,9 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 			if !ok {
 				return nil, errors.New("pip packages only supported with ContainerSandbox")
 			}
-            if err := containerSB.DoInstalls(); err != nil {
-                return nil, err
-            }
+			if err := containerSB.DoInstalls(); err != nil {
+				return nil, err
+			}
 		} else {
 			containerSB, ok := h.sandbox.(sb.ContainerSandbox)
 			if !ok {
@@ -185,7 +185,7 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 			if err := h.hset.poolMgr.Provision(containerSB, h.sandboxDir, h.pkgs); err != nil {
 				return nil, err
 			}
-        }
+		}
 	} else if h.state == state.Paused { // unpause if paused
 		if err := h.sandbox.Unpause(); err != nil {
 			return nil, err
