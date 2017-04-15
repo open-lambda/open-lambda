@@ -13,18 +13,14 @@ from helper_modules.package import Package
 def get_load_simulation_code_setup(cpu, mem):
     return str.format('''
 import load_simulator
-
-
-load_simulator.simulate_install({0}, {1})
-''',  cpu, mem)
+load_simulator.simulate_install({0}, {1}, False)
+''',  cpu, 0)
 
 
 def get_load_simulation_code_init(name, cpu, mem):
     return str.format('''
 import {2}.load_simulator
-
-
-p = load_simulator.simulate_import({0}, {1})
+p = load_simulator.simulate_load({0}, {1}, True)
 ''',  cpu, mem, name)
 
 
@@ -35,13 +31,27 @@ def copy_load_simulator_so(packages_dir, package_name):
     shutil.copyfile('load_simulator.so', packages_dir + '/' + package_name + '/' + package_name + '/load_simulator.so')
 
 
-def create_data_files(packages_dir, package_name, file_sizes):
+def create_data_files(packages_dir, package_name, file_sizes, compression_ratio_int):
     dir = packages_dir + '/' + package_name + '/' + package_name + '/data/'
     os.makedirs(dir)
+    compressable_size = 0
     for i in range(0, len(file_sizes)):
+        compressable_size += file_sizes[i]
         f = open(dir + 'data_' + str(i) + '.dat', 'w')
+        random_char = random.choice(string.ascii_letters + string.digits)
+        compressable_str = ''
         for j in range(0, file_sizes[i] * 1024):
-            f.write(random.choice(string.ascii_letters + string.digits))
+            compressable_str += random_char
+        f.write(compressable_str)
+        f.close()
+    compression_ratio = float(compression_ratio_int) / float(100)
+    if compressable_size > 0 and compression_ratio > 0:
+        uncompressable_size = int(((1 - compression_ratio) * compressable_size) / compression_ratio)
+        uncompressable_str = ''
+        for j in range(0, uncompressable_size * 1024):
+            uncompressable_str += random.choice(string.ascii_letters + string.digits)
+        f = open(dir + 'uncompressable.dat', 'w')
+        f.write(uncompressable_str)
         f.close()
 
 
@@ -54,7 +64,6 @@ def create_setup(packages_dir, package_name, cpu, mem, deps):
         deps_str += "        \'" + d.get_name() + "\',\n"
     setup = str.format('''
 from setuptools import setup
-
 setup(
     name = '{0}',
     version = '0.1',
@@ -141,13 +150,14 @@ def generate_packages(config):
         data_file_sizes = []
         for j in range(0, num_files):
             data_file_sizes.append(config['data_files']['size'].sample()) # in KB
+        compression_ratio = config['data_files']['compression_ratio'].sample()
         install_cpu_time = config['install']['cpu'].sample()
         install_mem = config['install']['mem'].sample()
         import_cpu_time = config['import']['cpu'].sample()
         import_cpu_mem = config['import']['mem'].sample()
         num_dependencies = config['num_dependencies'].sample()
         popularity = config['popularity'].sample()
-        new_package = Package(name, popularity, num_dependencies, data_file_sizes, install_cpu_time, install_mem,
+        new_package = Package(name, popularity, num_dependencies, data_file_sizes, compression_ratio, install_cpu_time, install_mem,
                               import_cpu_time, import_cpu_mem)
         packages.append(new_package)
     return packages
@@ -163,7 +173,7 @@ def write_package(packages_dir, package):
     os.makedirs('%s/%s' % (packages_dir, package.get_name()))
     os.makedirs('%s/%s/%s' % (packages_dir, package.get_name(), package.get_name()))
     # create contents
-    create_data_files(packages_dir, package.get_name(), package.get_data_file_sizes())
+    create_data_files(packages_dir, package.get_name(), package.get_data_file_sizes(), package.get_compression_ratio())
     create_setup(packages_dir, package.get_name(), package.get_install_cpu_time(), package.get_install_mem(),
                  package.get_dependencies())
     create_init(packages_dir, package.get_name(), package.get_import_cpu_time(), package.get_import_mem(),
@@ -202,6 +212,10 @@ def parse_config(config_file_name):
                     "dist": "normal",
                     "loc": 10.0,
                     "scale": 5.0
+                },
+                "compression_ratio": {
+                    "dist": "exact_value",
+                    "value": 50
                 }
             },
             "install": {
@@ -238,6 +252,7 @@ def parse_config(config_file_name):
     config['num_dependencies'] = distribution_factory(config['num_dependencies'])
     config['data_files']['num'] = distribution_factory(config['data_files']['num'])
     config['data_files']['size'] = distribution_factory(config['data_files']['size'])
+    config['data_files']['compression_ratio'] = distribution_factory(config['data_files']['compression_ratio'])
     config['install']['cpu'] = distribution_factory(config['install']['cpu'])
     config['install']['mem'] = distribution_factory(config['install']['mem'])
     config['import']['cpu'] = distribution_factory(config['import']['cpu'])

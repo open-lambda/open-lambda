@@ -1,47 +1,44 @@
 #include <Python.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 
 static PyObject *
-simulate_install(PyObject *self, PyObject *args) {
-    long cpu_units;
+simulate_load(PyObject *self, PyObject *args) {
+    long cpu_time_ms;
     long mem_bytes;
-
-    if (!PyArg_ParseTuple(args, "LL", &cpu_units, &mem_bytes)) {
-        return NULL;
-    }
-
+    int is_import;
     char *p;
-    p = (char *) malloc(mem_bytes);
+    struct rusage r;
+    int j;
 
-    int j = 0;
-    for (long i = 0; i < cpu_units; i++) {
-        j++;
-    }
-
-    free(p);
-    return Py_BuildValue("i", 0);
-}
-
-static PyObject *
-simulate_import(PyObject *self, PyObject *args) {
-    long cpu_units;
-    long mem_bytes;
-
-    if (!PyArg_ParseTuple(args, "LL", &cpu_units, &mem_bytes)) {
+    if (!PyArg_ParseTuple(args, "LLi", &cpu_time_ms, &mem_bytes, &is_import)) {
         return NULL;
     }
-
-    int j = 0;
-    for (long i = 0; i < cpu_units; i++) {
-        j++;
+    if (is_import) {
+        p = malloc(mem_bytes);
     }
-    char * p = malloc(mem_bytes);
+
+    int ONE_M = 1000000;
+    while(1) {
+        if (getrusage(RUSAGE_SELF, &r) == -1) {
+            printf("getrusage() failed");
+            exit(1);
+        }
+        long total_cpu_time_us = r.ru_utime.tv_sec * ONE_M + r.ru_utime.tv_usec +
+            r.ru_stime.tv_sec * ONE_M + r.ru_stime.tv_usec;
+        if (total_cpu_time_us / 1000 >= cpu_time_ms)
+            break;
+        for (long i = 0; i < 1000000; i++) {
+            j++;
+        }
+    }
+
     return Py_BuildValue("s#", p, mem_bytes);
 }
 
 static PyMethodDef LoadSimulatorMethods[] =
 {
-    {"simulate_install", simulate_install, METH_VARARGS, "simulate install"},
-    {"simulate_import", simulate_import, METH_VARARGS, "simulate import"},
+    {"simulate_load", simulate_load, METH_VARARGS, "simulate load"},
     { NULL, NULL, 0, NULL }
 };
 
