@@ -34,7 +34,7 @@ type DockerSandbox struct {
 	controllers string
 	tr          http.Transport
 	installed   map[string]bool
-    mirror      string
+	mirror      string
 }
 
 // NewDockerSandbox creates a DockerSandbox.
@@ -44,7 +44,6 @@ func NewDockerSandbox(sandbox_dir, pipmirror string, container *docker.Container
 	}
 	tr := http.Transport{Dial: dial, DisableKeepAlives: true}
 
-
 	sandbox := &DockerSandbox{
 		sandbox_dir: sandbox_dir,
 		container:   container,
@@ -52,7 +51,7 @@ func NewDockerSandbox(sandbox_dir, pipmirror string, container *docker.Container
 		controllers: "memory,cpu,devices,perf_event,cpuset,blkio,pids,freezer,net_cls,net_prio,hugetlb",
 		tr:          tr,
 		installed:   make(map[string]bool),
-        mirror:      pipmirror,
+		mirror:      pipmirror,
 	}
 
 	return sandbox
@@ -282,31 +281,31 @@ func (s *DockerSandbox) DoInstalls() error {
 		AttachStdout: false,
 		AttachStderr: false,
 		Container:    s.container.ID,
-        Cmd:          []string{"python", "/install.py"},
+		Cmd:          []string{"python", "/install.py"},
 	}
 
-    exec, err := s.client.CreateExec(execOpts)
-    if err != nil {
-        return err
-    }
+	exec, err := s.client.CreateExec(execOpts)
+	if err != nil {
+		return err
+	}
 
-    if err := s.client.StartExec(exec.ID, docker.StartExecOptions{}); err != nil {
-        return err
-    }
+	if err := s.client.StartExec(exec.ID, docker.StartExecOptions{}); err != nil {
+		return err
+	}
 
-    done := false
-    for !done {
-        status, err := s.client.InspectExec(exec.ID)
-        if err != nil {
-            return err
-        }
-        if !status.Running {
-            if status.ExitCode != 0 {
-                return errors.New(fmt.Sprintf("installation failed for container: %s", s.container.ID))
-            }
-            done = true
-        }
-    }
+	done := false
+	for !done {
+		status, err := s.client.InspectExec(exec.ID)
+		if err != nil {
+			return err
+		}
+		if !status.Running {
+			if status.ExitCode != 0 {
+				return errors.New(fmt.Sprintf("installation failed for container: %s", s.container.ID))
+			}
+			done = true
+		}
+	}
 
 	return nil
 }
