@@ -8,7 +8,6 @@ import "C"
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
 	"math"
 	"os/exec"
 	"path/filepath"
@@ -94,7 +93,6 @@ func (e *Evictor) evict(servers []ForkServer) []ForkServer {
 	}
 
 	if idx != -1 {
-		log.Printf("evict")
 		err := servers[idx].Kill()
 		if err != nil {
 			panic(fmt.Sprintf("failed to evict with: %v", err))
