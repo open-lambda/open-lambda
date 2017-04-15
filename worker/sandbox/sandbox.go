@@ -55,5 +55,5 @@ type ContainerSandbox interface {
 	NSPid() string
 
 	// Install the passed pip packages to the container.
-	Install(pkgs []string) error
+	DoInstalls() error
 }
