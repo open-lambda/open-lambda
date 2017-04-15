@@ -8,7 +8,7 @@ import numpy
 from helper_modules.distribution import distribution_factory
 import json
 from helper_modules.package import Package
-
+import argparse
 
 def get_load_simulation_code_setup(cpu, mem):
     return str.format('''
@@ -286,7 +286,12 @@ def main():
     # ensure we have the load simulator binary
     os.system('gcc -fPIC -shared -I/usr/include/python2.7 -lpython2.7  load_simulator.c -o load_simulator.so')
 
-    config = parse_config(None)
+
+    parser = argparse.ArgumentParser(description='Start a cluster')
+    parser.add_argument('-config', default=None)
+    args = parser.parse_args()
+
+    config = parse_config(args.config)
     print('Creating packages...')
     packages = generate_packages(config)
     print('Generating dependency tree...')
