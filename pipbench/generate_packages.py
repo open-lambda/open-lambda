@@ -276,6 +276,17 @@ def write_popularity_distribution_real(packages):
     f.write(contents)
     f.close()
 
+def write_out_package_dependencies(packages):
+    packages_deps = {}
+    for p in packages:
+        deps = []
+        for d in p.get_dependencies():
+            deps.append(d.get_name())
+        packages_deps[p.get_name()] = deps
+    f = open('package_dependencies.json', 'w')
+    json.dump(packages_deps, f)
+    f.close()
+
 def main():
     packages_dir = 'packages'
 
@@ -287,7 +298,7 @@ def main():
     os.system('gcc -fPIC -shared -I/usr/include/python2.7 -lpython2.7  load_simulator.c -o load_simulator.so')
 
 
-    parser = argparse.ArgumentParser(description='Start a cluster')
+    parser = argparse.ArgumentParser(description='Create pipbench packages')
     parser.add_argument('-config', default=None)
     args = parser.parse_args()
 
@@ -302,6 +313,8 @@ def main():
     write_popularity_distribution_target(packages)
     print('Writing out popularity distribution real...')
     write_popularity_distribution_real(packages)
+    print('Writing out direct dependencies lists...')
+    write_out_package_dependencies(packages)
     print('Done')
 
 
