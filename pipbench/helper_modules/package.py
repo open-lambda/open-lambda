@@ -1,5 +1,5 @@
 class Package:
-    def __init__(self, name, popularity, dependencies_target=None, data_file_sizes=None, compression_ratio=None, install_cpu_time=None,
+    def __init__(self, name, popularity=None, dependencies_target=None, data_file_sizes=None, compression_ratio=None, install_cpu_time=None,
                  install_mem=None, import_cpu_time=None, import_mem=None):
         self.name = name
         self.dependencies_target = dependencies_target
@@ -27,6 +27,9 @@ class Package:
 
     def get_popularity(self):
         return self.popularity
+
+    def set_popularity(self, popularity):
+        self.popularity = popularity
 
     def get_data_file_sizes(self):
         return self.data_file_sizes
