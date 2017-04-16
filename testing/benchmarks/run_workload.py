@@ -57,11 +57,9 @@ def get_async_request_obj(handler_name):
 def make_blocking_request(handler_name):
     headers = {'Content-Type': 'application/json'}
     start = get_time_millis()
-    print('making req')
     r = requests.post('http://localhost:8080/runLambda/%s' % handler_name, headers=headers, data=json.dumps({
         "name": "Alice"
     }))
-    print('donw with req')
     end = get_time_millis()
     now = datetime.datetime.now()
     result_str = '[%s] handler: %s status: %d in: %d ms' % ( datetime.datetime.isoformat(now), handler_name, r.status_code, end-start)
@@ -124,26 +122,40 @@ def cleanup_children(children):
     for k in range(0, len(children)):
         children[k].join()
 
-def request_runner(config, id):
+def request_runner(config, id, log_queue):
     print('Request runner %d started' % id)
-    with open('rr%d' % id, 'w') as f:
-        while True:
-            for handler_group in config["handlerGroups"]:
-                if numpy.random.random() < handler_group["runSample"].sample():
-                    num_to_run = handler_group["runAmount"].sample()
-                    for j in range(0, num_to_run):
-                        handlers = handler_group["handlers"]
-                        num_hanlders = len(handlers)
-                        handler_to_run = handlers[random.randint(0, num_hanlders - 1)]
-                        res_str = make_blocking_request(handler_to_run)
-                        print(res_str)
-                        f.write(res_str + '\n')
+    while True:
+        for handler_group in config["handlerGroups"]:
+            if numpy.random.random() < handler_group["runSample"].sample():
+                num_to_run = handler_group["runAmount"].sample()
+                for j in range(0, num_to_run):
+                    handlers = handler_group["handlers"]
+                    num_hanlders = len(handlers)
+                    handler_to_run = handlers[random.randint(0, num_hanlders - 1)]
+                    res_str = make_blocking_request(handler_to_run)
+                    log_queue.put(res_str)
 
-def benchmark(config, num_minutes, num_req_runners):
+
+def log_queue_consumer(stats_queue, log_file_name):
+    f = None
+    if log_file_name:
+        f = open(log_file_name, 'w')
+    while True:
+        log_entry = stats_queue.get()
+        print(log_entry)
+        if f:
+            f.write(log_entry + '\n')
+
+def benchmark(config, num_minutes, num_req_runners, log_file_name):
     req_runners = []
+    log_queue = multiprocessing.Queue(10000)
+    print('Creating log queue consumer')
+    queue_consumer = multiprocessing.Process(target=log_queue_consumer, args=(log_queue, log_file_name))
+    queue_consumer.start()
+
     print('Creating %d request runners' % num_req_runners)
     for i in range(0, num_req_runners):
-        p = multiprocessing.Process(target=request_runner, args=(config, i))
+        p = multiprocessing.Process(target=request_runner, args=(config, i, log_queue))
         p.start()
         req_runners.append(p)
 
@@ -155,12 +167,17 @@ def benchmark(config, num_minutes, num_req_runners):
         p.terminate()
         p.join()
 
+    queue_consumer.terminate()
+    queue_consumer.join()
+
+
 parser = argparse.ArgumentParser(description='Start a cluster')
 parser.add_argument('-cluster', default=None)
 parser.add_argument('-config', default=None)
 parser.add_argument('-handler-dir', default=None)
 parser.add_argument('-request-runners', type=int, default=2)
 parser.add_argument('-run-minutes', type=int, default=5)
+parser.add_argument('-log-file', default=None)
 parser.add_argument('--copy-handlers', action='store_true')
 parser.add_argument('--verbose', action='store_true')
 args = parser.parse_args()
@@ -170,8 +187,7 @@ def main():
         if not args.cluster:
             print('Must specify cluster name if copying handlers')
             exit()
-        if args.verbose:
-            print('Copying handlers')
+        print('Copying handlers')
         if not args.handler_dir:
             print('Must specify handler directory')
         copy_handlers(args.cluster, args.handler_dir)
@@ -181,7 +197,7 @@ def main():
     if args.verbose:
         print(config)
     print('Benchmarking...')
-    benchmark(config, args.run_minutes, args.request_runners)
+    benchmark(config, args.run_minutes, args.request_runners, args.log_file)
 
 if __name__ == '__main__':
     main()
