@@ -282,7 +282,7 @@ def write_out_package_dependencies(packages):
             deps.append(d.get_name())
         packages_deps[p.get_name()] = deps
     f = open('package_dependencies.json', 'w')
-    json.dump(packages_deps, f)
+    json.dump(packages_deps, f, sort_keys=True, indent=2)
     f.close()
 
 def main():
