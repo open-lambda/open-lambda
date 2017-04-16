@@ -13,7 +13,7 @@ import argparse
 def get_load_simulation_code_setup(cpu, mem):
     return str.format('''
 import load_simulator
-load_simulator.simulate_install({0}, {1}, False)
+load_simulator.simulate_load({0}, {1}, False)
 ''',  cpu, 0)
 
 
