@@ -62,12 +62,12 @@ def install(pkg):
     if pkg in installed:
         return
 
-    if mirror:
+    #if mirror:
         #ret = pip.main(['install', '-i', mirror, pkg])
-        check_output(['pip', 'install', '--index-url', mirror, '--trusted-host', mirror, pkg])
-    else:
+    check_output(['pip', 'install', '--index-url', 'http://192.168.103.144:9199/simple', '--trusted-host', '192.168.103.144', pkg])
+    #else:
         #ret = pip.main(['install', pkg])
-        check_output(['pip', 'install', pkg])
+     #   check_output(['pip', 'install', pkg])
 
     installed[pkg] = True
 

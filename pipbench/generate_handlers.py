@@ -5,7 +5,7 @@ import json
 from helper_modules.distribution import distribution_factory
 from helper_modules.handler import Handler
 from helper_modules.package import Package
-
+import argparse
 
 def write_lambda_func(handlers_dir, handler_name, packages):
     handler_contents = ''
@@ -26,8 +26,9 @@ def handler(conn, event):
 
 def write_packages_txt(handler_dir, handler_name, packages):
     handler_contents = ''
-    for p in packages:
-        handler_contents += '%s:%s\n' % (p.get_name(), p.get_name())
+    deps_list = get_all_dependencies_in_tree(packages)
+    for d in deps_list:
+        handler_contents += '%s:%s\n' % (d.get_name(), d.get_name())
     f = open('%s/%s/packages.txt' % (handler_dir, handler_name), 'w')
     f.write(handler_contents)
     f.close()
@@ -46,7 +47,7 @@ def match_packages_and_handlers(handlers, packages):
 
     for h in handlers:
         tries = 0
-        while h.should_add_more_dependencies() and tries < 10 * num_packages:
+        while h.should_add_more_dependencies():
             tries += 1
             # find a package
             i = numpy.random.randint(0, num_packages)
@@ -114,15 +115,52 @@ def parse_config(config_file_name):
     return config
 
 
-def get_list_of_packages():
-    packages = []
-    with open('package_popularity_real.csv', 'r') as f:
+def add_popularity_to_packages(csv_file_name, packages):
+    with open(csv_file_name, 'r') as f:
         for line in f:
             line_l = line.split(',')
             # name,popularity
             name = line_l[0]
             popularity = int(line_l[1])
-            packages.append(Package(name, popularity))
+            for p in packages:
+                if p.get_name() == name:
+                    p.set_popularity(popularity)
+                    break
+    return packages
+
+
+def get_all_dependencies_in_tree(packages):
+    dep_list = []
+    for p in packages:
+        get_all_depdencies_rec_helper(p, dep_list)
+    return dep_list
+
+
+def get_all_depdencies_rec_helper(package, dep_list):
+    dep_list.append(package)
+    for d in package.get_dependencies():
+        get_all_depdencies_rec_helper(d, dep_list)
+
+
+def add_dependencies_to_packages(deps_json_file_name, packages):
+    with open(deps_json_file_name, 'r') as f:
+        package_dependencies = json.load(f)
+    for name, deps in package_dependencies.items():
+        for dep_name in deps:
+            for p in packages:
+                if p.get_name() == name:
+                    for d in packages:
+                        if d.get_name() == dep_name:
+                            p.add_dependency(d)
+                            break
+                    break
+
+def get_packages():
+    with open('package_dependencies.json', 'r') as f:
+        package_dependencies = json.load(f)
+    packages = []
+    for name in package_dependencies:
+        packages.append(Package(name))
     return packages
 
 
@@ -149,9 +187,17 @@ def main():
         print('packages directory does not exist')
         exit()
 
-    config = parse_config(None)
+    parser = argparse.ArgumentParser(description='Start a cluster')
+    parser.add_argument('-config', default=None)
+    parser.add_argument('-package-popularity-csv', default='package_popularity_real.csv')
+    parser.add_argument('-package-dependencies-json', default='package_dependencies.json')
+    args = parser.parse_args()
+
+    config = parse_config(args.config)
     print('Reading in package popularity distribution...')
-    packages = get_list_of_packages()
+    packages = get_packages()
+    add_dependencies_to_packages(args.package_dependencies_json, packages)
+    add_popularity_to_packages(args.package_popularity_csv, packages)
     print('Creating handlers...')
     handlers = generate_handlers(config)
     print('Adding dependencies to handlers...')
