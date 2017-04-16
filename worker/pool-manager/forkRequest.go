@@ -125,6 +125,15 @@ sendFds(char *sockPath, char *pid, char *pkgs) {
         return errmsg;
     }
 
+    // Close fds for all namespaces.
+
+    for(k = 0; k < NUM_NS; k++) {
+        if(close(nsfds[k]) == -1) {
+            sprintf(errmsg, "close: %s\n", strerror(errno));
+            return errmsg;
+        }
+    }
+
     return buf;
 }
 */

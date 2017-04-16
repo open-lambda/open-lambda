@@ -332,6 +332,14 @@ static PyObject *ns_forkenter(PyObject *self, PyObject *args) {
         return NULL;
     }
 
+    /* Close the passed file descriptors */
+    for(k = 0; k < NUM_NS; k++) {
+        if (close(newns[k]) == -1) {
+            PyErr_SetString(PyExc_RuntimeError, "close passed file descriptor failed.");
+            return NULL;
+        }
+    }
+
     ret = Py_BuildValue("i", gc_pid);
 
     /* Grandchild closes connections returns in new namespaces */
