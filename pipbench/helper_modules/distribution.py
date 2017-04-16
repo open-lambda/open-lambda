@@ -14,8 +14,10 @@ class Distribution:
             r = numpy.random.randint(0, 1)
             total = 0
             for v in self.dist_args['values']:
-                if v['weight'] + total > r and total < r:
-                     val = v['value']
+                if total < r and total < r + v['weight']:
+                    val = v['value']
+                    break
+                total += v['weight']
         elif self.dist == 'exact_distribution_uniform':
             i = numpy.random.randint(0, 20)
             val = self.dist_args['values'][i]
@@ -26,8 +28,8 @@ class Distribution:
             val = dist(**self.dist_args)
 
         if self.transform:
-            if self.transform == 'float_ms_to_int_ms':
-                return round(val / 1000)
+            if self.transform == 'float_s_to_int_ms':
+                return round(val * 1000)
         else:
             return abs(math.ceil(val))
 
