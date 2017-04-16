@@ -12,6 +12,7 @@ import (
 
 	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/handler/state"
+	"github.com/open-lambda/open-lambda/worker/pool-manager/policy"
 	"github.com/open-lambda/open-lambda/worker/registry"
 
 	pmanager "github.com/open-lambda/open-lambda/worker/pool-manager"
@@ -56,6 +57,7 @@ type Handler struct {
 	codeDir    string
 	pkgs       []string
 	sandboxDir string
+	fs         *policy.ForkServer
 }
 
 // NewHandlerSet creates an empty HandlerSet
@@ -182,7 +184,7 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 				return nil, errors.New("forkenter only supported with ContainerSandbox")
 			}
 
-			if err := h.hset.poolMgr.Provision(containerSB, h.sandboxDir, h.pkgs); err != nil {
+			if h.fs, err = h.hset.poolMgr.Provision(containerSB, h.sandboxDir, h.pkgs); err != nil {
 				return nil, err
 			}
 		}
@@ -238,6 +240,11 @@ func (h *Handler) StopIfPaused() {
 		log.Printf("Could not kill %v after unpausing!  Error: %v\n", h.name, err)
 	} else {
 		h.state = state.Stopped
+		if h.fs != nil {
+			h.fs.Mutex.Lock()
+			h.fs.Runners = false
+			h.fs.Mutex.Unlock()
+		}
 	}
 }
 

@@ -3,6 +3,7 @@ package policy
 import (
 	"os"
 	"strconv"
+	"sync"
 
 	sb "github.com/open-lambda/open-lambda/worker/sandbox"
 )
@@ -15,6 +16,8 @@ type ForkServer struct {
 	Hits     int
 	Parent   *ForkServer
 	Children int
+	Runners  bool
+	Mutex    *sync.Mutex
 }
 
 func (fs *ForkServer) Hit() {
