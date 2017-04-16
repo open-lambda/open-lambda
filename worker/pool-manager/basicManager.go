@@ -17,19 +17,20 @@ import (
 type BasicManager struct {
 	factory *BufferedCacheFactory
 	cluster string
-	servers []policy.ForkServer
+	servers []*policy.ForkServer
 	matcher policy.CacheMatcher
 	seq     int
-	mutex   sync.Mutex
+	mutex   *sync.Mutex
 }
 
 func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
-	servers := make([]policy.ForkServer, 0, 0)
+	servers := make([]*policy.ForkServer, 0, 0)
 	bm = &BasicManager{
 		cluster: opts.Cluster_name,
 		servers: servers,
 		matcher: policy.NewSubsetMatcher(),
 		seq:     0,
+		mutex:   &sync.Mutex{},
 	}
 
 	rootCID, err := bm.initCacheRoot(opts.Pool_dir)
@@ -45,16 +46,15 @@ func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
 	go func(bm *BasicManager) {
 		for {
 			time.Sleep(50 * time.Millisecond)
-			bm.servers = e.CheckUsage(bm.servers, &bm.mutex)
+			bm.servers = e.CheckUsage(bm.servers, bm.mutex)
 		}
 	}(bm)
 
 	return bm, nil
 }
 
-func (bm *BasicManager) Provision(sandbox sb.ContainerSandbox, dir string, pkgs []string) (err error) {
+func (bm *BasicManager) Provision(sandbox sb.ContainerSandbox, dir string, pkgs []string) (fs *policy.ForkServer, err error) {
 	bm.mutex.Lock()
-	defer bm.mutex.Unlock()
 
 	fs, toCache := bm.matcher.Match(bm.servers, pkgs)
 
@@ -62,9 +62,13 @@ func (bm *BasicManager) Provision(sandbox sb.ContainerSandbox, dir string, pkgs 
 	if len(toCache) != 0 {
 		fs, err = bm.newCacheEntry(fs, toCache)
 		if err != nil {
-			return err
+			return nil, err
 		}
+	} else {
+		bm.mutex.Unlock()
+		fs.Mutex.Lock()
 	}
+	defer fs.Mutex.Unlock()
 
 	// keep track of number of hits
 	fs.Hit()
@@ -72,12 +76,12 @@ func (bm *BasicManager) Provision(sandbox sb.ContainerSandbox, dir string, pkgs 
 	// signal interpreter to forkenter into sandbox's namespace
 	pid, err := forkRequest(fs.SockPath, sandbox.NSPid(), []string{}, true)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// change cgroup of spawned lambda server
 	if err = sandbox.CGroupEnter(pid); err != nil {
-		return err
+		return nil, err
 	}
 
 	sockPath := fmt.Sprintf("%s/ol.sock", dir)
@@ -87,11 +91,11 @@ func (bm *BasicManager) Provision(sandbox sb.ContainerSandbox, dir string, pkgs 
 	for ok := true; ok; ok = os.IsNotExist(err) {
 		_, err = os.Stat(sockPath)
 		if time.Since(start).Seconds() > 10 {
-			return errors.New(fmt.Sprintf("handler server failed to initialize after 10s"))
+			return nil, errors.New(fmt.Sprintf("handler server failed to initialize after 10s"))
 		}
 	}
 
-	return nil
+	return fs, nil
 }
 
 func (bm *BasicManager) newCacheEntry(fs *policy.ForkServer, toCache []string) (*policy.ForkServer, error) {
@@ -103,6 +107,22 @@ func (bm *BasicManager) newCacheEntry(fs *policy.ForkServer, toCache []string) (
 	for k := 0; k < len(toCache); k++ {
 		pkgs[toCache[k]] = true
 	}
+
+	newFs := &policy.ForkServer{
+		Packages: pkgs,
+		Hits:     0,
+		Parent:   fs,
+		Children: 0,
+		Mutex:    &sync.Mutex{},
+	}
+
+	fs.Children += 1
+
+	bm.servers = append(bm.servers, newFs)
+	bm.seq++
+
+	newFs.Mutex.Lock()
+	bm.mutex.Unlock()
 
 	// get container for new entry
 	sandbox, dir, err := bm.factory.Create()
@@ -127,22 +147,11 @@ func (bm *BasicManager) newCacheEntry(fs *policy.ForkServer, toCache []string) (
 		}
 	}
 
-	newFs := policy.ForkServer{
-		Sandbox:  sandbox,
-		Pid:      pid,
-		SockPath: sockPath,
-		Packages: pkgs,
-		Hits:     0,
-		Parent:   fs,
-		Children: 0,
-	}
+	newFs.Sandbox = sandbox
+	newFs.Pid = pid
+	newFs.SockPath = sockPath
 
-	fs.Children += 1
-
-	bm.servers = append(bm.servers, newFs)
-	bm.seq++
-
-	return &newFs, nil
+	return newFs, nil
 }
 
 func (bm *BasicManager) initCacheRoot(poolDir string) (rootCID string, err error) {
@@ -176,7 +185,7 @@ func (bm *BasicManager) initCacheRoot(poolDir string) (rootCID string, err error
 		return "", err
 	}
 
-	fs := policy.ForkServer{
+	fs := &policy.ForkServer{
 		Sandbox:  rootSB,
 		Pid:      pid,
 		SockPath: fmt.Sprintf("%s/fs.sock", rootDir),
@@ -184,6 +193,7 @@ func (bm *BasicManager) initCacheRoot(poolDir string) (rootCID string, err error
 		Hits:     0,
 		Parent:   nil,
 		Children: 0,
+		Mutex:    &sync.Mutex{},
 	}
 
 	bm.servers = append(bm.servers, fs)

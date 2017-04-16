@@ -55,7 +55,7 @@ func NewEvictor(pkgfile, rootCID string, kb_limit int) (*Evictor, error) {
 	return e, nil
 }
 
-func (e *Evictor) CheckUsage(servers []ForkServer, mutex *sync.Mutex) []ForkServer {
+func (e *Evictor) CheckUsage(servers []*ForkServer, mutex *sync.Mutex) []*ForkServer {
 	usage := e.usage()
 	if usage > e.limit {
 		mutex.Lock()
@@ -81,7 +81,7 @@ func (e *Evictor) usage() (usage int) {
 	return usage
 }
 
-func (e *Evictor) evict(servers []ForkServer) []ForkServer {
+func (e *Evictor) evict(servers []*ForkServer) []*ForkServer {
 	idx := -1
 	worst := int(math.Inf(+1))
 

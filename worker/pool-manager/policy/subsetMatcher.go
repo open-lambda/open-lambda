@@ -7,7 +7,7 @@ func NewSubsetMatcher() *SubsetMatcher {
 	return &SubsetMatcher{}
 }
 
-func (sm *SubsetMatcher) Match(servers []ForkServer, pkgs []string) (*ForkServer, []string) {
+func (sm *SubsetMatcher) Match(servers []*ForkServer, pkgs []string) (*ForkServer, []string) {
 	best_fs := servers[0]
 	best_score := 0
 	best_toCache := pkgs
@@ -30,5 +30,5 @@ func (sm *SubsetMatcher) Match(servers []ForkServer, pkgs []string) (*ForkServer
 		}
 	}
 
-	return &best_fs, best_toCache
+	return best_fs, best_toCache
 }
