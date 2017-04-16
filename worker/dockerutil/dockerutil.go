@@ -18,6 +18,8 @@ const (
 	BASE_IMAGE           = "lambda"
 	POOL                 = "pool"
 	CACHE_IMAGE          = "cache-entry"
+	POOL_IMAGE           = "server-pool"
+	INSTALLER_IMAGE      = "pip-installer"
 )
 
 // ImageExists checks if an image of name exists.
