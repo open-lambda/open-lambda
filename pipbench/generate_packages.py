@@ -34,7 +34,7 @@ def copy_load_simulator_so(packages_dir, package_name):
 def create_data_files(packages_dir, package_name, file_sizes, compression_ratio_int):
     dir = packages_dir + '/' + package_name + '/' + package_name + '/data/'
     os.makedirs(dir)
-    compressable_size = 0
+    compressable_size = 44 # the other contents
     for i in range(0, len(file_sizes)):
         compressable_size += file_sizes[i]
         f = open(dir + 'data_' + str(i) + '.dat', 'w')
@@ -47,10 +47,8 @@ def create_data_files(packages_dir, package_name, file_sizes, compression_ratio_
     compression_ratio = float(compression_ratio_int) / float(100)
     if compressable_size > 0 and compression_ratio > 0:
         uncompressable_size = int(((1 - compression_ratio) * compressable_size) / compression_ratio)
-        uncompressable_str = ''
-        for j in range(0, uncompressable_size * 1024):
-            uncompressable_str += random.choice(string.ascii_letters + string.digits)
-        f = open(dir + 'uncompressable.dat', 'w')
+        uncompressable_str = os.urandom(uncompressable_size * 1024)
+        f = open(dir + 'uncompressable.dat', 'wb')
         f.write(uncompressable_str)
         f.close()
 
@@ -215,7 +213,7 @@ def parse_config(config_file_name):
                 },
                 "compression_ratio": {
                     "dist": "exact_value",
-                    "value": 50
+                    "value": 75
                 }
             },
             "install": {
