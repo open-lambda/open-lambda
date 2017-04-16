@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/open-lambda/open-lambda/registry"
 	"github.com/open-lambda/open-lambda/worker/config"
+	pip "github.com/open-lambda/open-lambda/worker/pip-manager"
 	"github.com/open-lambda/open-lambda/worker/server"
 	"github.com/urfave/cli"
 )
@@ -677,6 +679,58 @@ func upload(ctx *cli.Context) error {
 	return nil
 }
 
+// installs requirements to an unpack-only pip mirror
+func install(ctx *cli.Context) error {
+	index := ctx.String("index")
+	target := ctx.String("target")
+	reqsFile := ctx.String("reqs")
+	reqArgs := ctx.Args()
+
+	reqs := []string{}
+
+	reqSet := map[string]bool{}
+	if reqsFile != "" {
+		if file, err := os.Open(reqsFile); err != nil {
+			return err
+		} else {
+			defer file.Close()
+			scanner := bufio.NewScanner(file)
+			for scanner.Scan() {
+				normalized := strings.ToLower(scanner.Text())
+				if _, ok := reqSet[normalized]; !ok {
+					reqSet[normalized] = true
+					reqs = append(reqs, normalized)
+				}
+			}
+		}
+	}
+
+	for _, req := range reqArgs {
+		normalized := strings.ToLower(req)
+		if _, ok := reqSet[normalized]; !ok {
+			reqSet[normalized] = true
+			reqs = append(reqs, normalized)
+		}
+	}
+
+	if m, err := pip.NewUnpackMirrorServer(index, target); err != nil {
+		log.Fatal("fail to create unpack mirror server: ", err)
+	} else if remains, err := m.Prepare(reqs); err != nil {
+		log.Fatal("fail to prepare unpack mirror: ", err)
+	} else {
+		remainsLog := filepath.Join(target, "remains.log")
+		if err := ioutil.WriteFile(remainsLog, []byte(strings.Join(remains, "\n")), 0644); err != nil {
+			log.Fatal("fail to write logs: ", err)
+		}
+		if len(remains) == 0 {
+			log.Printf("All packages installed successfully\n")
+		} else {
+			log.Printf("Fail to installed %d out of %d packages. List written to %s\n", len(remains), len(reqs), remainsLog)
+		}
+	}
+	return nil
+}
+
 // main runs the admin tool
 func main() {
 	if c, err := docker.NewClientFromEnv(); err != nil {
@@ -867,6 +921,28 @@ OPTIONS:
 			UsageText: "admin kill --cluster=NAME",
 			Flags:     []cli.Flag{clusterFlag},
 			Action:    kill,
+		},
+		cli.Command{
+			Name:      "install",
+			Usage:     "Install packages to an unpack-only Pip mirror",
+			UsageText: "admin install [-i|--index=INDEX] [-t|--target=TARGET] [-r|--reqs=FILE] [req...]",
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:  "index, i",
+					Usage: "`INDEX` of Pip mirror",
+				},
+				cli.StringFlag{
+					Name:  "target, t",
+					Usage: "`TARGET` directory to install the unpack mirror",
+					Value: "/tmp/.open_lambda/pip",
+				},
+				cli.StringFlag{
+					Name:  "reqs, r",
+					Usage: "`FILE` of requirements to install",
+				},
+			},
+			ArgsUsage: "Requirements to install",
+			Action:    install,
 		},
 	}
 	app.Run(os.Args)
