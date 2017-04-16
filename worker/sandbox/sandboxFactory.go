@@ -28,10 +28,11 @@ func InitSandboxFactory(config *config.Config) (sf SandboxFactory, err error) {
 
 // DockerSBFactory is a SandboxFactory that creats docker sandboxes.
 type DockerSBFactory struct {
-	client *docker.Client
-	cmd    []string
-	labels map[string]string
-	env    []string
+	client  *docker.Client
+	cmd     []string
+	labels  map[string]string
+	env     []string
+	pkgsDir string
 }
 
 // emptySBInfo wraps sandbox information necessary for the buffer.
@@ -68,7 +69,7 @@ func NewDockerSBFactory(opts *config.Config) (*DockerSBFactory, error) {
 		cmd = []string{"/init"}
 	}
 
-	df := &DockerSBFactory{c, cmd, labels, env}
+	df := &DockerSBFactory{c, cmd, labels, env, opts.Pkgs_dir}
 	return df, nil
 }
 
@@ -77,6 +78,7 @@ func (df *DockerSBFactory) Create(handlerDir, sandboxDir, pipMirror string) (San
 	volumes := []string{
 		fmt.Sprintf("%s:%s:ro,slave", handlerDir, "/handler"),
 		fmt.Sprintf("%s:%s:slave", sandboxDir, "/host"),
+		fmt.Sprintf("%s:%s:ro", df.pkgsDir, "/packages"),
 	}
 
 	container, err := df.client.CreateContainer(

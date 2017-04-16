@@ -79,6 +79,11 @@ func registryPath(cluster string) string {
 	return path.Join(cluster, "registry")
 }
 
+// packagesPath gets the packages directory of the cluster
+func packagesPath(cluster string) string {
+	return path.Join(cluster, "packages")
+}
+
 // clusterNodes finds all docker containers belongs to a cluster and returns
 // a mapping from the type of the container to its container ID.
 func clusterNodes(cluster string) (map[string]([]string), error) {
@@ -124,6 +129,10 @@ func newCluster(ctx *cli.Context) error {
 		return err
 	}
 
+	if err := os.Mkdir(packagesPath(cluster), 0700); err != nil {
+		return err
+	}
+
 	// config dir and template
 	if err := os.Mkdir(path.Join(cluster, "config"), 0700); err != nil {
 		return err
@@ -134,6 +143,7 @@ func newCluster(ctx *cli.Context) error {
 		Registry:       "local",
 		Sandbox:        "docker",
 		Reg_dir:        registryPath(cluster),
+		Pkgs_dir:       packagesPath(cluster),
 		Worker_dir:     workerPath(cluster, "default"),
 		Sandbox_config: map[string]interface{}{"processes": 10},
 	}
