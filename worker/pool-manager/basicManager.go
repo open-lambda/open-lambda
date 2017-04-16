@@ -33,7 +33,7 @@ func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
 		mutex:   &sync.Mutex{},
 	}
 
-	rootCID, err := bm.initCacheRoot(opts.Pool_dir)
+	rootCID, err := bm.initCacheRoot(opts.Pool_dir, opts.Pkgs_dir)
 	if err != nil {
 		return nil, err
 	}
@@ -154,8 +154,8 @@ func (bm *BasicManager) newCacheEntry(fs *policy.ForkServer, toCache []string) (
 	return newFs, nil
 }
 
-func (bm *BasicManager) initCacheRoot(poolDir string) (rootCID string, err error) {
-	factory, rootSB, rootDir, rootCID, err := InitCacheFactory(poolDir, bm.cluster, 2) //TODO: buffer
+func (bm *BasicManager) initCacheRoot(poolDir, pkgsDir string) (rootCID string, err error) {
+	factory, rootSB, rootDir, rootCID, err := InitCacheFactory(poolDir, pkgsDir, bm.cluster, 2) //TODO: buffer
 	if err != nil {
 		return "", err
 	}

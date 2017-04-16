@@ -10,8 +10,8 @@ import (
 	sb "github.com/open-lambda/open-lambda/worker/sandbox"
 )
 
-func InitCacheFactory(poolDir, cluster string, buffer int) (cf *BufferedCacheFactory, root *sb.DockerSandbox, rootDir, rootCID string, err error) {
-	cf, root, rootDir, rootCID, err = NewBufferedCacheFactory(poolDir, cluster, buffer)
+func InitCacheFactory(poolDir, pkgsDir, cluster string, buffer int) (cf *BufferedCacheFactory, root *sb.DockerSandbox, rootDir, rootCID string, err error) {
+	cf, root, rootDir, rootCID, err = NewBufferedCacheFactory(poolDir, pkgsDir, cluster, buffer)
 	if err != nil {
 		return nil, nil, "", "", err
 	}
@@ -21,10 +21,11 @@ func InitCacheFactory(poolDir, cluster string, buffer int) (cf *BufferedCacheFac
 
 // CacheFactory is a SandboxFactory that creates docker sandboxes for the cache.
 type CacheFactory struct {
-	client *docker.Client
-	cmd    []string
-	caps   []string
-	labels map[string]string
+	client  *docker.Client
+	cmd     []string
+	caps    []string
+	labels  map[string]string
+	pkgsDir string
 }
 
 // emptySBInfo wraps sandbox information necessary for the buffer.
@@ -42,7 +43,7 @@ type BufferedCacheFactory struct {
 }
 
 // NewCacheFactory creates a CacheFactory.
-func NewCacheFactory(cluster string) (*CacheFactory, error) {
+func NewCacheFactory(cluster, pkgsDir string) (*CacheFactory, error) {
 	client, err := docker.NewClientFromEnv()
 	if err != nil {
 		return nil, err
@@ -57,7 +58,7 @@ func NewCacheFactory(cluster string) (*CacheFactory, error) {
 		dockerutil.DOCKER_LABEL_TYPE:    dockerutil.POOL,
 	}
 
-	cf := &CacheFactory{client, cmd, caps, labels}
+	cf := &CacheFactory{client, cmd, caps, labels, pkgsDir}
 	return cf, nil
 }
 
@@ -65,6 +66,7 @@ func NewCacheFactory(cluster string) (*CacheFactory, error) {
 func (cf *CacheFactory) Create(sandboxDir string, cmd []string) (*sb.DockerSandbox, string, error) {
 	volumes := []string{
 		fmt.Sprintf("%s:%s", sandboxDir, "/host"),
+		fmt.Sprintf("%s:%s:ro", cf.pkgsDir, "/packages"),
 	}
 
 	container, err := cf.client.CreateContainer(
@@ -91,8 +93,8 @@ func (cf *CacheFactory) Create(sandboxDir string, cmd []string) (*sb.DockerSandb
 
 // NewBufferedCacheFactory creates a BufferedCacheFactory and starts a go routine to
 // fill the sandbox buffer.
-func NewBufferedCacheFactory(poolDir, cluster string, buffer int) (*BufferedCacheFactory, *sb.DockerSandbox, string, string, error) {
-	delegate, err := NewCacheFactory(cluster)
+func NewBufferedCacheFactory(poolDir, pkgsDir, cluster string, buffer int) (*BufferedCacheFactory, *sb.DockerSandbox, string, string, error) {
+	delegate, err := NewCacheFactory(cluster, pkgsDir)
 	if err != nil {
 		return nil, nil, "", "", err
 	}

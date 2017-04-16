@@ -27,6 +27,8 @@ type Config struct {
 	Cluster_name string `json:"cluster_name"`
 	// pip mirror address for installing python packages
 	Pip_mirror string `json:"pip_mirror"`
+	// packages directory for unpack-only installations
+	Pkgs_dir string `json:"pkgs_dir"`
 
 	// pool options
 	// directory storing socket files for each forked server
@@ -140,6 +142,21 @@ func (c *Config) Defaults() error {
 			return err
 		}
 		c.Worker_dir = path
+	}
+
+	if c.Pkgs_dir == "" {
+		return fmt.Errorf("must specify packages directory")
+	}
+
+	if !path.IsAbs(c.Pkgs_dir) {
+		if c.path == "" {
+			return fmt.Errorf("Pkgs_dir cannot be relative, unless config is loaded from file")
+		}
+		path, err := filepath.Abs(path.Join(path.Dir(c.path), c.Pkgs_dir))
+		if err != nil {
+			return err
+		}
+		c.Pkgs_dir = path
 	}
 
 	// cgroup sandboxes require some extra settings

@@ -7,5 +7,6 @@
     "sandbox": "docker",
     "worker_dir": "test_worker",
     "sandbox_config": {"processes": 10},
-    "pool": ""
+    "pool": "",
+    "pkgs_dir": "packages"
 }

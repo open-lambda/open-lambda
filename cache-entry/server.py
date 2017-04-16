@@ -9,11 +9,14 @@ from subprocess import check_output
 
 import ns
 
+PKGS_PATH = '/packages'
 HOST_PATH = '/host'
 SOCK_PATH = '%s/ol.sock' % HOST_PATH
 STDOUT_PATH = '%s/stdout' % HOST_PATH
 STDERR_PATH = '%s/stderr' % HOST_PATH
 
+INDEX_HOST = '172.17.0.1'
+INDEX_PORT = '9199'
 
 PROCESSES_DEFAULT = 10
 initialized = False
@@ -27,7 +30,7 @@ def init():
 
     # assume submitted .py file is /handler/lambda_func.py
     sys.path.append('/handler')
-    import lambda_func 
+    import lambda_func
 
     # need alternate config mechanism
     if False:
@@ -64,7 +67,7 @@ def install(pkg):
 
     #if mirror:
         #ret = pip.main(['install', '-i', mirror, pkg])
-    check_output(['pip', 'install', '--index-url', 'http://192.168.103.144:9199/simple', '--trusted-host', '192.168.103.144', pkg])
+    check_output(['pip', 'install', '--index-url', 'http://%s:%s/simple' % (INDEX_HOST, INDEX_PORT), '--trusted-host', INDEX_HOST, pkg])
     #else:
         #ret = pip.main(['install', pkg])
      #   check_output(['pip', 'install', pkg])
@@ -78,6 +81,20 @@ def lambda_server():
     server.add_socket(socket)
     tornado.ioloop.IOLoop.instance().start()
     server.start(PROCESSES_DEFAULT)
+
+# create symbolic links from install cache to dist-packages, return if success
+def create_link(pkg):
+    # assume no version (e.g. "==1.2.1")
+    pkgdir = '%s/%s' % (PKGS_PATH, pkg)
+    if os.path.exists(pkgdir):
+        for name in os.listdir(pkgdir):
+            source = pkgdir + '/' + name
+            link_name = '/usr/lib/python2.7/dist-packages/' + name
+            if os.path.exists(link_name):
+                continue # should we report this?
+            os.symlink(source, link_name)
+        return True
+    return False
 
 # listen for fds to forkenter
 def fdlisten(path):
@@ -98,16 +115,20 @@ def fdlisten(path):
         r = ns.forkenter()
         if r == 0:
             redirect()
+
             # install & import packages
             for k, pkg in enumerate(pkgs):
                 if k < len(pkgs)-1:
                     split = pkg.split(':')
                     if split[1] != '':
-                        print('installing: %s' % split[1])
-                        try:
-                            install(split[1])
-                        except Exception as e: 
-                            print('install %s failed with: %s' % (split[1], e))
+                        if create_link(split[1]):
+                            print('using install cache: %s' % split[1])
+                        else:
+                            print('installing: %s' % split[1])
+                            try:
+                                install(split[1])
+                            except Exception as e:
+                                print('install %s failed with: %s' % (split[1], e))
 
                         sys.stdout.flush()
                         sys.stderr.flush()
