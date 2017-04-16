@@ -1,11 +1,12 @@
 class Package:
-    def __init__(self, name, popularity, dependencies_target=None, data_file_sizes=None, install_cpu_time=None,
+    def __init__(self, name, popularity=None, dependencies_target=None, data_file_sizes=None, compression_ratio=None, install_cpu_time=None,
                  install_mem=None, import_cpu_time=None, import_mem=None):
         self.name = name
         self.dependencies_target = dependencies_target
         self.dependencies = []
         self.popularity = popularity
         self.data_file_sizes = data_file_sizes
+        self.compression_ratio = compression_ratio
         self.install_cpu_time = install_cpu_time
         self.install_mem = install_mem
         self.import_cpu_time = import_cpu_time
@@ -27,8 +28,14 @@ class Package:
     def get_popularity(self):
         return self.popularity
 
+    def set_popularity(self, popularity):
+        self.popularity = popularity
+
     def get_data_file_sizes(self):
         return self.data_file_sizes
+
+    def get_compression_ratio(self):
+        return self.compression_ratio
 
     def get_install_cpu_time(self):
         return self.install_cpu_time
