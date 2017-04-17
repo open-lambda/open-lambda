@@ -110,39 +110,50 @@ def fdlisten(path):
 
         print('LISTENING')
         sys.stdout.flush()
-        pkgs = ns.fdlisten(path).split()
+        data = ns.fdlisten(path).split()
 
         r = ns.forkenter()
         if r == 0:
             redirect()
 
-            # install & import packages
-            for k, pkg in enumerate(pkgs):
-                if k < len(pkgs)-1:
-                    split = pkg.split(':')
-                    if split[1] != '':
-                        if create_link(split[1]):
-                            print('using install cache: %s' % split[1])
-                        else:
-                            raise Exception('should already installed using cache!')
-                            print('installing: %s' % split[1])
-                            try:
-                                install(split[1])
-                            except Exception as e:
-                                print('install %s failed with: %s' % (split[1], e))
+            imps = []
+            pkgs = []
+            for info in data[:-1]:
+                split = info.split(':')
+                imps.append(split[0])
+                if split[1] != '':
+                    pkgs.append(split[1])
 
-                        sys.stdout.flush()
-                        sys.stderr.flush()
-
-                    print('importing: %s' % split[0])
-                    try:
-                        globals()[split[0]] = importlib.import_module(split[0])
-                    except Exception as e:
-                        print('failed to import %s with: %s' % (split[0], e))
-
+            # use install cache
+            remains = []
+            for pkg in pkgs:
+                if create_link(pkg):
+                    print('using install cache: %s' % pkg)
                 else:
-                    signal = pkg
-                    print("signal: %s" % signal)
+                    remains.append(pkg)
+            pkgs = remains
+
+            # install from pip mirror
+            for pkg in pkgs:
+                print('installing: %s' % pkg)
+                try:
+                    install(pkg)
+                except Exception as e:
+                    print('install %s failed with: %s' % (split[1], e))
+            
+            # import modules
+            for imp in imps:
+                print('importing: %s' % imp)
+                try:
+                    globals()[imp] = importlib.import_module(imp)
+                except Exception as e:
+                    print('failed to import %s with: %s' % (imp, e))
+
+            signal = data[-1]
+            print('signal: %s' % signal)
+
+            sys.stdout.flush()
+            sys.stderr.flush()
 
         print('')
         sys.stdout.flush()
