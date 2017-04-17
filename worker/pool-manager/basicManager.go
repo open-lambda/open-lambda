@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,16 +23,23 @@ type BasicManager struct {
 	matcher policy.CacheMatcher
 	seq     int
 	mutex   *sync.Mutex
+	sizes   map[string]float64
 }
 
 func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
 	servers := make([]*policy.ForkServer, 0, 0)
+	sizes, err := readPkgSizes("/users/tharter/open-lambda/worker/pool-manager/pkgSizes.txt")
+	if err != nil {
+		return nil, err
+	}
+
 	bm = &BasicManager{
 		cluster: opts.Cluster_name,
 		servers: servers,
 		matcher: policy.NewSubsetMatcher(),
 		seq:     0,
 		mutex:   &sync.Mutex{},
+		sizes:   sizes,
 	}
 
 	rootCID, err := bm.initCacheRoot(opts.Pool_dir)
@@ -38,7 +47,7 @@ func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
 		return nil, err
 	}
 
-	e, err := policy.NewEvictor("", rootCID, 1000000) // 1GB -> make configurable
+	e, err := policy.NewEvictor("", rootCID, 5000000) // 1GB -> make configurable
 	if err != nil {
 		return nil, err
 	}
@@ -84,33 +93,24 @@ func (bm *BasicManager) Provision(sandbox sb.ContainerSandbox, dir string, pkgs 
 		return nil, err
 	}
 
-	sockPath := fmt.Sprintf("%s/ol.sock", dir)
-
-	// wait up to 15s for server to initialize
-	start := time.Now()
-	for ok := true; ok; ok = os.IsNotExist(err) {
-		_, err = os.Stat(sockPath)
-		if time.Since(start).Seconds() > 10 {
-			return nil, errors.New(fmt.Sprintf("handler server failed to initialize after 10s"))
-		}
-	}
-
 	return fs, nil
 }
 
 func (bm *BasicManager) newCacheEntry(fs *policy.ForkServer, toCache []string) (*policy.ForkServer, error) {
 	// make hashset of packages for new entry
 	pkgs := make(map[string]bool)
+	size := 0.0
 	for key, val := range fs.Packages {
 		pkgs[key] = val
 	}
 	for k := 0; k < len(toCache); k++ {
 		pkgs[toCache[k]] = true
+		size += bm.sizes[strings.ToLower(toCache[k])]
 	}
 
 	newFs := &policy.ForkServer{
 		Packages: pkgs,
-		Hits:     0,
+		Hits:     0.0,
 		Parent:   fs,
 		Children: 0,
 		Mutex:    &sync.Mutex{},
@@ -155,7 +155,7 @@ func (bm *BasicManager) newCacheEntry(fs *policy.ForkServer, toCache []string) (
 }
 
 func (bm *BasicManager) initCacheRoot(poolDir string) (rootCID string, err error) {
-	factory, rootSB, rootDir, rootCID, err := InitCacheFactory(poolDir, bm.cluster, 2) //TODO: buffer
+	factory, rootSB, rootDir, rootCID, err := InitCacheFactory(poolDir, bm.cluster, 20) //TODO: buffer
 	if err != nil {
 		return "", err
 	}
@@ -190,13 +190,43 @@ func (bm *BasicManager) initCacheRoot(poolDir string) (rootCID string, err error
 		Pid:      pid,
 		SockPath: fmt.Sprintf("%s/fs.sock", rootDir),
 		Packages: make(map[string]bool),
-		Hits:     0,
+		Hits:     0.0,
 		Parent:   nil,
 		Children: 0,
 		Mutex:    &sync.Mutex{},
+		Size:     1.0, // divide-by-zero
 	}
 
 	bm.servers = append(bm.servers, fs)
 
 	return rootCID, nil
+}
+
+func readPkgSizes(path string) (map[string]float64, error) {
+	sizes := make(map[string]float64)
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		if err = scanner.Err(); err != nil {
+			return nil, err
+		}
+
+		split := strings.Split(scanner.Text(), ":")
+		if len(split) != 2 {
+			return nil, errors.New("malformed package size file")
+		}
+
+		size, err := strconv.Atoi(split[1])
+		if err != nil {
+			return nil, err
+		}
+		sizes[strings.ToLower(split[1])] = float64(size)
+	}
+
+	return sizes, nil
 }

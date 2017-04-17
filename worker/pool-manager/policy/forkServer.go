@@ -13,17 +13,18 @@ type ForkServer struct {
 	Pid      string
 	SockPath string
 	Packages map[string]bool
-	Hits     int
+	Hits     float64
 	Parent   *ForkServer
 	Children int
 	Runners  bool
+	Size     float64
 	Mutex    *sync.Mutex
 }
 
 func (fs *ForkServer) Hit() {
 	curr := fs
 	for curr != nil {
-		curr.Hits += 1
+		curr.Hits += 1.0
 		curr = curr.Parent
 	}
 

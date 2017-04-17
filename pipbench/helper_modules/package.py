@@ -34,6 +34,9 @@ class Package:
     def get_data_file_sizes(self):
         return self.data_file_sizes
 
+    def get_total_size(self):
+        return sum(self.data_file_sizes)
+
     def get_compression_ratio(self):
         return self.compression_ratio
 

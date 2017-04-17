@@ -4,8 +4,8 @@ from subprocess import check_output
 
 PKG_PATH = '/handler/packages.txt'
 HOST_PATH = '/host'
-STDOUT_PATH = '%s/stdout' % HOST_PATH
-STDERR_PATH = '%s/stderr' % HOST_PATH
+STDOUT_PATH = '%s/stdout2' % HOST_PATH
+STDERR_PATH = '%s/stderr2' % HOST_PATH
 
 def main():
     sys.stdout = open(STDOUT_PATH, 'w')
@@ -13,6 +13,7 @@ def main():
 
     if not os.path.exists(PKG_PATH):
         print('no packages to install')
+        sys.stdout.flush()
         return
 
     with open(PKG_PATH) as fd:
@@ -20,10 +21,11 @@ def main():
             try:
                 pkg = line.split(':')[1]
                 if pkg != '':
-                    check_output(['pip', 'install', '--index-url', 'http://192.168.103.144:9199/simple', '--trusted-host', '192.168.103.144', pkg])
-                    install(pkg)
+                    check_output(['pip', 'install', '--index-url', 'http://128.104.222.169:9199/simple', '--trusted-host', '128.104.222.169', pkg])
             except Exception as e:
                 print('failed to install %s with %s' % (pkg, e))
+                sys.stdout.flush()
+
 
 if __name__ == '__main__':
     main()

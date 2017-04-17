@@ -64,7 +64,7 @@ def install(pkg):
 
     #if mirror:
         #ret = pip.main(['install', '-i', mirror, pkg])
-    check_output(['pip', 'install', '--index-url', 'http://192.168.103.144:9199/simple', '--trusted-host', '192.168.103.144', pkg])
+    check_output(['pip', 'install', '--index-url', 'http://128.104.222.169:9199/simple', '--trusted-host', '128.104.222.169', pkg])
     #else:
         #ret = pip.main(['install', pkg])
      #   check_output(['pip', 'install', pkg])

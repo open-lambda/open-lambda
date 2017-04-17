@@ -143,7 +143,7 @@ func NewBufferedSBFactory(opts *config.Config, delegate SandboxFactory) (*Buffer
 			if handlerDir, sandboxDir, err := mkSBDirs(bufDir); err != nil {
 				bf.buffer <- nil
 				bf.errors <- err
-			} else if sandbox, err := bf.delegate.Create(handlerDir, opts.Pip_mirror, sandboxDir); err != nil {
+			} else if sandbox, err := bf.delegate.Create(handlerDir, sandboxDir, opts.Pip_mirror); err != nil {
 				bf.buffer <- nil
 				bf.errors <- err
 			} else if err := sandbox.Start(); err != nil {

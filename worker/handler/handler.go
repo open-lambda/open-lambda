@@ -4,6 +4,7 @@ package handler
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"path"
@@ -188,6 +189,18 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 				return nil, err
 			}
 		}
+
+		sockPath := fmt.Sprintf("%s/ol.sock", h.sandboxDir)
+
+		// wait up to 30s for server to initialize
+		start := time.Now()
+		for ok := true; ok; ok = os.IsNotExist(err) {
+			_, err = os.Stat(sockPath)
+			if time.Since(start).Seconds() > 30 {
+				return nil, errors.New(fmt.Sprintf("handler server failed to initialize after 30s"))
+			}
+		}
+
 	} else if h.state == state.Paused { // unpause if paused
 		if err := h.sandbox.Unpause(); err != nil {
 			return nil, err
