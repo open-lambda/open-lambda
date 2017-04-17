@@ -86,10 +86,11 @@ func (df *DockerSBFactory) Create(handlerDir string, sandboxDir string) (Sandbox
 				Env:    df.env,
 				Cmd:    df.cmd,
 			},
-			// MM: Add Privileged flag to allow for perf
+			// MM: Add Privileged flag to allow for perf, IPC mode for posix ipc
 			HostConfig: &docker.HostConfig{
 				Privileged: true,
 				Binds:      volumes,
+                                IpcMode: "host",
 			},
 		},
 	)
