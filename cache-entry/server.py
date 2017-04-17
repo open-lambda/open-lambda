@@ -124,6 +124,7 @@ def fdlisten(path):
                         if create_link(split[1]):
                             print('using install cache: %s' % split[1])
                         else:
+                            raise Exception('should already installed using cache!')
                             print('installing: %s' % split[1])
                             try:
                                 install(split[1])
