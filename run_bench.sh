@@ -14,4 +14,6 @@ set -x
 ./bin/admin workers -cluster=bench_call
 # Give it a sec to catch up
 sleep 3
-curl -X POST localhost:8080/runLambda/call_perf -d '{}'
+#curl -X POST localhost:8080/runLambda/call_perf -d '{}'
+curl -X POST localhost:8080/runLambda/ipc_test -d '{}'
+#curl -X POST localhost:8080/runLambda/fork_test -d '{}'

@@ -1,0 +1,21 @@
+{
+	"registry": "local",
+	"sandbox": "docker",
+	"pool": "",
+	"reg_dir": "/home/manarm/adv_os/open-lambda/bench_call/registry",
+	"cluster_name": "/home/manarm/adv_os/open-lambda/bench_call",
+	"pip_mirror": "",
+	"pool_dir": "",
+	"num_forkservers": 1,
+	"reg_cluster": null,
+	"worker_dir": "/home/manarm/adv_os/open-lambda/bench_call/workers/worker-0",
+	"Cgroup_init_path": "",
+	"Cgroup_base": "",
+	"worker_port": "8080",
+	"docker_host": "localhost",
+	"sandbox_buffer": 0,
+	"Skip_pull_existing": false,
+	"sandbox_config": {
+		"processes": 10
+	}
+}
