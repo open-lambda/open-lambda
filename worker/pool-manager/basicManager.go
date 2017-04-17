@@ -28,7 +28,7 @@ type BasicManager struct {
 
 func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
 	servers := make([]*policy.ForkServer, 0, 0)
-	sizes, err := readPkgSizes("/users/tharter/open-lambda/worker/pool-manager/pkgSizes.txt")
+	sizes, err := readPkgSizes("/users/tharter/open-lambda/worker/pool-manager/package_sizes.txt")
 	if err != nil {
 		return nil, err
 	}
