@@ -10,8 +10,9 @@ import (
 type HandlerLRU struct {
 	mutex sync.Mutex
 	// use a linked list and a map to achieve a linked-map
-	hmap   map[*Handler]*list.Element
-	hqueue *list.List // front is recent
+	hmap     map[*Handler]*list.Element
+	handlers *map[string]*Handler
+	hqueue   *list.List // front is recent
 	// TODO(tyler): set hard limit to prevent new containers from starting?
 	soft_limit int
 	soft_cond  *sync.Cond
@@ -19,9 +20,10 @@ type HandlerLRU struct {
 
 // NewHandlerLRU creates a HandlerLRU with a given soft_limit and starts the
 // evictor in a go routine.
-func NewHandlerLRU(soft_limit int) *HandlerLRU {
+func NewHandlerLRU(handlers *map[string]*Handler, soft_limit int) *HandlerLRU {
 	lru := &HandlerLRU{
 		hmap:       make(map[*Handler]*list.Element),
+		handlers:   handlers,
 		hqueue:     list.New(),
 		soft_limit: soft_limit,
 	}
@@ -86,6 +88,8 @@ func (lru *HandlerLRU) Evictor() {
 		entry := lru.hqueue.Back()
 		handler := entry.Value.(*Handler)
 		lru.hqueue.Remove(entry)
+		(*lru.handlers)[handler.name] = nil
+		// remove from handlerset TODO
 		delete(lru.hmap, handler)
 
 		lru.mutex.Unlock()
