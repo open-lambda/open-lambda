@@ -9,7 +9,7 @@ def handler(conn, event):
     try:
       pid = fork()
       if pid == 0:
-        mq = MessageQueue("/mytest")
+        mq = MessageQueue("/mytest", flags=O_CREAT, mode=0600, max_messages = 8, max_message_size=bufsize)
         return mq.receive()[0] # (msg, priority) blocking
       else:
         mq = MessageQueue("/mytest", flags=O_CREAT, mode=0600, max_messages = 8, max_message_size=bufsize)
