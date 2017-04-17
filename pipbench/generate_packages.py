@@ -285,6 +285,11 @@ def write_out_package_dependencies(packages):
     json.dump(packages_deps, f, sort_keys=True, indent=2)
     f.close()
 
+def write_out_package_sizes(packages):
+    with open('package_sizes.txt', 'w') as fd:
+        for p in packages:
+            fd.write('%s:%s\n' % (p.get_name(), p.get_total_size()))
+
 def main():
     packages_dir = 'packages'
 
@@ -313,6 +318,8 @@ def main():
     write_popularity_distribution_real(packages)
     print('Writing out direct dependencies lists...')
     write_out_package_dependencies(packages)
+    print('Writing out package size file...')
+    write_out_package_sizes(packages)
     print('Done')
 
 
