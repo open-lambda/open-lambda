@@ -62,8 +62,8 @@ def make_blocking_request(handler_name):
     }))
     end = get_time_millis()
     now = datetime.datetime.now()
-    result_str = '[%s] handler: %s status: %d in: %d ms' % ( datetime.datetime.isoformat(now), handler_name, r.status_code, end-start)
-    return result_str
+    result = {"time": datetime.datetime.now(), "handler_name": handler_name, "status_code": r.status_code, "latency": end-start}
+    return result
 
 def fork_and_make_request(handler_name):
     p = multiprocessing.Process(target=make_blocking_request, args=(handler_name,))
@@ -136,21 +136,48 @@ def request_runner(config, id, log_queue):
                     log_queue.put(res_str)
 
 
-def log_queue_consumer(stats_queue, log_file_name):
+def log_queue_consumer(stats_queue, log_file_name, num_minutes):
+    start = time.clock()
+    results = []
     f = None
     if log_file_name:
         f = open(log_file_name, 'w')
-    while True:
+    while time.clock() - start < num_minutes * 60:
         log_entry = stats_queue.get()
-        print(log_entry)
-        if f:
-            f.write(log_entry + '\n')
+        results.append(log_entry)
+        log_str = '[%s] handler: %s status: %d in: %d ms' % ( datetime.datetime.isoformat(log_entry["time"]), log_entry["handler_name"], log_entry["status_code"], log_entry["latency"])
+        print(log_str)
+    if f:
+        f.write(log_str + '\n')
+    handlers = []
+    for l in results:
+        if not l["handler_name"] in handlers:
+            handlers.append(l["handler_name"])
+    for h in handlers:
+        reqs = []
+        for l in results:
+            if l["handler_name"] == h and l["status_code"] == 200:
+                reqs.append(h)
+        r = map(get_latency, reqs)
+        print("Hanlder %s avg latency: %d" % (h, statistics.mean(r)))
+        print("Total num reqs to handler %s: %d" % (h, len(r)))
+
+    only_200s = []
+    for l in results:
+        if l["status_code"] == 200:
+            only_200s.append(l)
+
+    print("Total latency: %d" % (statistics.mean(map(get_latency, only_200s))))
+    print("Total throughput: %d" % len(only_200s))
+
+def get_latency(le):
+    return le["latency"]
 
 def benchmark(config, num_minutes, num_req_runners, log_file_name):
     req_runners = []
     log_queue = multiprocessing.Queue(10000)
     print('Creating log queue consumer')
-    queue_consumer = multiprocessing.Process(target=log_queue_consumer, args=(log_queue, log_file_name))
+    queue_consumer = multiprocessing.Process(target=log_queue_consumer, args=(log_queue, log_file_name, num_minutes))
     queue_consumer.start()
 
     print('Creating %d request runners' % num_req_runners)
@@ -167,6 +194,7 @@ def benchmark(config, num_minutes, num_req_runners, log_file_name):
         p.terminate()
         p.join()
 
+    sleep(5)
     queue_consumer.terminate()
     queue_consumer.join()
 

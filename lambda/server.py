@@ -23,6 +23,9 @@ def init():
     if initialized:
         return
     
+    sys.stdout = open(STDOUT_PATH, 'w')
+    sys.stderr = open(STDERR_PATH, 'w')
+
     config = json.loads(os.environ['ol.config'])
     if config.get('db', None) == 'rethinkdb':
         host = config.get('rethinkdb.host', 'localhost')
@@ -64,9 +67,4 @@ def lambda_server():
     server.start(PROCESSES_DEFAULT)
 
 if __name__ == '__main__':
-    sys.stdout = open(STDOUT_PATH, 'w')
-    sys.stderr = open(STDERR_PATH, 'w')
-    try:
-        lambda_server()
-    except Exception as e:
-        print(e)
+    lambda_server()
