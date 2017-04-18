@@ -9,11 +9,14 @@ from subprocess import check_output
 
 import ns
 
+PKGS_PATH = '/packages'
 HOST_PATH = '/host'
 SOCK_PATH = '%s/ol.sock' % HOST_PATH
 STDOUT_PATH = '%s/stdout' % HOST_PATH
 STDERR_PATH = '%s/stderr' % HOST_PATH
 
+INDEX_HOST = '128.104.222.169'
+INDEX_PORT = '9199'
 
 PROCESSES_DEFAULT = 10
 initialized = False
@@ -27,7 +30,7 @@ def init():
 
     # assume submitted .py file is /handler/lambda_func.py
     sys.path.append('/handler')
-    import lambda_func 
+    import lambda_func
 
     # need alternate config mechanism
     if False:
@@ -64,7 +67,7 @@ def install(pkg):
 
     #if mirror:
         #ret = pip.main(['install', '-i', mirror, pkg])
-    check_output(['pip', 'install', '--index-url', 'http://128.104.222.169:9199/simple', '--trusted-host', '128.104.222.169', pkg])
+    check_output(['pip', 'install', '--index-url', 'http://%s:%s/simple' % (INDEX_HOST, INDEX_PORT), '--trusted-host', INDEX_HOST, pkg])
     #else:
         #ret = pip.main(['install', pkg])
      #   check_output(['pip', 'install', pkg])
@@ -77,7 +80,21 @@ def lambda_server():
     socket = tornado.netutil.bind_unix_socket(SOCK_PATH)
     server.add_socket(socket)
     tornado.ioloop.IOLoop.instance().start()
-    server.start(PROCESSES_DEFAULT)
+    #server.start(PROCESSES_DEFAULT)
+
+# create symbolic links from install cache to dist-packages, return if success
+def create_link(pkg):
+    # assume no version (e.g. "==1.2.1")
+    pkgdir = '%s/%s' % (PKGS_PATH, pkg)
+    if os.path.exists(pkgdir):
+        for name in os.listdir(pkgdir):
+            source = pkgdir + '/' + name
+            link_name = '/usr/lib/python2.7/dist-packages/' + name
+            if os.path.exists(link_name):
+                continue # should we report this?
+            os.symlink(source, link_name)
+        return True
+    return False
 
 # listen for fds to forkenter
 def fdlisten(path):
@@ -93,34 +110,50 @@ def fdlisten(path):
 
         print('LISTENING')
         sys.stdout.flush()
-        pkgs = ns.fdlisten(path).split()
+        data = ns.fdlisten(path).split()
 
         r = ns.forkenter()
         if r == 0:
             redirect()
-            # install & import packages
-            for k, pkg in enumerate(pkgs):
-                if k < len(pkgs)-1:
-                    split = pkg.split(':')
-                    if split[1] != '':
-                        print('installing: %s' % split[1])
-                        try:
-                            install(split[1])
-                        except Exception as e: 
-                            print('install %s failed with: %s' % (split[1], e))
 
-                        sys.stdout.flush()
-                        sys.stderr.flush()
+            imps = []
+            pkgs = []
+            for info in data[:-1]:
+                split = info.split(':')
+                imps.append(split[0])
+                if split[1] != '':
+                    pkgs.append(split[1])
 
-                    print('importing: %s' % split[0])
-                    try:
-                        globals()[split[0]] = importlib.import_module(split[0])
-                    except Exception as e:
-                        print('failed to import %s with: %s' % (split[0], e))
-
+            # use install cache
+            remains = []
+            for pkg in pkgs:
+                if create_link(pkg):
+                    print('using install cache: %s' % pkg)
                 else:
-                    signal = pkg
-                    print("signal: %s" % signal)
+                    remains.append(pkg)
+            pkgs = remains
+
+            # install from pip mirror
+            for pkg in pkgs:
+                print('installing: %s' % pkg)
+                try:
+                    install(pkg)
+                except Exception as e:
+                    print('install %s failed with: %s' % (split[1], e))
+            
+            # import modules
+            for imp in imps:
+                print('importing: %s' % imp)
+                try:
+                    globals()[imp] = importlib.import_module(imp)
+                except Exception as e:
+                    print('failed to import %s with: %s' % (imp, e))
+
+            signal = data[-1]
+            print('signal: %s' % signal)
+
+            sys.stdout.flush()
+            sys.stderr.flush()
 
         print('')
         sys.stdout.flush()

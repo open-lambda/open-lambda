@@ -7,6 +7,7 @@ REG_BIN:=registry/bin
 WORKER_GO_FILES = $(shell find worker/ -name '*.go')
 LAMBDA_FILES = $(shell find lambda)
 POOL_FILES = $(shell find cache-entry)
+PIP_FILES = $(shell find pip-installer)
 
 GO = $(abspath ./hack/go.sh)
 GO_PATH = hack/go
@@ -17,7 +18,7 @@ LAMBDA_DIR = $(abspath ./lambda)
 PIPBENCH_DIR = $(abspath ./pipbench)
 
 .PHONY: all
-all : .git/hooks/pre-commit imgs/lambda imgs/cache-entry bin/admin
+all : .git/hooks/pre-commit imgs/lambda imgs/cache-entry imgs/pip-installer bin/admin
 
 .git/hooks/pre-commit: util/pre-commit
 	cp util/pre-commit .git/hooks/pre-commit
@@ -31,6 +32,10 @@ imgs/cache-entry : $(POOL_FILES)
 	${MAKE} -C cache-entry
 	docker build -t cache-entry cache-entry
 	touch imgs/cache-entry
+
+imgs/pip-installer : $(PIP_FILES)
+	docker build -t pip-installer pip-installer
+	touch imgs/pip-installer
 
 bin/admin : $(WORKER_GO_FILES)
 	cd $(ADMIN_DIR) && $(GO) install
