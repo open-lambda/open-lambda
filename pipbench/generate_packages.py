@@ -10,6 +10,10 @@ import json
 from helper_modules.package import Package
 import argparse
 from subprocess import check_output
+import multiprocessing
+
+
+CORES = 10
 
 def get_load_simulation_code_setup(cpu, mem):
     return str.format('''
@@ -153,19 +157,27 @@ def generate_packages(config):
     return packages
 
 
-def write_packages(packages_dir, packages):
+def worker(packages):
+    print('hello')
+    print(len(packages))
     for p in packages:
-        write_package(packages_dir, p)
+        write_package('packages', p)
+
+def write_packages(packages_dir, packages):
+    pkg_shards = [[] for i in range(CORES)]
+    print(len(packages))
+    for i in range(len(packages)):
+        pkg_shards[i%CORES].append(packages[i])
+    pool = multiprocessing.Pool(CORES)
+    pool.map(worker, pkg_shards)
+
 
 def alter_compression(packages_dir, package_name, compression_ratio):
     tar_name = packages_dir + '/' + package_name + "-0.1.tar.gz"
     package_dir_path = '%s/%s' % (packages_dir, package_name)
     out = check_output(['du', '-bs', package_dir_path])
     compressable_size = int(out.split()[0])
-    print(package_name)
     compression_ratio = compression_ratio / 100
-    print(compression_ratio)
-    print(compressable_size)
     tar = tarfile.open(tar_name, "w:gz")
     os.chdir(packages_dir)
     tar.add(package_name)
@@ -173,11 +185,9 @@ def alter_compression(packages_dir, package_name, compression_ratio):
     tar.close()
     stat_res = os.stat(tar_name)
     ccs = stat_res.st_size
-    print(ccs)
     uncompressed_size = int((compressable_size * compression_ratio - ccs) / (1 - compression_ratio))
     if uncompressed_size < 0:
         uncompressed_size = 0
-    print(uncompressed_size)
     ballast_bin = os.urandom(uncompressed_size)
     with open('%s/ballast.dat' % package_dir_path, 'wb') as f:
         f.write(ballast_bin)
