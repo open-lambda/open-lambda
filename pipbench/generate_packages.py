@@ -9,6 +9,7 @@ from helper_modules.distribution import distribution_factory
 import json
 from helper_modules.package import Package
 import argparse
+from subprocess import check_output
 
 def get_load_simulation_code_setup(cpu, mem):
     return str.format('''
@@ -34,22 +35,13 @@ def copy_load_simulator_so(packages_dir, package_name):
 def create_data_files(packages_dir, package_name, file_sizes, compression_ratio_int):
     dir = packages_dir + '/' + package_name + '/' + package_name + '/data/'
     os.makedirs(dir)
-    compressable_size = 44 # the other contents
     for i in range(0, len(file_sizes)):
-        compressable_size += file_sizes[i]
         f = open(dir + 'data_' + str(i) + '.dat', 'w')
         random_char = random.choice(string.ascii_letters + string.digits)
         compressable_str = ''
         for j in range(0, file_sizes[i] * 1024):
             compressable_str += random_char
         f.write(compressable_str)
-        f.close()
-    compression_ratio = float(compression_ratio_int) / float(100)
-    if compressable_size > 0 and compression_ratio > 0:
-        uncompressable_size = int(((1 - compression_ratio) * compressable_size) / compression_ratio)
-        uncompressable_str = os.urandom(uncompressable_size * 1024)
-        f = open(dir + 'uncompressable.dat', 'wb')
-        f.write(uncompressable_str)
         f.close()
 
 
@@ -165,6 +157,36 @@ def write_packages(packages_dir, packages):
     for p in packages:
         write_package(packages_dir, p)
 
+def alter_compression(packages_dir, package_name, compression_ratio):
+    tar_name = packages_dir + '/' + package_name + "-0.1.tar.gz"
+    package_dir_path = '%s/%s' % (packages_dir, package_name)
+    out = check_output(['du', '-bs', package_dir_path])
+    compressable_size = int(out.split()[0])
+    print(package_name)
+    compression_ratio = compression_ratio / 100
+    print(compression_ratio)
+    print(compressable_size)
+    tar = tarfile.open(tar_name, "w:gz")
+    os.chdir(packages_dir)
+    tar.add(package_name)
+    os.chdir('..')
+    tar.close()
+    stat_res = os.stat(tar_name)
+    ccs = stat_res.st_size
+    print(ccs)
+    uncompressed_size = int((compressable_size * compression_ratio - ccs) / (1 - compression_ratio))
+    if uncompressed_size < 0:
+        uncompressed_size = 0
+    print(uncompressed_size)
+    ballast_bin = os.urandom(uncompressed_size)
+    with open('%s/ballast.dat' % package_dir_path, 'wb') as f:
+        f.write(ballast_bin)
+    tar = tarfile.open(tar_name, "w:gz")
+    os.chdir(packages_dir)
+    tar.add(package_name)
+    os.chdir('..')
+    tar.close()
+    shutil.rmtree('%s/%s' % (packages_dir, package_name))
 
 def write_package(packages_dir, package):
     # create package directories
@@ -177,14 +199,7 @@ def write_package(packages_dir, package):
     create_init(packages_dir, package.get_name(), package.get_import_cpu_time(), package.get_import_mem(),
                 package.get_dependencies())
     copy_load_simulator_so(packages_dir, package.get_name())
-    # tarball and zip
-    tar = tarfile.open(packages_dir + '/' + package.get_name() + "-0.1.tar.gz", "w:gz")
-    os.chdir(packages_dir)
-    tar.add(package.get_name())
-    tar.close()
-    # remove unzipped package directory
-    shutil.rmtree(package.get_name())
-    os.chdir('..')
+    alter_compression(packages_dir, package.get_name(), package.get_compression_ratio())
 
 
 def parse_config(config_file_name):
