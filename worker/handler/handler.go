@@ -47,9 +47,9 @@ type HandlerSet struct {
 // concurrency and communicates with the sandbox manager to change the
 // state of the container that servers the lambda.
 type Handler struct {
+	name       string
 	mutex      sync.Mutex
 	hset       *HandlerSet
-	name       string
 	sandbox    sb.Sandbox
 	lastPull   *time.Time
 	state      state.HandlerState
@@ -62,7 +62,7 @@ type Handler struct {
 }
 
 // NewHandlerSet creates an empty HandlerSet
-func NewHandlerSet(config *config.Config, lru *HandlerLRU) (handlerSet *HandlerSet, err error) {
+func NewHandlerSet(config *config.Config) (handlerSet *HandlerSet, err error) {
 	rm, err := registry.InitRegistryManager(config)
 	if err != nil {
 		return nil, err
@@ -78,12 +78,13 @@ func NewHandlerSet(config *config.Config, lru *HandlerLRU) (handlerSet *HandlerS
 		return nil, err
 	}
 
+	handlers := make(map[string]*Handler)
 	handlerSet = &HandlerSet{
-		handlers:  make(map[string]*Handler),
+		handlers:  handlers,
 		regMgr:    rm,
 		sbFactory: sf,
 		poolMgr:   pm,
-		lru:       lru,
+		lru:       NewHandlerLRU(&handlers, 25),
 		workerDir: config.Worker_dir,
 		pipMirror: config.Pip_mirror,
 	}
@@ -96,12 +97,13 @@ func (h *HandlerSet) Get(name string) *Handler {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
+	log.Printf("handler: %v, name: %v", h.handlers[name], name)
 	handler := h.handlers[name]
 	if handler == nil {
 		sandboxDir := path.Join(h.workerDir, "handlers", name, "sandbox")
 		handler = &Handler{
-			hset:       h,
 			name:       name,
+			hset:       h,
 			state:      state.Unitialized,
 			runners:    0,
 			pkgs:       []string{},

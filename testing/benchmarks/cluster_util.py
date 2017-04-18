@@ -48,13 +48,14 @@ def get_default_config(cluster_name):
     return {
         "registry": "local",
         "sandbox": "docker",
-        "reg_dir": "../registry",
+        "reg_dir": "%s/%s/registry" % (SCRIPT_DIR, cluster_name),
         "cluster_name": "%s" % cluster_name,
         "worker_dir": "workers/default",
-        "benchmark_log": "./perf/%s.perf" % cluster_name,
+        "benchmark_log": "%s/perf/%s.perf" % (SCRIPT_DIR, cluster_name),
         "sandbox_buffer": 0,
         "sandbox_config": {},
-        "pip_mirror": "192.168.103.144"
+        "pip_mirror": "172.17.0.1",
+        "pkgs_dir": "%s/packages" % SCRIPT_DIR
     }
 
 def add_interpreter_pool(config, pool, pool_dir):
@@ -78,7 +79,7 @@ def setup_cluster(cluster_name, config):
 
 def copy_handlers(cluster_name):
     shutil.rmtree('%s/%s/registry' % (SCRIPT_DIR, cluster_name))
-    shutil.copytree(SCRIPT_DIR + '/handlers', '%s/%s/registry' % (SCRIPT_DIR, cluster_name))
+    shutil.copytree(SCRIPT_DIR + '/../handlers', '%s/%s/registry' % (SCRIPT_DIR, cluster_name))
 
 
 if not os.path.exists('perf'):

@@ -34,9 +34,7 @@ func newHttpErr(msg string, code int) *httpErr {
 
 // NewServer creates a server based on the passed config."
 func NewServer(config *config.Config) (*Server, error) {
-	lru := handler.NewHandlerLRU(100) //TODO: tyler
-
-	handlers, err := handler.NewHandlerSet(config, lru)
+	handlers, err := handler.NewHandlerSet(config)
 	if err != nil {
 		return nil, err
 	}

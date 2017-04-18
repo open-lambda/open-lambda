@@ -9,13 +9,15 @@ EOF
     tabflag=' -tabs'
 fi
 
-# test for non-empty gofmt (this outputs diffs)
-if [[ $( cd worker && gofmt -d${tabflag} . ) ]]; then
+# test for non-empty gofmt (this outputs diffs) (excluding vendor)
+if [[ $(cd worker && \
+    gofmt -d${tabflag} \
+    $(find . -type f ! -path './vendor/*' -name '*.go')) ]]; then
 	cat <<EOF
 Error: format check failed
 Please format "worker" directory with the following command and commit again:
-        
-    gofmt -w -l${tabflag} $(pwd)/worker
+
+    gofmt -w -l${tabflag} \$(find $PWD/worker ! -path '*/vendor/*' -name '*.go')
 EOF
 	exit 1
 fi

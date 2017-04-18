@@ -5,5 +5,6 @@
     "registry": "local",
     "worker_dir": "test_worker",
     "pool_dir": "test_pool",
-    "pool": "basic"
+    "pool": "basic",
+    "pkgs_dir": "packages"
 }
