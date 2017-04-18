@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"syscall"
 
 	docker "github.com/fsouza/go-dockerclient"
@@ -129,8 +130,8 @@ func mkSBDirs(bufDir string) (string, string, error) {
 func NewBufferedSBFactory(opts *config.Config, delegate SandboxFactory) (*BufferedSBFactory, error) {
 	bf := &BufferedSBFactory{}
 	bf.delegate = delegate
-	bf.buffer = make(chan *emptySBInfo, opts.Sandbox_buffer-1) // -1 for the last one blocking the channel
-	bf.errors = make(chan error, opts.Sandbox_buffer-1)
+	bf.buffer = make(chan *emptySBInfo, opts.Sandbox_buffer)
+	bf.errors = make(chan error, opts.Sandbox_buffer)
 	bf.mntDir = "/tmp/.olmnts"
 
 	if err := os.MkdirAll(bf.mntDir, os.ModeDir); err != nil {
@@ -138,29 +139,25 @@ func NewBufferedSBFactory(opts *config.Config, delegate SandboxFactory) (*Buffer
 	}
 
 	// fill the sandbox buffer
-	go func() {
-		idx := 0
-		for {
-			bufDir := filepath.Join(bf.mntDir, fmt.Sprintf("%d", idx))
-			if handlerDir, sandboxDir, err := mkSBDirs(bufDir); err != nil {
-				bf.buffer <- nil
-				bf.errors <- err
-			} else if sandbox, err := bf.delegate.Create(handlerDir, sandboxDir, opts.Pip_mirror); err != nil {
-				bf.buffer <- nil
-				bf.errors <- err
-			} else if err := sandbox.Start(); err != nil {
-				bf.buffer <- nil
-				bf.errors <- err
-			} else if err := sandbox.Pause(); err != nil {
-				bf.buffer <- nil
-				bf.errors <- err
-			} else {
-				bf.buffer <- &emptySBInfo{sandbox, handlerDir, sandboxDir}
-				bf.errors <- nil
+	var shared_idx int64 = -1
+	for i := 0; i < opts.Sandbox_buffer; i++ {
+		go func(idxptr *int64) {
+			for {
+				bufDir := filepath.Join(bf.mntDir, fmt.Sprintf("%d", atomic.AddInt64(idxptr, 1)))
+				if handlerDir, sandboxDir, err := mkSBDirs(bufDir); err != nil {
+					bf.errors <- err
+				} else if sandbox, err := bf.delegate.Create(handlerDir, sandboxDir, opts.Pip_mirror); err != nil {
+					bf.errors <- err
+				} else if err := sandbox.Start(); err != nil {
+					bf.errors <- err
+				} else if err := sandbox.Pause(); err != nil {
+					bf.errors <- err
+				} else {
+					bf.buffer <- &emptySBInfo{sandbox, handlerDir, sandboxDir}
+				}
 			}
-			idx++
-		}
-	}()
+		}(&shared_idx)
+	}
 
 	return bf, nil
 }
@@ -170,13 +167,16 @@ func NewBufferedSBFactory(opts *config.Config, delegate SandboxFactory) (*Buffer
 // Paused state, instead of Stopped.
 func (bf *BufferedSBFactory) Create(handlerDir, sandboxDir, pipMirror string) (Sandbox, error) {
 	mntFlag := uintptr(syscall.MS_BIND | syscall.MS_REC)
-	if info, err := <-bf.buffer, <-bf.errors; err != nil {
+	select {
+	case info := <-bf.buffer:
+		if err := syscall.Mount(handlerDir, info.handlerDir, "", mntFlag, ""); err != nil {
+			return nil, err
+		} else if err := syscall.Mount(sandboxDir, info.sandboxDir, "", mntFlag, ""); err != nil {
+			return nil, err
+		} else {
+			return info.sandbox, nil
+		}
+	case err := <-bf.errors:
 		return nil, err
-	} else if err := syscall.Mount(handlerDir, info.handlerDir, "", mntFlag, ""); err != nil {
-		return nil, err
-	} else if err := syscall.Mount(sandboxDir, info.sandboxDir, "", mntFlag, ""); err != nil {
-		return nil, err
-	} else {
-		return info.sandbox, nil
 	}
 }
