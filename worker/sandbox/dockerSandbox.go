@@ -275,41 +275,6 @@ func (s *DockerSandbox) NSPid() string {
 	return s.nspid
 }
 
-func (s *DockerSandbox) DoInstalls() error {
-	execOpts := docker.CreateExecOptions{
-		AttachStdin:  false,
-		AttachStdout: false,
-		AttachStderr: false,
-		Container:    s.container.ID,
-		Cmd:          []string{"python", "/install.py"},
-	}
-
-	exec, err := s.client.CreateExec(execOpts)
-	if err != nil {
-		return err
-	}
-
-	if err := s.client.StartExec(exec.ID, docker.StartExecOptions{}); err != nil {
-		return err
-	}
-
-	done := false
-	for !done {
-		status, err := s.client.InspectExec(exec.ID)
-		if err != nil {
-			return err
-		}
-		if !status.Running {
-			if status.ExitCode != 0 {
-				return errors.New(fmt.Sprintf("installation failed for container: %s", s.container.ID))
-			}
-			done = true
-		}
-	}
-
-	return nil
-}
-
 func (s *DockerSandbox) ID() string {
 	return s.container.ID
 }

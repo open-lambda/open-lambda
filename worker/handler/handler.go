@@ -84,7 +84,7 @@ func NewHandlerSet(config *config.Config) (handlerSet *HandlerSet, err error) {
 		regMgr:    rm,
 		sbFactory: sf,
 		poolMgr:   pm,
-		lru:       NewHandlerLRU(&handlers, 25),
+		lru:       NewHandlerLRU(&handlers, 1000000000), //bytes
 		workerDir: config.Worker_dir,
 		pipMirror: config.Pip_mirror,
 	}
@@ -97,7 +97,6 @@ func (h *HandlerSet) Get(name string) *Handler {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
-	log.Printf("handler: %v, name: %v", h.handlers[name], name)
 	handler := h.handlers[name]
 	if handler == nil {
 		sandboxDir := path.Join(h.workerDir, "handlers", name, "sandbox")
@@ -173,15 +172,7 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 			}
 		}
 
-		if h.hset.poolMgr == nil {
-			containerSB, ok := h.sandbox.(sb.ContainerSandbox)
-			if !ok {
-				return nil, errors.New("pip packages only supported with ContainerSandbox")
-			}
-			if err := containerSB.DoInstalls(); err != nil {
-				return nil, err
-			}
-		} else {
+		if h.hset.poolMgr != nil {
 			containerSB, ok := h.sandbox.(sb.ContainerSandbox)
 			if !ok {
 				return nil, errors.New("forkenter only supported with ContainerSandbox")
@@ -191,7 +182,6 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 				return nil, err
 			}
 		}
-
 		sockPath := fmt.Sprintf("%s/ol.sock", h.sandboxDir)
 
 		// wait up to 30s for server to initialize
