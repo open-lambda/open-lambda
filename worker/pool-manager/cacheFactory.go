@@ -152,10 +152,11 @@ func NewBufferedCacheFactory(poolDir, pkgsDir, cluster string, buffer int) (*Buf
 		}(&shared_idx)
 	}
 
-	log.Printf("filling buffer")
+	log.Printf("filling cache buffer")
 	for len(bf.buffer) < cap(bf.buffer) {
 		time.Sleep(20 * time.Millisecond)
 	}
+	log.Printf("cache buffer full")
 
 	return bf, root, rootDir, rootCID, nil
 }

@@ -161,10 +161,11 @@ func NewBufferedSBFactory(opts *config.Config, delegate SandboxFactory) (*Buffer
 		}(&shared_idx)
 	}
 
-	log.Printf("filling buffer")
+	log.Printf("filling sandbox buffer")
 	for len(bf.buffer) < cap(bf.buffer) {
 		time.Sleep(20 * time.Millisecond)
 	}
+	log.Printf("sandbox buffer full")
 
 	return bf, nil
 }
