@@ -182,6 +182,7 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 				return nil, err
 			}
 		}
+
 		sockPath := fmt.Sprintf("%s/ol.sock", h.sandboxDir)
 
 		// wait up to 30s for server to initialize
