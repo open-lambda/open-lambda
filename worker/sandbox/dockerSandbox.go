@@ -309,3 +309,7 @@ func (s *DockerSandbox) DoInstalls() error {
 
 	return nil
 }
+
+func (s *DockerSandbox) ID() string {
+	return s.container.ID
+}

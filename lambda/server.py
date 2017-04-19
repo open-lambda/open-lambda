@@ -1,15 +1,22 @@
 #!/usr/bin/python
-import traceback, json, sys, socket, os
+import traceback, json, sys, socket, os, time
 import rethinkdb
 import tornado.ioloop
 import tornado.web
 import tornado.httpserver
 import tornado.netutil
+from subprocess import check_output
 
 HOST_PATH = '/host'
 SOCK_PATH = '%s/ol.sock' % HOST_PATH
 STDOUT_PATH = '%s/stdout' % HOST_PATH
 STDERR_PATH = '%s/stderr' % HOST_PATH
+
+PKGS_PATH = '/packages'
+PKG_PATH = '/handler/packages.txt'
+
+INDEX_HOST = '128.104.222.169'
+INDEX_PORT = '9199'
 
 
 PROCESSES_DEFAULT = 10
@@ -35,6 +42,38 @@ def init():
 
     initialized = True
 
+# create symbolic links from install cache to dist-packages, return if success
+def create_link(pkg):
+    # assume no version (e.g. "==1.2.1")
+    pkgdir = '%s/%s' % (PKGS_PATH, pkg)
+    if os.path.exists(pkgdir):
+        for name in os.listdir(pkgdir):
+            source = pkgdir + '/' + name
+            link_name = '/usr/lib/python2.7/dist-packages/' + name
+            if os.path.exists(link_name):
+                continue # should we report this?
+            os.symlink(source, link_name)
+        return True
+    return False
+
+def install():
+    with open(PKG_PATH) as fd:
+        for line in fd:
+            pkg = line.strip().split(':')[1]
+            if pkg != '':
+                if create_link(pkg):
+                    print('using install cache: %s' % pkg)
+                    sys.stdout.flush()
+                else:
+                    print('installing: %s' % pkg)
+                    sys.stdout.flush()
+                    try:
+                        print(check_output(['pip', 'install', '--index-url', 'http://%s:%s/simple' % (INDEX_HOST, INDEX_PORT), '--trusted-host', INDEX_HOST, pkg]))
+                        sys.stdout.flush()
+                    except Exception as e:
+                        print('failed to install %s with %s' % (pkg, e))
+                        sys.stdout.flush()
+
 class SockFileHandler(tornado.web.RequestHandler):
     def post(self):
         try:
@@ -57,6 +96,7 @@ tornado_app = tornado.web.Application([
 
 # listen on sock file with Tornado
 def lambda_server():
+    install()
     server = tornado.httpserver.HTTPServer(tornado_app)
     socket = tornado.netutil.bind_unix_socket(SOCK_PATH)
     server.add_socket(socket)
@@ -66,6 +106,16 @@ def lambda_server():
 if __name__ == '__main__':
     sys.stdout = open(STDOUT_PATH, 'w')
     sys.stderr = open(STDERR_PATH, 'w')
+
+    curr = 0.0
+    while not os.path.exists(PKG_PATH):
+        time.sleep(0.005)
+        curr += 0.005
+        if curr > 1.0:
+            print('packages.txt missing')
+            sys.stdout.flush()
+            sys.exit(1)
+
     try:
         lambda_server()
     except Exception as e:

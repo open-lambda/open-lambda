@@ -3,6 +3,9 @@ package handler
 import (
 	"container/list"
 	"fmt"
+	"io/ioutil"
+	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -16,6 +19,7 @@ type HandlerLRU struct {
 	// TODO(tyler): set hard limit to prevent new containers from starting?
 	soft_limit int
 	soft_cond  *sync.Cond
+	size       int
 }
 
 // NewHandlerLRU creates a HandlerLRU with a given soft_limit and starts the
@@ -26,6 +30,7 @@ func NewHandlerLRU(handlers *map[string]*Handler, soft_limit int) *HandlerLRU {
 		handlers:   handlers,
 		hqueue:     list.New(),
 		soft_limit: soft_limit,
+		size:       0,
 	}
 	lru.soft_cond = sync.NewCond(&lru.mutex)
 	// TODO(tyler): start a configurable number of tasks
@@ -51,10 +56,11 @@ func (lru *HandlerLRU) Add(handler *Handler) {
 	if lru.hmap[handler] != nil {
 		panic("cannot double insert in LRU")
 	}
+	lru.size += handlerUsage(handler)
 	entry := lru.hqueue.PushFront(handler)
 	lru.hmap[handler] = entry
 
-	if lru.Len() > lru.soft_limit {
+	if lru.size > lru.soft_limit {
 		lru.soft_cond.Signal()
 	}
 }
@@ -71,6 +77,8 @@ func (lru *HandlerLRU) Remove(handler *Handler) {
 			panic("queue entry not found")
 		}
 	}
+
+	lru.size -= handlerUsage(handler)
 }
 
 // Evictor waits on signal that the number of Handlers in the LRU list exceeds
@@ -113,4 +121,21 @@ func (lru *HandlerLRU) Dump() {
 		h := e.Value.(*Handler)
 		fmt.Printf("> %s\n", h.name)
 	}
+}
+
+func handlerUsage(handler *Handler) (usage int) {
+	usagePath := fmt.Sprintf("/sys/fs/cgroup/memory/docker/%s/memory.usage_in_bytes", handler.sandbox.ID)
+
+	buf, err := ioutil.ReadFile(usagePath)
+	if err != nil {
+		return 0
+	}
+
+	str := strings.TrimSpace(string(buf[:]))
+	usage, err = strconv.Atoi(str)
+	if err != nil {
+		panic(fmt.Sprintf("atoi failed: %v", err))
+	}
+
+	return usage
 }

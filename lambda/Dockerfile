@@ -7,7 +7,6 @@ RUN pip install --upgrade pip
 RUN pip install rethinkdb
 RUN pip install tornado
 
-COPY install.py /
 COPY server.py /
 COPY init /
 
