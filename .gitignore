@@ -35,6 +35,9 @@
 # tars
 *.tar
 
+# log files
+*.pid
+
 *~
 *.swp
 
@@ -55,3 +58,7 @@
 /testing/test_worker
 /testing/test_pool
 /cgroup/cgroup_init
+/bench_call/*
+/bench_resp/*
+/out.txt
+/txt.py

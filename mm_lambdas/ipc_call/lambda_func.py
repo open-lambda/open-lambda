@@ -11,19 +11,45 @@
 # This is tricky to coordinate, since benches must be setup using http messages
 
 from subprocess import call
+from time import sleep
+import os
 from posix_ipc import *
 
 bufsize = 16
 
+def child():
+  sleep(5)
+  mq = MessageQueue("/mytest", flags=O_CREAT, mode=0600, max_messages = 8, max_message_size=bufsize)
+  mq.send("Call msg")
+  ret = mq.receive()[0] # (msg, priority)
+  os._exit(0)	 # no return
+
 def handler(conn, event):
     try:
-      # Start time
-      mq = MessageQueue("/mytest", flags=O_CREAT, mode=0600, max_messages = 8, max_message_size=bufsize)
-      mq.send("Call msg")
-      ret = mq.receive()[0] # (msg, priority)
-      # Stop time
-      mq.unlink()
-      mq.close()
-      return ret
+      pid = os.fork()
+      if pid == 0:
+         child()
+      else:
+        # Runs perf record on child PID while child does IPC
+        # Perf will terminate when child exits
+        call(["perf","record", "-ag", "-F", "99", "--output=perf.data",
+              "-e", "syscalls:sys_*", "-e", "net:*", "-e", "skb:*" ,"-e", "sock:*" ,"-e", "cpu-clock",
+              "-p", str(pid) ])
+        os.waitpid(pid,0) 
+
+        # Make sure mq is unlinked (lives in host IPC namespace)
+        mq = MessageQueue("/mytest")
+        mq.close()
+        mq.unlink()
+        
+        # Run result through perf script and return
+        f = open("f", 'wb')
+        g = open("g", 'wb')
+        call(["perf", "script", "--input=perf.data"], stdout=f, stderr=g)
+        f.close()
+        g.close()
+        f = open("f", 'rb')
+        g = open("g", 'rb')
+        return f.read() + g.read()
     except Exception as e:
         return {'error': str(e)} 
