@@ -13,7 +13,8 @@ from subprocess import check_output
 import multiprocessing
 
 
-CORES = 10
+CORES = 40
+RANDOM = None
 
 def get_load_simulation_code_setup(cpu, mem):
     return str.format('''
@@ -158,14 +159,11 @@ def generate_packages(config):
 
 
 def worker(packages):
-    print('hello')
-    print(len(packages))
     for p in packages:
         write_package('packages', p)
 
 def write_packages(packages_dir, packages):
     pkg_shards = [[] for i in range(CORES)]
-    print(len(packages))
     for i in range(len(packages)):
         pkg_shards[i%CORES].append(packages[i])
     pool = multiprocessing.Pool(CORES)
@@ -188,7 +186,8 @@ def alter_compression(packages_dir, package_name, compression_ratio):
     uncompressed_size = int((compressable_size * compression_ratio - ccs) / (1 - compression_ratio))
     if uncompressed_size < 0:
         uncompressed_size = 0
-    ballast_bin = os.urandom(uncompressed_size)
+    assert(len(RANDOM) >= uncompressed_size)
+    ballast_bin = RANDOM[:uncompressed_size]
     with open('%s/ballast.dat' % package_dir_path, 'wb') as f:
         f.write(ballast_bin)
     tar = tarfile.open(tar_name, "w:gz")
@@ -316,6 +315,8 @@ def write_out_package_sizes(packages):
             fd.write('%s:%s\n' % (p.get_name(), p.get_total_size()))
 
 def main():
+    global RANDOM
+    RANDOM = os.urandom(10*(1024**2))
     packages_dir = 'packages'
 
     # create mirror dir if not found
