@@ -1,16 +1,26 @@
 import os
 import numpy
-import numpy
+import shutil
 import json
 from helper_modules.distribution import distribution_factory
 from helper_modules.handler import Handler
 from helper_modules.package import Package
 import argparse
 
-def write_lambda_func(handlers_dir, handler_name, packages):
+def write_lambda_func(handlers_dir, handler):
+    handler_name = handler.get_name()
+    packages = handler.get_dependencies()
+    mem = handler.get_mem()
+    
     handler_contents = ''
     for p in packages:
         handler_contents += 'import ' + p.get_name() + '\n'
+
+    handler_contents += str.format('''
+import load_simulator
+load_simulator.simulate_load(0, {0}, False)
+''',  mem)
+        
     handler_contents += str.format('''
 def handler(conn, event):
     try:
@@ -63,7 +73,8 @@ def generate_handlers(config):
     for i in range(0, config['num_handlers']):
         num_deps = config["num_dependencies"].sample()
         name = 'a%d' % i
-        handlers.append(Handler(name, num_deps))
+        mem = config["load"]["mem"].sample()
+        handlers.append(Handler(name, num_deps, mem))
     return handlers
 
 
@@ -71,11 +82,10 @@ def write_handlers(handlers_dir, handlers):
     for h in handlers:
         write_handler(handlers_dir, h)
 
-
 def write_handler(handlers_dir, handler):
-    write_lambda_func(handlers_dir, handler.get_name(), handler.get_dependencies())
+    write_lambda_func(handlers_dir, handler)
     write_packages_txt(handlers_dir, handler.get_name(), handler.get_dependencies())
-
+    shutil.copyfile('load_simulator.so', handlers_dir + '/' + handler.get_name() + '/load_simulator.so')
 
 def parse_config(config_file_name):
     if config_file_name is None:
@@ -83,14 +93,12 @@ def parse_config(config_file_name):
             "num_handlers": 4000,
             "load": {
                 "cpu": {
-                    "dist": "normal",
-                    "loc": 100000000.0,
-                    "scale": 100000000.0
+                    "dist": "exact_value",
+                    "value": 0.0,
                 },
                 "mem": {
-                    "dist": "normal",
-                    "loc": 10000.0,
-                    "scale": 10.0
+                    "dist": "exact_value",
+                    "value": 1024,
                 }
             },
             "package_popularity": {
@@ -165,14 +173,17 @@ def get_packages():
 
 
 def write_handler_import_distribution(packages):
-    frequencies = ''
+    freq = {}
     for p in packages:
-        frequencies += '%s,%d\n' % (p.get_name(), p.get_reference_count())
+        freq[p.get_name()] = p.get_reference_count()
 
-    f = open('handler_import_distribution.csv', 'w')
-    f.write(frequencies)
-    f.close()
+    with open('handler_import_distribution.csv', 'w') as fd:
+        for p in sorted(freq, key=freq.get, reverse=True):
+            fd.write('%s,%d\n' % (p,freq[p]))
 
+    with open('top_packages.txt', 'w') as fd:
+        for p in sorted(freq, key=freq.get, reverse=True):
+            fd.write('%s\n' % p)
 
 def main():
     handlers_dir = 'handlers'
