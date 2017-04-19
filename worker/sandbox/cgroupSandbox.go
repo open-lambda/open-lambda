@@ -108,11 +108,6 @@ func (s *CgroupSandbox) NSPid() int {
 	return s.nspid
 }
 
-func (s *CgroupSandbox) DoInstalls() error {
-	//TODO(tyler)
-	return nil
-}
-
 func (s *CgroupSandbox) ID() string {
 	//TODO(tyler)
 	return ""

@@ -49,7 +49,7 @@ test-config :
 
 # run go unit tests in initialized environment
 test : test-config imgs/lambda
-	cd $(WORKER_DIR) && $(GO) test ./handler -v
+	#cd $(WORKER_DIR) && $(GO) test ./handler -v
 	cd $(WORKER_DIR) && $(GO) test ./server -v
 
 cgroup/cgroup_init : cgroup/cgroup_init.c
@@ -69,7 +69,7 @@ pooltest-config :
 
 # run go unit tests in initialized environment
 pooltest : pooltest-config imgs/lambda imgs/cache-entry
-	cd $(WORKER_DIR) && $(GO) test ./handler -v
+	#cd $(WORKER_DIR) && $(GO) test ./handler -v
 	cd $(WORKER_DIR) && $(GO) test ./server -v
 
 .PHONY: clean
