@@ -138,7 +138,7 @@ func (bm *BasicManager) newCacheEntry(fs *policy.ForkServer, toCache []string) (
 
 	sockPath := fmt.Sprintf("%s/fs.sock", dir)
 
-	// wait up to 15s for server to initialize
+	// wait up to 30s for server to initialize
 	start := time.Now()
 	for ok := true; ok; ok = os.IsNotExist(err) {
 		_, err = os.Stat(sockPath)

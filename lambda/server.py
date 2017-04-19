@@ -69,6 +69,7 @@ def install():
                     sys.stdout.flush()
                     try:
                         print(check_output(['pip', 'install', '--index-url', 'http://%s:%s/simple' % (INDEX_HOST, INDEX_PORT), '--trusted-host', INDEX_HOST, pkg]))
+                        #print(check_output(['pip', 'install', pkg]))
                         sys.stdout.flush()
                     except Exception as e:
                         print('failed to install %s with %s' % (pkg, e))
@@ -108,7 +109,7 @@ if __name__ == '__main__':
     sys.stderr = open(STDERR_PATH, 'w')
 
     curr = 0.0
-    while not os.path.exists(PKG_PATH):
+    while not os.path.exists(PKGS_PATH):
         time.sleep(0.005)
         curr += 0.005
         if curr > 1.0:

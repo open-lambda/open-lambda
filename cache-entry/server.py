@@ -80,7 +80,7 @@ def lambda_server():
     socket = tornado.netutil.bind_unix_socket(SOCK_PATH)
     server.add_socket(socket)
     tornado.ioloop.IOLoop.instance().start()
-    #server.start(PROCESSES_DEFAULT)
+    server.start(PROCESSES_DEFAULT)
 
 # create symbolic links from install cache to dist-packages, return if success
 def create_link(pkg):
