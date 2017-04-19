@@ -43,6 +43,8 @@ type Sandbox interface {
 
 	// What communication channel can we use to forward requests?
 	Channel() (*SandboxChannel, error)
+
+	ID() string
 }
 
 type ContainerSandbox interface {

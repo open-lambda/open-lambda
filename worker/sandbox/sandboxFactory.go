@@ -2,10 +2,12 @@ package sandbox
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sync/atomic"
 	"syscall"
+	"time"
 
 	docker "github.com/fsouza/go-dockerclient"
 	"github.com/open-lambda/open-lambda/worker/config"
@@ -140,7 +142,7 @@ func NewBufferedSBFactory(opts *config.Config, delegate SandboxFactory) (*Buffer
 
 	// fill the sandbox buffer
 	var shared_idx int64 = -1
-	for i := 0; i < opts.Sandbox_buffer; i++ {
+	for i := 0; i < 5; i++ {
 		go func(idxptr *int64) {
 			for {
 				bufDir := filepath.Join(bf.mntDir, fmt.Sprintf("%d", atomic.AddInt64(idxptr, 1)))
@@ -159,6 +161,11 @@ func NewBufferedSBFactory(opts *config.Config, delegate SandboxFactory) (*Buffer
 		}(&shared_idx)
 	}
 
+	log.Printf("filling buffer")
+	for len(bf.buffer) < cap(bf.buffer) {
+		time.Sleep(20 * time.Millisecond)
+	}
+
 	return bf, nil
 }
 
@@ -169,7 +176,9 @@ func (bf *BufferedSBFactory) Create(handlerDir, sandboxDir, pipMirror string) (S
 	mntFlag := uintptr(syscall.MS_BIND | syscall.MS_REC)
 	select {
 	case info := <-bf.buffer:
-		if err := syscall.Mount(handlerDir, info.handlerDir, "", mntFlag, ""); err != nil {
+		if err := info.sandbox.Unpause(); err != nil {
+			return nil, err
+		} else if err := syscall.Mount(handlerDir, info.handlerDir, "", mntFlag, ""); err != nil {
 			return nil, err
 		} else if err := syscall.Mount(sandboxDir, info.sandboxDir, "", mntFlag, ""); err != nil {
 			return nil, err

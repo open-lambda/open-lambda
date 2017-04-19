@@ -2,8 +2,11 @@ package pmanager
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
+	"sync/atomic"
+	"time"
 
 	docker "github.com/fsouza/go-dockerclient"
 	"github.com/open-lambda/open-lambda/worker/dockerutil"
@@ -124,29 +127,35 @@ func NewBufferedCacheFactory(poolDir, pkgsDir, cluster string, buffer int) (*Buf
 	}
 
 	// fill the sandbox buffer
-	go func() {
-		idx := 1
-		for {
-			sandboxDir := filepath.Join(bf.dir, fmt.Sprintf("%d", idx))
-			if err := os.MkdirAll(sandboxDir, os.ModeDir); err != nil {
-				bf.buffer <- nil
-				bf.errors <- err
-			} else if sandbox, _, err := bf.delegate.Create(sandboxDir, []string{"/init"}); err != nil {
-				bf.buffer <- nil
-				bf.errors <- err
-			} else if err := sandbox.Start(); err != nil {
-				bf.buffer <- nil
-				bf.errors <- err
-			} else if err := sandbox.Pause(); err != nil {
-				bf.buffer <- nil
-				bf.errors <- err
-			} else {
-				bf.buffer <- &emptySBInfo{sandbox, sandboxDir}
-				bf.errors <- nil
+	var shared_idx int64 = 0
+	for i := 0; i < 5; i++ {
+		go func(idxptr *int64) {
+			for {
+				sandboxDir := filepath.Join(bf.dir, fmt.Sprintf("%d", atomic.AddInt64(idxptr, 1)))
+				if err := os.MkdirAll(sandboxDir, os.ModeDir); err != nil {
+					bf.buffer <- nil
+					bf.errors <- err
+				} else if sandbox, _, err := bf.delegate.Create(sandboxDir, []string{"/init"}); err != nil {
+					bf.buffer <- nil
+					bf.errors <- err
+				} else if err := sandbox.Start(); err != nil {
+					bf.buffer <- nil
+					bf.errors <- err
+				} else if err := sandbox.Pause(); err != nil {
+					bf.buffer <- nil
+					bf.errors <- err
+				} else {
+					bf.buffer <- &emptySBInfo{sandbox, sandboxDir}
+					bf.errors <- nil
+				}
 			}
-			idx++
-		}
-	}()
+		}(&shared_idx)
+	}
+
+	log.Printf("filling buffer")
+	for len(bf.buffer) < cap(bf.buffer) {
+		time.Sleep(20 * time.Millisecond)
+	}
 
 	return bf, root, rootDir, rootCID, nil
 }

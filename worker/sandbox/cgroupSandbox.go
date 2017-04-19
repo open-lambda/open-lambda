@@ -112,3 +112,8 @@ func (s *CgroupSandbox) DoInstalls() error {
 	//TODO(tyler)
 	return nil
 }
+
+func (s *CgroupSandbox) ID() string {
+	//TODO(tyler)
+	return ""
+}

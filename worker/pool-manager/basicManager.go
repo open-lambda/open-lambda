@@ -47,7 +47,7 @@ func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
 		return nil, err
 	}
 
-	e, err := policy.NewEvictor("", rootCID, 5000000) // 1GB -> make configurable
+	e, err := policy.NewEvictor("", rootCID, 5000000) // 5GB -> make configurable
 	if err != nil {
 		return nil, err
 	}
