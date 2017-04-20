@@ -174,21 +174,22 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 			}
 		}
 
+		hit := false
 		if h.hset.poolMgr != nil {
 			containerSB, ok := h.sandbox.(sb.ContainerSandbox)
 			if !ok {
 				return nil, errors.New("forkenter only supported with ContainerSandbox")
 			}
 
-			hit := false
 			if h.fs, hit, err = h.hset.poolMgr.Provision(containerSB, h.sandboxDir, h.pkgs); err != nil {
 				return nil, err
 			}
-			if hit {
-				atomic.AddInt64(h.hset.ihits, 1)
-			} else {
-				atomic.AddInt64(h.hset.misses, 1)
-			}
+		}
+
+		if hit {
+			atomic.AddInt64(h.hset.ihits, 1)
+		} else {
+			atomic.AddInt64(h.hset.misses, 1)
 		}
 
 		sockPath := fmt.Sprintf("%s/ol.sock", h.sandboxDir)
