@@ -33,7 +33,8 @@ type HandlerSet struct {
 	lru       *HandlerLRU
 	workerDir string
 	pipMirror string
-	hits      *int64
+	hhits     *int64
+	ihits     *int64
 	misses    *int64
 }
 
@@ -73,7 +74,8 @@ func NewHandlerSet(opts *config.Config) (handlerSet *HandlerSet, err error) {
 		return nil, err
 	}
 
-	var hits int64 = 0
+	var hhits int64 = 0
+	var ihits int64 = 0
 	var misses int64 = 0
 	handlers := make(map[string]*Handler)
 	handlerSet = &HandlerSet{
@@ -84,7 +86,8 @@ func NewHandlerSet(opts *config.Config) (handlerSet *HandlerSet, err error) {
 		lru:       NewHandlerLRU(&handlers, opts.Handler_cache_size), //kb
 		workerDir: opts.Worker_dir,
 		pipMirror: opts.Pip_mirror,
-		hits:      &hits,
+		hhits:     &hhits,
+		ihits:     &ihits,
 		misses:    &misses,
 	}
 
@@ -146,7 +149,6 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 
 	// create sandbox if needed
 	if h.sandbox == nil {
-		atomic.AddInt64(h.hset.misses, 1)
 		if err := os.MkdirAll(h.sandboxDir, 0666); err != nil {
 			return nil, err
 		}
@@ -178,8 +180,14 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 				return nil, errors.New("forkenter only supported with ContainerSandbox")
 			}
 
-			if h.fs, err = h.hset.poolMgr.Provision(containerSB, h.sandboxDir, h.pkgs); err != nil {
+			hit := false
+			if h.fs, hit, err = h.hset.poolMgr.Provision(containerSB, h.sandboxDir, h.pkgs); err != nil {
 				return nil, err
+			}
+			if hit {
+				atomic.AddInt64(h.hset.ihits, 1)
+			} else {
+				atomic.AddInt64(h.hset.misses, 1)
 			}
 		}
 
@@ -195,19 +203,19 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 		}
 
 	} else if h.state == state.Paused { // unpause if paused
-		atomic.AddInt64(h.hset.hits, 1)
+		atomic.AddInt64(h.hset.hhits, 1)
 		if err := h.sandbox.Unpause(); err != nil {
 			return nil, err
 		}
 		h.hset.lru.Remove(h)
 	} else {
-		atomic.AddInt64(h.hset.hits, 1)
+		atomic.AddInt64(h.hset.hhits, 1)
 	}
 
 	h.state = state.Running
 	h.runners += 1
 
-	log.Printf("HANDLER CACHE - hits: %v, misses: %v", *h.hset.hits, *h.hset.misses)
+	log.Printf("handler hits: %v, import hits: %v, misses: %v", *h.hset.hhits, *h.hset.ihits, *h.hset.misses)
 	return h.sandbox.Channel()
 }
 

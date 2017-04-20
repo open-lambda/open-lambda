@@ -62,20 +62,23 @@ func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
 	return bm, nil
 }
 
-func (bm *BasicManager) Provision(sandbox sb.ContainerSandbox, dir string, pkgs []string) (fs *policy.ForkServer, err error) {
+func (bm *BasicManager) Provision(sandbox sb.ContainerSandbox, dir string, pkgs []string) (fs *policy.ForkServer, hit bool, err error) {
 	bm.mutex.Lock()
 
-	fs, toCache := bm.matcher.Match(bm.servers, pkgs)
+	fs, toCache, hit := bm.matcher.Match(bm.servers, pkgs)
 
 	// make new cache entry if necessary
 	if len(toCache) != 0 {
 		fs, err = bm.newCacheEntry(fs, toCache)
 		if err != nil {
-			return nil, err
+			return bm.Provision(sandbox, dir, pkgs) //TODO
 		}
 	} else {
 		bm.mutex.Unlock()
 		fs.Mutex.Lock()
+		if fs == nil {
+			return bm.Provision(sandbox, dir, pkgs) //TODO
+		}
 	}
 	defer fs.Mutex.Unlock()
 
@@ -85,15 +88,15 @@ func (bm *BasicManager) Provision(sandbox sb.ContainerSandbox, dir string, pkgs 
 	// signal interpreter to forkenter into sandbox's namespace
 	pid, err := forkRequest(fs.SockPath, sandbox.NSPid(), []string{}, true)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	// change cgroup of spawned lambda server
 	if err = sandbox.CGroupEnter(pid); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
-	return fs, nil
+	return fs, hit, nil
 }
 
 func (bm *BasicManager) newCacheEntry(fs *policy.ForkServer, toCache []string) (*policy.ForkServer, error) {
@@ -127,12 +130,14 @@ func (bm *BasicManager) newCacheEntry(fs *policy.ForkServer, toCache []string) (
 	// get container for new entry
 	sandbox, dir, err := bm.factory.Create()
 	if err != nil {
+		newFs.Kill()
 		return nil, err
 	}
 
 	// signal interpreter to forkenter into sandbox's namespace
 	pid, err := forkRequest(fs.SockPath, sandbox.NSPid(), toCache, false)
 	if err != nil {
+		newFs.Kill()
 		return nil, err
 	}
 
@@ -142,9 +147,10 @@ func (bm *BasicManager) newCacheEntry(fs *policy.ForkServer, toCache []string) (
 	start := time.Now()
 	for ok := true; ok; ok = os.IsNotExist(err) {
 		_, err = os.Stat(sockPath)
-		if time.Since(start).Seconds() > 30 {
-			return nil, errors.New(fmt.Sprintf("cache server %d failed to initialize after 30s", bm.seq))
+		if time.Since(start).Seconds() > 500 {
+			return nil, errors.New(fmt.Sprintf("cache server %d failed to initialize after 500s", bm.seq))
 		}
+		time.Sleep(1 * time.Millisecond)
 	}
 
 	newFs.Sandbox = sandbox
