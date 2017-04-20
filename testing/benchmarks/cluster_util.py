@@ -68,8 +68,8 @@ def add_install_cache(config, d):
     config['pkgs_dir'] = d
     return config
 
-def add_import_cache(config, d):
-    config['import_cache_size'] = 5000000
+def add_import_cache(config, d, size):
+    config['import_cache_size'] = size
     config['import_cache_dir'] = d
     return config
 
@@ -98,7 +98,7 @@ parser.add_argument('--remove', action='store_true')
 parser.add_argument('--stop-all', action='store_true')
 parser.add_argument('--start', action='store_true')
 parser.add_argument('--handler-cache', action='store_true')
-parser.add_argument('--import-cache', action='store_true')
+parser.add_argument('--import-cache', defatul=5242880)
 parser.add_argument('--install-cache', action='store_true')
 parser.add_argument('--pipbench', action='store_true')
 args = parser.parse_args()
@@ -130,7 +130,7 @@ if args.start:
         config = add_handler_cache(config)
     if args.import_cache:
         d = '%s/%s/import-cache' % (SCRIPT_DIR, args.cluster)
-        config = add_import_cache(config, d)
+        config = add_import_cache(config, d, int(args.import_cache))
     if args.install_cache:
         d = '%s/install-cache' % (SCRIPT_DIR)
         config = add_install_cache(config, d)
