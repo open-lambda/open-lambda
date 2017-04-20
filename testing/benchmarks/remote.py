@@ -1,4 +1,4 @@
-import os, sys
+import os, sys, time
 from subprocess import check_output
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -36,7 +36,10 @@ def get_confs():
     return confs.items()
 
 def run_bench(conf):
-    print('run_bench for: %s' % conf)
+    try:
+        print(str(check_output(['python3', 'run_workload.py', os.path.join(CONF_DIR, conf)])))
+    except Exception as e:
+        print('run_workload "%s" failed: %s' % (conf, e))
 
 def main():
     global RESET
@@ -49,6 +52,8 @@ def main():
             print('Starting worker...')
             print('cmd: %s' % setup)
             ssh(setup)
+            print('Sleeping to let buffers fill...')
+            time.sleep(10)
             print('Running test "%s"...' % conf)
             run_bench(conf)
             print('Fetching worker log...')
