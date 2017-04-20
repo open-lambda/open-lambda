@@ -1,0 +1,12 @@
+{
+    "log": "bench.log",
+    "type": "async",
+    "wait": 100,
+    "runners": 1,
+    "minutes": 1,
+    "handlers": "handlers.txt",
+    "handler_choice": "rotation",
+    "rotation_period": 1000,
+    "rotation_slice": 10,
+    "host": "localhost"
+}

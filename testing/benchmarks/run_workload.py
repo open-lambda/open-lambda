@@ -52,6 +52,18 @@ def sync_request(handler_name):
 
     return
 
+
+def handlers_slice(start, end):
+    if end < start:
+        start_ind = math.floor((start / 100) * len(handlers))
+        end_ind = math.floor((end / 100) * len(handlers))
+        return  handlers[:end_ind] + handlers[start_ind:]
+    else:
+        start_ind = math.floor((start / 100) * len(handlers))
+        end_ind = math.floor((end / 100) * len(handlers))
+        return handlers[start_ind:end_ind]
+
+
 def runner(i, flag, request_func):
     global outstanding
     global async_lock
@@ -62,14 +74,27 @@ def runner(i, flag, request_func):
         outstanding = 0
 
     wait = float(config['wait'])/1000.0
-
+    rot_start = None
+    rot_cur = None
+    rot_handlers = None
     print('runner %d started' % i)
     while flag.value != 1:
         if config['wait'] > 0:
             time.sleep(wait)
 
-        request_func(random.choice(handlers))
-
+        if config['handler_choice'] == 'rotation':
+            if rot_start == None:
+                rot_cur = 0
+                rot_handlers = handlers_slice(rot_cur, (rot_cur + config['rotation_slice']) % 100)
+                rot_start = time.time()
+            elif (time.time() - rot_start) * 1000 > config['rotation_period']:
+                rot_cur = (rot_cur +  config['rotation_slice']) % 100
+                rot_handlers = handlers_slice(rot_cur, (rot_cur + config['rotation_slice']) % 100)
+                rot_start = time.time()
+            handler = random.choice(rot_handlers)
+        else:
+            handler = random.choice(handlers)
+        request_func(handler)
     while True:
         with async_lock:
             if outstanding == 0:
@@ -82,7 +107,6 @@ def runner(i, flag, request_func):
 def log_consumer(log_path):
     global log_queue
 
-    start = time.clock()
     results = []
 
     log = open(log_path, 'w')
