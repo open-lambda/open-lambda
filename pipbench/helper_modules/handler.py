@@ -1,21 +1,24 @@
 class Handler:
-    def __init__(self, name, dependencies_target, mem):
+    def __init__(self, name, imps, deps, mem):
         self.name = name
-        self.dependencies_target = dependencies_target
-        self.dependencies = []
+        self.imps = imps
+        self.deps = deps
         self.mem = mem
 
-    def add_dependency(self, dependency):
-        self.dependencies.append(dependency)
+    def get_lambda_func(self):
+        imps = '\n'.join('import %s' % imp for imp in self.imps)
+        simulator = '''import load_simulator
+load_simulator.simulate_load(0, {mem})
+'''.format(mem=self.mem)
+        return '''{imps}
+{simulator}
+def handler(conn, event):
+    try:
+        return "Hello from {name}"
+    except Exception as e:
+        return {{'error': str(e)}}
+'''.format(imps=imps, simulator=simulator, name=self.name)
 
-    def get_name(self):
-        return self.name
 
-    def get_dependencies(self):
-        return self.dependencies
-    
-    def get_mem(self):
-        return self.mem
-    
-    def should_add_more_dependencies(self):
-        return len(self.dependencies) < self.dependencies_target
+    def get_packages_txt(self):
+        return '\n'.join('{pkg}:{pkg}'.format(pkg=dep) for dep in self.deps)
