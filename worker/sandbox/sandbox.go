@@ -46,7 +46,7 @@ type Sandbox interface {
 
 	ID() string
 
-	Exec([]string) (error)
+	Exec([]string) error
 }
 
 type ContainerSandbox interface {
