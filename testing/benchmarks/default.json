@@ -1,0 +1,9 @@
+{
+    "log": "bench.log",
+    "type": "sync",
+    "wait": 0,
+    "runners": 4,
+    "minutes": 4,
+    "handlers": "handlers.txt",
+    "host": "localhost"
+}
