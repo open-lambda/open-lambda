@@ -42,7 +42,6 @@ def create_data_files(pkg_dir, pkg):
 
 
 def write_pkg_simple(simple_dir, pkg):
-    print(pkg.name)
     os.makedirs('%s/%s' % (simple_dir, pkg.name))
     with open('%s/%s/index.html' % (simple_dir, pkg.name), 'w') as index:
         index.write('''
