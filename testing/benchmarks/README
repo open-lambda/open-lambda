@@ -1,30 +1,23 @@
-To start a cluster without an interpreter pool or container pool
-python3 cluster_util.py --start -cluster <cluster name>
+cluster_util.py - wrapper around admin tool
+    run: "python3 cluster_util.py --start" with optional flags:
+        -cluster <dir> (defaults to working_dir/test)
+        --handler-cache
+        --import-cache
+        --install-cache (looks in testing/benchmarks/install-cache)
 
-To add an interpreter pool, add flag
--interpreter-pool <type>
-Where type is: basic
+    run: "python3 cluster_util.py --stop-all" to kill everything between runs
 
-To add an container pool, add flag
--container-pool <num>
-Where num is the value used for sandbox buffer
+    requires:
+        things in install cache dir
+        things in registry dir (testing/benchmarks/registry)
 
-To kill a cluster
-python3 cluster_util.py --stop -cluster <cluster name>
+run_workload - spins up clients and runs!
+    run "python3 run_workload.py <config>"
+    one argument -> config file (see others for examples)
 
-To kill a cluster and also remove its the directory
-python3 cluster_util.py --stop --remove -cluster <cluster name>
+    requires: handlers.txt (list of handler names, one per line)
 
-To nuke all docker containers and the worker process
-python3 cluster_util.py --stop-all
+misc:
+    -> need to change the "HOST_NAME" variable in lambda/server.py and cache-entry/server.py to the IP address of the node running the pypi server (domain name isn't working for unknown reason - run 'ifconfig' to find IP address)
 
-
-To run a workload
-python3 run_workload.py -config <config file> -cluster <cluster name>
-
-To use a regex to populate handler groups
--handler-dir handlers
-
-To actually copy the handlers to the cluster registry
---copy-handlers
-Note: This deletes all other handlers in that registry
+    -> make sure there is a *correct* (including indirect dependencies) "packages.txt" in every handler directory

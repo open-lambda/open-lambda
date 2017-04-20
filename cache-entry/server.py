@@ -105,11 +105,11 @@ def fdlisten(path):
     while r != 0 or signal == "cache":
         if r == 0:
             print('RESET')
-            sys.stdout.flush()
+            #sys.stdout.flush()()
             ns.reset()
 
         print('LISTENING')
-        sys.stdout.flush()
+        #sys.stdout.flush()()
         data = ns.fdlisten(path).split()
 
         r = ns.forkenter()
@@ -152,16 +152,16 @@ def fdlisten(path):
             signal = data[-1]
             print('signal: %s' % signal)
 
-            sys.stdout.flush()
-            sys.stderr.flush()
+            #sys.stdout.flush()()
+            #sys.stderr.flush()()
 
         print('')
-        sys.stdout.flush()
+        #sys.stdout.flush()()
 
         count += 1
 
     print('SERVING HANDLERS')
-    sys.stdout.flush()
+    #sys.stdout.flush()()
     init()
     lambda_server()
 
