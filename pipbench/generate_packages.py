@@ -31,14 +31,22 @@ def write_packages(pkgs_dir, packages):
     pool.map(worker, pkg_shards)
 
 
-def create_data_files(pkg_dir, pkg):
+def create_tar(pkg_dir, pkg):
     data_dir = '%s/%s/data' % (pkg_dir, pkg.name)
     os.makedirs(data_dir)
-    with open('%s/data_1.dat' % data_dir, 'w') as data:
-        random_char = chr(random.randint(0, 255))
-        data.write(random_char * pkg.uncompressed)
-    with open('%s/ballast.dat' % pkg_dir, 'w') as ballast:
-        ballast.write(RANDOM[:pkg.compressed])
+    if pkg.uncompressed > 3300:
+        with open('%s/data.dat' % data_dir, 'w') as data:
+            random_char = chr(random.randint(0, 255))
+            data.write(random_char * (pkg.uncompressed - 3300))
+    with tarfile.open(pkg_dir + '-0.1.tar.gz', 'w:gz') as tar:
+        tar.add(pkg_dir, arcname=pkg.name)
+    size = os.stat(pkg_dir + '-0.1.tar.gz').st_size
+    if size < pkg.compressed:
+        with open('%s/ballast.dat' % pkg_dir, 'wb') as ballast:
+            rand_len = pkg.compressed - size
+            ballast.write(RANDOM[:rand_len])
+    with tarfile.open(pkg_dir + '-0.1.tar.gz', 'w:gz') as tar:
+        tar.add(pkg_dir, arcname=pkg.name)
 
 
 def write_pkg_simple(simple_dir, pkg):
@@ -58,11 +66,9 @@ def write_package(mirror_dir, pkg):
         f.write(pkg.setup_code())
     with open('%s/%s/__init__.py' % (pkg_dir, pkg.name), 'w') as f:
         f.write(pkg.init_code())
-    create_data_files(pkg_dir, pkg)
     shutil.copyfile('load_simulator.so', '%s/load_simulator.so' % (pkg_dir))
     shutil.copyfile('load_simulator.so', '%s/%s/load_simulator.so' % (pkg_dir, pkg.name))
-    with tarfile.open(pkg_dir + '-0.1.tar.gz', 'w:gz') as tar:
-        tar.add(pkg_dir, arcname=pkg.name)
+    create_tar(pkg_dir, pkg)
     shutil.rmtree(pkg_dir)
 
     write_pkg_simple('%s/simple' % mirror_dir, pkg)
@@ -77,8 +83,9 @@ def write_simple(mirror_dir, pkgs):
 
 
 def main():
-    if len(sys.argv) < 2:
-        print('usage: python %s <spec_file> [<seed>]')
+    if len(sys.argv) != 3:
+        print('usage: python %s <spec_file> <random_file>')
+        return
 
     with open(sys.argv[1]) as spec_file:
         spec = json.load(spec_file)
@@ -87,9 +94,11 @@ def main():
 
     global RANDOM
     if len(sys.argv) >= 3:
-        random.seed(int(sys.argv[2]))
-    RANDOM = ''.join(chr(random.randint(0, 255)) for _ in range(max_size))
-    print('random generated')
+        with open(sys.argv[2], 'rb') as f:
+            RANDOM = f.read()
+        if len(RANDOM) < max_size:
+            print('random file is not large enough: %d < %d' % (len(RANDOM), max_size))
+            return
 
     mirror_dir = '%s/web' % CWD
 
