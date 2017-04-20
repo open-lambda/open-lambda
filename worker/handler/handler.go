@@ -189,7 +189,7 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 		start := time.Now()
 		for ok := true; ok; ok = os.IsNotExist(err) {
 			_, err = os.Stat(sockPath)
-			if time.Since(start).Seconds() > 30 {
+			if time.Since(start).Seconds() > 45 {
 				return nil, errors.New(fmt.Sprintf("handler server failed to initialize after 30s"))
 			}
 		}
@@ -200,12 +200,14 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 			return nil, err
 		}
 		h.hset.lru.Remove(h)
+	} else {
+		atomic.AddInt64(h.hset.hits, 1)
 	}
 
 	h.state = state.Running
 	h.runners += 1
 
-	log.Printf("HANDLER CACHE - hits: %v, misses: %v", h.hset.hits, h.hset.misses)
+	log.Printf("HANDLER CACHE - hits: %v, misses: %v", *h.hset.hits, *h.hset.misses)
 	return h.sandbox.Channel()
 }
 
