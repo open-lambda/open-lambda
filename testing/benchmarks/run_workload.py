@@ -154,7 +154,7 @@ def run_benchmark():
     flag = multiprocessing.Value('b')
 
     wait = float(config['wait'])/1000.0
-    inc = wait / len(config['runners'])
+    inc = wait / config['runners']
     for i in range(config['runners']):
         time.sleep(inc*i)
         p = multiprocessing.Process(target=runner, args=(i, flag, request_func))
