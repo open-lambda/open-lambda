@@ -278,3 +278,21 @@ func (s *DockerSandbox) NSPid() string {
 func (s *DockerSandbox) ID() string {
 	return s.container.ID
 }
+
+func (s *DockerSandbox) Exec(cmd []string) error {
+	execOpts := docker.CreateExecOptions{
+		AttachStdin:  false,
+		AttachStdout: false,
+		AttachStderr: false,
+		Container:    s.container.ID,
+		Cmd:          cmd,
+	}
+
+	if exec, err := s.client.CreateExec(execOpts); err != nil {
+		return err
+	} else if err := s.client.StartExec(exec.ID, docker.StartExecOptions{}); err != nil {
+		return err
+	}
+
+	return nil
+}
