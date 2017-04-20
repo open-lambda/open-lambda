@@ -50,7 +50,7 @@ def sync_request(handler_name):
     result = {"time": datetime.datetime.now(), "handler_name": handler_name, "status_code": r.status_code, "latency": ms}
     log_queue.put(result)
 
-    return 
+    return
 
 def runner(i, flag, request_func):
     global outstanding
@@ -153,7 +153,10 @@ def run_benchmark():
     runners = []
     flag = multiprocessing.Value('b')
 
+    wait = float(config['wait'])/1000.0
+    inc = wait / len(config['runners'])
     for i in range(config['runners']):
+        time.sleep(inc*i)
         p = multiprocessing.Process(target=runner, args=(i, flag, request_func))
         p.start()
         runners.append(p)
