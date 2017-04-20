@@ -51,6 +51,7 @@ type BufferedSBFactory struct {
 	buffer   chan *emptySBInfo
 	errors   chan error
 	mntDir   string
+	cache    bool
 }
 
 // NewDockerSBFactory creates a DockerSBFactory.
@@ -65,12 +66,7 @@ func NewDockerSBFactory(opts *config.Config) (*DockerSBFactory, error) {
 		dockerutil.DOCKER_LABEL_TYPE:    dockerutil.SANDBOX,
 	}
 	env := []string{fmt.Sprintf("ol.config=%s", opts.SandboxConfJson())}
-	var cmd []string
-	if opts.Import_cache_size == 0 {
-		cmd = []string{"/usr/bin/python", "/server.py"}
-	} else {
-		cmd = []string{"/init"}
-	}
+	cmd := []string{"/init"}
 
 	df := &DockerSBFactory{c, cmd, labels, env, opts.Pkgs_dir}
 	return df, nil
@@ -93,7 +89,8 @@ func (df *DockerSBFactory) Create(handlerDir, sandboxDir, pipMirror string) (San
 				Cmd:    df.cmd,
 			},
 			HostConfig: &docker.HostConfig{
-				Binds: volumes,
+				Binds:      volumes,
+				AutoRemove: true,
 			},
 		},
 	)
@@ -135,6 +132,11 @@ func NewBufferedSBFactory(opts *config.Config, delegate SandboxFactory) (*Buffer
 	bf.buffer = make(chan *emptySBInfo, opts.Sandbox_buffer)
 	bf.errors = make(chan error, opts.Sandbox_buffer)
 	bf.mntDir = "/tmp/.olmnts"
+	if opts.Import_cache_size == 0 {
+		bf.cache = false
+	} else {
+		bf.cache = true
+	}
 
 	if err := os.MkdirAll(bf.mntDir, os.ModeDir); err != nil {
 		return nil, fmt.Errorf("fail to create directory at %s: %v", bf.mntDir, err)
@@ -183,9 +185,18 @@ func (bf *BufferedSBFactory) Create(handlerDir, sandboxDir, pipMirror string) (S
 			return nil, err
 		} else if err := syscall.Mount(sandboxDir, info.sandboxDir, "", mntFlag, ""); err != nil {
 			return nil, err
-		} else {
-			return info.sandbox, nil
 		}
+		if !bf.cache {
+			sockPath := filepath.Join(sandboxDir, "ol.sock")
+			_ = os.Remove(sockPath)
+
+			if err := info.sandbox.Exec([]string{"python", "/server.py"}); err != nil {
+				return nil, err
+			}
+		}
+
+		return info.sandbox, nil
+
 	case err := <-bf.errors:
 		return nil, err
 	}

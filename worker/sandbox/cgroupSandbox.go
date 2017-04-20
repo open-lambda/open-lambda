@@ -112,3 +112,8 @@ func (s *CgroupSandbox) ID() string {
 	//TODO(tyler)
 	return ""
 }
+
+func (s *CgroupSandbox) Exec(cmd []string) error {
+	//TODO(tyler)
+	return nil
+}

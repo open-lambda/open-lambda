@@ -45,6 +45,8 @@ type Sandbox interface {
 	Channel() (*SandboxChannel, error)
 
 	ID() string
+
+	Exec([]string) error
 }
 
 type ContainerSandbox interface {
