@@ -80,9 +80,10 @@ func (cf *CacheFactory) Create(sandboxDir string, cmd []string) (*sb.DockerSandb
 				Cmd:    cmd,
 			},
 			HostConfig: &docker.HostConfig{
-				Binds:   volumes,
-				PidMode: "host",
-				CapAdd:  cf.caps,
+				Binds:      volumes,
+				PidMode:    "host",
+				CapAdd:     cf.caps,
+				AutoRemove: true,
 			},
 		},
 	)
