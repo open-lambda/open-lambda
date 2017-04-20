@@ -7,6 +7,7 @@ import "C"
 
 import (
 	"fmt"
+	"log"
 	"io/ioutil"
 	"math"
 	"os/exec"
@@ -60,6 +61,7 @@ func (e *Evictor) CheckUsage(servers []*ForkServer, mutex *sync.Mutex) []*ForkSe
 	if usage > e.limit {
 		mutex.Lock()
 		defer mutex.Unlock()
+		log.Printf("EVICT IMPORT: %v usage / %v limit", usage, e.limit)
 		return e.evict(servers)
 	}
 
