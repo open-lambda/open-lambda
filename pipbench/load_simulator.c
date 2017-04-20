@@ -2,33 +2,32 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 
+#define MILLION 1000000
+
 static PyObject *
 simulate_load(PyObject *self, PyObject *args) {
     long cpu_time_ms;
     long mem_bytes;
-    int is_import;
     char *p;
     struct rusage r;
     int j;
 
-    if (!PyArg_ParseTuple(args, "LLi", &cpu_time_ms, &mem_bytes, &is_import)) {
+    if (!PyArg_ParseTuple(args, "LL", &cpu_time_ms, &mem_bytes)) {
         return NULL;
     }
-    if (is_import) {
-        p = malloc(mem_bytes);
-    }
 
-    int ONE_M = 1000000;
+    p = malloc(mem_bytes);
+
     while(1) {
         if (getrusage(RUSAGE_SELF, &r) == -1) {
             printf("getrusage() failed");
             exit(1);
         }
-        long total_cpu_time_us = r.ru_utime.tv_sec * ONE_M + r.ru_utime.tv_usec +
-            r.ru_stime.tv_sec * ONE_M + r.ru_stime.tv_usec;
+        long total_cpu_time_us = r.ru_utime.tv_sec * MILLION + r.ru_utime.tv_usec +
+            r.ru_stime.tv_sec * MILLION + r.ru_stime.tv_usec;
         if (total_cpu_time_us / 1000 >= cpu_time_ms)
             break;
-        for (long i = 0; i < 1000000; i++) {
+        for (long i = 0; i < MILLION; i++) {
             j++;
         }
     }
