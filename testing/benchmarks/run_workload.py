@@ -13,11 +13,10 @@ global outstanding
 HEADERS = {'Content-Type': 'application/json'}
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 
-def async_response(res):
+def async_response(r, **kwargs):
     global outstanding
     global log_queue
 
-    print('response')
     split = r.request.url.split('/')
     handler_name = split[len(split)-1]
     ms = r.elapsed.seconds*1000.0 + r.elapsed.microseconds/1000.0
@@ -31,11 +30,11 @@ def async_response(res):
 def async_request(handler_name):
     global outstanding
 
-    r = grequests.post('http://localhost:8080/runLambda/%s' % handler_name, headers=HEADERS, data=json.dumps({
+    r = grequests.post('http://%s:8080/runLambda/%s' % (config['host'], handler_name), headers=HEADERS, data=json.dumps({
         "name": "Alice"
-    }), hooks={'response': async_response})
+    }), hooks=dict(response=async_response))
 
-    grequests.map([r])
+    job = grequests.send(r, grequests.Pool(1))
 
     with async_lock:
         outstanding += 1
@@ -43,7 +42,7 @@ def async_request(handler_name):
     return
 
 def sync_request(handler_name):
-    r = requests.post('http://localhost:8080/runLambda/%s' % handler_name, headers=HEADERS, data=json.dumps({
+    r = requests.post('http://%s:8080/runLambda/%s' % (config['host'], handler_name), headers=HEADERS, data=json.dumps({
         "name": "Alice"
     }))
 
