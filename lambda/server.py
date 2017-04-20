@@ -51,7 +51,9 @@ def create_link(pkg):
             source = pkgdir + '/' + name
             link_name = '/usr/lib/python2.7/dist-packages/' + name
             if os.path.exists(link_name):
-                continue # should we report this?
+                print('link failed, path already exists: %s' % link_name)
+                sys.stdout.flush()
+                continue
             os.symlink(source, link_name)
         return True
     return False
