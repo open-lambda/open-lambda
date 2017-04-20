@@ -48,8 +48,10 @@ func (fs *ForkServer) Kill() error {
 
 	proc.Kill()
 
-	fs.Sandbox.Stop()
-	fs.Sandbox.Remove()
+	go func() {
+		fs.Sandbox.Stop()
+		fs.Sandbox.Remove()
+	}()
 	fs.Parent.Children -= 1
 
 	return nil
