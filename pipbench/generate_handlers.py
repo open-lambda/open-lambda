@@ -1,222 +1,74 @@
 import os
-import numpy
 import shutil
 import json
-from helper_modules.distribution import distribution_factory
 from helper_modules.handler import Handler
-from helper_modules.package import Package
 import argparse
-
-def write_lambda_func(handlers_dir, handler):
-    handler_name = handler.get_name()
-    packages = handler.get_dependencies()
-    mem = handler.get_mem()
-    
-    handler_contents = ''
-    for p in packages:
-        handler_contents += 'import ' + p.get_name() + '\n'
-
-    handler_contents += str.format('''
-import load_simulator
-load_simulator.simulate_load(0, {0}, False)
-''',  mem)
-        
-    handler_contents += str.format('''
-def handler(conn, event):
-    try:
-        return "Hello from {0}"
-    except Exception as e:
-        return {{'error': str(e)}}
-''', handler_name)
-    os.makedirs('%s/%s' % (handlers_dir, handler_name))
-    f = open('%s/%s/lambda_func.py' % (handlers_dir, handler_name), 'w')
-    f.write(handler_contents)
-    f.close()
+import re
 
 
-def write_packages_txt(handler_dir, handler_name, packages):
-    handler_contents = ''
-    deps_list = get_all_dependencies_in_tree(packages)
-    for d in deps_list:
-        handler_contents += '%s:%s\n' % (d.get_name(), d.get_name())
-    f = open('%s/%s/packages.txt' % (handler_dir, handler_name), 'w')
-    f.write(handler_contents)
-    f.close()
+CWD = os.path.dirname(os.path.realpath(__file__))
 
 
-def get_total_popularity(packages):
-    total_popularity = 0
-    for p in packages:
-        total_popularity += p.get_popularity()
-    return total_popularity
+def populate_graph(graph):
+    # sort by level
+    pkgs = sorted(graph, key=lambda x: int(re.match(r'level(\d+)', x).group(1)))
+    for pkg in pkgs:
+        if len(graph[pkg]) == 0:
+            continue
+        graph[pkg] |= set.union(*[graph[dep] for dep in graph[pkg]])
 
 
-def match_packages_and_handlers(handlers, packages):
-    num_packages = len(packages)
-    total_popularity = get_total_popularity(packages)
+def write_handlers(handlers_dir, graph, duplicates):
+    for pkg in graph:
+        for idx in range(duplicates):
+            handler_name = '%shdl%d' % (pkg, idx)
+            # TODO: memory is hard-coded to 1MB
+            mem = 1024
+            # TODO: for now a handler only imports one package
+            imps = set([pkg])
+            handler = Handler(handler_name, imps, set.union(imps, *[graph[imp] for imp in imps]), mem)
+            write_handler(handlers_dir, handler)
 
-    for h in handlers:
-        tries = 0
-        while h.should_add_more_dependencies():
-            tries += 1
-            # find a package
-            i = numpy.random.randint(0, num_packages)
-            dep = packages[i]
-            # add with probability proportional to the popularity
-            if dep.get_popularity() / total_popularity:
-                h.add_dependency(dep)
-                dep.add_reference()
-
-
-def generate_handlers(config):
-    handlers = []
-    for i in range(0, config['num_handlers']):
-        num_deps = config["num_dependencies"].sample()
-        name = 'a%d' % i
-        mem = config["load"]["mem"].sample()
-        handlers.append(Handler(name, num_deps, mem))
-    return handlers
-
-
-def write_handlers(handlers_dir, handlers):
-    for h in handlers:
-        write_handler(handlers_dir, h)
 
 def write_handler(handlers_dir, handler):
-    write_lambda_func(handlers_dir, handler)
-    write_packages_txt(handlers_dir, handler.get_name(), handler.get_dependencies())
-    shutil.copyfile('load_simulator.so', handlers_dir + '/' + handler.get_name() + '/load_simulator.so')
+    handler_dir = '%s/%s' % (handlers_dir, handler.name)
+    os.makedirs(handler_dir)
 
-def parse_config(config_file_name):
-    if config_file_name is None:
-        config = {
-            "num_handlers": 4000,
-            "load": {
-                "cpu": {
-                    "dist": "exact_value",
-                    "value": 0.0,
-                },
-                "mem": {
-                    "dist": "exact_value",
-                    "value": 1024,
-                }
-            },
-            "package_popularity": {
-                "dist": "zipf",
-                "a": 2
-            },
-            "num_dependencies": {
-                "dist": "normal",
-                "loc": 2.0,
-                "scale": 2.0
-            }
-        }
-    else:
-        f = open(config_file_name, 'r')
-        config = json.load(f)
+    lambda_func = handler.get_lambda_func()
+    with open('%s/lambda_func.py' % handler_dir, 'w') as f:
+        f.write(lambda_func)
 
-    config['load']['cpu'] = distribution_factory(config['load']['cpu'])
-    config['load']['mem'] = distribution_factory(config['load']['mem'])
-    config['package_popularity'] = distribution_factory(config['package_popularity'])
-    config['num_dependencies'] = distribution_factory(config['num_dependencies'])
+    packages_txt = handler.get_packages_txt()
+    with open('%s/packages.txt' % handler_dir, 'w') as f:
+        f.write(packages_txt)
 
-    return config
+    shutil.copyfile('load_simulator.so', '%s/load_simulator.so' % handler_dir)
 
-
-def add_popularity_to_packages(csv_file_name, packages):
-    with open(csv_file_name, 'r') as f:
-        for line in f:
-            line_l = line.split(',')
-            # name,popularity
-            name = line_l[0]
-            popularity = int(line_l[1])
-            for p in packages:
-                if p.get_name() == name:
-                    p.set_popularity(popularity)
-                    break
-    return packages
-
-
-def get_all_dependencies_in_tree(packages):
-    dep_list = []
-    for p in packages:
-        get_all_depdencies_rec_helper(p, dep_list)
-    return dep_list
-
-
-def get_all_depdencies_rec_helper(package, dep_list):
-    dep_list.append(package)
-    for d in package.get_dependencies():
-        get_all_depdencies_rec_helper(d, dep_list)
-
-
-def add_dependencies_to_packages(deps_json_file_name, packages):
-    with open(deps_json_file_name, 'r') as f:
-        package_dependencies = json.load(f)
-    for name, deps in package_dependencies.items():
-        for dep_name in deps:
-            for p in packages:
-                if p.get_name() == name:
-                    for d in packages:
-                        if d.get_name() == dep_name:
-                            p.add_dependency(d)
-                            break
-                    break
-
-def get_packages():
-    with open('package_dependencies.json', 'r') as f:
-        package_dependencies = json.load(f)
-    packages = []
-    for name in package_dependencies:
-        packages.append(Package(name))
-    return packages
-
-
-def write_handler_import_distribution(packages):
-    freq = {}
-    for p in packages:
-        freq[p.get_name()] = p.get_reference_count()
-
-    with open('handler_import_distribution.csv', 'w') as fd:
-        for p in sorted(freq, key=freq.get, reverse=True):
-            fd.write('%s,%d\n' % (p,freq[p]))
-
-    with open('top_packages.txt', 'w') as fd:
-        for p in sorted(freq, key=freq.get, reverse=True):
-            fd.write('%s\n' % p)
 
 def main():
-    handlers_dir = 'handlers'
-    packages_dir = 'packages'
+    parser = argparse.ArgumentParser(description='Generate pipbench handlers')
+    parser.add_argument('spec_file', help='json specification file of the pipbench mirror')
+    parser.add_argument('-d', '--duplicates', type=int, default=10, help='number of duplicate handlers for each package')
+    args = parser.parse_args()
+
+    with open(args.spec_file) as spec_file:
+        spec = json.load(spec_file)
+    graph = {entry['name']: set(entry['deps']) for entry in spec}
+
+    handlers_dir = '%s/handlers' % CWD
 
     os.system('gcc -fPIC -shared -I/usr/include/python2.7 -lpython2.7  load_simulator.c -o load_simulator.so')
 
     if not os.path.exists(handlers_dir):
         os.makedirs(handlers_dir)
+    elif len(os.listdir(handlers_dir)) != 0:
+        print('handlers directory is not empty')
+        return
 
-    if not os.path.exists(packages_dir):
-        print('packages directory does not exist')
-        exit()
-
-    parser = argparse.ArgumentParser(description='Start a cluster')
-    parser.add_argument('-config', default=None)
-    parser.add_argument('-package-popularity-csv', default='package_popularity_real.csv')
-    parser.add_argument('-package-dependencies-json', default='package_dependencies.json')
-    args = parser.parse_args()
-
-    config = parse_config(args.config)
-    print('Reading in package popularity distribution...')
-    packages = get_packages()
-    add_dependencies_to_packages(args.package_dependencies_json, packages)
-    add_popularity_to_packages(args.package_popularity_csv, packages)
-    print('Creating handlers...')
-    handlers = generate_handlers(config)
-    print('Adding dependencies to handlers...')
-    match_packages_and_handlers(handlers, packages)
+    print('Populating indirect dependencies...')
+    populate_graph(graph)
     print('Writing out handlers...')
-    write_handlers(handlers_dir, handlers)
-    print('Writing out handler import distribution...')
-    write_handler_import_distribution(packages)
+    write_handlers(handlers_dir, graph, args.duplicates)
     print('Done')
 
 
