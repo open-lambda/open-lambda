@@ -48,23 +48,29 @@ def get_default_config(cluster_name):
     return {
         "registry": "local",
         "sandbox": "docker",
-        "reg_dir": "%s/%s/registry" % (SCRIPT_DIR, cluster_name),
+        "reg_dir": "%s/registry" % (SCRIPT_DIR),
         "cluster_name": "%s" % cluster_name,
         "worker_dir": "workers/default",
         "benchmark_log": "%s/perf/%s.perf" % (SCRIPT_DIR, cluster_name),
-        "sandbox_buffer": 0,
+        "sandbox_buffer": 25,
         "sandbox_config": {},
         "pip_mirror": "172.17.0.1",
-        "pkgs_dir": "%s/packages" % SCRIPT_DIR
+        "pkgs_dir": "%s/empty" % SCRIPT_DIR,
+        "import_cache_size": 0,
+        "handler_cache_size": 0,
     }
 
-def add_interpreter_pool(config, pool, pool_dir):
-    config['pool'] = pool
-    config['pool_dir'] = pool_dir
+def add_handler_cache(config):
+    config['handler_cache_size'] = 1000000
     return config
 
-def add_container_pool(config, sandbox_buffer):
-    config['sandbox_buffer'] = int(sandbox_buffer)
+def add_install_cache(config, d):
+    config['pkgs_dir'] = d
+    return config
+
+def add_import_cache(config, d):
+    config['import_cache_size'] = 5000000
+    config['import_cache_dir'] = d
     return config
 
 def setup_cluster(cluster_name, config):
@@ -86,13 +92,14 @@ if not os.path.exists('perf'):
     os.makedirs('perf')
 
 parser = argparse.ArgumentParser(description='Start a cluster')
-parser.add_argument('-cluster', default=None)
+parser.add_argument('-cluster', default='test')
 parser.add_argument('--stop', action='store_true')
 parser.add_argument('--remove', action='store_true')
 parser.add_argument('--stop-all', action='store_true')
 parser.add_argument('--start', action='store_true')
-parser.add_argument('-interpreter-pool', default=None)
-parser.add_argument('-container-pool', default=None)
+parser.add_argument('--handler-cache', action='store_true')
+parser.add_argument('--import-cache', action='store_true')
+parser.add_argument('--install-cache', action='store_true')
 parser.add_argument('--pipbench', action='store_true')
 args = parser.parse_args()
 
@@ -119,11 +126,14 @@ if args.remove:
 
 if args.start:
     config = get_default_config(args.cluster)
-    if args.interpreter_pool is not None:
-        pool_dir = '%s/%s/pool_dir' % (SCRIPT_DIR, args.cluster)
-        config = add_interpreter_pool(config, args.interpreter_pool, pool_dir)
-    if args.container_pool is not None:
-        config = add_container_pool(config, args.container_pool)
+    if args.handler_cache:
+        config = add_handler_cache(config)
+    if args.import_cache:
+        d = '%s/%s/import-cache' % (SCRIPT_DIR, args.cluster)
+        config = add_import_cache(config, d)
+    if args.install_cache:
+        d = '%s/install-cache' % (SCRIPT_DIR)
+        config = add_install_cache(config, d)
     if args.pipbench:
         config = add_pipbench(config)
     setup_cluster(args.cluster, config)

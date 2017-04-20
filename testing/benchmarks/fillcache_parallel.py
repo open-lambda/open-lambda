@@ -3,7 +3,7 @@ import sys
 from subprocess import check_output
 import multiprocessing
 
-INDEX_HOST = '128.104.222.169'
+INDEX_HOST = 'node-1.sosp.openlambda-pg0.wisc.cloudlab.us'
 INDEX_PORT = '9199'
 
 CORES = 40
@@ -12,9 +12,10 @@ LIMIT = 10 * (1024**3) # 10 GB
 
 def worker(packages):
     for pkg in packages:
-        path = PKG_DIR + '/' + pkg + '-0.1.tar.gz'
-        print path
-        check_output(['pip', 'install', '-t', 'packages/%s' % pkg, '--no-deps', '-q', path])
+        cmd = ['pip', 'install', '-i', 'http://' + INDEX_HOST + ':' + INDEX_PORT + '/simple', '--trusted-host', INDEX_HOST, '-t', 'packages/%s' % pkg, '--no-deps', '-q', pkg]
+        print(' '.join(cmd))
+        check_output(cmd)
+
     return len(packages)
 
 def main():

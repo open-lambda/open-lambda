@@ -1,10 +1,10 @@
 package handler
 
 import (
-	"log"
 	"container/list"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"strconv"
 	"strings"
 	"sync"
@@ -30,7 +30,7 @@ func NewHandlerLRU(handlers *map[string]*Handler, soft_limit int) *HandlerLRU {
 		hmap:       make(map[*Handler]*list.Element),
 		handlers:   handlers,
 		hqueue:     list.New(),
-		soft_limit: soft_limit*1024,
+		soft_limit: soft_limit * 1024,
 		size:       0,
 	}
 	lru.soft_cond = sync.NewCond(&lru.mutex)
