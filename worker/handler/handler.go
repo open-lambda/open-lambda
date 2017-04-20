@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/open-lambda/open-lambda/worker/config"
@@ -32,6 +33,8 @@ type HandlerSet struct {
 	lru       *HandlerLRU
 	workerDir string
 	pipMirror string
+	hits      *int64
+	misses    *int64
 }
 
 // Handler handles requests to run a lambda on a worker server. It handles
@@ -70,6 +73,8 @@ func NewHandlerSet(opts *config.Config) (handlerSet *HandlerSet, err error) {
 		return nil, err
 	}
 
+	var hits int64 = 0
+	var misses int64 = 0
 	handlers := make(map[string]*Handler)
 	handlerSet = &HandlerSet{
 		handlers:  handlers,
@@ -79,6 +84,8 @@ func NewHandlerSet(opts *config.Config) (handlerSet *HandlerSet, err error) {
 		lru:       NewHandlerLRU(&handlers, opts.Handler_cache_size), //kb
 		workerDir: opts.Worker_dir,
 		pipMirror: opts.Pip_mirror,
+		hits:      &hits,
+		misses:    &misses,
 	}
 
 	return handlerSet, nil
@@ -139,6 +146,7 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 
 	// create sandbox if needed
 	if h.sandbox == nil {
+		atomic.AddInt64(h.hset.misses, 1)
 		if err := os.MkdirAll(h.sandboxDir, 0666); err != nil {
 			return nil, err
 		}
@@ -187,6 +195,7 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 		}
 
 	} else if h.state == state.Paused { // unpause if paused
+		atomic.AddInt64(h.hset.hits, 1)
 		if err := h.sandbox.Unpause(); err != nil {
 			return nil, err
 		}
@@ -196,6 +205,7 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 	h.state = state.Running
 	h.runners += 1
 
+	log.Printf("HANDLER CACHE - hits: %v, misses: %v", h.hset.hits, h.hset.misses)
 	return h.sandbox.Channel()
 }
 
