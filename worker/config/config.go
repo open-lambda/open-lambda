@@ -29,9 +29,9 @@ type Config struct {
 	Pkgs_dir string `json:"pkgs_dir"`
 
 	// cache options
-	Handler_cache_size  int `json:"handler_cache_size"` //kb
-	Import_cache_size   int `json:"import_cache_size"`  //kb
-	Import_cache_buffer int `json:"import_cache_buffer"`
+	Handler_cache_size  int    `json:"handler_cache_size"` //kb
+	Import_cache_size   int    `json:"import_cache_size"`  //kb
+	Import_cache_buffer int    `json:"import_cache_buffer"`
 	Import_cache_dir    string `json:"import_cache_dir"`
 
 	// olregistry options
