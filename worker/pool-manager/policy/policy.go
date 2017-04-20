@@ -1,7 +1,7 @@
 package policy
 
 type CacheMatcher interface {
-	Match(servers []*ForkServer, pkgs []string) (*ForkServer, []string)
+	Match(servers []*ForkServer, pkgs []string) (*ForkServer, []string, bool)
 }
 
 type CacheEvictor interface {
