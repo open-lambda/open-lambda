@@ -88,8 +88,7 @@ func (e *Evictor) evict(servers []*ForkServer) []*ForkServer {
 	worst := float64(math.Inf(+1))
 
 	for k := 1; k < len(servers); k++ {
-		//if servers[k].Children == 0 && !servers[k].Runners {
-		if servers[k].Children == 0 {
+		if servers[k].Children == 0 && !servers[k].Runners {
 			if ratio := servers[k].Hits / servers[k].Size; ratio < worst {
 				idx = k
 				worst = ratio
