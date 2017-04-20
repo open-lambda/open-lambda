@@ -1,62 +1,53 @@
+import hashlib
+
 class Package:
-    def __init__(self, name, popularity=None, dependencies_target=None, data_file_sizes=None, compression_ratio=None, install_cpu_time=None,
-                 install_mem=None, import_cpu_time=None, import_mem=None):
+    def __init__(self,
+            name,
+            deps=None,
+            popularity=None,
+            compressed=None,
+            uncompressed=None,
+            install_cpu=None,
+            import_cpu=None,
+            import_mem=None,
+            subfiles=None):
         self.name = name
-        self.dependencies_target = dependencies_target
-        self.dependencies = []
+        self.deps = deps
         self.popularity = popularity
-        self.data_file_sizes = data_file_sizes
-        self.compression_ratio = compression_ratio
-        self.install_cpu_time = install_cpu_time
-        self.install_mem = install_mem
-        self.import_cpu_time = import_cpu_time
+        self.compressed = compressed
+        self.uncompressed = uncompressed
+        self.install_cpu = install_cpu
+        self.import_cpu = import_cpu
         self.import_mem = import_mem
-        self.reference_count = 0
 
-    def add_dependency(self, dependency):
-        self.dependencies.append(dependency)
 
-    def get_dependencies(self):
-        return self.dependencies
+    def setup_code(self):
+        deps = ','.join("'%s'" % dep for dep in self.deps)
+        return '''
+import load_simulator
+load_simulator.simulate_load({cpu}, 0)
 
-    def get_dependencies_target(self):
-        return self.dependencies_target
+from setuptools import setup
+setup(
+    name = '{name}',
+    version = '0.1',
+    packages=['{name}'],
+    package_dir={{'{name}': '{name}'}},
+    package_data={{'{name}': ['load_simulator.so', 'data/*.dat']}},
+    install_requires=[{deps}],
+)
+'''.format(name=self.name, cpu=self.install_cpu, deps=deps)
 
-    def get_name(self):
-        return self.name
 
-    def get_popularity(self):
-        return self.popularity
+    def init_code(self):
+        imps = '\n'.join('import %s' % dep for dep in self.deps)
+        return '''
+{imps}
+import {name}.load_simulator
+p = load_simulator.simulate_load({cpu}, {mem})
+'''.format(name=self.name, imps=imps, cpu=self.import_cpu, mem=self.import_mem)
 
-    def set_popularity(self, popularity):
-        self.popularity = popularity
 
-    def get_data_file_sizes(self):
-        return self.data_file_sizes
-
-    def get_total_size(self):
-        return sum(self.data_file_sizes)
-
-    def get_compression_ratio(self):
-        return self.compression_ratio
-
-    def get_install_cpu_time(self):
-        return self.install_cpu_time
-
-    def get_install_mem(self):
-        return self.install_mem
-
-    def get_import_cpu_time(self):
-        return self.import_cpu_time
-
-    def get_import_mem(self):
-        return self.import_mem
-
-    def should_add_more_dependencies(self):
-        return len(self.dependencies) < self.dependencies_target
-
-    def add_reference(self):
-        self.reference_count += 1
-
-    def get_reference_count(self):
-        return self.reference_count
+    def get_dir(self):
+        hsh = hashlib.sha256(self.name.encode('utf-8')).hexdigest()
+        return '%s/%s/%s/%s' % (hsh[:2], hsh[2:4], hsh[4:], self.name)
