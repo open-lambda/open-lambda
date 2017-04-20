@@ -42,12 +42,12 @@ func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
 		sizes:   sizes,
 	}
 
-	rootCID, err := bm.initCacheRoot(opts.Pool_dir, opts.Pkgs_dir)
+	rootCID, err := bm.initCacheRoot(opts.Import_cache_dir, opts.Pkgs_dir, opts.Import_cache_buffer)
 	if err != nil {
 		return nil, err
 	}
 
-	e, err := policy.NewEvictor("", rootCID, 5000000) // 5GB -> make configurable
+	e, err := policy.NewEvictor("", rootCID, opts.Import_cache_size)
 	if err != nil {
 		return nil, err
 	}
@@ -154,8 +154,8 @@ func (bm *BasicManager) newCacheEntry(fs *policy.ForkServer, toCache []string) (
 	return newFs, nil
 }
 
-func (bm *BasicManager) initCacheRoot(poolDir, pkgsDir string) (rootCID string, err error) {
-	factory, rootSB, rootDir, rootCID, err := InitCacheFactory(poolDir, pkgsDir, bm.cluster, 2) //TODO: buffer
+func (bm *BasicManager) initCacheRoot(poolDir, pkgsDir string, buffer int) (rootCID string, err error) {
+	factory, rootSB, rootDir, rootCID, err := InitCacheFactory(poolDir, pkgsDir, bm.cluster, buffer)
 	if err != nil {
 		return "", err
 	}

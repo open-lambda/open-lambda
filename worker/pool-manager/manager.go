@@ -10,9 +10,9 @@ type PoolManager interface {
 	Provision(sandbox sb.ContainerSandbox, dir string, pkgs []string) (*policy.ForkServer, error)
 }
 
-func InitPoolManager(config *config.Config) (pm PoolManager, err error) {
-	if config.Pool == "basic" {
-		if pm, err = NewBasicManager(config); err != nil {
+func InitPoolManager(opts *config.Config) (pm PoolManager, err error) {
+	if opts.Import_cache_size != 0 {
+		if pm, err = NewBasicManager(opts); err != nil {
 			return nil, err
 		}
 	} else {

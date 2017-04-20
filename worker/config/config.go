@@ -19,8 +19,6 @@ type Config struct {
 	// sandbox type: "docker" or "cgroup"
 	// currently ignored as cgroup sandbox is not fully integrated
 	Sandbox string `json:"sandbox"`
-	// pool manager type: "basic" or ""
-	Pool string `json:"pool"`
 	// registry directory for storing local copies of handler code
 	Reg_dir string `json:"reg_dir"`
 	// name of the cluster
@@ -30,9 +28,11 @@ type Config struct {
 	// packages directory for unpack-only installations
 	Pkgs_dir string `json:"pkgs_dir"`
 
-	// pool options
-	// directory storing socket files for each forked server
-	Pool_dir string `json:"pool_dir"`
+	// cache options
+	Handler_cache_size  int `json:"handler_cache_size"` //kb
+	Import_cache_size   int `json:"import_cache_size"`  //kb
+	Import_cache_buffer int `json:"import_cache_buffer"`
+	Import_cache_dir    string `json:"import_cache_dir"`
 
 	// olregistry options
 	// addresses of olregistry cluster
@@ -194,21 +194,21 @@ func (c *Config) Defaults() error {
 		}
 	}
 
-	// pool dir
-	if c.Pool != "" {
-		if c.Pool_dir == "" {
-			return fmt.Errorf("must specify local pool directory if using interpreter pool")
+	// import cache
+	if c.Import_cache_size != 0 {
+		if c.Import_cache_dir == "" {
+			return fmt.Errorf("must specify import cache directory if using interpreter pool")
 		}
 
-		if !path.IsAbs(c.Pool_dir) {
+		if !path.IsAbs(c.Import_cache_dir) {
 			if c.path == "" {
-				return fmt.Errorf("Pool_dir cannot be relative, unless config is loaded from file")
+				return fmt.Errorf("Import_cache_dir cannot be relative, unless config is loaded from file")
 			}
-			path, err := filepath.Abs(path.Join(path.Dir(c.path), c.Pool_dir))
+			path, err := filepath.Abs(path.Join(path.Dir(c.path), c.Import_cache_dir))
 			if err != nil {
 				return err
 			}
-			c.Pool_dir = path
+			c.Import_cache_dir = path
 		}
 	}
 

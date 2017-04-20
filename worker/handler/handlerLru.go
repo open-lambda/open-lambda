@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log"
 	"container/list"
 	"fmt"
 	"io/ioutil"
@@ -29,7 +30,7 @@ func NewHandlerLRU(handlers *map[string]*Handler, soft_limit int) *HandlerLRU {
 		hmap:       make(map[*Handler]*list.Element),
 		handlers:   handlers,
 		hqueue:     list.New(),
-		soft_limit: soft_limit,
+		soft_limit: soft_limit*1024,
 		size:       0,
 	}
 	lru.soft_cond = sync.NewCond(&lru.mutex)
@@ -56,8 +57,9 @@ func (lru *HandlerLRU) Add(handler *Handler) {
 	if lru.hmap[handler] != nil {
 		panic("cannot double insert in LRU")
 	}
-	lru.size += handlerUsage(handler)
 	entry := lru.hqueue.PushFront(handler)
+	handler.usage = handlerUsage(handler)
+	lru.size += handler.usage
 	lru.hmap[handler] = entry
 
 	if lru.size > lru.soft_limit {
@@ -77,8 +79,7 @@ func (lru *HandlerLRU) Remove(handler *Handler) {
 			panic("queue entry not found")
 		}
 	}
-
-	lru.size -= handlerUsage(handler)
+	lru.size -= handler.usage
 }
 
 // Evictor waits on signal that the number of Handlers in the LRU list exceeds
@@ -88,17 +89,20 @@ func (lru *HandlerLRU) Evictor() {
 	defer lru.mutex.Unlock()
 
 	for {
-		for lru.Len() <= lru.soft_limit {
+		for lru.size <= lru.soft_limit {
 			lru.soft_cond.Wait()
 		}
+		log.Printf("EVICTING HANDLER: %v used / %v limit", lru.size, lru.soft_limit)
 
 		// pop off least-recently used entry
 		entry := lru.hqueue.Back()
-		handler := entry.Value.(*Handler)
 		lru.hqueue.Remove(entry)
+
+		handler := entry.Value.(*Handler)
 		(*lru.handlers)[handler.name] = nil
-		// remove from handlerset TODO
+
 		delete(lru.hmap, handler)
+		lru.size -= handler.usage
 
 		lru.mutex.Unlock()
 		// depending on interleavings, it could also be
@@ -124,11 +128,11 @@ func (lru *HandlerLRU) Dump() {
 }
 
 func handlerUsage(handler *Handler) (usage int) {
-	usagePath := fmt.Sprintf("/sys/fs/cgroup/memory/docker/%s/memory.usage_in_bytes", handler.sandbox.ID)
+	usagePath := fmt.Sprintf("/sys/fs/cgroup/memory/docker/%s/memory.usage_in_bytes", handler.sandbox.ID())
 
 	buf, err := ioutil.ReadFile(usagePath)
 	if err != nil {
-		return 0
+		panic(fmt.Sprintf("get usage failed: %v", err))
 	}
 
 	str := strings.TrimSpace(string(buf[:]))

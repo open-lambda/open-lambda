@@ -20,15 +20,6 @@ import (
 	sb "github.com/open-lambda/open-lambda/worker/sandbox"
 )
 
-// HandlerSetOpts wraps parameters necessary to create a HandlerSet.
-type HandlerSetOpts struct {
-	RegMgr    registry.RegistryManager
-	SbFactory sb.SandboxFactory
-	PoolMgr   pmanager.PoolManager
-	Config    *config.Config
-	Lru       *HandlerLRU
-}
-
 // HandlerSet represents a collection of Handlers of a worker server. It
 // manages the Handler by HandlerLRU.
 type HandlerSet struct {
@@ -59,21 +50,22 @@ type Handler struct {
 	pkgs       []string
 	sandboxDir string
 	fs         *policy.ForkServer
+	usage	   int
 }
 
 // NewHandlerSet creates an empty HandlerSet
-func NewHandlerSet(config *config.Config) (handlerSet *HandlerSet, err error) {
-	rm, err := registry.InitRegistryManager(config)
+func NewHandlerSet(opts *config.Config) (handlerSet *HandlerSet, err error) {
+	rm, err := registry.InitRegistryManager(opts)
 	if err != nil {
 		return nil, err
 	}
 
-	sf, err := sb.InitSandboxFactory(config)
+	sf, err := sb.InitSandboxFactory(opts)
 	if err != nil {
 		return nil, err
 	}
 
-	pm, err := pmanager.InitPoolManager(config)
+	pm, err := pmanager.InitPoolManager(opts)
 	if err != nil {
 		return nil, err
 	}
@@ -84,9 +76,9 @@ func NewHandlerSet(config *config.Config) (handlerSet *HandlerSet, err error) {
 		regMgr:    rm,
 		sbFactory: sf,
 		poolMgr:   pm,
-		lru:       NewHandlerLRU(&handlers, 1000000000), //bytes
-		workerDir: config.Worker_dir,
-		pipMirror: config.Pip_mirror,
+		lru:       NewHandlerLRU(&handlers, opts.Handler_cache_size), //kb
+		workerDir: opts.Worker_dir,
+		pipMirror: opts.Pip_mirror,
 	}
 
 	return handlerSet, nil
@@ -238,20 +230,21 @@ func (h *Handler) StopIfPaused() {
 		return
 	}
 
-	// TODO(tyler): why do we need to unpause in order to kill?
-	if err := h.sandbox.Unpause(); err != nil {
-		log.Printf("Could not unpause %v to kill it!  Error: %v\n", h.name, err)
-	} else if err := h.sandbox.Stop(); err != nil {
-		// TODO: a resource leak?
-		log.Printf("Could not kill %v after unpausing!  Error: %v\n", h.name, err)
-	} else {
-		h.state = state.Stopped
-		if h.fs != nil {
-			h.fs.Mutex.Lock()
-			h.fs.Runners = false
-			h.fs.Mutex.Unlock()
-		}
+	h.state = state.Stopped
+	if h.fs != nil {
+		h.fs.Mutex.Lock()
+		h.fs.Runners = false
+		h.fs.Mutex.Unlock()
 	}
+
+	go func() {
+		if err := h.sandbox.Unpause(); err != nil {
+			log.Printf("Could not unpause %v to kill it!  Error: %v\n", h.name, err)
+		} else if err := h.sandbox.Stop(); err != nil {
+			log.Printf("Could not kill %v after unpausing!  Error: %v\n", h.name, err)
+		} else {
+		}
+	}()
 }
 
 // Sandbox returns the sandbox of this Handler.

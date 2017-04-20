@@ -66,7 +66,7 @@ func NewDockerSBFactory(opts *config.Config) (*DockerSBFactory, error) {
 	}
 	env := []string{fmt.Sprintf("ol.config=%s", opts.SandboxConfJson())}
 	var cmd []string
-	if opts.Pool == "" {
+	if opts.Import_cache_size == 0 {
 		cmd = []string{"/usr/bin/python", "/server.py"}
 	} else {
 		cmd = []string{"/init"}
