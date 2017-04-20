@@ -1,0 +1,8 @@
+{
+    "type": "async",
+    "wait": 5000,
+    "runners": 10,
+    "minutes": 10,
+    "handlers": "hitratio/handlers.txt",
+    "host": "node-0.sosp.openlambda-pg0.wisc.cloudlab.us"
+}

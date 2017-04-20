@@ -96,14 +96,12 @@ def runner(i, flag, request_func):
             handler = random.choice(rot_handlers)
 
         request_func(handler)
-    while True:
-        with async_lock:
-            if outstanding == 0:
-                break
-
-        time.sleep(0.1)
 
     log_queue.put(None)
+    log_queue = None
+
+    return
+
 
 def log_consumer(log_path):
     global log_queue
@@ -212,14 +210,9 @@ def get_handlers():
 
     return
 
-def main():
+def main(log_path):
     global log_queue
     log_queue = multiprocessing.Queue(10000)
-
-    log_path = os.path.join(SCRIPT_DIR, config['log'])
-    if os.path.exists(log_path):
-        print('log file exists - please move it')
-        sys.exit(1)
 
     logger = multiprocessing.Process(target=log_consumer, args=(log_path,))
     logger.start()
@@ -239,5 +232,10 @@ if __name__ == '__main__':
     with open(sys.argv[1]) as fd:
         config = json.load(fd)
 
-    main()
+    log_path = sys.argv[1].split('.json')[0] + '.log'
+    if os.path.exists(log_path):
+        print('log file exists - please move it')
+        sys.exit(1)
+
+    main(log_path)
 
