@@ -15,7 +15,7 @@ STDERR_PATH = '%s/stderr' % HOST_PATH
 PKGS_PATH = '/packages'
 PKG_PATH = '/handler/packages.txt'
 
-INDEX_HOST = '128.104.222.169'
+INDEX_HOST = '128.104.222.179'
 INDEX_PORT = '9199'
 
 

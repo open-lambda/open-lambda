@@ -51,7 +51,7 @@ type BufferedSBFactory struct {
 	buffer   chan *emptySBInfo
 	errors   chan error
 	mntDir   string
-	cache   bool
+	cache    bool
 }
 
 // NewDockerSBFactory creates a DockerSBFactory.
@@ -89,7 +89,7 @@ func (df *DockerSBFactory) Create(handlerDir, sandboxDir, pipMirror string) (San
 				Cmd:    df.cmd,
 			},
 			HostConfig: &docker.HostConfig{
-				Binds: volumes,
+				Binds:      volumes,
 				AutoRemove: true,
 			},
 		},
