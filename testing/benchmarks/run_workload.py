@@ -82,7 +82,9 @@ def runner(i, flag, request_func):
         if config['wait'] > 0:
             time.sleep(wait)
 
-        if config['handler_choice'] == 'rotation':
+        if not 'handler_choice' in 'rotation' or config['handler_choice'] != 'rotation':
+            handler = random.choice(handlers)
+        else:
             if rot_start == None:
                 rot_cur = 0
                 rot_handlers = handlers_slice(rot_cur, (rot_cur + config['rotation_slice']) % 100)
@@ -92,8 +94,7 @@ def runner(i, flag, request_func):
                 rot_handlers = handlers_slice(rot_cur, (rot_cur + config['rotation_slice']) % 100)
                 rot_start = time.time()
             handler = random.choice(rot_handlers)
-        else:
-            handler = random.choice(handlers)
+
         request_func(handler)
     while True:
         with async_lock:
@@ -180,7 +181,7 @@ def run_benchmark():
     wait = float(config['wait'])/1000.0
     inc = wait / config['runners']
     for i in range(config['runners']):
-        time.sleep(inc*i)
+        time.sleep(inc)
         p = multiprocessing.Process(target=runner, args=(i, flag, request_func))
         p.start()
         runners.append(p)
