@@ -101,7 +101,7 @@ func (lru *HandlerLRU) Evictor() {
 		lru.hqueue.Remove(entry)
 
 		handler := entry.Value.(*Handler)
-		lru.hset.handlers[handler.name] = nil
+		delete(lru.hset.handlers, handler.name)
 		lru.hset.mutex.Unlock()
 		go handler.nuke()
 
