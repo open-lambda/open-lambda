@@ -32,8 +32,10 @@ def handler(conn, event):
       else:
         # Runs perf record on child PID while child does IPC
         # Perf will terminate when child exits
+        # Switch "ext4:*" for your FS as necessary
         call(["perf","record", "-ag", "-F", "99", "--output=perf.data",
               "-e", "syscalls:sys_*", "-e", "net:*", "-e", "skb:*" ,"-e", "sock:*" ,"-e", "cpu-clock",
+              "-e", "ext4:*",
               "-p", str(pid) ])
         os.waitpid(pid,0) 
 

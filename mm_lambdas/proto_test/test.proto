@@ -1,0 +1,6 @@
+package tutorial;
+
+message MyDict {
+  required string turn = 1;
+  required string pow = 2;
+}
