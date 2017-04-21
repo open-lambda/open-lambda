@@ -263,7 +263,8 @@ func (h *Handler) StopIfPaused() {
 			log.Printf("Could not unpause %v to kill it!  Error: %v\n", h.name, err)
 		} else if err := h.sandbox.Stop(); err != nil {
 			log.Printf("Could not kill %v after unpausing!  Error: %v\n", h.name, err)
-		} else {
+		} else if err := h.sandbox.Remove(); err != nil {
+			log.Printf("Could not remove %v after stopping! Error: %v\n", h.name, err)
 		}
 	}()
 }
