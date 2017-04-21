@@ -21,38 +21,36 @@ def populate_graph(graph):
         graph[pkg] |= set.union(*[graph[dep] for dep in graph[pkg]])
 
 
-def write_handlers(handlers_dir, graph, pop, num_imports, duplicates, num_handlers):
-    pkgs = set()
+def pick_imports(pkgs, zipf, dep_dist):
+    pkg_dist = numpy.random.zipf(zipf, len(pkgs))
+    tot_zipf = sum(pkg_dist)
+    pkg_dist = [float(dist) / tot_zipf for dist in pkg_dist]
+
+    while True:
+        num_deps = numpy.random.choice(dep_dist)
+        yield numpy.random.choice(pkgs, num_deps, False, pkg_dist)
+
+def write_handlers(handlers_dir, graph, zipf, dep_dist, duplicates, num_handlers):
+    all_deps = set()
     refs = {pkg_name: 0  for pkg_name in graph}
-    num_pkgs = len(graph)
-    pkgs_pops_dist = []
-    pkg_by_ind = list(pop.keys())
 
-    i = 0
-    for pkg_name in pkg_by_ind:
-        i += 1
-        pkg_pop = pop[pkg_name]
-        for j in range(pkg_pop):
-            pkgs_pops_dist.append(i)
+    # sort keys for deterministic result
+    imps_gen = pick_imports(sorted(graph), zipf, dep_dist)
 
-    for h_i in range(num_handlers):
+    for i in range(num_handlers):
         # TODO: memory is hard-coded to 1MB
         mem = 1024
-        dep_names = []
-        for i in range(num_imports[numpy.random.randint(0, len(num_imports))]):
-            pkgidx = pkgs_pops_dist[numpy.random.randint(0, num_pkgs)]
-            pkg = pkg_by_ind[pkgidx]
-            dep_names.append(pkg)
-            refs[pkg] += 1
-        imps = set(dep_names)
+        imps = set(next(imps_gen))
+        for imp in imps:
+            refs[imp] += 1
         deps = set.union(imps, *[graph[imp] for imp in imps])
-        for idx in range(duplicates):
-            handler_name = '%shdl%d' % (h_i, idx)
+        for j in range(duplicates):
+            handler_name = 'hdl%d_%d' % (i, j)
             handler = Handler(handler_name, imps, deps, mem)
             write_handler(handlers_dir, handler)
-        pkgs |= deps
+        all_deps |= deps
 
-    return pkgs, refs
+    return all_deps, refs
 
 
 def write_handler(handlers_dir, handler):
@@ -73,20 +71,19 @@ def write_handler(handlers_dir, handler):
 def main():
     parser = argparse.ArgumentParser(description='Generate pipbench handlers')
     parser.add_argument('spec_file', help='json specification file of the pipbench mirror')
-    parser.add_argument('-d', '--duplicates', type=int, default=10, help='number of duplicate handlers for each package')
-    parser.add_argument('-n', '--num-handlers', type=int, default=1, help='number of handlers to create')
-    parser.add_argument('zipf_arg', type=float, help='argument to the zipfian distribution')
-    parser.add_argument('rand_seed', type=int, help='random number generator seed')
     parser.add_argument('dep_dist', help='number of imports per handler dist')
+    parser.add_argument('-d', '--duplicates', type=int, default=1, help='number of duplicate handlers for each package')
+    parser.add_argument('-n', '--num-handlers', type=int, default=100, help='number of handlers to create')
+    parser.add_argument('-z', '--zipf_arg', type=float, default=1.4, help='argument to the zipfian distribution')
+    parser.add_argument('-s', '--seed', type=int, default=1, help='random number generator seed')
     args = parser.parse_args()
 
-    numpy.random.seed(args.rand_seed)
-    random.seed(args.rand_seed)
+    numpy.random.seed(args.seed)
 
     with open(args.spec_file) as spec_file:
         spec = json.load(spec_file)
     graph = {entry['name']: set(entry['deps']) for entry in spec}
-    pop = {entry['name']: numpy.random.zipf(args.zipf_arg) for entry in spec}
+
     with open(args.dep_dist) as f:
         num_imports = list(map(int, f.read().split()))
 
@@ -103,17 +100,16 @@ def main():
     print('Populating indirect dependencies...')
     populate_graph(graph)
     print('Writing out handlers...')
-    pkgs, refs = write_handlers(handlers_dir, graph, pop, num_imports, args.duplicates, args.num_handlers)
+    all_deps, refs = write_handlers(handlers_dir, graph, args.zipf_arg, num_imports, args.duplicates, args.num_handlers)
     print('Writing out packages used...')
     spec = {entry['name']: entry for entry in spec}
     with open('packages_and_size.txt', 'w') as f:
-        for pkg in pkgs:
+        for pkg in all_deps:
             f.write('%s:%d\n' % (pkg, spec[pkg]['uncompressed']))
     print('Writing out package handler reference counts')
     with open('packages_handler_refcounts.txt', 'w') as f:
-        refs_list = sorted(refs.items(), key=operator.itemgetter(1))
-        for rc in refs_list:
-            f.write('%s %d\n' %(rc[0], rc[1]))
+        for pkg in sorted(refs, key=refs.get):
+            f.write('%s %d\n' %(pkg, refs[pkg]))
     print('Done')
 
 

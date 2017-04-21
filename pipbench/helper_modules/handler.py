@@ -5,8 +5,9 @@ class Handler:
         self.deps = deps
         self.mem = mem
 
+
     def get_lambda_func(self):
-        imps = '\n'.join('import %s' % imp for imp in self.imps)
+        imps = '\n'.join('import %s' % imp for imp in sorted(self.imps))
         simulator = '''import load_simulator
 load_simulator.simulate_load(0, {mem})
 '''.format(mem=self.mem)
@@ -21,4 +22,4 @@ def handler(conn, event):
 
 
     def get_packages_txt(self):
-        return '\n'.join('{pkg}:{pkg}'.format(pkg=dep) for dep in self.deps)
+        return '\n'.join('{pkg}:{pkg}'.format(pkg=dep) for dep in sorted(self.deps))
