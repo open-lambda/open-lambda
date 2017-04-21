@@ -105,7 +105,7 @@ sendFds(char *sockPath, char *pid, char *pkgs) {
 
     // Send package string to server.
 
-    int buflen = 500;
+    int buflen = 5000;
     if(send(s, pkgs, buflen, 0) == -1) {
         sprintf(errmsg, "send: %s\n", strerror(errno));
         return errmsg;
