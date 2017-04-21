@@ -238,7 +238,7 @@ static PyObject *ns_fdlisten(PyObject *self, PyObject *args) {
     }
     printf("\n");
 
-    buflen = 500;
+    buflen = 5000;
     char buf[buflen];
     if((len = recv(conn, buf, buflen, 0)) == -1) {
         PyErr_SetString(PyExc_RuntimeError, "Receiving package string from socket failed.");
