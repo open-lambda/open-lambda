@@ -4,7 +4,8 @@ import json
 from helper_modules.handler import Handler
 import argparse
 import re
-
+import numpy
+import operator
 
 CWD = os.path.dirname(os.path.realpath(__file__))
 
@@ -18,18 +19,33 @@ def populate_graph(graph):
         graph[pkg] |= set.union(*[graph[dep] for dep in graph[pkg]])
 
 
-def write_handlers(handlers_dir, graph, duplicates, num_pkgs):
+def write_handlers(handlers_dir, graph, pop, refs, duplicates, num_pkgs):
     if num_pkgs < 0:
         num_pkgs = len(graph)
     count = 0
     pkgs = set()
+    pkgs_indexed = [pkg for pkg in graph]
+
+    num_pkgs = len(graph)
+    total_pop = 0
+    for pkg in pop:
+        total_pop += pop[pkg]
     for pkg in graph:
         if count >= num_pkgs:
             break
         # TODO: memory is hard-coded to 1MB
         mem = 1024
-        # TODO: for now a handler only imports one package
-        imps = set([pkg])
+        if True:
+            num_pkgs = len(graph)
+            while True:
+                i = numpy.random.randint(0, num_pkgs)
+                if pop[pkgs_indexed[i]] / total_pop > numpy.random.random():
+                    imps = set([pkgs_indexed[i]])
+                    refs[pkgs_indexed[i]] += 1
+                    break
+        else:
+            # TODO: for now a handler only imports one package
+            imps = set([pkg])
         deps = set.union(imps, *[graph[imp] for imp in imps])
         for idx in range(duplicates):
             handler_name = '%shdl%d' % (pkg, idx)
@@ -37,6 +53,7 @@ def write_handlers(handlers_dir, graph, duplicates, num_pkgs):
             write_handler(handlers_dir, handler)
         pkgs |= deps
         count += 1
+
     return pkgs
 
 
@@ -65,6 +82,8 @@ def main():
     with open(args.spec_file) as spec_file:
         spec = json.load(spec_file)
     graph = {entry['name']: set(entry['deps']) for entry in spec}
+    pop = {entry['name']: entry['handler_popularity'] for entry in spec}
+    refs ={entry['name']: 0  for entry in spec}
 
     handlers_dir = '%s/handlers' % CWD
 
@@ -79,12 +98,17 @@ def main():
     print('Populating indirect dependencies...')
     populate_graph(graph)
     print('Writing out handlers...')
-    pkgs = write_handlers(handlers_dir, graph, args.duplicates, args.num_pkgs)
+    pkgs = write_handlers(handlers_dir, graph, pop, refs, args.duplicates, args.num_pkgs)
     print('Writing out packages used...')
     spec = {entry['name']: entry for entry in spec}
     with open('packages_and_size.txt', 'w') as f:
         for pkg in pkgs:
             f.write('%s:%d\n' % (pkg, spec[pkg]['uncompressed']))
+    print('Writing out package handler reference counts')
+    with open('packages_handler_refcounts.txt', 'w') as f:
+        refs_list = sorted(refs.items(), key=operator.itemgetter(1))
+        for rc in refs_list:
+            f.write('%s %d\n' %(rc[0], rc[1]))
     print('Done')
 
 
