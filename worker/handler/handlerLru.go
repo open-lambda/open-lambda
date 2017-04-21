@@ -14,9 +14,9 @@ import (
 type HandlerLRU struct {
 	mutex sync.Mutex
 	// use a linked list and a map to achieve a linked-map
-	hmap     map[*Handler]*list.Element
-	handlers *map[string]*Handler
-	hqueue   *list.List // front is recent
+	hmap   map[*Handler]*list.Element
+	hset   *HandlerSet
+	hqueue *list.List // front is recent
 	// TODO(tyler): set hard limit to prevent new containers from starting?
 	soft_limit int
 	soft_cond  *sync.Cond
@@ -25,10 +25,10 @@ type HandlerLRU struct {
 
 // NewHandlerLRU creates a HandlerLRU with a given soft_limit and starts the
 // evictor in a go routine.
-func NewHandlerLRU(handlers *map[string]*Handler, soft_limit int) *HandlerLRU {
+func NewHandlerLRU(hset *HandlerSet, soft_limit int) *HandlerLRU {
 	lru := &HandlerLRU{
 		hmap:       make(map[*Handler]*list.Element),
-		handlers:   handlers,
+		hset:       hset,
 		hqueue:     list.New(),
 		soft_limit: soft_limit * 1024,
 		size:       0,
@@ -95,11 +95,15 @@ func (lru *HandlerLRU) Evictor() {
 		log.Printf("EVICTING HANDLER: %v used / %v limit", lru.size, lru.soft_limit)
 
 		// pop off least-recently used entry
+
+		lru.hset.mutex.Lock()
 		entry := lru.hqueue.Back()
 		lru.hqueue.Remove(entry)
 
 		handler := entry.Value.(*Handler)
-		(*lru.handlers)[handler.name] = nil
+		lru.hset.handlers[handler.name] = nil
+		lru.hset.mutex.Unlock()
+		go handler.nuke()
 
 		delete(lru.hmap, handler)
 		lru.size -= handler.usage
@@ -109,7 +113,6 @@ func (lru *HandlerLRU) Evictor() {
 		// running or already stopped.
 		//
 		// TODO(tyler): is there a better way?
-		handler.StopIfPaused()
 		lru.mutex.Lock()
 	}
 }

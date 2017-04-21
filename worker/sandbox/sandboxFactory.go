@@ -89,7 +89,7 @@ func (df *DockerSBFactory) Create(handlerDir, sandboxDir, pipMirror string) (San
 				Cmd:    df.cmd,
 			},
 			HostConfig: &docker.HostConfig{
-				Binds:      volumes,
+				Binds: volumes,
 			},
 		},
 	)
