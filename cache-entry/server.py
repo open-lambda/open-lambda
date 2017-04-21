@@ -1,5 +1,5 @@
 #!/usr/bin/python
-import traceback, json, sys, socket, os, importlib, pip
+import traceback, json, sys, socket, os, importlib, pip, hashlib
 import rethinkdb
 import tornado.ioloop
 import tornado.web
@@ -84,8 +84,9 @@ def lambda_server():
 
 # create symbolic links from install cache to dist-packages, return if success
 def create_link(pkg):
+    hsh = hashlib.sha256(pkg).hexdigest()
     # assume no version (e.g. "==1.2.1")
-    pkgdir = '%s/%s' % (PKGS_PATH, pkg)
+    pkgdir = '%s/%s/%s/%s/%s' % (PKGS_PATH, hsh[:2], hsh[2:4], hsh[4:], pkg)
     if os.path.exists(pkgdir):
         for name in os.listdir(pkgdir):
             source = pkgdir + '/' + name

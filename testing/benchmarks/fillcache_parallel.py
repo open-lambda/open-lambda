@@ -1,5 +1,5 @@
 #!/usr/bin/python
-import sys
+import sys, os, hashlib
 from subprocess import check_output
 import multiprocessing
 
@@ -12,7 +12,10 @@ LIMIT = 10 * (1024**3) # 10 GB
 
 def worker(packages):
     for pkg in packages:
-        cmd = ['pip', 'install', '-i', 'http://' + INDEX_HOST + ':' + INDEX_PORT + '/simple', '--trusted-host', INDEX_HOST, '-t', 'packages/%s' % pkg, '--no-deps', '-q', pkg]
+        hsh = hashlib.sha256(pkg).hexdigest()
+        target = '%s/%s/%s/%s/%s' % (PKG_DIR, hsh[:2], hsh[2:4], hsh[4:], pkg)
+        os.makedirs(target)
+        cmd = ['pip', 'install', '-i', 'http://' + INDEX_HOST + ':' + INDEX_PORT + '/simple', '--trusted-host', INDEX_HOST, '-t', target, '--no-deps', '-q', pkg]
         print(' '.join(cmd))
         check_output(cmd)
 
