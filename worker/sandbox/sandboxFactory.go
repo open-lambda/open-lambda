@@ -90,7 +90,6 @@ func (df *DockerSBFactory) Create(handlerDir, sandboxDir, pipMirror string) (San
 			},
 			HostConfig: &docker.HostConfig{
 				Binds:      volumes,
-				AutoRemove: true,
 			},
 		},
 	)
