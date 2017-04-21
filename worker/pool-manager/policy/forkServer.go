@@ -16,7 +16,6 @@ type ForkServer struct {
 	Hits     float64
 	Parent   *ForkServer
 	Children int
-	Runners  bool
 	Size     float64
 	Mutex    *sync.Mutex
 }
@@ -40,12 +39,10 @@ func (fs *ForkServer) Kill() error {
 	if err != nil {
 		return err
 	}
-
 	proc, err := os.FindProcess(pid)
 	if err != nil {
 		return err
 	}
-
 	proc.Kill()
 
 	go func() {
@@ -53,6 +50,8 @@ func (fs *ForkServer) Kill() error {
 		fs.Sandbox.Remove()
 	}()
 	fs.Parent.Children -= 1
+
+	fs = nil
 
 	return nil
 }

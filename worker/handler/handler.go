@@ -83,12 +83,17 @@ func NewHandlerSet(opts *config.Config) (handlerSet *HandlerSet, err error) {
 		regMgr:    rm,
 		sbFactory: sf,
 		poolMgr:   pm,
-		lru:       NewHandlerLRU(&handlers, opts.Handler_cache_size), //kb
 		workerDir: opts.Worker_dir,
 		pipMirror: opts.Pip_mirror,
 		hhits:     &hhits,
 		ihits:     &ihits,
 		misses:    &misses,
+	}
+
+	handlerSet.lru = NewHandlerLRU(handlerSet, opts.Handler_cache_size) //kb
+
+	if pm != nil {
+		go handlerSet.killOrphans()
 	}
 
 	return handlerSet, nil
@@ -114,6 +119,32 @@ func (h *HandlerSet) Get(name string) *Handler {
 	}
 
 	return handler
+}
+
+func (h *HandlerSet) killOrphans() {
+	for {
+		time.Sleep(5 * time.Millisecond)
+		h.mutex.Lock()
+		defer h.mutex.Unlock()
+
+		for _, handler := range h.handlers {
+			handler.mutex.Lock()
+			if handler.sandbox != nil && handler.fs == nil {
+				h.mutex.Lock()
+				h.handlers[handler.name] = nil
+				h.mutex.Unlock()
+
+				for handler.runners > 0 {
+					handler.mutex.Unlock()
+					time.Sleep(1 * time.Millisecond)
+					handler.mutex.Lock()
+				}
+				go handler.nuke()
+			}
+			handler.mutex.Unlock()
+		}
+
+	}
 }
 
 // Dump prints the name and state of the Handlers currently in the HandlerSet.
@@ -243,30 +274,10 @@ func (h *Handler) RunFinish() {
 }
 
 // StopIfPaused stops the sandbox if it is paused.
-func (h *Handler) StopIfPaused() {
-	h.mutex.Lock()
-	defer h.mutex.Unlock()
-
-	if h.state != state.Paused {
-		return
-	}
-
-	h.state = state.Stopped
-	if h.fs != nil {
-		h.fs.Mutex.Lock()
-		h.fs.Runners = false
-		h.fs.Mutex.Unlock()
-	}
-
-	go func() {
-		if err := h.sandbox.Unpause(); err != nil {
-			log.Printf("Could not unpause %v to kill it!  Error: %v\n", h.name, err)
-		} else if err := h.sandbox.Stop(); err != nil {
-			log.Printf("Could not kill %v after unpausing!  Error: %v\n", h.name, err)
-		} else if err := h.sandbox.Remove(); err != nil {
-			log.Printf("Could not remove %v after stopping! Error: %v\n", h.name, err)
-		}
-	}()
+func (h *Handler) nuke() {
+	h.sandbox.Unpause()
+	h.sandbox.Stop()
+	h.sandbox.Remove()
 }
 
 // Sandbox returns the sandbox of this Handler.
