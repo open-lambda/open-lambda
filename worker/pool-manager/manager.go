@@ -8,6 +8,7 @@ import (
 
 type PoolManager interface {
 	Provision(sandbox sb.ContainerSandbox, dir string, pkgs []string) (*policy.ForkServer, bool, error)
+	Full() bool
 }
 
 func InitPoolManager(opts *config.Config) (pm PoolManager, err error) {

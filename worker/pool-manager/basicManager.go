@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	sb "github.com/open-lambda/open-lambda/worker/sandbox"
@@ -24,6 +25,7 @@ type BasicManager struct {
 	seq     int
 	mutex   *sync.Mutex
 	sizes   map[string]float64
+	full    *int32
 }
 
 func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
@@ -33,6 +35,7 @@ func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
 		return nil, err
 	}
 
+	var full int32 = 0
 	bm = &BasicManager{
 		cluster: opts.Cluster_name,
 		servers: servers,
@@ -40,6 +43,7 @@ func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
 		seq:     0,
 		mutex:   &sync.Mutex{},
 		sizes:   sizes,
+		full:    &full,
 	}
 
 	rootCID, err := bm.initCacheRoot(opts.Import_cache_dir, opts.Pkgs_dir, opts.Import_cache_buffer)
@@ -54,8 +58,8 @@ func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
 
 	go func(bm *BasicManager) {
 		for {
-			time.Sleep(50 * time.Millisecond)
-			bm.servers = e.CheckUsage(bm.servers, bm.mutex)
+			//time.Sleep(50 * time.Millisecond)
+			bm.servers = e.CheckUsage(bm.servers, bm.mutex, bm.full)
 		}
 	}(bm)
 
@@ -71,13 +75,15 @@ func (bm *BasicManager) Provision(sandbox sb.ContainerSandbox, dir string, pkgs 
 	if len(toCache) != 0 {
 		fs, err = bm.newCacheEntry(fs, toCache)
 		if err != nil {
-			return bm.Provision(sandbox, dir, pkgs) //TODO
+			return nil, false, err
+			//return bm.Provision(sandbox, dir, pkgs) //TODO
 		}
 	} else {
 		bm.mutex.Unlock()
 		fs.Mutex.Lock()
 		if fs == nil {
-			return bm.Provision(sandbox, dir, pkgs) //TODO
+			return nil, false, err
+			//return bm.Provision(sandbox, dir, pkgs) //TODO
 		}
 	}
 	defer fs.Mutex.Unlock()
@@ -117,7 +123,6 @@ func (bm *BasicManager) newCacheEntry(fs *policy.ForkServer, toCache []string) (
 		Parent:   fs,
 		Children: 0,
 		Mutex:    &sync.Mutex{},
-		Runners:  true,
 	}
 
 	fs.Children += 1
@@ -207,6 +212,10 @@ func (bm *BasicManager) initCacheRoot(poolDir, pkgsDir string, buffer int) (root
 	bm.servers = append(bm.servers, fs)
 
 	return rootCID, nil
+}
+
+func (bm *BasicManager) Full() bool {
+	return atomic.LoadInt32(bm.full) == 1
 }
 
 func readPkgSizes(path string) (map[string]float64, error) {

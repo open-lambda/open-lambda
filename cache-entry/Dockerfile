@@ -12,6 +12,7 @@ RUN pip install requests
 COPY init /
 COPY ns.so /
 COPY server.py /
+COPY nocache.py /
 COPY initroot.py /
 
 CMD ["python", "/initroot.py"]
