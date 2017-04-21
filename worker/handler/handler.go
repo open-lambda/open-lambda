@@ -123,27 +123,20 @@ func (h *HandlerSet) Get(name string) *Handler {
 
 func (h *HandlerSet) killOrphans() {
 	for {
-		time.Sleep(5 * time.Millisecond)
-		h.mutex.Lock()
-		defer h.mutex.Unlock()
-
 		for _, handler := range h.handlers {
 			handler.mutex.Lock()
-			if handler.sandbox != nil && handler.fs == nil {
+			if handler.fs != nil && handler.fs.Dead {
 				h.mutex.Lock()
 				h.handlers[handler.name] = nil
 				h.mutex.Unlock()
 
-				for handler.runners > 0 {
-					handler.mutex.Unlock()
-					time.Sleep(1 * time.Millisecond)
-					handler.mutex.Lock()
+				if handler.runners == 0 {
+					go handler.nuke()
 				}
-				go handler.nuke()
 			}
+			time.Sleep(50 * time.Microsecond)
 			handler.mutex.Unlock()
 		}
-
 	}
 }
 
@@ -211,10 +204,20 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 			if !ok {
 				return nil, errors.New("forkenter only supported with ContainerSandbox")
 			}
+			if !h.hset.poolMgr.Full() {
+				if h.fs, hit, err = h.hset.poolMgr.Provision(containerSB, h.sandboxDir, h.pkgs); err != nil {
+					return nil, err
+				}
+			} else {
+				log.Printf("FALLBACK")
+				err := containerSB.Exec([]string{"python", "nocache.py"})
+				if err != nil {
+					return nil, err
+				}
 
-			if h.fs, hit, err = h.hset.poolMgr.Provision(containerSB, h.sandboxDir, h.pkgs); err != nil {
-				return nil, err
 			}
+		} else {
+
 		}
 
 		if hit {

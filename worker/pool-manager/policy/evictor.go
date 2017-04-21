@@ -8,13 +8,13 @@ import "C"
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
 	"math"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 )
 
@@ -24,6 +24,7 @@ type Evictor struct {
 	usagePath string
 }
 
+//func NewEvictor(pkgfile, rootCID string, kb_limit int, full *bool) (*Evictor, error) {
 func NewEvictor(pkgfile, rootCID string, kb_limit int) (*Evictor, error) {
 	basePath := fmt.Sprintf("/sys/fs/cgroup/memory/docker/%s/", rootCID)
 	byte_limit := 1024 * kb_limit
@@ -51,18 +52,21 @@ func NewEvictor(pkgfile, rootCID string, kb_limit int) (*Evictor, error) {
 		limit:     byte_limit,
 		eventfd:   int(eventfd),
 		usagePath: usagePath,
+		//full:      full,
 	}
 
 	return e, nil
 }
 
-func (e *Evictor) CheckUsage(servers []*ForkServer, mutex *sync.Mutex) []*ForkServer {
+func (e *Evictor) CheckUsage(servers []*ForkServer, mutex *sync.Mutex, full *int32) []*ForkServer {
 	usage := e.usage()
 	if usage > e.limit {
+		atomic.StoreInt32(full, 1)
 		mutex.Lock()
 		defer mutex.Unlock()
-		log.Printf("EVICT IMPORT: %v usage / %v limit", usage, e.limit)
 		return e.evict(servers)
+	} else {
+		atomic.StoreInt32(full, 0)
 	}
 
 	return servers

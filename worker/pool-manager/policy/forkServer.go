@@ -18,6 +18,7 @@ type ForkServer struct {
 	Children int
 	Size     float64
 	Mutex    *sync.Mutex
+	Dead     bool
 }
 
 func (fs *ForkServer) Hit() {
@@ -35,6 +36,7 @@ func (fs *ForkServer) Kill() error {
 		panic("attempted to kill the root")
 	}
 
+	fs.Dead = true
 	pid, err := strconv.Atoi(fs.Pid)
 	if err != nil {
 		return err
@@ -50,8 +52,6 @@ func (fs *ForkServer) Kill() error {
 		fs.Sandbox.Remove()
 	}()
 	fs.Parent.Children -= 1
-
-	fs = nil
 
 	return nil
 }
