@@ -117,7 +117,6 @@ func (bm *BasicManager) newCacheEntry(fs *policy.ForkServer, toCache []string) (
 		Parent:   fs,
 		Children: 0,
 		Mutex:    &sync.Mutex{},
-		Runners:  true,
 	}
 
 	fs.Children += 1
