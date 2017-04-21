@@ -67,7 +67,7 @@ def install(pkg):
 
     #if mirror:
         #ret = pip.main(['install', '-i', mirror, pkg])
-    check_output(['pip', 'install', '--index-url', 'http://%s:%s/simple' % (INDEX_HOST, INDEX_PORT), '--trusted-host', INDEX_HOST, pkg])
+    check_output(['pip', 'install', '--no-cache-dir', '--index-url', 'http://%s:%s/simple' % (INDEX_HOST, INDEX_PORT), '--trusted-host', INDEX_HOST, pkg])
     #else:
         #ret = pip.main(['install', pkg])
      #   check_output(['pip', 'install', pkg])
