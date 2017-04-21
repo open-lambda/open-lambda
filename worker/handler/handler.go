@@ -122,17 +122,20 @@ func (h *HandlerSet) Get(name string) *Handler {
 }
 
 func (h *HandlerSet) killOrphans() {
+	var toDelete string
 	for {
+		if toDelete != "" {
+			h.mutex.Lock()
+			handler := h.handlers[toDelete]
+			delete(h.handlers, toDelete)
+			h.mutex.Unlock()
+			go handler.nuke()
+		}
+		toDelete = ""
 		for _, handler := range h.handlers {
 			handler.mutex.Lock()
 			if handler.fs != nil && handler.fs.Dead {
-				h.mutex.Lock()
-				h.handlers[handler.name] = nil
-				h.mutex.Unlock()
-
-				if handler.runners == 0 {
-					go handler.nuke()
-				}
+				toDelete = handler.name
 			}
 			time.Sleep(50 * time.Microsecond)
 			handler.mutex.Unlock()
@@ -210,7 +213,7 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 				}
 			} else {
 				log.Printf("FALLBACK")
-				err := containerSB.Exec([]string{"python", "nocache.py"})
+				err := containerSB.Exec([]string{"python", "server.py"})
 				if err != nil {
 					return nil, err
 				}
@@ -278,6 +281,10 @@ func (h *Handler) RunFinish() {
 
 // StopIfPaused stops the sandbox if it is paused.
 func (h *Handler) nuke() {
+	for h.runners != 0 {
+		time.Sleep(500 * time.Microsecond)
+	}
+
 	h.sandbox.Unpause()
 	h.sandbox.Stop()
 	h.sandbox.Remove()
