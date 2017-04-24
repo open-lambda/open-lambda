@@ -5,9 +5,11 @@ import string
 import random
 import json
 import cPickle as pickle
+from subprocess import call
 
 def random_string(n):
-  return ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(n))
+  # Tweak: Start with char for protobuf
+  return 'X' + ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(n-1))
 
 # keys^depth values
 def random_dict(num_keys, depth, value_len):
@@ -22,7 +24,7 @@ def random_dict(num_keys, depth, value_len):
 
 # Iterate through nested dict and write out as protobuf structure
 def proto_dict(d, name):
-  i = 0
+  i = 1
   ret = "message " + name + " {\n"
   for name,value in d.items():
     if(isinstance(value, dict)):
@@ -32,11 +34,12 @@ def proto_dict(d, name):
       ret += "required string " + name + " = " + str(i) + ";\n" 
     i += 1
   ret += "}\n"
+  return ret
 
 def gen(num_keys, depth, value_len):
   # Create dictionary
   d = random_dict(num_keys, depth, value_len)
-  name = "rand_" + str(num_keys) + "." + str(depth) + "." + str(value_len)
+  name = "rand_" + str(num_keys) + "_" + str(depth) + "_" + str(value_len)
 
   # Save python-format dict to file (for JSON and pickle tests)
   f = open(name + ".pkl", "wb") 
@@ -45,9 +48,12 @@ def gen(num_keys, depth, value_len):
 
   # Iterate through dictionary and dump to .proto file
   f = open(name + ".proto", "wb") 
-  f.write("package " + name + ";") 
+  f.write('syntax = "proto2";\n')
+  f.write("package " + name + ";\n") 
   f.write(proto_dict(d, "Rand"))
   f.close()
+  # Invoke compiler
+  call(["protoc", name + ".proto", "--python_out=."]) 
 
 def main():
   if len(sys.argv) != 4:
