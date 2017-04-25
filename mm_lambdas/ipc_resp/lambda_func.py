@@ -5,10 +5,7 @@
 #       3) Send Ack
 #       4) Exit
 
-from subprocess import call
 from posix_ipc import *
-
-bufsize = 16
 
 def handler(conn, event):
     try:
