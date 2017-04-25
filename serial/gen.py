@@ -8,7 +8,7 @@ import cPickle as pickle
 from subprocess import call
 
 def random_string(n):
-  # Tweak: Start with char for protobuf
+  # Start with char for protobuf names
   return 'X' + ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(n-1))
 
 # keys^depth values
@@ -29,7 +29,7 @@ def proto_dict(d, name):
   for name,value in d.items():
     if(isinstance(value, dict)):
       ret += proto_dict(value, name)
-      ret += "required " + name + "d" + str(i) + " = " + str(i) + ";\n"
+      ret += "required " + name + " d" + str(i) + " = " + str(i) + ";\n"
     else:
       ret += "required string " + name + " = " + str(i) + ";\n" 
     i += 1
