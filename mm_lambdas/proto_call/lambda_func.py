@@ -40,6 +40,6 @@ def handler(conn, event):
         stop = time.time()
         mq.close()
         mq.unlink()
-        return str(stop - start)
+        return "t: " + str(stop - start) + " s: " + str(getsizeof(payload))
     except Exception as e:
         return {'error': str(e)} 

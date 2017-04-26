@@ -54,6 +54,9 @@ def gen(num_keys, depth, value_len):
   f.close()
   # Invoke compiler
   call(["protoc", name + ".proto", "--python_out=."]) 
+  
+  # Return filenames for adding to dockerfile
+  return name
 
 def main():
   if len(sys.argv) != 4:
