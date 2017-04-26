@@ -30,5 +30,9 @@ sleep 3
 #curl -X POST localhost:8080/runLambda/pkl_call -d '{"num_keys":"1", "depth" : "1", "value_len" : "1"}' # execute call
 
 # Serial test: json (still uses pkl_resp)
-curl -X POST localhost:8081/runLambda/pkl_resp -d '{"num_keys":"1", "depth" : "1", "value_len" : "1"}' & # setup resp
-curl -X POST localhost:8080/runLambda/json_call -d '{"num_keys":"1", "depth" : "1", "value_len" : "1"}' # execute call
+#curl -X POST localhost:8081/runLambda/pkl_resp -d '{"num_keys":"1", "depth" : "1", "value_len" : "1"}' & # setup resp
+#curl -X POST localhost:8080/runLambda/json_call -d '{"num_keys":"1", "depth" : "1", "value_len" : "1"}' # execute call
+
+# Serial test: protobuf
+curl -X POST localhost:8081/runLambda/proto_resp -d '{"num_keys":"1", "depth" : "1", "value_len" : "1"}' & # setup resp
+curl -X POST localhost:8080/runLambda/proto_call -d '{"num_keys":"1", "depth" : "1", "value_len" : "1"}' # execute call

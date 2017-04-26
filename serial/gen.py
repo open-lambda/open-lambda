@@ -31,7 +31,7 @@ def proto_dict(d, name):
       ret += proto_dict(value, name)
       ret += "required " + name + " d" + str(i) + " = " + str(i) + ";\n"
     else:
-      ret += "required string " + name + " = " + str(i) + ";\n" 
+      ret += "optional string " + name + " = " + str(i) + " [default = \"" + value + "\"];\n" 
     i += 1
   ret += "}\n"
   return ret
@@ -54,6 +54,9 @@ def gen(num_keys, depth, value_len):
   f.close()
   # Invoke compiler
   call(["protoc", name + ".proto", "--python_out=."]) 
+  
+  # Return filenames for adding to dockerfile
+  return name
 
 def main():
   if len(sys.argv) != 4:
