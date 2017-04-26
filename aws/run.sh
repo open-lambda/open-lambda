@@ -14,9 +14,7 @@ iterations=$4
 out="results/result_${keys}_${depth}_${length}_${iterations}.out"
 
 aws lambda invoke --function-name server --payload "{\"num_keys\":$keys, \"depth\":$depth, \"value_len\":$length, \"iterations\":$iterations}" $out > /dev/null
-echo
 cat $out
-echo 
 echo
 
 exit

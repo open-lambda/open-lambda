@@ -90,3 +90,13 @@ def lambda_handler(event, context):
         'stddev':     stddev
     }
 
+
+if __name__ == "__main__":
+    e = {
+        'num_keys': 1,
+        'depth': 1,
+        'value_len': 4194304,
+        'iterations': 1
+    }
+
+    lambda_handler(e, {})
