@@ -23,35 +23,80 @@ def random_dict(num_keys, depth, value_len):
     return d
 
 
+def mean(data):
+    """Return the sample arithmetic mean of data."""
+    n = len(data)
+    if n < 1:
+        raise ValueError('mean requires at least one data point')
+    return sum(data)/float(n)
+
+def _ss(data):
+    """Return sum of square deviations of sequence data."""
+    c = mean(data)
+    ss = sum((x-c)**2 for x in data)
+    return ss
+
+def dev(data):
+    """Calculates the population standard deviation."""
+    n = len(data)
+    if n < 2:
+        raise ValueError('variance requires at least two data points')
+    ss = _ss(data)
+    pvar = ss/float(n-1) # the sample variance
+    return pvar**0.5
+
+
 def lambda_handler(event, context):
-    k = event.get('num_keys',1)
-    d = event.get('depth', 1)
+    k = event.get('num_keys',0)
+    d = event.get('depth', 0)
     l = event.get('value_len', 0)
     i = event.get('iterations', 1)
     
     data = random_dict(num_keys=k, depth=d, value_len=l)
     p = json.dumps(data)
+
+    times = []
     
-    #print(time.clock())
-    start = time.time()
 
     for _ in range(i):
+
+        start = time.time()
         resp = client.invoke(
             FunctionName='client',
             InvocationType='RequestResponse',
             Payload = p
         )
-    
-    #print(time.clock())
-    end = time.time()
+        end = time.time()
 
-    elapsed = end - start
-    print(elapsed)
+        times += [end-start]
+
+
+    elapsed = sum(times)
+    minimum = min(times)
+    maximum = max(times)
+    stddev = 0
+    if i >= 2:
+        stddev =  dev(times)
+        
+
     return {
-        'num_keys':   k,
-        'depth':      d,
-        'value_len':  l,
-        'iterations': i,
-        'duration':   elapsed
+        # 'num_keys':   k,
+        # 'depth':      d,
+        # 'value_len':  l,
+        # 'iterations': i,
+        'duration':   elapsed,
+        'min':        minimum,
+        'max':        maximum,
+        'stddev':     stddev
     }
 
+
+if __name__ == "__main__":
+    e = {
+        'num_keys': 1,
+        'depth': 1,
+        'value_len': 4194304,
+        'iterations': 1
+    }
+
+    lambda_handler(e, {})
