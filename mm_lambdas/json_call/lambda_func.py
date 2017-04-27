@@ -16,8 +16,9 @@ def handler(conn, event):
         f.close()
 
         # Setup mq
-        tmp = pickle.dumps(d)
-        mq = MessageQueue("/mytest", flags=O_CREAT, mode=0600, max_messages = 8, max_message_size=getsizeof(tmp))
+        tmp = json.dumps(d)
+        #mq = MessageQueue("/mytest", flags=O_CREAT | O_EXCL, mode=0600, max_messages = 8, max_message_size=len(tmp.encode('utf-8')))
+        mq = MessageQueue("/mytest")
         
         # Timed send
         start = time.time()
@@ -29,6 +30,6 @@ def handler(conn, event):
         stop = time.time()
         mq.close()
         mq.unlink()
-        return "t: " + str(stop - start) + " s: " + str(getsizeof(payload))
+        return "t: " + str(stop - start) + " s: " + str(len(payload.encode('utf-8')))
     except Exception as e:
         return {'error': str(e)} 

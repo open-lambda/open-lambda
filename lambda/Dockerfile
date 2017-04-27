@@ -19,6 +19,9 @@ RUN apt-get -y install autoconf automake libtool curl make g++ unzip
 RUN cd protobuf; make clean; ./autogen.sh; ./configure --prefix=/usr; make; make install; ldconfig
 RUN cd protobuf/python; python setup.py build; python setup.py test; python setup.py install
 
+COPY rand_* /
+
+
 COPY server.py /
 COPY init /
 

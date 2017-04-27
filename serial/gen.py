@@ -33,6 +33,8 @@ def proto_dict(d, name):
     else:
       ret += "optional string " + name + " = " + str(i) + " [default = \"" + value + "\"];\n" 
     i += 1
+    if(i == 19000):
+      i = 20000 # Protobuf reserved numbers
   ret += "}\n"
   return ret
 

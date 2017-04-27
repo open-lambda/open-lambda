@@ -16,7 +16,8 @@ def handler(conn, event):
 
         # Setup mq
         tmp = pickle.dumps(d)
-        mq = MessageQueue("/mytest", flags=O_CREAT, mode=0600, max_messages = 8, max_message_size=getsizeof(tmp))
+        #mq = MessageQueue("/mytest", flags=O_CREAT, mode=0600, max_messages = 8, max_message_size=getsizeof(tmp) + 16)
+        mq = MessageQueue("/mytest")
         
         # Timed send
         start = time.time()
