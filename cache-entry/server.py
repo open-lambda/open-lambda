@@ -11,18 +11,21 @@ import ns
 
 PKGS_PATH = '/packages'
 HOST_PATH = '/host'
+
+FS_PATH = '%s/fs.sock' % HOST_PATH
 SOCK_PATH = '%s/ol.sock' % HOST_PATH
+
 STDOUT_PATH = '%s/stdout' % HOST_PATH
 STDERR_PATH = '%s/stderr' % HOST_PATH
 
-INDEX_HOST = '128.104.222.179'
-INDEX_PORT = '9199'
+global INDEX_HOST
+global INDEX_PORT
+MIRROR = False
 
 PROCESSES_DEFAULT = 10
 initialized = False
 config = None
 db_conn = None
-installed = {}
 
 # run after forking into sandbox
 def init():
@@ -61,18 +64,10 @@ tornado_app = tornado.web.Application([
 ])
 
 def install(pkg):
-    global installed, mirror
-    if pkg in installed:
-        return
-
-    #if mirror:
-        #ret = pip.main(['install', '-i', mirror, pkg])
-    #check_output(['pip', 'install', '--no-cache-dir', '--index-url', 'http://%s:%s/simple' % (INDEX_HOST, INDEX_PORT), '--trusted-host', INDEX_HOST, pkg])
-    #else:
-        #ret = pip.main(['install', pkg])
-    check_output(['pip', 'install', pkg])
-
-    installed[pkg] = True
+    if MIRROR:
+        check_output(['pip', 'install', '--no-cache-dir', '--index-url', 'http://%s:%s/simple' % (INDEX_HOST, INDEX_PORT), '--trusted-host', INDEX_HOST, pkg])
+    else:
+        check_output(['pip', 'install', pkg])
 
 # listen on sock file with Tornado
 def lambda_server():
@@ -98,7 +93,7 @@ def create_link(pkg):
     return False
 
 # listen for fds to forkenter
-def fdlisten(path):
+def fdlisten():
     signal = "cache"
     r = -1
     count = 0
@@ -111,17 +106,17 @@ def fdlisten(path):
 
         print('LISTENING')
         sys.stdout.flush()
-        data = ns.fdlisten(path).split()
+        data = ns.fdlisten(FS_PATH).split()
 
         r = ns.forkenter()
         if r == 0:
             redirect()
 
-            imps = []
+            mods = []
             pkgs = []
             for info in data[:-1]:
                 split = info.split(':')
-                imps.append(split[0])
+                mods.append(split[0])
                 if split[1] != '':
                     pkgs.append(split[1])
 
@@ -143,12 +138,12 @@ def fdlisten(path):
                     print('install %s failed with: %s' % (split[1], e))
             
             # import modules
-            for imp in imps:
-                print('importing: %s' % imp)
+            for mod in mods:
+                print('importing: %s' % mod)
                 try:
-                    globals()[imp] = importlib.import_module(imp)
+                    globals()[mod] = importlib.import_module(mod)
                 except Exception as e:
-                    print('failed to import %s with: %s' % (imp, e))
+                    print('failed to import %s with: %s' % (mod, e))
 
             signal = data[-1]
             print('signal: %s' % signal)
@@ -173,13 +168,20 @@ def redirect():
     sys.stderr = open(STDERR_PATH, 'w')
 
 if __name__ == '__main__':
-    if len(sys.argv) < 2 or len(sys.argv) > 3:
-        print('Usage: python %s <sock> or python %s <sock> <pip_mirror>' % (sys.argv[0], sys.argv[0]))
+    global INDEX_HOST
+    global INDEX_PORT
+    sys.stdout = open(STDOUT_PATH, 'w')
+    sys.stderr = open(STDERR_PATH, 'w')
+
+    if len(sys.argv) != 1 and len(sys.argv) != 3:
+        print('Usage: python %s or python %s <index_host> <index_sock>' % (sys.argv[0], sys.argv[0]))
         sys.exit(1)
 
     try:
-        mirror = sys.argv[2]
+        INDEX_HOST = sys.argv[1]
+        INDEX_PORT = sys.argv[2]
+        MIRROR = True
     except:
-        mirror = None
+        pass
 
-    fdlisten(sys.argv[1])
+    fdlisten()

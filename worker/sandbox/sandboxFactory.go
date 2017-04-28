@@ -16,7 +16,7 @@ import (
 
 // SandboxFactory is the common interface for all sandbox creation functions.
 type SandboxFactory interface {
-	Create(handlerDir, sandboxDir, pipMirror string) (sandbox Sandbox, err error)
+	Create(handlerDir, sandboxDir, indexHost, indexPort string) (sandbox Sandbox, err error)
 }
 
 func InitSandboxFactory(config *config.Config) (sf SandboxFactory, err error) {
@@ -73,7 +73,7 @@ func NewDockerSBFactory(opts *config.Config) (*DockerSBFactory, error) {
 }
 
 // Create creates a docker sandbox from the handler and sandbox directory.
-func (df *DockerSBFactory) Create(handlerDir, sandboxDir, pipMirror string) (Sandbox, error) {
+func (df *DockerSBFactory) Create(handlerDir, sandboxDir, indexHost, indexPort string) (Sandbox, error) {
 	volumes := []string{
 		fmt.Sprintf("%s:%s:ro,slave", handlerDir, "/handler"),
 		fmt.Sprintf("%s:%s:slave", sandboxDir, "/host"),
@@ -97,7 +97,7 @@ func (df *DockerSBFactory) Create(handlerDir, sandboxDir, pipMirror string) (San
 		return nil, err
 	}
 
-	sandbox := NewDockerSandbox(sandboxDir, pipMirror, container, df.client)
+	sandbox := NewDockerSandbox(sandboxDir, indexHost, indexPort, container, df.client)
 	return sandbox, nil
 }
 
@@ -149,7 +149,7 @@ func NewBufferedSBFactory(opts *config.Config, delegate SandboxFactory) (*Buffer
 				bufDir := filepath.Join(bf.mntDir, fmt.Sprintf("%d", atomic.AddInt64(idxptr, 1)))
 				if handlerDir, sandboxDir, err := mkSBDirs(bufDir); err != nil {
 					bf.errors <- err
-				} else if sandbox, err := bf.delegate.Create(handlerDir, sandboxDir, opts.Pip_mirror); err != nil {
+				} else if sandbox, err := bf.delegate.Create(handlerDir, sandboxDir, opts.Index_host, opts.Index_port); err != nil {
 					bf.errors <- err
 				} else if err := sandbox.Start(); err != nil {
 					bf.errors <- err
@@ -174,7 +174,7 @@ func NewBufferedSBFactory(opts *config.Config, delegate SandboxFactory) (*Buffer
 // Create mounts the handler and sandbox directories to the ones already
 // mounted in the sandbox, and returns that sandbox. The sandbox would be in
 // Paused state, instead of Stopped.
-func (bf *BufferedSBFactory) Create(handlerDir, sandboxDir, pipMirror string) (Sandbox, error) {
+func (bf *BufferedSBFactory) Create(handlerDir, sandboxDir, indexHost, indexPort string) (Sandbox, error) {
 	mntFlag := uintptr(syscall.MS_BIND | syscall.MS_REC)
 	select {
 	case info := <-bf.buffer:
@@ -188,10 +188,6 @@ func (bf *BufferedSBFactory) Create(handlerDir, sandboxDir, pipMirror string) (S
 		if !bf.cache {
 			sockPath := filepath.Join(sandboxDir, "ol.sock")
 			_ = os.Remove(sockPath)
-
-			if err := info.sandbox.Exec([]string{"python", "/server.py"}); err != nil {
-				return nil, err
-			}
 		}
 
 		return info.sandbox, nil

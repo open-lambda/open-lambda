@@ -34,11 +34,12 @@ type DockerSandbox struct {
 	controllers string
 	tr          http.Transport
 	installed   map[string]bool
-	mirror      string
+	index_host  string
+	index_port  string
 }
 
 // NewDockerSandbox creates a DockerSandbox.
-func NewDockerSandbox(sandbox_dir, pipmirror string, container *docker.Container, client *docker.Client) *DockerSandbox {
+func NewDockerSandbox(sandbox_dir, index_host, index_port string, container *docker.Container, client *docker.Client) *DockerSandbox {
 	dial := func(proto, addr string) (net.Conn, error) {
 		return net.Dial("unix", filepath.Join(sandbox_dir, "ol.sock"))
 	}
@@ -51,7 +52,8 @@ func NewDockerSandbox(sandbox_dir, pipmirror string, container *docker.Container
 		controllers: "memory,cpu,devices,perf_event,cpuset,blkio,pids,freezer,net_cls,net_prio,hugetlb",
 		tr:          tr,
 		installed:   make(map[string]bool),
-		mirror:      pipmirror,
+		index_host:  index_host,
+		index_port:  index_port,
 	}
 
 	return sandbox
@@ -279,7 +281,12 @@ func (s *DockerSandbox) ID() string {
 	return s.container.ID
 }
 
-func (s *DockerSandbox) Exec(cmd []string) error {
+func (s *DockerSandbox) RunServer() error {
+	cmd := []string{"python", "server.py"}
+	if s.index_host != "" && s.index_port != "" {
+		cmd = append(cmd, s.index_host, s.index_port)
+	}
+
 	execOpts := docker.CreateExecOptions{
 		AttachStdin:  false,
 		AttachStdout: false,
