@@ -1,4 +1,4 @@
-package pmanager
+package cache
 
 import (
 	"fmt"
@@ -13,8 +13,8 @@ import (
 	sb "github.com/open-lambda/open-lambda/worker/sandbox"
 )
 
-func InitCacheFactory(poolDir, pkgsDir, cluster string, buffer int) (cf *BufferedCacheFactory, root *sb.DockerSandbox, rootDir, rootCID string, err error) {
-	cf, root, rootDir, rootCID, err = NewBufferedCacheFactory(poolDir, pkgsDir, cluster, buffer)
+func InitCacheFactory(cacheDir, pkgsDir, cluster string, buffer int) (cf *BufferedCacheFactory, root *sb.DockerSandbox, rootDir, rootCID string, err error) {
+	cf, root, rootDir, rootCID, err = NewBufferedCacheFactory(cacheDir, pkgsDir, cluster, buffer)
 	if err != nil {
 		return nil, nil, "", "", err
 	}
@@ -97,7 +97,7 @@ func (cf *CacheFactory) Create(sandboxDir string, cmd []string) (*sb.DockerSandb
 
 // NewBufferedCacheFactory creates a BufferedCacheFactory and starts a go routine to
 // fill the sandbox buffer.
-func NewBufferedCacheFactory(poolDir, pkgsDir, cluster string, buffer int) (*BufferedCacheFactory, *sb.DockerSandbox, string, string, error) {
+func NewBufferedCacheFactory(cacheDir, pkgsDir, cluster string, buffer int) (*BufferedCacheFactory, *sb.DockerSandbox, string, string, error) {
 	delegate, err := NewCacheFactory(cluster, pkgsDir)
 	if err != nil {
 		return nil, nil, "", "", err
@@ -107,17 +107,17 @@ func NewBufferedCacheFactory(poolDir, pkgsDir, cluster string, buffer int) (*Buf
 		delegate: delegate,
 		buffer:   make(chan *emptySBInfo, buffer),
 		errors:   make(chan error, buffer),
-		dir:      poolDir,
+		dir:      cacheDir,
 	}
 
-	if err := os.MkdirAll(poolDir, os.ModeDir); err != nil {
-		return nil, nil, "", "", fmt.Errorf("failed to create pool directory at %s: %v", poolDir, err)
+	if err := os.MkdirAll(cacheDir, os.ModeDir); err != nil {
+		return nil, nil, "", "", fmt.Errorf("failed to create pool directory at %s: %v", cacheDir, err)
 	}
 
 	// create the root container
 	rootDir := filepath.Join(bf.dir, "root")
 	if err := os.MkdirAll(rootDir, os.ModeDir); err != nil {
-		return nil, nil, "", "", fmt.Errorf("failed to create cache entry directory at %s: %v", poolDir, err)
+		return nil, nil, "", "", fmt.Errorf("failed to create cache entry directory at %s: %v", cacheDir, err)
 	}
 
 	root, rootCID, err := bf.delegate.Create(rootDir, []string{"python", "initroot.py"})

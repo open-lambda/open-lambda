@@ -14,10 +14,9 @@ import (
 
 	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/handler/state"
-	"github.com/open-lambda/open-lambda/worker/pool-manager/policy"
+	"github.com/open-lambda/open-lambda/worker/import-cache"
 	"github.com/open-lambda/open-lambda/worker/registry"
 
-	pmanager "github.com/open-lambda/open-lambda/worker/pool-manager"
 	sb "github.com/open-lambda/open-lambda/worker/sandbox"
 )
 
@@ -28,7 +27,7 @@ type HandlerSet struct {
 	handlers  map[string]*Handler
 	regMgr    registry.RegistryManager
 	sbFactory sb.SandboxFactory
-	poolMgr   pmanager.PoolManager
+	cacheMgr  *cache.CacheManager
 	config    *config.Config
 	lru       *HandlerLRU
 	workerDir string
@@ -53,7 +52,7 @@ type Handler struct {
 	codeDir    string
 	pkgs       []string
 	sandboxDir string
-	fs         *policy.ForkServer
+	fs         *cache.ForkServer
 	usage      int
 }
 
@@ -69,7 +68,7 @@ func NewHandlerSet(opts *config.Config) (handlerSet *HandlerSet, err error) {
 		return nil, err
 	}
 
-	pm, err := pmanager.InitPoolManager(opts)
+	cm, err := cache.InitCacheManager(opts)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +81,7 @@ func NewHandlerSet(opts *config.Config) (handlerSet *HandlerSet, err error) {
 		handlers:  handlers,
 		regMgr:    rm,
 		sbFactory: sf,
-		poolMgr:   pm,
+		cacheMgr:  cm,
 		workerDir: opts.Worker_dir,
 		pipMirror: opts.Pip_mirror,
 		hhits:     &hhits,
@@ -92,7 +91,7 @@ func NewHandlerSet(opts *config.Config) (handlerSet *HandlerSet, err error) {
 
 	handlerSet.lru = NewHandlerLRU(handlerSet, opts.Handler_cache_size) //kb
 
-	if pm != nil {
+	if cm != nil {
 		go handlerSet.killOrphans()
 	}
 
@@ -202,13 +201,13 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 		}
 
 		hit := false
-		if h.hset.poolMgr != nil {
+		if h.hset.cacheMgr != nil {
 			containerSB, ok := h.sandbox.(sb.ContainerSandbox)
 			if !ok {
 				return nil, errors.New("forkenter only supported with ContainerSandbox")
 			}
-			if !h.hset.poolMgr.Full() {
-				if h.fs, hit, err = h.hset.poolMgr.Provision(containerSB, h.sandboxDir, h.pkgs); err != nil {
+			if !h.hset.cacheMgr.Full() {
+				if h.fs, hit, err = h.hset.cacheMgr.Provision(containerSB, h.sandboxDir, h.pkgs); err != nil {
 					return nil, err
 				}
 			} else {
@@ -231,12 +230,12 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 
 		sockPath := fmt.Sprintf("%s/ol.sock", h.sandboxDir)
 
-		// wait up to 30s for server to initialize
+		// wait up to 20s for server to initialize
 		start := time.Now()
 		for ok := true; ok; ok = os.IsNotExist(err) {
 			_, err = os.Stat(sockPath)
-			if time.Since(start).Seconds() > 45 {
-				return nil, errors.New(fmt.Sprintf("handler server failed to initialize after 30s"))
+			if time.Since(start).Seconds() > 20 {
+				return nil, errors.New(fmt.Sprintf("handler server failed to initialize after 20s"))
 			}
 		}
 

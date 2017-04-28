@@ -63,12 +63,12 @@ cgrouptest-config :
 cgrouptest : cgrouptest-config imgs/lambda cgroup/cgroup_init
 	cd $(WORKER_DIR) && $(GO) test ./sandbox -v
 
-.PHONY: pooltest pooltest-config
-pooltest-config :
-	$(eval export WORKER_CONFIG := $(PWD)/testing/worker-config-pool.json)
+.PHONY: cachetest cachetest-config
+cachetest-config :
+	$(eval export WORKER_CONFIG := $(PWD)/testing/worker-config-cache.json)
 
 # run go unit tests in initialized environment
-pooltest : pooltest-config imgs/lambda imgs/cache-entry
+cachetest : cachetest-config imgs/lambda imgs/cache-entry
 	#cd $(WORKER_DIR) && $(GO) test ./handler -v
 	cd $(WORKER_DIR) && $(GO) test ./server -v
 
@@ -77,7 +77,7 @@ clean :
 	rm -rf bin
 	rm -rf registry/bin
 	rm -f imgs/lambda imgs/cache-entry imgs/olregistry
-	rm -rf testing/test_worker testing/test_pool
+	rm -rf testing/test_worker testing/test_cache
 	rm -f cgroup/cgroup_init
 	${MAKE} -C lambda clean
 	${MAKE} -C cache-entry clean

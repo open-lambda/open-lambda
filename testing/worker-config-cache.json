@@ -1,0 +1,11 @@
+{
+    "cluster_name": "test_cluster",
+    "reg_dir": "handlers",
+    "registry": "local",
+    "sandbox": "docker",
+    "worker_dir": "test_worker",
+    "pkgs_dir": "packages",
+    "import_cache_dir": "test_cache",
+    "import_cache_size": 5242880,
+    "handler_cache_size": 1048576
+}
