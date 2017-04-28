@@ -1,4 +1,4 @@
-package policy
+package cache
 
 type CacheMatcher interface {
 	Match(servers []*ForkServer, pkgs []string) (*ForkServer, []string, bool)

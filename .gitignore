@@ -54,5 +54,5 @@
 /lambda/ns.so
 /lambda/fdclient
 /testing/test_worker
-/testing/test_pool
+/testing/test_cache
 /cgroup/cgroup_init

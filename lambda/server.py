@@ -31,7 +31,7 @@ def init():
         return
     
     config = json.loads(os.environ['ol.config'])
-    if config.get('db', None) == 'rethinkdb':
+    if config != None and config.get('db', None) == 'rethinkdb':
         host = config.get('rethinkdb.host', 'localhost')
         port = config.get('rethinkdb.port', 28015)
         print 'Connect to %s:%d' % (host, port)
@@ -71,8 +71,8 @@ def install():
                     print('installing: %s' % pkg)
                     sys.stdout.flush()
                     try:
-                        print(check_output(['pip', 'install', '--no-cache-dir', '--index-url', 'http://%s:%s/simple' % (INDEX_HOST, INDEX_PORT), '--trusted-host', INDEX_HOST, pkg]))
-                        #print(check_output(['pip', 'install', pkg]))
+                        #print(check_output(['pip', 'install', '--no-cache-dir', '--index-url', 'http://%s:%s/simple' % (INDEX_HOST, INDEX_PORT), '--trusted-host', INDEX_HOST, pkg]))
+                        print(check_output(['pip', 'install', pkg]))
                         sys.stdout.flush()
                     except Exception as e:
                         print('failed to install %s with %s' % (pkg, e))

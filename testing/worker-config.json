@@ -1,12 +1,13 @@
 {
-    "cluster_name": "test_cluster",
-    "worker_port": "8080",
-    "reg_dir": "handlers",
-    "cgroup_init_path": "../cgroup/cgroup_init",
-    "registry": "local",
-    "sandbox": "docker",
-    "worker_dir": "test_worker",
-    "sandbox_config": {"processes": 10},
-    "pool": "",
-    "pkgs_dir": "packages"
+        "registry": "local",
+        "sandbox": "docker",
+        "reg_dir": "handlers",
+        "cluster_name": "test_cluster",
+        "worker_dir": "workers/default",
+        "benchmark_log": "perf/test.perf",
+        "sandbox_buffer": 0,
+        "sandbox_config": {},
+        "pkgs_dir": "packages",
+        "import_cache_size": 0,
+        "handler_cache_size": 1048576
 }

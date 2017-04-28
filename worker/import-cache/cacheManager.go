@@ -1,6 +1,7 @@
-package pmanager
+package cache
 
 import (
+	"log"
 	"bufio"
 	"errors"
 	"fmt"
@@ -14,76 +15,79 @@ import (
 	sb "github.com/open-lambda/open-lambda/worker/sandbox"
 
 	"github.com/open-lambda/open-lambda/worker/config"
-	"github.com/open-lambda/open-lambda/worker/pool-manager/policy"
 )
 
-type BasicManager struct {
+type CacheManager struct {
 	factory *BufferedCacheFactory
 	cluster string
-	servers []*policy.ForkServer
-	matcher policy.CacheMatcher
+	servers []*ForkServer
+	matcher CacheMatcher
 	seq     int
 	mutex   *sync.Mutex
 	sizes   map[string]float64
 	full    *int32
 }
 
-func NewBasicManager(opts *config.Config) (bm *BasicManager, err error) {
-	servers := make([]*policy.ForkServer, 0, 0)
-	sizes, err := readPkgSizes("/ol/open-lambda/worker/pool-manager/package_sizes.txt")
+func InitCacheManager(opts *config.Config) (cm *CacheManager, err error) {
+	if opts.Import_cache_size == 0 {
+		return nil, nil
+	}
+
+	servers := make([]*ForkServer, 0, 0)
+	sizes, err := readPkgSizes("/ol/open-lambda/worker/cache-manager/package_sizes.txt")
 	if err != nil {
 		return nil, err
 	}
 
 	var full int32 = 0
-	bm = &BasicManager{
+	cm = &CacheManager{
 		cluster: opts.Cluster_name,
 		servers: servers,
-		matcher: policy.NewSubsetMatcher(),
+		matcher: NewSubsetMatcher(),
 		seq:     0,
 		mutex:   &sync.Mutex{},
 		sizes:   sizes,
 		full:    &full,
 	}
 
-	rootCID, err := bm.initCacheRoot(opts.Import_cache_dir, opts.Pkgs_dir, opts.Import_cache_buffer)
+	rootCID, err := cm.initCacheRoot(opts.Import_cache_dir, opts.Pkgs_dir, opts.Import_cache_buffer)
 	if err != nil {
 		return nil, err
 	}
 
-	e, err := policy.NewEvictor("", rootCID, opts.Import_cache_size)
+	e, err := NewEvictor("", rootCID, opts.Import_cache_size)
 	if err != nil {
 		return nil, err
 	}
 
-	go func(bm *BasicManager) {
+	go func(cm *CacheManager) {
 		for {
-			//time.Sleep(50 * time.Millisecond)
-			bm.servers = e.CheckUsage(bm.servers, bm.mutex, bm.full)
+			time.Sleep(50 * time.Millisecond)
+			cm.servers = e.CheckUsage(cm.servers, cm.mutex, cm.full)
 		}
-	}(bm)
+	}(cm)
 
-	return bm, nil
+	return cm, nil
 }
 
-func (bm *BasicManager) Provision(sandbox sb.ContainerSandbox, dir string, pkgs []string) (fs *policy.ForkServer, hit bool, err error) {
-	bm.mutex.Lock()
+func (cm *CacheManager) Provision(sandbox sb.ContainerSandbox, dir string, pkgs []string) (fs *ForkServer, hit bool, err error) {
+	cm.mutex.Lock()
 
-	fs, toCache, hit := bm.matcher.Match(bm.servers, pkgs)
+	fs, toCache, hit := cm.matcher.Match(cm.servers, pkgs)
 
 	// make new cache entry if necessary
 	if len(toCache) != 0 {
-		fs, err = bm.newCacheEntry(fs, toCache)
+		fs, err = cm.newCacheEntry(fs, toCache)
 		if err != nil {
 			return nil, false, err
-			//return bm.Provision(sandbox, dir, pkgs) //TODO
+			//return cm.Provision(sandbox, dir, pkgs) //TODO
 		}
 	} else {
-		bm.mutex.Unlock()
+		cm.mutex.Unlock()
 		fs.Mutex.Lock()
 		if fs == nil {
 			return nil, false, err
-			//return bm.Provision(sandbox, dir, pkgs) //TODO
+			//return cm.Provision(sandbox, dir, pkgs) //TODO
 		}
 	}
 	defer fs.Mutex.Unlock()
@@ -105,7 +109,7 @@ func (bm *BasicManager) Provision(sandbox sb.ContainerSandbox, dir string, pkgs 
 	return fs, hit, nil
 }
 
-func (bm *BasicManager) newCacheEntry(fs *policy.ForkServer, toCache []string) (*policy.ForkServer, error) {
+func (cm *CacheManager) newCacheEntry(fs *ForkServer, toCache []string) (*ForkServer, error) {
 	// make hashset of packages for new entry
 	pkgs := make(map[string]bool)
 	size := 0.0
@@ -114,10 +118,10 @@ func (bm *BasicManager) newCacheEntry(fs *policy.ForkServer, toCache []string) (
 	}
 	for k := 0; k < len(toCache); k++ {
 		pkgs[toCache[k]] = true
-		size += bm.sizes[strings.ToLower(toCache[k])]
+		size += cm.sizes[strings.ToLower(toCache[k])]
 	}
 
-	newFs := &policy.ForkServer{
+	newFs := &ForkServer{
 		Packages: pkgs,
 		Hits:     0.0,
 		Parent:   fs,
@@ -127,14 +131,14 @@ func (bm *BasicManager) newCacheEntry(fs *policy.ForkServer, toCache []string) (
 
 	fs.Children += 1
 
-	bm.servers = append(bm.servers, newFs)
-	bm.seq++
+	cm.servers = append(cm.servers, newFs)
+	cm.seq++
 
 	newFs.Mutex.Lock()
-	bm.mutex.Unlock()
+	cm.mutex.Unlock()
 
 	// get container for new entry
-	sandbox, dir, err := bm.factory.Create()
+	sandbox, dir, err := cm.factory.Create()
 	if err != nil {
 		newFs.Kill()
 		return nil, err
@@ -154,7 +158,7 @@ func (bm *BasicManager) newCacheEntry(fs *policy.ForkServer, toCache []string) (
 	for ok := true; ok; ok = os.IsNotExist(err) {
 		_, err = os.Stat(sockPath)
 		if time.Since(start).Seconds() > 500 {
-			return nil, errors.New(fmt.Sprintf("cache server %d failed to initialize after 500s", bm.seq))
+			return nil, errors.New(fmt.Sprintf("cache server %d failed to initialize after 500s", cm.seq))
 		}
 		time.Sleep(1 * time.Millisecond)
 	}
@@ -166,12 +170,12 @@ func (bm *BasicManager) newCacheEntry(fs *policy.ForkServer, toCache []string) (
 	return newFs, nil
 }
 
-func (bm *BasicManager) initCacheRoot(poolDir, pkgsDir string, buffer int) (rootCID string, err error) {
-	factory, rootSB, rootDir, rootCID, err := InitCacheFactory(poolDir, pkgsDir, bm.cluster, buffer)
+func (cm *CacheManager) initCacheRoot(poolDir, pkgsDir string, buffer int) (rootCID string, err error) {
+	factory, rootSB, rootDir, rootCID, err := InitCacheFactory(poolDir, pkgsDir, cm.cluster, buffer)
 	if err != nil {
 		return "", err
 	}
-	bm.factory = factory
+	cm.factory = factory
 
 	// wait up to 5s for root server to spawn
 	pidPath := fmt.Sprintf("%s/pid", rootDir)
@@ -197,7 +201,7 @@ func (bm *BasicManager) initCacheRoot(poolDir, pkgsDir string, buffer int) (root
 		return "", err
 	}
 
-	fs := &policy.ForkServer{
+	fs := &ForkServer{
 		Sandbox:  rootSB,
 		Pid:      pid,
 		SockPath: fmt.Sprintf("%s/fs.sock", rootDir),
@@ -209,20 +213,21 @@ func (bm *BasicManager) initCacheRoot(poolDir, pkgsDir string, buffer int) (root
 		Size:     1.0, // divide-by-zero
 	}
 
-	bm.servers = append(bm.servers, fs)
+	cm.servers = append(cm.servers, fs)
 
 	return rootCID, nil
 }
 
-func (bm *BasicManager) Full() bool {
-	return atomic.LoadInt32(bm.full) == 1
+func (cm *CacheManager) Full() bool {
+	return atomic.LoadInt32(cm.full) == 1
 }
 
 func readPkgSizes(path string) (map[string]float64, error) {
 	sizes := make(map[string]float64)
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		log.Printf("invalid package sizes path %v, using 0 for all", path);
+		return make(map[string]float64), nil
 	}
 	defer file.Close()
 
