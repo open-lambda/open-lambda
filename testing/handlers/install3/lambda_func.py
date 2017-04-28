@@ -1,6 +1,6 @@
 import jedi
 import requests
-import numpy
+import simplejson
 
 def handler(conn, event):
     return 'imported'

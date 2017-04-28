@@ -31,7 +31,8 @@ type HandlerSet struct {
 	config    *config.Config
 	lru       *HandlerLRU
 	workerDir string
-	pipMirror string
+	indexHost string
+	indexPort string
 	hhits     *int64
 	ihits     *int64
 	misses    *int64
@@ -83,7 +84,8 @@ func NewHandlerSet(opts *config.Config) (handlerSet *HandlerSet, err error) {
 		sbFactory: sf,
 		cacheMgr:  cm,
 		workerDir: opts.Worker_dir,
-		pipMirror: opts.Pip_mirror,
+		indexHost: opts.Index_host,
+		indexPort: opts.Index_port,
 		hhits:     &hhits,
 		ihits:     &ihits,
 		misses:    &misses,
@@ -179,7 +181,7 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 			return nil, err
 		}
 
-		sandbox, err := h.hset.sbFactory.Create(h.codeDir, h.sandboxDir, h.hset.pipMirror)
+		sandbox, err := h.hset.sbFactory.Create(h.codeDir, h.sandboxDir, h.hset.indexHost, h.hset.indexPort)
 		if err != nil {
 			return nil, err
 		}
@@ -201,24 +203,19 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 		}
 
 		hit := false
-		if h.hset.cacheMgr != nil {
+		if h.hset.cacheMgr == nil || h.hset.cacheMgr.Full() {
+			err := h.sandbox.RunServer()
+			if err != nil {
+				return nil, err
+			}
+		} else {
 			containerSB, ok := h.sandbox.(sb.ContainerSandbox)
 			if !ok {
 				return nil, errors.New("forkenter only supported with ContainerSandbox")
 			}
-			if !h.hset.cacheMgr.Full() {
-				if h.fs, hit, err = h.hset.cacheMgr.Provision(containerSB, h.sandboxDir, h.pkgs); err != nil {
-					return nil, err
-				}
-			} else {
-				log.Printf("FALLBACK")
-				err := containerSB.Exec([]string{"python", "server.py"})
-				if err != nil {
-					return nil, err
-				}
-
+			if h.fs, hit, err = h.hset.cacheMgr.Provision(containerSB, h.sandboxDir, h.pkgs); err != nil {
+				return nil, err
 			}
-		} else {
 
 		}
 

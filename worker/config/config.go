@@ -24,7 +24,8 @@ type Config struct {
 	// name of the cluster
 	Cluster_name string `json:"cluster_name"`
 	// pip mirror address for installing python packages
-	Pip_mirror string `json:"pip_mirror"`
+	Index_host string `json:"index_host"`
+	Index_port string `json:"index_port"`
 	// packages directory for unpack-only installations
 	Pkgs_dir string `json:"pkgs_dir"`
 

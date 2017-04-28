@@ -3,7 +3,7 @@
         "sandbox": "docker",
         "reg_dir": "handlers",
         "cluster_name": "test_cluster",
-        "worker_dir": "workers/default",
+        "worker_dir": "test_worker",
         "benchmark_log": "perf/test.perf",
         "sandbox_buffer": 0,
         "sandbox_config": {},

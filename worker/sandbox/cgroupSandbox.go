@@ -113,7 +113,7 @@ func (s *CgroupSandbox) ID() string {
 	return ""
 }
 
-func (s *CgroupSandbox) Exec(cmd []string) error {
+func (s *CgroupSandbox) RunServer() error {
 	//TODO(tyler)
 	return nil
 }

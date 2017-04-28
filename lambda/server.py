@@ -15,9 +15,9 @@ STDERR_PATH = '%s/stderr' % HOST_PATH
 PKGS_PATH = '/packages'
 PKG_PATH = '/handler/packages.txt'
 
-INDEX_HOST = '128.104.222.179'
-INDEX_PORT = '9199'
-
+global INDEX_HOST
+global INDEX_PORT
+MIRROR = False
 
 PROCESSES_DEFAULT = 10
 initialized = False
@@ -59,7 +59,13 @@ def create_link(pkg):
         return True
     return False
 
-def install():
+def install(pkg):
+    if MIRROR:
+        check_output(['pip', 'install', '--no-cache-dir', '--index-url', 'http://%s:%s/simple' % (INDEX_HOST, INDEX_PORT), '--trusted-host', INDEX_HOST, pkg])
+    else:
+        check_output(['pip', 'install', pkg])
+
+def do_installs():
     with open(PKG_PATH) as fd:
         for line in fd:
             pkg = line.strip().split(':')[1]
@@ -71,8 +77,7 @@ def install():
                     print('installing: %s' % pkg)
                     sys.stdout.flush()
                     try:
-                        #print(check_output(['pip', 'install', '--no-cache-dir', '--index-url', 'http://%s:%s/simple' % (INDEX_HOST, INDEX_PORT), '--trusted-host', INDEX_HOST, pkg]))
-                        print(check_output(['pip', 'install', pkg]))
+                        install(pkg)
                         sys.stdout.flush()
                     except Exception as e:
                         print('failed to install %s with %s' % (pkg, e))
@@ -100,7 +105,7 @@ tornado_app = tornado.web.Application([
 
 # listen on sock file with Tornado
 def lambda_server():
-    install()
+    do_installs()
     server = tornado.httpserver.HTTPServer(tornado_app)
     socket = tornado.netutil.bind_unix_socket(SOCK_PATH)
     server.add_socket(socket)
@@ -108,8 +113,21 @@ def lambda_server():
     server.start(PROCESSES_DEFAULT)
 
 if __name__ == '__main__':
+    global INDEX_HOST
+    global INDEX_PORT
     sys.stdout = open(STDOUT_PATH, 'w')
     sys.stderr = open(STDERR_PATH, 'w')
+
+    if len(sys.argv) != 1 and len(sys.argv) != 3:
+        print('Usage: python %s or python %s <index_host> <index_sock>' % (sys.argv[0], sys.argv[0]))
+        sys.exit(1)
+
+    try:
+        INDEX_HOST = sys.argv[1]
+        INDEX_PORT = sys.argv[2]
+        MIRROR = True
+    except:
+        pass
 
     curr = 0.0
     while not os.path.exists(PKGS_PATH):
@@ -120,7 +138,4 @@ if __name__ == '__main__':
             sys.stdout.flush()
             sys.exit(1)
 
-    try:
-        lambda_server()
-    except Exception as e:
-        print(e)
+    lambda_server()

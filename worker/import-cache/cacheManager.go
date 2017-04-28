@@ -1,10 +1,10 @@
 package cache
 
 import (
-	"log"
 	"bufio"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -50,7 +50,7 @@ func InitCacheManager(opts *config.Config) (cm *CacheManager, err error) {
 		full:    &full,
 	}
 
-	rootCID, err := cm.initCacheRoot(opts.Import_cache_dir, opts.Pkgs_dir, opts.Import_cache_buffer)
+	rootCID, err := cm.initCacheRoot(opts)
 	if err != nil {
 		return nil, err
 	}
@@ -170,40 +170,26 @@ func (cm *CacheManager) newCacheEntry(fs *ForkServer, toCache []string) (*ForkSe
 	return newFs, nil
 }
 
-func (cm *CacheManager) initCacheRoot(poolDir, pkgsDir string, buffer int) (rootCID string, err error) {
-	factory, rootSB, rootDir, rootCID, err := InitCacheFactory(poolDir, pkgsDir, cm.cluster, buffer)
+func (cm *CacheManager) initCacheRoot(opts *config.Config) (rootCID string, err error) {
+	factory, rootSB, rootDir, rootCID, err := InitCacheFactory(opts, cm.cluster)
 	if err != nil {
 		return "", err
 	}
 	cm.factory = factory
 
 	// wait up to 5s for root server to spawn
-	pidPath := fmt.Sprintf("%s/pid", rootDir)
+	sockPath := fmt.Sprintf("%s/fs.sock", rootDir)
 	start := time.Now()
 	for ok := true; ok; ok = os.IsNotExist(err) {
-		_, err = os.Stat(pidPath)
+		_, err = os.Stat(sockPath)
 		if time.Since(start).Seconds() > 5 {
 			return "", errors.New("root forkserver failed to start after 5s")
 		}
 	}
 
-	pidFile, err := os.Open(pidPath)
-	if err != nil {
-		return "", err
-	}
-	defer pidFile.Close()
-
-	scnr := bufio.NewScanner(pidFile)
-	scnr.Scan()
-	pid := scnr.Text()
-
-	if err := scnr.Err(); err != nil {
-		return "", err
-	}
-
 	fs := &ForkServer{
 		Sandbox:  rootSB,
-		Pid:      pid,
+		Pid:      "-1",
 		SockPath: fmt.Sprintf("%s/fs.sock", rootDir),
 		Packages: make(map[string]bool),
 		Hits:     0.0,
@@ -226,7 +212,7 @@ func readPkgSizes(path string) (map[string]float64, error) {
 	sizes := make(map[string]float64)
 	file, err := os.Open(path)
 	if err != nil {
-		log.Printf("invalid package sizes path %v, using 0 for all", path);
+		log.Printf("invalid package sizes path %v, using 0 for all", path)
 		return make(map[string]float64), nil
 	}
 	defer file.Close()

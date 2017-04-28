@@ -8,13 +8,15 @@ import (
 	"sync/atomic"
 	"time"
 
-	docker "github.com/fsouza/go-dockerclient"
+	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/dockerutil"
+
+	docker "github.com/fsouza/go-dockerclient"
 	sb "github.com/open-lambda/open-lambda/worker/sandbox"
 )
 
-func InitCacheFactory(cacheDir, pkgsDir, cluster string, buffer int) (cf *BufferedCacheFactory, root *sb.DockerSandbox, rootDir, rootCID string, err error) {
-	cf, root, rootDir, rootCID, err = NewBufferedCacheFactory(cacheDir, pkgsDir, cluster, buffer)
+func InitCacheFactory(opts *config.Config, cluster string) (cf *BufferedCacheFactory, root *sb.DockerSandbox, rootDir, rootCID string, err error) {
+	cf, root, rootDir, rootCID, err = NewBufferedCacheFactory(opts, cluster)
 	if err != nil {
 		return nil, nil, "", "", err
 	}
@@ -91,13 +93,24 @@ func (cf *CacheFactory) Create(sandboxDir string, cmd []string) (*sb.DockerSandb
 		return nil, "", err
 	}
 
-	sandbox := sb.NewDockerSandbox(sandboxDir, "", container, cf.client)
+	sandbox := sb.NewDockerSandbox(sandboxDir, "", "", container, cf.client)
 	return sandbox, container.ID, nil
 }
 
 // NewBufferedCacheFactory creates a BufferedCacheFactory and starts a go routine to
 // fill the sandbox buffer.
-func NewBufferedCacheFactory(cacheDir, pkgsDir, cluster string, buffer int) (*BufferedCacheFactory, *sb.DockerSandbox, string, string, error) {
+func NewBufferedCacheFactory(opts *config.Config, cluster string) (*BufferedCacheFactory, *sb.DockerSandbox, string, string, error) {
+	cacheDir := opts.Import_cache_dir
+	pkgsDir := opts.Pkgs_dir
+	buffer := opts.Import_cache_buffer
+	indexHost := opts.Index_host
+	indexPort := opts.Index_port
+
+	rootCmd := []string{"python", "server.py"}
+	if indexHost != "" && indexPort != "" {
+		rootCmd = append(rootCmd, indexHost, indexPort)
+	}
+
 	delegate, err := NewCacheFactory(cluster, pkgsDir)
 	if err != nil {
 		return nil, nil, "", "", err
@@ -120,7 +133,7 @@ func NewBufferedCacheFactory(cacheDir, pkgsDir, cluster string, buffer int) (*Bu
 		return nil, nil, "", "", fmt.Errorf("failed to create cache entry directory at %s: %v", cacheDir, err)
 	}
 
-	root, rootCID, err := bf.delegate.Create(rootDir, []string{"python", "initroot.py"})
+	root, rootCID, err := bf.delegate.Create(rootDir, rootCmd)
 	if err != nil {
 		return nil, nil, "", "", fmt.Errorf("failed to create cache entry sandbox: %v", err)
 	} else if err := root.Start(); err != nil {
