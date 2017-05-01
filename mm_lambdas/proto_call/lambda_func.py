@@ -21,7 +21,8 @@ def handler(conn, event):
         num_keys = int(event['num_keys'])
         depth = int(event['depth'])
         value_len = int(event['value_len'])
-      
+        iterations = int(event['iterations'])      
+
         name = "rand_" + str(num_keys) + "_" + str(depth) + "_" + str(value_len)
         i = importlib.import_module(name + "_pb2")
         d = i.Rand()
@@ -34,15 +35,23 @@ def handler(conn, event):
         mq = MessageQueue("/mytest") # setup by responder
         
         # Timed send
-        start = time.time()
-        payload = d.SerializeToString()
-        mq.send(payload)
-        # Wait for ack
-        mq.receive() 
+        times = []
+        for i in range(iterations):
+          start = time.time()
+          payload = d.SerializeToString()
+          mq.send(payload)
+          # Wait for ack
+          mq.receive() 
+          stop = time.time()
+          times.append(stop - start)  
 
-        stop = time.time()
+        avg = 0.0
+        for t in times:
+          avg += t
+        avg = avg/len(times)
+
         mq.close()
         mq.unlink()
-        return "t: " + str(stop - start) + " s: " + str(getsizeof(payload))
+        return "t: " + str(avg) + " s: " + str(getsizeof(payload))
     except Exception as e:
         return {'error': str(e)} 
