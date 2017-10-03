@@ -13,6 +13,11 @@ surrounding a given sandbox type (Docker container, cgroup, etc).
 
 import "github.com/open-lambda/open-lambda/worker/handler/state"
 
+// TODO - use cpuset?
+var cgroupList []string = []string{"blkio", "cpu", "cpuacct", "devices", "freezer", "hugetlb", "memory", "perf_event", "systemd"}
+
+const olCGroupName = "openlambda"
+
 type SandboxChannel struct {
 	Url       string
 	Transport http.Transport

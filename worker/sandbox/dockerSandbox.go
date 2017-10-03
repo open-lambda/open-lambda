@@ -31,7 +31,6 @@ type DockerSandbox struct {
 	nspid       string
 	container   *docker.Container
 	client      *docker.Client
-	controllers string
 	tr          http.Transport
 	installed   map[string]bool
 	index_host  string
@@ -49,7 +48,6 @@ func NewDockerSandbox(sandbox_dir, index_host, index_port string, container *doc
 		sandbox_dir: sandbox_dir,
 		container:   container,
 		client:      client,
-		controllers: "memory,cpu,devices,perf_event,cpuset,blkio,pids,freezer,net_cls,net_prio,hugetlb",
 		tr:          tr,
 		installed:   make(map[string]bool),
 		index_host:  index_host,
@@ -251,8 +249,9 @@ func (s *DockerSandbox) CGroupEnter(pid string) (err error) {
 		t = b.CreateTimer("cgclassify process into docker container", "us")
 	}
 
-	cgroup := fmt.Sprintf("%s:/docker/%s", s.controllers, s.container.ID)
-	cmd := exec.Command("cgclassify", "--sticky", "-g", cgroup, pid)
+	controllers := "memory,cpu,devices,perf_event,cpuset,blkio,pids,freezer,net_cls,net_prio,hugetlb"
+	cgroupArg := fmt.Sprintf("%s:/docker/%s", controllers, s.container.ID)
+	cmd := exec.Command("cgclassify", "--sticky", "-g", cgroupArg, pid)
 
 	if t != nil {
 		t.Start()

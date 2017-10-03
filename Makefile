@@ -52,16 +52,17 @@ test : test-config imgs/lambda
 	#cd $(WORKER_DIR) && $(GO) test ./handler -v
 	cd $(WORKER_DIR) && $(GO) test ./server -v
 
-cgroup/cgroup_init : cgroup/cgroup_init.c
-	${MAKE} -C cgroup
+olcontainer/olcontainer_init : olcontainer/olcontainer_init.c
+	${MAKE} -C olcontainer
 
 # TODO: eventually merge this with default tests
-.PHONY: cgrouptest cgrouptest-config
-cgrouptest-config :
-	$(eval export WORKER_CONFIG := $(PWD)/testing/worker-config-cgroup.json)
+.PHONY: olcontainertest olcontainertest-config
+olcontainertest-config :
+	$(eval export WORKER_CONFIG := $(PWD)/testing/worker-config-olcontainer.json)
 
-cgrouptest : cgrouptest-config imgs/lambda cgroup/cgroup_init
-	cd $(WORKER_DIR) && $(GO) test ./sandbox -v
+olcontainertest : olcontainertest-config imgs/lambda olcontainer/olcontainer_init
+	mkdir -p /tmp/olpkgs
+	cd $(WORKER_DIR) && $(GO) test -tags olcontainertest ./sandbox/ -v
 
 .PHONY: cachetest cachetest-config
 cachetest-config :
@@ -78,7 +79,7 @@ clean :
 	rm -rf registry/bin
 	rm -f imgs/lambda imgs/cache-entry imgs/olregistry
 	rm -rf testing/test_worker testing/test_cache
-	rm -f cgroup/cgroup_init
+	rm -f olcontainer/olcontainer_init
 	${MAKE} -C lambda clean
 	${MAKE} -C cache-entry clean
 

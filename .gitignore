@@ -50,9 +50,9 @@
 /registry/bin
 /registry/pushserver
 /registry/regpush
-/lambda/init
+/lambda/ol-init
 /lambda/ns.so
 /lambda/fdclient
 /testing/test_worker
 /testing/test_cache
-/cgroup/cgroup_init
+/olcontainer/olcontainer_init

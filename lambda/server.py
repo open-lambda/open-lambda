@@ -134,7 +134,7 @@ if __name__ == '__main__':
         time.sleep(0.005)
         curr += 0.005
         if curr > 1.0:
-            print('packages.txt missing')
+            print('packages.txt missing (path=%s)' % PKGS_PATH)
             sys.stdout.flush()
             sys.exit(1)
 

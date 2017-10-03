@@ -8,6 +8,6 @@ RUN pip install rethinkdb
 RUN pip install tornado
 
 COPY server.py /
-COPY init /
+COPY ol-init /
 
 CMD ["python", "/server.py"]
