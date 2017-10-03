@@ -29,19 +29,19 @@ func Init() {
 	}
 
 	// test dir, base dir
-	testDir, err = ioutil.TempDir(os.TempDir(), "cgroup_test")
+	testDir, err = ioutil.TempDir(os.TempDir(), "olcontainer_test")
 	if err != nil {
 		log.Fatal("cannot create temp dir")
 	}
 	baseDir = path.Join(testDir, "base")
-	fmt.Printf("Using %s for cgroup testing\n", testDir)
+	fmt.Printf("Using %s for olcontainer testing\n", testDir)
 
 	// conf
 	conf, err = config.ParseConfig(os.Getenv("WORKER_CONFIG"))
 	if err != nil {
 		log.Fatal(err)
 	}
-	conf.Cgroup_base = baseDir
+	conf.OLContainer_base = baseDir
 
 	// ubuntu FS base
 	fmt.Printf("dump lambda root to %s\n", baseDir)
@@ -54,12 +54,11 @@ func Init() {
 func TestMain(m *testing.M) {
 	Init()
 	res := m.Run()
-	// TODO: cleanup
 	os.Exit(res)
 }
 
 func TestCreate(t *testing.T) {
-	factory, err := NewCgroupSBFactory(conf)
+	factory, err := NewOLContainerSBFactory(conf)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -72,12 +71,27 @@ func TestCreate(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	s, err := factory.Create(handler_dir, sandbox_dir)
+	s, err := factory.Create(handler_dir, sandbox_dir, "", "")
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
+	// always clean up
+	defer func(s Sandbox) {
+		if err := s.Stop(); err != nil {
+			t.Fatal(err.Error())
+		}
+
+		if err := s.Remove(); err != nil {
+			t.Fatal(err.Error())
+		}
+	}(s)
+
 	if err := s.Start(); err != nil {
+		t.Fatal(err.Error())
+	}
+
+	if err := s.RunServer(); err != nil {
 		t.Fatal(err.Error())
 	}
 

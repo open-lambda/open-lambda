@@ -64,7 +64,7 @@ func configPath(cluster string, name string) string {
 }
 
 // BasePath gets location for storing base handler files (e.g., Ubuntu
-// install files) for cgroup mode
+// install files) for olcontainer mode
 func basePath(cluster string) string {
 	return path.Join(cluster, "base")
 }
@@ -588,24 +588,24 @@ func kill(ctx *cli.Context) error {
 	return nil
 }
 
-// manage cgroups directly
-func cgroup_sandbox(ctx *cli.Context) error {
+// manage olcontainers directly
+func olcontainer_sandbox(ctx *cli.Context) error {
 	cluster := parseCluster(ctx.String("cluster"), true)
 
-	// create a base directory to run cgroup containers
+	// create a base directory to run olcontainer containers
 	baseDir := path.Join(basePath(cluster), "lambda")
 	err := dutil.DumpDockerImage(client, "lambda", baseDir)
 	if err != nil {
 		return err
 	}
 
-	// configure template to use cgroup containers
+	// configure template to use olcontainer containers
 	c, err := config.ParseConfig(templatePath(cluster))
 	if err != nil {
 		return err
 	}
-	c.Sandbox = "cgroup"
-	c.Cgroup_base = baseDir
+	c.Sandbox = "olcontainer"
+	c.OLContainer_base = baseDir
 	if err := c.Save(templatePath(cluster)); err != nil {
 		return err
 	}
@@ -916,14 +916,14 @@ OPTIONS:
 			Action: upload,
 		},
 		cli.Command{
-			Name:        "cgroup-sandbox",
-			Usage:       "Use cgroups directly",
-			UsageText:   "admin cgroup-sandbox --cluster=NAME",
-			Description: "Creates a root file system in the cluster directory and configures OpenLambda to use cgroup containers",
+			Name:        "olcontainer-sandbox",
+			Usage:       "Use OpenLambda barebones container implementation",
+			UsageText:   "admin olcontainer-sandbox --cluster=NAME",
+			Description: "Creates a root file system in the cluster directory and configures OpenLambda to use barebones container implementation",
 			Flags: []cli.Flag{
 				clusterFlag,
 			},
-			Action: cgroup_sandbox,
+			Action: olcontainer_sandbox,
 		},
 		cli.Command{
 			Name:      "kill",

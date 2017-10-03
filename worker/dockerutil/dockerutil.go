@@ -171,5 +171,9 @@ func DumpDockerImage(client *docker.Client, image string, outdir string) error {
 		return err
 	}
 
+	if err := os.Mkdir(path.Join(outdir, "packages"), 0700); err != nil {
+		return err
+	}
+
 	return nil
 }

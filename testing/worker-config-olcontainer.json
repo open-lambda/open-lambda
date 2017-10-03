@@ -2,11 +2,12 @@
     "cluster_name": "test_cluster",
     "worker_port": "8080",
     "reg_dir": "handlers",
-    "sandbox": "cgroup",
-    "cgroup_init_path": "../cgroup/cgroup_init",
-    "cgroup_base": "populate_later",
+    "sandbox": "olcontainer",
+    "olcontainer_init_path": "../olcontainer/olcontainer_init",
+    "olcontainer_base": "populate_later",
     "registry": "local",
     "worker_dir": "test_worker",
+    "pkgs_dir": "/tmp/olpkgs",
     "sandbox_config": {"processes": 10},
     "pool": ""
 }

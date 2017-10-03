@@ -1,11 +1,11 @@
 .PHONY: all
 
-all: init
+all: ol-init
 
-init: init.c
-	gcc -O2 -o init init.c
+ol-init: ol-init.c
+	gcc -Wall -O2 ol-init.c -o ol-init
 
 .PHONY: clean
 
 clean:
-	rm -f init
+	rm -f ol-init

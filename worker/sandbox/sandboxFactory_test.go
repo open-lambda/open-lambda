@@ -7,6 +7,7 @@ import (
 	"time"
 
 	docker "github.com/fsouza/go-dockerclient"
+
 	"github.com/open-lambda/open-lambda/worker/config"
 )
 
@@ -63,7 +64,7 @@ func TestWriteToDirs(t *testing.T) {
 		t.Fatalf("cannot create sandbox directory: ", err)
 	}
 
-	if sandbox, err := dockerSbFactory.Create(handlerDir, sandboxDir); err != nil {
+	if sandbox, err := dockerSbFactory.Create(handlerDir, sandboxDir, "", ""); err != nil {
 		t.Fatalf("fail to create sandbox: ", err)
 	} else if err := sandbox.Start(); err != nil {
 		t.Fatalf("fail to start sandbox: ", err)
