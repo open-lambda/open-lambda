@@ -91,6 +91,7 @@ func (s *OLContainerSandbox) Start() error {
 	}
 
 	s.initProc = initCmd.Process
+	fmt.Printf("PID: %v\n", s.initProc.Pid)
 
 	if err := s.CGroupEnter(strconv.Itoa(s.initProc.Pid)); err != nil {
 		return err
@@ -134,7 +135,7 @@ func (s *OLContainerSandbox) Stop() error {
 }
 
 func (s *OLContainerSandbox) Pause() error {
-	freezerPath := path.Join("/sys/fs/cgroup/freezer", olCGroupName, s.id)
+	freezerPath := path.Join("/sys/fs/cgroup/freezer", olCGroupName, s.id, "freezer.state")
 	err := ioutil.WriteFile(freezerPath, []byte("FROZEN"), os.ModeAppend)
 	if err != nil {
 		return err
@@ -147,7 +148,7 @@ func (s *OLContainerSandbox) Pause() error {
 }
 
 func (s *OLContainerSandbox) Unpause() error {
-	freezerPath := path.Join("/sys/fs/cgroup/freezer", olCGroupName, s.id)
+	freezerPath := path.Join("/sys/fs/cgroup/freezer", olCGroupName, s.id, "freezer.state")
 	err := ioutil.WriteFile(freezerPath, []byte("THAWED"), os.ModeAppend)
 	if err != nil {
 		return err
@@ -227,4 +228,8 @@ func (s *OLContainerSandbox) RunServer() error {
 	}
 
 	return nil
+}
+
+func (s *OLContainerSandbox) MemoryCGroupPath() string {
+	return fmt.Sprintf("/sys/fs/cgroup/memory/%s/%s/", olCGroupName, s.id)
 }

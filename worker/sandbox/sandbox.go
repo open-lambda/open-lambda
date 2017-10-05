@@ -14,7 +14,7 @@ surrounding a given sandbox type (Docker container, cgroup, etc).
 import "github.com/open-lambda/open-lambda/worker/handler/state"
 
 // TODO - use cpuset?
-var cgroupList []string = []string{"blkio", "cpu", "cpuacct", "devices", "freezer", "hugetlb", "memory", "perf_event", "systemd"}
+var cgroupList []string = []string{"blkio", "cpu", "devices", "freezer", "hugetlb", "memory", "perf_event", "systemd"}
 
 const olCGroupName = "openlambda"
 
@@ -52,6 +52,8 @@ type Sandbox interface {
 	ID() string
 
 	RunServer() error
+
+	MemoryCGroupPath() string
 }
 
 type ContainerSandbox interface {

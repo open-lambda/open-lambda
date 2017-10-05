@@ -115,8 +115,13 @@ def lambda_server():
 if __name__ == '__main__':
     global INDEX_HOST
     global INDEX_PORT
-    sys.stdout = open(STDOUT_PATH, 'w')
-    sys.stderr = open(STDERR_PATH, 'w')
+    try:
+        sys.stdout = open(STDOUT_PATH, 'w')
+        sys.stderr = open(STDERR_PATH, 'w')
+    except Exception as e:
+        with open('/ERROR', 'w') as fd:
+            fd.write('failed to open stdout/stderr with: %s\n' % e)
+            sys.exit(1)
 
     if len(sys.argv) != 1 and len(sys.argv) != 3:
         print('Usage: python %s or python %s <index_host> <index_sock>' % (sys.argv[0], sys.argv[0]))

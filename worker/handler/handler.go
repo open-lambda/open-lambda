@@ -177,7 +177,7 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 
 	// create sandbox if needed
 	if h.sandbox == nil {
-		if err := os.MkdirAll(h.sandboxDir, 0666); err != nil {
+		if err := os.MkdirAll(h.sandboxDir, 0777); err != nil {
 			return nil, err
 		}
 

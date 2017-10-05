@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"path"
 	"strconv"
 	"strings"
 	"sync"
@@ -131,8 +132,7 @@ func (lru *HandlerLRU) Dump() {
 }
 
 func handlerUsage(handler *Handler) (usage int) {
-	usagePath := fmt.Sprintf("/sys/fs/cgroup/memory/docker/%s/memory.usage_in_bytes", handler.sandbox.ID())
-
+	usagePath := path.Join(handler.sandbox.MemoryCGroupPath(), "memory.usage_in_bytes")
 	buf, err := ioutil.ReadFile(usagePath)
 	if err != nil {
 		panic(fmt.Sprintf("get usage failed: %v", err))
