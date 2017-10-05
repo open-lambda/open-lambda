@@ -8,8 +8,10 @@
 char **params;
 
 void signal_handler() {
-	execv(params[0], params);
-	printf("inside\n");
+	int ret = fork();
+	if (ret == 0) {
+		execv(params[0], params);
+	}
 
 	return;
 }
@@ -26,7 +28,8 @@ int main(int argc, char *argv[]) {
 	params[argc+1] = NULL;
 
 	signal(SIGUSR1, signal_handler);
-	pause();
+	pause(); // wait for SIGUSR1 and handle
+	pause(); // sleep forever, we're init for the ns
 
 	return 0;
 }
