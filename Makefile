@@ -18,7 +18,7 @@ LAMBDA_DIR = $(abspath ./lambda)
 PIPBENCH_DIR = $(abspath ./pipbench)
 
 .PHONY: all
-all : .git/hooks/pre-commit imgs/lambda imgs/cache-entry imgs/pip-installer bin/admin
+all : .git/hooks/pre-commit imgs/lambda imgs/cache-entry imgs/pip-installer bin/admin olcontainer/olcontainer_init
 
 .git/hooks/pre-commit: util/pre-commit
 	cp util/pre-commit .git/hooks/pre-commit

@@ -64,3 +64,8 @@ func (df *DockerSBFactory) Create(handlerDir, sandboxDir, indexHost, indexPort s
 	sandbox := NewDockerSandbox(sandboxDir, indexHost, indexPort, container, df.client)
 	return sandbox, nil
 }
+
+// TODO
+func (df *DockerSBFactory) Cleanup() {
+	return
+}

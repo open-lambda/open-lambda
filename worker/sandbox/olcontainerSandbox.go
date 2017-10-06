@@ -11,6 +11,7 @@ package sandbox
 
 import (
 	"fmt"
+	"time"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -33,7 +34,8 @@ type OLContainerSandbox struct {
 	indexHost string
 	indexPort string
 	status    state.HandlerState
-	initProc  *os.Process
+	initPid   string
+	initCmd   *exec.Cmd
 }
 
 func NewOLContainerSandbox(opts *config.Config, rootDir, indexHost, indexPort, id string) (*OLContainerSandbox, error) {
@@ -72,7 +74,7 @@ func (s *OLContainerSandbox) Channel() (channel *SandboxChannel, err error) {
 }
 
 func (s *OLContainerSandbox) Start() error {
-	initArgs := []string{s.rootDir, "/ol-init"}
+	initArgs := []string{"-imnrpuUf", "--mount-proc", s.opts.OLContainer_init_path, s.rootDir, "/ol-init"}
 	if s.indexHost != "" {
 		initArgs = append(initArgs, s.indexHost)
 	}
@@ -80,20 +82,32 @@ func (s *OLContainerSandbox) Start() error {
 		initArgs = append(initArgs, s.indexPort)
 	}
 
-	initCmd := exec.Command(
-		s.opts.OLContainer_init_path,
+	s.initCmd = exec.Command(
+		"unshare",
 		initArgs...,
 	)
 
-	initCmd.Env = []string{fmt.Sprintf("ol.config=%s", s.opts.SandboxConfJson())}
-	if err := initCmd.Start(); err != nil {
+	s.initCmd.Env = []string{fmt.Sprintf("ol.config=%s", s.opts.SandboxConfJson())}
+	if err := s.initCmd.Start(); err != nil {
 		return err
 	}
 
-	s.initProc = initCmd.Process
-	fmt.Printf("PID: %v\n", s.initProc.Pid)
+	// wait up to 5s for server olcontainer_init to spawn
+	start := time.Now()
+	for {
+		pgrep := exec.Command("pgrep", "-P", strconv.Itoa(s.initCmd.Process.Pid))
+		out, err := pgrep.Output()
+		if err == nil {
+			s.initPid = strings.TrimSpace(string(out[:]))
+			break
+		}
 
-	if err := s.CGroupEnter(strconv.Itoa(s.initProc.Pid)); err != nil {
+		if time.Since(start).Seconds() > 5 {
+			return fmt.Errorf("olcontainer_init failed to spawn after 5s")
+		}
+	}
+
+	if err := s.CGroupEnter(s.initPid); err != nil {
 		return err
 	}
 
@@ -115,20 +129,13 @@ func (s *OLContainerSandbox) Stop() error {
 				break
 			}
 
-			if pid, err := strconv.Atoi(pidStr); err != nil {
-				return err
-			} else if proc, err := os.FindProcess(pid); err != nil {
-				return err
-			} else if err := proc.Kill(); err != nil {
-				return err
-			}
+			// don't check errors because some might die before we get to them
+			exec.Command("kill", "-9", pidStr).Run()
 		}
 	}
 
-	// avoid zombie python process
-	if _, err := s.initProc.Wait(); err != nil {
-		return err
-	}
+	// release unshare process resources
+	s.initCmd.Wait()
 
 	s.status = state.Stopped
 	return nil
@@ -141,8 +148,6 @@ func (s *OLContainerSandbox) Pause() error {
 		return err
 	}
 
-	// TODO wait for it to freeze?
-
 	s.status = state.Paused
 	return nil
 }
@@ -154,13 +159,10 @@ func (s *OLContainerSandbox) Unpause() error {
 		return err
 	}
 
-	// TODO wait for it to thaw?
-
 	s.status = state.Running
 	return nil
 }
 
-// TODO: continue cleanup attempt on error?
 func (s *OLContainerSandbox) Remove() error {
 	// remove cgroups
 	for _, cgroup := range cgroupList {
@@ -214,7 +216,7 @@ func (s *OLContainerSandbox) CGroupEnter(pid string) (err error) {
 }
 
 func (s *OLContainerSandbox) NSPid() string {
-	return strconv.Itoa(s.initProc.Pid)
+	return s.initPid
 }
 
 func (s *OLContainerSandbox) ID() string {
@@ -222,7 +224,7 @@ func (s *OLContainerSandbox) ID() string {
 }
 
 func (s *OLContainerSandbox) RunServer() error {
-	signal := exec.Command("kill", "-SIGUSR1", strconv.Itoa(s.initProc.Pid))
+	signal := exec.Command("kill", "-SIGUSR1", s.initPid)
 	if err := signal.Run(); err != nil {
 		return err
 	}

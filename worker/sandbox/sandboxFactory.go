@@ -15,6 +15,7 @@ import (
 // SandboxFactory is the common interface for all sandbox creation functions.
 type SandboxFactory interface {
 	Create(handlerDir, sandboxDir, indexHost, indexPort string) (sandbox Sandbox, err error)
+	Cleanup()
 }
 
 // BufferedSBFactory maintains a buffer of sandboxes created by another factory.
@@ -24,6 +25,7 @@ type BufferedSBFactory struct {
 	errors   chan error
 	mntDir   string
 	cache    bool
+	idxPtr   *int64
 }
 
 // emptySBInfo wraps sandbox information necessary for the buffer.
@@ -97,11 +99,17 @@ func NewBufferedSBFactory(opts *config.Config, delegate SandboxFactory) (*Buffer
 	}
 
 	// fill the sandbox buffer
-	var shared_idx int64 = -1
+	var sharedIdx int64 = -1
+	bf.idxPtr = &sharedIdx
 	for i := 0; i < 5; i++ {
-		go func(idxptr *int64) {
+		go func(idxPtr *int64) {
 			for {
-				bufDir := filepath.Join(bf.mntDir, fmt.Sprintf("%d", atomic.AddInt64(idxptr, 1)))
+				newIdx := atomic.AddInt64(idxPtr, 1)
+				if newIdx < 0 {
+					return // kill signal
+				}
+
+				bufDir := filepath.Join(bf.mntDir, fmt.Sprintf("%d", newIdx))
 				if handlerDir, sandboxDir, err := mkSBDirs(bufDir); err != nil {
 					bf.errors <- err
 				} else if sandbox, err := bf.delegate.Create(handlerDir, sandboxDir, opts.Index_host, opts.Index_port); err != nil {
@@ -114,7 +122,7 @@ func NewBufferedSBFactory(opts *config.Config, delegate SandboxFactory) (*Buffer
 					bf.buffer <- &emptySBInfo{sandbox, handlerDir, sandboxDir}
 				}
 			}
-		}(&shared_idx)
+		}(bf.idxPtr)
 	}
 
 	log.Printf("filling sandbox buffer")
@@ -150,4 +158,15 @@ func (bf *BufferedSBFactory) Create(handlerDir, sandboxDir, indexHost, indexPort
 	case err := <-bf.errors:
 		return nil, err
 	}
+}
+
+// TODO - remove directories created
+func (bf *BufferedSBFactory) Cleanup() {
+	// kill signal must be negative for all producers
+	atomic.StoreInt64(bf.idxPtr, -1000)
+
+	bf.delegate.Cleanup()
+
+	cmd([]string{"umount", filepath.Join(bf.mntDir, "*", "*")})
+	cmd([]string{"rm", "-rf", bf.mntDir})
 }
