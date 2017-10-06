@@ -28,7 +28,6 @@ func NewOLContainerSBFactory(opts *config.Config) (*OLContainerSBFactory, error)
 }
 
 func cmd(args []string) error {
-	fmt.Printf("Execute: %s\n", strings.Join(args, " "))
 	c := exec.Cmd{Path: args[0], Args: args}
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
@@ -37,7 +36,7 @@ func cmd(args []string) error {
 }
 
 // Create creates a docker sandbox from the handler and sandbox directory.
-func (self *OLContainerSBFactory) Create(handlerDir, sandboxDir, indexHost, indexPort string) (Sandbox, error) {
+func (sf *OLContainerSBFactory) Create(handlerDir, sandboxDir, indexHost, indexPort string) (Sandbox, error) {
 	id_bytes, err := exec.Command("uuidgen").Output()
 	if err != nil {
 		return nil, err
@@ -50,7 +49,7 @@ func (self *OLContainerSBFactory) Create(handlerDir, sandboxDir, indexHost, inde
 	}
 
 	// NOTE: mount points are expected to exist in OLContainer_base directory
-	err = cmd([]string{"/bin/mount", "--bind", "-o", "ro", self.opts.OLContainer_base, rootDir})
+	err = cmd([]string{"/bin/mount", "--bind", "-o", "ro", sf.opts.OLContainer_base, rootDir})
 	if err != nil {
 		return nil, fmt.Errorf("Failed to bind base: %v", err.Error())
 	}
@@ -60,7 +59,7 @@ func (self *OLContainerSBFactory) Create(handlerDir, sandboxDir, indexHost, inde
 		return nil, fmt.Errorf("Failed to bind handler dir: %v", err.Error())
 	}
 
-	err = cmd([]string{"/bin/mount", "--bind", "-o", "ro", self.opts.Pkgs_dir, path.Join(rootDir, "packages")})
+	err = cmd([]string{"/bin/mount", "--bind", "-o", "ro", sf.opts.Pkgs_dir, path.Join(rootDir, "packages")})
 	if err != nil {
 		return nil, fmt.Errorf("Failed to bind packages dir: %v", err.Error())
 	}
@@ -70,10 +69,17 @@ func (self *OLContainerSBFactory) Create(handlerDir, sandboxDir, indexHost, inde
 		return nil, fmt.Errorf("Failed to bind host dir: %v", err.Error())
 	}
 
-	sandbox, err := NewOLContainerSandbox(self.opts, rootDir, indexHost, indexPort, id)
+	sandbox, err := NewOLContainerSandbox(sf.opts, rootDir, indexHost, indexPort, id)
 	if err != nil {
 		return nil, err
 	}
 
 	return sandbox, nil
+}
+
+// TODO
+func (sf *OLContainerSBFactory) Cleanup() {
+	cmd([]string{"/bin/umount", "/tmp/sandbox_*/*"})
+	cmd([]string{"/bin/umount", "/tmp/sandbox_*"})
+	cmd([]string{"rm", "-rf", "/tmp/sandbox_*"})
 }

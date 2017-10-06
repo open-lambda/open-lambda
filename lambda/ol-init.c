@@ -2,17 +2,21 @@
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
-
-/* Lightweight "dummy" process to spin in containers */
+#include <sys/types.h>
+#include <sys/wait.h>
 
 char **params;
 
+// double fork to avoid zombies and exec the python server
 void signal_handler() {
-	int ret = fork();
-	if (ret == 0) {
-		execv(params[0], params);
+	if (fork() == 0) {
+		if (fork() == 0) {
+			execv(params[0], params);
+		}
+		exit(0);
 	}
 
+	wait(NULL);
 	return;
 }
 

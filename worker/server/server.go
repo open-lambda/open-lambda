@@ -1,6 +1,9 @@
 package server
 
 import (
+	"os"
+	"os/signal"
+	"syscall"
 	"bytes"
 	"fmt"
 	"io/ioutil"
@@ -12,6 +15,11 @@ import (
 	"github.com/open-lambda/open-lambda/worker/benchmarker"
 	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/handler"
+)
+
+const (
+	RUN_PATH = "/runLambda/"
+	STATUS_PATH = "/status"
 )
 
 // Server is a worker server that listens to run lambda requests and forward
@@ -196,7 +204,7 @@ func (s *Server) RunLambda(w http.ResponseWriter, r *http.Request) {
 func (s *Server) Status(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Receive request to %s\n", r.URL.Path)
 
-	wbody := []byte("ready")
+	wbody := []byte("ready\n")
 	if _, err := w.Write(wbody); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
@@ -220,6 +228,10 @@ func getUrlComponents(r *http.Request) []string {
 	return components
 }
 
+func cleanup() {
+	log.Printf("CLEANING UP")
+}
+
 // Main starts a server.
 func Main(config_path string) {
 	log.Printf("Parse config\n")
@@ -234,15 +246,27 @@ func Main(config_path string) {
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	if conf.Benchmark_file != "" {
 		benchmarker.CreateBenchmarkerSingleton(conf.Benchmark_file)
 	}
+
 	port := fmt.Sprintf(":%s", conf.Worker_port)
-	run_path := "/runLambda/"
-	status_path := "/status"
-	http.HandleFunc(run_path, server.RunLambda)
-	http.HandleFunc(status_path, server.Status)
-	log.Printf("Execute handler by POSTing to localhost%s%s%s\n", port, run_path, "<lambda>")
-	log.Printf("Get status by sending request to localhost%s%s\n", port, status_path)
+	http.HandleFunc(RUN_PATH, server.RunLambda)
+	http.HandleFunc(STATUS_PATH, server.Status)
+
+	log.Printf("Execute handler by POSTing to localhost%s%s%s\n", port, RUN_PATH, "<lambda>")
+	log.Printf("Get status by sending request to localhost%s%s\n", port, STATUS_PATH)
+
+	// clean up if signal hits us
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	signal.Notify(c, os.Interrupt, syscall.SIGINT)
+	go func() {
+		<-c
+		cleanup()
+		os.Exit(1)
+	}()
+
 	log.Fatal(http.ListenAndServe(port, nil))
 }

@@ -304,5 +304,5 @@ func (s *DockerSandbox) RunServer() error {
 }
 
 func (s *DockerSandbox) MemoryCGroupPath() string {
-	return fmt.Sprintf("/sys/fs/cgroup/memory/docker/%s/", s.ID)
+	return fmt.Sprintf("/sys/fs/cgroup/memory/docker/%s/", s.container.ID)
 }

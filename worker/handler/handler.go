@@ -3,7 +3,6 @@
 package handler
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -19,6 +18,7 @@ import (
 
 	sb "github.com/open-lambda/open-lambda/worker/sandbox"
 )
+
 
 // HandlerSet represents a collection of Handlers of a worker server. It
 // manages the Handler by HandlerLRU.
@@ -155,6 +155,13 @@ func (h *HandlerSet) Dump() {
 	}
 }
 
+func (h *HandlerSet) Cleanup() {
+	h.sbFactory.Cleanup()
+	for _, handler := range h.handlers {
+		handler.nuke()
+	}
+}
+
 // RunStart runs the lambda handled by this Handler. It checks if the code has
 // been pulled, sandbox been created, and sandbox been started. The channel of
 // the sandbox of this lambda is returned.
@@ -211,7 +218,7 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 		} else {
 			containerSB, ok := h.sandbox.(sb.ContainerSandbox)
 			if !ok {
-				return nil, errors.New("forkenter only supported with ContainerSandbox")
+				return nil, fmt.Errorf("forkenter only supported with ContainerSandbox")
 			}
 			if h.fs, hit, err = h.hset.cacheMgr.Provision(containerSB, h.sandboxDir, h.pkgs); err != nil {
 				return nil, err
@@ -232,7 +239,7 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 		for ok := true; ok; ok = os.IsNotExist(err) {
 			_, err = os.Stat(sockPath)
 			if time.Since(start).Seconds() > 20 {
-				return nil, errors.New(fmt.Sprintf("handler server failed to initialize after 20s"))
+				return nil, fmt.Errorf("handler server failed to initialize after 20s")
 			}
 		}
 
@@ -275,12 +282,7 @@ func (h *Handler) RunFinish() {
 	}
 }
 
-// StopIfPaused stops the sandbox if it is paused.
 func (h *Handler) nuke() {
-	for h.runners != 0 {
-		time.Sleep(500 * time.Microsecond)
-	}
-
 	h.sandbox.Unpause()
 	h.sandbox.Stop()
 	h.sandbox.Remove()
