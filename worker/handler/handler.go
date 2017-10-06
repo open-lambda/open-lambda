@@ -19,7 +19,6 @@ import (
 	sb "github.com/open-lambda/open-lambda/worker/sandbox"
 )
 
-
 // HandlerSet represents a collection of Handlers of a worker server. It
 // manages the Handler by HandlerLRU.
 type HandlerSet struct {
@@ -156,10 +155,13 @@ func (h *HandlerSet) Dump() {
 }
 
 func (h *HandlerSet) Cleanup() {
-	h.sbFactory.Cleanup()
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
+
 	for _, handler := range h.handlers {
 		handler.nuke()
 	}
+	h.sbFactory.Cleanup()
 }
 
 // RunStart runs the lambda handled by this Handler. It checks if the code has

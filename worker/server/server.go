@@ -1,15 +1,15 @@
 package server
 
 import (
-	"os"
-	"os/signal"
-	"syscall"
 	"bytes"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/open-lambda/open-lambda/worker/benchmarker"
@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	RUN_PATH = "/runLambda/"
+	RUN_PATH    = "/runLambda/"
 	STATUS_PATH = "/status"
 )
 
@@ -228,8 +228,8 @@ func getUrlComponents(r *http.Request) []string {
 	return components
 }
 
-func cleanup() {
-	log.Printf("CLEANING UP")
+func (s *Server) cleanup() {
+	s.handlers.Cleanup()
 }
 
 // Main starts a server.
@@ -262,11 +262,11 @@ func Main(config_path string) {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	signal.Notify(c, os.Interrupt, syscall.SIGINT)
-	go func() {
+	go func(s *Server) {
 		<-c
-		cleanup()
+		s.cleanup()
 		os.Exit(1)
-	}()
+	}(server)
 
 	log.Fatal(http.ListenAndServe(port, nil))
 }

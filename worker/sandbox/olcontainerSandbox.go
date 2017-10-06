@@ -11,8 +11,8 @@ package sandbox
 
 import (
 	"fmt"
-	"time"
 	"io/ioutil"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/handler/state"
@@ -175,21 +176,21 @@ func (s *OLContainerSandbox) Remove() error {
 	// unmount directories
 	handler_dir := filepath.Join(s.rootDir, "handler")
 	if err := syscall.Unmount(handler_dir, syscall.MNT_DETACH); err != nil {
-		return err
+		log.Printf("failed to unmount handler dir: %s :: %s\n", handler_dir, err)
 	}
 
 	host_dir := filepath.Join(s.rootDir, "host")
 	if err := syscall.Unmount(host_dir, syscall.MNT_DETACH); err != nil {
-		return err
+		log.Printf("failed to unmount host dir: %s :: %s\n", host_dir, err)
 	}
 
 	pkgs_dir := filepath.Join(s.rootDir, "packages")
 	if err := syscall.Unmount(pkgs_dir, syscall.MNT_DETACH); err != nil {
-		return err
+		log.Printf("failed to unmount packages dir: %s :: %s\n", pkgs_dir, err)
 	}
 
 	if err := syscall.Unmount(s.rootDir, syscall.MNT_DETACH); err != nil {
-		return err
+		log.Printf("failed to unmount root dir: %s :: %s\n", s.rootDir, err)
 	}
 
 	// remove everything
