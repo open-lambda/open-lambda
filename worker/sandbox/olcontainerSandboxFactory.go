@@ -79,7 +79,8 @@ func (sf *OLContainerSBFactory) Create(handlerDir, sandboxDir, indexHost, indexP
 
 // TODO
 func (sf *OLContainerSBFactory) Cleanup() {
-	cmd([]string{"/bin/umount", "/tmp/sandbox_*/*"})
-	cmd([]string{"/bin/umount", "/tmp/sandbox_*"})
-	cmd([]string{"rm", "-rf", "/tmp/sandbox_*"})
+	for _, cgroup := range cgroupList {
+		cgroupPath := path.Join("/sys/fs/cgroup", cgroup, olCGroupName)
+		os.Remove(cgroupPath)
+	}
 }

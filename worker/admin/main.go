@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 
 	docker "github.com/fsouza/go-dockerclient"
 	dutil "github.com/open-lambda/open-lambda/worker/dockerutil"
@@ -578,7 +579,7 @@ func kill(ctx *cli.Context) error {
 				fmt.Printf("%s\n", err.Error())
 				fmt.Printf("Failed to find worker process with PID %d.  May require manual cleanup.\n", pid)
 			}
-			if err := p.Kill(); err != nil {
+			if err := p.Signal(syscall.SIGINT); err != nil {
 				fmt.Printf("%s\n", err.Error())
 				fmt.Printf("Failed to kill process with PID %d.  May require manual cleanup.\n", pid)
 			}
