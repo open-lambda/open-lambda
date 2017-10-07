@@ -69,7 +69,7 @@ func (sf *OLContainerSBFactory) Create(handlerDir, sandboxDir, indexHost, indexP
 		return nil, fmt.Errorf("Failed to bind host dir: %v", err.Error())
 	}
 
-	sandbox, err := NewOLContainerSandbox(sf.opts, rootDir, indexHost, indexPort, id)
+	sandbox, err := NewOLContainerSandbox(sf.opts, rootDir, sandboxDir, indexHost, indexPort, id)
 	if err != nil {
 		return nil, err
 	}

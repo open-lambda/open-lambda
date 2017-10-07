@@ -10,13 +10,9 @@ char **params;
 // double fork to avoid zombies and exec the python server
 void signal_handler() {
 	if (fork() == 0) {
-		if (fork() == 0) {
-			execv(params[0], params);
-		}
-		exit(0);
+		execv(params[0], params);
 	}
 
-	wait(NULL);
 	return;
 }
 
