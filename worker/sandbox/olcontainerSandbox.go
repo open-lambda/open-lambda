@@ -29,17 +29,18 @@ import (
 )
 
 type OLContainerSandbox struct {
-	opts      *config.Config
-	id        string
-	rootDir   string
-	indexHost string
-	indexPort string
-	status    state.HandlerState
-	initPid   string
-	initCmd   *exec.Cmd
+	opts       *config.Config
+	id         string
+	rootDir    string
+	sandboxDir string
+	indexHost  string
+	indexPort  string
+	status     state.HandlerState
+	initPid    string
+	initCmd    *exec.Cmd
 }
 
-func NewOLContainerSandbox(opts *config.Config, rootDir, indexHost, indexPort, id string) (*OLContainerSandbox, error) {
+func NewOLContainerSandbox(opts *config.Config, rootDir, sandboxDir, indexHost, indexPort, id string) (*OLContainerSandbox, error) {
 	// create container cgroups
 	for _, cgroup := range cgroupList {
 		cgroupPath := path.Join("/sys/fs/cgroup/", cgroup, olCGroupName, id)
@@ -49,12 +50,13 @@ func NewOLContainerSandbox(opts *config.Config, rootDir, indexHost, indexPort, i
 	}
 
 	sandbox := &OLContainerSandbox{
-		opts:      opts,
-		id:        id,
-		rootDir:   rootDir,
-		indexHost: indexHost,
-		indexPort: indexPort,
-		status:    state.Stopped,
+		opts:       opts,
+		id:         id,
+		rootDir:    rootDir,
+		sandboxDir: sandboxDir,
+		indexHost:  indexHost,
+		indexPort:  indexPort,
+		status:     state.Stopped,
 	}
 
 	return sandbox, nil
@@ -66,7 +68,7 @@ func (s *OLContainerSandbox) State() (hstate state.HandlerState, err error) {
 
 func (s *OLContainerSandbox) Channel() (channel *SandboxChannel, err error) {
 	dial := func(proto, addr string) (net.Conn, error) {
-		return net.Dial("unix", filepath.Join(s.rootDir, "host", "ol.sock"))
+		return net.Dial("unix", filepath.Join(s.sandboxDir, "ol.sock"))
 	}
 	tr := http.Transport{Dial: dial}
 
