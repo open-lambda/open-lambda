@@ -10,6 +10,8 @@ import (
 	"github.com/open-lambda/open-lambda/worker/config"
 )
 
+var unshareFlags []string = []string{"-impuf", "--mount-proc"}
+
 // OLContainerSBFactory is a SandboxFactory that creats docker sandboxes.
 type OLContainerSBFactory struct {
 	opts    *config.Config
@@ -79,7 +81,7 @@ func (sf *OLContainerSBFactory) Create(handlerDir, sandboxDir, indexHost, indexP
 		startCmd = append(startCmd, indexPort)
 	}
 
-	return NewOLContainerSandbox(sf.opts, rootDir, sandboxDir, id, startCmd)
+	return NewOLContainerSandbox(sf.opts, rootDir, sandboxDir, id, startCmd, unshareFlags)
 }
 
 func (sf *OLContainerSBFactory) Cleanup() {

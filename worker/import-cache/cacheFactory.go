@@ -26,6 +26,8 @@ import (
 	sb "github.com/open-lambda/open-lambda/worker/sandbox"
 )
 
+var unshareFlags []string = []string{"-fimu"}
+
 func InitCacheFactory(opts *config.Config, cluster string) (cf *BufferedCacheFactory, root sb.ContainerSandbox, rootDir, memCGroupPath string, err error) {
 	cf, root, rootDir, memCGroupPath, err = NewBufferedCacheFactory(opts, cluster)
 	if err != nil {
@@ -170,7 +172,7 @@ func (cf *OLContainerCacheFactory) Create(sandboxDir string, startCmd []string) 
 		return nil, "", fmt.Errorf("Failed to bind host dir: %v", err.Error())
 	}
 
-	sandbox, err := sb.NewOLContainerSandbox(cf.opts, rootDir, sandboxDir, id, startCmd)
+	sandbox, err := sb.NewOLContainerSandbox(cf.opts, rootDir, sandboxDir, id, startCmd, unshareFlags)
 	if err != nil {
 		return nil, "", err
 	}
@@ -186,9 +188,9 @@ func (cf *OLContainerCacheFactory) Cleanup() {
 		os.Remove(cgroupPath)
 	}
 
-	log.Printf("%s\n", runCmd([]string{"/bin/umount", "/tmp/cache_*/*"}))
-	log.Printf("%s\n", runCmd([]string{"/bin/umount", "/tmp/cache_*"}))
-	log.Printf("%s\n", runCmd([]string{"/bin/rm", "-rf", "/tmp/cache_*"}))
+	runCmd([]string{"/bin/umount", "/tmp/cache_*/*"})
+	runCmd([]string{"/bin/umount", "/tmp/cache_*"})
+	runCmd([]string{"/bin/rm", "-rf", "/tmp/cache_*"})
 }
 
 // NewBufferedCacheFactory creates a BufferedCacheFactory and starts a go routine to
@@ -313,12 +315,11 @@ func (bf *BufferedCacheFactory) Cleanup() {
 			info.sandbox.Stop()
 			info.sandbox.Remove()
 		default:
-			break
+			// clean up mount points once buffer is empty
+			bf.delegate.Cleanup()
+			return
 		}
 	}
-
-	// clean up mount points
-	bf.delegate.Cleanup()
 }
 
 func runCmd(args []string) error {
