@@ -125,6 +125,7 @@ func (h *HandlerSet) Get(name string) *Handler {
 	return handler
 }
 
+/*
 func (h *HandlerSet) killOrphans() {
 	var toDelete string
 	for {
@@ -146,6 +147,7 @@ func (h *HandlerSet) killOrphans() {
 		}
 	}
 }
+*/
 
 // Dump prints the name and state of the Handlers currently in the HandlerSet.
 func (h *HandlerSet) Dump() {
