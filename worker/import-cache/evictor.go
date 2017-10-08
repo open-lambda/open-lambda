@@ -25,8 +25,7 @@ type Evictor struct {
 }
 
 //func NewEvictor(pkgfile, rootCID string, kb_limit int, full *bool) (*Evictor, error) {
-func NewEvictor(pkgfile, rootCID string, kb_limit int) (*Evictor, error) {
-	basePath := fmt.Sprintf("/sys/fs/cgroup/memory/docker/%s/", rootCID)
+func NewEvictor(pkgfile, memCGroupPath string, kb_limit int) (*Evictor, error) {
 	byte_limit := 1024 * kb_limit
 
 	eventfd, err := C.eventfd(0, C.EFD_CLOEXEC)
@@ -34,13 +33,13 @@ func NewEvictor(pkgfile, rootCID string, kb_limit int) (*Evictor, error) {
 		return nil, err
 	}
 
-	usagePath := filepath.Join(basePath, "memory.usage_in_bytes")
+	usagePath := filepath.Join(memCGroupPath, "memory.usage_in_bytes")
 	usagefd, err := syscall.Open(usagePath, syscall.O_RDONLY, 0777)
 	if err != nil {
 		return nil, err
 	}
 
-	eventPath := filepath.Join(basePath, "cgroup.event_control")
+	eventPath := filepath.Join(memCGroupPath, "cgroup.event_control")
 
 	eventStr := fmt.Sprintf("'%d %d %d'", eventfd, usagefd, byte_limit)
 	echo := exec.Command("echo", eventStr, ">", eventPath)

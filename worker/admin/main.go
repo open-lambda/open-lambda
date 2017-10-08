@@ -590,13 +590,24 @@ func kill(ctx *cli.Context) error {
 }
 
 // manage olcontainers directly
-func olcontainer_sandbox(ctx *cli.Context) error {
+func olcontainer_sandbox(ctx *cli.Context) (err error) {
 	cluster := parseCluster(ctx.String("cluster"), true)
 
-	// create a base directory to run olcontainer containers
-	baseDir := path.Join(basePath(cluster), "lambda")
-	err := dutil.DumpDockerImage(client, "lambda", baseDir)
+	// create a base directory to run olcontainer handlers
+	handlerDir := path.Join(basePath(cluster), "lambda")
+	err = dutil.DumpDockerImage(client, "lambda", handlerDir)
 	if err != nil {
+		return err
+	} else if err = write_dns(handlerDir); err != nil {
+		return err
+	}
+
+	// create a base directory to run olcontainer cache entries
+	cacheDir := path.Join(basePath(cluster), "cache-entry")
+	err = dutil.DumpDockerImage(client, "cache-entry", cacheDir)
+	if err != nil {
+		return err
+	} else if err = write_dns(cacheDir); err != nil {
 		return err
 	}
 
@@ -606,12 +617,19 @@ func olcontainer_sandbox(ctx *cli.Context) error {
 		return err
 	}
 	c.Sandbox = "olcontainer"
-	c.OLContainer_base = baseDir
+	c.OLContainer_handler_base = handlerDir
+	c.OLContainer_cache_base = cacheDir
 	if err := c.Save(templatePath(cluster)); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+// need this because Docker containers don't have a dns server in /etc/resolv.conf
+func write_dns(rootDir string) error {
+	dnsPath := filepath.Join(rootDir, "etc/resolv.conf")
+	return ioutil.WriteFile(dnsPath, []byte("nameserver 8.8.8.8\n"), 0644)
 }
 
 // olstore_exec corresponds to the "olstore-exec" command of the admin tool.

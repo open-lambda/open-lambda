@@ -13,4 +13,4 @@ COPY init /
 COPY ns.so /
 COPY server.py /
 
-CMD ["python", "/init"]
+CMD ["/init"]

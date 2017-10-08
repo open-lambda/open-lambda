@@ -13,10 +13,9 @@ surrounding a given sandbox type (Docker container, cgroup, etc).
 
 import "github.com/open-lambda/open-lambda/worker/handler/state"
 
-// TODO - use cpuset?
-var cgroupList []string = []string{"blkio", "cpu", "devices", "freezer", "hugetlb", "memory", "perf_event", "systemd"}
+const OLCGroupName = "openlambda"
 
-const olCGroupName = "openlambda"
+var CGroupList []string = []string{"blkio", "cpu", "devices", "freezer", "hugetlb", "memory", "perf_event", "systemd"}
 
 type SandboxChannel struct {
 	Url       string
@@ -64,4 +63,7 @@ type ContainerSandbox interface {
 
 	// PID of a process in the container's namespaces (for joining)
 	NSPid() string
+
+	// Directory that new processes need to chroot into (none if docker)
+	RootDir() string
 }

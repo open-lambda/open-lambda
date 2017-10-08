@@ -41,7 +41,7 @@ func Init() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	conf.OLContainer_base = baseDir
+	conf.OLContainer_handler_base = baseDir
 
 	// ubuntu FS base
 	fmt.Printf("dump lambda root to %s\n", baseDir)
@@ -58,7 +58,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestCreate(t *testing.T) {
-	factory, err := NewOLContainerSBFactory(conf)
+	factory, err := NewOLContainerSBFactory(conf, baseDir)
 	if err != nil {
 		t.Fatal(err.Error())
 	}

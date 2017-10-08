@@ -32,10 +32,6 @@ func (fs *ForkServer) Hit() {
 }
 
 func (fs *ForkServer) Kill() error {
-	if fs.Parent == nil {
-		panic("attempted to kill the root")
-	}
-
 	fs.Dead = true
 	pid, err := strconv.Atoi(fs.Pid)
 	if err != nil {
@@ -51,7 +47,10 @@ func (fs *ForkServer) Kill() error {
 		fs.Sandbox.Stop()
 		fs.Sandbox.Remove()
 	}()
-	fs.Parent.Children -= 1
+
+	if fs.Parent != nil {
+		fs.Parent.Children -= 1
+	}
 
 	return nil
 }

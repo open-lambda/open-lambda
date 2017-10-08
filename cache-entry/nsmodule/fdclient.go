@@ -47,7 +47,7 @@ sendfd(int s, int fd)
 }
 
 int
-sendFds(char *sockPath, char *pid, char *pkgs)
+sendFds(char *sockPath, char *pid, char *rootdir, char *pkgs)
 {
     char *path;
     int k;
@@ -109,16 +109,24 @@ sendFds(char *sockPath, char *pid, char *pkgs)
         }
     }
 
-    int buflen = 500;
+    int rootbuflen = 500;
+    // Send root directory string to server.
+    printf("Sending package string.\n");
+    if(send(s, rootdir, rootbuflen, 0) == -1) {
+        printf("Sending root directory failed.\n");
+        exit(1);
+    }
+
+    int pkgbuflen = 5000;
     // Send package string to server.
     printf("Sending package string.\n");
-    if(send(s, pkgs, buflen, 0) == -1) {
+    if(send(s, pkgs, pkgbuflen, 0) == -1) {
         printf("Sending package string failed.\n");
         exit(1);
     }
 
-    buflen = 50;
-    char pidbuf[buflen];
+    int pidbuflen = 50;
+    char pidbuf[pidbuflen];
     printf("Listening...\n");
     if((len = recv(s, pidbuf, 50, 0)) == -1) {
         printf("Failed.\n");
@@ -145,15 +153,17 @@ const NUM_NS = 6
 
 func main() {
 	if len(os.Args) < 3 {
-		fmt.Printf("Usage: %s <sockfile> <pid>\n", os.Args[0])
+		fmt.Printf("Usage: %s <sockfile> <pid> <rootdir>\n", os.Args[0])
 	}
 
 	sockPath := os.Args[1]
 	targetPid := os.Args[2]
+	rootDir := os.Args[3]
 
 	csock := C.CString(sockPath)
 	cpid := C.CString(targetPid)
-	cstr := C.CString("threading subprocess")
+	croot := C.CString(rootDir)
+	cstr := C.CString("threading: subprocess: serve")
 
-	C.sendFds(csock, cpid, cstr)
+	C.sendFds(csock, cpid, croot, cstr)
 }

@@ -44,8 +44,10 @@ type Config struct {
 	Worker_dir string `json:"worker_dir"`
 	// initialization path for olcontainer; currently ignored
 	OLContainer_init_path string `json: "olcontainer_init_path"`
-	// base path for olcontainer; currently ignored
-	OLContainer_base string `json: "olcontainer_base"`
+	// base path for olcontainer handlers
+	OLContainer_handler_base string `json: "olcontainer_handler_base"`
+	// base path for olcontainer import cache
+	OLContainer_cache_base string `json: "olcontainer_cache_base"`
 	// port the worker server listens to
 	Worker_port string `json:"worker_port"`
 
@@ -178,27 +180,44 @@ func (c *Config) Defaults() error {
 			c.OLContainer_init_path = path
 		}
 
-		// olcontainer base path
-		if c.OLContainer_base == "" {
-			return fmt.Errorf("must specify OLContainer_base")
+		// olcontainer base paths
+		if c.OLContainer_handler_base == "" {
+			return fmt.Errorf("must specify olcontainer_handler_base")
 		}
 
-		if !path.IsAbs(c.OLContainer_base) {
+		if !path.IsAbs(c.OLContainer_handler_base) {
 			if c.path == "" {
-				return fmt.Errorf("OLContainer_base cannot be relative, unless config is loaded from file")
+				return fmt.Errorf("olcontainer_handler_base cannot be relative, unless config is loaded from file")
 			}
-			path, err := filepath.Abs(path.Join(path.Dir(c.path), c.OLContainer_base))
+			path, err := filepath.Abs(path.Join(path.Dir(c.path), c.OLContainer_handler_base))
 			if err != nil {
 				return err
 			}
-			c.OLContainer_base = path
+			c.OLContainer_handler_base = path
+		}
+
+		if c.Import_cache_size != 0 {
+			if c.OLContainer_cache_base == "" {
+				return fmt.Errorf("must specify olcontainer_cache_base if using import cache")
+			}
+
+			if !path.IsAbs(c.OLContainer_cache_base) {
+				if c.path == "" {
+					return fmt.Errorf("olcontainer_cache_base cannot be relative, unless config is loaded from file")
+				}
+				path, err := filepath.Abs(path.Join(path.Dir(c.path), c.OLContainer_cache_base))
+				if err != nil {
+					return err
+				}
+				c.OLContainer_cache_base = path
+			}
 		}
 	}
 
 	// import cache
 	if c.Import_cache_size != 0 {
 		if c.Import_cache_dir == "" {
-			return fmt.Errorf("must specify import cache directory if using interpreter pool")
+			return fmt.Errorf("must specify import_cache_dir if using import cache")
 		}
 
 		if !path.IsAbs(c.Import_cache_dir) {
