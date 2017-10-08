@@ -41,18 +41,19 @@ type HandlerSet struct {
 // concurrency and communicates with the sandbox manager to change the
 // state of the container that servers the lambda.
 type Handler struct {
-	name       string
-	mutex      sync.Mutex
-	hset       *HandlerSet
-	sandbox    sb.Sandbox
-	lastPull   *time.Time
-	runners    int
-	code       []byte
-	codeDir    string
-	pkgs       []string
-	sandboxDir string
-	fs         *cache.ForkServer
-	usage      int
+	name     string
+	id       string
+	mutex    sync.Mutex
+	hset     *HandlerSet
+	sandbox  sb.Sandbox
+	lastPull *time.Time
+	runners  int
+	code     []byte
+	codeDir  string
+	pkgs     []string
+	hostDir  string
+	fs       *cache.ForkServer
+	usage    int
 }
 
 // NewHandlerSet creates an empty HandlerSet
@@ -107,13 +108,13 @@ func (h *HandlerSet) Get(name string) *Handler {
 
 	handler := h.handlers[name]
 	if handler == nil {
-		sandboxDir := path.Join(h.workerDir, "handlers", name, "sandbox")
+		hostDir := path.Join(h.workerDir, "handlers", name)
 		handler = &Handler{
-			name:       name,
-			hset:       h,
-			runners:    0,
-			pkgs:       []string{},
-			sandboxDir: sandboxDir,
+			name:    name,
+			hset:    h,
+			runners: 0,
+			pkgs:    []string{},
+			hostDir: hostDir,
 		}
 		h.handlers[name] = handler
 	}
@@ -190,16 +191,14 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 
 	// create sandbox if needed
 	if h.sandbox == nil {
-		if err := os.MkdirAll(h.sandboxDir, 0777); err != nil {
-			return nil, err
-		}
-
-		sandbox, err := h.hset.sbFactory.Create(h.codeDir, h.sandboxDir, h.hset.indexHost, h.hset.indexPort)
+		sandbox, err := h.hset.sbFactory.Create(h.codeDir, h.hostDir, h.hset.indexHost, h.hset.indexPort)
 		if err != nil {
 			return nil, err
 		}
 
 		h.sandbox = sandbox
+		h.id = h.sandbox.ID()
+		h.hostDir = path.Join(h.hostDir, h.id)
 		if sbState, err := h.sandbox.State(); err != nil {
 			return nil, err
 		} else if sbState == state.Stopped {
@@ -223,7 +222,7 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 			if !ok {
 				return nil, fmt.Errorf("forkenter only supported with ContainerSandbox")
 			}
-			if h.fs, hit, err = h.hset.cacheMgr.Provision(containerSB, h.sandboxDir, h.pkgs); err != nil {
+			if h.fs, hit, err = h.hset.cacheMgr.Provision(containerSB, h.hostDir, h.pkgs); err != nil {
 				return nil, err
 			}
 
@@ -235,7 +234,7 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 			atomic.AddInt64(h.hset.misses, 1)
 		}
 
-		sockPath := fmt.Sprintf("%s/ol.sock", h.sandboxDir)
+		sockPath := fmt.Sprintf("%s/ol.sock", h.hostDir)
 
 		// wait up to 20s for server to initialize
 		start := time.Now()

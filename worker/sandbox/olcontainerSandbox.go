@@ -32,7 +32,7 @@ type OLContainerSandbox struct {
 	opts         *config.Config
 	id           string
 	rootDir      string
-	sandboxDir   string
+	hostDir      string
 	status       state.HandlerState
 	initPid      string
 	initCmd      *exec.Cmd
@@ -40,7 +40,7 @@ type OLContainerSandbox struct {
 	unshareFlags []string
 }
 
-func NewOLContainerSandbox(opts *config.Config, rootDir, sandboxDir, id string, startCmd, unshareFlags []string) (*OLContainerSandbox, error) {
+func NewOLContainerSandbox(opts *config.Config, rootDir, hostDir, id string, startCmd, unshareFlags []string) (*OLContainerSandbox, error) {
 	// create container cgroups
 	for _, cgroup := range CGroupList {
 		cgroupPath := path.Join("/sys/fs/cgroup/", cgroup, OLCGroupName, id)
@@ -53,7 +53,7 @@ func NewOLContainerSandbox(opts *config.Config, rootDir, sandboxDir, id string, 
 		opts:         opts,
 		id:           id,
 		rootDir:      rootDir,
-		sandboxDir:   sandboxDir,
+		hostDir:      hostDir,
 		unshareFlags: unshareFlags,
 		status:       state.Stopped,
 		startCmd:     startCmd,
@@ -68,7 +68,7 @@ func (s *OLContainerSandbox) State() (hstate state.HandlerState, err error) {
 
 func (s *OLContainerSandbox) Channel() (channel *SandboxChannel, err error) {
 	dial := func(proto, addr string) (net.Conn, error) {
-		return net.Dial("unix", filepath.Join(s.sandboxDir, "ol.sock"))
+		return net.Dial("unix", filepath.Join(s.hostDir, "ol.sock"))
 	}
 	tr := http.Transport{Dial: dial}
 
@@ -179,10 +179,10 @@ func (s *OLContainerSandbox) Unpause() error {
 
 func (s *OLContainerSandbox) Remove() error {
 	// remove sockets if they exist
-	if err := os.RemoveAll(filepath.Join(s.sandboxDir, "ol.sock")); err != nil {
+	if err := os.RemoveAll(filepath.Join(s.hostDir, "ol.sock")); err != nil {
 		return err
 	}
-	if err := os.RemoveAll(filepath.Join(s.sandboxDir, "fs.sock")); err != nil {
+	if err := os.RemoveAll(filepath.Join(s.hostDir, "fs.sock")); err != nil {
 		return err
 	}
 

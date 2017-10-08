@@ -67,9 +67,6 @@ func TestCreate(t *testing.T) {
 
 	handler_dir := path.Join(conf.Reg_dir, handler_name)
 	sandbox_dir := path.Join(testDir, "sandbox1")
-	if err := os.Mkdir(sandbox_dir, 0777); err != nil {
-		t.Fatal(err.Error())
-	}
 
 	s, err := factory.Create(handler_dir, sandbox_dir, "", "")
 	if err != nil {
