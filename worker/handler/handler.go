@@ -46,7 +46,6 @@ type Handler struct {
 	hset       *HandlerSet
 	sandbox    sb.Sandbox
 	lastPull   *time.Time
-	state      state.HandlerState
 	runners    int
 	code       []byte
 	codeDir    string
@@ -112,7 +111,6 @@ func (h *HandlerSet) Get(name string) *Handler {
 		handler = &Handler{
 			name:       name,
 			hset:       h,
-			state:      state.Unitialized,
 			runners:    0,
 			pkgs:       []string{},
 			sandboxDir: sandboxDir,
@@ -152,7 +150,8 @@ func (h *HandlerSet) Dump() {
 
 	log.Printf("HANDLERS:\n")
 	for k, v := range h.handlers {
-		log.Printf("> %v: %v\n", k, v.state.String())
+		state, _ := v.sandbox.State()
+		log.Printf("> %v: %v\n", k, state.String())
 	}
 }
 
@@ -201,17 +200,14 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 		}
 
 		h.sandbox = sandbox
-		if h.state, err = sandbox.State(); err != nil {
+		if sbState, err := h.sandbox.State(); err != nil {
 			return nil, err
-		}
-
-		// newly created sandbox could be in any state; let it run
-		if h.state == state.Stopped {
-			if err := sandbox.Start(); err != nil {
+		} else if sbState == state.Stopped {
+			if err := h.sandbox.Start(); err != nil {
 				return nil, err
 			}
-		} else if h.state == state.Paused {
-			if err := sandbox.Unpause(); err != nil {
+		} else if sbState == state.Paused {
+			if err := h.sandbox.Unpause(); err != nil {
 				return nil, err
 			}
 		}
@@ -251,7 +247,8 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 			time.Sleep(50 * time.Microsecond)
 		}
 
-	} else if h.state == state.Paused { // unpause if paused
+	} else if sbState, _ := h.sandbox.State(); sbState == state.Paused {
+		// unpause if paused
 		atomic.AddInt64(h.hset.hhits, 1)
 		if err := h.sandbox.Unpause(); err != nil {
 			return nil, err
@@ -261,7 +258,6 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 		atomic.AddInt64(h.hset.hhits, 1)
 	}
 
-	h.state = state.Running
 	h.runners += 1
 
 	log.Printf("handler hits: %v, import hits: %v, misses: %v", *h.hset.hhits, *h.hset.ihits, *h.hset.misses)
@@ -285,7 +281,6 @@ func (h *Handler) RunFinish() {
 			// running for free...
 			log.Printf("Could not pause %v!  Error: %v\n", h.name, err)
 		}
-		h.state = state.Paused
 		h.hset.lru.Add(h)
 	}
 }
