@@ -258,7 +258,7 @@ func (s *OLContainerSandbox) RunServer() error {
 		return err
 	}
 
-	err = proc.Signal(syscall.SIGUSR1)
+	err = proc.Signal(syscall.SIGURG)
 	if err != nil {
 		log.Printf("failed to send SIGUSR1 to pid=%d :: %v", pid, err)
 		return err

@@ -27,9 +27,10 @@ int main(int argc, char *argv[]) {
 	}
 	params[argc+1] = NULL;
 
-	signal(SIGUSR1, signal_handler);
-	pause(); // wait for SIGUSR1 and handle
-	pause(); // sleep forever, we're init for the ns
+	signal(SIGURG, signal_handler);
+	while (1) {
+		pause(); // sleep forever, we're init for the ns
+	}
 
 	return 0;
 }
