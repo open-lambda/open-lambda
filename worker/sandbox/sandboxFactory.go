@@ -43,7 +43,7 @@ func InitSandboxFactory(config *config.Config) (sf SandboxFactory, err error) {
 			return nil, err
 		}
 	} else if config.Sandbox == "olcontainer" {
-		delegate, err = NewOLContainerSBFactory(config)
+		delegate, err = NewOLContainerSBFactory(config, config.OLContainer_handler_base)
 		if err != nil {
 			return nil, err
 		}
@@ -160,13 +160,27 @@ func (bf *BufferedSBFactory) Create(handlerDir, sandboxDir, indexHost, indexPort
 	}
 }
 
-// TODO - remove directories created
 func (bf *BufferedSBFactory) Cleanup() {
 	// kill signal must be negative for all producers
 	atomic.StoreInt64(bf.idxPtr, -1000)
 
+	// empty the buffer
+	for {
+		select {
+		case info := <-bf.buffer:
+			if info == nil {
+				continue
+			}
+			info.sandbox.Unpause()
+			info.sandbox.Stop()
+			info.sandbox.Remove()
+		default:
+			break
+		}
+	}
+
 	bf.delegate.Cleanup()
 
-	cmd([]string{"umount", filepath.Join(bf.mntDir, "*", "*")})
-	cmd([]string{"rm", "-rf", bf.mntDir})
+	runCmd([]string{"umount", filepath.Join(bf.mntDir, "*", "*")})
+	runCmd([]string{"rm", "-rf", bf.mntDir})
 }

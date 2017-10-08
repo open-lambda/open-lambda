@@ -162,6 +162,7 @@ func (h *HandlerSet) Cleanup() {
 		handler.nuke()
 	}
 	h.sbFactory.Cleanup()
+	h.cacheMgr.Cleanup()
 }
 
 // RunStart runs the lambda handled by this Handler. It checks if the code has

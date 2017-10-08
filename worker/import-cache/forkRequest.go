@@ -47,7 +47,7 @@ sendfd(int s, int fd) {
 }
 
 const char*
-sendFds(char *sockPath, char *pid, char *pkgs) {
+sendFds(char *sockPath, char *pid, char *rootdir, char *pkgs) {
     char *path;
     int k;
 
@@ -103,11 +103,20 @@ sendFds(char *sockPath, char *pid, char *pkgs) {
         }
     }
 
+    // Send root directory string to server.
+
+    int rootbuflen = 500;
+    printf("Sending package string.\n");
+    if(send(s, rootdir, rootbuflen, 0) == -1) {
+        sprintf(errmsg, "send rootdir: %s\n", strerror(errno));
+        return errmsg;
+    }
+
     // Send package string to server.
 
-    int buflen = 5000;
-    if(send(s, pkgs, buflen, 0) == -1) {
-        sprintf(errmsg, "send: %s\n", strerror(errno));
+    int pkgbuflen = 5000;
+    if(send(s, pkgs, pkgbuflen, 0) == -1) {
+        sprintf(errmsg, "send pkgs: %s\n", strerror(errno));
         return errmsg;
     }
 
@@ -142,6 +151,7 @@ import "C"
 import (
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/open-lambda/open-lambda/worker/benchmarker"
@@ -157,7 +167,7 @@ import (
  * Returns the PID of the spawned process upon success.
  */
 
-func forkRequest(sockPath, targetPid string, pkgList []string, handler bool) (pid string, err error) {
+func forkRequest(sockPath, targetPid, rootDir string, pkgList []string, handler bool) (pid string, err error) {
 	b := benchmarker.GetBenchmarker()
 	var t *benchmarker.Timer
 	if b != nil {
@@ -175,13 +185,17 @@ func forkRequest(sockPath, targetPid string, pkgList []string, handler bool) (pi
 		signal = "cache"
 	}
 
+	log.Printf("FORKREQUEST PATH: %s\n", sockPath)
+	log.Printf("FORKREQUEST PID: %s\n", targetPid)
+
 	pkgStr := strings.Join(append(pkgList, signal), " ")
 
 	csock := C.CString(sockPath)
 	cpid := C.CString(targetPid)
+	croot := C.CString(rootDir)
 	cpkgs := C.CString(pkgStr)
 
-	ret, err := C.sendFds(csock, cpid, cpkgs)
+	ret, err := C.sendFds(csock, cpid, croot, cpkgs)
 	if t != nil {
 		if err == nil {
 			t.End()

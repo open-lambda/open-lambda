@@ -33,17 +33,16 @@ type OLContainerSandbox struct {
 	id         string
 	rootDir    string
 	sandboxDir string
-	indexHost  string
-	indexPort  string
 	status     state.HandlerState
 	initPid    string
 	initCmd    *exec.Cmd
+	startCmd   []string
 }
 
-func NewOLContainerSandbox(opts *config.Config, rootDir, sandboxDir, indexHost, indexPort, id string) (*OLContainerSandbox, error) {
+func NewOLContainerSandbox(opts *config.Config, rootDir, sandboxDir, id string, startCmd []string) (*OLContainerSandbox, error) {
 	// create container cgroups
-	for _, cgroup := range cgroupList {
-		cgroupPath := path.Join("/sys/fs/cgroup/", cgroup, olCGroupName, id)
+	for _, cgroup := range CGroupList {
+		cgroupPath := path.Join("/sys/fs/cgroup/", cgroup, OLCGroupName, id)
 		if err := os.MkdirAll(cgroupPath, 0700); err != nil {
 			return nil, err
 		}
@@ -54,9 +53,8 @@ func NewOLContainerSandbox(opts *config.Config, rootDir, sandboxDir, indexHost, 
 		id:         id,
 		rootDir:    rootDir,
 		sandboxDir: sandboxDir,
-		indexHost:  indexHost,
-		indexPort:  indexPort,
 		status:     state.Stopped,
+		startCmd:   startCmd,
 	}
 
 	return sandbox, nil
@@ -77,13 +75,10 @@ func (s *OLContainerSandbox) Channel() (channel *SandboxChannel, err error) {
 }
 
 func (s *OLContainerSandbox) Start() error {
-	initArgs := []string{"-imnrpuUf", "--mount-proc", s.opts.OLContainer_init_path, s.rootDir, "/ol-init"}
-	if s.indexHost != "" {
-		initArgs = append(initArgs, s.indexHost)
-	}
-	if s.indexPort != "" {
-		initArgs = append(initArgs, s.indexPort)
-	}
+	fstart := time.Now()
+	//initArgs := []string{"-imnrpuUf", "--mount-proc", s.opts.OLContainer_init_path, s.rootDir}
+	initArgs := []string{"-fiump", "--mount-proc", s.opts.OLContainer_init_path, s.rootDir}
+	initArgs = append(initArgs, s.startCmd...)
 
 	s.initCmd = exec.Command(
 		"unshare",
@@ -114,14 +109,15 @@ func (s *OLContainerSandbox) Start() error {
 		return err
 	}
 
+	log.Printf("start took: %v", time.Since(fstart))
 	s.status = state.Running
 	return nil
 }
 
 func (s *OLContainerSandbox) Stop() error {
 	// kill any remaining processes
-	for _, cgroup := range cgroupList {
-		procsPath := path.Join("/sys/fs/cgroup/", cgroup, olCGroupName, s.id, "cgroup.procs")
+	for _, cgroup := range CGroupList {
+		procsPath := path.Join("/sys/fs/cgroup/", cgroup, OLCGroupName, s.id, "cgroup.procs")
 		pids, err := ioutil.ReadFile(procsPath)
 		if err != nil {
 			return err
@@ -145,7 +141,7 @@ func (s *OLContainerSandbox) Stop() error {
 }
 
 func (s *OLContainerSandbox) Pause() error {
-	freezerPath := path.Join("/sys/fs/cgroup/freezer", olCGroupName, s.id, "freezer.state")
+	freezerPath := path.Join("/sys/fs/cgroup/freezer", OLCGroupName, s.id, "freezer.state")
 	err := ioutil.WriteFile(freezerPath, []byte("FROZEN"), os.ModeAppend)
 	if err != nil {
 		return err
@@ -156,7 +152,7 @@ func (s *OLContainerSandbox) Pause() error {
 }
 
 func (s *OLContainerSandbox) Unpause() error {
-	freezerPath := path.Join("/sys/fs/cgroup/freezer", olCGroupName, s.id, "freezer.state")
+	freezerPath := path.Join("/sys/fs/cgroup/freezer", OLCGroupName, s.id, "freezer.state")
 	err := ioutil.WriteFile(freezerPath, []byte("THAWED"), os.ModeAppend)
 	if err != nil {
 		return err
@@ -168,8 +164,8 @@ func (s *OLContainerSandbox) Unpause() error {
 
 func (s *OLContainerSandbox) Remove() error {
 	// remove cgroups
-	for _, cgroup := range cgroupList {
-		cgroupPath := path.Join("/sys/fs/cgroup/", cgroup, olCGroupName, s.id)
+	for _, cgroup := range CGroupList {
+		cgroupPath := path.Join("/sys/fs/cgroup/", cgroup, OLCGroupName, s.id)
 		if err := os.Remove(cgroupPath); err != nil {
 			return err
 		}
@@ -206,8 +202,8 @@ func (s *OLContainerSandbox) Logs() (string, error) {
 
 func (s *OLContainerSandbox) CGroupEnter(pid string) (err error) {
 	// put process into each cgroup
-	for _, cgroup := range cgroupList {
-		tasksPath := path.Join("/sys/fs/cgroup/", cgroup, olCGroupName, s.id, "tasks")
+	for _, cgroup := range CGroupList {
+		tasksPath := path.Join("/sys/fs/cgroup/", cgroup, OLCGroupName, s.id, "tasks")
 
 		err := ioutil.WriteFile(tasksPath, []byte(pid), os.ModeAppend)
 		if err != nil {
@@ -236,5 +232,9 @@ func (s *OLContainerSandbox) RunServer() error {
 }
 
 func (s *OLContainerSandbox) MemoryCGroupPath() string {
-	return fmt.Sprintf("/sys/fs/cgroup/memory/%s/%s/", olCGroupName, s.id)
+	return fmt.Sprintf("/sys/fs/cgroup/memory/%s/%s/", OLCGroupName, s.id)
+}
+
+func (s *OLContainerSandbox) RootDir() string {
+	return s.rootDir
 }

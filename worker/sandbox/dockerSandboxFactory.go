@@ -20,7 +20,7 @@ type DockerSBFactory struct {
 
 // NewDockerSBFactory creates a DockerSBFactory.
 func NewDockerSBFactory(opts *config.Config) (*DockerSBFactory, error) {
-	c, err := docker.NewClientFromEnv()
+	client, err := docker.NewClientFromEnv()
 	if err != nil {
 		return nil, err
 	}
@@ -32,7 +32,7 @@ func NewDockerSBFactory(opts *config.Config) (*DockerSBFactory, error) {
 	env := []string{fmt.Sprintf("ol.config=%s", opts.SandboxConfJson())}
 	cmd := []string{"/ol-init"}
 
-	df := &DockerSBFactory{c, cmd, labels, env, opts.Pkgs_dir}
+	df := &DockerSBFactory{client, cmd, labels, env, opts.Pkgs_dir}
 	return df, nil
 }
 

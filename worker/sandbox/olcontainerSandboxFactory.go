@@ -12,27 +12,28 @@ import (
 
 // OLContainerSBFactory is a SandboxFactory that creats docker sandboxes.
 type OLContainerSBFactory struct {
-	opts *config.Config
+	opts    *config.Config
+	baseDir string
 }
 
 // NewOLContainerSBFactory creates a OLContainerSBFactory.
-func NewOLContainerSBFactory(opts *config.Config) (*OLContainerSBFactory, error) {
-	for _, cgroup := range cgroupList {
-		cgroupPath := path.Join("/sys/fs/cgroup", cgroup, olCGroupName)
+func NewOLContainerSBFactory(opts *config.Config, baseDir string) (*OLContainerSBFactory, error) {
+	for _, cgroup := range CGroupList {
+		cgroupPath := path.Join("/sys/fs/cgroup", cgroup, OLCGroupName)
 		if err := os.MkdirAll(cgroupPath, 0700); err != nil {
 			return nil, err
 		}
 	}
 
-	return &OLContainerSBFactory{opts: opts}, nil
+	return &OLContainerSBFactory{opts: opts, baseDir: baseDir}, nil
 }
 
-func cmd(args []string) error {
+func runCmd(args []string) error {
 	c := exec.Cmd{Path: args[0], Args: args}
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
-	err := c.Run()
-	return err
+
+	return c.Run()
 }
 
 // Create creates a docker sandbox from the handler and sandbox directory.
@@ -48,39 +49,42 @@ func (sf *OLContainerSBFactory) Create(handlerDir, sandboxDir, indexHost, indexP
 		return nil, err
 	}
 
-	// NOTE: mount points are expected to exist in OLContainer_base directory
-	err = cmd([]string{"/bin/mount", "--bind", "-o", "ro", sf.opts.OLContainer_base, rootDir})
+	// NOTE: mount points are expected to exist in OLContainer_handler_base directory
+	layers := fmt.Sprintf("br=%s=rw:%s=ro", rootDir, sf.baseDir)
+	err = runCmd([]string{"/bin/mount", "-t", "aufs", "-o", layers, "none", rootDir})
 	if err != nil {
 		return nil, fmt.Errorf("Failed to bind base: %v", err.Error())
 	}
 
-	err = cmd([]string{"/bin/mount", "--bind", "-o", "ro", handlerDir, path.Join(rootDir, "handler")})
+	err = runCmd([]string{"/bin/mount", "--bind", "-o", "ro", handlerDir, path.Join(rootDir, "handler")})
 	if err != nil {
 		return nil, fmt.Errorf("Failed to bind handler dir: %v", err.Error())
 	}
 
-	err = cmd([]string{"/bin/mount", "--bind", "-o", "ro", sf.opts.Pkgs_dir, path.Join(rootDir, "packages")})
+	err = runCmd([]string{"/bin/mount", "--bind", "-o", "ro", sf.opts.Pkgs_dir, path.Join(rootDir, "packages")})
 	if err != nil {
 		return nil, fmt.Errorf("Failed to bind packages dir: %v", err.Error())
 	}
 
-	err = cmd([]string{"/bin/mount", "--bind", sandboxDir, path.Join(rootDir, "host")})
+	err = runCmd([]string{"/bin/mount", "--bind", sandboxDir, path.Join(rootDir, "host")})
 	if err != nil {
 		return nil, fmt.Errorf("Failed to bind host dir: %v", err.Error())
 	}
 
-	sandbox, err := NewOLContainerSandbox(sf.opts, rootDir, sandboxDir, indexHost, indexPort, id)
-	if err != nil {
-		return nil, err
+	startCmd := []string{"/ol-init"}
+	if indexHost != "" {
+		startCmd = append(startCmd, indexHost)
+	}
+	if indexPort != "" {
+		startCmd = append(startCmd, indexPort)
 	}
 
-	return sandbox, nil
+	return NewOLContainerSandbox(sf.opts, rootDir, sandboxDir, id, startCmd)
 }
 
-// TODO
 func (sf *OLContainerSBFactory) Cleanup() {
-	for _, cgroup := range cgroupList {
-		cgroupPath := path.Join("/sys/fs/cgroup", cgroup, olCGroupName)
+	for _, cgroup := range CGroupList {
+		cgroupPath := path.Join("/sys/fs/cgroup", cgroup, OLCGroupName)
 		os.Remove(cgroupPath)
 	}
 }

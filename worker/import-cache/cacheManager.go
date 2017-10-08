@@ -50,12 +50,12 @@ func InitCacheManager(opts *config.Config) (cm *CacheManager, err error) {
 		full:    &full,
 	}
 
-	rootCID, err := cm.initCacheRoot(opts)
+	memCGroupPath, err := cm.initCacheRoot(opts)
 	if err != nil {
 		return nil, err
 	}
 
-	e, err := NewEvictor("", rootCID, opts.Import_cache_size)
+	e, err := NewEvictor("", memCGroupPath, opts.Import_cache_size)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +96,7 @@ func (cm *CacheManager) Provision(sandbox sb.ContainerSandbox, dir string, pkgs 
 	fs.Hit()
 
 	// signal interpreter to forkenter into sandbox's namespace
-	pid, err := forkRequest(fs.SockPath, sandbox.NSPid(), []string{}, true)
+	pid, err := forkRequest(fs.SockPath, sandbox.NSPid(), sandbox.RootDir(), []string{}, true)
 	if err != nil {
 		return nil, false, err
 	}
@@ -138,20 +138,20 @@ func (cm *CacheManager) newCacheEntry(fs *ForkServer, toCache []string) (*ForkSe
 	cm.mutex.Unlock()
 
 	// get container for new entry
-	sandbox, dir, err := cm.factory.Create()
+	sandbox, sandboxDir, err := cm.factory.Create()
 	if err != nil {
 		newFs.Kill()
 		return nil, err
 	}
 
 	// signal interpreter to forkenter into sandbox's namespace
-	pid, err := forkRequest(fs.SockPath, sandbox.NSPid(), toCache, false)
+	pid, err := forkRequest(fs.SockPath, sandbox.NSPid(), sandbox.RootDir(), toCache, false)
 	if err != nil {
 		newFs.Kill()
 		return nil, err
 	}
 
-	sockPath := fmt.Sprintf("%s/fs.sock", dir)
+	sockPath := fmt.Sprintf("%s/fs.sock", sandboxDir)
 
 	// wait up to 30s for server to initialize
 	start := time.Now()
@@ -170,8 +170,8 @@ func (cm *CacheManager) newCacheEntry(fs *ForkServer, toCache []string) (*ForkSe
 	return newFs, nil
 }
 
-func (cm *CacheManager) initCacheRoot(opts *config.Config) (rootCID string, err error) {
-	factory, rootSB, rootDir, rootCID, err := InitCacheFactory(opts, cm.cluster)
+func (cm *CacheManager) initCacheRoot(opts *config.Config) (memCGroupPath string, err error) {
+	factory, rootSB, rootDir, memCGroupPath, err := InitCacheFactory(opts, cm.cluster)
 	if err != nil {
 		return "", err
 	}
@@ -201,7 +201,7 @@ func (cm *CacheManager) initCacheRoot(opts *config.Config) (rootCID string, err 
 
 	cm.servers = append(cm.servers, fs)
 
-	return rootCID, nil
+	return memCGroupPath, nil
 }
 
 func (cm *CacheManager) Full() bool {
@@ -236,4 +236,12 @@ func readPkgSizes(path string) (map[string]float64, error) {
 	}
 
 	return sizes, nil
+}
+
+func (cm *CacheManager) Cleanup() {
+	for _, server := range cm.servers {
+		server.Kill()
+	}
+
+	cm.factory.Cleanup()
 }

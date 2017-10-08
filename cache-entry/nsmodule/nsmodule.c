@@ -38,6 +38,7 @@ PyMODINIT_FUNC initns(void)
 int sock, conn, initialized;
 const int NUM_NS = 6;
 int oldns[6], newns[6];
+char newroot[500];
 
 /* Helper functions */
 
@@ -188,9 +189,9 @@ static PyObject *ns_reset(PyObject *self, PyObject *args) {
  * Returns the package list for importing in Python interpreter.
  */
 static PyObject *ns_fdlisten(PyObject *self, PyObject *args) {
-	struct sockaddr_un remote;
+    struct sockaddr_un remote;
     int k, len, buflen;
-	unsigned int t;
+    unsigned int t;
     PyObject *ret;
 
     if (!initialized) {
@@ -237,6 +238,14 @@ static PyObject *ns_fdlisten(PyObject *self, PyObject *args) {
         printf(" %d", newns[k]);
     }
     printf("\n");
+
+    memset(newroot, '\0', sizeof(newroot));
+    if((len = recv(conn, newroot, sizeof(newroot)/sizeof(newroot[0]), 0)) == -1) {
+        PyErr_SetString(PyExc_RuntimeError, "Receiving root directory string from socket failed.");
+        return NULL;
+    }
+
+    printf("Receive root directory string: \"%s\"\n", newroot);
 
     buflen = 5000;
     char buf[buflen];
@@ -320,6 +329,12 @@ static PyObject *ns_forkenter(PyObject *self, PyObject *args) {
 
         /* Grandchild process */
         } else if (!gc_pid) {
+            // chroot to new root directory
+            if(chroot(newroot) != 0 ) {
+                PyErr_SetString(PyExc_RuntimeError, "Chroot failed.");
+                return NULL;
+            }
+
             // just close pipe fds
             close(pipefd[0]);
             close(pipefd[1]);
@@ -363,6 +378,7 @@ static PyObject *ns_forkenter(PyObject *self, PyObject *args) {
     /* Parent responds with grandchild PID and returns in original namespaces */
 
     sprintf(childpid, "%d", gc_pid);
+    printf("%s\n", childpid);
 
     if(send(conn, childpid, 50, 0) == -1) {
         PyErr_SetString(PyExc_RuntimeError, "Parent failed to send child PID.");
