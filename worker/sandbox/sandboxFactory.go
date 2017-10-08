@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sync/atomic"
 	"syscall"
@@ -185,4 +186,12 @@ func (bf *BufferedSBFactory) Cleanup() {
 			return
 		}
 	}
+}
+
+func runCmd(args []string) error {
+	c := exec.Cmd{Path: args[0], Args: args}
+	c.Stdout = os.Stdout
+	c.Stderr = os.Stderr
+
+	return c.Run()
 }

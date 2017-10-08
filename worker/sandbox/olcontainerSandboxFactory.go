@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path"
 	"strings"
+	"syscall"
 
 	"github.com/open-lambda/open-lambda/worker/config"
 )
@@ -30,14 +31,6 @@ func NewOLContainerSBFactory(opts *config.Config, baseDir string) (*OLContainerS
 	return &OLContainerSBFactory{opts: opts, baseDir: baseDir}, nil
 }
 
-func runCmd(args []string) error {
-	c := exec.Cmd{Path: args[0], Args: args}
-	c.Stdout = os.Stdout
-	c.Stderr = os.Stderr
-
-	return c.Run()
-}
-
 // Create creates a docker sandbox from the handler and sandbox directory.
 func (sf *OLContainerSBFactory) Create(handlerDir, sandboxDir, indexHost, indexPort string) (Sandbox, error) {
 	id_bytes, err := exec.Command("uuidgen").Output()
@@ -51,34 +44,32 @@ func (sf *OLContainerSBFactory) Create(handlerDir, sandboxDir, indexHost, indexP
 		return nil, err
 	}
 
+	BIND_RO := uintptr(syscall.MS_BIND | syscall.MS_RDONLY)
+
 	// NOTE: mount points are expected to exist in OLContainer_handler_base directory
+
 	layers := fmt.Sprintf("br=%s=rw:%s=ro", rootDir, sf.baseDir)
-	err = runCmd([]string{"/bin/mount", "-t", "aufs", "-o", layers, "none", rootDir})
-	if err != nil {
-		return nil, fmt.Errorf("Failed to bind base: %v", err.Error())
+	if err := syscall.Mount("none", rootDir, "aufs", 0, layers); err != nil {
+		return nil, fmt.Errorf("failed to mount base dir: %v", err.Error())
 	}
 
-	err = runCmd([]string{"/bin/mount", "--bind", "-o", "ro", handlerDir, path.Join(rootDir, "handler")})
-	if err != nil {
-		return nil, fmt.Errorf("Failed to bind handler dir: %v", err.Error())
-	}
-	err = runCmd([]string{"/bin/mount", "--make-slave", path.Join(rootDir, "handler")})
-	if err != nil {
-		return nil, fmt.Errorf("Failed to make handler dir a slave: %v", err.Error())
+	containerHandlerDir := path.Join(rootDir, "handler")
+	if err := syscall.Mount(handlerDir, containerHandlerDir, "", syscall.MS_BIND, ""); err != nil {
+		return nil, fmt.Errorf("failed to bind handler dir: %v", err.Error())
+	} else if err := syscall.Mount("none", containerHandlerDir, "", syscall.MS_SLAVE, ""); err != nil {
+		return nil, fmt.Errorf("failed to make handler dir a slave: %v", err.Error())
 	}
 
-	err = runCmd([]string{"/bin/mount", "--bind", "-o", "ro", sf.opts.Pkgs_dir, path.Join(rootDir, "packages")})
-	if err != nil {
-		return nil, fmt.Errorf("Failed to bind packages dir: %v", err.Error())
+	hostDir := path.Join(rootDir, "host")
+	if err := syscall.Mount(sandboxDir, hostDir, "", syscall.MS_BIND, ""); err != nil {
+		return nil, fmt.Errorf("failed to bind host dir: %v", err.Error())
+	} else if err := syscall.Mount("none", hostDir, "", syscall.MS_SLAVE, ""); err != nil {
+		return nil, fmt.Errorf("failed to make host dir a slave: %v", err.Error())
 	}
 
-	err = runCmd([]string{"/bin/mount", "--bind", sandboxDir, path.Join(rootDir, "host")})
-	if err != nil {
-		return nil, fmt.Errorf("Failed to bind host dir: %v", err.Error())
-	}
-	err = runCmd([]string{"/bin/mount", "--make-slave", path.Join(rootDir, "host")})
-	if err != nil {
-		return nil, fmt.Errorf("Failed to make host dir a slave: %v", err.Error())
+	pkgsDir := path.Join(rootDir, "packages")
+	if err := syscall.Mount(sf.opts.Pkgs_dir, pkgsDir, "", BIND_RO, ""); err != nil {
+		return nil, fmt.Errorf("failed to bind handler dir: %v", err.Error())
 	}
 
 	startCmd := []string{"/ol-init"}

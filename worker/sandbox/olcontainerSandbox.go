@@ -129,8 +129,22 @@ func (s *OLContainerSandbox) Stop() error {
 				break
 			}
 
-			// don't check errors because some might die before we get to them
-			exec.Command("kill", "-9", pidStr).Run()
+			pid, err := strconv.Atoi(pidStr)
+			if err != nil {
+				log.Printf("read bad pid string: %s :: %v", pidStr, err)
+				continue
+			}
+
+			proc, err := os.FindProcess(pid)
+			if err != nil {
+				log.Printf("failed to find process with pid=%d :: %v", pid, err)
+				continue
+			}
+
+			err = proc.Signal(syscall.SIGKILL)
+			if err != nil {
+				log.Printf("failed to send kill signal to pid=%d :: %v", pid, err)
+			}
 		}
 	}
 
@@ -232,8 +246,21 @@ func (s *OLContainerSandbox) ID() string {
 }
 
 func (s *OLContainerSandbox) RunServer() error {
-	signal := exec.Command("kill", "-SIGUSR1", s.initPid)
-	if err := signal.Run(); err != nil {
+	pid, err := strconv.Atoi(s.initPid)
+	if err != nil {
+		log.Printf("bad initPid string: %s :: %v", s.initPid, err)
+		return err
+	}
+
+	proc, err := os.FindProcess(pid)
+	if err != nil {
+		log.Printf("failed to find initPid process with pid=%d :: %v", pid, err)
+		return err
+	}
+
+	err = proc.Signal(syscall.SIGUSR1)
+	if err != nil {
+		log.Printf("failed to send SIGUSR1 to pid=%d :: %v", pid, err)
 		return err
 	}
 
