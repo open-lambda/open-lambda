@@ -138,7 +138,7 @@ func NewBufferedSBFactory(opts *config.Config, delegate SandboxFactory) (*Buffer
 // mounted in the sandbox, and returns that sandbox. The sandbox would be in
 // Paused state, instead of Stopped.
 func (bf *BufferedSBFactory) Create(handlerDir, sandboxDir, indexHost, indexPort string) (Sandbox, error) {
-	mntFlag := uintptr(syscall.MS_BIND | syscall.MS_REC)
+	mntFlag := uintptr(syscall.MS_BIND | syscall.MS_SHARED)
 	select {
 	case info := <-bf.buffer:
 		if err := info.sandbox.Unpause(); err != nil {
@@ -174,13 +174,15 @@ func (bf *BufferedSBFactory) Cleanup() {
 			info.sandbox.Unpause()
 			info.sandbox.Stop()
 			info.sandbox.Remove()
+
 		default:
-			break
+			bf.delegate.Cleanup()
+
+			// clean up directories once all sandboxes are dead
+			runCmd([]string{"umount", filepath.Join(bf.mntDir, "*", "*")})
+			runCmd([]string{"rm", "-rf", bf.mntDir})
+
+			return
 		}
 	}
-
-	bf.delegate.Cleanup()
-
-	runCmd([]string{"umount", filepath.Join(bf.mntDir, "*", "*")})
-	runCmd([]string{"rm", "-rf", bf.mntDir})
 }

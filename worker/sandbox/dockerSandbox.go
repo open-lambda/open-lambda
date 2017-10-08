@@ -17,6 +17,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"os/exec"
 	"path/filepath"
 
@@ -27,14 +28,14 @@ import (
 
 // DockerSandbox is a sandbox inside a docker container.
 type DockerSandbox struct {
-	sandbox_dir string
-	nspid       string
-	container   *docker.Container
-	client      *docker.Client
-	tr          http.Transport
-	installed   map[string]bool
-	index_host  string
-	index_port  string
+	sandboxDir string
+	nspid      string
+	container  *docker.Container
+	client     *docker.Client
+	tr         http.Transport
+	installed  map[string]bool
+	index_host string
+	index_port string
 }
 
 // NewDockerSandbox creates a DockerSandbox.
@@ -45,13 +46,13 @@ func NewDockerSandbox(sandbox_dir, index_host, index_port string, container *doc
 	tr := http.Transport{Dial: dial, DisableKeepAlives: true}
 
 	sandbox := &DockerSandbox{
-		sandbox_dir: sandbox_dir,
-		container:   container,
-		client:      client,
-		tr:          tr,
-		installed:   make(map[string]bool),
-		index_host:  index_host,
-		index_port:  index_port,
+		sandboxDir: sandbox_dir,
+		container:  container,
+		client:     client,
+		tr:         tr,
+		installed:  make(map[string]bool),
+		index_host: index_host,
+		index_port: index_port,
 	}
 
 	return sandbox
@@ -209,6 +210,14 @@ func (s *DockerSandbox) Unpause() error {
 
 // Remove frees all resources associated with the lambda (stops the container if necessary).
 func (s *DockerSandbox) Remove() error {
+	// remove sockets if they exist
+	if err := os.RemoveAll(filepath.Join(s.sandboxDir, "ol.sock")); err != nil {
+		return err
+	}
+	if err := os.RemoveAll(filepath.Join(s.sandboxDir, "fs.sock")); err != nil {
+		return err
+	}
+
 	if err := s.client.RemoveContainer(docker.RemoveContainerOptions{
 		ID: s.container.ID,
 	}); err != nil {
@@ -221,8 +230,8 @@ func (s *DockerSandbox) Remove() error {
 
 // Logs returns log output for the container.
 func (s *DockerSandbox) Logs() (string, error) {
-	stdout_path := filepath.Join(s.sandbox_dir, "stdout")
-	stderr_path := filepath.Join(s.sandbox_dir, "stderr")
+	stdout_path := filepath.Join(s.sandboxDir, "stdout")
+	stderr_path := filepath.Join(s.sandboxDir, "stderr")
 
 	stdout, err := ioutil.ReadFile(stdout_path)
 	if err != nil {

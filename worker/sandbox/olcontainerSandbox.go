@@ -29,17 +29,18 @@ import (
 )
 
 type OLContainerSandbox struct {
-	opts       *config.Config
-	id         string
-	rootDir    string
-	sandboxDir string
-	status     state.HandlerState
-	initPid    string
-	initCmd    *exec.Cmd
-	startCmd   []string
+	opts         *config.Config
+	id           string
+	rootDir      string
+	sandboxDir   string
+	status       state.HandlerState
+	initPid      string
+	initCmd      *exec.Cmd
+	startCmd     []string
+	unshareFlags []string
 }
 
-func NewOLContainerSandbox(opts *config.Config, rootDir, sandboxDir, id string, startCmd []string) (*OLContainerSandbox, error) {
+func NewOLContainerSandbox(opts *config.Config, rootDir, sandboxDir, id string, startCmd, unshareFlags []string) (*OLContainerSandbox, error) {
 	// create container cgroups
 	for _, cgroup := range CGroupList {
 		cgroupPath := path.Join("/sys/fs/cgroup/", cgroup, OLCGroupName, id)
@@ -49,12 +50,13 @@ func NewOLContainerSandbox(opts *config.Config, rootDir, sandboxDir, id string, 
 	}
 
 	sandbox := &OLContainerSandbox{
-		opts:       opts,
-		id:         id,
-		rootDir:    rootDir,
-		sandboxDir: sandboxDir,
-		status:     state.Stopped,
-		startCmd:   startCmd,
+		opts:         opts,
+		id:           id,
+		rootDir:      rootDir,
+		sandboxDir:   sandboxDir,
+		unshareFlags: unshareFlags,
+		status:       state.Stopped,
+		startCmd:     startCmd,
 	}
 
 	return sandbox, nil
@@ -75,10 +77,9 @@ func (s *OLContainerSandbox) Channel() (channel *SandboxChannel, err error) {
 }
 
 func (s *OLContainerSandbox) Start() error {
-	fstart := time.Now()
-	//initArgs := []string{"-imnrpuUf", "--mount-proc", s.opts.OLContainer_init_path, s.rootDir}
-	initArgs := []string{"-fiump", "--mount-proc", s.opts.OLContainer_init_path, s.rootDir}
+	initArgs := []string{s.opts.OLContainer_init_path, s.rootDir}
 	initArgs = append(initArgs, s.startCmd...)
+	initArgs = append(s.unshareFlags, initArgs...)
 
 	s.initCmd = exec.Command(
 		"unshare",
@@ -103,13 +104,13 @@ func (s *OLContainerSandbox) Start() error {
 		if time.Since(start).Seconds() > 5 {
 			return fmt.Errorf("olcontainer_init failed to spawn after 5s")
 		}
+		time.Sleep(10 * time.Microsecond)
 	}
 
 	if err := s.CGroupEnter(s.initPid); err != nil {
 		return err
 	}
 
-	log.Printf("start took: %v", time.Since(fstart))
 	s.status = state.Running
 	return nil
 }
@@ -163,6 +164,14 @@ func (s *OLContainerSandbox) Unpause() error {
 }
 
 func (s *OLContainerSandbox) Remove() error {
+	// remove sockets if they exist
+	if err := os.RemoveAll(filepath.Join(s.sandboxDir, "ol.sock")); err != nil {
+		return err
+	}
+	if err := os.RemoveAll(filepath.Join(s.sandboxDir, "fs.sock")); err != nil {
+		return err
+	}
+
 	// remove cgroups
 	for _, cgroup := range CGroupList {
 		cgroupPath := path.Join("/sys/fs/cgroup/", cgroup, OLCGroupName, s.id)

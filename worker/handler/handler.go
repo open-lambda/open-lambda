@@ -92,9 +92,11 @@ func NewHandlerSet(opts *config.Config) (handlerSet *HandlerSet, err error) {
 
 	handlerSet.lru = NewHandlerLRU(handlerSet, opts.Handler_cache_size) //kb
 
-	if cm != nil {
-		go handlerSet.killOrphans()
-	}
+	/*
+		if cm != nil {
+			go handlerSet.killOrphans()
+		}
+	*/
 
 	return handlerSet, nil
 }
@@ -162,7 +164,9 @@ func (h *HandlerSet) Cleanup() {
 		handler.nuke()
 	}
 	h.sbFactory.Cleanup()
-	h.cacheMgr.Cleanup()
+	if h.cacheMgr != nil {
+		h.cacheMgr.Cleanup()
+	}
 }
 
 // RunStart runs the lambda handled by this Handler. It checks if the code has
@@ -244,6 +248,7 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 			if time.Since(start).Seconds() > 20 {
 				return nil, fmt.Errorf("handler server failed to initialize after 20s")
 			}
+			time.Sleep(50 * time.Microsecond)
 		}
 
 	} else if h.state == state.Paused { // unpause if paused

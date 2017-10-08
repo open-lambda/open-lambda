@@ -151,7 +151,6 @@ import "C"
 import (
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/open-lambda/open-lambda/worker/benchmarker"
@@ -185,9 +184,6 @@ func forkRequest(sockPath, targetPid, rootDir string, pkgList []string, handler 
 		signal = "cache"
 	}
 
-	log.Printf("FORKREQUEST PATH: %s\n", sockPath)
-	log.Printf("FORKREQUEST PID: %s\n", targetPid)
-
 	pkgStr := strings.Join(append(pkgList, signal), " ")
 
 	csock := C.CString(sockPath)
@@ -204,7 +200,7 @@ func forkRequest(sockPath, targetPid, rootDir string, pkgList []string, handler 
 		}
 	}
 	pid = C.GoString(ret)
-	if err != nil {
+	if err != nil || pid == "" {
 		return "", errors.New(fmt.Sprintf("sendFds: %s", pid))
 	}
 
