@@ -10,7 +10,7 @@ import (
 	"github.com/open-lambda/open-lambda/worker/config"
 )
 
-var unshareFlags []string = []string{"-impuf", "--mount-proc"}
+var unshareFlags []string = []string{"-impuf", "--mount-proc", "--propagation", "unchanged"}
 
 // OLContainerSBFactory is a SandboxFactory that creats docker sandboxes.
 type OLContainerSBFactory struct {
@@ -62,6 +62,10 @@ func (sf *OLContainerSBFactory) Create(handlerDir, sandboxDir, indexHost, indexP
 	if err != nil {
 		return nil, fmt.Errorf("Failed to bind handler dir: %v", err.Error())
 	}
+	err = runCmd([]string{"/bin/mount", "--make-slave", path.Join(rootDir, "handler")})
+	if err != nil {
+		return nil, fmt.Errorf("Failed to make handler dir a slave: %v", err.Error())
+	}
 
 	err = runCmd([]string{"/bin/mount", "--bind", "-o", "ro", sf.opts.Pkgs_dir, path.Join(rootDir, "packages")})
 	if err != nil {
@@ -71,6 +75,10 @@ func (sf *OLContainerSBFactory) Create(handlerDir, sandboxDir, indexHost, indexP
 	err = runCmd([]string{"/bin/mount", "--bind", sandboxDir, path.Join(rootDir, "host")})
 	if err != nil {
 		return nil, fmt.Errorf("Failed to bind host dir: %v", err.Error())
+	}
+	err = runCmd([]string{"/bin/mount", "--make-slave", path.Join(rootDir, "host")})
+	if err != nil {
+		return nil, fmt.Errorf("Failed to make host dir a slave: %v", err.Error())
 	}
 
 	startCmd := []string{"/ol-init"}
