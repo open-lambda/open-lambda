@@ -22,19 +22,20 @@ import (
 // HandlerSet represents a collection of Handlers of a worker server. It
 // manages the Handler by HandlerLRU.
 type HandlerSet struct {
-	mutex     sync.Mutex
-	handlers  map[string]*Handler
-	regMgr    registry.RegistryManager
-	sbFactory sb.SandboxFactory
-	cacheMgr  *cache.CacheManager
-	config    *config.Config
-	lru       *HandlerLRU
-	workerDir string
-	indexHost string
-	indexPort string
-	hhits     *int64
-	ihits     *int64
-	misses    *int64
+	mutex       sync.Mutex
+	handlers    map[string]*Handler
+	pullMutexes map[string]*sync.Mutex
+	regMgr      registry.RegistryManager
+	sbFactory   sb.SandboxFactory
+	cacheMgr    *cache.CacheManager
+	config      *config.Config
+	lru         *HandlerLRU
+	workerDir   string
+	indexHost   string
+	indexPort   string
+	hhits       *int64
+	ihits       *int64
+	misses      *int64
 }
 
 // Handler handles requests to run a lambda on a worker server. It handles
@@ -78,16 +79,17 @@ func NewHandlerSet(opts *config.Config) (handlerSet *HandlerSet, err error) {
 	var misses int64 = 0
 	handlers := make(map[string]*Handler)
 	handlerSet = &HandlerSet{
-		handlers:  handlers,
-		regMgr:    rm,
-		sbFactory: sf,
-		cacheMgr:  cm,
-		workerDir: opts.Worker_dir,
-		indexHost: opts.Index_host,
-		indexPort: opts.Index_port,
-		hhits:     &hhits,
-		ihits:     &ihits,
-		misses:    &misses,
+		handlers:    handlers,
+		pullMutexes: make(map[string]*sync.Mutex),
+		regMgr:      rm,
+		sbFactory:   sf,
+		cacheMgr:    cm,
+		workerDir:   opts.Worker_dir,
+		indexHost:   opts.Index_host,
+		indexPort:   opts.Index_port,
+		hhits:       &hhits,
+		ihits:       &ihits,
+		misses:      &misses,
 	}
 
 	handlerSet.lru = NewHandlerLRU(handlerSet, opts.Handler_cache_size) //kb
@@ -117,6 +119,7 @@ func (h *HandlerSet) Get(name string) *Handler {
 			hostDir: hostDir,
 		}
 		h.handlers[name] = handler
+		h.pullMutexes[name] = &sync.Mutex{}
 	}
 
 	return handler
@@ -178,6 +181,13 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 
 	// get code if needed
 	if h.lastPull == nil {
+		// get pull mutex
+		h.hset.mutex.Lock()
+		pullMutex := h.hset.pullMutexes[h.name]
+		h.hset.mutex.Unlock()
+
+		pullMutex.Lock()
+
 		codeDir, pkgs, err := h.hset.regMgr.Pull(h.name)
 		if err != nil {
 			return nil, err
@@ -187,6 +197,8 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 		h.lastPull = &now
 		h.codeDir = codeDir
 		h.pkgs = pkgs
+
+		pullMutex.Unlock()
 	}
 
 	// create sandbox if needed
