@@ -112,7 +112,7 @@ func (cf *DockerCacheFactory) Create(sandboxDir string, cmd []string) (sb.Contai
 		return nil, "", err
 	}
 
-	sandbox := sb.NewDockerSandbox(sandboxDir, "", "", container, cf.client)
+	sandbox := sb.NewDockerSandbox("", sandboxDir, "", "", container, cf.client)
 	memCGroupPath := path.Join("/sys/fs/cgroup/memory/docker/", container.ID)
 
 	return sandbox, memCGroupPath, nil

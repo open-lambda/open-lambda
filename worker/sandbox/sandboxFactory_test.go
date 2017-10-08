@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"testing"
@@ -82,7 +83,7 @@ func TestWriteToDirs(t *testing.T) {
 		if _, err := os.Stat("/tmp/.handlerDir/should_fail"); os.IsExist(err) {
 			t.Fatalf("should not be able to write to handler directory: ", err)
 		}
-		if _, err := os.Stat("/tmp/.sandboxDir/should_succeed"); os.IsNotExist(err) {
+		if _, err := os.Stat(fmt.Sprintf("/tmp/.sandboxDir/%s/should_succeed", sandbox.ID())); os.IsNotExist(err) {
 			t.Fatalf("should be able to write to sandbox directory: ", err)
 		}
 		time.Sleep(time.Second)

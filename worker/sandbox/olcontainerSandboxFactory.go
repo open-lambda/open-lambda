@@ -32,14 +32,20 @@ func NewOLContainerSBFactory(opts *config.Config, baseDir string) (*OLContainerS
 }
 
 // Create creates a docker sandbox from the handler and sandbox directory.
-func (sf *OLContainerSBFactory) Create(handlerDir, sandboxDir, indexHost, indexPort string) (Sandbox, error) {
+func (sf *OLContainerSBFactory) Create(handlerDir, workingDir, indexHost, indexPort string) (Sandbox, error) {
 	id_bytes, err := exec.Command("uuidgen").Output()
 	if err != nil {
 		return nil, err
 	}
 	id := strings.TrimSpace(string(id_bytes[:]))
 
-	rootDir := path.Join(fmt.Sprintf("/tmp/sandbox_%s", id))
+	// create sandbox directory
+	hostDir := path.Join(workingDir, id)
+	if err := os.MkdirAll(hostDir, 0777); err != nil {
+		return nil, err
+	}
+
+	rootDir := fmt.Sprintf("/tmp/sandbox_%s", id)
 	if err := os.Mkdir(rootDir, 0700); err != nil {
 		return nil, err
 	}
@@ -60,10 +66,10 @@ func (sf *OLContainerSBFactory) Create(handlerDir, sandboxDir, indexHost, indexP
 		return nil, fmt.Errorf("failed to make handler dir a slave: %v", err.Error())
 	}
 
-	hostDir := path.Join(rootDir, "host")
-	if err := syscall.Mount(sandboxDir, hostDir, "", syscall.MS_BIND, ""); err != nil {
+	sbHostDir := path.Join(rootDir, "host")
+	if err := syscall.Mount(hostDir, sbHostDir, "", syscall.MS_BIND, ""); err != nil {
 		return nil, fmt.Errorf("failed to bind host dir: %v", err.Error())
-	} else if err := syscall.Mount("none", hostDir, "", syscall.MS_SLAVE, ""); err != nil {
+	} else if err := syscall.Mount("none", sbHostDir, "", syscall.MS_SLAVE, ""); err != nil {
 		return nil, fmt.Errorf("failed to make host dir a slave: %v", err.Error())
 	}
 
@@ -80,7 +86,7 @@ func (sf *OLContainerSBFactory) Create(handlerDir, sandboxDir, indexHost, indexP
 		startCmd = append(startCmd, indexPort)
 	}
 
-	return NewOLContainerSandbox(sf.opts, rootDir, sandboxDir, id, startCmd, unshareFlags)
+	return NewOLContainerSandbox(sf.opts, rootDir, hostDir, id, startCmd, unshareFlags)
 }
 
 func (sf *OLContainerSBFactory) Cleanup() {

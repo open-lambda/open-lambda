@@ -2,6 +2,10 @@ package sandbox
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
+	"path"
+	"strings"
 
 	docker "github.com/fsouza/go-dockerclient"
 
@@ -37,10 +41,21 @@ func NewDockerSBFactory(opts *config.Config) (*DockerSBFactory, error) {
 }
 
 // Create creates a docker sandbox from the handler and sandbox directory.
-func (df *DockerSBFactory) Create(handlerDir, sandboxDir, indexHost, indexPort string) (Sandbox, error) {
+func (df *DockerSBFactory) Create(handlerDir, workingDir, indexHost, indexPort string) (Sandbox, error) {
+	id_bytes, err := exec.Command("uuidgen").Output()
+	if err != nil {
+		return nil, err
+	}
+	id := strings.TrimSpace(string(id_bytes[:]))
+
+	// create sandbox directory
+	hostDir := path.Join(workingDir, id)
+	if err := os.MkdirAll(hostDir, 0777); err != nil {
+		return nil, err
+	}
 	volumes := []string{
 		fmt.Sprintf("%s:%s:ro,slave", handlerDir, "/handler"),
-		fmt.Sprintf("%s:%s:slave", sandboxDir, "/host"),
+		fmt.Sprintf("%s:%s:slave", hostDir, "/host"),
 		fmt.Sprintf("%s:%s:ro", df.pkgsDir, "/packages"),
 	}
 
@@ -61,7 +76,7 @@ func (df *DockerSBFactory) Create(handlerDir, sandboxDir, indexHost, indexPort s
 		return nil, err
 	}
 
-	sandbox := NewDockerSandbox(sandboxDir, indexHost, indexPort, container, df.client)
+	sandbox := NewDockerSandbox(id, hostDir, indexHost, indexPort, container, df.client)
 	return sandbox, nil
 }
 

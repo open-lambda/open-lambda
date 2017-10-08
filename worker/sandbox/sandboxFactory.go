@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"sync/atomic"
 	"syscall"
@@ -15,7 +16,7 @@ import (
 
 // SandboxFactory is the common interface for all sandbox creation functions.
 type SandboxFactory interface {
-	Create(handlerDir, sandboxDir, indexHost, indexPort string) (sandbox Sandbox, err error)
+	Create(handlerDir, workingDir, indexHost, indexPort string) (sandbox Sandbox, err error)
 	Cleanup()
 }
 
@@ -138,19 +139,25 @@ func NewBufferedSBFactory(opts *config.Config, delegate SandboxFactory) (*Buffer
 // Create mounts the handler and sandbox directories to the ones already
 // mounted in the sandbox, and returns that sandbox. The sandbox would be in
 // Paused state, instead of Stopped.
-func (bf *BufferedSBFactory) Create(handlerDir, sandboxDir, indexHost, indexPort string) (Sandbox, error) {
-	mntFlag := uintptr(syscall.MS_BIND | syscall.MS_SHARED)
+func (bf *BufferedSBFactory) Create(handlerDir, workingDir, indexHost, indexPort string) (Sandbox, error) {
+	mntFlag := uintptr(syscall.MS_BIND | syscall.MS_REC)
 	select {
 	case info := <-bf.buffer:
+		// create cluster host directory
+		hostDir := path.Join(workingDir, info.sandbox.ID())
+		if err := os.MkdirAll(hostDir, 0777); err != nil {
+			return nil, err
+		}
+
 		if err := info.sandbox.Unpause(); err != nil {
 			return nil, err
 		} else if err := syscall.Mount(handlerDir, info.handlerDir, "", mntFlag, ""); err != nil {
 			return nil, err
-		} else if err := syscall.Mount(sandboxDir, info.sandboxDir, "", mntFlag, ""); err != nil {
+		} else if err := syscall.Mount(hostDir, info.sandboxDir, "", mntFlag, ""); err != nil {
 			return nil, err
 		}
 		if !bf.cache {
-			sockPath := filepath.Join(sandboxDir, "ol.sock")
+			sockPath := filepath.Join(workingDir, "ol.sock")
 			_ = os.Remove(sockPath)
 		}
 

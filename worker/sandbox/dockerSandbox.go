@@ -28,7 +28,8 @@ import (
 
 // DockerSandbox is a sandbox inside a docker container.
 type DockerSandbox struct {
-	sandboxDir string
+	host_id    string
+	host_dir   string
 	nspid      string
 	container  *docker.Container
 	client     *docker.Client
@@ -39,14 +40,15 @@ type DockerSandbox struct {
 }
 
 // NewDockerSandbox creates a DockerSandbox.
-func NewDockerSandbox(sandbox_dir, index_host, index_port string, container *docker.Container, client *docker.Client) *DockerSandbox {
+func NewDockerSandbox(host_id, host_dir, index_host, index_port string, container *docker.Container, client *docker.Client) *DockerSandbox {
 	dial := func(proto, addr string) (net.Conn, error) {
-		return net.Dial("unix", filepath.Join(sandbox_dir, "ol.sock"))
+		return net.Dial("unix", filepath.Join(host_dir, "ol.sock"))
 	}
 	tr := http.Transport{Dial: dial, DisableKeepAlives: true}
 
 	sandbox := &DockerSandbox{
-		sandboxDir: sandbox_dir,
+		host_id:    host_id,
+		host_dir:   host_dir,
 		container:  container,
 		client:     client,
 		tr:         tr,
@@ -211,10 +213,10 @@ func (s *DockerSandbox) Unpause() error {
 // Remove frees all resources associated with the lambda (stops the container if necessary).
 func (s *DockerSandbox) Remove() error {
 	// remove sockets if they exist
-	if err := os.RemoveAll(filepath.Join(s.sandboxDir, "ol.sock")); err != nil {
+	if err := os.RemoveAll(filepath.Join(s.host_dir, "ol.sock")); err != nil {
 		return err
 	}
-	if err := os.RemoveAll(filepath.Join(s.sandboxDir, "fs.sock")); err != nil {
+	if err := os.RemoveAll(filepath.Join(s.host_dir, "fs.sock")); err != nil {
 		return err
 	}
 
@@ -230,8 +232,8 @@ func (s *DockerSandbox) Remove() error {
 
 // Logs returns log output for the container.
 func (s *DockerSandbox) Logs() (string, error) {
-	stdout_path := filepath.Join(s.sandboxDir, "stdout")
-	stderr_path := filepath.Join(s.sandboxDir, "stderr")
+	stdout_path := filepath.Join(s.host_dir, "stdout")
+	stderr_path := filepath.Join(s.host_dir, "stderr")
 
 	stdout, err := ioutil.ReadFile(stdout_path)
 	if err != nil {
@@ -286,6 +288,10 @@ func (s *DockerSandbox) NSPid() string {
 }
 
 func (s *DockerSandbox) ID() string {
+	return s.host_id
+}
+
+func (s *DockerSandbox) DockerID() string {
 	return s.container.ID
 }
 
