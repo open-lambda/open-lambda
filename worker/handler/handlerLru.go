@@ -16,7 +16,7 @@ type HandlerLRU struct {
 	mutex sync.Mutex
 	// use a linked list and a map to achieve a linked-map
 	hmap   map[*Handler]*list.Element
-	hset   *HandlerSet
+	hms    *HandlerManagerSet
 	hqueue *list.List // front is recent
 	// TODO(tyler): set hard limit to prevent new containers from starting?
 	soft_limit int
@@ -26,10 +26,10 @@ type HandlerLRU struct {
 
 // NewHandlerLRU creates a HandlerLRU with a given soft_limit and starts the
 // evictor in a go routine.
-func NewHandlerLRU(hset *HandlerSet, soft_limit int) *HandlerLRU {
+func NewHandlerLRU(hms *HandlerManagerSet, soft_limit int) *HandlerLRU {
 	lru := &HandlerLRU{
 		hmap:       make(map[*Handler]*list.Element),
-		hset:       hset,
+		hms:        hms,
 		hqueue:     list.New(),
 		soft_limit: soft_limit * 1024,
 		size:       0,
@@ -86,35 +86,37 @@ func (lru *HandlerLRU) Remove(handler *Handler) {
 // Evictor waits on signal that the number of Handlers in the LRU list exceeds
 // the soft limit, and tries to stop the LRU handlers until the limit is met.
 func (lru *HandlerLRU) Evictor() {
-	lru.mutex.Lock()
-	defer lru.mutex.Unlock()
-
 	for {
+		lru.mutex.Lock()
 		for lru.size <= lru.soft_limit {
 			lru.soft_cond.Wait()
 		}
+		lru.mutex.Unlock()
 		log.Printf("EVICTING HANDLER: %v used / %v limit", lru.size, lru.soft_limit)
 
+		// lock the HandlerManagerSet
+		lru.hms.mutex.Lock()
+		lru.mutex.Lock()
+
 		// pop off least-recently used entry
-
-		lru.hset.mutex.Lock()
 		entry := lru.hqueue.Back()
+		h := entry.Value.(*Handler)
 		lru.hqueue.Remove(entry)
-
-		handler := entry.Value.(*Handler)
-		delete(lru.hset.handlers, handler.name)
-		lru.hset.mutex.Unlock()
-		go handler.nuke()
-
-		delete(lru.hmap, handler)
-		lru.size -= handler.usage
+		delete(lru.hmap, h)
+		lru.size -= h.usage
 
 		lru.mutex.Unlock()
-		// depending on interleavings, it could also be
-		// running or already stopped.
-		//
-		// TODO(tyler): is there a better way?
-		lru.mutex.Lock()
+
+		// modify the Handler's HandlerManager
+		hm := lru.hms.hmMap[h.name]
+		hEle := hm.hElements[h]
+		hm.handlers.Remove(hEle)
+		delete(hm.hElements, h)
+
+		lru.hms.mutex.Unlock()
+
+		go h.nuke()
+
 	}
 }
 

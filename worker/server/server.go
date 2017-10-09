@@ -26,7 +26,7 @@ const (
 // these requests to its sandboxes.
 type Server struct {
 	config   *config.Config
-	handlers *handler.HandlerSet
+	handlers *handler.HandlerManagerSet
 }
 
 // httpErr is a wrapper for an http error and the return code of the request.
@@ -42,7 +42,7 @@ func newHttpErr(msg string, code int) *httpErr {
 
 // NewServer creates a server based on the passed config."
 func NewServer(config *config.Config) (*Server, error) {
-	handlers, err := handler.NewHandlerSet(config)
+	handlers, err := handler.NewHandlerManagerSet(config)
 	if err != nil {
 		return nil, err
 	}
