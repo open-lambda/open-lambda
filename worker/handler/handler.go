@@ -40,15 +40,17 @@ type HandlerManagerSet struct {
 }
 
 type HandlerManager struct {
-	mutex      sync.Mutex
-	hms        *HandlerManagerSet
-	handlers   *list.List
-	hElements  map[*Handler]*list.Element
-	workingDir string
-	lastPull   *time.Time
-	code       []byte
-	codeDir    string
-	pkgs       []string
+	name        string
+	mutex       sync.Mutex
+	hms         *HandlerManagerSet
+	handlers    *list.List
+	hElements   map[*Handler]*list.Element
+	workingDir  string
+	maxHandlers int
+	lastPull    *time.Time
+	code        []byte
+	codeDir     string
+	pkgs        []string
 }
 
 // Handler handles requests to run a lambda on a worker server. It handles
@@ -121,6 +123,7 @@ func (hms *HandlerManagerSet) Get(name string) (h *Handler, err error) {
 	if hm == nil {
 		workingDir := path.Join(hms.workerDir, "handlers", name)
 		hms.hmMap[name] = &HandlerManager{
+			name:       name,
 			hms:        hms,
 			handlers:   list.New(),
 			hElements:  make(map[*Handler]*list.Element),
@@ -163,7 +166,7 @@ func (hms *HandlerManagerSet) Get(name string) (h *Handler, err error) {
 
 	// get code if needed
 	if hm.lastPull == nil {
-		codeDir, pkgs, err := hms.regMgr.Pull(h.name)
+		codeDir, pkgs, err := hms.regMgr.Pull(hm.name)
 		if err != nil {
 			return nil, err
 		}
@@ -210,9 +213,11 @@ func (hms *HandlerManagerSet) Dump() {
 	log.Printf("HANDLERS:\n")
 	for name, hm := range hms.hmMap {
 		hm.mutex.Lock()
+		log.Printf(" %v: %d", name, hm.maxHandlers)
 		for e := hm.handlers.Front(); e != nil; e = e.Next() {
-			state, _ := e.Value.(*Handler).sandbox.State()
-			log.Printf("> %v: %v\n", name, state.String())
+			h := e.Value.(*Handler)
+			state, _ := h.sandbox.State()
+			log.Printf(" > %v: %v\n", h.id, state.String())
 		}
 		hm.mutex.Unlock()
 	}
@@ -312,6 +317,7 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 		if hms.maxRunners == 0 || h.runners < hms.maxRunners {
 			hm.mutex.Lock()
 			hm.hElements[h] = hm.handlers.PushFront(h)
+			hm.maxHandlers = max(hm.maxHandlers, hm.handlers.Len())
 			hm.mutex.Unlock()
 		}
 
@@ -346,6 +352,7 @@ func (h *Handler) RunFinish() {
 	if hms.maxRunners != 0 && h.runners == hms.maxRunners {
 		hm.mutex.Lock()
 		hm.hElements[h] = hm.handlers.PushFront(h)
+		hm.maxHandlers = max(hm.maxHandlers, hm.handlers.Len())
 		hm.mutex.Unlock()
 	}
 
@@ -357,7 +364,7 @@ func (h *Handler) RunFinish() {
 			// TODO(tyler): better way to handle this?  If
 			// we can't pause, the handler gets to keep
 			// running for free...
-			log.Printf("Could not pause %v!  Error: %v\n", h.name, err)
+			log.Printf("Could not pause %v: %v!  Error: %v\n", h.name, h.id, err)
 		}
 
 		hms.lru.Add(h)
@@ -373,4 +380,11 @@ func (h *Handler) nuke() {
 // Sandbox returns the sandbox of this Handler.
 func (h *Handler) Sandbox() sb.Sandbox {
 	return h.sandbox
+}
+
+func max(i1, i2 int) int {
+	if i1 < i2 {
+		return i2
+	}
+	return i1
 }
