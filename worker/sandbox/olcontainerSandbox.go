@@ -82,7 +82,6 @@ func (s *OLContainerSandbox) Start() error {
 	initArgs = append(s.unshareFlags, initArgs...)
 
 	s.initCmd = exec.Command(
-		"unshare",
 		initArgs...,
 	)
 
