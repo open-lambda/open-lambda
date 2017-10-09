@@ -98,6 +98,12 @@ func (lru *HandlerLRU) Evictor() {
 		lru.hms.mutex.Lock()
 		lru.mutex.Lock()
 
+		if lru.hqueue.Len() == 0 {
+			lru.mutex.Unlock()
+			lru.hms.mutex.Unlock()
+			continue
+		}
+
 		// pop off least-recently used entry
 		entry := lru.hqueue.Back()
 		h := entry.Value.(*Handler)
