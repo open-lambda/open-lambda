@@ -28,6 +28,8 @@ type Config struct {
 	Index_port string `json:"index_port"`
 	// packages directory for unpack-only installations
 	Pkgs_dir string `json:"pkgs_dir"`
+	// max number of concurrent runners per sandbox
+	Max_runners int `json:"max_runners"`
 
 	// cache options
 	Handler_cache_size  int    `json:"handler_cache_size"` //kb

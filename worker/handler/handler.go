@@ -23,19 +23,20 @@ import (
 // HandlerSet represents a collection of Handlers of a worker server. It
 // manages the Handler by HandlerLRU.
 type HandlerManagerSet struct {
-	mutex     sync.Mutex
-	hmMap     map[string]*HandlerManager
-	regMgr    registry.RegistryManager
-	sbFactory sb.SandboxFactory
-	cacheMgr  *cache.CacheManager
-	config    *config.Config
-	lru       *HandlerLRU
-	workerDir string
-	indexHost string
-	indexPort string
-	hhits     *int64
-	ihits     *int64
-	misses    *int64
+	mutex      sync.Mutex
+	hmMap      map[string]*HandlerManager
+	regMgr     registry.RegistryManager
+	sbFactory  sb.SandboxFactory
+	cacheMgr   *cache.CacheManager
+	config     *config.Config
+	lru        *HandlerLRU
+	workerDir  string
+	indexHost  string
+	indexPort  string
+	maxRunners int
+	hhits      *int64
+	ihits      *int64
+	misses     *int64
 }
 
 type HandlerManager struct {
@@ -86,17 +87,18 @@ func NewHandlerManagerSet(opts *config.Config) (hms *HandlerManagerSet, err erro
 	var ihits int64 = 0
 	var misses int64 = 0
 	hms = &HandlerManagerSet{
-		hmMap:     make(map[string]*HandlerManager),
-		regMgr:    rm,
-		sbFactory: sf,
-		cacheMgr:  cm,
-		config:    opts,
-		workerDir: opts.Worker_dir,
-		indexHost: opts.Index_host,
-		indexPort: opts.Index_port,
-		hhits:     &hhits,
-		ihits:     &ihits,
-		misses:    &misses,
+		hmMap:      make(map[string]*HandlerManager),
+		regMgr:     rm,
+		sbFactory:  sf,
+		cacheMgr:   cm,
+		config:     opts,
+		workerDir:  opts.Worker_dir,
+		indexHost:  opts.Index_host,
+		indexPort:  opts.Index_port,
+		maxRunners: opts.Max_runners,
+		hhits:      &hhits,
+		ihits:      &ihits,
+		misses:     &misses,
 	}
 
 	hms.lru = NewHandlerLRU(hms, opts.Handler_cache_size) //kb
@@ -148,6 +150,11 @@ func (hms *HandlerManagerSet) Get(name string) (h *Handler, err error) {
 		}
 
 		h.runners += 1
+
+		if h.hm.hms.maxRunners != 0 && h.runners == h.hm.hms.maxRunners {
+			hm.handlers.Remove(hEle)
+			delete(hm.hElements, h)
+		}
 		h.mutex.Unlock()
 	}
 	// not perfect, but removal from the LRU needs to be atomic
@@ -302,9 +309,11 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 		}
 
 		// we are up so we can add ourselves for reuse
-		hm.mutex.Lock()
-		hm.hElements[h] = hm.handlers.PushFront(h)
-		hm.mutex.Unlock()
+		if hms.maxRunners == 0 || h.runners < hms.maxRunners {
+			hm.mutex.Lock()
+			hm.hElements[h] = hm.handlers.PushFront(h)
+			hm.mutex.Unlock()
+		}
 
 	} else if sbState, _ := h.sandbox.State(); sbState == state.Paused {
 		// unpause if paused
@@ -327,6 +336,19 @@ func (h *Handler) RunFinish() {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
+	hm := h.hm
+	hms := h.hm.hms
+
+	// if we finish first
+	// no deadlock can occur here despite taking the locks in the
+	// opposite order because hm -> h in Get has no reference
+	// in the handler list
+	if hms.maxRunners != 0 && h.runners == hms.maxRunners {
+		hm.mutex.Lock()
+		hm.hElements[h] = hm.handlers.PushFront(h)
+		hm.mutex.Unlock()
+	}
+
 	h.runners -= 1
 
 	// are we the last?
@@ -338,7 +360,7 @@ func (h *Handler) RunFinish() {
 			log.Printf("Could not pause %v!  Error: %v\n", h.name, err)
 		}
 
-		h.hm.hms.lru.Add(h)
+		hms.lru.Add(h)
 	}
 }
 
