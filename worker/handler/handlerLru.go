@@ -115,9 +115,11 @@ func (lru *HandlerLRU) Evictor() {
 
 		// modify the Handler's HandlerManager
 		hm := lru.hms.hmMap[h.name]
+		hm.mutex.Lock()
 		hEle := hm.hElements[h]
 		hm.handlers.Remove(hEle)
 		delete(hm.hElements, h)
+		hm.mutex.Unlock()
 
 		lru.hms.mutex.Unlock()
 

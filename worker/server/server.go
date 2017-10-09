@@ -158,7 +158,12 @@ func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 	}
 
 	// forward to sandbox
-	handler := s.handlers.Get(img)
+	var handler *handler.Handler
+	if h, err := s.handlers.Get(img); err != nil {
+		return newHttpErr(err.Error(), http.StatusInternalServerError)
+	} else {
+		handler = h
+	}
 
 	wbody, w2, err := s.ForwardToSandbox(handler, r, rbody)
 	if err != nil {
