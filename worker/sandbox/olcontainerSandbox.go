@@ -30,7 +30,9 @@ import (
 
 type OLContainerSandbox struct {
 	opts         *config.Config
+	cgf          *CgroupFactory
 	id           string
+	cgId         string
 	rootDir      string
 	hostDir      string
 	status       state.HandlerState
@@ -40,18 +42,15 @@ type OLContainerSandbox struct {
 	unshareFlags []string
 }
 
-func NewOLContainerSandbox(opts *config.Config, rootDir, hostDir, id string, startCmd, unshareFlags []string) (*OLContainerSandbox, error) {
+func NewOLContainerSandbox(cgf *CgroupFactory, opts *config.Config, rootDir, hostDir, id string, startCmd, unshareFlags []string) (*OLContainerSandbox, error) {
 	// create container cgroups
-	for _, cgroup := range CGroupList {
-		cgroupPath := path.Join("/sys/fs/cgroup/", cgroup, OLCGroupName, id)
-		if err := os.MkdirAll(cgroupPath, 0700); err != nil {
-			return nil, err
-		}
-	}
+	cgId := cgf.GetCg(id)
 
 	sandbox := &OLContainerSandbox{
+		cgf:          cgf,
 		opts:         opts,
 		id:           id,
+		cgId:         cgId,
 		rootDir:      rootDir,
 		hostDir:      hostDir,
 		unshareFlags: unshareFlags,
@@ -187,12 +186,7 @@ func (s *OLContainerSandbox) Remove() error {
 	}
 
 	// remove cgroups
-	for _, cgroup := range CGroupList {
-		cgroupPath := path.Join("/sys/fs/cgroup/", cgroup, OLCGroupName, s.id)
-		if err := os.Remove(cgroupPath); err != nil {
-			return err
-		}
-	}
+	s.cgf.PutCg(s.id, s.cgId)
 
 	// unmount directories
 	handler_dir := filepath.Join(s.rootDir, "handler")
@@ -226,7 +220,7 @@ func (s *OLContainerSandbox) Logs() (string, error) {
 func (s *OLContainerSandbox) CGroupEnter(pid string) (err error) {
 	// put process into each cgroup
 	for _, cgroup := range CGroupList {
-		tasksPath := path.Join("/sys/fs/cgroup/", cgroup, OLCGroupName, s.id, "tasks")
+		tasksPath := path.Join("/sys/fs/cgroup/", cgroup, OLCGroupName, s.cgId, "tasks")
 
 		err := ioutil.WriteFile(tasksPath, []byte(pid), os.ModeAppend)
 		if err != nil {
@@ -268,7 +262,7 @@ func (s *OLContainerSandbox) RunServer() error {
 }
 
 func (s *OLContainerSandbox) MemoryCGroupPath() string {
-	return fmt.Sprintf("/sys/fs/cgroup/memory/%s/%s/", OLCGroupName, s.id)
+	return fmt.Sprintf("/sys/fs/cgroup/memory/%s/%s/", OLCGroupName, s.cgId)
 }
 
 func (s *OLContainerSandbox) RootDir() string {

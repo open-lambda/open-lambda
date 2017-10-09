@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/open-lambda/open-lambda/worker/config"
@@ -15,8 +16,10 @@ var unshareFlags []string = []string{"-impuf", "--mount-proc", "--propagation", 
 
 // OLContainerSBFactory is a SandboxFactory that creats docker sandboxes.
 type OLContainerSBFactory struct {
+	mutex   sync.Mutex
 	opts    *config.Config
 	baseDir string
+	cgf     *CgroupFactory
 }
 
 // NewOLContainerSBFactory creates a OLContainerSBFactory.
@@ -28,7 +31,12 @@ func NewOLContainerSBFactory(opts *config.Config, baseDir string) (*OLContainerS
 		}
 	}
 
-	return &OLContainerSBFactory{opts: opts, baseDir: baseDir}, nil
+	cgf, err := NewCgroupFactory(opts.Cg_pool_size)
+	if err != nil {
+		return nil, err
+	}
+
+	return &OLContainerSBFactory{opts: opts, baseDir: baseDir, cgf: cgf}, nil
 }
 
 // Create creates a docker sandbox from the handler and sandbox directory.
@@ -86,12 +94,12 @@ func (sf *OLContainerSBFactory) Create(handlerDir, workingDir, indexHost, indexP
 		startCmd = append(startCmd, indexPort)
 	}
 
-	return NewOLContainerSandbox(sf.opts, rootDir, hostDir, id, startCmd, unshareFlags)
+	return NewOLContainerSandbox(sf.cgf, sf.opts, rootDir, hostDir, id, startCmd, unshareFlags)
 }
 
 func (sf *OLContainerSBFactory) Cleanup() {
 	for _, cgroup := range CGroupList {
 		cgroupPath := path.Join("/sys/fs/cgroup", cgroup, OLCGroupName)
-		os.Remove(cgroupPath)
+		os.RemoveAll(cgroupPath)
 	}
 }

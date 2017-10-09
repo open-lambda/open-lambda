@@ -56,6 +56,8 @@ type Config struct {
 	// sandbox factory options
 	// number of sandbox buffers; if zero, no buffer will be used
 	Sandbox_buffer int `json:"sandbox_buffer"`
+	// if olcontainer -> number of cgroup to init
+	Cg_pool_size int `json:"cg_pool_size"`
 
 	// for unit testing to skip pull path
 	Skip_pull_existing bool `json:"Skip_pull_existing"`

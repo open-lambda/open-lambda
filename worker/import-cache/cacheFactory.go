@@ -125,6 +125,7 @@ func (cf *DockerCacheFactory) Cleanup() {
 // OLContainerCacheFactory is a SandboxFactory that creates olcontainers for the cache.
 type OLContainerCacheFactory struct {
 	opts    *config.Config
+	cgf     *sb.CgroupFactory
 	cmd     []string
 	baseDir string
 	pkgsDir string
@@ -139,7 +140,12 @@ func NewOLContainerCacheFactory(opts *config.Config, cluster, baseDir, pkgsDir s
 		}
 	}
 
-	return &OLContainerCacheFactory{opts, []string{"/init"}, baseDir, pkgsDir}, nil
+	cgf, err := sb.NewCgroupFactory(0)
+	if err != nil {
+		return nil, err
+	}
+
+	return &OLContainerCacheFactory{opts, cgf, []string{"/init"}, baseDir, pkgsDir}, nil
 }
 
 // Create creates a docker sandbox from the pool directory.
@@ -172,7 +178,7 @@ func (cf *OLContainerCacheFactory) Create(sandboxDir string, startCmd []string) 
 		return nil, "", fmt.Errorf("Failed to bind host dir: %v", err.Error())
 	}
 
-	sandbox, err := sb.NewOLContainerSandbox(cf.opts, rootDir, sandboxDir, id, startCmd, unshareFlags)
+	sandbox, err := sb.NewOLContainerSandbox(cf.cgf, cf.opts, rootDir, sandboxDir, id, startCmd, unshareFlags)
 	if err != nil {
 		return nil, "", err
 	}
