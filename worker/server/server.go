@@ -56,12 +56,10 @@ func NewServer(config *config.Config) (*Server, error) {
 }
 
 // ForwardToSandbox forwards a run lambda request to a sandbox.
-func (s *Server) ForwardToSandbox(handler *handler.Handler, r *http.Request, input []byte) ([]byte, *http.Response, *httpErr) {
+func (s *Server) ForwardToSandbox(handler *handler.Handler, r *http.Request, input []byte) ([]byte, *http.Response, error) {
 	channel, err := handler.RunStart()
 	if err != nil {
-		return nil, nil, newHttpErr(
-			err.Error(),
-			http.StatusInternalServerError)
+		return nil, nil, err
 	}
 
 	defer handler.RunFinish()
@@ -84,9 +82,7 @@ func (s *Server) ForwardToSandbox(handler *handler.Handler, r *http.Request, inp
 
 		r2, err := http.NewRequest(r.Method, url, bytes.NewReader(input))
 		if err != nil {
-			return nil, nil, newHttpErr(
-				err.Error(),
-				http.StatusInternalServerError)
+			return nil, nil, err
 		}
 
 		r2.Header.Set("Content-Type", r.Header.Get("Content-Type"))
@@ -105,9 +101,7 @@ func (s *Server) ForwardToSandbox(handler *handler.Handler, r *http.Request, inp
 				for i, item := range errors {
 					log.Printf("Attempt %v: %v\n", i, item.Error())
 				}
-				return nil, nil, newHttpErr(
-					err.Error(),
-					http.StatusInternalServerError)
+				return nil, nil, err
 			}
 			time.Sleep(time.Duration(tries*100) * time.Millisecond)
 			continue
@@ -120,9 +114,7 @@ func (s *Server) ForwardToSandbox(handler *handler.Handler, r *http.Request, inp
 		defer w2.Body.Close()
 		wbody, err := ioutil.ReadAll(w2.Body)
 		if err != nil {
-			return nil, nil, newHttpErr(
-				err.Error(),
-				http.StatusInternalServerError)
+			return nil, nil, err
 		}
 		return wbody, w2, nil
 	}
@@ -167,7 +159,7 @@ func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 
 	wbody, w2, err := s.ForwardToSandbox(handler, r, rbody)
 	if err != nil {
-		return err
+		return newHttpErr(err.Error(), http.StatusInternalServerError)
 	}
 
 	w.WriteHeader(w2.StatusCode)
