@@ -155,7 +155,7 @@ func (s *OLContainerSandbox) Stop() error {
 }
 
 func (s *OLContainerSandbox) Pause() error {
-	freezerPath := path.Join("/sys/fs/cgroup/freezer", OLCGroupName, s.id, "freezer.state")
+	freezerPath := path.Join("/sys/fs/cgroup/freezer", OLCGroupName, s.cgId, "freezer.state")
 	err := ioutil.WriteFile(freezerPath, []byte("FROZEN"), os.ModeAppend)
 	if err != nil {
 		return err
@@ -166,7 +166,7 @@ func (s *OLContainerSandbox) Pause() error {
 }
 
 func (s *OLContainerSandbox) Unpause() error {
-	freezerPath := path.Join("/sys/fs/cgroup/freezer", OLCGroupName, s.id, "freezer.state")
+	freezerPath := path.Join("/sys/fs/cgroup/freezer", OLCGroupName, s.cgId, "freezer.state")
 	err := ioutil.WriteFile(freezerPath, []byte("THAWED"), os.ModeAppend)
 	if err != nil {
 		return err
