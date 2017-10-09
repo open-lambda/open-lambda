@@ -85,6 +85,7 @@ func (s *Server) ForwardToSandbox(handler *handler.Handler, r *http.Request, inp
 			return nil, nil, err
 		}
 
+		r2.Close = true
 		r2.Header.Set("Content-Type", r.Header.Get("Content-Type"))
 		client := &http.Client{Transport: &channel.Transport}
 		if t != nil {
