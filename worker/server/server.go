@@ -206,6 +206,8 @@ func (s *Server) Status(w http.ResponseWriter, r *http.Request) {
 	if _, err := w.Write(wbody); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
+
+	s.handlers.Dump()
 }
 
 // getUrlComponents parses request URL into its "/" delimated components
