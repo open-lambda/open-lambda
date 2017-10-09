@@ -23,23 +23,23 @@ import (
 // HandlerSet represents a collection of Handlers of a worker server. It
 // manages the Handler by HandlerLRU.
 type HandlerManagerSet struct {
-	mutex       sync.Mutex
-	hmMap       map[string]*HandlerManager
-	pullMutexes map[string]*sync.Mutex
-	regMgr      registry.RegistryManager
-	sbFactory   sb.SandboxFactory
-	cacheMgr    *cache.CacheManager
-	config      *config.Config
-	lru         *HandlerLRU
-	workerDir   string
-	indexHost   string
-	indexPort   string
-	hhits       *int64
-	ihits       *int64
-	misses      *int64
+	mutex     sync.Mutex
+	hmMap     map[string]*HandlerManager
+	regMgr    registry.RegistryManager
+	sbFactory sb.SandboxFactory
+	cacheMgr  *cache.CacheManager
+	config    *config.Config
+	lru       *HandlerLRU
+	workerDir string
+	indexHost string
+	indexPort string
+	hhits     *int64
+	ihits     *int64
+	misses    *int64
 }
 
 type HandlerManager struct {
+	mutex      sync.Mutex
 	hms        *HandlerManagerSet
 	handlers   *list.List
 	hElements  map[*Handler]*list.Element
@@ -86,18 +86,17 @@ func NewHandlerManagerSet(opts *config.Config) (hms *HandlerManagerSet, err erro
 	var ihits int64 = 0
 	var misses int64 = 0
 	hms = &HandlerManagerSet{
-		hmMap:       make(map[string]*HandlerManager),
-		pullMutexes: make(map[string]*sync.Mutex),
-		regMgr:      rm,
-		sbFactory:   sf,
-		cacheMgr:    cm,
-		config:      opts,
-		workerDir:   opts.Worker_dir,
-		indexHost:   opts.Index_host,
-		indexPort:   opts.Index_port,
-		hhits:       &hhits,
-		ihits:       &ihits,
-		misses:      &misses,
+		hmMap:     make(map[string]*HandlerManager),
+		regMgr:    rm,
+		sbFactory: sf,
+		cacheMgr:  cm,
+		config:    opts,
+		workerDir: opts.Worker_dir,
+		indexHost: opts.Index_host,
+		indexPort: opts.Index_port,
+		hhits:     &hhits,
+		ihits:     &ihits,
+		misses:    &misses,
 	}
 
 	hms.lru = NewHandlerLRU(hms, opts.Handler_cache_size) //kb
@@ -112,11 +111,8 @@ func NewHandlerManagerSet(opts *config.Config) (hms *HandlerManagerSet, err erro
 }
 
 // Get always returns a Handler, creating one if necessarily.
-func (hms *HandlerManagerSet) Get(name string) *Handler {
+func (hms *HandlerManagerSet) Get(name string) (h *Handler, err error) {
 	hms.mutex.Lock()
-	defer hms.mutex.Unlock()
-
-	var h *Handler
 
 	hm := hms.hmMap[name]
 
@@ -131,11 +127,10 @@ func (hms *HandlerManagerSet) Get(name string) *Handler {
 		}
 
 		hm = hms.hmMap[name]
-
-		hms.pullMutexes[name] = &sync.Mutex{}
 	}
 
 	// find or create handler
+	hm.mutex.Lock()
 	if hm.handlers.Front() == nil {
 		h = &Handler{
 			name:    name,
@@ -155,8 +150,25 @@ func (hms *HandlerManagerSet) Get(name string) *Handler {
 		h.runners += 1
 		h.mutex.Unlock()
 	}
+	// not perfect, but removal from the LRU needs to be atomic
+	// with respect to the LRU and the HandlerManager
+	hms.mutex.Unlock()
 
-	return h
+	// get code if needed
+	if hm.lastPull == nil {
+		codeDir, pkgs, err := hms.regMgr.Pull(h.name)
+		if err != nil {
+			return nil, err
+		}
+
+		now := time.Now()
+		hm.lastPull = &now
+		hm.codeDir = codeDir
+		hm.pkgs = pkgs
+	}
+	hm.mutex.Unlock()
+
+	return h, nil
 }
 
 /*
@@ -190,10 +202,12 @@ func (hms *HandlerManagerSet) Dump() {
 
 	log.Printf("HANDLERS:\n")
 	for name, hm := range hms.hmMap {
+		hm.mutex.Lock()
 		for e := hm.handlers.Front(); e != nil; e = e.Next() {
 			state, _ := e.Value.(*Handler).sandbox.State()
 			log.Printf("> %v: %v\n", name, state.String())
 		}
+		hm.mutex.Unlock()
 	}
 }
 
@@ -223,30 +237,6 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 
 	hm := h.hm
 	hms := h.hm.hms
-
-	// get code if needed
-	if hm.lastPull == nil {
-		// get pull mutex
-		hms.mutex.Lock()
-		pullMutex := hms.pullMutexes[h.name]
-		hms.mutex.Unlock()
-
-		pullMutex.Lock()
-
-		if hm.lastPull == nil {
-			codeDir, pkgs, err := hms.regMgr.Pull(h.name)
-			if err != nil {
-				return nil, err
-			}
-
-			now := time.Now()
-			hm.lastPull = &now
-			hm.codeDir = codeDir
-			hm.pkgs = pkgs
-		}
-
-		pullMutex.Unlock()
-	}
 
 	// create sandbox if needed
 	if h.sandbox == nil {
@@ -312,9 +302,9 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 		}
 
 		// we are up so we can add ourselves for reuse
-		hms.mutex.Lock()
+		hm.mutex.Lock()
 		hm.hElements[h] = hm.handlers.PushFront(h)
-		hms.mutex.Unlock()
+		hm.mutex.Unlock()
 
 	} else if sbState, _ := h.sandbox.State(); sbState == state.Paused {
 		// unpause if paused
@@ -348,9 +338,7 @@ func (h *Handler) RunFinish() {
 			log.Printf("Could not pause %v!  Error: %v\n", h.name, err)
 		}
 
-		h.hm.hms.mutex.Lock()
 		h.hm.hms.lru.Add(h)
-		h.hm.hms.mutex.Unlock()
 	}
 }
 
