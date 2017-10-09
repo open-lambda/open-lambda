@@ -91,6 +91,7 @@ func NewHandlerManagerSet(opts *config.Config) (hms *HandlerManagerSet, err erro
 		regMgr:      rm,
 		sbFactory:   sf,
 		cacheMgr:    cm,
+		config:      opts,
 		workerDir:   opts.Worker_dir,
 		indexHost:   opts.Index_host,
 		indexPort:   opts.Index_port,
@@ -298,7 +299,7 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 		start := time.Now()
 		for ok := true; ok; ok = os.IsNotExist(err) {
 			_, err = os.Stat(sockPath)
-			if hms.cacheMgr == nil || hms.cacheMgr.Full() {
+			if hms.config.Sandbox == "olcontainer" && (hms.cacheMgr == nil || hms.cacheMgr.Full()) {
 				time.Sleep(10 * time.Microsecond)
 				if err := h.sandbox.RunServer(); err != nil {
 					return nil, err
