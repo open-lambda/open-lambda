@@ -117,7 +117,7 @@ func (s *OLContainerSandbox) Start() error {
 func (s *OLContainerSandbox) Stop() error {
 	// kill any remaining processes
 	for _, cgroup := range CGroupList {
-		procsPath := path.Join("/sys/fs/cgroup/", cgroup, OLCGroupName, s.id, "cgroup.procs")
+		procsPath := path.Join("/sys/fs/cgroup/", cgroup, OLCGroupName, s.cgId, "cgroup.procs")
 		pids, err := ioutil.ReadFile(procsPath)
 		if err != nil {
 			return err
