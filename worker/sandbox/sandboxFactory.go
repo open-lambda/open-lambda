@@ -153,7 +153,7 @@ func (bf *BufferedSBFactory) Create(handlerDir, workingDir, indexHost, indexPort
 			return nil, err
 		} else if err := syscall.Mount(handlerDir, info.handlerDir, "", mntFlag, ""); err != nil {
 			return nil, err
-		} else if err := syscall.Mount(hostDir, info.sandboxDir, "", mntFlag, ""); err != nil {
+		} else if err := syscall.Mount(hostDir, path.Join(info.sandboxDir, info.sandbox.ID()), "", mntFlag, ""); err != nil {
 			return nil, err
 		}
 		if !bf.cache {

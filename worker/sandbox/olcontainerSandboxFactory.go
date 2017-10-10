@@ -12,7 +12,7 @@ import (
 	"github.com/open-lambda/open-lambda/worker/config"
 )
 
-var unshareFlags []string = []string{"-impuf", "--mount-proc", "--propagation", "unchanged"}
+var unshareFlags []string = []string{"-impuf", "--mount-proc", "--propagation", "slave"}
 
 // OLContainerSBFactory is a SandboxFactory that creats docker sandboxes.
 type OLContainerSBFactory struct {
@@ -67,10 +67,10 @@ func (sf *OLContainerSBFactory) Create(handlerDir, workingDir, indexHost, indexP
 		return nil, fmt.Errorf("failed to mount base dir: %v", err.Error())
 	}
 
-	containerHandlerDir := path.Join(rootDir, "handler")
-	if err := syscall.Mount(handlerDir, containerHandlerDir, "", syscall.MS_BIND, ""); err != nil {
+	sbHandlerDir := path.Join(rootDir, "handler")
+	if err := syscall.Mount(handlerDir, sbHandlerDir, "", syscall.MS_BIND, ""); err != nil {
 		return nil, fmt.Errorf("failed to bind handler dir: %v", err.Error())
-	} else if err := syscall.Mount("none", containerHandlerDir, "", syscall.MS_SLAVE, ""); err != nil {
+	} else if err := syscall.Mount("none", sbHandlerDir, "", syscall.MS_SLAVE, ""); err != nil {
 		return nil, fmt.Errorf("failed to make handler dir a slave: %v", err.Error())
 	}
 
