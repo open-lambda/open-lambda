@@ -240,6 +240,22 @@ func (hms *HandlerManagerSet) Cleanup() {
 	}
 }
 
+// must be called with handler lock
+func (hm *HandlerManager) AddHandler(h *Handler) {
+	hms := hm.hms
+
+	// if we finish first
+	// no deadlock can occur here despite taking the locks in the
+	// opposite order because hm -> h in Get has no reference
+	// in the handler list
+	if hms.maxRunners != 0 && h.runners == hms.maxRunners-1 {
+		hm.mutex.Lock()
+		hm.hElements[h] = hm.handlers.PushFront(h)
+		hm.maxHandlers = max(hm.maxHandlers, hm.handlers.Len())
+		hm.mutex.Unlock()
+	}
+}
+
 // RunStart runs the lambda handled by this Handler. It checks if the code has
 // been pulled, sandbox been created, and sandbox been started. The channel of
 // the sandbox of this lambda is returned.
@@ -345,17 +361,6 @@ func (h *Handler) RunFinish() {
 	hm := h.hm
 	hms := h.hm.hms
 
-	// if we finish first
-	// no deadlock can occur here despite taking the locks in the
-	// opposite order because hm -> h in Get has no reference
-	// in the handler list
-	if hms.maxRunners != 0 && h.runners == hms.maxRunners {
-		hm.mutex.Lock()
-		hm.hElements[h] = hm.handlers.PushFront(h)
-		hm.maxHandlers = max(hm.maxHandlers, hm.handlers.Len())
-		hm.mutex.Unlock()
-	}
-
 	h.runners -= 1
 
 	// are we the last?
@@ -367,7 +372,10 @@ func (h *Handler) RunFinish() {
 			log.Printf("Could not pause %v: %v!  Error: %v\n", h.name, h.id, err)
 		}
 
+		hm.AddHandler(h)
 		hms.lru.Add(h)
+	} else {
+		hm.AddHandler(h)
 	}
 }
 
