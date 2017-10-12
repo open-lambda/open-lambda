@@ -115,6 +115,7 @@ func (s *OLContainerSandbox) Start() error {
 }
 
 func (s *OLContainerSandbox) Stop() error {
+	start := time.Now()
 	// kill any remaining processes
 	for _, cgroup := range CGroupList {
 		procsPath := path.Join("/sys/fs/cgroup/", cgroup, OLCGroupName, s.cgId, "cgroup.procs")
@@ -151,6 +152,7 @@ func (s *OLContainerSandbox) Stop() error {
 	s.initCmd.Wait()
 
 	s.status = state.Stopped
+	log.Printf("stop took: %v", time.Since(start))
 	return nil
 }
 
@@ -188,28 +190,42 @@ func (s *OLContainerSandbox) Remove() error {
 	// remove cgroups
 	s.cgf.PutCg(s.id, s.cgId)
 
+	start := time.Now()
 	// unmount directories
 	handler_dir := filepath.Join(s.rootDir, "handler")
 	if err := syscall.Unmount(handler_dir, syscall.MNT_DETACH); err != nil {
 		log.Printf("failed to unmount handler dir: %s :: %s\n", handler_dir, err)
 	}
+	log.Printf("Unmount handler dir took: %v", time.Since(start))
 
+	start = time.Now()
 	host_dir := filepath.Join(s.rootDir, "host")
 	if err := syscall.Unmount(host_dir, syscall.MNT_DETACH); err != nil {
 		log.Printf("failed to unmount host dir: %s :: %s\n", host_dir, err)
 	}
+	log.Printf("Unmount host dir took: %v", time.Since(start))
 
+	start = time.Now()
 	pkgs_dir := filepath.Join(s.rootDir, "packages")
 	if err := syscall.Unmount(pkgs_dir, syscall.MNT_DETACH); err != nil {
 		log.Printf("failed to unmount packages dir: %s :: %s\n", pkgs_dir, err)
 	}
+	log.Printf("Unmount packages dir took: %v", time.Since(start))
 
+	start = time.Now()
 	if err := syscall.Unmount(s.rootDir, syscall.MNT_DETACH); err != nil {
 		log.Printf("failed to unmount root dir: %s :: %s\n", s.rootDir, err)
 	}
+	log.Printf("Unmount rootDir took: %v", time.Since(start))
 
 	// remove everything
-	return os.RemoveAll(s.rootDir)
+	start = time.Now()
+	if err := os.RemoveAll(s.rootDir); err != nil {
+		return err
+	}
+	log.Printf("Removing everything took: %v", time.Since(start))
+
+	return nil
 }
 
 func (s *OLContainerSandbox) Logs() (string, error) {

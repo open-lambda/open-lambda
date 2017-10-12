@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"log"
 	"fmt"
 	"os"
 	"os/exec"
@@ -11,6 +12,12 @@ import (
 
 	"github.com/open-lambda/open-lambda/worker/config"
 )
+
+const rootSandboxDir string = "/tmp/olroots"
+
+var BIND uintptr = uintptr(syscall.MS_BIND | syscall.MS_REC)
+var BIND_RO uintptr = uintptr(syscall.MS_BIND | syscall.MS_REC | syscall.MS_RDONLY)
+var PRIVATE uintptr = uintptr(syscall.MS_PRIVATE | syscall.MS_REC)
 
 var unshareFlags []string = []string{"-impuf", "--mount-proc", "--propagation", "slave"}
 
@@ -29,6 +36,14 @@ func NewOLContainerSBFactory(opts *config.Config, baseDir string) (*OLContainerS
 		if err := os.MkdirAll(cgroupPath, 0700); err != nil {
 			return nil, err
 		}
+	}
+
+	if err := os.Mkdir(rootSandboxDir, 0777); err != nil {
+		return nil, fmt.Errorf("failed to make root sandbox dir :: %v", err.Error())
+	} else if err := syscall.Mount(rootSandboxDir, rootSandboxDir, "", BIND, ""); err != nil {
+		return nil, fmt.Errorf("failed to bind root sandbox dir: %v", err.Error())
+	} else if err := syscall.Mount("none", rootSandboxDir, "", PRIVATE, ""); err != nil {
+		return nil, fmt.Errorf("failed to make root sandbox dir private :: %v", err.Error())
 	}
 
 	cgf, err := NewCgroupFactory(opts.Cg_pool_size)
@@ -53,38 +68,54 @@ func (sf *OLContainerSBFactory) Create(handlerDir, workingDir, indexHost, indexP
 		return nil, err
 	}
 
-	rootDir := fmt.Sprintf("/tmp/sandbox_%s", id)
+	rootDir := path.Join(rootSandboxDir, fmt.Sprintf("sandbox_%s", id))
 	if err := os.Mkdir(rootDir, 0700); err != nil {
 		return nil, err
 	}
-
-	BIND_RO := uintptr(syscall.MS_BIND | syscall.MS_RDONLY)
 
 	// NOTE: mount points are expected to exist in OLContainer_handler_base directory
 
 	layers := fmt.Sprintf("br=%s=rw:%s=ro", rootDir, sf.baseDir)
 	if err := syscall.Mount("none", rootDir, "aufs", 0, layers); err != nil {
 		return nil, fmt.Errorf("failed to mount base dir: %v", err.Error())
+	} else if err := syscall.Mount("none", rootDir, "", PRIVATE, ""); err != nil {
+		return nil, fmt.Errorf("failed to make root dir private :: %v", err.Error())
 	}
+/*
+	if err := syscall.Mount(sf.baseDir, rootDir, "", BIND_RO, ""); err != nil {
+		return nil, fmt.Errorf("failed to bind root dir: %v", err.Error())
+	}
+*/
 
 	sbHandlerDir := path.Join(rootDir, "handler")
-	if err := syscall.Mount(handlerDir, sbHandlerDir, "", syscall.MS_BIND, ""); err != nil {
+	if err := syscall.Mount(handlerDir, sbHandlerDir, "", BIND, ""); err != nil {
 		return nil, fmt.Errorf("failed to bind handler dir: %v", err.Error())
-	} else if err := syscall.Mount("none", sbHandlerDir, "", syscall.MS_SLAVE, ""); err != nil {
-		return nil, fmt.Errorf("failed to make handler dir a slave: %v", err.Error())
 	}
+/*
+	 else if err := syscall.Mount("none", sbHandlerDir, "", PRIVATE, ""); err != nil {
+		return nil, fmt.Errorf("failed to make handler dir private: %v", err.Error())
+	}
+*/
 
 	sbHostDir := path.Join(rootDir, "host")
-	if err := syscall.Mount(hostDir, sbHostDir, "", syscall.MS_BIND, ""); err != nil {
+	if err := syscall.Mount(hostDir, sbHostDir, "", BIND, ""); err != nil {
 		return nil, fmt.Errorf("failed to bind host dir: %v", err.Error())
-	} else if err := syscall.Mount("none", sbHostDir, "", syscall.MS_SLAVE, ""); err != nil {
-		return nil, fmt.Errorf("failed to make host dir a slave: %v", err.Error())
 	}
+/*
+	 else if err := syscall.Mount("none", sbHostDir, "", PRIVATE, ""); err != nil {
+		return nil, fmt.Errorf("failed to make host dir private: %v", err.Error())
+	}
+*/
 
 	pkgsDir := path.Join(rootDir, "packages")
 	if err := syscall.Mount(sf.opts.Pkgs_dir, pkgsDir, "", BIND_RO, ""); err != nil {
 		return nil, fmt.Errorf("failed to bind handler dir: %v", err.Error())
 	}
+/*
+	 else if err := syscall.Mount("none", sbHostDir, "", PRIVATE, ""); err != nil {
+		return nil, fmt.Errorf("failed to make host dir private: %v", err.Error())
+	}
+*/
 
 	startCmd := []string{"/ol-init"}
 	if indexHost != "" {
@@ -102,4 +133,7 @@ func (sf *OLContainerSBFactory) Cleanup() {
 		cgroupPath := path.Join("/sys/fs/cgroup", cgroup, OLCGroupName)
 		os.RemoveAll(cgroupPath)
 	}
+
+	log.Printf("cleanup, unmount root dir: %v", syscall.Unmount(rootSandboxDir, syscall.MNT_DETACH))
+	log.Printf("cleanup, remove root dir: %v", os.RemoveAll(rootSandboxDir))
 }
