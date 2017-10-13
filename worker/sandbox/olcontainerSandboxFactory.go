@@ -1,8 +1,8 @@
 package sandbox
 
 import (
-	"log"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path"
@@ -81,41 +81,41 @@ func (sf *OLContainerSBFactory) Create(handlerDir, workingDir, indexHost, indexP
 	} else if err := syscall.Mount("none", rootDir, "", PRIVATE, ""); err != nil {
 		return nil, fmt.Errorf("failed to make root dir private :: %v", err.Error())
 	}
-/*
-	if err := syscall.Mount(sf.baseDir, rootDir, "", BIND_RO, ""); err != nil {
-		return nil, fmt.Errorf("failed to bind root dir: %v", err.Error())
-	}
-*/
+	/*
+		if err := syscall.Mount(sf.baseDir, rootDir, "", BIND_RO, ""); err != nil {
+			return nil, fmt.Errorf("failed to bind root dir: %v", err.Error())
+		}
+	*/
 
 	sbHandlerDir := path.Join(rootDir, "handler")
 	if err := syscall.Mount(handlerDir, sbHandlerDir, "", BIND, ""); err != nil {
 		return nil, fmt.Errorf("failed to bind handler dir: %v", err.Error())
 	}
-/*
-	 else if err := syscall.Mount("none", sbHandlerDir, "", PRIVATE, ""); err != nil {
-		return nil, fmt.Errorf("failed to make handler dir private: %v", err.Error())
-	}
-*/
+	/*
+		 else if err := syscall.Mount("none", sbHandlerDir, "", PRIVATE, ""); err != nil {
+			return nil, fmt.Errorf("failed to make handler dir private: %v", err.Error())
+		}
+	*/
 
 	sbHostDir := path.Join(rootDir, "host")
 	if err := syscall.Mount(hostDir, sbHostDir, "", BIND, ""); err != nil {
 		return nil, fmt.Errorf("failed to bind host dir: %v", err.Error())
 	}
-/*
-	 else if err := syscall.Mount("none", sbHostDir, "", PRIVATE, ""); err != nil {
-		return nil, fmt.Errorf("failed to make host dir private: %v", err.Error())
-	}
-*/
+	/*
+		 else if err := syscall.Mount("none", sbHostDir, "", PRIVATE, ""); err != nil {
+			return nil, fmt.Errorf("failed to make host dir private: %v", err.Error())
+		}
+	*/
 
 	pkgsDir := path.Join(rootDir, "packages")
 	if err := syscall.Mount(sf.opts.Pkgs_dir, pkgsDir, "", BIND_RO, ""); err != nil {
 		return nil, fmt.Errorf("failed to bind handler dir: %v", err.Error())
 	}
-/*
-	 else if err := syscall.Mount("none", sbHostDir, "", PRIVATE, ""); err != nil {
-		return nil, fmt.Errorf("failed to make host dir private: %v", err.Error())
-	}
-*/
+	/*
+		 else if err := syscall.Mount("none", sbHostDir, "", PRIVATE, ""); err != nil {
+			return nil, fmt.Errorf("failed to make host dir private: %v", err.Error())
+		}
+	*/
 
 	startCmd := []string{"/ol-init"}
 	if indexHost != "" {

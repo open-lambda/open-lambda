@@ -61,9 +61,9 @@ def create_link(pkg):
 
 def install(pkg):
     if MIRROR:
-        check_output(['pip', 'install', '--no-cache-dir', '--index-url', 'http://%s:%s/simple' % (INDEX_HOST, INDEX_PORT), '--trusted-host', INDEX_HOST, pkg])
+        check_output(' '.join(['pip', 'install', '--no-cache-dir', '--index-url', 'http://%s:%s/simple' % (INDEX_HOST, INDEX_PORT), '--trusted-host', INDEX_HOST, pkg]), shell=True)
     else:
-        check_output(['pip', 'install', pkg])
+        check_output(' '.join(['pip', 'install', pkg]), shell=True)
 
 def do_installs():
     with open(PKG_PATH) as fd:
