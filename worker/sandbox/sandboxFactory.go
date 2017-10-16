@@ -14,6 +14,8 @@ import (
 	"github.com/open-lambda/open-lambda/worker/config"
 )
 
+const olMntDir = "/tmp/olmnts"
+
 // SandboxFactory is the common interface for all sandbox creation functions.
 type SandboxFactory interface {
 	Create(handlerDir, workingDir, indexHost, indexPort string) (sandbox Sandbox, err error)
@@ -89,15 +91,14 @@ func NewBufferedSBFactory(opts *config.Config, delegate SandboxFactory) (*Buffer
 	bf.delegate = delegate
 	bf.buffer = make(chan *emptySBInfo, opts.Sandbox_buffer)
 	bf.errors = make(chan error, opts.Sandbox_buffer)
-	bf.mntDir = "/tmp/.olmnts"
 	if opts.Import_cache_size == 0 {
 		bf.cache = false
 	} else {
 		bf.cache = true
 	}
 
-	if err := os.MkdirAll(bf.mntDir, os.ModeDir); err != nil {
-		return nil, fmt.Errorf("fail to create directory at %s: %v", bf.mntDir, err)
+	if err := os.MkdirAll(olMntDir, os.ModeDir); err != nil {
+		return nil, fmt.Errorf("fail to create directory at %s: %v", olMntDir, err)
 	}
 
 	// fill the sandbox buffer
@@ -111,7 +112,7 @@ func NewBufferedSBFactory(opts *config.Config, delegate SandboxFactory) (*Buffer
 					return // kill signal
 				}
 
-				bufDir := filepath.Join(bf.mntDir, fmt.Sprintf("%d", newIdx))
+				bufDir := filepath.Join(olMntDir, fmt.Sprintf("%d", newIdx))
 				if handlerDir, sandboxDir, err := mkSBDirs(bufDir); err != nil {
 					bf.errors <- err
 				} else if sandbox, err := bf.delegate.Create(handlerDir, sandboxDir, opts.Index_host, opts.Index_port); err != nil {
@@ -140,7 +141,7 @@ func NewBufferedSBFactory(opts *config.Config, delegate SandboxFactory) (*Buffer
 // mounted in the sandbox, and returns that sandbox. The sandbox would be in
 // Paused state, instead of Stopped.
 func (bf *BufferedSBFactory) Create(handlerDir, workingDir, indexHost, indexPort string) (Sandbox, error) {
-	mntFlag := uintptr(syscall.MS_BIND | syscall.MS_REC)
+	mntFlag := uintptr(syscall.MS_BIND)
 	select {
 	case info := <-bf.buffer:
 		// create cluster host directory
@@ -187,8 +188,8 @@ func (bf *BufferedSBFactory) Cleanup() {
 			bf.delegate.Cleanup()
 
 			// clean up directories once all sandboxes are dead
-			runCmd([]string{"umount", filepath.Join(bf.mntDir, "*", "*")})
-			runCmd([]string{"rm", "-rf", bf.mntDir})
+			runCmd([]string{"umount", filepath.Join(olMntDir, "*", "*")})
+			runCmd([]string{"rm", "-rf", olMntDir})
 
 			return
 		}

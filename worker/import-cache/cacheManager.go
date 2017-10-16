@@ -79,6 +79,7 @@ func (cm *CacheManager) Provision(sandbox sb.ContainerSandbox, dir string, pkgs 
 	if len(toCache) != 0 {
 		fs, err = cm.newCacheEntry(fs, toCache)
 		if err != nil {
+			cm.mutex.Unlock()
 			return nil, false, err
 			//return cm.Provision(sandbox, dir, pkgs) //TODO
 		}
@@ -86,6 +87,7 @@ func (cm *CacheManager) Provision(sandbox sb.ContainerSandbox, dir string, pkgs 
 		cm.mutex.Unlock()
 		fs.Mutex.Lock()
 		if fs == nil {
+			fs.Mutex.Unlock()
 			return nil, false, err
 			//return cm.Provision(sandbox, dir, pkgs) //TODO
 		}

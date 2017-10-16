@@ -16,6 +16,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -26,7 +27,7 @@ import (
 	sb "github.com/open-lambda/open-lambda/worker/sandbox"
 )
 
-var unshareFlags []string = []string{"-fimu"}
+var unshareFlags []string = []string{"-fimuC"}
 
 func InitCacheFactory(opts *config.Config, cluster string) (cf *BufferedCacheFactory, root sb.ContainerSandbox, rootDir, memCGroupPath string, err error) {
 	cf, root, rootDir, memCGroupPath, err = NewBufferedCacheFactory(opts, cluster)
@@ -140,7 +141,7 @@ func NewOLContainerCacheFactory(opts *config.Config, cluster, baseDir, pkgsDir s
 		}
 	}
 
-	cgf, err := sb.NewCgroupFactory(0)
+	cgf, err := sb.NewCgroupFactory("cache", opts.Cg_pool_size)
 	if err != nil {
 		return nil, err
 	}
@@ -178,14 +179,12 @@ func (cf *OLContainerCacheFactory) Create(sandboxDir string, startCmd []string) 
 		return nil, "", fmt.Errorf("Failed to bind host dir: %v", err.Error())
 	}
 
-	sandbox, err := sb.NewOLContainerSandbox(cf.cgf, cf.opts, rootDir, sandboxDir, id, startCmd, unshareFlags)
+	sandbox, err := sb.NewOLContainerSandbox(cf.cgf, cf.opts, rootDir, sandboxDir, id, startCmd, unshareFlags, &sync.Mutex{})
 	if err != nil {
 		return nil, "", err
 	}
 
-	memCGroupPath := path.Join("/sys/fs/cgroup/memory/", sb.OLCGroupName, id)
-
-	return sandbox, memCGroupPath, nil
+	return sandbox, sandbox.MemoryCGroupPath(), nil
 }
 
 func (cf *OLContainerCacheFactory) Cleanup() {
@@ -303,7 +302,7 @@ func (bf *BufferedCacheFactory) Create() (sb.ContainerSandbox, string, error) {
 		return nil, "", err
 	}
 
-	return info.sandbox, info.sandboxDir, nil
+	return info.sandbox, path.Join(info.sandboxDir, info.sandbox.ID()), nil
 }
 
 func (bf *BufferedCacheFactory) Cleanup() {

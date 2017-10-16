@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -40,9 +41,10 @@ type OLContainerSandbox struct {
 	initCmd      *exec.Cmd
 	startCmd     []string
 	unshareFlags []string
+	pipeMutex    *sync.Mutex
 }
 
-func NewOLContainerSandbox(cgf *CgroupFactory, opts *config.Config, rootDir, hostDir, id string, startCmd, unshareFlags []string) (*OLContainerSandbox, error) {
+func NewOLContainerSandbox(cgf *CgroupFactory, opts *config.Config, rootDir, hostDir, id string, startCmd, unshareFlags []string, pipeMutex *sync.Mutex) (*OLContainerSandbox, error) {
 	// create container cgroups
 	cgId := cgf.GetCg(id)
 
@@ -56,6 +58,7 @@ func NewOLContainerSandbox(cgf *CgroupFactory, opts *config.Config, rootDir, hos
 		unshareFlags: unshareFlags,
 		status:       state.Stopped,
 		startCmd:     startCmd,
+		pipeMutex:    pipeMutex,
 	}
 
 	return sandbox, nil
@@ -105,6 +108,7 @@ func (s *OLContainerSandbox) Start() error {
 		}
 		time.Sleep(10 * time.Microsecond)
 	}
+	log.Printf("wait for olcontainer_init took %v\n", time.Since(start))
 
 	if err := s.CGroupEnter(s.initPid); err != nil {
 		return err
@@ -117,42 +121,42 @@ func (s *OLContainerSandbox) Start() error {
 func (s *OLContainerSandbox) Stop() error {
 	start := time.Now()
 	// kill any remaining processes
-	for _, cgroup := range CGroupList {
-		procsPath := path.Join("/sys/fs/cgroup/", cgroup, OLCGroupName, s.cgId, "cgroup.procs")
-		pids, err := ioutil.ReadFile(procsPath)
-		if err != nil {
-			return err
+	procsPath := path.Join("/sys/fs/cgroup/memory", OLCGroupName, s.cgId, "cgroup.procs")
+	pids, err := ioutil.ReadFile(procsPath)
+	if err != nil {
+		return err
+	}
+
+	for _, pidStr := range strings.Split(strings.TrimSpace(string(pids[:])), "\n") {
+		if pidStr == "" {
+			break
 		}
 
-		for _, pidStr := range strings.Split(strings.TrimSpace(string(pids[:])), "\n") {
-			if pidStr == "" {
-				break
-			}
+		pid, err := strconv.Atoi(pidStr)
+		if err != nil {
+			log.Printf("read bad pid string: %s :: %v", pidStr, err)
+			continue
+		}
 
-			pid, err := strconv.Atoi(pidStr)
-			if err != nil {
-				log.Printf("read bad pid string: %s :: %v", pidStr, err)
-				continue
-			}
+		proc, err := os.FindProcess(pid)
+		if err != nil {
+			log.Printf("failed to find process with pid=%d :: %v", pid, err)
+			continue
+		}
 
-			proc, err := os.FindProcess(pid)
-			if err != nil {
-				log.Printf("failed to find process with pid=%d :: %v", pid, err)
-				continue
-			}
-
-			err = proc.Signal(syscall.SIGKILL)
-			if err != nil {
-				log.Printf("failed to send kill signal to pid=%d :: %v", pid, err)
-			}
+		err = proc.Signal(syscall.SIGKILL)
+		if err != nil {
+			log.Printf("failed to send kill signal to pid=%d :: %v", pid, err)
 		}
 	}
 
-	// release unshare process resources
-	s.initCmd.Wait()
+	go func(s *OLContainerSandbox, start time.Time) {
+		// release unshare process resources
+		s.initCmd.Process.Kill()
+		s.initCmd.Process.Wait()
+	}(s, start)
 
 	s.status = state.Stopped
-	log.Printf("stop took: %v", time.Since(start))
 	return nil
 }
 
@@ -190,40 +194,18 @@ func (s *OLContainerSandbox) Remove() error {
 	// remove cgroups
 	s.cgf.PutCg(s.id, s.cgId)
 
-	start := time.Now()
-	// unmount directories
-	handler_dir := filepath.Join(s.rootDir, "handler")
-	if err := syscall.Unmount(handler_dir, syscall.MNT_DETACH); err != nil {
-		log.Printf("failed to unmount handler dir: %s :: %s\n", handler_dir, err)
-	}
-	log.Printf("Unmount handler dir took: %v", time.Since(start))
+	data := append([]byte(s.rootDir), 0)
+	data = append(data, make([]byte, 100-len(data))...)
 
-	start = time.Now()
-	host_dir := filepath.Join(s.rootDir, "host")
-	if err := syscall.Unmount(host_dir, syscall.MNT_DETACH); err != nil {
-		log.Printf("failed to unmount host dir: %s :: %s\n", host_dir, err)
-	}
-	log.Printf("Unmount host dir took: %v", time.Since(start))
-
-	start = time.Now()
-	pkgs_dir := filepath.Join(s.rootDir, "packages")
-	if err := syscall.Unmount(pkgs_dir, syscall.MNT_DETACH); err != nil {
-		log.Printf("failed to unmount packages dir: %s :: %s\n", pkgs_dir, err)
-	}
-	log.Printf("Unmount packages dir took: %v", time.Since(start))
-
-	start = time.Now()
-	if err := syscall.Unmount(s.rootDir, syscall.MNT_DETACH); err != nil {
-		log.Printf("failed to unmount root dir: %s :: %s\n", s.rootDir, err)
-	}
-	log.Printf("Unmount rootDir took: %v", time.Since(start))
-
-	// remove everything
-	start = time.Now()
-	if err := os.RemoveAll(s.rootDir); err != nil {
+	s.pipeMutex.Lock()
+	defer s.pipeMutex.Unlock()
+	if f, err := os.OpenFile("/tmp/olpipe", os.O_RDWR, os.ModeNamedPipe); err != nil {
+		return err
+	} else if _, err = f.Write(data); err != nil {
+		return err
+	} else if err = f.Close(); err != nil {
 		return err
 	}
-	log.Printf("Removing everything took: %v", time.Since(start))
 
 	return nil
 }

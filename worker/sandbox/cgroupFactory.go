@@ -14,7 +14,7 @@ type CgroupFactory struct {
 	freeCg   *list.List
 }
 
-func NewCgroupFactory(poolSize int) (*CgroupFactory, error) {
+func NewCgroupFactory(prefix string, poolSize int) (*CgroupFactory, error) {
 	var freeCg *list.List
 	freeCg = nil
 
@@ -22,7 +22,7 @@ func NewCgroupFactory(poolSize int) (*CgroupFactory, error) {
 		// init cgroup pool
 		freeCg = list.New()
 		for i := 1; i <= poolSize; i++ {
-			cgId := fmt.Sprintf("%d", i)
+			cgId := fmt.Sprintf("%s-%d", prefix, i)
 			if err := CreateCg(cgId); err != nil {
 				return nil, err
 			} else {
