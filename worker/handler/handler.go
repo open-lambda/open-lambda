@@ -380,9 +380,15 @@ func (h *Handler) RunFinish() {
 }
 
 func (h *Handler) nuke() {
-	h.sandbox.Unpause()
-	h.sandbox.Stop()
-	h.sandbox.Remove()
+	if err := h.sandbox.Unpause(); err != nil {
+		log.Printf("failed to unpause sandbox :: %v", err.Error())
+	}
+	if err := h.sandbox.Stop(); err != nil {
+		log.Printf("failed to stop sandbox :: %v", err.Error())
+	}
+	if err := h.sandbox.Remove(); err != nil {
+		log.Printf("failed to remove sandbox :: %v", err.Error())
+	}
 }
 
 // Sandbox returns the sandbox of this Handler.

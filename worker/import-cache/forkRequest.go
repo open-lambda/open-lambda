@@ -71,7 +71,7 @@ sendFds(char *sockPath, char *pid, char *rootdir, char *pkgs) {
 
         nsfds[k] = open(path, O_RDONLY);
         if (nsfds[k] == -1) {
-            sprintf(errmsg, "open: %s\n", strerror(errno));
+            sprintf(errmsg, "open %s failed: %s\n", path, strerror(errno));
             return errmsg;
         }
     }
@@ -149,9 +149,9 @@ sendFds(char *sockPath, char *pid, char *rootdir, char *pkgs) {
 import "C"
 
 import (
-	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/open-lambda/open-lambda/worker/benchmarker"
 )
@@ -166,7 +166,7 @@ import (
  * Returns the PID of the spawned process upon success.
  */
 
-func forkRequest(sockPath, targetPid, rootDir string, pkgList []string, handler bool) (pid string, err error) {
+func forkRequest(sockPath, targetPid, rootDir string, pkgList []string, handler bool) (string, error) {
 	b := benchmarker.GetBenchmarker()
 	var t *benchmarker.Timer
 	if b != nil {
@@ -191,18 +191,19 @@ func forkRequest(sockPath, targetPid, rootDir string, pkgList []string, handler 
 	croot := C.CString(rootDir)
 	cpkgs := C.CString(pkgStr)
 
-	ret, err := C.sendFds(csock, cpid, croot, cpkgs)
-	if t != nil {
+	var err error
+	for k := 0; k < 5; k++ {
+		ret, err := C.sendFds(csock, cpid, croot, cpkgs)
 		if err == nil {
-			t.End()
-		} else {
-			t.Error("Send Fds Failed")
+			pid := C.GoString(ret)
+			if err != nil || pid == "" {
+				err = fmt.Errorf("sendFds failed :: %s", pid)
+			} else {
+				return pid, nil
+			}
 		}
-	}
-	pid = C.GoString(ret)
-	if err != nil || pid == "" {
-		return "", errors.New(fmt.Sprintf("sendFds: %s", pid))
+		time.Sleep(50 * time.Microsecond)
 	}
 
-	return pid, nil
+	return "", err
 }
