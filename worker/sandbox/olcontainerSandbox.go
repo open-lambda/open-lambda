@@ -31,6 +31,7 @@ import (
 type OLContainerSandbox struct {
 	opts         *config.Config
 	cgf          *CgroupFactory
+	nnf          *NetnsFactory
 	id           string
 	cgId         string
 	rootDir      string
@@ -42,12 +43,13 @@ type OLContainerSandbox struct {
 	unshareFlags []string
 }
 
-func NewOLContainerSandbox(cgf *CgroupFactory, opts *config.Config, rootDir, hostDir, id string, startCmd, unshareFlags []string) (*OLContainerSandbox, error) {
+func NewOLContainerSandbox(cgf *CgroupFactory, nnf *NetnsFactory, opts *config.Config, rootDir, hostDir, id string, startCmd, unshareFlags []string) (*OLContainerSandbox, error) {
 	// create container cgroups
 	cgId := cgf.GetCg(id)
 
 	sandbox := &OLContainerSandbox{
 		cgf:          cgf,
+		nnf:          nnf,
 		opts:         opts,
 		id:           id,
 		cgId:         cgId,
@@ -80,10 +82,20 @@ func (s *OLContainerSandbox) Start() error {
 	initArgs = append(initArgs, s.startCmd...)
 	initArgs = append(s.unshareFlags, initArgs...)
 
-	s.initCmd = exec.Command(
-		"unshare",
-		initArgs...,
-	)
+	if s.nnf != nil {
+		nsId := s.nnf.GetNsId(s.id)
+		netnsArgs := []string{"netns", "exec", nsId, "unshare"}
+		netnsArgs = append(netnsArgs, initArgs...)
+		s.initCmd = exec.Command(
+			"ip",
+			netnsArgs...,
+		)
+	} else {
+		s.initCmd = exec.Command(
+			"unshare",
+			initArgs...,
+		)
+	}
 
 	s.initCmd.Env = []string{fmt.Sprintf("ol.config=%s", s.opts.SandboxConfJson())}
 	if err := s.initCmd.Start(); err != nil {
@@ -183,6 +195,13 @@ func (s *OLContainerSandbox) Remove() error {
 	}
 	if err := os.RemoveAll(filepath.Join(s.hostDir, "fs.sock")); err != nil {
 		return err
+	}
+
+	// remove netns
+	if s.nnf != nil {
+		if err := s.nnf.DestroyNetns(s.id); err != nil {
+			log.Printf("OLSB Remove DestroyNS error: %v", err)
+		}
 	}
 
 	// remove cgroups

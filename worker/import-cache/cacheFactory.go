@@ -126,6 +126,7 @@ func (cf *DockerCacheFactory) Cleanup() {
 type OLContainerCacheFactory struct {
 	opts    *config.Config
 	cgf     *sb.CgroupFactory
+	nnf     *sb.NetnsFactory
 	cmd     []string
 	baseDir string
 	pkgsDir string
@@ -145,7 +146,13 @@ func NewOLContainerCacheFactory(opts *config.Config, cluster, baseDir, pkgsDir s
 		return nil, err
 	}
 
-	return &OLContainerCacheFactory{opts, cgf, []string{"/init"}, baseDir, pkgsDir}, nil
+	var nnf *sb.NetnsFactory
+	nnf = nil
+	if opts.Use_netns != 0 {
+		nnf = sb.NewNetnsFactory("cache", opts.Ip_pool_size)
+	}
+
+	return &OLContainerCacheFactory{opts, cgf, nnf, []string{"/init"}, baseDir, pkgsDir}, nil
 }
 
 // Create creates a docker sandbox from the pool directory.
@@ -178,7 +185,14 @@ func (cf *OLContainerCacheFactory) Create(sandboxDir string, startCmd []string) 
 		return nil, "", fmt.Errorf("Failed to bind host dir: %v", err.Error())
 	}
 
-	sandbox, err := sb.NewOLContainerSandbox(cf.cgf, cf.opts, rootDir, sandboxDir, id, startCmd, unshareFlags)
+	if cf.nnf != nil {
+		err := cf.nnf.CreateNetns(id)
+		if err != nil {
+			return nil, "", err
+		}
+	}
+
+	sandbox, err := sb.NewOLContainerSandbox(cf.cgf, cf.nnf, cf.opts, rootDir, sandboxDir, id, startCmd, unshareFlags)
 	if err != nil {
 		return nil, "", err
 	}

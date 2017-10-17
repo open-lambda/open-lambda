@@ -20,6 +20,7 @@ type OLContainerSBFactory struct {
 	opts    *config.Config
 	baseDir string
 	cgf     *CgroupFactory
+	nnf     *NetnsFactory
 }
 
 // NewOLContainerSBFactory creates a OLContainerSBFactory.
@@ -36,7 +37,13 @@ func NewOLContainerSBFactory(opts *config.Config, baseDir string) (*OLContainerS
 		return nil, err
 	}
 
-	return &OLContainerSBFactory{opts: opts, baseDir: baseDir, cgf: cgf}, nil
+	var nnf *NetnsFactory
+	nnf = nil
+	if opts.Use_netns != 0 {
+		nnf = NewNetnsFactory("sandbox", opts.Ip_pool_size)
+	}
+
+	return &OLContainerSBFactory{opts: opts, baseDir: baseDir, cgf: cgf, nnf: nnf}, nil
 }
 
 // Create creates a docker sandbox from the handler and sandbox directory.
@@ -94,7 +101,14 @@ func (sf *OLContainerSBFactory) Create(handlerDir, workingDir, indexHost, indexP
 		startCmd = append(startCmd, indexPort)
 	}
 
-	return NewOLContainerSandbox(sf.cgf, sf.opts, rootDir, hostDir, id, startCmd, unshareFlags)
+	if sf.nnf != nil {
+		err := sf.nnf.CreateNetns(id)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return NewOLContainerSandbox(sf.cgf, sf.nnf, sf.opts, rootDir, hostDir, id, startCmd, unshareFlags)
 }
 
 func (sf *OLContainerSBFactory) Cleanup() {
