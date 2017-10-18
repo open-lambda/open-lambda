@@ -79,13 +79,12 @@ func (cm *CacheManager) Provision(sandbox sb.ContainerSandbox, dir string, pkgs 
 	if len(toCache) != 0 {
 		fs, err = cm.newCacheEntry(fs, toCache)
 		if err != nil {
-			cm.mutex.Unlock()
 			return nil, false, err
 			//return cm.Provision(sandbox, dir, pkgs) //TODO
 		}
 	} else {
-		cm.mutex.Unlock()
 		fs.Mutex.Lock()
+		cm.mutex.Unlock()
 		if fs == nil {
 			fs.Mutex.Unlock()
 			return nil, false, err
@@ -149,6 +148,7 @@ func (cm *CacheManager) newCacheEntry(fs *ForkServer, toCache []string) (*ForkSe
 	// signal interpreter to forkenter into sandbox's namespace
 	pid, err := forkRequest(fs.SockPath, sandbox.NSPid(), sandbox.RootDir(), toCache, false)
 	if err != nil {
+		newFs.Mutex.Unlock()
 		newFs.Kill()
 		return nil, err
 	}
@@ -159,8 +159,8 @@ func (cm *CacheManager) newCacheEntry(fs *ForkServer, toCache []string) (*ForkSe
 	start := time.Now()
 	for ok := true; ok; ok = os.IsNotExist(err) {
 		_, err = os.Stat(sockPath)
-		if time.Since(start).Seconds() > 500 {
-			return nil, errors.New(fmt.Sprintf("cache server %d failed to initialize after 500s", cm.seq))
+		if time.Since(start).Seconds() > 30 {
+			return nil, errors.New(fmt.Sprintf("cache server %d failed to initialize after 30s", cm.seq))
 		}
 		time.Sleep(1 * time.Millisecond)
 	}
@@ -173,7 +173,7 @@ func (cm *CacheManager) newCacheEntry(fs *ForkServer, toCache []string) (*ForkSe
 }
 
 func (cm *CacheManager) initCacheRoot(opts *config.Config) (memCGroupPath string, err error) {
-	factory, rootSB, rootDir, memCGroupPath, err := InitCacheFactory(opts, cm.cluster)
+	factory, rootSB, rootDir, err := InitCacheFactory(opts, cm.cluster)
 	if err != nil {
 		return "", err
 	}
@@ -203,7 +203,7 @@ func (cm *CacheManager) initCacheRoot(opts *config.Config) (memCGroupPath string
 
 	cm.servers = append(cm.servers, fs)
 
-	return memCGroupPath, nil
+	return rootSB.MemoryCGroupPath(), nil
 }
 
 func (cm *CacheManager) Full() bool {

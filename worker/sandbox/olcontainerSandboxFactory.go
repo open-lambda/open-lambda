@@ -12,21 +12,21 @@ import (
 	"github.com/open-lambda/open-lambda/worker/config"
 )
 
-const rootSandboxDir string = "/tmp/olroots"
+const rootSandboxDir string = "/tmp/olsbs"
 
 var BIND uintptr = uintptr(syscall.MS_BIND | syscall.MS_REC)
 var BIND_RO uintptr = uintptr(syscall.MS_BIND | syscall.MS_REC | syscall.MS_RDONLY)
 var PRIVATE uintptr = uintptr(syscall.MS_PRIVATE | syscall.MS_REC)
 
 var unshareFlags []string = []string{"-impuCf", "--propagation", "slave"}
+var unmounts []string = []string{"handler", "host", "packages"}
 
 // OLContainerSBFactory is a SandboxFactory that creats docker sandboxes.
 type OLContainerSBFactory struct {
-	mutex     sync.Mutex
-	pipeMutex *sync.Mutex
-	opts      *config.Config
-	baseDir   string
-	cgf       *CgroupFactory
+	mutex   sync.Mutex
+	opts    *config.Config
+	baseDir string
+	cgf     *CgroupFactory
 }
 
 // NewOLContainerSBFactory creates a OLContainerSBFactory.
@@ -51,7 +51,7 @@ func NewOLContainerSBFactory(opts *config.Config, baseDir string) (*OLContainerS
 		return nil, err
 	}
 
-	return &OLContainerSBFactory{opts: opts, baseDir: baseDir, cgf: cgf, pipeMutex: &sync.Mutex{}}, nil
+	return &OLContainerSBFactory{opts: opts, baseDir: baseDir, cgf: cgf}, nil
 }
 
 // Create creates a docker sandbox from the handler and sandbox directory.
@@ -68,7 +68,7 @@ func (sf *OLContainerSBFactory) Create(handlerDir, workingDir, indexHost, indexP
 		return nil, err
 	}
 
-	rootDir := path.Join(rootSandboxDir, fmt.Sprintf("sandbox_%s", id))
+	rootDir := path.Join(rootSandboxDir, id)
 	if err := os.Mkdir(rootDir, 0700); err != nil {
 		return nil, err
 	}
@@ -81,40 +81,21 @@ func (sf *OLContainerSBFactory) Create(handlerDir, workingDir, indexHost, indexP
 	} else if err := syscall.Mount("none", rootDir, "", PRIVATE, ""); err != nil {
 		return nil, fmt.Errorf("failed to make root dir private :: %v", err.Error())
 	}
-	/*
-		if err := syscall.Mount(sf.baseDir, rootDir, "", BIND_RO, ""); err != nil {
-			return nil, fmt.Errorf("failed to bind root dir: %v", err.Error())
-		}
-	*/
 
 	sbHandlerDir := path.Join(rootDir, "handler")
 	if err := syscall.Mount(handlerDir, sbHandlerDir, "", BIND_RO, ""); err != nil {
 		return nil, fmt.Errorf("failed to bind handler dir: %v", err.Error())
 	}
-	/*
-		 else if err := syscall.Mount("none", sbHandlerDir, "", PRIVATE, ""); err != nil {
-			return nil, fmt.Errorf("failed to make handler dir private: %v", err.Error())
-		}
-	*/
 
 	sbHostDir := path.Join(rootDir, "host")
 	if err := syscall.Mount(hostDir, sbHostDir, "", BIND, ""); err != nil {
 		return nil, fmt.Errorf("failed to bind host dir: %v", err.Error())
 	}
-	/*
-		 else if err := syscall.Mount("none", sbHostDir, "", PRIVATE, ""); err != nil {
-			return nil, fmt.Errorf("failed to make host dir private: %v", err.Error())
-		}
-	*/
 
-	/*
-		pkgsDir := path.Join(rootDir, "packages")
-		if err := syscall.Mount(sf.opts.Pkgs_dir, pkgsDir, "", BIND_RO, ""); err != nil {
-			return nil, fmt.Errorf("failed to bind handler dir: %v", err.Error())
-		} else if err := syscall.Mount("none", sbHostDir, "", PRIVATE, ""); err != nil {
-			return nil, fmt.Errorf("failed to make host dir private: %v", err.Error())
-		}
-	*/
+	sbPkgsDir := path.Join(rootDir, "packages")
+	if err := syscall.Mount(sf.opts.Pkgs_dir, sbPkgsDir, "", BIND_RO, ""); err != nil {
+		return nil, fmt.Errorf("failed to bind packages dir: %v", err.Error())
+	}
 
 	startCmd := []string{"/ol-init"}
 	if indexHost != "" {
@@ -124,7 +105,7 @@ func (sf *OLContainerSBFactory) Create(handlerDir, workingDir, indexHost, indexP
 		startCmd = append(startCmd, indexPort)
 	}
 
-	return NewOLContainerSandbox(sf.cgf, sf.opts, rootDir, hostDir, id, startCmd, unshareFlags, sf.pipeMutex)
+	return NewOLContainerSandbox(sf.cgf, sf.opts, rootDir, hostDir, id, startCmd, unshareFlags, unmounts)
 }
 
 func (sf *OLContainerSBFactory) Cleanup() {
