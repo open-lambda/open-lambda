@@ -21,7 +21,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -41,10 +40,10 @@ type OLContainerSandbox struct {
 	initCmd      *exec.Cmd
 	startCmd     []string
 	unshareFlags []string
-	pipeMutex    *sync.Mutex
+	unmounts     []string
 }
 
-func NewOLContainerSandbox(cgf *CgroupFactory, opts *config.Config, rootDir, hostDir, id string, startCmd, unshareFlags []string, pipeMutex *sync.Mutex) (*OLContainerSandbox, error) {
+func NewOLContainerSandbox(cgf *CgroupFactory, opts *config.Config, rootDir, hostDir, id string, startCmd, unshareFlags, unmounts []string) (*OLContainerSandbox, error) {
 	// create container cgroups
 	cgId := cgf.GetCg(id)
 
@@ -58,7 +57,7 @@ func NewOLContainerSandbox(cgf *CgroupFactory, opts *config.Config, rootDir, hos
 		unshareFlags: unshareFlags,
 		status:       state.Stopped,
 		startCmd:     startCmd,
-		pipeMutex:    pipeMutex,
+		unmounts:     unmounts,
 	}
 
 	return sandbox, nil
@@ -183,6 +182,8 @@ func (s *OLContainerSandbox) Unpause() error {
 }
 
 func (s *OLContainerSandbox) Remove() error {
+	start := time.Now()
+
 	// remove sockets if they exist
 	if err := os.RemoveAll(filepath.Join(s.hostDir, "ol.sock")); err != nil {
 		return err
@@ -194,18 +195,23 @@ func (s *OLContainerSandbox) Remove() error {
 	// remove cgroups
 	s.cgf.PutCg(s.id, s.cgId)
 
-	data := append([]byte(s.rootDir), 0)
-	data = append(data, make([]byte, 100-len(data))...)
+	// unmount things
+	for _, dir := range s.unmounts {
+		mnt := filepath.Join(s.rootDir, dir)
+		if err := syscall.Unmount(mnt, syscall.MNT_DETACH); err != nil {
+			return err
+		}
+	}
 
-	s.pipeMutex.Lock()
-	defer s.pipeMutex.Unlock()
-	if f, err := os.OpenFile("/tmp/olpipe", os.O_RDWR, os.ModeNamedPipe); err != nil {
-		return err
-	} else if _, err = f.Write(data); err != nil {
-		return err
-	} else if err = f.Close(); err != nil {
+	if err := syscall.Unmount(s.rootDir, syscall.MNT_DETACH); err != nil {
 		return err
 	}
+
+	if err := os.RemoveAll(s.rootDir); err != nil {
+		return err
+	}
+
+	log.Printf("remove took %v\n", time.Since(start))
 
 	return nil
 }

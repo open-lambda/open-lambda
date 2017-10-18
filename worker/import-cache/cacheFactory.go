@@ -16,8 +16,8 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/open-lambda/open-lambda/worker/config"
@@ -28,14 +28,17 @@ import (
 )
 
 var unshareFlags []string = []string{"-fimuC"}
+var unmounts []string = []string{"host", "packages"}
 
-func InitCacheFactory(opts *config.Config, cluster string) (cf *BufferedCacheFactory, root sb.ContainerSandbox, rootDir, memCGroupPath string, err error) {
-	cf, root, rootDir, memCGroupPath, err = NewBufferedCacheFactory(opts, cluster)
+const rootCacheSandboxDir = "/tmp/olcache"
+
+func InitCacheFactory(opts *config.Config, cluster string) (cf *BufferedCacheFactory, root sb.ContainerSandbox, rootDir string, err error) {
+	cf, root, rootDir, err = NewBufferedCacheFactory(opts, cluster)
 	if err != nil {
-		return nil, nil, "", "", err
+		return nil, nil, "", err
 	}
 
-	return cf, root, rootDir, memCGroupPath, nil
+	return cf, root, rootDir, nil
 }
 
 // emptySBInfo wraps sandbox information necessary for the buffer.
@@ -54,7 +57,7 @@ type BufferedCacheFactory struct {
 }
 
 type CacheFactory interface {
-	Create(sandboxDir string, rootCmd []string) (sb.ContainerSandbox, string, error)
+	Create(sandboxDir string, rootCmd []string) (sb.ContainerSandbox, error)
 	Cleanup()
 }
 
@@ -88,7 +91,7 @@ func NewDockerCacheFactory(cluster, pkgsDir string) (*DockerCacheFactory, error)
 }
 
 // Create creates a docker container from the pool directory.
-func (cf *DockerCacheFactory) Create(sandboxDir string, cmd []string) (sb.ContainerSandbox, string, error) {
+func (cf *DockerCacheFactory) Create(sandboxDir string, cmd []string) (sb.ContainerSandbox, error) {
 	volumes := []string{
 		fmt.Sprintf("%s:%s", sandboxDir, "/host"),
 		fmt.Sprintf("%s:%s:ro", cf.pkgsDir, "/packages"),
@@ -110,13 +113,12 @@ func (cf *DockerCacheFactory) Create(sandboxDir string, cmd []string) (sb.Contai
 		},
 	)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	sandbox := sb.NewDockerSandbox("", sandboxDir, "", "", container, cf.client)
-	memCGroupPath := path.Join("/sys/fs/cgroup/memory/docker/", container.ID)
 
-	return sandbox, memCGroupPath, nil
+	return sandbox, nil
 }
 
 func (cf *DockerCacheFactory) Cleanup() {
@@ -146,45 +148,52 @@ func NewOLContainerCacheFactory(opts *config.Config, cluster, baseDir, pkgsDir s
 		return nil, err
 	}
 
+	if err := os.MkdirAll(rootCacheSandboxDir, 0777); err != nil {
+		return nil, fmt.Errorf("failed to make root sandbox dir :: %v", err.Error())
+	} else if err := syscall.Mount(rootCacheSandboxDir, rootCacheSandboxDir, "", sb.BIND, ""); err != nil {
+		return nil, fmt.Errorf("failed to bind root sandbox dir: %v", err.Error())
+	} else if err := syscall.Mount("none", rootCacheSandboxDir, "", sb.PRIVATE, ""); err != nil {
+		return nil, fmt.Errorf("failed to make root cache sandbox dir private :: %v", err.Error())
+	}
+
 	return &OLContainerCacheFactory{opts, cgf, []string{"/init"}, baseDir, pkgsDir}, nil
 }
 
 // Create creates a docker sandbox from the pool directory.
-func (cf *OLContainerCacheFactory) Create(sandboxDir string, startCmd []string) (sb.ContainerSandbox, string, error) {
+func (cf *OLContainerCacheFactory) Create(hostDir string, startCmd []string) (sb.ContainerSandbox, error) {
 	id_bytes, err := exec.Command("uuidgen").Output()
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	id := strings.TrimSpace(string(id_bytes[:]))
 
-	rootDir := path.Join(fmt.Sprintf("/tmp/cache_%s", id))
+	rootDir := path.Join(rootCacheSandboxDir, fmt.Sprintf("%s", id))
 	if err := os.Mkdir(rootDir, 0700); err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	// NOTE: mount points are expected to exist in OLContainer_handler_base directory
 	layers := fmt.Sprintf("br=%s=rw:%s=ro", rootDir, cf.baseDir)
-	err = runCmd([]string{"/bin/mount", "-t", "aufs", "-o", layers, "none", rootDir})
-	if err != nil {
-		return nil, "", fmt.Errorf("Failed to bind base: %v", err.Error())
+	if err := syscall.Mount("none", rootDir, "aufs", 0, layers); err != nil {
+		return nil, fmt.Errorf("failed to mount base dir: %v", err.Error())
 	}
 
-	err = runCmd([]string{"/bin/mount", "--bind", "-o", "ro", cf.pkgsDir, path.Join(rootDir, "packages")})
-	if err != nil {
-		return nil, "", fmt.Errorf("Failed to bind packages dir: %v", err.Error())
+	sbHostDir := path.Join(rootDir, "host")
+	if err := syscall.Mount(hostDir, sbHostDir, "", sb.BIND, ""); err != nil {
+		return nil, fmt.Errorf("failed to bind host dir: %v", err.Error())
 	}
 
-	err = runCmd([]string{"/bin/mount", "--bind", sandboxDir, path.Join(rootDir, "host")})
-	if err != nil {
-		return nil, "", fmt.Errorf("Failed to bind host dir: %v", err.Error())
+	sbPkgsDir := path.Join(rootDir, "packages")
+	if err := syscall.Mount(cf.pkgsDir, sbPkgsDir, "", sb.BIND_RO, ""); err != nil {
+		return nil, fmt.Errorf("failed to bind packages dir: %v", err.Error())
 	}
 
-	sandbox, err := sb.NewOLContainerSandbox(cf.cgf, cf.opts, rootDir, sandboxDir, id, startCmd, unshareFlags, &sync.Mutex{})
+	sandbox, err := sb.NewOLContainerSandbox(cf.cgf, cf.opts, rootDir, hostDir, id, startCmd, unshareFlags, unmounts)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
-	return sandbox, sandbox.MemoryCGroupPath(), nil
+	return sandbox, nil
 }
 
 func (cf *OLContainerCacheFactory) Cleanup() {
@@ -200,7 +209,7 @@ func (cf *OLContainerCacheFactory) Cleanup() {
 
 // NewBufferedCacheFactory creates a BufferedCacheFactory and starts a go routine to
 // fill the sandbox buffer.
-func NewBufferedCacheFactory(opts *config.Config, cluster string) (*BufferedCacheFactory, sb.ContainerSandbox, string, string, error) {
+func NewBufferedCacheFactory(opts *config.Config, cluster string) (*BufferedCacheFactory, sb.ContainerSandbox, string, error) {
 	cacheDir := opts.Import_cache_dir
 	pkgsDir := opts.Pkgs_dir
 	buffer := opts.Import_cache_buffer
@@ -217,12 +226,12 @@ func NewBufferedCacheFactory(opts *config.Config, cluster string) (*BufferedCach
 	if opts.Sandbox == "docker" {
 		delegate, err = NewDockerCacheFactory(cluster, pkgsDir)
 		if err != nil {
-			return nil, nil, "", "", err
+			return nil, nil, "", err
 		}
 	} else if opts.Sandbox == "olcontainer" {
 		delegate, err = NewOLContainerCacheFactory(opts, cluster, opts.OLContainer_cache_base, pkgsDir)
 		if err != nil {
-			return nil, nil, "", "", err
+			return nil, nil, "", err
 		}
 	}
 
@@ -234,20 +243,20 @@ func NewBufferedCacheFactory(opts *config.Config, cluster string) (*BufferedCach
 	}
 
 	if err := os.MkdirAll(cacheDir, os.ModeDir); err != nil {
-		return nil, nil, "", "", fmt.Errorf("failed to create pool directory at %s: %v", cacheDir, err)
+		return nil, nil, "", fmt.Errorf("failed to create pool directory at %s: %v", cacheDir, err)
 	}
 
 	// create the root container
 	rootDir := filepath.Join(bf.dir, "root")
 	if err := os.MkdirAll(rootDir, os.ModeDir); err != nil {
-		return nil, nil, "", "", fmt.Errorf("failed to create cache entry directory at %s: %v", cacheDir, err)
+		return nil, nil, "", fmt.Errorf("failed to create cache entry directory at %s: %v", cacheDir, err)
 	}
 
-	root, memCGroupPath, err := bf.delegate.Create(rootDir, rootCmd)
+	root, err := bf.delegate.Create(rootDir, rootCmd)
 	if err != nil {
-		return nil, nil, "", "", fmt.Errorf("failed to create cache entry sandbox: %v", err)
+		return nil, nil, "", fmt.Errorf("failed to create cache entry sandbox: %v", err)
 	} else if err := root.Start(); err != nil {
-		return nil, nil, "", "", fmt.Errorf("failed to start cache entry sandbox: %v", err)
+		return nil, nil, "", fmt.Errorf("failed to start cache entry sandbox: %v", err)
 	}
 
 	// fill the sandbox buffer
@@ -265,7 +274,7 @@ func NewBufferedCacheFactory(opts *config.Config, cluster string) (*BufferedCach
 				if err := os.MkdirAll(sandboxDir, os.ModeDir); err != nil {
 					bf.buffer <- nil
 					bf.errors <- err
-				} else if sandbox, _, err := bf.delegate.Create(sandboxDir, []string{"/init"}); err != nil {
+				} else if sandbox, err := bf.delegate.Create(sandboxDir, []string{"/init"}); err != nil {
 					bf.buffer <- nil
 					bf.errors <- err
 				} else if err := sandbox.Start(); err != nil {
@@ -288,7 +297,7 @@ func NewBufferedCacheFactory(opts *config.Config, cluster string) (*BufferedCach
 	}
 	log.Printf("cache buffer full")
 
-	return bf, root, rootDir, memCGroupPath, nil
+	return bf, root, rootDir, nil
 }
 
 // Returns a sandbox ready for a cache interpreter
@@ -302,7 +311,7 @@ func (bf *BufferedCacheFactory) Create() (sb.ContainerSandbox, string, error) {
 		return nil, "", err
 	}
 
-	return info.sandbox, path.Join(info.sandboxDir, info.sandbox.ID()), nil
+	return info.sandbox, info.sandboxDir, nil
 }
 
 func (bf *BufferedCacheFactory) Cleanup() {
