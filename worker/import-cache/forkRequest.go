@@ -106,7 +106,6 @@ sendFds(char *sockPath, char *pid, char *rootdir, char *pkgs) {
     // Send root directory string to server.
 
     int rootbuflen = 500;
-    printf("Sending package string.\n");
     if(send(s, rootdir, rootbuflen, 0) == -1) {
         sprintf(errmsg, "send rootdir: %s\n", strerror(errno));
         return errmsg;
