@@ -53,6 +53,9 @@ type Sandbox interface {
 	RunServer() error
 
 	MemoryCGroupPath() string
+
+	AddUnmounts(mnts []string)
+	AddRemovals(dirs []string)
 }
 
 type ContainerSandbox interface {

@@ -28,7 +28,6 @@ import (
 )
 
 var unshareFlags []string = []string{"-fimuC"}
-var unmounts []string = []string{"host", "packages"}
 
 const rootCacheSandboxDir = "/tmp/olcache"
 
@@ -188,7 +187,10 @@ func (cf *OLContainerCacheFactory) Create(hostDir string, startCmd []string) (sb
 		return nil, fmt.Errorf("failed to bind packages dir: %v", err.Error())
 	}
 
-	sandbox, err := sb.NewOLContainerSandbox(cf.cgf, cf.opts, rootDir, hostDir, id, startCmd, unshareFlags, unmounts)
+	unmounts := []string{sbHostDir, sbHostDir, rootDir}
+	removals := []string{rootDir}
+
+	sandbox, err := sb.NewOLContainerSandbox(cf.cgf, cf.opts, rootDir, hostDir, id, startCmd, unshareFlags, unmounts, removals)
 	if err != nil {
 		return nil, err
 	}

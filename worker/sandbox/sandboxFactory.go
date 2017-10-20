@@ -35,6 +35,7 @@ type BufferedSBFactory struct {
 // emptySBInfo wraps sandbox information necessary for the buffer.
 type emptySBInfo struct {
 	sandbox    Sandbox
+	bufDir     string
 	handlerDir string
 	sandboxDir string
 }
@@ -122,7 +123,7 @@ func NewBufferedSBFactory(opts *config.Config, delegate SandboxFactory) (*Buffer
 				} else if err := sandbox.Pause(); err != nil {
 					bf.errors <- err
 				} else {
-					bf.buffer <- &emptySBInfo{sandbox, handlerDir, sandboxDir}
+					bf.buffer <- &emptySBInfo{sandbox, bufDir, handlerDir, sandboxDir}
 				}
 			}
 		}(bf.idxPtr)
@@ -150,17 +151,21 @@ func (bf *BufferedSBFactory) Create(handlerDir, workingDir, indexHost, indexPort
 			return nil, err
 		}
 
+		sbHostDir := path.Join(info.sandboxDir, info.sandbox.ID())
 		if err := info.sandbox.Unpause(); err != nil {
 			return nil, err
 		} else if err := syscall.Mount(handlerDir, info.handlerDir, "", mntFlag, ""); err != nil {
 			return nil, err
-		} else if err := syscall.Mount(hostDir, path.Join(info.sandboxDir, info.sandbox.ID()), "", mntFlag, ""); err != nil {
+		} else if err := syscall.Mount(hostDir, sbHostDir, "", mntFlag, ""); err != nil {
 			return nil, err
 		}
 		if !bf.cache {
 			sockPath := filepath.Join(workingDir, "ol.sock")
 			_ = os.Remove(sockPath)
 		}
+
+		info.sandbox.AddUnmounts([]string{info.handlerDir, sbHostDir})
+		info.sandbox.AddRemovals([]string{info.bufDir})
 
 		return info.sandbox, nil
 

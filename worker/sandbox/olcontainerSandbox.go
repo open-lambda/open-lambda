@@ -41,9 +41,10 @@ type OLContainerSandbox struct {
 	startCmd     []string
 	unshareFlags []string
 	unmounts     []string
+	removals     []string
 }
 
-func NewOLContainerSandbox(cgf *CgroupFactory, opts *config.Config, rootDir, hostDir, id string, startCmd, unshareFlags, unmounts []string) (*OLContainerSandbox, error) {
+func NewOLContainerSandbox(cgf *CgroupFactory, opts *config.Config, rootDir, hostDir, id string, startCmd, unshareFlags, unmounts, removals []string) (*OLContainerSandbox, error) {
 	// create container cgroups
 	cgId := cgf.GetCg(id)
 
@@ -58,6 +59,7 @@ func NewOLContainerSandbox(cgf *CgroupFactory, opts *config.Config, rootDir, hos
 		status:       state.Stopped,
 		startCmd:     startCmd,
 		unmounts:     unmounts,
+		removals:     removals,
 	}
 
 	return sandbox, nil
@@ -196,19 +198,17 @@ func (s *OLContainerSandbox) Remove() error {
 	s.cgf.PutCg(s.id, s.cgId)
 
 	// unmount things
-	for _, dir := range s.unmounts {
-		mnt := filepath.Join(s.rootDir, dir)
+	for _, mnt := range s.unmounts {
 		if err := syscall.Unmount(mnt, syscall.MNT_DETACH); err != nil {
-			return err
+			log.Printf("unmount %s failed :: %v\n", mnt, err)
 		}
 	}
 
-	if err := syscall.Unmount(s.rootDir, syscall.MNT_DETACH); err != nil {
-		return err
-	}
-
-	if err := os.RemoveAll(s.rootDir); err != nil {
-		return err
+	// remove things
+	for _, dir := range s.removals {
+		if err := os.RemoveAll(dir); err != nil {
+			log.Printf("remove %s failed :: %v\n", dir, err)
+		}
 	}
 
 	log.Printf("remove took %v\n", time.Since(start))
@@ -271,4 +271,16 @@ func (s *OLContainerSandbox) MemoryCGroupPath() string {
 
 func (s *OLContainerSandbox) RootDir() string {
 	return s.rootDir
+}
+
+func (s *OLContainerSandbox) AddUnmounts(mnts []string) {
+	s.unmounts = append(mnts, s.unmounts...)
+
+	return
+}
+
+func (s *OLContainerSandbox) AddRemovals(dirs []string) {
+	s.removals = append(dirs, s.removals...)
+
+	return
 }
