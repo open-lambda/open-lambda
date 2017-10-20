@@ -18,8 +18,7 @@ var BIND uintptr = uintptr(syscall.MS_BIND | syscall.MS_REC)
 var BIND_RO uintptr = uintptr(syscall.MS_BIND | syscall.MS_REC | syscall.MS_RDONLY)
 var PRIVATE uintptr = uintptr(syscall.MS_PRIVATE | syscall.MS_REC)
 
-var unshareFlags []string = []string{"-impuCf", "--propagation", "slave"}
-var unmounts []string = []string{"handler", "host", "packages"}
+var unshareFlags []string = []string{"-impuf", "--propagation", "slave"}
 
 // OLContainerSBFactory is a SandboxFactory that creats docker sandboxes.
 type OLContainerSBFactory struct {
@@ -105,7 +104,10 @@ func (sf *OLContainerSBFactory) Create(handlerDir, workingDir, indexHost, indexP
 		startCmd = append(startCmd, indexPort)
 	}
 
-	return NewOLContainerSandbox(sf.cgf, sf.opts, rootDir, hostDir, id, startCmd, unshareFlags, unmounts)
+	unmounts := []string{sbHandlerDir, sbHostDir, sbPkgsDir, rootDir}
+	removals := []string{rootDir}
+
+	return NewOLContainerSandbox(sf.cgf, sf.opts, rootDir, hostDir, id, startCmd, unshareFlags, unmounts, removals)
 }
 
 func (sf *OLContainerSBFactory) Cleanup() {
