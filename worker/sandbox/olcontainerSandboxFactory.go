@@ -2,6 +2,7 @@ package sandbox
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path"
@@ -16,6 +17,7 @@ import (
 const rootSandboxDir string = "/tmp/olsbs"
 
 const numUnmountWorkers int = 150
+
 var unmountPoolExists bool = false
 var unmountPoolMutex *sync.Mutex = &sync.Mutex{}
 var unmountQueue chan string = nil
@@ -38,16 +40,16 @@ type OLContainerSBFactory struct {
 // the sandbox factory new sandbox method isn't always used (import cache) so we need a way to
 // initialize the pool and queue
 func UnmountQueueSingleton() chan string {
-  unmountPoolMutex.Lock()
-  if !unmountPoolExists {
-	  unmountQueue := make(chan string, numUnmountWorkers*10)
-	  for i := 0; i < numUnmountWorkers; i++ {
-		  go UnmountWorker(unmountQueue)
-	  }
-    unmountPoolExists = true
-  }
-  unmountPoolMutex.Unlock()
-  return unmountQueue
+	unmountPoolMutex.Lock()
+	if !unmountPoolExists {
+		unmountQueue = make(chan string, numUnmountWorkers)
+		for i := 0; i < numUnmountWorkers; i++ {
+			go UnmountWorker(unmountQueue)
+		}
+		unmountPoolExists = true
+	}
+	unmountPoolMutex.Unlock()
+	return unmountQueue
 }
 
 // NewOLContainerSBFactory creates a OLContainerSBFactory.
@@ -72,7 +74,7 @@ func NewOLContainerSBFactory(opts *config.Config, baseDir string) (*OLContainerS
 		return nil, err
 	}
 
-  umntq := UnmountQueueSingleton()
+	umntq := UnmountQueueSingleton()
 	return &OLContainerSBFactory{opts: opts, baseDir: baseDir, cgf: cgf, umntq: umntq}, nil
 }
 
@@ -145,8 +147,10 @@ func (sf *OLContainerSBFactory) Cleanup() {
 
 func UnmountWorker(umntq chan string) {
 	runtime.LockOSThread()
-	mnt_point := <-umntq
-	if err := syscall.Unmount(mnt_point, syscall.MNT_DETACH); err != nil {
-		fmt.Errorf("unmount %s failed :: %v\n", mnt_point, err)
+	for true {
+		mnt_point := <-umntq
+		if err := syscall.Unmount(mnt_point, syscall.MNT_DETACH); err != nil {
+			log.Printf("unmount %s failed :: %v\n", mnt_point, err)
+		}
 	}
 }
