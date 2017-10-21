@@ -194,9 +194,6 @@ func (s *OLContainerSandbox) Remove() error {
 		return err
 	}
 
-	// remove cgroups
-	s.cgf.PutCg(s.id, s.cgId)
-
 	// unmount things
 	for _, mnt := range s.unmounts {
 		if err := syscall.Unmount(mnt, syscall.MNT_DETACH); err != nil {
@@ -209,6 +206,11 @@ func (s *OLContainerSandbox) Remove() error {
 		if err := os.RemoveAll(dir); err != nil {
 			log.Printf("remove %s failed :: %v\n", dir, err)
 		}
+	}
+
+	// remove cgroups
+	if err := s.cgf.PutCg(s.id, s.cgId); err != nil {
+		log.Printf("Unable to delete cgroups: %v", err)
 	}
 
 	log.Printf("remove took %v\n", time.Since(start))
