@@ -1,5 +1,5 @@
 #!/usr/bin/python
-import traceback, json, sys, socket, os, importlib, pip, hashlib
+import traceback, json, sys, socket, os, importlib, pip, hashlib, signal
 import rethinkdb
 import tornado.ioloop
 import tornado.web
