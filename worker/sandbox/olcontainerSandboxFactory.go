@@ -10,13 +10,14 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"unsafe"
 
 	"github.com/open-lambda/open-lambda/worker/config"
 )
 
 const rootSandboxDir string = "/tmp/olsbs"
 
-const numUnmountWorkers int = 150
+const numUnmountWorkers int = 75
 
 var unmountPoolExists bool = false
 var unmountPoolMutex *sync.Mutex = &sync.Mutex{}
@@ -149,7 +150,15 @@ func UnmountWorker(umntq chan string) {
 	runtime.LockOSThread()
 	for true {
 		mnt_point := <-umntq
-		if err := syscall.Unmount(mnt_point, syscall.MNT_DETACH); err != nil {
+		flags := syscall.MNT_DETACH
+		var _p0 *byte
+		_p0, err := syscall.BytePtrFromString(mnt_point)
+		if err != nil {
+			log.Printf("ERROR: Unmount conversion")
+			continue
+		}
+		_, _, e1 := syscall.RawSyscall(syscall.SYS_UMOUNT2, uintptr(unsafe.Pointer(_p0)), uintptr(flags), 0)
+		if e1 != 0 {
 			log.Printf("unmount %s failed :: %v\n", mnt_point, err)
 		}
 	}
