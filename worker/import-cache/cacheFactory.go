@@ -27,7 +27,7 @@ import (
 	sb "github.com/open-lambda/open-lambda/worker/sandbox"
 )
 
-var unshareFlags []string = []string{"-fimuC"}
+var unshareFlags []string = []string{"-fimu"}
 
 const rootCacheSandboxDir = "/tmp/olcache"
 
