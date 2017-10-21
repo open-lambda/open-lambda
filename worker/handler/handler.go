@@ -136,7 +136,7 @@ func (hms *HandlerManagerSet) Get(name string) (h *Handler, err error) {
 
 	// find or create handler
 	hm.mutex.Lock()
-	if hm.handlers.Front() == nil {
+	if hms.config.Handler_cache_size == 0 || hm.handlers.Front() == nil {
 		h = &Handler{
 			name:    name,
 			hm:      hm,
