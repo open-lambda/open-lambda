@@ -37,6 +37,7 @@ def init():
         print 'Connect to %s:%d' % (host, port)
         db_conn = rethinkdb.connect(host, port)
 
+    sys.path.append('/host/pip')
     sys.path.append('/handler')
     import lambda_func # assume submitted .py file is /handler/lambda_func.py
 
@@ -61,9 +62,9 @@ def create_link(pkg):
 
 def install(pkg):
     if MIRROR:
-        check_output(' '.join(['pip', 'install', '--no-cache-dir', '--index-url', 'http://%s:%s/simple' % (INDEX_HOST, INDEX_PORT), '--trusted-host', INDEX_HOST, pkg]), shell=True)
+        check_output(' '.join(['pip', 'install', '-t', '/host/pip', '--no-cache-dir', '--index-url', 'http://%s:%s/simple' % (INDEX_HOST, INDEX_PORT), '--trusted-host', INDEX_HOST, pkg]), shell=True)
     else:
-        check_output(' '.join(['pip', 'install', pkg]), shell=True)
+        check_output(' '.join(['pip', 'install', '-t', '/host/pip', pkg]), shell=True)
 
 def do_installs():
     with open(PKG_PATH) as fd:

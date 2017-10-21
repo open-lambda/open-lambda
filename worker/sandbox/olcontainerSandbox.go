@@ -186,14 +186,6 @@ func (s *OLContainerSandbox) Unpause() error {
 func (s *OLContainerSandbox) Remove() error {
 	start := time.Now()
 
-	// remove sockets if they exist
-	if err := os.RemoveAll(filepath.Join(s.hostDir, "ol.sock")); err != nil {
-		return err
-	}
-	if err := os.RemoveAll(filepath.Join(s.hostDir, "fs.sock")); err != nil {
-		return err
-	}
-
 	// unmount things
 	for _, mnt := range s.unmounts {
 		if err := syscall.Unmount(mnt, syscall.MNT_DETACH); err != nil {

@@ -171,6 +171,16 @@ func (cf *OLContainerCacheFactory) Create(hostDir string, startCmd []string) (sb
 		return nil, err
 	}
 
+	pipDir := path.Join(hostDir, "pip")
+	if err := os.Mkdir(pipDir, 0777); err != nil {
+		return nil, err
+	}
+
+	tmpDir := path.Join(hostDir, "tmp")
+	if err := os.Mkdir(tmpDir, 0777); err != nil {
+		return nil, err
+	}
+
 	// NOTE: mount points are expected to exist in OLContainer_handler_base directory
 	layers := fmt.Sprintf("br=%s=rw:%s=ro", rootDir, cf.baseDir)
 	if err := syscall.Mount("none", rootDir, "aufs", 0, layers); err != nil {
@@ -182,9 +192,16 @@ func (cf *OLContainerCacheFactory) Create(hostDir string, startCmd []string) (sb
 		return nil, fmt.Errorf("failed to bind host dir: %v", err.Error())
 	}
 
+	sbTmpDir := path.Join(rootDir, "tmp")
+	if err := syscall.Mount(tmpDir, sbTmpDir, "", sb.BIND, ""); err != nil {
+		return nil, fmt.Errorf("failed to bind tmp dir: %v", err.Error())
+	}
+
 	sbPkgsDir := path.Join(rootDir, "packages")
-	if err := syscall.Mount(cf.pkgsDir, sbPkgsDir, "", sb.BIND_RO, ""); err != nil {
+	if err := syscall.Mount(cf.pkgsDir, sbPkgsDir, "", sb.BIND, ""); err != nil {
 		return nil, fmt.Errorf("failed to bind packages dir: %v", err.Error())
+	} else if err := syscall.Mount(cf.pkgsDir, sbPkgsDir, "", sb.BIND_RO, ""); err != nil {
+		return nil, fmt.Errorf("failed to bind packages dir RO: %v", err.Error())
 	}
 
 	unmounts := []string{sbHostDir, sbHostDir, rootDir}
