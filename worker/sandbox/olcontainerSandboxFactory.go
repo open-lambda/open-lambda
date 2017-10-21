@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -13,6 +14,7 @@ import (
 )
 
 const rootSandboxDir string = "/tmp/olsbs"
+const numUnmountWorkers int = 150
 
 var BIND uintptr = uintptr(syscall.MS_BIND | syscall.MS_REC)
 var BIND_RO uintptr = uintptr(syscall.MS_BIND | syscall.MS_REC | syscall.MS_RDONLY)
@@ -26,6 +28,7 @@ type OLContainerSBFactory struct {
 	opts    *config.Config
 	baseDir string
 	cgf     *CgroupFactory
+	umntq   chan string
 }
 
 // NewOLContainerSBFactory creates a OLContainerSBFactory.
@@ -50,7 +53,15 @@ func NewOLContainerSBFactory(opts *config.Config, baseDir string) (*OLContainerS
 		return nil, err
 	}
 
-	return &OLContainerSBFactory{opts: opts, baseDir: baseDir, cgf: cgf}, nil
+	umntq := make(chan string, numUnmountWorkers*10)
+
+	sf := &OLContainerSBFactory{opts: opts, baseDir: baseDir, cgf: cgf, umntq: umntq}
+
+	for i := 0; i < numUnmountWorkers; i++ {
+		go sf.UnmountWorker()
+	}
+
+	return sf, nil
 }
 
 // Create creates a docker sandbox from the handler and sandbox directory.
@@ -107,7 +118,7 @@ func (sf *OLContainerSBFactory) Create(handlerDir, workingDir, indexHost, indexP
 	unmounts := []string{sbHandlerDir, sbHostDir, sbPkgsDir, rootDir}
 	removals := []string{rootDir}
 
-	return NewOLContainerSandbox(sf.cgf, sf.opts, rootDir, hostDir, id, startCmd, unshareFlags, unmounts, removals)
+	return NewOLContainerSandbox(sf.cgf, sf.opts, rootDir, hostDir, id, startCmd, unshareFlags, unmounts, removals, sf.umntq)
 }
 
 func (sf *OLContainerSBFactory) Cleanup() {
@@ -118,4 +129,12 @@ func (sf *OLContainerSBFactory) Cleanup() {
 
 	//log.Printf("cleanup, unmount root dir: %v", syscall.Unmount(rootSandboxDir, syscall.MNT_DETACH))
 	//log.Printf("cleanup, remove root dir: %v", os.RemoveAll(rootSandboxDir))
+}
+
+func (sf *OLContainerSBFactory) UnmountWorker() {
+	runtime.LockOSThread()
+	mnt_point := <-sf.umntq
+	if err := syscall.Unmount(mnt_point, syscall.MNT_DETACH); err != nil {
+		log.Printf("unmount %s failed :: %v\n", mnt, err)
+	}
 }

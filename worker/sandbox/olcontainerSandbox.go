@@ -42,9 +42,10 @@ type OLContainerSandbox struct {
 	unshareFlags []string
 	unmounts     []string
 	removals     []string
+	umntq        chan string
 }
 
-func NewOLContainerSandbox(cgf *CgroupFactory, opts *config.Config, rootDir, hostDir, id string, startCmd, unshareFlags, unmounts, removals []string) (*OLContainerSandbox, error) {
+func NewOLContainerSandbox(cgf *CgroupFactory, opts *config.Config, rootDir, hostDir, id string, startCmd, unshareFlags, unmounts, removals []string, umntq chan string) (*OLContainerSandbox, error) {
 	// create container cgroups
 	cgId := cgf.GetCg(id)
 
@@ -60,6 +61,7 @@ func NewOLContainerSandbox(cgf *CgroupFactory, opts *config.Config, rootDir, hos
 		startCmd:     startCmd,
 		unmounts:     unmounts,
 		removals:     removals,
+		umntq:        umntq,
 	}
 
 	return sandbox, nil
@@ -199,9 +201,7 @@ func (s *OLContainerSandbox) Remove() error {
 
 	// unmount things
 	for _, mnt := range s.unmounts {
-		if err := syscall.Unmount(mnt, syscall.MNT_DETACH); err != nil {
-			log.Printf("unmount %s failed :: %v\n", mnt, err)
-		}
+		s.umntq <- mnt
 	}
 
 	// remove things
