@@ -190,7 +190,8 @@ func (cf *OLContainerCacheFactory) Create(hostDir string, startCmd []string) (sb
 	unmounts := []string{sbHostDir, sbHostDir, rootDir}
 	removals := []string{rootDir}
 
-	sandbox, err := sb.NewOLContainerSandbox(cf.cgf, cf.opts, rootDir, hostDir, id, startCmd, unshareFlags, unmounts, removals)
+  umntq := sb.UnmountQueueSingleton()
+	sandbox, err := sb.NewOLContainerSandbox(cf.cgf, cf.opts, rootDir, hostDir, id, startCmd, unshareFlags, unmounts, removals, umntq)
 	if err != nil {
 		return nil, err
 	}

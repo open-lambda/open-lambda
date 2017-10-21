@@ -14,7 +14,11 @@ import (
 )
 
 const rootSandboxDir string = "/tmp/olsbs"
+
 const numUnmountWorkers int = 150
+var unmountPoolExists bool = false
+var unmountPoolMutex *sync.Mutex = &sync.Mutex{}
+var unmountQueue chan string = nil
 
 var BIND uintptr = uintptr(syscall.MS_BIND | syscall.MS_REC)
 var BIND_RO uintptr = uintptr(syscall.MS_BIND | syscall.MS_REC | syscall.MS_RDONLY)
@@ -29,6 +33,21 @@ type OLContainerSBFactory struct {
 	baseDir string
 	cgf     *CgroupFactory
 	umntq   chan string
+}
+
+// the sandbox factory new sandbox method isn't always used (import cache) so we need a way to
+// initialize the pool and queue
+func UnmountQueueSingleton() chan string {
+  unmountPoolMutex.Lock()
+  if !unmountPoolExists {
+	  unmountQueue := make(chan string, numUnmountWorkers*10)
+	  for i := 0; i < numUnmountWorkers; i++ {
+		  go UnmountWorker(unmountQueue)
+	  }
+    unmountPoolExists = true
+  }
+  unmountPoolMutex.Unlock()
+  return unmountQueue
 }
 
 // NewOLContainerSBFactory creates a OLContainerSBFactory.
@@ -53,15 +72,8 @@ func NewOLContainerSBFactory(opts *config.Config, baseDir string) (*OLContainerS
 		return nil, err
 	}
 
-	umntq := make(chan string, numUnmountWorkers*10)
-
-	sf := &OLContainerSBFactory{opts: opts, baseDir: baseDir, cgf: cgf, umntq: umntq}
-
-	for i := 0; i < numUnmountWorkers; i++ {
-		go sf.UnmountWorker()
-	}
-
-	return sf, nil
+  umntq := UnmountQueueSingleton()
+	return &OLContainerSBFactory{opts: opts, baseDir: baseDir, cgf: cgf, umntq: umntq}, nil
 }
 
 // Create creates a docker sandbox from the handler and sandbox directory.
@@ -131,10 +143,10 @@ func (sf *OLContainerSBFactory) Cleanup() {
 	//log.Printf("cleanup, remove root dir: %v", os.RemoveAll(rootSandboxDir))
 }
 
-func (sf *OLContainerSBFactory) UnmountWorker() {
+func UnmountWorker(umntq chan string) {
 	runtime.LockOSThread()
-	mnt_point := <-sf.umntq
+	mnt_point := <-umntq
 	if err := syscall.Unmount(mnt_point, syscall.MNT_DETACH); err != nil {
-		log.Printf("unmount %s failed :: %v\n", mnt, err)
+		fmt.Errorf("unmount %s failed :: %v\n", mnt_point, err)
 	}
 }
