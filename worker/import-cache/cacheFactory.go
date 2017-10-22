@@ -204,13 +204,12 @@ func (cf *OLContainerCacheFactory) Create(hostDir string, startCmd []string) (sb
 		return nil, fmt.Errorf("failed to bind packages dir RO: %v", err.Error())
 	}
 
-	unmounts := []string{sbHostDir, sbHostDir, rootDir}
-	removals := []string{rootDir}
-
-	sandbox, err := sb.NewOLContainerSandbox(cf.cgf, cf.opts, rootDir, hostDir, id, startCmd, unshareFlags, unmounts, removals)
+	sandbox, err := sb.NewOLContainerSandbox(cf.cgf, cf.opts, rootDir, id, startCmd, unshareFlags)
 	if err != nil {
 		return nil, err
 	}
+
+	sandbox.HostDir = hostDir
 
 	return sandbox, nil
 }

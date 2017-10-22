@@ -34,17 +34,15 @@ type OLContainerSandbox struct {
 	id           string
 	cgId         string
 	rootDir      string
-	hostDir      string
+	HostDir      string
 	status       state.HandlerState
 	initPid      string
 	initCmd      *exec.Cmd
 	startCmd     []string
 	unshareFlags []string
-	unmounts     []string
-	removals     []string
 }
 
-func NewOLContainerSandbox(cgf *CgroupFactory, opts *config.Config, rootDir, hostDir, id string, startCmd, unshareFlags, unmounts, removals []string) (*OLContainerSandbox, error) {
+func NewOLContainerSandbox(cgf *CgroupFactory, opts *config.Config, rootDir, id string, startCmd, unshareFlags []string) (*OLContainerSandbox, error) {
 	// create container cgroups
 	cgId := cgf.GetCg(id)
 
@@ -54,12 +52,9 @@ func NewOLContainerSandbox(cgf *CgroupFactory, opts *config.Config, rootDir, hos
 		id:           id,
 		cgId:         cgId,
 		rootDir:      rootDir,
-		hostDir:      hostDir,
 		unshareFlags: unshareFlags,
 		status:       state.Stopped,
 		startCmd:     startCmd,
-		unmounts:     unmounts,
-		removals:     removals,
 	}
 
 	return sandbox, nil
@@ -70,8 +65,12 @@ func (s *OLContainerSandbox) State() (hstate state.HandlerState, err error) {
 }
 
 func (s *OLContainerSandbox) Channel() (channel *SandboxChannel, err error) {
+	if s.HostDir == "" {
+		return nil, fmt.Errorf("cannot call channel before calling initHostDir")
+	}
+
 	dial := func(proto, addr string) (net.Conn, error) {
-		return net.Dial("unix", filepath.Join(s.hostDir, "ol.sock"))
+		return net.Dial("unix", filepath.Join(s.HostDir, "ol.sock"))
 	}
 	tr := http.Transport{Dial: dial}
 
@@ -186,23 +185,17 @@ func (s *OLContainerSandbox) Unpause() error {
 func (s *OLContainerSandbox) Remove() error {
 	start := time.Now()
 
-	// unmount things
-	for _, mnt := range s.unmounts {
-		if err := syscall.Unmount(mnt, syscall.MNT_DETACH); err != nil {
-			log.Printf("unmount %s failed :: %v\n", mnt, err)
-		}
-	}
-
-	// remove things
-	for _, dir := range s.removals {
-		if err := os.RemoveAll(dir); err != nil {
-			log.Printf("remove %s failed :: %v\n", dir, err)
-		}
-	}
-
 	// remove cgroups
 	if err := s.cgf.PutCg(s.id, s.cgId); err != nil {
 		log.Printf("Unable to delete cgroups: %v", err)
+	}
+
+	if err := syscall.Unmount(s.rootDir, syscall.MNT_DETACH); err != nil {
+		log.Printf("unmount root dir %s failed :: %v\n", s.rootDir, err)
+	}
+
+	if err := os.RemoveAll(s.rootDir); err != nil {
+		log.Printf("remove root dir %s failed :: %v\n", s.rootDir, err)
 	}
 
 	log.Printf("remove took %v\n", time.Since(start))
@@ -267,14 +260,35 @@ func (s *OLContainerSandbox) RootDir() string {
 	return s.rootDir
 }
 
-func (s *OLContainerSandbox) AddUnmounts(mnts []string) {
-	s.unmounts = append(mnts, s.unmounts...)
+func (s *OLContainerSandbox) mountDirs(hostDir, handlerDir string) error {
+	s.HostDir = hostDir
 
-	return
-}
+	pipDir := filepath.Join(hostDir, "pip")
+	if err := os.Mkdir(pipDir, 0777); err != nil {
+		return err
+	}
 
-func (s *OLContainerSandbox) AddRemovals(dirs []string) {
-	s.removals = append(dirs, s.removals...)
+	tmpDir := filepath.Join(hostDir, "tmp")
+	if err := os.Mkdir(tmpDir, 0777); err != nil {
+		return err
+	}
 
-	return
+	sbHostDir := filepath.Join(s.rootDir, "host")
+	if err := syscall.Mount(hostDir, sbHostDir, "", BIND, ""); err != nil {
+		return fmt.Errorf("failed to bind host dir: %v", err.Error())
+	}
+
+	sbTmpDir := filepath.Join(s.rootDir, "tmp")
+	if err := syscall.Mount(tmpDir, sbTmpDir, "", BIND, ""); err != nil {
+		return fmt.Errorf("failed to bind tmp dir: %v", err.Error())
+	}
+
+	sbHandlerDir := filepath.Join(s.rootDir, "handler")
+	if err := syscall.Mount(handlerDir, sbHandlerDir, "", BIND, ""); err != nil {
+		return fmt.Errorf("failed to bind handler dir: %s -> %s :: %v", handlerDir, sbHandlerDir, err.Error())
+	} else if err := syscall.Mount("none", sbHandlerDir, "", BIND_RO, ""); err != nil {
+		return fmt.Errorf("failed to bind handler dir RO: %v", err.Error())
+	}
+
+	return nil
 }

@@ -325,11 +325,3 @@ func (s *DockerSandbox) MemoryCGroupPath() string {
 func (s *DockerSandbox) RootDir() string {
 	return "/"
 }
-
-func (s *DockerSandbox) AddUnmounts(mnts []string) {
-	return
-}
-
-func (s *DockerSandbox) AddRemovals(dirs []string) {
-	return
-}
