@@ -66,4 +66,7 @@ type ContainerSandbox interface {
 
 	// Directory that new processes need to chroot into (none if docker)
 	RootDir() string
+
+	// Directory in the cluster directory to communicate with sandbox
+	HostDir() string
 }

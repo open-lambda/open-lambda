@@ -18,7 +18,7 @@ import (
 )
 
 type CacheManager struct {
-	factory *BufferedCacheFactory
+	factory CacheFactory
 	cluster string
 	servers []*ForkServer
 	matcher CacheMatcher
@@ -139,7 +139,7 @@ func (cm *CacheManager) newCacheEntry(fs *ForkServer, toCache []string) (*ForkSe
 	cm.mutex.Unlock()
 
 	// get container for new entry
-	sandbox, sandboxDir, err := cm.factory.Create()
+	sandbox, err := cm.factory.Create([]string{"/init"})
 	if err != nil {
 		newFs.Kill()
 		return nil, err
@@ -153,7 +153,7 @@ func (cm *CacheManager) newCacheEntry(fs *ForkServer, toCache []string) (*ForkSe
 		return nil, err
 	}
 
-	sockPath := fmt.Sprintf("%s/fs.sock", sandboxDir)
+	sockPath := fmt.Sprintf("%s/fs.sock", sandbox.HostDir())
 
 	// wait up to 30s for server to initialize
 	start := time.Now()

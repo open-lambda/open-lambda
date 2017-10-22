@@ -29,7 +29,7 @@ import (
 // DockerSandbox is a sandbox inside a docker container.
 type DockerSandbox struct {
 	host_id    string
-	host_dir   string
+	hostDir    string
 	nspid      string
 	container  *docker.Container
 	client     *docker.Client
@@ -40,15 +40,15 @@ type DockerSandbox struct {
 }
 
 // NewDockerSandbox creates a DockerSandbox.
-func NewDockerSandbox(host_id, host_dir, index_host, index_port string, container *docker.Container, client *docker.Client) *DockerSandbox {
+func NewDockerSandbox(host_id, hostDir, index_host, index_port string, container *docker.Container, client *docker.Client) *DockerSandbox {
 	dial := func(proto, addr string) (net.Conn, error) {
-		return net.Dial("unix", filepath.Join(host_dir, "ol.sock"))
+		return net.Dial("unix", filepath.Join(hostDir, "ol.sock"))
 	}
 	tr := http.Transport{Dial: dial, DisableKeepAlives: true}
 
 	sandbox := &DockerSandbox{
 		host_id:    host_id,
-		host_dir:   host_dir,
+		hostDir:    hostDir,
 		container:  container,
 		client:     client,
 		tr:         tr,
@@ -213,10 +213,10 @@ func (s *DockerSandbox) Unpause() error {
 // Remove frees all resources associated with the lambda (stops the container if necessary).
 func (s *DockerSandbox) Remove() error {
 	// remove sockets if they exist
-	if err := os.RemoveAll(filepath.Join(s.host_dir, "ol.sock")); err != nil {
+	if err := os.RemoveAll(filepath.Join(s.hostDir, "ol.sock")); err != nil {
 		return err
 	}
-	if err := os.RemoveAll(filepath.Join(s.host_dir, "fs.sock")); err != nil {
+	if err := os.RemoveAll(filepath.Join(s.hostDir, "fs.sock")); err != nil {
 		return err
 	}
 
@@ -232,8 +232,8 @@ func (s *DockerSandbox) Remove() error {
 
 // Logs returns log output for the container.
 func (s *DockerSandbox) Logs() (string, error) {
-	stdout_path := filepath.Join(s.host_dir, "stdout")
-	stderr_path := filepath.Join(s.host_dir, "stderr")
+	stdout_path := filepath.Join(s.hostDir, "stdout")
+	stderr_path := filepath.Join(s.hostDir, "stderr")
 
 	stdout, err := ioutil.ReadFile(stdout_path)
 	if err != nil {
@@ -324,4 +324,8 @@ func (s *DockerSandbox) MemoryCGroupPath() string {
 
 func (s *DockerSandbox) RootDir() string {
 	return "/"
+}
+
+func (s *DockerSandbox) HostDir() string {
+	return s.hostDir
 }
