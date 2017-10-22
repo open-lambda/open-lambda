@@ -198,6 +198,10 @@ func (s *OLContainerSandbox) Remove() error {
 		log.Printf("remove root dir %s failed :: %v\n", s.rootDir, err)
 	}
 
+	if err := os.RemoveAll(s.HostDir); err != nil {
+		log.Printf("remove host dir %s failed :: %v\n", s.HostDir, err)
+	}
+
 	log.Printf("remove took %v\n", time.Since(start))
 
 	return nil

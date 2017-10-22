@@ -155,6 +155,13 @@ func NewOLContainerCacheFactory(opts *config.Config, cluster, baseDir, pkgsDir s
 		return nil, fmt.Errorf("failed to make root cache sandbox dir private :: %v", err.Error())
 	}
 
+	sbPkgsDir := path.Join(baseDir, "packages")
+	if err := syscall.Mount(pkgsDir, sbPkgsDir, "", sb.BIND, ""); err != nil {
+		return nil, fmt.Errorf("failed to bind packages dir: %s -> %s :: %v", opts.Pkgs_dir, sbPkgsDir, err)
+	} else if err := syscall.Mount("none", sbPkgsDir, "", sb.BIND_RO, ""); err != nil {
+		return nil, fmt.Errorf("failed to bind packages dir RO: %s -> %s :: %v", opts.Pkgs_dir, sbPkgsDir, err)
+	}
+
 	return &OLContainerCacheFactory{opts, cgf, []string{"/init"}, baseDir, pkgsDir}, nil
 }
 
@@ -195,13 +202,6 @@ func (cf *OLContainerCacheFactory) Create(hostDir string, startCmd []string) (sb
 	sbTmpDir := path.Join(rootDir, "tmp")
 	if err := syscall.Mount(tmpDir, sbTmpDir, "", sb.BIND, ""); err != nil {
 		return nil, fmt.Errorf("failed to bind tmp dir: %v", err.Error())
-	}
-
-	sbPkgsDir := path.Join(rootDir, "packages")
-	if err := syscall.Mount(cf.pkgsDir, sbPkgsDir, "", sb.BIND, ""); err != nil {
-		return nil, fmt.Errorf("failed to bind packages dir: %v", err.Error())
-	} else if err := syscall.Mount(cf.pkgsDir, sbPkgsDir, "", sb.BIND_RO, ""); err != nil {
-		return nil, fmt.Errorf("failed to bind packages dir RO: %v", err.Error())
 	}
 
 	sandbox, err := sb.NewOLContainerSandbox(cf.cgf, cf.opts, rootDir, id, startCmd, unshareFlags)
