@@ -106,7 +106,7 @@ func (s *OLContainerSandbox) Start() error {
 		if time.Since(start).Seconds() > 5 {
 			return fmt.Errorf("olcontainer_init failed to spawn after 5s")
 		}
-		time.Sleep(10 * time.Microsecond)
+		time.Sleep(100 * time.Microsecond)
 	}
 	log.Printf("wait for olcontainer_init took %v\n", time.Since(start))
 
@@ -264,7 +264,7 @@ func (s *OLContainerSandbox) RootDir() string {
 	return s.rootDir
 }
 
-func (s *OLContainerSandbox) mountDirs(hostDir, handlerDir string) error {
+func (s *OLContainerSandbox) MountDirs(hostDir, handlerDir string) error {
 	s.HostDir = hostDir
 
 	pipDir := filepath.Join(hostDir, "pip")
@@ -287,11 +287,13 @@ func (s *OLContainerSandbox) mountDirs(hostDir, handlerDir string) error {
 		return fmt.Errorf("failed to bind tmp dir: %v", err.Error())
 	}
 
-	sbHandlerDir := filepath.Join(s.rootDir, "handler")
-	if err := syscall.Mount(handlerDir, sbHandlerDir, "", BIND, ""); err != nil {
-		return fmt.Errorf("failed to bind handler dir: %s -> %s :: %v", handlerDir, sbHandlerDir, err.Error())
-	} else if err := syscall.Mount("none", sbHandlerDir, "", BIND_RO, ""); err != nil {
-		return fmt.Errorf("failed to bind handler dir RO: %v", err.Error())
+	if handlerDir != "" {
+		sbHandlerDir := filepath.Join(s.rootDir, "handler")
+		if err := syscall.Mount(handlerDir, sbHandlerDir, "", BIND, ""); err != nil {
+			return fmt.Errorf("failed to bind handler dir: %s -> %s :: %v", handlerDir, sbHandlerDir, err.Error())
+		} else if err := syscall.Mount("none", sbHandlerDir, "", BIND_RO, ""); err != nil {
+			return fmt.Errorf("failed to bind handler dir RO: %v", err.Error())
+		}
 	}
 
 	return nil
