@@ -191,7 +191,13 @@ func NewBufferedOLContainerSBFactory(opts *config.Config, delegate SandboxFactor
 
 	var sharedIdx int64 = -1
 	bf.idxPtr = &sharedIdx
-	for i := 0; i < 20; i++ {
+
+	threads := 1
+	if opts.Sandbox_buffer_threads > 0 {
+		threads = opts.Sandbox_buffer_threads
+	}
+
+	for i := 0; i < threads; i++ {
 		go func(idxPtr *int64) {
 			for {
 				newIdx := atomic.AddInt64(idxPtr, 1)

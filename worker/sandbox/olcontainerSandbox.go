@@ -34,7 +34,7 @@ type OLContainerSandbox struct {
 	id           string
 	cgId         string
 	rootDir      string
-	HostDir      string
+	hostDir      string
 	status       state.HandlerState
 	initPid      string
 	initCmd      *exec.Cmd
@@ -65,12 +65,12 @@ func (s *OLContainerSandbox) State() (hstate state.HandlerState, err error) {
 }
 
 func (s *OLContainerSandbox) Channel() (channel *SandboxChannel, err error) {
-	if s.HostDir == "" {
-		return nil, fmt.Errorf("cannot call channel before calling initHostDir")
+	if s.hostDir == "" {
+		return nil, fmt.Errorf("cannot call channel before calling mountDirs")
 	}
 
 	dial := func(proto, addr string) (net.Conn, error) {
-		return net.Dial("unix", filepath.Join(s.HostDir, "ol.sock"))
+		return net.Dial("unix", filepath.Join(s.hostDir, "ol.sock"))
 	}
 	tr := http.Transport{Dial: dial}
 
@@ -106,7 +106,7 @@ func (s *OLContainerSandbox) Start() error {
 		if time.Since(start).Seconds() > 5 {
 			return fmt.Errorf("olcontainer_init failed to spawn after 5s")
 		}
-		time.Sleep(100 * time.Microsecond)
+		time.Sleep(500 * time.Microsecond)
 	}
 	log.Printf("wait for olcontainer_init took %v\n", time.Since(start))
 
@@ -198,8 +198,8 @@ func (s *OLContainerSandbox) Remove() error {
 		log.Printf("remove root dir %s failed :: %v\n", s.rootDir, err)
 	}
 
-	if err := os.RemoveAll(s.HostDir); err != nil {
-		log.Printf("remove host dir %s failed :: %v\n", s.HostDir, err)
+	if err := os.RemoveAll(s.hostDir); err != nil {
+		log.Printf("remove host dir %s failed :: %v\n", s.hostDir, err)
 	}
 
 	log.Printf("remove took %v\n", time.Since(start))
@@ -264,8 +264,12 @@ func (s *OLContainerSandbox) RootDir() string {
 	return s.rootDir
 }
 
+func (s *OLContainerSandbox) HostDir() string {
+	return s.hostDir
+}
+
 func (s *OLContainerSandbox) MountDirs(hostDir, handlerDir string) error {
-	s.HostDir = hostDir
+	s.hostDir = hostDir
 
 	pipDir := filepath.Join(hostDir, "pip")
 	if err := os.Mkdir(pipDir, 0777); err != nil {
