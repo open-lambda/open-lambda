@@ -178,30 +178,14 @@ func (cf *OLContainerCacheFactory) Create(hostDir string, startCmd []string) (sb
 		return nil, err
 	}
 
-	pipDir := path.Join(hostDir, "pip")
-	if err := os.Mkdir(pipDir, 0777); err != nil {
-		return nil, err
-	}
-
-	tmpDir := path.Join(hostDir, "tmp")
-	if err := os.Mkdir(tmpDir, 0777); err != nil {
-		return nil, err
-	}
-
 	// NOTE: mount points are expected to exist in OLContainer_handler_base directory
-	layers := fmt.Sprintf("br=%s=rw:%s=ro", rootDir, cf.baseDir)
-	if err := syscall.Mount("none", rootDir, "aufs", 0, layers); err != nil {
-		return nil, fmt.Errorf("failed to mount base dir: %v", err.Error())
-	}
 
-	sbHostDir := path.Join(rootDir, "host")
-	if err := syscall.Mount(hostDir, sbHostDir, "", sb.BIND, ""); err != nil {
-		return nil, fmt.Errorf("failed to bind host dir: %v", err.Error())
-	}
-
-	sbTmpDir := path.Join(rootDir, "tmp")
-	if err := syscall.Mount(tmpDir, sbTmpDir, "", sb.BIND, ""); err != nil {
-		return nil, fmt.Errorf("failed to bind tmp dir: %v", err.Error())
+	if err := syscall.Mount(cf.baseDir, rootDir, "", sb.BIND, ""); err != nil {
+		return nil, fmt.Errorf("failed to bind root dir: %s -> %s :: %v\n", cf.baseDir, rootDir, err)
+	} else if err := syscall.Mount("none", rootDir, "", sb.BIND_RO, ""); err != nil {
+		return nil, fmt.Errorf("failed to bind root dir RO: %s :: %v\n", rootDir, err)
+	} else if err := syscall.Mount("none", rootDir, "", sb.PRIVATE, ""); err != nil {
+		return nil, fmt.Errorf("failed to make root dir private :: %v", err)
 	}
 
 	sandbox, err := sb.NewOLContainerSandbox(cf.cgf, cf.opts, rootDir, id, startCmd, unshareFlags)
@@ -209,7 +193,16 @@ func (cf *OLContainerCacheFactory) Create(hostDir string, startCmd []string) (sb
 		return nil, err
 	}
 
-	sandbox.HostDir = hostDir
+	sbHostDir := filepath.Join(rootDir, "host")
+	if err := syscall.Mount(sbHostDir, sbHostDir, "", sb.BIND, ""); err != nil {
+		return nil, fmt.Errorf("failed to bind sandbox host dir onto itself :: %v\n", err)
+	} else if err := syscall.Mount("none", sbHostDir, "", sb.SHARED, ""); err != nil {
+		return nil, fmt.Errorf("failed to make sbHostDir shared :: %v\n", err)
+	}
+
+	if err := sandbox.MountDirs(hostDir, ""); err != nil {
+		return nil, err
+	}
 
 	return sandbox, nil
 }

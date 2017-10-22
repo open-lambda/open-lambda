@@ -128,6 +128,13 @@ func (sf *OLContainerSBFactory) Create(handlerDir, workingDir string) (Sandbox, 
 			return nil, fmt.Errorf("failed to make sbHandlerDir shared :: %v\n", err)
 		}
 
+		sbTmpDir := filepath.Join(rootDir, "tmp")
+		if err := syscall.Mount(sbTmpDir, sbTmpDir, "", BIND, ""); err != nil {
+			return nil, fmt.Errorf("failed to bind sbTmpDir onto itself :: %v\n", err)
+		} else if err := syscall.Mount("none", sbTmpDir, "", SHARED, ""); err != nil {
+			return nil, fmt.Errorf("failed to make sbTmpDir shared :: %v\n", err)
+		}
+
 		return sandbox, nil
 	}
 
@@ -137,7 +144,7 @@ func (sf *OLContainerSBFactory) Create(handlerDir, workingDir string) (Sandbox, 
 		return nil, err
 	}
 
-	if err := sandbox.mountDirs(hostDir, handlerDir); err != nil {
+	if err := sandbox.MountDirs(hostDir, handlerDir); err != nil {
 		return nil, err
 	}
 
@@ -179,9 +186,12 @@ func NewBufferedOLContainerSBFactory(opts *config.Config, delegate SandboxFactor
 	}
 
 	// fill the sandbox buffer
+	start := time.Now()
+	log.Printf("filling sandbox buffer")
+
 	var sharedIdx int64 = -1
 	bf.idxPtr = &sharedIdx
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 20; i++ {
 		go func(idxPtr *int64) {
 			for {
 				newIdx := atomic.AddInt64(idxPtr, 1)
@@ -204,11 +214,10 @@ func NewBufferedOLContainerSBFactory(opts *config.Config, delegate SandboxFactor
 		}(bf.idxPtr)
 	}
 
-	log.Printf("filling sandbox buffer")
 	for len(bf.buffer) < cap(bf.buffer) {
 		time.Sleep(20 * time.Millisecond)
 	}
-	log.Printf("sandbox buffer full")
+	log.Printf("sandbox buffer full in %v", time.Since(start))
 
 	return bf, nil
 }
@@ -225,7 +234,7 @@ func (bf *BufferedOLContainerSBFactory) Create(handlerDir, workingDir string) (S
 			return nil, err
 		}
 
-		if err := sandbox.mountDirs(hostDir, handlerDir); err != nil {
+		if err := sandbox.MountDirs(hostDir, handlerDir); err != nil {
 			return nil, err
 		}
 
