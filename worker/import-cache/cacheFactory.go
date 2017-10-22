@@ -173,7 +173,7 @@ func (cf *OLContainerCacheFactory) Create(hostDir string, startCmd []string) (sb
 	}
 	id := strings.TrimSpace(string(id_bytes[:]))
 
-	rootDir := path.Join(rootCacheSandboxDir, fmt.Sprintf("%s", id))
+	rootDir := path.Join(rootCacheSandboxDir, id)
 	if err := os.Mkdir(rootDir, 0700); err != nil {
 		return nil, err
 	}
@@ -191,13 +191,6 @@ func (cf *OLContainerCacheFactory) Create(hostDir string, startCmd []string) (sb
 	sandbox, err := sb.NewOLContainerSandbox(cf.cgf, cf.opts, rootDir, id, startCmd, unshareFlags)
 	if err != nil {
 		return nil, err
-	}
-
-	sbHostDir := filepath.Join(rootDir, "host")
-	if err := syscall.Mount(sbHostDir, sbHostDir, "", sb.BIND, ""); err != nil {
-		return nil, fmt.Errorf("failed to bind sandbox host dir onto itself :: %v\n", err)
-	} else if err := syscall.Mount("none", sbHostDir, "", sb.SHARED, ""); err != nil {
-		return nil, fmt.Errorf("failed to make sbHostDir shared :: %v\n", err)
 	}
 
 	if err := sandbox.MountDirs(hostDir, ""); err != nil {
