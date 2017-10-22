@@ -31,8 +31,6 @@ type HandlerManagerSet struct {
 	config     *config.Config
 	lru        *HandlerLRU
 	workerDir  string
-	indexHost  string
-	indexPort  string
 	maxRunners int
 	hhits      *int64
 	ihits      *int64
@@ -95,8 +93,6 @@ func NewHandlerManagerSet(opts *config.Config) (hms *HandlerManagerSet, err erro
 		cacheMgr:   cm,
 		config:     opts,
 		workerDir:  opts.Worker_dir,
-		indexHost:  opts.Index_host,
-		indexPort:  opts.Index_port,
 		maxRunners: opts.Max_runners,
 		hhits:      &hhits,
 		ihits:      &ihits,
@@ -268,7 +264,7 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 
 	// create sandbox if needed
 	if h.sandbox == nil {
-		sandbox, err := hms.sbFactory.Create(hm.codeDir, hm.workingDir, hms.indexHost, hms.indexPort)
+		sandbox, err := hms.sbFactory.Create(hm.codeDir, hm.workingDir)
 		if err != nil {
 			return nil, err
 		}
