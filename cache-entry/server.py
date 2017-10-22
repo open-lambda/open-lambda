@@ -85,7 +85,7 @@ def create_link(pkg):
     if os.path.exists(pkgdir):
         for name in os.listdir(pkgdir):
             source = pkgdir + '/' + name
-            link_name = '/usr/lib/python2.7/dist-packages/' + name
+            link_name = '/host/pip/%s' % name
             if os.path.exists(link_name):
                 continue # should we report this?
             os.symlink(source, link_name)

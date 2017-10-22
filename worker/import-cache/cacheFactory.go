@@ -155,10 +155,10 @@ func NewOLContainerCacheFactory(opts *config.Config, cluster, baseDir, pkgsDir, 
 	}
 
 	sbPkgsDir := path.Join(baseDir, "packages")
-	if err := syscall.Mount(pkgsDir, sbPkgsDir, "", sb.BIND, ""); err != nil {
-		return nil, fmt.Errorf("failed to bind packages dir: %s -> %s :: %v", opts.Pkgs_dir, sbPkgsDir, err)
-	} else if err := syscall.Mount("none", sbPkgsDir, "", sb.BIND_RO, ""); err != nil {
-		return nil, fmt.Errorf("failed to bind packages dir RO: %s -> %s :: %v", opts.Pkgs_dir, sbPkgsDir, err)
+
+	_, err = exec.Command("/bin/sh", "-c", fmt.Sprintf("cp -r %s/* %s", pkgsDir, sbPkgsDir)).Output()
+	if err != nil {
+		return nil, err
 	}
 
 	return &OLContainerCacheFactory{opts, cgf, baseDir, pkgsDir, cacheDir, idxPtr}, nil

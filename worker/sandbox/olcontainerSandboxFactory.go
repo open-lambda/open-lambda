@@ -46,17 +46,14 @@ func NewOLContainerSBFactory(opts *config.Config) (*OLContainerSBFactory, error)
 		return nil, fmt.Errorf("failed to make root sandbox dir :: %v", err)
 	} else if err := syscall.Mount(rootSandboxDir, rootSandboxDir, "", BIND, ""); err != nil {
 		return nil, fmt.Errorf("failed to bind root sandbox dir: %v", err)
-	} else if err := syscall.Mount("none", rootSandboxDir, "", PRIVATE, ""); err != nil {
-		return nil, fmt.Errorf("failed to make root sandbox dir private :: %v", err)
 	}
 
 	baseDir := opts.OLContainer_handler_base
-
 	pkgsDir := filepath.Join(baseDir, "packages")
-	if err := syscall.Mount(opts.Pkgs_dir, pkgsDir, "", BIND, ""); err != nil {
-		return nil, fmt.Errorf("failed to bind packages dir: %s -> %s :: %v", opts.Pkgs_dir, pkgsDir, err)
-	} else if err := syscall.Mount("none", pkgsDir, "", BIND_RO, ""); err != nil {
-		return nil, fmt.Errorf("failed to bind packages dir RO: %s -> %s :: %v", opts.Pkgs_dir, pkgsDir, err)
+
+	_, err := exec.Command("/bin/sh", "-c", fmt.Sprintf("cp -r %s/* %s", opts.Pkgs_dir, pkgsDir)).Output()
+	if err != nil {
+		return nil, err
 	}
 
 	cgf, err := NewCgroupFactory("sandbox", opts.Cg_pool_size)
