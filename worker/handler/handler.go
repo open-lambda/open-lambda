@@ -319,7 +319,7 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 					return nil, err
 				}
 			}
-			if time.Since(start).Seconds() > 20 {
+			if time.Since(start).Seconds() > 600 {
 				return nil, fmt.Errorf("handler server failed to initialize after 20s")
 			}
 			time.Sleep(50 * time.Microsecond)

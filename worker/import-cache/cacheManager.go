@@ -159,8 +159,8 @@ func (cm *CacheManager) newCacheEntry(fs *ForkServer, toCache []string) (*ForkSe
 	start := time.Now()
 	for ok := true; ok; ok = os.IsNotExist(err) {
 		_, err = os.Stat(sockPath)
-		if time.Since(start).Seconds() > 30 {
-			return nil, errors.New(fmt.Sprintf("cache server %d failed to initialize after 30s", cm.seq))
+		if time.Since(start).Seconds() > 600 {
+			return nil, errors.New(fmt.Sprintf("cache server %d failed to initialize after 600s", cm.seq))
 		}
 		time.Sleep(1 * time.Millisecond)
 	}
