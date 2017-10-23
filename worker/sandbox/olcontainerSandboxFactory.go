@@ -21,7 +21,7 @@ var BIND_RO uintptr = uintptr(syscall.MS_BIND | syscall.MS_RDONLY | syscall.MS_R
 var PRIVATE uintptr = uintptr(syscall.MS_PRIVATE)
 var SHARED uintptr = uintptr(syscall.MS_SHARED)
 
-var unshareFlags []string = []string{"-impuf", "--propagation", "slave"}
+var unshareFlags []string = []string{"-impu", "--propagation", "slave"}
 
 // OLContainerSBFactory is a SandboxFactory that creats docker sandboxes.
 type OLContainerSBFactory struct {
@@ -51,7 +51,7 @@ func NewOLContainerSBFactory(opts *config.Config) (*OLContainerSBFactory, error)
 	baseDir := opts.OLContainer_handler_base
 	pkgsDir := filepath.Join(baseDir, "packages")
 
-	_, err := exec.Command("/bin/sh", "-c", fmt.Sprintf("cp -r %s/* %s", opts.Pkgs_dir, pkgsDir)).Output()
+	_, err := exec.Command("/bin/sh", "-c", fmt.Sprintf("cp -rT %s %s", opts.Pkgs_dir, pkgsDir)).Output()
 	if err != nil {
 		log.Printf("failed to copy packages to lambda base image :: %v", err)
 	}
@@ -75,6 +75,9 @@ func NewOLContainerSBFactory(opts *config.Config) (*OLContainerSBFactory, error)
 
 // Create creates a docker sandbox from the handler and sandbox directory.
 func (sf *OLContainerSBFactory) Create(handlerDir, workingDir string) (Sandbox, error) {
+	start := time.Now()
+	defer log.Printf("create olcontainer took %v\n", time.Since(start))
+
 	id_bytes, err := exec.Command("uuidgen").Output()
 	if err != nil {
 		return nil, err
@@ -138,6 +141,11 @@ func (sf *OLContainerSBFactory) Create(handlerDir, workingDir string) (Sandbox, 
 	// create sandbox directories
 	hostDir := filepath.Join(workingDir, id)
 	if err := os.MkdirAll(hostDir, 0777); err != nil {
+		return nil, err
+	}
+	// pipe for synchronization before socket is ready
+	pipe := filepath.Join(hostDir, "pipe")
+	if err := syscall.Mkfifo(pipe, 0777); err != nil {
 		return nil, err
 	}
 
@@ -226,6 +234,9 @@ func NewBufferedOLContainerSBFactory(opts *config.Config, delegate SandboxFactor
 // Create mounts the handler and sandbox directories to the ones already
 // mounted in the sandbox, and returns that sandbox.
 func (bf *BufferedOLContainerSBFactory) Create(handlerDir, workingDir string) (Sandbox, error) {
+	start := time.Now()
+	defer log.Printf("create buffered olcontainer took %v\n", time.Since(start))
+
 	select {
 	case sandbox := <-bf.buffer:
 		// create cluster host directory

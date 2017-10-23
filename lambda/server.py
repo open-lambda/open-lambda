@@ -11,6 +11,8 @@ HOST_PATH = '/host'
 SOCK_PATH = '%s/ol.sock' % HOST_PATH
 STDOUT_PATH = '%s/stdout' % HOST_PATH
 STDERR_PATH = '%s/stderr' % HOST_PATH
+# debug use
+# HOST_ERR = sys.stderr
 
 PKGS_PATH = '/packages'
 PKG_PATH = '/handler/packages.txt'
@@ -110,12 +112,17 @@ def lambda_server():
     server = tornado.httpserver.HTTPServer(tornado_app)
     socket = tornado.netutil.bind_unix_socket(SOCK_PATH)
     server.add_socket(socket)
+    # notify worker server that we are ready through stdout
+    # flush is necessary, and don't put it after tornado start; won't work
+    with open('/host/pipe', 'w') as pipe:
+        pipe.write('ready')
     tornado.ioloop.IOLoop.instance().start()
     server.start(PROCESSES_DEFAULT)
 
 if __name__ == '__main__':
     global INDEX_HOST
     global INDEX_PORT
+
     try:
         sys.stdout = open(STDOUT_PATH, 'w')
         sys.stderr = open(STDERR_PATH, 'w')

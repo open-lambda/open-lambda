@@ -27,7 +27,7 @@ import (
 	sb "github.com/open-lambda/open-lambda/worker/sandbox"
 )
 
-var unshareFlags []string = []string{"-fimu"}
+var unshareFlags []string = []string{"-imu"}
 
 const rootCacheSandboxDir = "/tmp/olcache"
 
@@ -156,7 +156,7 @@ func NewOLContainerCacheFactory(opts *config.Config, cluster, baseDir, pkgsDir, 
 
 	sbPkgsDir := path.Join(baseDir, "packages")
 
-	_, err = exec.Command("/bin/sh", "-c", fmt.Sprintf("cp -r %s/* %s", pkgsDir, sbPkgsDir)).Output()
+	_, err = exec.Command("/bin/sh", "-c", fmt.Sprintf("cp -rT %s %s", pkgsDir, sbPkgsDir)).Output()
 	if err != nil {
 		log.Printf("failed to copy packages to cache entry base image :: %v", err)
 	}
@@ -169,6 +169,11 @@ func (cf *OLContainerCacheFactory) Create(startCmd []string) (sb.ContainerSandbo
 	newIdx := atomic.AddInt64(cf.idxPtr, 1)
 	hostDir := filepath.Join(cf.cacheDir, fmt.Sprintf("%d", newIdx))
 	if err := os.MkdirAll(hostDir, os.ModeDir); err != nil {
+		return nil, err
+	}
+	// pipe for synchronization before socket is ready
+	pipe := filepath.Join(hostDir, "pipe")
+	if err := syscall.Mkfifo(pipe, 0777); err != nil {
 		return nil, err
 	}
 

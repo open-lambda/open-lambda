@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -155,14 +156,41 @@ func (cm *CacheManager) newCacheEntry(fs *ForkServer, toCache []string) (*ForkSe
 
 	sockPath := fmt.Sprintf("%s/fs.sock", sandbox.HostDir())
 
+	// use StdoutPipe of olcontainer to sync with lambda server
+	ready := make(chan bool, 1)
+	go func() {
+		pipeDir := filepath.Join(sandbox.HostDir(), "pipe")
+		pipe, err := os.OpenFile(pipeDir, os.O_RDWR, 0777)
+		if err != nil {
+			log.Fatalf("Cannot open pipe: %v\n", err)
+		}
+		defer pipe.Close()
+
+		// wait for "ready"
+		buf := make([]byte, 5)
+		n, err := pipe.Read(buf)
+		if err != nil {
+			log.Fatalf("Cannot read from stdout of olcontainer: %v\n", err)
+		} else if n != 5 {
+			log.Fatalf("Expect to read 5 bytes, only %d read\n", n)
+		}
+		ready <- true
+	}()
+
+	// wait up to 20s for server to initialize
+	timeout := make(chan bool, 1)
+	go func() {
+		time.Sleep(20 * time.Second)
+		timeout <- true
+	}()
+
 	// wait up to 30s for server to initialize
 	start := time.Now()
-	for ok := true; ok; ok = os.IsNotExist(err) {
-		_, err = os.Stat(sockPath)
-		if time.Since(start).Seconds() > 600 {
-			return nil, errors.New(fmt.Sprintf("cache server %d failed to initialize after 600s", cm.seq))
-		}
-		time.Sleep(1 * time.Millisecond)
+	select {
+	case <-ready:
+		log.Printf("wait for server took %v\n", time.Since(start))
+	case <-timeout:
+		return nil, fmt.Errorf("handler server failed to initialize after 20s")
 	}
 
 	newFs.Sandbox = sandbox

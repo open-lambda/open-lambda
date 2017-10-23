@@ -10,6 +10,7 @@ code, initializing containers, etc.
 package sandbox
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -17,7 +18,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -85,36 +85,71 @@ func (s *OLContainerSandbox) Start() error {
 	start := time.Now()
 	defer log.Printf("create container took %v\n", time.Since(start))
 
-	initArgs := []string{s.opts.OLContainer_init_path, s.rootDir}
+	initArgs := append(s.unshareFlags, s.rootDir)
 	initArgs = append(initArgs, s.startCmd...)
-	initArgs = append(s.unshareFlags, initArgs...)
 
 	s.initCmd = exec.Command(
-		"unshare",
+		s.opts.OLContainer_init_path,
 		initArgs...,
 	)
 
 	s.initCmd.Env = []string{fmt.Sprintf("ol.config=%s", s.opts.SandboxConfJson())}
+
+	// let the init program prints error to log, for debugging
+	s.initCmd.Stderr = os.Stdout
+
+	pipeDir := filepath.Join(s.HostDir(), "pipe")
+	pipe, err := os.OpenFile(pipeDir, os.O_RDWR, 0777)
+	if err != nil {
+		log.Fatalf("Cannot open pipe: %v\n", err)
+	}
+	defer pipe.Close()
+
+	cmdStart := time.Now()
 	if err := s.initCmd.Start(); err != nil {
 		return err
 	}
 
-	// wait up to 5s for server olcontainer_init to spawn
-	start = time.Now()
-	for {
-		pgrep := exec.Command("pgrep", "-P", strconv.Itoa(s.initCmd.Process.Pid))
-		out, err := pgrep.Output()
-		if err == nil {
-			s.initPid = strings.TrimSpace(string(out[:]))
-			break
+	ready := make(chan string, 1)
+	go func() {
+		// message will be either 5 byte \0 padded pid (<65536), or "ready"
+		pid := make([]byte, 6)
+		n, err := pipe.Read(pid[:5])
+		if err != nil {
+			log.Fatalf("Cannot read from stdout of olcontainer: %v\n", err)
+		} else if n != 5 {
+			log.Fatalf("Expect to read 5 bytes, only %d read\n", n)
+		}
+		n = bytes.IndexByte(pid, 0)
+
+		// TODO: make it less hacky
+		if s.startCmd[0] == "/ol-init" {
+			// wait for signal handler to be "ready"
+			buf := make([]byte, 5)
+			n, err = pipe.Read(buf)
+			if err != nil {
+				log.Fatalf("Cannot read from stdout of olcontainer: %v\n", err)
+			} else if n != 5 {
+				log.Fatalf("Expect to read 5 bytes, only %d read\n", n)
+			}
 		}
 
-		if time.Since(start).Seconds() > 5 {
-			return fmt.Errorf("olcontainer_init failed to spawn after 5s")
-		}
-		time.Sleep(500 * time.Microsecond)
+		ready <- string(pid[:n])
+	}()
+
+	// wait up to 5s for server olcontainer_init to spawn
+	timeout := make(chan bool, 1)
+	go func() {
+		time.Sleep(5 * time.Second)
+		timeout <- true
+	}()
+
+	select {
+	case s.initPid = <-ready:
+		log.Printf("wait for olcontainer_init took %v\n", time.Since(cmdStart))
+	case <-timeout:
+		return fmt.Errorf("olcontainer_init failed to spawn after 5s")
 	}
-	log.Printf("wait for olcontainer_init took %v\n", time.Since(start))
 
 	if err := s.CGroupEnter(s.initPid); err != nil {
 		return err
@@ -131,7 +166,7 @@ func (s *OLContainerSandbox) Stop() error {
 
 	start := time.Now()
 	// kill any remaining processes
-	procsPath := path.Join("/sys/fs/cgroup/memory", OLCGroupName, s.cgId, "cgroup.procs")
+	procsPath := filepath.Join("/sys/fs/cgroup/memory", OLCGroupName, s.cgId, "cgroup.procs")
 	pids, err := ioutil.ReadFile(procsPath)
 	if err != nil {
 		return err
@@ -164,7 +199,7 @@ func (s *OLContainerSandbox) Stop() error {
 		// release unshare process resources
 		s.initCmd.Process.Kill()
 		s.initCmd.Process.Wait()
-		defer log.Printf("kill processes took %v\n", time.Since(start))
+		log.Printf("kill processes took %v", time.Since(start))
 	}(s, start)
 
 	s.status = state.Stopped
@@ -172,7 +207,7 @@ func (s *OLContainerSandbox) Stop() error {
 }
 
 func (s *OLContainerSandbox) Pause() error {
-	freezerPath := path.Join("/sys/fs/cgroup/freezer", OLCGroupName, s.cgId, "freezer.state")
+	freezerPath := filepath.Join("/sys/fs/cgroup/freezer", OLCGroupName, s.cgId, "freezer.state")
 	err := ioutil.WriteFile(freezerPath, []byte("FROZEN"), os.ModeAppend)
 	if err != nil {
 		return err
@@ -183,7 +218,7 @@ func (s *OLContainerSandbox) Pause() error {
 }
 
 func (s *OLContainerSandbox) Unpause() error {
-	statePath := path.Join("/sys/fs/cgroup/freezer", OLCGroupName, s.cgId, "freezer.state")
+	statePath := filepath.Join("/sys/fs/cgroup/freezer", OLCGroupName, s.cgId, "freezer.state")
 
 	err := ioutil.WriteFile(statePath, []byte("THAWED"), os.ModeAppend)
 	if err != nil {
@@ -195,7 +230,7 @@ func (s *OLContainerSandbox) Unpause() error {
 
 func (s *OLContainerSandbox) WaitForUnpause(timeout time.Duration) error {
 	// TODO: should we check parent_freezing to be sure?
-	selfFreezingPath := path.Join("/sys/fs/cgroup/freezer", OLCGroupName, s.cgId, "freezer.self_freezing")
+	selfFreezingPath := filepath.Join("/sys/fs/cgroup/freezer", OLCGroupName, s.cgId, "freezer.self_freezing")
 
 	start := time.Now()
 	for time.Since(start) < timeout {
@@ -251,7 +286,7 @@ func (s *OLContainerSandbox) CGroupEnter(pid string) (err error) {
 
 	// put process into each cgroup
 	for _, cgroup := range CGroupList {
-		tasksPath := path.Join("/sys/fs/cgroup/", cgroup, OLCGroupName, s.cgId, "tasks")
+		tasksPath := filepath.Join("/sys/fs/cgroup/", cgroup, OLCGroupName, s.cgId, "tasks")
 
 		err := ioutil.WriteFile(tasksPath, []byte(pid), os.ModeAppend)
 		if err != nil {

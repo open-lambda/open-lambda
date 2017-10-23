@@ -2,6 +2,7 @@
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <fcntl.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 
@@ -13,9 +14,8 @@ char **params;
 void signal_handler() {
 	if (fork() == 0) {
 		execv(params[0], params);
+		exit(1);
 	}
-
-	return;
 }
 
 /*
@@ -45,6 +45,16 @@ int main(int argc, char *argv[]) {
 	params[argc+1] = NULL;
 
 	install_handler();
+
+	// notify worker server that signal handler is installed throught stdout
+    int fd = open("/host/pipe", O_RDWR);
+    if (fd < 0) {
+        fprintf(stderr, "cannot open pipe");
+        exit(1);
+    }
+    write(fd, "ready", 5);
+    close(fd);
+
 	while (1) {
 		pause(); // sleep forever, we're init for the ns
 	}

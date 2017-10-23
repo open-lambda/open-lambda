@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -121,7 +121,7 @@ func (hms *HandlerManagerSet) Get(name string) (h *Handler, err error) {
 	hm := hms.hmMap[name]
 
 	if hm == nil {
-		workingDir := path.Join(hms.workerDir, "handlers", name)
+		workingDir := filepath.Join(hms.workerDir, "handlers", name)
 		hms.hmMap[name] = &HandlerManager{
 			name:       name,
 			hms:        hms,
@@ -299,7 +299,7 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 
 		h.sandbox = sandbox
 		h.id = h.sandbox.ID()
-		h.hostDir = path.Join(hm.workingDir, h.id)
+		h.hostDir = filepath.Join(hm.workingDir, h.id)
 		if sbState, err := h.sandbox.State(); err != nil {
 			return nil, err
 		} else if sbState == state.Stopped {
@@ -339,18 +339,56 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 
 		// wait up to 20s for server to initialize
 		start := time.Now()
-		for ok := true; ok; ok = os.IsNotExist(err) {
-			_, err = os.Stat(sockPath)
-			if hms.config.Sandbox == "olcontainer" && (hms.cacheMgr == nil || hms.cacheMgr.Full()) {
-				time.Sleep(10 * time.Microsecond)
-				if err := h.sandbox.RunServer(); err != nil {
-					return nil, err
+		// TODO: make pipe compatible with non-olcontainer
+		if olcontainer, ok := h.sandbox.(*sb.OLContainerSandbox); ok {
+			// use StdoutPipe of olcontainer to sync with lambda server
+			ready := make(chan bool, 1)
+			go func() {
+				pipeDir := filepath.Join(olcontainer.HostDir(), "pipe")
+				pipe, err := os.OpenFile(pipeDir, os.O_RDWR, 0777)
+				if err != nil {
+					log.Fatalf("Cannot open pipe: %v\n", err)
 				}
-			}
-			if time.Since(start).Seconds() > 600 {
+				defer pipe.Close()
+
+				// wait for "ready"
+				buf := make([]byte, 5)
+				n, err := pipe.Read(buf)
+				if err != nil {
+					log.Fatalf("Cannot read from stdout of olcontainer: %v\n", err)
+				} else if n != 5 {
+					log.Fatalf("Expect to read 5 bytes, only %d read\n", n)
+				}
+				ready <- true
+			}()
+
+			// wait up to 20s for server to initialize
+			timeout := make(chan bool, 1)
+			go func() {
+				time.Sleep(20 * time.Second)
+				timeout <- true
+			}()
+
+			select {
+			case <-ready:
+				log.Printf("wait for server took %v\n", time.Since(start))
+			case <-timeout:
 				return nil, fmt.Errorf("handler server failed to initialize after 20s")
 			}
-			time.Sleep(50 * time.Microsecond)
+		} else {
+			for ok := true; ok; ok = os.IsNotExist(err) {
+				_, err = os.Stat(sockPath)
+				if hms.config.Sandbox == "olcontainer" && (hms.cacheMgr == nil || hms.cacheMgr.Full()) {
+					time.Sleep(10 * time.Microsecond)
+					if err := h.sandbox.RunServer(); err != nil {
+						return nil, err
+					}
+				}
+				if time.Since(start).Seconds() > 20 {
+					return nil, fmt.Errorf("handler server failed to initialize after 20s")
+				}
+				time.Sleep(50 * time.Microsecond)
+			}
 		}
 
 		// we are up so we can add ourselves for reuse

@@ -3,5 +3,7 @@
 /* Lightweight "dummy" process to spin in containers */
 
 int main() {
-    pause();
+    while (1) {
+        pause();
+    }
 }
