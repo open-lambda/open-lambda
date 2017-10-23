@@ -34,18 +34,26 @@ func NewCgroupFactory(prefix string, poolSize int) (*CgroupFactory, error) {
 	return &CgroupFactory{poolSize: poolSize, freeCg: freeCg}, nil
 }
 
-func (cgf *CgroupFactory) GetCg(cgId string) string {
+func (cgf *CgroupFactory) GetCg(id string) (string, error) {
+	var err error
+	var cgId string
+	err = nil
+
 	if cgf.freeCg != nil {
 		cgf.mutex.Lock()
-		cgEle := cgf.freeCg.Front()
-		cgId = cgEle.Value.(string)
-		cgf.freeCg.Remove(cgEle)
+		if cgEle := cgf.freeCg.Front(); cgEle != nil {
+			cgId = cgEle.Value.(string)
+			cgf.freeCg.Remove(cgEle)
+		}
 		cgf.mutex.Unlock()
-	} else {
-		CreateCg(cgId)
 	}
 
-	return cgId
+	if cgId == "" {
+		err = CreateCg(id)
+		cgId = id
+	}
+
+	return cgId, err
 }
 
 func (cgf *CgroupFactory) PutCg(id, cgId string) error {

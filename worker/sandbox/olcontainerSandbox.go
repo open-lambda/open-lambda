@@ -44,7 +44,10 @@ type OLContainerSandbox struct {
 
 func NewOLContainerSandbox(cgf *CgroupFactory, opts *config.Config, rootDir, id string, startCmd, unshareFlags []string) (*OLContainerSandbox, error) {
 	// create container cgroups
-	cgId := cgf.GetCg(id)
+	cgId, err := cgf.GetCg(id)
+	if err != nil {
+		return nil, err
+	}
 
 	sandbox := &OLContainerSandbox{
 		cgf:          cgf,
