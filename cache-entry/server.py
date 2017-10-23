@@ -137,6 +137,7 @@ def fdlisten():
                 except Exception as e:
                     print('install %s failed with: %s' % (split[1], e))
             
+	    sys.path.append('/host/pip')
             # import modules
             for mod in mods:
                 print('importing: %s' % mod)

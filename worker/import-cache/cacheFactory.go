@@ -202,6 +202,12 @@ func (cf *OLContainerCacheFactory) Create(startCmd []string) (sb.ContainerSandbo
 		return nil, err
 	}
 
+	if err := sandbox.Start(); err != nil {
+		sandbox.Stop()
+		sandbox.Remove()
+		return nil, err
+	}
+
 	return sandbox, nil
 }
 
@@ -283,10 +289,8 @@ func NewCacheFactory(opts *config.Config, cluster string) (CacheFactory, sb.Cont
 					return // kill signal
 				}
 
+				// expect sandbox to come back started
 				if sandbox, err := bf.delegate.Create([]string{"/init"}); err != nil {
-					bf.buffer <- nil
-					bf.errors <- err
-				} else if err := sandbox.Start(); err != nil {
 					bf.buffer <- nil
 					bf.errors <- err
 				} else if err := sandbox.Pause(); err != nil {
