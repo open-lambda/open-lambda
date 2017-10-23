@@ -261,8 +261,6 @@ func NewCacheFactory(opts *config.Config, cluster string) (CacheFactory, sb.Cont
 	root, err := delegate.Create(rootCmd)
 	if err != nil {
 		return nil, nil, "", fmt.Errorf("failed to create cache entry sandbox: %v", err)
-	} else if err := root.Start(); err != nil {
-		return nil, nil, "", fmt.Errorf("failed to start cache entry sandbox: %v", err)
 	}
 
 	rootDir := filepath.Join(cacheDir, "0")

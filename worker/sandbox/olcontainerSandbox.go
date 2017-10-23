@@ -220,6 +220,10 @@ func (s *OLContainerSandbox) Logs() (string, error) {
 }
 
 func (s *OLContainerSandbox) CGroupEnter(pid string) (err error) {
+	if pid == "" {
+		return fmt.Errorf("empty pid passed to cgroupenter")
+	}
+
 	// put process into each cgroup
 	for _, cgroup := range CGroupList {
 		tasksPath := path.Join("/sys/fs/cgroup/", cgroup, OLCGroupName, s.cgId, "tasks")

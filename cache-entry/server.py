@@ -65,9 +65,9 @@ tornado_app = tornado.web.Application([
 
 def install(pkg):
     if MIRROR:
-        check_output(' '.join(['pip', 'install', '--no-cache-dir', '--index-url', 'http://%s:%s/simple' % (INDEX_HOST, INDEX_PORT), '--trusted-host', INDEX_HOST, pkg]), shell=True)
+        check_output(' '.join(['pip', 'install', '-t', '/host/pip', '--no-cache-dir', '--index-url', 'http://%s:%s/simple' % (INDEX_HOST, INDEX_PORT), '--trusted-host', INDEX_HOST, pkg]), shell=True)
     else:
-        check_output(' '.join(['pip', 'install', pkg]), shell=True)
+        check_output(' '.join(['pip', 'install', '-t', '/host/pip', pkg]), shell=True)
 
 # listen on sock file with Tornado
 def lambda_server():
@@ -137,7 +137,7 @@ def fdlisten():
                 except Exception as e:
                     print('install %s failed with: %s' % (split[1], e))
             
-	    sys.path.append('/host/pip')
+	    sys.path.insert(1, '/host/pip')
             # import modules
             for mod in mods:
                 print('importing: %s' % mod)
