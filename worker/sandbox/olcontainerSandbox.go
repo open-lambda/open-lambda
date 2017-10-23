@@ -179,14 +179,32 @@ func (s *OLContainerSandbox) Pause() error {
 }
 
 func (s *OLContainerSandbox) Unpause() error {
-	freezerPath := path.Join("/sys/fs/cgroup/freezer", OLCGroupName, s.cgId, "freezer.state")
-	err := ioutil.WriteFile(freezerPath, []byte("THAWED"), os.ModeAppend)
+	freezerPath := path.Join("/sys/fs/cgroup/freezer", OLCGroupName, s.cgId)
+
+	statePath := path.Join(freezerPath, "freezer.state")
+	err := ioutil.WriteFile(statePath, []byte("THAWED"), os.ModeAppend)
 	if err != nil {
 		return err
 	}
 
-	s.status = state.Running
-	return nil
+	// TODO: should we check parent_freezing to be sure?
+	selfFreezingPath := path.Join(freezerPath, "freezer.self_freezing")
+	start := time.Now()
+	timeout := 5 * time.Second
+	for time.Since(start) < timeout {
+		freezerState, err := ioutil.ReadFile(selfFreezingPath)
+		if err != nil {
+			return fmt.Errorf("failed to check self_freezing state :: %v", err)
+		}
+
+		if strings.TrimSpace(string(freezerState[:])) == "0" {
+			s.status = state.Running
+			return nil
+		}
+		time.Sleep(100 * time.Microsecond)
+	}
+
+	return fmt.Errorf("olcontainer didn't pause after %v", timeout)
 }
 
 func (s *OLContainerSandbox) Remove() error {
