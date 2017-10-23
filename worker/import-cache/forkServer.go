@@ -44,6 +44,7 @@ func (fs *ForkServer) Kill() error {
 	proc.Kill()
 
 	go func() {
+		fs.Sandbox.Unpause()
 		fs.Sandbox.Stop()
 		fs.Sandbox.Remove()
 	}()
