@@ -158,7 +158,7 @@ func NewOLContainerCacheFactory(opts *config.Config, cluster, baseDir, pkgsDir, 
 
 	_, err = exec.Command("/bin/sh", "-c", fmt.Sprintf("cp -r %s/* %s", pkgsDir, sbPkgsDir)).Output()
 	if err != nil {
-		return nil, err
+		log.Printf("failed to copy packages to cache entry base image :: %v", err)
 	}
 
 	return &OLContainerCacheFactory{opts, cgf, baseDir, pkgsDir, cacheDir, idxPtr}, nil

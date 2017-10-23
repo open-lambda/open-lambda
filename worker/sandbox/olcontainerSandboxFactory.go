@@ -53,7 +53,7 @@ func NewOLContainerSBFactory(opts *config.Config) (*OLContainerSBFactory, error)
 
 	_, err := exec.Command("/bin/sh", "-c", fmt.Sprintf("cp -r %s/* %s", opts.Pkgs_dir, pkgsDir)).Output()
 	if err != nil {
-		return nil, err
+		log.Printf("failed to copy packages to lambda base image :: %v", err)
 	}
 
 	cgf, err := NewCgroupFactory("sandbox", opts.Cg_pool_size)
