@@ -170,8 +170,6 @@ func NewBufferedDockerSBFactory(opts *config.Config, delegate SandboxFactory) (*
 					bf.errors <- err
 				} else if err := sandbox.Start(); err != nil {
 					bf.errors <- err
-				} else if err := sandbox.Pause(); err != nil {
-					bf.errors <- err
 				} else {
 					bf.buffer <- &emptySBInfo{sandbox, bufDir, handlerDir, sandboxDir}
 				}
@@ -189,8 +187,7 @@ func NewBufferedDockerSBFactory(opts *config.Config, delegate SandboxFactory) (*
 }
 
 // Create mounts the handler and sandbox directories to the ones already
-// mounted in the sandbox, and returns that sandbox. The sandbox would be in
-// Paused state, instead of Stopped.
+// mounted in the sandbox, and returns that sandbox.
 func (bf *BufferedDockerSBFactory) Create(handlerDir, workingDir string) (Sandbox, error) {
 	mntFlag := uintptr(syscall.MS_BIND)
 	select {
@@ -202,9 +199,7 @@ func (bf *BufferedDockerSBFactory) Create(handlerDir, workingDir string) (Sandbo
 		}
 
 		sbHostDir := filepath.Join(info.sandboxDir, info.sandbox.ID())
-		if err := info.sandbox.Unpause(); err != nil {
-			return nil, err
-		} else if err := syscall.Mount(handlerDir, info.handlerDir, "", mntFlag, ""); err != nil {
+		if err := syscall.Mount(handlerDir, info.handlerDir, "", mntFlag, ""); err != nil {
 			return nil, err
 		} else if err := syscall.Mount(hostDir, sbHostDir, "", mntFlag, ""); err != nil {
 			return nil, err

@@ -54,7 +54,7 @@ func NewLocalManager(opts *config.Config) (*LocalManager, error) {
 func (lm *LocalManager) Pull(name string) (string, []string, error) {
 	handlerDir := filepath.Join(lm.regDir, name)
 	if _, err := os.Stat(handlerDir); os.IsNotExist(err) {
-		return "", nil, fmt.Errorf("handler does not exists at %s", handlerDir)
+		return "", nil, fmt.Errorf("handler does not exist: %s", handlerDir)
 	} else if err != nil {
 		return "", nil, err
 	}
