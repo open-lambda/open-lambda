@@ -208,8 +208,6 @@ func NewBufferedOLContainerSBFactory(opts *config.Config, delegate SandboxFactor
 					bf.errors <- err
 				} else if err := sandbox.Start(); err != nil {
 					bf.errors <- err
-				} else if err := sandbox.Pause(); err != nil {
-					bf.errors <- err
 				} else {
 					bf.buffer <- sandbox
 				}
@@ -226,8 +224,7 @@ func NewBufferedOLContainerSBFactory(opts *config.Config, delegate SandboxFactor
 }
 
 // Create mounts the handler and sandbox directories to the ones already
-// mounted in the sandbox, and returns that sandbox. The sandbox would be in
-// Paused state, instead of Stopped.
+// mounted in the sandbox, and returns that sandbox.
 func (bf *BufferedOLContainerSBFactory) Create(handlerDir, workingDir string) (Sandbox, error) {
 	select {
 	case sandbox := <-bf.buffer:

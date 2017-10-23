@@ -291,9 +291,6 @@ func NewCacheFactory(opts *config.Config, cluster string) (CacheFactory, sb.Cont
 				if sandbox, err := bf.delegate.Create([]string{"/init"}); err != nil {
 					bf.buffer <- nil
 					bf.errors <- err
-				} else if err := sandbox.Pause(); err != nil {
-					bf.buffer <- nil
-					bf.errors <- err
 				} else {
 					bf.buffer <- sandbox
 					bf.errors <- nil
@@ -315,10 +312,6 @@ func NewCacheFactory(opts *config.Config, cluster string) (CacheFactory, sb.Cont
 func (bf *BufferedCacheFactory) Create(startCmd []string) (sb.ContainerSandbox, error) {
 	sandbox, err := <-bf.buffer, <-bf.errors
 	if err != nil {
-		return nil, err
-	}
-
-	if err := sandbox.Unpause(); err != nil {
 		return nil, err
 	}
 
