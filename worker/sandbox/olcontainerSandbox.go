@@ -79,6 +79,9 @@ func (s *OLContainerSandbox) Channel() (channel *SandboxChannel, err error) {
 }
 
 func (s *OLContainerSandbox) Start() error {
+	start := time.Now()
+	defer log.Printf("create container took %v\n", time.Since(start))
+
 	initArgs := []string{s.opts.OLContainer_init_path, s.rootDir}
 	initArgs = append(initArgs, s.startCmd...)
 	initArgs = append(s.unshareFlags, initArgs...)
@@ -94,7 +97,7 @@ func (s *OLContainerSandbox) Start() error {
 	}
 
 	// wait up to 5s for server olcontainer_init to spawn
-	start := time.Now()
+	start = time.Now()
 	for {
 		pgrep := exec.Command("pgrep", "-P", strconv.Itoa(s.initCmd.Process.Pid))
 		out, err := pgrep.Output()
@@ -154,6 +157,7 @@ func (s *OLContainerSandbox) Stop() error {
 		// release unshare process resources
 		s.initCmd.Process.Kill()
 		s.initCmd.Process.Wait()
+		defer log.Printf("kill processes took %v\n", time.Since(start))
 	}(s, start)
 
 	s.status = state.Stopped
