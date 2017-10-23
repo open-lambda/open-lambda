@@ -1,0 +1,9 @@
+{
+    "log": "20runners.log",
+    "type": "sync",
+    "wait": 0,
+    "runners": 20,
+    "minutes": 1,
+    "handlers": "handlers.txt",
+    "host": "localhost"
+}

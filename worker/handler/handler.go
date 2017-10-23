@@ -112,6 +112,9 @@ func NewHandlerManagerSet(opts *config.Config) (hms *HandlerManagerSet, err erro
 
 // Get always returns a Handler, creating one if necessarily.
 func (hms *HandlerManagerSet) Get(name string) (h *Handler, err error) {
+	start := time.Now()
+	defer log.Printf("get handler took %v\n", time.Since(start))
+
 	hms.mutex.Lock()
 
 	hm := hms.hmMap[name]
@@ -256,6 +259,9 @@ func (hm *HandlerManager) AddHandler(h *Handler) {
 // been pulled, sandbox been created, and sandbox been started. The channel of
 // the sandbox of this lambda is returned.
 func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
+	start := time.Now()
+	defer log.Printf("start server took %v\n", time.Since(start))
+
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 

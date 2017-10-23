@@ -64,6 +64,9 @@ func (s *Server) ForwardToSandbox(handler *handler.Handler, r *http.Request, inp
 
 	defer handler.RunFinish()
 
+	start := time.Now()
+	defer log.Printf("forward request took %v\n", time.Since(start))
+
 	// forward request to sandbox.  r and w are the server
 	// request and response respectively.  r2 and w2 are the
 	// sandbox request and response respectively.
