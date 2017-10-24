@@ -55,7 +55,7 @@ func InitCacheManager(opts *config.Config) (cm *CacheManager, err error) {
 		return nil, err
 	}
 
-	e, err := NewEvictor("", memCGroupPath, opts.Import_cache_size)
+	e, err := NewEvictor(cm, "", memCGroupPath, opts.Import_cache_size)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +63,7 @@ func InitCacheManager(opts *config.Config) (cm *CacheManager, err error) {
 	go func(cm *CacheManager) {
 		for {
 			time.Sleep(50 * time.Millisecond)
-			cm.servers = e.CheckUsage(cm.servers, cm.mutex, cm.full)
+			e.CheckUsage()
 		}
 	}(cm)
 

@@ -8,24 +8,25 @@ import "C"
 import (
 	"fmt"
 	"io/ioutil"
+	"log"
 	"math"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"syscall"
 )
 
 type Evictor struct {
+	cm        *CacheManager
 	limit     int
 	eventfd   int
 	usagePath string
 }
 
 //func NewEvictor(pkgfile, rootCID string, kb_limit int, full *bool) (*Evictor, error) {
-func NewEvictor(pkgfile, memCGroupPath string, kb_limit int) (*Evictor, error) {
+func NewEvictor(cm *CacheManager, pkgfile, memCGroupPath string, kb_limit int) (*Evictor, error) {
 	byte_limit := 1024 * kb_limit
 
 	eventfd, err := C.eventfd(0, C.EFD_CLOEXEC)
@@ -48,6 +49,7 @@ func NewEvictor(pkgfile, memCGroupPath string, kb_limit int) (*Evictor, error) {
 	}
 
 	e := &Evictor{
+		cm:        cm,
 		limit:     byte_limit,
 		eventfd:   int(eventfd),
 		usagePath: usagePath,
@@ -57,18 +59,17 @@ func NewEvictor(pkgfile, memCGroupPath string, kb_limit int) (*Evictor, error) {
 	return e, nil
 }
 
-func (e *Evictor) CheckUsage(servers []*ForkServer, mutex *sync.Mutex, full *int32) []*ForkServer {
+func (e *Evictor) CheckUsage() {
+	e.cm.mutex.Lock()
+	defer e.cm.mutex.Unlock()
+
 	usage := e.usage()
 	if usage > e.limit {
-		atomic.StoreInt32(full, 1)
-		mutex.Lock()
-		defer mutex.Unlock()
-		return e.evict(servers)
+		atomic.StoreInt32(e.cm.full, 1)
+		e.evict()
 	} else {
-		atomic.StoreInt32(full, 0)
+		atomic.StoreInt32(e.cm.full, 0)
 	}
-
-	return servers
 }
 
 func (e *Evictor) usage() (usage int) {
@@ -86,7 +87,8 @@ func (e *Evictor) usage() (usage int) {
 	return usage
 }
 
-func (e *Evictor) evict(servers []*ForkServer) []*ForkServer {
+func (e *Evictor) evict() {
+	servers := e.cm.servers
 	idx := -1
 	worst := float64(math.Inf(+1))
 
@@ -100,13 +102,14 @@ func (e *Evictor) evict(servers []*ForkServer) []*ForkServer {
 	}
 
 	if idx != -1 {
-		err := servers[idx].Kill()
-		if err != nil {
-			panic(fmt.Sprintf("failed to evict with: %v", err))
-		}
+		// make sure no one else is using this one..
+		victim := servers[idx]
+		victim.Mutex.Lock()
+		victim.Mutex.Unlock()
 
-		return append(servers[:idx], servers[idx+1:]...)
+		e.cm.servers = append(servers[:idx], servers[idx+1:]...)
+		go victim.Kill()
+	} else {
+		log.Printf("No victim found")
 	}
-
-	return servers
 }
