@@ -4,6 +4,7 @@ package handler
 
 import (
 	"container/list"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -135,7 +136,7 @@ func (hms *HandlerManagerSet) Get(name string) (h *Handler, err error) {
 
 	// find or create handler
 	hm.mutex.Lock()
-	if hms.config.Handler_cache_size == 0 || hm.handlers.Front() == nil {
+	if hm.handlers.Front() == nil {
 		h = &Handler{
 			name:    name,
 			hm:      hm,
@@ -255,6 +256,27 @@ func (hm *HandlerManager) AddHandler(h *Handler) {
 	}
 }
 
+func (hm *HandlerManager) TryRemoveHandler(h *Handler) error {
+	hm.mutex.Lock()
+	defer hm.mutex.Unlock()
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
+
+	// someone has come in and has started running
+	if h.runners > 0 {
+		return errors.New("concurrent runner entered system")
+	}
+
+	// remove reference to handler in HandlerManager
+	// this ensures h is the last reference to the Handler
+	if hEle := hm.hElements[h]; hEle != nil {
+		hm.handlers.Remove(hEle)
+		delete(hm.hElements, h)
+	}
+
+	return nil
+}
+
 // RunStart runs the lambda handled by this Handler. It checks if the code has
 // been pulled, sandbox been created, and sandbox been started. The channel of
 // the sandbox of this lambda is returned.
@@ -358,7 +380,6 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 // be added to the HandlerLRU.
 func (h *Handler) RunFinish() {
 	h.mutex.Lock()
-	defer h.mutex.Unlock()
 
 	hm := h.hm
 	hms := h.hm.hms
@@ -374,11 +395,25 @@ func (h *Handler) RunFinish() {
 			log.Printf("Could not pause %v: %v!  Error: %v\n", h.name, h.id, err)
 		}
 
+		if handlerUsage(h) > hms.lru.soft_limit {
+			h.mutex.Unlock()
+
+			// we were potentially the last runner
+			// try to remove us from the handler manager
+			if err := hm.TryRemoveHandler(h); err == nil {
+				// we were the last one so... bye
+				go h.nuke()
+			}
+			return
+		}
+
 		hm.AddHandler(h)
 		hms.lru.Add(h)
 	} else {
 		hm.AddHandler(h)
 	}
+
+	h.mutex.Unlock()
 }
 
 func (h *Handler) nuke() {
