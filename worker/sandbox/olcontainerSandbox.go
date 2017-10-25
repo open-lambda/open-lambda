@@ -120,7 +120,6 @@ func (s *OLContainerSandbox) Start() error {
 		} else if n != 5 {
 			log.Fatalf("Expect to read 5 bytes, only %d read\n", n)
 		}
-		n = bytes.IndexByte(pid, 0)
 
 		// TODO: make it less hacky
 		if s.startCmd[0] == "/ol-init" {
@@ -129,12 +128,12 @@ func (s *OLContainerSandbox) Start() error {
 			n, err = pipe.Read(buf)
 			if err != nil {
 				log.Fatalf("Cannot read from stdout of olcontainer: %v\n", err)
-			} else if n != 5 {
-				log.Fatalf("Expect to read 5 bytes, only %d read\n", n)
+			} else if string(buf) != "ready" {
+				log.Fatalf("Expect to see `ready` but sees %s\n", string(buf))
 			}
 		}
 
-		ready <- string(pid[:n])
+		ready <- string(pid[:bytes.IndexByte(pid, 0)])
 	}()
 
 	// wait up to 5s for server olcontainer_init to spawn

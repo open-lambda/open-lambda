@@ -353,11 +353,11 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 
 				// wait for "ready"
 				buf := make([]byte, 5)
-				n, err := pipe.Read(buf)
+				_, err = pipe.Read(buf)
 				if err != nil {
 					log.Fatalf("Cannot read from stdout of olcontainer: %v\n", err)
-				} else if n != 5 {
-					log.Fatalf("Expect to read 5 bytes, only %d read\n", n)
+				} else if string(buf) != "ready" {
+					log.Fatalf("Expect to see `ready` but sees %s\n", string(buf))
 				}
 				ready <- true
 			}()
