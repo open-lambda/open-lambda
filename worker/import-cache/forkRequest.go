@@ -1,6 +1,7 @@
 package cache
 
 /*
+#include <arpa/inet.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -47,7 +48,7 @@ sendfd(int s, int fd) {
 }
 
 const char*
-sendFds(char *sockPath, char *pid, char *rootdir, char *pkgs) {
+sendFds(char *sockPath, char *pid, char *rootdir, int rootdirLen, char *pkgs, int pkgsLen) {
     char *path;
     int k;
 
@@ -104,17 +105,23 @@ sendFds(char *sockPath, char *pid, char *rootdir, char *pkgs) {
     }
 
     // Send root directory string to server.
-
-    int rootbuflen = 500;
-    if(send(s, rootdir, rootbuflen, 0) == -1) {
+    int conv_int = htonl(rootdirLen);
+    if(send(s, &conv_int, sizeof(int), 0) == -1) {
+        sprintf(errmsg, "send rootdir: %s\n", strerror(errno));
+        return errmsg;
+    }
+    if(send(s, rootdir, rootdirLen, 0) == -1) {
         sprintf(errmsg, "send rootdir: %s\n", strerror(errno));
         return errmsg;
     }
 
     // Send package string to server.
-
-    int pkgbuflen = 5000;
-    if(send(s, pkgs, pkgbuflen, 0) == -1) {
+    conv_int = htonl(pkgsLen);
+    if(send(s, &conv_int, sizeof(int), 0) == -1) {
+        sprintf(errmsg, "send pkgs: %s\n", strerror(errno));
+        return errmsg;
+    }
+    if(send(s, pkgs, pkgsLen, 0) == -1) {
         sprintf(errmsg, "send pkgs: %s\n", strerror(errno));
         return errmsg;
     }
@@ -148,9 +155,12 @@ sendFds(char *sockPath, char *pid, char *rootdir, char *pkgs) {
 import "C"
 
 import (
+	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/open-lambda/open-lambda/worker/benchmarker"
 )
@@ -185,14 +195,23 @@ func forkRequest(sockPath, targetPid, rootDir string, pkgList []string, handler 
 
 	pkgStr := strings.Join(append(pkgList, signal), " ")
 
+	if len(pkgStr) >= 4096 {
+		return "", errors.New("Package string length too long")
+	}
+
 	csock := C.CString(sockPath)
 	cpid := C.CString(targetPid)
 	croot := C.CString(rootDir)
 	cpkgs := C.CString(pkgStr)
 
+	defer C.free(unsafe.Pointer(csock))
+	defer C.free(unsafe.Pointer(cpid))
+	defer C.free(unsafe.Pointer(croot))
+	defer C.free(unsafe.Pointer(cpkgs))
+
 	var err error
 	for k := 0; k < 5; k++ {
-		ret, err := C.sendFds(csock, cpid, croot, cpkgs)
+		ret, err := C.sendFds(csock, cpid, croot, C.int(len(rootDir)+1), cpkgs, C.int(len(pkgStr)+1))
 		if err == nil {
 			pid := C.GoString(ret)
 			if err != nil || pid == "" {
@@ -200,6 +219,8 @@ func forkRequest(sockPath, targetPid, rootDir string, pkgList []string, handler 
 			} else {
 				return pid, nil
 			}
+		} else {
+			log.Printf("forkRequest: sendFds error: %v %v", ret, err)
 		}
 		time.Sleep(50 * time.Microsecond)
 	}

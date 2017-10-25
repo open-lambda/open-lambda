@@ -1,4 +1,5 @@
 #include <Python.h>
+#include <arpa/inet.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <fcntl.h>
@@ -9,6 +10,8 @@
 #include <sys/un.h>
 #include <sys/wait.h>
 #include <signal.h>
+
+#define BUF_SIZE 4096
 
 /* Python C wrapper declarations */
 
@@ -189,8 +192,10 @@ static PyObject *ns_reset(PyObject *self, PyObject *args) {
  * Returns the package list for importing in Python interpreter.
  */
 static PyObject *ns_fdlisten(PyObject *self, PyObject *args) {
+    char buf[BUF_SIZE];
+    int read_size = 0;
     struct sockaddr_un remote;
-    int k, len, buflen;
+    int k, len;
     unsigned int t;
     PyObject *ret;
 
@@ -239,17 +244,27 @@ static PyObject *ns_fdlisten(PyObject *self, PyObject *args) {
     }
     PySys_WriteStdout("\n");
 
+    // how many bytes to receive?
+    if((len = recv(conn, &read_size, sizeof(int), 0)) == -1) {
+        PyErr_SetString(PyExc_RuntimeError, "Failed to read rootdir size.");
+    }
+    read_size = ntohl(read_size);
+
     memset(newroot, '\0', sizeof(newroot));
-    if((len = recv(conn, newroot, sizeof(newroot)/sizeof(newroot[0]), 0)) == -1) {
+
+    if((len = recv(conn, newroot, read_size, 0)) == -1) {
         PyErr_SetString(PyExc_RuntimeError, "Receiving root directory string from socket failed.");
         return NULL;
     }
 
     PySys_WriteStdout("ns_fdlisten: Receive root directory string: \"%s\"\n", newroot);
 
-    buflen = 5000;
-    char buf[buflen];
-    if((len = recv(conn, buf, buflen, 0)) == -1) {
+    if((len = recv(conn, &read_size, sizeof(int), 0)) == -1) {
+        PyErr_SetString(PyExc_RuntimeError, "Failed to read rootdir size.");
+    }
+    read_size = ntohl(read_size);
+
+    if((len = recv(conn, buf, read_size, 0)) == -1) {
         PyErr_SetString(PyExc_RuntimeError, "Receiving package string from socket failed.");
         return NULL;
     }
