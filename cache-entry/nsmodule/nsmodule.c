@@ -211,7 +211,7 @@ static PyObject *ns_fdlisten(PyObject *self, PyObject *args) {
 */
 
         /* Bind socket */
-        printf("BIND SOCKET\n");
+        PySys_WriteStdout("ns_fdlisten: BIND SOCKET\n");
         fflush(stdout);
         if(initSock(sockpath) == -1) {
             PyErr_SetString(PyExc_RuntimeError, "Failed to initialize socket.");
@@ -232,12 +232,12 @@ static PyObject *ns_fdlisten(PyObject *self, PyObject *args) {
         return NULL;
     }
 
-    printf("Receive fds:");
+    PySys_WriteStdout("ns_fdlisten: Receive fds:");
     for(k = 0; k < NUM_NS; k++) {
         newns[k] = recvfd(conn);
-        printf(" %d", newns[k]);
+        PySys_WriteStdout(" %d", newns[k]);
     }
-    printf("\n");
+    PySys_WriteStdout("\n");
 
     memset(newroot, '\0', sizeof(newroot));
     if((len = recv(conn, newroot, sizeof(newroot)/sizeof(newroot[0]), 0)) == -1) {
@@ -245,7 +245,7 @@ static PyObject *ns_fdlisten(PyObject *self, PyObject *args) {
         return NULL;
     }
 
-    printf("Receive root directory string: \"%s\"\n", newroot);
+    PySys_WriteStdout("ns_fdlisten: Receive root directory string: \"%s\"\n", newroot);
 
     buflen = 5000;
     char buf[buflen];
@@ -254,7 +254,7 @@ static PyObject *ns_fdlisten(PyObject *self, PyObject *args) {
         return NULL;
     }
 
-    printf("Receive packages string: \"%s\"\n", buf);
+    PySys_WriteStdout("ns_fdlisten: Receive packages string: \"%s\"\n", buf);
 
     ret = Py_BuildValue("s", buf);
     return ret;
@@ -378,7 +378,7 @@ static PyObject *ns_forkenter(PyObject *self, PyObject *args) {
     /* Parent responds with grandchild PID and returns in original namespaces */
 
     sprintf(childpid, "%d", gc_pid);
-    printf("%s\n", childpid);
+    PySys_WriteStdout("ns_forkenter: child pid: %s\n", childpid);
 
     if(send(conn, childpid, 50, 0) == -1) {
         PyErr_SetString(PyExc_RuntimeError, "Parent failed to send child PID.");

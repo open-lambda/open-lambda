@@ -115,8 +115,10 @@ def fdlisten():
         print('LISTENING')
         sys.stdout.flush()
         data = ns.fdlisten(FS_PATH).split()
+        sys.stdout.flush()
 
         r = ns.forkenter()
+        sys.stdout.flush()
         if r == 0:
             redirect()
 
