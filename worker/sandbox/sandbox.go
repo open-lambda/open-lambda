@@ -11,7 +11,11 @@ surrounding a given sandbox type (Docker container, cgroup, etc).
 
 */
 
-import "github.com/open-lambda/open-lambda/worker/handler/state"
+import (
+	"time"
+
+	"github.com/open-lambda/open-lambda/worker/handler/state"
+)
 
 const OLCGroupName = "openlambda"
 
@@ -53,6 +57,8 @@ type Sandbox interface {
 	RunServer() error
 
 	MemoryCGroupPath() string
+
+	WaitForUnpause(timeout time.Duration) error
 }
 
 type ContainerSandbox interface {

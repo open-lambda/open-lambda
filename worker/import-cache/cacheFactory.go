@@ -199,6 +199,8 @@ func (cf *OLContainerCacheFactory) Create(startCmd []string) (sb.ContainerSandbo
 	}
 
 	if err := sandbox.MountDirs(hostDir, ""); err != nil {
+		sandbox.Stop()
+		sandbox.Remove()
 		return nil, err
 	}
 

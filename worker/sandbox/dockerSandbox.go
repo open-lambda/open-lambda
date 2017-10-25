@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 
 	docker "github.com/fsouza/go-dockerclient"
 	"github.com/open-lambda/open-lambda/worker/benchmarker"
@@ -207,6 +208,10 @@ func (s *DockerSandbox) Unpause() error {
 		t.End()
 	}
 
+	return nil
+}
+
+func (s *DockerSandbox) WaitForUnpause(timeout time.Duration) error {
 	return nil
 }
 

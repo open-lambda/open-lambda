@@ -125,6 +125,10 @@ func (s *OLContainerSandbox) Start() error {
 }
 
 func (s *OLContainerSandbox) Stop() error {
+	if err := s.WaitForUnpause(5 * time.Second); err != nil {
+		return err
+	}
+
 	start := time.Now()
 	// kill any remaining processes
 	procsPath := path.Join("/sys/fs/cgroup/memory", OLCGroupName, s.cgId, "cgroup.procs")
@@ -179,18 +183,21 @@ func (s *OLContainerSandbox) Pause() error {
 }
 
 func (s *OLContainerSandbox) Unpause() error {
-	freezerPath := path.Join("/sys/fs/cgroup/freezer", OLCGroupName, s.cgId)
+	statePath := path.Join("/sys/fs/cgroup/freezer", OLCGroupName, s.cgId, "freezer.state")
 
-	statePath := path.Join(freezerPath, "freezer.state")
 	err := ioutil.WriteFile(statePath, []byte("THAWED"), os.ModeAppend)
 	if err != nil {
 		return err
 	}
 
+	return nil
+}
+
+func (s *OLContainerSandbox) WaitForUnpause(timeout time.Duration) error {
 	// TODO: should we check parent_freezing to be sure?
-	selfFreezingPath := path.Join(freezerPath, "freezer.self_freezing")
+	selfFreezingPath := path.Join("/sys/fs/cgroup/freezer", OLCGroupName, s.cgId, "freezer.self_freezing")
+
 	start := time.Now()
-	timeout := 5 * time.Second
 	for time.Since(start) < timeout {
 		freezerState, err := ioutil.ReadFile(selfFreezingPath)
 		if err != nil {
@@ -204,7 +211,7 @@ func (s *OLContainerSandbox) Unpause() error {
 		time.Sleep(100 * time.Microsecond)
 	}
 
-	return fmt.Errorf("olcontainer didn't pause after %v", timeout)
+	return fmt.Errorf("olcontainer didn't unpause after %v", timeout)
 }
 
 func (s *OLContainerSandbox) Remove() error {

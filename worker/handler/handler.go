@@ -372,6 +372,9 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 	}
 
 	log.Printf("handler hits: %v, import hits: %v, misses: %v", *hms.hhits, *hms.ihits, *hms.misses)
+	if err := h.sandbox.WaitForUnpause(5 * time.Second); err != nil {
+		return nil, err
+	}
 	return h.sandbox.Channel()
 }
 
