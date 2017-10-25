@@ -223,12 +223,12 @@ static PyObject *ns_fdlisten(PyObject *self, PyObject *args) {
             return NULL;
         }
 
-        initialized = 1;
-
 	if (listen(sock, 1) == -1) {
         PyErr_SetString(PyExc_RuntimeError, "Listen on socket failed.");
         return NULL;
 	}
+
+        initialized = 1;
     }
 
     t = sizeof(remote);
