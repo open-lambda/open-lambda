@@ -75,32 +75,37 @@ func (cm *CacheManager) Provision(sandbox sb.ContainerSandbox, dir string, pkgs 
 
 	fs, toCache, hit := cm.matcher.Match(cm.servers, pkgs)
 
-	// make new cache entry if necessary
-	if len(toCache) != 0 {
-		fs, err = cm.newCacheEntry(fs, toCache)
-		if err != nil {
-			return nil, false, err
-			//return cm.Provision(sandbox, dir, pkgs) //TODO
-		}
-	} else {
-		fs.Mutex.Lock()
-		cm.mutex.Unlock()
-		if fs == nil {
-			fs.Mutex.Unlock()
-			return nil, false, err
-			//return cm.Provision(sandbox, dir, pkgs) //TODO
-		}
+	if fs == nil {
+		return nil, false, errors.New("no match?")
 	}
-	defer fs.Mutex.Unlock()
 
+	if len(toCache) != 0 {
+		baseFS := fs
+		baseFS.Mutex.Lock()
+		fs, err = cm.newCacheEntry(baseFS, toCache)
+		baseFS.Mutex.Unlock()
+		if err != nil {
+			cm.mutex.Unlock()
+			return nil, false, err
+		}
+
+		cm.servers = append(cm.servers, fs)
+		cm.seq++
+	}
+	cm.mutex.Unlock()
+
+	fs.Mutex.Lock()
 	// keep track of number of hits
 	fs.Hit()
 
 	// signal interpreter to forkenter into sandbox's namespace
 	pid, err := forkRequest(fs.SockPath, sandbox.NSPid(), sandbox.RootDir(), []string{}, true)
 	if err != nil {
+		fs.Mutex.Unlock()
 		return nil, false, err
 	}
+
+	fs.Mutex.Unlock()
 
 	// change cgroup of spawned lambda server
 	if err = sandbox.CGroupEnter(pid); err != nil {
@@ -110,11 +115,11 @@ func (cm *CacheManager) Provision(sandbox sb.ContainerSandbox, dir string, pkgs 
 	return fs, hit, nil
 }
 
-func (cm *CacheManager) newCacheEntry(fs *ForkServer, toCache []string) (*ForkServer, error) {
+func (cm *CacheManager) newCacheEntry(baseFS *ForkServer, toCache []string) (*ForkServer, error) {
 	// make hashset of packages for new entry
 	pkgs := make(map[string]bool)
 	size := 0.0
-	for key, val := range fs.Packages {
+	for key, val := range baseFS.Packages {
 		pkgs[key] = val
 	}
 	for k := 0; k < len(toCache); k++ {
@@ -122,34 +127,27 @@ func (cm *CacheManager) newCacheEntry(fs *ForkServer, toCache []string) (*ForkSe
 		size += cm.sizes[strings.ToLower(toCache[k])]
 	}
 
-	newFs := &ForkServer{
+	fs := &ForkServer{
 		Packages: pkgs,
 		Hits:     0.0,
-		Parent:   fs,
+		Parent:   baseFS,
 		Children: 0,
 		Mutex:    &sync.Mutex{},
 	}
 
-	fs.Children += 1
-
-	cm.servers = append(cm.servers, newFs)
-	cm.seq++
-
-	newFs.Mutex.Lock()
-	cm.mutex.Unlock()
+	baseFS.Children += 1
 
 	// get container for new entry
 	sandbox, err := cm.factory.Create([]string{"/init"})
 	if err != nil {
-		newFs.Kill()
+		fs.Kill()
 		return nil, err
 	}
 
 	// signal interpreter to forkenter into sandbox's namespace
-	pid, err := forkRequest(fs.SockPath, sandbox.NSPid(), sandbox.RootDir(), toCache, false)
+	pid, err := forkRequest(baseFS.SockPath, sandbox.NSPid(), sandbox.RootDir(), toCache, false)
 	if err != nil {
-		newFs.Mutex.Unlock()
-		newFs.Kill()
+		fs.Kill()
 		return nil, err
 	}
 
@@ -165,11 +163,11 @@ func (cm *CacheManager) newCacheEntry(fs *ForkServer, toCache []string) (*ForkSe
 		time.Sleep(1 * time.Millisecond)
 	}
 
-	newFs.Sandbox = sandbox
-	newFs.Pid = pid
-	newFs.SockPath = sockPath
+	fs.Sandbox = sandbox
+	fs.Pid = pid
+	fs.SockPath = sockPath
 
-	return newFs, nil
+	return fs, nil
 }
 
 func (cm *CacheManager) initCacheRoot(opts *config.Config) (memCGroupPath string, err error) {
