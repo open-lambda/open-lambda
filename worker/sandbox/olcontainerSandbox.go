@@ -100,7 +100,7 @@ func (s *OLContainerSandbox) Start() error {
 	// let the init program prints error to log, for debugging
 	s.initCmd.Stderr = os.Stdout
 
-	pipeDir := filepath.Join(s.HostDir(), "pipe")
+	pipeDir := filepath.Join(s.HostDir(), "init_pipe")
 	pipe, err := os.OpenFile(pipeDir, os.O_RDWR, 0777)
 	if err != nil {
 		log.Fatalf("Cannot open pipe: %v\n", err)
@@ -147,7 +147,7 @@ func (s *OLContainerSandbox) Start() error {
 
 	select {
 	case s.initPid = <-ready:
-		log.Printf("wait for olcontainer_init took %v\n", time.Since(cmdStart))
+		log.Printf("wait for olcontainer_init took %v pid=%s\n", time.Since(cmdStart), s.initPid)
 	case <-timeout:
 		return fmt.Errorf("olcontainer_init failed to spawn after 5s")
 	}

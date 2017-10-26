@@ -80,7 +80,7 @@ def lambda_server():
     server.add_socket(socket)
     # notify worker server that we are ready through stdout
     # flush is necessary, and don't put it after tornado start; won't work
-    with open('/host/pipe', 'w') as pipe:
+    with open('/host/server_pipe', 'w') as pipe:
         pipe.write('ready')
     tornado.ioloop.IOLoop.instance().start()
     server.start(PROCESSES_DEFAULT)

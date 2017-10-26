@@ -160,7 +160,7 @@ func (cm *CacheManager) newCacheEntry(baseFS *ForkServer, toCache []string) (*Fo
 	}
 
 	// open pipe before forkenter
-	pipeDir := filepath.Join(sandbox.HostDir(), "pipe")
+	pipeDir := filepath.Join(sandbox.HostDir(), "server_pipe")
 	pipe, err := os.OpenFile(pipeDir, os.O_RDWR, 0777)
 	if err != nil {
 		log.Fatalf("Cannot open pipe: %v\n", err)
@@ -223,7 +223,7 @@ func (cm *CacheManager) initCacheRoot(opts *config.Config) (memCGroupPath string
 	cm.factory = factory
 
 	// open pipe before forkenter
-	pipeDir := filepath.Join(rootSB.HostDir(), "pipe")
+	pipeDir := filepath.Join(rootSB.HostDir(), "server_pipe")
 	pipe, err := os.OpenFile(pipeDir, os.O_RDWR, 0777)
 	if err != nil {
 		log.Fatalf("Cannot open pipe: %v\n", err)

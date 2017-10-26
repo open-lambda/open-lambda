@@ -340,7 +340,7 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 			// use StdoutPipe of olcontainer to sync with lambda server
 			ready := make(chan bool, 1)
 			go func() {
-				pipeDir := filepath.Join(olcontainer.HostDir(), "pipe")
+				pipeDir := filepath.Join(olcontainer.HostDir(), "server_pipe")
 				pipe, err := os.OpenFile(pipeDir, os.O_RDWR, 0777)
 				if err != nil {
 					log.Fatalf("Cannot open pipe: %v\n", err)

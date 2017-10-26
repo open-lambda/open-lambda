@@ -113,7 +113,7 @@ int initSock(char *sockpath) {
 	}
 
     // notify worker that the socket is ready
-    int pipefd = open("/host/pipe", O_WRONLY);
+    int pipefd = open("/host/server_pipe", O_WRONLY);
     if (pipefd < 0) {
         perror("open");
         exit(1);

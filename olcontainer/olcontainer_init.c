@@ -144,9 +144,9 @@ int main(int argc, char *argv[]) {
   if (read(pipefd[0], (void *) &pid, sizeof(pid)) < 0) {
       errExit("read");
   }
-  close(pipefd[1]);
+  close(pipefd[0]);
 
-  int fd = open("/host/pipe", O_RDWR);
+  int fd = open("/host/init_pipe", O_WRONLY);
   if (fd < 0) {
       fprintf(stderr, "cannot open pipe\n");
       exit(1);

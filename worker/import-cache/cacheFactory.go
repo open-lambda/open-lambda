@@ -171,8 +171,13 @@ func (cf *OLContainerCacheFactory) Create(parentDir string, startCmd []string) (
 	if err := os.MkdirAll(hostDir, os.ModeDir); err != nil {
 		return nil, err
 	}
+	// pipe for synchronization before init is ready
+	pipe := filepath.Join(hostDir, "init_pipe")
+	if err := syscall.Mkfifo(pipe, 0777); err != nil {
+		return nil, err
+	}
 	// pipe for synchronization before socket is ready
-	pipe := filepath.Join(hostDir, "pipe")
+	pipe = filepath.Join(hostDir, "server_pipe")
 	if err := syscall.Mkfifo(pipe, 0777); err != nil {
 		return nil, err
 	}

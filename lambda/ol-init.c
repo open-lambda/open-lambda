@@ -47,7 +47,7 @@ int main(int argc, char *argv[]) {
 	install_handler();
 
 	// notify worker server that signal handler is installed throught stdout
-    int fd = open("/host/pipe", O_RDWR);
+    int fd = open("/host/init_pipe", O_WRONLY);
     if (fd < 0) {
         fprintf(stderr, "cannot open pipe\n");
         exit(1);
