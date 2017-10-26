@@ -129,7 +129,7 @@ func (s *OLContainerSandbox) Start() error {
 			if err != nil {
 				log.Fatalf("Cannot read from stdout of olcontainer: %v\n", err)
 			} else if string(buf) != "ready" {
-				log.Fatalf("Expect to see `ready` but sees %s\n", string(buf))
+				log.Fatalf("In olcontainerSandbox: Expect to see `ready` but sees %s\n", string(buf))
 			}
 		}
 

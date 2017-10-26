@@ -112,6 +112,18 @@ int initSock(char *sockpath) {
 		exit(1);
 	}
 
+    // notify worker that the socket is ready
+    int pipefd = open("/host/pipe", O_WRONLY);
+    if (pipefd < 0) {
+        perror("open");
+        exit(1);
+    }
+    if (write(pipefd, "ready", strlen("ready")) < 0) {
+        perror("write");
+        exit(1);
+    }
+    close(pipefd);
+
     return 0;
 }
 

@@ -49,10 +49,13 @@ int main(int argc, char *argv[]) {
 	// notify worker server that signal handler is installed throught stdout
     int fd = open("/host/pipe", O_RDWR);
     if (fd < 0) {
-        fprintf(stderr, "cannot open pipe");
+        fprintf(stderr, "cannot open pipe\n");
         exit(1);
     }
-    write(fd, "ready", 5);
+    if (write(fd, "ready", 5) < 0) {
+        perror("write");
+        exit(1);
+    }
     close(fd);
 
 	while (1) {

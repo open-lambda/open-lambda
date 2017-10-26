@@ -146,6 +146,13 @@ func (cm *CacheManager) newCacheEntry(baseFS *ForkServer, toCache []string) (*Fo
 		return nil, err
 	}
 
+	// open pipe before forkenter
+	pipeDir := filepath.Join(sandbox.HostDir(), "pipe")
+	pipe, err := os.OpenFile(pipeDir, os.O_RDWR, 0777)
+	if err != nil {
+		log.Fatalf("Cannot open pipe: %v\n", err)
+	}
+
 	// signal interpreter to forkenter into sandbox's namespace
 	pid, err := forkRequest(baseFS.SockPath, sandbox.NSPid(), sandbox.RootDir(), toCache, false)
 	if err != nil {
@@ -158,11 +165,6 @@ func (cm *CacheManager) newCacheEntry(baseFS *ForkServer, toCache []string) (*Fo
 	// use StdoutPipe of olcontainer to sync with lambda server
 	ready := make(chan bool, 1)
 	go func() {
-		pipeDir := filepath.Join(sandbox.HostDir(), "pipe")
-		pipe, err := os.OpenFile(pipeDir, os.O_RDWR, 0777)
-		if err != nil {
-			log.Fatalf("Cannot open pipe: %v\n", err)
-		}
 		defer pipe.Close()
 
 		// wait for "ready"
@@ -179,7 +181,7 @@ func (cm *CacheManager) newCacheEntry(baseFS *ForkServer, toCache []string) (*Fo
 	// wait up to 20s for server to initialize
 	timeout := make(chan bool, 1)
 	go func() {
-		time.Sleep(20 * time.Second)
+		time.Sleep(5 * time.Second)
 		timeout <- true
 	}()
 
@@ -189,7 +191,7 @@ func (cm *CacheManager) newCacheEntry(baseFS *ForkServer, toCache []string) (*Fo
 	case <-ready:
 		log.Printf("wait for server took %v\n", time.Since(start))
 	case <-timeout:
-		return nil, fmt.Errorf("handler server failed to initialize after 20s")
+		return nil, fmt.Errorf("Cache entry failed to initialize after 5s")
 	}
 
 	fs.Sandbox = sandbox
@@ -206,14 +208,44 @@ func (cm *CacheManager) initCacheRoot(opts *config.Config) (memCGroupPath string
 	}
 	cm.factory = factory
 
-	// wait up to 5s for root server to spawn
-	sockPath := fmt.Sprintf("%s/fs.sock", rootDir)
+	// open pipe before forkenter
+	pipeDir := filepath.Join(rootSB.HostDir(), "pipe")
+	pipe, err := os.OpenFile(pipeDir, os.O_RDWR, 0777)
+	if err != nil {
+		log.Fatalf("Cannot open pipe: %v\n", err)
+	}
+
 	start := time.Now()
-	for ok := true; ok; ok = os.IsNotExist(err) {
-		_, err = os.Stat(sockPath)
-		if time.Since(start).Seconds() > 5 {
-			return "", errors.New("root forkserver failed to start after 5s")
+	// use StdoutPipe of olcontainer to sync with lambda server
+	ready := make(chan bool, 1)
+	go func() {
+		defer pipe.Close()
+
+		// wait for "ready"
+		buf := make([]byte, 5)
+		n, err := pipe.Read(buf)
+		if err != nil {
+			log.Fatalf("Cannot read from stdout of olcontainer: %v\n", err)
+		} else if n != 5 {
+			log.Fatalf("Expect to read 5 bytes, only %d read\n", n)
 		}
+		ready <- true
+	}()
+
+	// wait up to 20s for server to initialize
+	timeout := make(chan bool, 1)
+	go func() {
+		time.Sleep(5 * time.Second)
+		timeout <- true
+	}()
+
+	// wait up to 30s for server to initialize
+	start = time.Now()
+	select {
+	case <-ready:
+		log.Printf("wait for server took %v\n", time.Since(start))
+	case <-timeout:
+		return "", errors.New("root forkserver failed to start after 5s")
 	}
 
 	fs := &ForkServer{

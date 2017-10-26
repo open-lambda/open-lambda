@@ -98,21 +98,19 @@ int main(int argc, char *argv[]) {
     errExit("unshare failed");
   }
 
+  int pipefd[2];
+  if (pipe(pipefd) < 0) {
+      errExit("fork");
+  }
+
   if ((pid = fork()) == -1) {
     errExit("fork failed");
   } else if (pid != 0) { // parent
-    // notify worker server the pid of init through stdout
-    // pid will be no more than 5 digits (65536)
-    char pipepath[256];
-    snprintf(pipepath, sizeof(pipepath), "%s/host/pipe", argv[optind]);
-    int fd = open(pipepath, O_RDWR);
-    if (fd < 0) {
-        errExit("cannot open pipe");
+    close(pipefd[0]);
+    if (write(pipefd[1], (void *) &pid, sizeof(pid)) < 0) {
+        errExit("write");
     }
-    char buf[6];
-    snprintf(buf, 6, "%d", pid);
-    write(fd, buf, 5);
-    close(fd);
+    close(pipefd[1]);
 
     if (waitpid(pid, &status, 0) == -1)
       errExit("waitpid failed");
@@ -141,9 +139,29 @@ int main(int argc, char *argv[]) {
     errExit("chdir failed");
   }
 
+  // notify worker our pid
+  close(pipefd[1]);
+  if (read(pipefd[0], (void *) &pid, sizeof(pid)) < 0) {
+      errExit("read");
+  }
+  close(pipefd[1]);
+
+  int fd = open("/host/pipe", O_RDWR);
+  if (fd < 0) {
+      fprintf(stderr, "cannot open pipe\n");
+      exit(1);
+  }
+  char buf[6];
+  snprintf(buf, 6, "%d", pid);
+  if (write(fd, buf, 5) < 0) {
+      perror("write");
+      exit(1);
+  }
+  close(fd);
+
   // start user proc
   res = execve(argv[optind+1], &argv[optind+1], environ);
-  printf("cgroup_init: failed\n");
+  fprintf(stderr, "cgroup_init: failed\n");
   if (res != 0) {
     errExit("failed to do execve");
   }
