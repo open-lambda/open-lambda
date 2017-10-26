@@ -219,11 +219,11 @@ func (cm *CacheManager) initCacheRoot(opts *config.Config) (memCGroupPath string
 
 		// wait for "ready"
 		buf := make([]byte, 5)
-		n, err := pipe.Read(buf)
+		_, err := pipe.Read(buf)
 		if err != nil {
 			log.Fatalf("Cannot read from stdout of olcontainer: %v\n", err)
-		} else if n != 5 {
-			log.Fatalf("Expect to read 5 bytes, only %d read\n", n)
+		} else if string(buf) != "ready" {
+			log.Fatalf("Expect to read `ready`, only found %s\n", string(buf))
 		}
 		ready <- true
 	}()
@@ -236,6 +236,11 @@ func (cm *CacheManager) initCacheRoot(opts *config.Config) (memCGroupPath string
 	case <-ready:
 		log.Printf("wait for server took %v\n", time.Since(start))
 	case <-timeout.C:
+		if n, err := pipe.Write([]byte("timeo")); err != nil {
+			return "", err
+		} else if n != 5 {
+			return "", fmt.Errorf("Cannot write `timeo` to pipe\n")
+		}
 		return "", errors.New("root forkserver failed to start after 5s")
 	}
 

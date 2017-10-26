@@ -338,3 +338,7 @@ func (s *DockerSandbox) ChrootDir() string {
 func (s *DockerSandbox) HostDir() string {
 	return s.hostDir
 }
+
+func (s *DockerSandbox) Pipe() *os.File {
+	return nil
+}

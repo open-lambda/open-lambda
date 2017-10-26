@@ -40,6 +40,7 @@ type OLContainerSandbox struct {
 	initCmd      *exec.Cmd
 	startCmd     []string
 	unshareFlags []string
+	pipe         *os.File
 }
 
 func NewOLContainerSandbox(cgf *CgroupFactory, opts *config.Config, rootDir, id string, startCmd, unshareFlags []string) (*OLContainerSandbox, error) {
@@ -99,12 +100,13 @@ func (s *OLContainerSandbox) Start() error {
 	// let the init program prints error to log, for debugging
 	s.initCmd.Stderr = os.Stdout
 
+	// setup the pipe
 	pipeDir := filepath.Join(s.HostDir(), "init_pipe")
 	pipe, err := os.OpenFile(pipeDir, os.O_RDWR, 0777)
 	if err != nil {
 		log.Fatalf("Cannot open pipe: %v\n", err)
 	}
-	defer pipe.Close()
+	s.pipe = pipe
 
 	start := time.Now()
 	if err := s.initCmd.Start(); err != nil {
@@ -116,7 +118,7 @@ func (s *OLContainerSandbox) Start() error {
 	go func() {
 		// message will be either 5 byte \0 padded pid (<65536), or "ready"
 		pid := make([]byte, 6)
-		n, err := pipe.Read(pid[:5])
+		n, err := s.Pipe().Read(pid[:5])
 		if err != nil {
 			log.Fatalf("Cannot read from stdout of olcontainer: %v\n", err)
 		} else if n != 5 {
@@ -133,6 +135,12 @@ func (s *OLContainerSandbox) Start() error {
 	case s.initPid = <-ready:
 		log.Printf("wait for olcontainer_init took %v\n", time.Since(start))
 	case <-timeout.C:
+		// clean up go routine
+		if n, err := s.Pipe().Write([]byte("timeo")); err != nil {
+			return err
+		} else if n != 5 {
+			return fmt.Errorf("Cannot write `timeo` to pipe\n")
+		}
 		return fmt.Errorf("olcontainer_init failed to spawn after 5s")
 	}
 
@@ -303,19 +311,12 @@ func (s *OLContainerSandbox) RunServer() error {
 		return err
 	}
 
-	pipeDir := filepath.Join(s.HostDir(), "init_pipe")
-	pipe, err := os.OpenFile(pipeDir, os.O_RDWR, 0777)
-	if err != nil {
-		log.Fatalf("Cannot open pipe: %v\n", err)
-	}
-	defer pipe.Close()
-
 	ready := make(chan bool, 1)
 	defer close(ready)
 	go func() {
 		// wait for signal handler to be "ready"
 		buf := make([]byte, 5)
-		_, err = pipe.Read(buf)
+		_, err = s.Pipe().Read(buf)
 		if err != nil {
 			log.Fatalf("Cannot read from stdout of olcontainer: %v\n", err)
 		} else if string(buf) != "ready" {
@@ -333,6 +334,11 @@ func (s *OLContainerSandbox) RunServer() error {
 	case <-ready:
 		log.Printf("wait for init signal handler took %v\n", time.Since(start))
 	case <-timeout.C:
+		if n, err := s.Pipe().Write([]byte("timeo")); err != nil {
+			return err
+		} else if n != 5 {
+			return fmt.Errorf("Cannot write `timeo` to pipe\n")
+		}
 		return fmt.Errorf("olcontainer_init failed to spawn after 5s")
 	}
 
@@ -390,4 +396,8 @@ func (s *OLContainerSandbox) MountDirs(hostDir, handlerDir string) error {
 	}
 
 	return nil
+}
+
+func (s *OLContainerSandbox) Pipe() *os.File {
+	return s.pipe
 }

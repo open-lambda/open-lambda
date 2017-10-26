@@ -2,6 +2,7 @@ package sandbox
 
 import (
 	"net/http"
+	"os"
 )
 
 /*
@@ -65,6 +66,8 @@ type Sandbox interface {
 
 	// Directory in the cluster directory to communicate with sandbox
 	HostDir() string
+
+	Pipe() *os.File
 }
 
 type ContainerSandbox interface {

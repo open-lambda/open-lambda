@@ -73,7 +73,7 @@ func (fs *ForkServer) WaitForEntryInit() error {
 		n, err := fs.Pipe.Read(buf)
 		if err != nil {
 			log.Fatalf("Cannot read from stdout of olcontainer: %v\n", err)
-		} else if n != 5 {
+		} else if string(buf) != "ready" {
 			log.Fatalf("Expect to read 5 bytes, only %d read\n", n)
 		}
 		ready <- true
@@ -87,6 +87,11 @@ func (fs *ForkServer) WaitForEntryInit() error {
 	case <-ready:
 		log.Printf("wait for server took %v\n", time.Since(start))
 	case <-timeout.C:
+		if n, err := fs.Pipe.Write([]byte("timeo")); err != nil {
+			return err
+		} else if n != 5 {
+			return fmt.Errorf("Cannot write `timeo` to pipe\n")
+		}
 		return fmt.Errorf("Cache entry failed to initialize after 5s")
 	}
 
