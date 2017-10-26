@@ -244,7 +244,7 @@ func (s *OLContainerSandbox) WaitForUnpause(timeout time.Duration) error {
 			s.status = state.Running
 			return nil
 		}
-		time.Sleep(100 * time.Microsecond)
+		time.Sleep(1 * time.Millisecond)
 	}
 
 	return fmt.Errorf("olcontainer didn't unpause after %v", timeout)
