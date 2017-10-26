@@ -81,7 +81,7 @@ func (cm *CacheManager) Provision(sbFactory sb.SandboxFactory, handlerDir, hostD
 		return nil, nil, false, errors.New("no match?")
 	}
 
-	if len(toCache) != 0 {
+	if len(toCache) != 0 && !cm.Full() {
 		baseFS := fs
 		baseFS.Mutex.Lock()
 		fs, err = cm.newCacheEntry(baseFS, toCache)
@@ -98,6 +98,8 @@ func (cm *CacheManager) Provision(sbFactory sb.SandboxFactory, handlerDir, hostD
 		cm.mutex.Lock()
 		cm.servers = append(cm.servers, fs)
 		cm.seq++
+
+		toCache = []string{}
 	}
 	// we must take this lock to prevent the fork server from being
 	// reclaimed while we are waiting to create the container... not ideal
@@ -121,7 +123,7 @@ func (cm *CacheManager) Provision(sbFactory sb.SandboxFactory, handlerDir, hostD
 
 	// signal interpreter to forkenter into sandbox's namespace
 	//chrootDir := filepath.Join("/tmp", fmt.Sprintf("sb_%s", sandbox.ID()))
-	pid, err := forkRequest(fs.SockPath, sandbox.NSPid(), sandbox.RootDir(), []string{}, true)
+	pid, err := forkRequest(fs.SockPath, sandbox.NSPid(), sandbox.RootDir(), toCache, true)
 	if err != nil {
 		fs.Mutex.Unlock()
 		return nil, nil, false, err

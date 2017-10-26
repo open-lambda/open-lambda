@@ -295,7 +295,7 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 	// create sandbox if needed
 	if h.sandbox == nil {
 		hit := false
-		if hms.cacheMgr == nil || hms.cacheMgr.Full() {
+		if hms.cacheMgr == nil {
 			sandbox, err := hms.sbFactory.Create(hm.codeDir, hm.workingDir, "")
 			if err != nil {
 				return nil, err
