@@ -86,14 +86,22 @@ func (cm *CacheManager) Provision(sbFactory sb.SandboxFactory, handlerDir, hostD
 		baseFS.Mutex.Lock()
 		fs, err = cm.newCacheEntry(baseFS, toCache)
 		baseFS.Mutex.Unlock()
+		cm.mutex.Unlock()
 		if err != nil {
-			cm.mutex.Unlock()
 			return nil, nil, false, err
 		}
 
+		if err := fs.WaitForEntryInit(); err != nil {
+			return nil, nil, false, err
+		}
+
+		cm.mutex.Lock()
 		cm.servers = append(cm.servers, fs)
 		cm.seq++
 	}
+	// we must take this lock to prevent the fork server from being
+	// reclaimed while we are waiting to create the container... not ideal
+	fs.Mutex.Lock()
 	cm.mutex.Unlock()
 
 	tmpSandbox, err := sbFactory.Create(handlerDir, hostDir, fs.Sandbox.RootDir())
@@ -108,7 +116,6 @@ func (cm *CacheManager) Provision(sbFactory sb.SandboxFactory, handlerDir, hostD
 		return nil, nil, false, fmt.Errorf("import cache only supported with container sandboxes")
 	}
 
-	fs.Mutex.Lock()
 	// keep track of number of hits
 	fs.Hit()
 
@@ -132,6 +139,7 @@ func (cm *CacheManager) Provision(sbFactory sb.SandboxFactory, handlerDir, hostD
 
 func (cm *CacheManager) newCacheEntry(baseFS *ForkServer, toCache []string) (*ForkServer, error) {
 	// make hashset of packages for new entry
+	var err error
 	pkgs := make(map[string]bool)
 	size := 0.0
 	for key, val := range baseFS.Packages {
@@ -161,7 +169,7 @@ func (cm *CacheManager) newCacheEntry(baseFS *ForkServer, toCache []string) (*Fo
 
 	// open pipe before forkenter
 	pipeDir := filepath.Join(sandbox.HostDir(), "server_pipe")
-	pipe, err := os.OpenFile(pipeDir, os.O_RDWR, 0777)
+	fs.Pipe, err = os.OpenFile(pipeDir, os.O_RDWR, 0777)
 	if err != nil {
 		log.Fatalf("Cannot open pipe: %v\n", err)
 	}
@@ -174,39 +182,9 @@ func (cm *CacheManager) newCacheEntry(baseFS *ForkServer, toCache []string) (*Fo
 		return nil, err
 	}
 
-	sockPath := fmt.Sprintf("%s/fs.sock", sandbox.HostDir())
-
-	// use StdoutPipe of olcontainer to sync with lambda server
-	ready := make(chan bool, 1)
-	defer close(ready)
-	go func() {
-		defer pipe.Close()
-
-		// wait for "ready"
-		buf := make([]byte, 5)
-		n, err := pipe.Read(buf)
-		if err != nil {
-			log.Fatalf("Cannot read from stdout of olcontainer: %v\n", err)
-		} else if n != 5 {
-			log.Fatalf("Expect to read 5 bytes, only %d read\n", n)
-		}
-		ready <- true
-	}()
-
-	timeout := time.NewTimer(5 * time.Second)
-	defer timeout.Stop()
-
-	start := time.Now()
-	select {
-	case <-ready:
-		log.Printf("wait for server took %v\n", time.Since(start))
-	case <-timeout.C:
-		return nil, fmt.Errorf("Cache entry failed to initialize after 5s")
-	}
-
 	fs.Sandbox = sandbox
 	fs.Pid = pid
-	fs.SockPath = sockPath
+	fs.SockPath = fmt.Sprintf("%s/fs.sock", sandbox.HostDir())
 
 	return fs, nil
 }

@@ -1,9 +1,12 @@
 package cache
 
 import (
+	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"sync"
+	"time"
 
 	sb "github.com/open-lambda/open-lambda/worker/sandbox"
 )
@@ -19,6 +22,7 @@ type ForkServer struct {
 	Size     float64
 	Mutex    *sync.Mutex
 	Dead     bool
+	Pipe     *os.File
 }
 
 func (fs *ForkServer) Hit() {
@@ -51,6 +55,39 @@ func (fs *ForkServer) Kill() error {
 
 	if fs.Parent != nil {
 		fs.Parent.Children -= 1
+	}
+
+	return nil
+}
+
+func (fs *ForkServer) WaitForEntryInit() error {
+
+	// use StdoutPipe of olcontainer to sync with lambda server
+	ready := make(chan bool, 1)
+	defer close(ready)
+	go func() {
+		defer fs.Pipe.Close()
+
+		// wait for "ready"
+		buf := make([]byte, 5)
+		n, err := fs.Pipe.Read(buf)
+		if err != nil {
+			log.Fatalf("Cannot read from stdout of olcontainer: %v\n", err)
+		} else if n != 5 {
+			log.Fatalf("Expect to read 5 bytes, only %d read\n", n)
+		}
+		ready <- true
+	}()
+
+	timeout := time.NewTimer(5 * time.Second)
+	defer timeout.Stop()
+
+	start := time.Now()
+	select {
+	case <-ready:
+		log.Printf("wait for server took %v\n", time.Since(start))
+	case <-timeout.C:
+		return fmt.Errorf("Cache entry failed to initialize after 5s")
 	}
 
 	return nil
