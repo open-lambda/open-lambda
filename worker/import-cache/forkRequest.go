@@ -54,15 +54,12 @@ sendFds(char *sockPath, char *pid, char *rootdir, int rootdirLen, char *pkgs, in
 
     // Namespaces to be merged (all but 'user') - MUST merge 'mnt' last
 
-    const int NUM_NS = 6;
+    const int NUM_NS = 3;
     int nsfds[NUM_NS];
     const char *ns[NUM_NS];
-    ns[0] = "cgroup";
-    ns[1] = "ipc";
-    ns[2] = "uts";
-    ns[3] = "net";
-    ns[4] = "pid";
-    ns[5] = "mnt";
+    ns[0] = "ipc";
+    ns[1] = "uts";
+    ns[2] = "pid";
 
     // Get fds for all namespaces.
 
@@ -75,6 +72,12 @@ sendFds(char *sockPath, char *pid, char *rootdir, int rootdirLen, char *pkgs, in
             sprintf(errmsg, "open %s failed: %s\n", path, strerror(errno));
             return errmsg;
         }
+    }
+
+    int chrootFD = open(rootdir, O_RDONLY);
+    if (chrootFD == -1) {
+        sprintf(errmsg, "open %s failed: %s\n", rootdir, strerror(errno));
+        return errmsg;
     }
 
     // Connect to server via socket.
@@ -104,19 +107,13 @@ sendFds(char *sockPath, char *pid, char *rootdir, int rootdirLen, char *pkgs, in
         }
     }
 
-    // Send root directory string to server.
-    int conv_int = htonl(rootdirLen);
-    if(send(s, &conv_int, sizeof(int), 0) == -1) {
-        sprintf(errmsg, "send rootdir: %s\n", strerror(errno));
-        return errmsg;
-    }
-    if(send(s, rootdir, rootdirLen, 0) == -1) {
-        sprintf(errmsg, "send rootdir: %s\n", strerror(errno));
+    if (sendfd(s, chrootFD) == -1) {
+        sprintf(errmsg, "sendfd: %s\n", strerror(errno));
         return errmsg;
     }
 
     // Send package string to server.
-    conv_int = htonl(pkgsLen);
+    int conv_int = htonl(pkgsLen);
     if(send(s, &conv_int, sizeof(int), 0) == -1) {
         sprintf(errmsg, "send pkgs: %s\n", strerror(errno));
         return errmsg;
@@ -147,6 +144,11 @@ sendFds(char *sockPath, char *pid, char *rootdir, int rootdirLen, char *pkgs, in
             sprintf(errmsg, "close: %s\n", strerror(errno));
             return errmsg;
         }
+    }
+
+    if(close(chrootFD) == -1) {
+        sprintf(errmsg, "close: %s\n", strerror(errno));
+        return errmsg;
     }
 
     return buf;
@@ -215,7 +217,7 @@ func forkRequest(sockPath, targetPid, rootDir string, pkgList []string, handler 
 		if err == nil {
 			pid := C.GoString(ret)
 			if err != nil || pid == "" {
-				err = fmt.Errorf("sendFds failed :: %s", pid)
+				err = fmt.Errorf("sendFds failed :: %s", err)
 			} else {
 				return pid, nil
 			}

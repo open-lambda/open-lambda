@@ -188,12 +188,16 @@ func (cf *OLContainerCacheFactory) Create(parentDir string, startCmd []string) (
 	}
 	id := strings.TrimSpace(string(id_bytes[:]))
 
-	var rootDir string
-	if parentDir == "" {
-		rootDir = filepath.Join(rootCacheSandboxDir, fmt.Sprintf("cache_%s", id))
-	} else {
-		rootDir = filepath.Join(parentDir, "tmp", fmt.Sprintf("cache_%s", id))
-	}
+	/*
+		var rootDir string
+		if parentDir == "" {
+	*/
+	rootDir := filepath.Join(rootCacheSandboxDir, fmt.Sprintf("cache_%s", id))
+	/*
+		} else {
+			rootDir = filepath.Join(parentDir, "tmp", fmt.Sprintf("cache_%s", id))
+		}
+	*/
 
 	if err := os.Mkdir(rootDir, 0700); err != nil {
 		return nil, err

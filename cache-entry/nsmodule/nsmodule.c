@@ -39,9 +39,8 @@ PyMODINIT_FUNC initns(void)
 /* Global variables */
 
 int sock, conn, initialized;
-const int NUM_NS = 6;
-int oldns[6], newns[6];
-char newroot[500];
+const int NUM_NS = 3;
+int oldns[6], newns[3], root_fd;
 
 /* Helper functions */
 
@@ -256,20 +255,11 @@ static PyObject *ns_fdlisten(PyObject *self, PyObject *args) {
     }
     PySys_WriteStdout("\n");
 
+
+    root_fd = recvfd(conn);
+    PySys_WriteStdout("root_fd: %d\n", root_fd);
+
     // how many bytes to receive?
-    if((len = recv(conn, &read_size, sizeof(int), 0)) == -1) {
-        PyErr_SetString(PyExc_RuntimeError, "Failed to read rootdir size.");
-    }
-    read_size = ntohl(read_size);
-
-    memset(newroot, '\0', sizeof(newroot));
-
-    if((len = recv(conn, newroot, read_size, 0)) == -1) {
-        PyErr_SetString(PyExc_RuntimeError, "Receiving root directory string from socket failed.");
-        return NULL;
-    }
-
-    PySys_WriteStdout("ns_fdlisten: Receive root directory string: \"%s\"\n", newroot);
 
     if((len = recv(conn, &read_size, sizeof(int), 0)) == -1) {
         PyErr_SetString(PyExc_RuntimeError, "Failed to read rootdir size.");
@@ -357,7 +347,11 @@ static PyObject *ns_forkenter(PyObject *self, PyObject *args) {
         /* Grandchild process */
         } else if (!gc_pid) {
             // chroot to new root directory
-            if(chroot(newroot) != 0 ) {
+            if (fchdir(root_fd) != 0) {
+                PyErr_SetString(PyExc_RuntimeError, "Fchdir failed.");
+		return NULL;
+	    }
+            if(chroot(".") != 0 ) {
                 PyErr_SetString(PyExc_RuntimeError, "Chroot failed.");
                 return NULL;
             }
@@ -377,9 +371,14 @@ static PyObject *ns_forkenter(PyObject *self, PyObject *args) {
     /* Close the passed file descriptors */
     for(k = 0; k < NUM_NS; k++) {
         if (close(newns[k]) == -1) {
-            PyErr_SetString(PyExc_RuntimeError, "close passed file descriptor failed.");
+            PyErr_SetString(PyExc_RuntimeError, "close passed ns file descriptor failed.");
             return NULL;
         }
+    }
+
+    if (close(root_fd) != 0) {
+            PyErr_SetString(PyExc_RuntimeError, "close passed root file descriptor failed.");
+            return NULL;
     }
 
     ret = Py_BuildValue("i", gc_pid);

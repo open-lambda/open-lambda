@@ -87,12 +87,16 @@ func (sf *OLContainerSBFactory) Create(handlerDir, workingDir, parentDir string)
 	}
 	id := strings.TrimSpace(string(id_bytes[:]))
 
-	var rootDir string
-	if parentDir == "" {
-		rootDir = filepath.Join(rootSandboxDir, fmt.Sprintf("sb_%s", id))
-	} else {
-		rootDir = filepath.Join(parentDir, "tmp", fmt.Sprintf("sb_%s", id))
-	}
+	/*
+		var rootDir string
+		if parentDir == "" {
+	*/
+	rootDir := filepath.Join(rootSandboxDir, fmt.Sprintf("sb_%s", id))
+	/*
+		} else {
+			rootDir = filepath.Join(parentDir, "tmp", fmt.Sprintf("sb_%s", id))
+		}
+	*/
 
 	if err := os.Mkdir(rootDir, 0777); err != nil {
 		return nil, err
