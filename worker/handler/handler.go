@@ -374,16 +374,10 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 		} else {
 			for ok := true; ok; ok = os.IsNotExist(err) {
 				_, err = os.Stat(sockPath)
-				if hms.config.Sandbox == "olcontainer" && (hms.cacheMgr == nil || hms.cacheMgr.Full()) {
-					time.Sleep(10 * time.Microsecond)
-					if err := h.sandbox.RunServer(); err != nil {
-						return nil, err
-					}
-				}
 				if time.Since(start).Seconds() > 20 {
 					return nil, fmt.Errorf("handler server failed to initialize after 20s")
 				}
-				time.Sleep(50 * time.Microsecond)
+				time.Sleep(1 * time.Millisecond)
 			}
 		}
 
