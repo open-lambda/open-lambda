@@ -21,7 +21,7 @@ var BIND_RO uintptr = uintptr(syscall.MS_BIND | syscall.MS_RDONLY | syscall.MS_R
 var PRIVATE uintptr = uintptr(syscall.MS_PRIVATE)
 var SHARED uintptr = uintptr(syscall.MS_SHARED)
 
-var unshareFlags []string = []string{"-impu", "--propagation", "slave"}
+var unshareFlags []string = []string{"-ipu"}
 
 // OLContainerSBFactory is a SandboxFactory that creats docker sandboxes.
 type OLContainerSBFactory struct {
@@ -46,6 +46,8 @@ func NewOLContainerSBFactory(opts *config.Config) (*OLContainerSBFactory, error)
 		return nil, fmt.Errorf("failed to make root sandbox dir :: %v", err)
 	} else if err := syscall.Mount(rootSandboxDir, rootSandboxDir, "", BIND, ""); err != nil {
 		return nil, fmt.Errorf("failed to bind root sandbox dir: %v", err)
+	} else if err := syscall.Mount("none", rootSandboxDir, "", PRIVATE, ""); err != nil {
+		return nil, fmt.Errorf("failed to make root sandbox dir private :: %v", err)
 	}
 
 	baseDir := opts.OLContainer_handler_base
@@ -74,7 +76,7 @@ func NewOLContainerSBFactory(opts *config.Config) (*OLContainerSBFactory, error)
 }
 
 // Create creates a docker sandbox from the handler and sandbox directory.
-func (sf *OLContainerSBFactory) Create(handlerDir, workingDir string) (Sandbox, error) {
+func (sf *OLContainerSBFactory) Create(handlerDir, workingDir, parentDir string) (Sandbox, error) {
 	start := time.Now()
 	defer log.Printf("create olcontainer took %v\n", time.Since(start))
 
@@ -84,7 +86,13 @@ func (sf *OLContainerSBFactory) Create(handlerDir, workingDir string) (Sandbox, 
 	}
 	id := strings.TrimSpace(string(id_bytes[:]))
 
-	rootDir := filepath.Join(rootSandboxDir, id)
+	var rootDir string
+	if parentDir == "" {
+		rootDir = filepath.Join(rootSandboxDir, fmt.Sprintf("sb_%s", id))
+	} else {
+		rootDir = filepath.Join(parentDir, "tmp", fmt.Sprintf("sb_%s", id))
+	}
+
 	if err := os.Mkdir(rootDir, 0777); err != nil {
 		return nil, err
 	}
@@ -126,13 +134,6 @@ func (sf *OLContainerSBFactory) Create(handlerDir, workingDir string) (Sandbox, 
 			return nil, fmt.Errorf("failed to bind sbHandlerDir onto itself :: %v\n", err)
 		} else if err := syscall.Mount("none", sbHandlerDir, "", SHARED, ""); err != nil {
 			return nil, fmt.Errorf("failed to make sbHandlerDir shared :: %v\n", err)
-		}
-
-		sbTmpDir := filepath.Join(rootDir, "tmp")
-		if err := syscall.Mount(sbTmpDir, sbTmpDir, "", BIND, ""); err != nil {
-			return nil, fmt.Errorf("failed to bind sbTmpDir onto itself :: %v\n", err)
-		} else if err := syscall.Mount("none", sbTmpDir, "", SHARED, ""); err != nil {
-			return nil, fmt.Errorf("failed to make sbTmpDir shared :: %v\n", err)
 		}
 
 		return sandbox, nil
@@ -210,7 +211,7 @@ func NewBufferedOLContainerSBFactory(opts *config.Config, delegate SandboxFactor
 					return // kill signal
 				}
 
-				if sandbox, err := bf.delegate.Create("", ""); err != nil {
+				if sandbox, err := bf.delegate.Create("", "", ""); err != nil {
 					bf.errors <- err
 				} else if sandbox, ok := sandbox.(*OLContainerSandbox); !ok {
 					bf.errors <- err
@@ -233,7 +234,7 @@ func NewBufferedOLContainerSBFactory(opts *config.Config, delegate SandboxFactor
 
 // Create mounts the handler and sandbox directories to the ones already
 // mounted in the sandbox, and returns that sandbox.
-func (bf *BufferedOLContainerSBFactory) Create(handlerDir, workingDir string) (Sandbox, error) {
+func (bf *BufferedOLContainerSBFactory) Create(handlerDir, workingDir, parentDir string) (Sandbox, error) {
 	start := time.Now()
 	defer log.Printf("create buffered olcontainer took %v\n", time.Since(start))
 

@@ -18,7 +18,7 @@ type emptySBInfo struct {
 
 // SandboxFactory is the common interface for all sandbox creation functions.
 type SandboxFactory interface {
-	Create(handlerDir, workingDir string) (sandbox Sandbox, err error)
+	Create(handlerDir, workingDir, rootDir string) (sandbox Sandbox, err error)
 	Cleanup()
 }
 

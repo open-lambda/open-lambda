@@ -59,6 +59,12 @@ type Sandbox interface {
 	MemoryCGroupPath() string
 
 	WaitForUnpause(timeout time.Duration) error
+
+	// Directory that new processes need to chroot into from host's view
+	RootDir() string
+
+	// Directory in the cluster directory to communicate with sandbox
+	HostDir() string
 }
 
 type ContainerSandbox interface {
@@ -69,10 +75,4 @@ type ContainerSandbox interface {
 
 	// PID of a process in the container's namespaces (for joining)
 	NSPid() string
-
-	// Directory that new processes need to chroot into (none if docker)
-	RootDir() string
-
-	// Directory in the cluster directory to communicate with sandbox
-	HostDir() string
 }

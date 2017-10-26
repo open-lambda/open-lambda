@@ -83,7 +83,9 @@ func (s *OLContainerSandbox) Channel() (channel *SandboxChannel, err error) {
 
 func (s *OLContainerSandbox) Start() error {
 	start := time.Now()
-	defer log.Printf("create container took %v\n", time.Since(start))
+	defer func(start time.Time) {
+		log.Printf("create container took %v\n", time.Since(start))
+	}(start)
 
 	initArgs := append(s.unshareFlags, s.rootDir)
 	initArgs = append(initArgs, s.startCmd...)

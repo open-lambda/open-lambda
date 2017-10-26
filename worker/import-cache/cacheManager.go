@@ -71,14 +71,14 @@ func InitCacheManager(opts *config.Config) (cm *CacheManager, err error) {
 	return cm, nil
 }
 
-func (cm *CacheManager) Provision(sandbox sb.ContainerSandbox, dir string, pkgs []string) (fs *ForkServer, hit bool, err error) {
+func (cm *CacheManager) Provision(sbFactory sb.SandboxFactory, handlerDir, hostDir string, pkgs []string) (sandbox sb.ContainerSandbox, fs *ForkServer, hit bool, err error) {
 	cm.mutex.Lock()
 
 	fs, toCache, hit := cm.matcher.Match(cm.servers, pkgs)
 
 	if fs == nil {
 		cm.mutex.Unlock()
-		return nil, false, errors.New("no match?")
+		return nil, nil, false, errors.New("no match?")
 	}
 
 	if len(toCache) != 0 {
@@ -88,7 +88,7 @@ func (cm *CacheManager) Provision(sandbox sb.ContainerSandbox, dir string, pkgs 
 		baseFS.Mutex.Unlock()
 		if err != nil {
 			cm.mutex.Unlock()
-			return nil, false, err
+			return nil, nil, false, err
 		}
 
 		cm.servers = append(cm.servers, fs)
@@ -96,25 +96,38 @@ func (cm *CacheManager) Provision(sandbox sb.ContainerSandbox, dir string, pkgs 
 	}
 	cm.mutex.Unlock()
 
+	tmpSandbox, err := sbFactory.Create(handlerDir, hostDir, fs.Sandbox.RootDir())
+	if err != nil {
+		return nil, nil, false, err
+	} else if err := tmpSandbox.Start(); err != nil {
+		return nil, nil, false, fmt.Errorf("failed to start container :: %v", err)
+	}
+
+	sandbox, ok := tmpSandbox.(sb.ContainerSandbox)
+	if !ok {
+		return nil, nil, false, fmt.Errorf("import cache only supported with container sandboxes")
+	}
+
 	fs.Mutex.Lock()
 	// keep track of number of hits
 	fs.Hit()
 
 	// signal interpreter to forkenter into sandbox's namespace
+	//chrootDir := filepath.Join("/tmp", fmt.Sprintf("sb_%s", sandbox.ID()))
 	pid, err := forkRequest(fs.SockPath, sandbox.NSPid(), sandbox.RootDir(), []string{}, true)
 	if err != nil {
 		fs.Mutex.Unlock()
-		return nil, false, err
+		return nil, nil, false, err
 	}
 
 	fs.Mutex.Unlock()
 
 	// change cgroup of spawned lambda server
 	if err = sandbox.CGroupEnter(pid); err != nil {
-		return nil, false, err
+		return nil, nil, false, err
 	}
 
-	return fs, hit, nil
+	return sandbox, fs, hit, nil
 }
 
 func (cm *CacheManager) newCacheEntry(baseFS *ForkServer, toCache []string) (*ForkServer, error) {
@@ -140,7 +153,7 @@ func (cm *CacheManager) newCacheEntry(baseFS *ForkServer, toCache []string) (*Fo
 	baseFS.Children += 1
 
 	// get container for new entry
-	sandbox, err := cm.factory.Create([]string{"/init"})
+	sandbox, err := cm.factory.Create(baseFS.Sandbox.RootDir(), []string{"/init"})
 	if err != nil {
 		fs.Kill()
 		return nil, err
@@ -154,6 +167,7 @@ func (cm *CacheManager) newCacheEntry(baseFS *ForkServer, toCache []string) (*Fo
 	}
 
 	// signal interpreter to forkenter into sandbox's namespace
+	//chrootDir := filepath.Join("/tmp", fmt.Sprintf("cache_%s", sandbox.ID()))
 	pid, err := forkRequest(baseFS.SockPath, sandbox.NSPid(), sandbox.RootDir(), toCache, false)
 	if err != nil {
 		fs.Kill()

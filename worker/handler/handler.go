@@ -292,48 +292,44 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 
 	// create sandbox if needed
 	if h.sandbox == nil {
-		sandbox, err := hms.sbFactory.Create(hm.codeDir, hm.workingDir)
-		if err != nil {
-			return nil, err
-		}
-
-		h.sandbox = sandbox
-		h.id = h.sandbox.ID()
-		h.hostDir = filepath.Join(hm.workingDir, h.id)
-		if sbState, err := h.sandbox.State(); err != nil {
-			return nil, err
-		} else if sbState == state.Stopped {
-			if err := h.sandbox.Start(); err != nil {
-				return nil, err
-			}
-		} else if sbState == state.Paused {
-			if err := h.sandbox.Unpause(); err != nil {
-				return nil, err
-			}
-		}
-
 		hit := false
 		if hms.cacheMgr == nil || hms.cacheMgr.Full() {
-			err := h.sandbox.RunServer()
+			sandbox, err := hms.sbFactory.Create(hm.codeDir, hm.workingDir, "")
+			if err != nil {
+				return nil, err
+			}
+
+			h.sandbox = sandbox
+			if sbState, err := h.sandbox.State(); err != nil {
+				return nil, err
+			} else if sbState == state.Stopped {
+				if err := h.sandbox.Start(); err != nil {
+					return nil, err
+				}
+			} else if sbState == state.Paused {
+				if err := h.sandbox.Unpause(); err != nil {
+					return nil, err
+				}
+			}
+
+			err = h.sandbox.RunServer()
 			if err != nil {
 				return nil, err
 			}
 		} else {
-			containerSB, ok := h.sandbox.(sb.ContainerSandbox)
-			if !ok {
-				return nil, fmt.Errorf("forkenter only supported with ContainerSandbox")
-			}
-			if h.fs, hit, err = hms.cacheMgr.Provision(containerSB, h.hostDir, hm.pkgs); err != nil {
+			if h.sandbox, h.fs, hit, err = hms.cacheMgr.Provision(hms.sbFactory, hm.codeDir, hm.workingDir, hm.pkgs); err != nil {
 				return nil, err
 			}
 
+			if hit {
+				atomic.AddInt64(hms.ihits, 1)
+			} else {
+				atomic.AddInt64(hms.misses, 1)
+			}
 		}
 
-		if hit {
-			atomic.AddInt64(hms.ihits, 1)
-		} else {
-			atomic.AddInt64(hms.misses, 1)
-		}
+		h.id = h.sandbox.ID()
+		h.hostDir = h.sandbox.HostDir()
 
 		sockPath := fmt.Sprintf("%s/ol.sock", h.hostDir)
 
