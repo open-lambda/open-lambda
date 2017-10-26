@@ -82,10 +82,9 @@ func (s *OLContainerSandbox) Channel() (channel *SandboxChannel, err error) {
 }
 
 func (s *OLContainerSandbox) Start() error {
-	start := time.Now()
 	defer func(start time.Time) {
 		log.Printf("create container took %v\n", time.Since(start))
-	}(start)
+	}(time.Now())
 
 	initArgs := append(s.unshareFlags, s.rootDir)
 	initArgs = append(initArgs, s.startCmd...)
@@ -107,7 +106,7 @@ func (s *OLContainerSandbox) Start() error {
 	}
 	defer pipe.Close()
 
-	cmdStart := time.Now()
+	start := time.Now()
 	if err := s.initCmd.Start(); err != nil {
 		return err
 	}
@@ -122,19 +121,6 @@ func (s *OLContainerSandbox) Start() error {
 		} else if n != 5 {
 			log.Fatalf("Expect to read 5 bytes, only %d read\n", n)
 		}
-
-		// TODO: make it less hacky
-		if s.startCmd[0] == "/ol-init" {
-			// wait for signal handler to be "ready"
-			buf := make([]byte, 5)
-			n, err = pipe.Read(buf)
-			if err != nil {
-				log.Fatalf("Cannot read from stdout of olcontainer: %v\n", err)
-			} else if string(buf) != "ready" {
-				log.Fatalf("In olcontainerSandbox: Expect to see `ready` but sees %s\n", string(buf))
-			}
-		}
-
 		ready <- string(pid[:bytes.IndexByte(pid, 0)])
 	}()
 
@@ -147,7 +133,7 @@ func (s *OLContainerSandbox) Start() error {
 
 	select {
 	case s.initPid = <-ready:
-		log.Printf("wait for olcontainer_init took %v pid=%s\n", time.Since(cmdStart), s.initPid)
+		log.Printf("wait for olcontainer_init took %v\n", time.Since(start))
 	case <-timeout:
 		return fmt.Errorf("olcontainer_init failed to spawn after 5s")
 	}
@@ -251,7 +237,9 @@ func (s *OLContainerSandbox) WaitForUnpause(timeout time.Duration) error {
 }
 
 func (s *OLContainerSandbox) Remove() error {
-	start := time.Now()
+	defer func(start time.Time) {
+		log.Printf("remove took %v\n", time.Since(start))
+	}(time.Now())
 
 	// remove cgroups
 	if err := s.cgf.PutCg(s.id, s.cgId); err != nil {
@@ -269,8 +257,6 @@ func (s *OLContainerSandbox) Remove() error {
 	if err := os.RemoveAll(s.hostDir); err != nil {
 		log.Printf("remove host dir %s failed :: %v\n", s.hostDir, err)
 	}
-
-	log.Printf("remove took %v\n", time.Since(start))
 
 	return nil
 }
@@ -317,6 +303,41 @@ func (s *OLContainerSandbox) RunServer() error {
 	if err != nil {
 		log.Printf("failed to find initPid process with pid=%d :: %v", pid, err)
 		return err
+	}
+
+	pipeDir := filepath.Join(s.HostDir(), "init_pipe")
+	pipe, err := os.OpenFile(pipeDir, os.O_RDWR, 0777)
+	if err != nil {
+		log.Fatalf("Cannot open pipe: %v\n", err)
+	}
+	defer pipe.Close()
+
+	ready := make(chan bool, 1)
+	go func() {
+		// wait for signal handler to be "ready"
+		buf := make([]byte, 5)
+		_, err = pipe.Read(buf)
+		if err != nil {
+			log.Fatalf("Cannot read from stdout of olcontainer: %v\n", err)
+		} else if string(buf) != "ready" {
+			log.Fatalf("In olcontainerSandbox: Expect to see `ready` but sees %s\n", string(buf))
+		}
+		ready <- true
+	}()
+
+	// wait up to 5s for server olcontainer_init to spawn
+	timeout := make(chan bool, 1)
+	go func() {
+		time.Sleep(5 * time.Second)
+		timeout <- true
+	}()
+
+	start := time.Now()
+	select {
+	case <-ready:
+		log.Printf("wait for init signal handler took %v\n", time.Since(start))
+	case <-timeout:
+		return fmt.Errorf("olcontainer_init failed to spawn after 5s")
 	}
 
 	err = proc.Signal(syscall.SIGURG)

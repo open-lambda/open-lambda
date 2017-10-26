@@ -77,8 +77,9 @@ func NewOLContainerSBFactory(opts *config.Config) (*OLContainerSBFactory, error)
 
 // Create creates a docker sandbox from the handler and sandbox directory.
 func (sf *OLContainerSBFactory) Create(handlerDir, workingDir, parentDir string) (Sandbox, error) {
-	start := time.Now()
-	defer log.Printf("create olcontainer took %v\n", time.Since(start))
+	defer func(start time.Time) {
+		log.Printf("create olcontainer took %v\n", time.Since(start))
+	}(time.Now())
 
 	id_bytes, err := exec.Command("uuidgen").Output()
 	if err != nil {
@@ -240,8 +241,9 @@ func NewBufferedOLContainerSBFactory(opts *config.Config, delegate SandboxFactor
 // Create mounts the handler and sandbox directories to the ones already
 // mounted in the sandbox, and returns that sandbox.
 func (bf *BufferedOLContainerSBFactory) Create(handlerDir, workingDir, parentDir string) (Sandbox, error) {
-	start := time.Now()
-	defer log.Printf("create buffered olcontainer took %v\n", time.Since(start))
+	defer func(start time.Time) {
+		log.Printf("create buffered olcontainer took %v\n", time.Since(start))
+	}(time.Now())
 
 	select {
 	case sandbox := <-bf.buffer:
