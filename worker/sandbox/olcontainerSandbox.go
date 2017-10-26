@@ -112,6 +112,7 @@ func (s *OLContainerSandbox) Start() error {
 	}
 
 	ready := make(chan string, 1)
+	defer close(ready)
 	go func() {
 		// message will be either 5 byte \0 padded pid (<65536), or "ready"
 		pid := make([]byte, 6)
@@ -125,16 +126,13 @@ func (s *OLContainerSandbox) Start() error {
 	}()
 
 	// wait up to 5s for server olcontainer_init to spawn
-	timeout := make(chan bool, 1)
-	go func() {
-		time.Sleep(5 * time.Second)
-		timeout <- true
-	}()
+	timeout := time.NewTimer(5 * time.Second)
+	defer timeout.Stop()
 
 	select {
 	case s.initPid = <-ready:
 		log.Printf("wait for olcontainer_init took %v\n", time.Since(start))
-	case <-timeout:
+	case <-timeout.C:
 		return fmt.Errorf("olcontainer_init failed to spawn after 5s")
 	}
 
@@ -313,6 +311,7 @@ func (s *OLContainerSandbox) RunServer() error {
 	defer pipe.Close()
 
 	ready := make(chan bool, 1)
+	defer close(ready)
 	go func() {
 		// wait for signal handler to be "ready"
 		buf := make([]byte, 5)
@@ -326,17 +325,14 @@ func (s *OLContainerSandbox) RunServer() error {
 	}()
 
 	// wait up to 5s for server olcontainer_init to spawn
-	timeout := make(chan bool, 1)
-	go func() {
-		time.Sleep(5 * time.Second)
-		timeout <- true
-	}()
+	timeout := time.NewTimer(5 * time.Second)
+	defer timeout.Stop()
 
 	start := time.Now()
 	select {
 	case <-ready:
 		log.Printf("wait for init signal handler took %v\n", time.Since(start))
-	case <-timeout:
+	case <-timeout.C:
 		return fmt.Errorf("olcontainer_init failed to spawn after 5s")
 	}
 

@@ -178,6 +178,7 @@ func (cm *CacheManager) newCacheEntry(baseFS *ForkServer, toCache []string) (*Fo
 
 	// use StdoutPipe of olcontainer to sync with lambda server
 	ready := make(chan bool, 1)
+	defer close(ready)
 	go func() {
 		defer pipe.Close()
 
@@ -192,19 +193,14 @@ func (cm *CacheManager) newCacheEntry(baseFS *ForkServer, toCache []string) (*Fo
 		ready <- true
 	}()
 
-	// wait up to 20s for server to initialize
-	timeout := make(chan bool, 1)
-	go func() {
-		time.Sleep(5 * time.Second)
-		timeout <- true
-	}()
+	timeout := time.NewTimer(5 * time.Second)
+	defer timeout.Stop()
 
-	// wait up to 30s for server to initialize
 	start := time.Now()
 	select {
 	case <-ready:
 		log.Printf("wait for server took %v\n", time.Since(start))
-	case <-timeout:
+	case <-timeout.C:
 		return nil, fmt.Errorf("Cache entry failed to initialize after 5s")
 	}
 
@@ -232,6 +228,7 @@ func (cm *CacheManager) initCacheRoot(opts *config.Config) (memCGroupPath string
 	start := time.Now()
 	// use StdoutPipe of olcontainer to sync with lambda server
 	ready := make(chan bool, 1)
+	defer close(ready)
 	go func() {
 		defer pipe.Close()
 
@@ -246,19 +243,14 @@ func (cm *CacheManager) initCacheRoot(opts *config.Config) (memCGroupPath string
 		ready <- true
 	}()
 
-	// wait up to 20s for server to initialize
-	timeout := make(chan bool, 1)
-	go func() {
-		time.Sleep(5 * time.Second)
-		timeout <- true
-	}()
+	timeout := time.NewTimer(5 * time.Second)
+	defer timeout.Stop()
 
-	// wait up to 30s for server to initialize
 	start = time.Now()
 	select {
 	case <-ready:
 		log.Printf("wait for server took %v\n", time.Since(start))
-	case <-timeout:
+	case <-timeout.C:
 		return "", errors.New("root forkserver failed to start after 5s")
 	}
 

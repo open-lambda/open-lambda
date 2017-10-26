@@ -341,6 +341,7 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 		if olcontainer, ok := h.sandbox.(*sb.OLContainerSandbox); ok {
 			// use StdoutPipe of olcontainer to sync with lambda server
 			ready := make(chan bool, 1)
+			defer close(ready)
 			go func() {
 				pipeDir := filepath.Join(olcontainer.HostDir(), "server_pipe")
 				pipe, err := os.OpenFile(pipeDir, os.O_RDWR, 0777)
@@ -361,16 +362,13 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 			}()
 
 			// wait up to 20s for server to initialize
-			timeout := make(chan bool, 1)
-			go func() {
-				time.Sleep(20 * time.Second)
-				timeout <- true
-			}()
+			timeout := time.NewTimer(20 * time.Second)
+			defer timeout.Stop()
 
 			select {
 			case <-ready:
 				log.Printf("wait for server took %v\n", time.Since(start))
-			case <-timeout:
+			case <-timeout.C:
 				return nil, fmt.Errorf("handler server failed to initialize after 20s")
 			}
 		} else {
