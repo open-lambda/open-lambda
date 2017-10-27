@@ -159,42 +159,23 @@ func (s *OLContainerSandbox) Stop() error {
 	}
 
 	start := time.Now()
-	// kill any remaining processes
-	procsPath := filepath.Join("/sys/fs/cgroup/memory", OLCGroupName, s.cgId, "cgroup.procs")
-	pids, err := ioutil.ReadFile(procsPath)
+
+	pid, _ := strconv.Atoi(s.initPid)
+	proc, err := os.FindProcess(pid)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to find init process with pid=%d :: %v", pid, err)
+	}
+	err = proc.Signal(syscall.SIGKILL)
+	if err != nil {
+		log.Printf("failed to send kill signal to init process pid=%d :: %v", pid, err)
 	}
 
-	for _, pidStr := range strings.Split(strings.TrimSpace(string(pids[:])), "\n") {
-		if pidStr == "" {
-			break
-		}
-
-		pid, err := strconv.Atoi(pidStr)
-		if err != nil {
-			log.Printf("read bad pid string: %s :: %v", pidStr, err)
-			continue
-		}
-
-		proc, err := os.FindProcess(pid)
-		if err != nil {
-			log.Printf("failed to find process with pid=%d :: %v", pid, err)
-			continue
-		}
-
-		err = proc.Signal(syscall.SIGKILL)
-		if err != nil {
-			log.Printf("failed to send kill signal to pid=%d :: %v", pid, err)
-		}
+	// let the initCmd (olcontainer_init) to clean up all children
+	_, err = s.initCmd.Process.Wait()
+	if err != nil {
+		log.Printf("failed to wait on initCmd pid=%d :: %v", s.initCmd.Process.Pid, err)
 	}
-
-	go func(s *OLContainerSandbox, start time.Time) {
-		// release unshare process resources
-		s.initCmd.Process.Kill()
-		s.initCmd.Process.Wait()
-		log.Printf("kill processes took %v", time.Since(start))
-	}(s, start)
+	log.Printf("kill processes took %v", time.Since(start))
 
 	s.status = state.Stopped
 	return nil
@@ -248,11 +229,6 @@ func (s *OLContainerSandbox) Remove() error {
 		log.Printf("remove took %v\n", time.Since(start))
 	}(time.Now())
 
-	// remove cgroups
-	if err := s.cgf.PutCg(s.id, s.cgId); err != nil {
-		log.Printf("Unable to delete cgroups: %v", err)
-	}
-
 	if err := syscall.Unmount(s.rootDir, syscall.MNT_DETACH); err != nil {
 		log.Printf("unmount root dir %s failed :: %v\n", s.rootDir, err)
 	}
@@ -263,6 +239,13 @@ func (s *OLContainerSandbox) Remove() error {
 
 	if err := os.RemoveAll(s.hostDir); err != nil {
 		log.Printf("remove host dir %s failed :: %v\n", s.hostDir, err)
+	}
+
+	//TODO somehow wait for the processes to exit?
+	time.Sleep(100 * time.Millisecond)
+	// remove cgroups
+	if err := s.cgf.PutCg(s.id, s.cgId); err != nil {
+		log.Printf("Unable to delete cgroups: %v", err)
 	}
 
 	return nil

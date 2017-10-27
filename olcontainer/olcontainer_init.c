@@ -7,6 +7,8 @@
 #include <unistd.h>
 #include <sched.h>
 #include <string.h>
+#include <errno.h>
+#include <sys/prctl.h>
 #include <sys/wait.h>
 #include <sys/mount.h>
 
@@ -93,6 +95,10 @@ int main(int argc, char *argv[]) {
     usage();
   }
 
+  // actively reaping children
+  if (prctl(PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) < 0)
+    errExit("prctl");
+
   res = unshare(unshare_flags);
   if (res != 0) {
     errExit("unshare failed");
@@ -112,13 +118,14 @@ int main(int argc, char *argv[]) {
     }
     close(pipefd[1]);
 
-    if (waitpid(pid, &status, 0) == -1)
-      errExit("waitpid failed");
-    else if (WIFEXITED(status))
-      return WEXITSTATUS(status);
-    else if (WIFSIGNALED(status))
-      kill(getpid(), WTERMSIG(status));
-    errExit("child exit failed");
+    // keep reaping until all children are gone
+    while (1) {
+      res = waitpid(-1, &status, 0);
+      if (res < 0 && errno == ECHILD)
+        exit(0);
+      if (res < 0)
+        errExit("waitpid");
+    }
   }
 
   if ((unshare_flags & CLONE_NEWNS) && propagation) {
