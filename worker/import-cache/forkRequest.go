@@ -47,6 +47,18 @@ sendfd(int s, int fd) {
 	return 0;
 }
 
+int sendAll(int sockfd, const void *buf, int len, int flags) {
+	int rc;
+	while (len > 0) {
+		rc = send(sockfd, buf, len, flags);
+		if (rc < 0)
+			return rc;
+		buf += rc;
+		len -= rc;
+	}
+	return 0;
+}
+
 const char*
 sendFds(char *sockPath, char *pid, char *rootdir, int rootdirLen, char *pkgs, int pkgsLen) {
     char *path;
@@ -118,7 +130,7 @@ sendFds(char *sockPath, char *pid, char *rootdir, int rootdirLen, char *pkgs, in
         sprintf(errmsg, "send pkgs: %s\n", strerror(errno));
         return errmsg;
     }
-    if(send(s, pkgs, pkgsLen, 0) == -1) {
+    if(sendAll(s, pkgs, pkgsLen, 0) == -1) {
         sprintf(errmsg, "send pkgs: %s\n", strerror(errno));
         return errmsg;
     }
@@ -196,10 +208,6 @@ func forkRequest(sockPath, targetPid, rootDir string, pkgList []string, handler 
 	}
 
 	pkgStr := strings.Join(append(pkgList, signal), " ")
-
-	if len(pkgStr) >= 4096 {
-		return "", errors.New("Package string length too long")
-	}
 
 	csock := C.CString(sockPath)
 	cpid := C.CString(targetPid)

@@ -11,8 +11,6 @@
 #include <sys/wait.h>
 #include <signal.h>
 
-#define BUF_SIZE 4096
-
 /* Python C wrapper declarations */
 
 static PyObject *ns_reset(PyObject *self, PyObject *args);
@@ -195,6 +193,18 @@ static PyObject *ns_reset(PyObject *self, PyObject *args) {
     return ret;
 }
 
+int recv_all(int sockfd, void *buf, int len, int flags) {
+    int rc;
+    while (len > 0) {
+        rc = recv(sockfd, buf, len, flags);
+        if (rc < 0)
+            return rc;
+        buf += rc;
+        len -= rc;
+    }
+    return 0;
+}
+
 /*  
  * Listens on unix domain socket at the passed path, receiving
  * 6 file descriptors followed by a string with a whitespace-
@@ -203,7 +213,7 @@ static PyObject *ns_reset(PyObject *self, PyObject *args) {
  * Returns the package list for importing in Python interpreter.
  */
 static PyObject *ns_fdlisten(PyObject *self, PyObject *args) {
-    char buf[BUF_SIZE];
+    char *buf;
     int read_size = 0;
     struct sockaddr_un remote;
     int k, len;
@@ -263,10 +273,17 @@ static PyObject *ns_fdlisten(PyObject *self, PyObject *args) {
 
     if((len = recv(conn, &read_size, sizeof(int), 0)) == -1) {
         PyErr_SetString(PyExc_RuntimeError, "Failed to read rootdir size.");
+        return NULL;
     }
     read_size = ntohl(read_size);
 
-    if((len = recv(conn, buf, read_size, 0)) == -1) {
+    buf = malloc(read_size);
+    if (buf == NULL) {
+        PyErr_SetString(PyExc_RuntimeError, "Failed to allocation memory.");
+        return NULL;
+    }
+    if((len = recv_all(conn, buf, read_size, 0)) == -1) {
+        free(buf);
         PyErr_SetString(PyExc_RuntimeError, "Receiving package string from socket failed.");
         return NULL;
     }
@@ -274,6 +291,7 @@ static PyObject *ns_fdlisten(PyObject *self, PyObject *args) {
     PySys_WriteStdout("ns_fdlisten: Receive packages string: \"%s\"\n", buf);
 
     ret = Py_BuildValue("s", buf);
+    free(buf);
     return ret;
 }
 
