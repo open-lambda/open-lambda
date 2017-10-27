@@ -59,7 +59,7 @@ int sendAll(int sockfd, const void *buf, int len, int flags) {
 	return 0;
 }
 
-const char*
+char*
 sendFds(char *sockPath, char *pid, char *rootdir, int rootdirLen, char *pkgs, int pkgsLen) {
     char *path;
     int k;
@@ -137,9 +137,9 @@ sendFds(char *sockPath, char *pid, char *rootdir, int rootdirLen, char *pkgs, in
 
     // Receive spawned PID from server.
 
-    static char buf[50];
+    char *buf = malloc(10);
 
-    if((len = recv(s, buf, 50, 0)) == -1) {
+    if((len = recv(s, buf, 10, 0)) == -1) {
         sprintf(errmsg, "recv: %s\n", strerror(errno));
         return errmsg;
     }
@@ -223,6 +223,7 @@ func forkRequest(sockPath, targetPid, rootDir string, pkgList []string, handler 
 		ret, err := C.sendFds(csock, cpid, croot, C.int(len(rootDir)+1), cpkgs, C.int(len(pkgStr)+1))
 		if err == nil {
 			pid := C.GoString(ret)
+			C.free(unsafe.Pointer(ret))
 			if err != nil || pid == "" {
 				err = fmt.Errorf("sendFds failed :: %s", err)
 			} else {
