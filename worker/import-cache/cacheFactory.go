@@ -166,6 +166,10 @@ func NewOLContainerCacheFactory(opts *config.Config, cluster, baseDir, pkgsDir, 
 
 // Create creates a docker sandbox from the pool directory.
 func (cf *OLContainerCacheFactory) Create(startCmd []string) (sb.ContainerSandbox, error) {
+	defer func(start time.Time) {
+		log.Printf("create cache container took %v\n", time.Since(start))
+	}(time.Now())
+
 	newIdx := atomic.AddInt64(cf.idxPtr, 1)
 	hostDir := filepath.Join(cf.cacheDir, fmt.Sprintf("%d", newIdx))
 	if err := os.MkdirAll(hostDir, os.ModeDir); err != nil {

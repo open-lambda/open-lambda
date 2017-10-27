@@ -72,6 +72,10 @@ func InitCacheManager(opts *config.Config) (cm *CacheManager, err error) {
 }
 
 func (cm *CacheManager) Provision(sandbox sb.ContainerSandbox, pkgs []string) (fs *ForkServer, hit bool, err error) {
+	defer func(start time.Time) {
+		log.Printf("provision took %v\n", time.Since(start))
+	}(time.Now())
+
 	cm.mutex.Lock()
 
 	fs, toCache, hit := cm.matcher.Match(cm.servers, pkgs)
@@ -208,9 +212,9 @@ func (cm *CacheManager) initCacheRoot(opts *config.Config) (memCGroupPath string
 		buf := make([]byte, 5)
 		_, err := pipe.Read(buf)
 		if err != nil {
-			log.Fatalf("Cannot read from stdout of olcontainer: %v\n", err)
+			log.Printf("Cannot read from stdout of olcontainer: %v\n", err)
 		} else if string(buf) != "ready" {
-			log.Fatalf("Expect to read `ready`, only found %s\n", string(buf))
+			log.Printf("Expect to read `ready`, only found %s\n", string(buf))
 		}
 		ready <- true
 	}()

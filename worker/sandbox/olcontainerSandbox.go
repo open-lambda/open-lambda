@@ -120,11 +120,12 @@ func (s *OLContainerSandbox) Start() error {
 		pid := make([]byte, 6)
 		n, err := s.Pipe().Read(pid[:5])
 		if err != nil {
-			log.Fatalf("Cannot read from stdout of olcontainer: %v\n", err)
+			log.Printf("Cannot read from stdout of olcontainer: %v\n", err)
 		} else if n != 5 {
-			log.Fatalf("Expect to read 5 bytes, only %d read\n", n)
+			log.Printf("Expect to read 5 bytes, only %d read\n", n)
+		} else {
+			ready <- string(pid[:bytes.IndexByte(pid, 0)])
 		}
-		ready <- string(pid[:bytes.IndexByte(pid, 0)])
 	}()
 
 	// wait up to 5s for server olcontainer_init to spawn

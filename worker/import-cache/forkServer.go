@@ -70,13 +70,14 @@ func (fs *ForkServer) WaitForEntryInit() error {
 
 		// wait for "ready"
 		buf := make([]byte, 5)
-		n, err := fs.Pipe.Read(buf)
+		_, err := fs.Pipe.Read(buf)
 		if err != nil {
-			log.Fatalf("Cannot read from stdout of olcontainer: %v\n", err)
+			log.Printf("Cannot read from stdout of olcontainer: %v\n", err)
 		} else if string(buf) != "ready" {
-			log.Fatalf("Expect to read 5 bytes, only %d read\n", n)
+			log.Printf("Expect to read `ready`, but found %v\n", string(buf))
+		} else {
+			ready <- true
 		}
-		ready <- true
 	}()
 
 	timeout := time.NewTimer(5 * time.Second)

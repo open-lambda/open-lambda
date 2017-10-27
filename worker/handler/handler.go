@@ -113,10 +113,6 @@ func NewHandlerManagerSet(opts *config.Config) (hms *HandlerManagerSet, err erro
 
 // Get always returns a Handler, creating one if necessarily.
 func (hms *HandlerManagerSet) Get(name string) (h *Handler, err error) {
-	defer func(start time.Time) {
-		log.Printf("get handler took %v\n", time.Since(start))
-	}(time.Now())
-
 	hms.mutex.Lock()
 
 	hm := hms.hmMap[name]
@@ -282,10 +278,6 @@ func (hm *HandlerManager) TryRemoveHandler(h *Handler) error {
 // been pulled, sandbox been created, and sandbox been started. The channel of
 // the sandbox of this lambda is returned.
 func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
-	defer func(start time.Time) {
-		log.Printf("RunStart took %v\n", time.Since(start))
-	}(time.Now())
-
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
@@ -356,9 +348,9 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 				buf := make([]byte, 5)
 				_, err = pipe.Read(buf)
 				if err != nil {
-					log.Fatalf("Cannot read from stdout of olcontainer: %v\n", err)
+					log.Printf("Cannot read from stdout of olcontainer: %v\n", err)
 				} else if string(buf) != "ready" {
-					log.Fatalf("Expect to see `ready` but got %s\n", string(buf))
+					log.Printf("Expect to see `ready` but got %s\n", string(buf))
 				}
 				ready <- true
 			}()

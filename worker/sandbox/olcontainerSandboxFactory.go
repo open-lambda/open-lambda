@@ -235,10 +235,6 @@ func NewBufferedOLContainerSBFactory(opts *config.Config, delegate SandboxFactor
 // Create mounts the handler and sandbox directories to the ones already
 // mounted in the sandbox, and returns that sandbox.
 func (bf *BufferedOLContainerSBFactory) Create(handlerDir, workingDir string) (Sandbox, error) {
-	defer func(start time.Time) {
-		log.Printf("create buffered olcontainer took %v\n", time.Since(start))
-	}(time.Now())
-
 	select {
 	case sandbox := <-bf.buffer:
 		// create cluster host directory
