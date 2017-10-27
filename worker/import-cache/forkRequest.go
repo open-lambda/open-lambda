@@ -169,7 +169,6 @@ sendFds(char *sockPath, char *pid, char *rootdir, int rootdirLen, char *pkgs, in
 import "C"
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"strings"

@@ -84,7 +84,9 @@ func (s *OLContainerSandbox) Channel() (channel *SandboxChannel, err error) {
 
 func (s *OLContainerSandbox) Start() error {
 	defer func(start time.Time) {
-		log.Printf("create container took %v\n", time.Since(start))
+		if config.Timing {
+			log.Printf("create container took %v\n", time.Since(start))
+		}
 	}(time.Now())
 
 	initArgs := append(s.unshareFlags, s.rootDir)
@@ -134,7 +136,9 @@ func (s *OLContainerSandbox) Start() error {
 
 	select {
 	case s.initPid = <-ready:
-		log.Printf("wait for olcontainer_init took %v\n", time.Since(start))
+		if config.Timing {
+			log.Printf("wait for olcontainer_init took %v\n", time.Since(start))
+		}
 	case <-timeout.C:
 		// clean up go routine
 		if n, err := s.Pipe().Write([]byte("timeo")); err != nil {
@@ -175,7 +179,9 @@ func (s *OLContainerSandbox) Stop() error {
 	if err != nil {
 		log.Printf("failed to wait on initCmd pid=%d :: %v", s.initCmd.Process.Pid, err)
 	}
-	log.Printf("kill processes took %v", time.Since(start))
+	if config.Timing {
+		log.Printf("kill processes took %v", time.Since(start))
+	}
 
 	s.status = state.Stopped
 	return nil
@@ -225,9 +231,11 @@ func (s *OLContainerSandbox) WaitForUnpause(timeout time.Duration) error {
 }
 
 func (s *OLContainerSandbox) Remove() error {
-	defer func(start time.Time) {
-		log.Printf("remove took %v\n", time.Since(start))
-	}(time.Now())
+	if config.Timing {
+		defer func(start time.Time) {
+			log.Printf("remove took %v\n", time.Since(start))
+		}(time.Now())
+	}
 
 	if err := syscall.Unmount(s.rootDir, syscall.MNT_DETACH); err != nil {
 		log.Printf("unmount root dir %s failed :: %v\n", s.rootDir, err)
@@ -316,7 +324,9 @@ func (s *OLContainerSandbox) RunServer() error {
 	start := time.Now()
 	select {
 	case <-ready:
-		log.Printf("wait for init signal handler took %v\n", time.Since(start))
+		if config.Timing {
+			log.Printf("wait for init signal handler took %v\n", time.Since(start))
+		}
 	case <-timeout.C:
 		if n, err := s.Pipe().Write([]byte("timeo")); err != nil {
 			return err

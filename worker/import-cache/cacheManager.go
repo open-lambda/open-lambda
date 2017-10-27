@@ -72,9 +72,11 @@ func InitCacheManager(opts *config.Config) (cm *CacheManager, err error) {
 }
 
 func (cm *CacheManager) Provision(sandbox sb.ContainerSandbox, pkgs []string) (fs *ForkServer, hit bool, err error) {
-	defer func(start time.Time) {
-		log.Printf("provision took %v\n", time.Since(start))
-	}(time.Now())
+	if config.Timing {
+		defer func(start time.Time) {
+			log.Printf("provision took %v\n", time.Since(start))
+		}(time.Now())
+	}
 
 	cm.mutex.Lock()
 

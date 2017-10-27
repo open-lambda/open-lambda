@@ -77,9 +77,11 @@ func NewOLContainerSBFactory(opts *config.Config) (*OLContainerSBFactory, error)
 
 // Create creates a docker sandbox from the handler and sandbox directory.
 func (sf *OLContainerSBFactory) Create(handlerDir, workingDir string) (Sandbox, error) {
-	defer func(start time.Time) {
-		log.Printf("create olcontainer took %v\n", time.Since(start))
-	}(time.Now())
+	if config.Timing {
+		defer func(start time.Time) {
+			log.Printf("create olcontainer took %v\n", time.Since(start))
+		}(time.Now())
+	}
 
 	id_bytes, err := exec.Command("uuidgen").Output()
 	if err != nil {

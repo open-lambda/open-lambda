@@ -361,7 +361,9 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 
 			select {
 			case <-ready:
-				log.Printf("wait for server took %v\n", time.Since(start))
+				if config.Timing {
+					log.Printf("wait for server took %v\n", time.Since(start))
+				}
 			case <-timeout.C:
 				return nil, fmt.Errorf("handler server failed to initialize after 20s")
 			}

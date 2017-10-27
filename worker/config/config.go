@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 )
 
+var Timing bool
+
 // Config represents the configuration for a worker server.
 type Config struct {
 	// base path for path parameters in this config; must be non-empty if any
@@ -69,6 +71,8 @@ type Config struct {
 
 	// write benchmark times to separate log file
 	Benchmark_file string `json:"benchmark_log"`
+
+	Timing bool `json:"timing"`
 }
 
 // SandboxConfJson marshals the Sandbox_config of the Config into a JSON string.
@@ -237,6 +241,8 @@ func (c *Config) Defaults() error {
 			c.Import_cache_dir = path
 		}
 	}
+
+	Timing = c.Timing
 
 	return nil
 }
