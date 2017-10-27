@@ -165,7 +165,7 @@ func (s *OLContainerSandbox) Stop() error {
 	if err != nil {
 		return fmt.Errorf("failed to find init process with pid=%d :: %v", pid, err)
 	}
-	err = proc.Signal(syscall.SIGKILL)
+	err = proc.Signal(syscall.SIGTERM)
 	if err != nil {
 		log.Printf("failed to send kill signal to init process pid=%d :: %v", pid, err)
 	}
@@ -326,7 +326,7 @@ func (s *OLContainerSandbox) RunServer() error {
 		return fmt.Errorf("olcontainer_init failed to spawn after 5s")
 	}
 
-	err = proc.Signal(syscall.SIGURG)
+	err = proc.Signal(syscall.SIGUSR1)
 	if err != nil {
 		log.Printf("failed to send SIGUSR1 to pid=%d :: %v", pid, err)
 		return err

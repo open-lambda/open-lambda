@@ -43,6 +43,20 @@ static unsigned long parse_propagation(const char *str)
 	exit(EXIT_FAILURE);
 }
 
+void debug_status(int status, int pid, int child_pid) {
+#ifdef DDEBUG
+    if (WIFEXITED(status)) {
+      fprintf(stderr, "olcontainer_init: exited, status=%d pid=%d (child pid=%d)\n", WEXITSTATUS(status), pid, child_pid);
+    } else if (WIFSIGNALED(status)) {
+      fprintf(stderr, "olcontainer_init: killed by signal %d pid=%d (child pid=%d)\n", WTERMSIG(status), pid, child_pid);
+    } else if (WIFSTOPPED(status)) {
+      fprintf(stderr, "olcontainer_init: stopped by signal %d pid=%d (child pid=%d)\n", WSTOPSIG(status), pid, child_pid);
+    } else if (WIFCONTINUED(status)) {
+      fprintf(stderr, "olcontainer_init: continued pid=%d (child pid=%d)\n", pid, child_pid);
+    }
+#endif
+}
+
 int main(int argc, char *argv[]) {
   int res, status, pid;
   int unshare_flags = 0;

@@ -18,6 +18,10 @@ void signal_handler() {
 	}
 }
 
+void sigterm_handler() {
+	exit(0);
+}
+
 /*
  * Install the handler and block all other signals while handling
  * the signal. Reset the signal handler after caught to default.
@@ -30,7 +34,10 @@ void install_handler() {
 	setup_action.sa_handler = signal_handler;
 	setup_action.sa_mask = block_mask;
 	setup_action.sa_flags = SA_RESETHAND;
-	sigaction(SIGURG, &setup_action, NULL);
+	sigaction(SIGUSR1, &setup_action, NULL);
+
+	setup_action.sa_handler = sigterm_handler;
+	sigaction(SIGTERM, &setup_action, NULL);
 }
 
 int main(int argc, char *argv[]) {
