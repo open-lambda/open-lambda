@@ -32,7 +32,7 @@ var unshareFlags []string = []string{"-iu"}
 const rootCacheSandboxDir = "/tmp/olcache"
 
 type CacheFactory interface {
-	Create(parentDir string, startCmd []string) (sb.ContainerSandbox, error)
+	Create(startCmd []string) (sb.ContainerSandbox, error)
 	Cleanup()
 }
 
@@ -82,7 +82,7 @@ func NewDockerCacheFactory(cluster, pkgsDir, cacheDir string, idxPtr *int64) (*D
 }
 
 // Create creates a docker container from the pool directory.
-func (cf *DockerCacheFactory) Create(parentDir string, startCmd []string) (sb.ContainerSandbox, error) {
+func (cf *DockerCacheFactory) Create(startCmd []string) (sb.ContainerSandbox, error) {
 	newIdx := atomic.AddInt64(cf.idxPtr, 1)
 	sandboxDir := filepath.Join(cf.cacheDir, fmt.Sprintf("%d", newIdx))
 	if err := os.MkdirAll(sandboxDir, os.ModeDir); err != nil {
@@ -165,7 +165,7 @@ func NewOLContainerCacheFactory(opts *config.Config, cluster, baseDir, pkgsDir, 
 }
 
 // Create creates a docker sandbox from the pool directory.
-func (cf *OLContainerCacheFactory) Create(parentDir string, startCmd []string) (sb.ContainerSandbox, error) {
+func (cf *OLContainerCacheFactory) Create(startCmd []string) (sb.ContainerSandbox, error) {
 	newIdx := atomic.AddInt64(cf.idxPtr, 1)
 	hostDir := filepath.Join(cf.cacheDir, fmt.Sprintf("%d", newIdx))
 	if err := os.MkdirAll(hostDir, os.ModeDir); err != nil {
@@ -188,17 +188,7 @@ func (cf *OLContainerCacheFactory) Create(parentDir string, startCmd []string) (
 	}
 	id := strings.TrimSpace(string(id_bytes[:]))
 
-	/*
-		var rootDir string
-		if parentDir == "" {
-	*/
 	rootDir := filepath.Join(rootCacheSandboxDir, fmt.Sprintf("cache_%s", id))
-	/*
-		} else {
-			rootDir = filepath.Join(parentDir, "tmp", fmt.Sprintf("cache_%s", id))
-		}
-	*/
-
 	if err := os.Mkdir(rootDir, 0700); err != nil {
 		return nil, err
 	}
@@ -280,7 +270,7 @@ func NewCacheFactory(opts *config.Config, cluster string) (CacheFactory, sb.Cont
 	}
 
 	// create the root container
-	root, err := delegate.Create("", rootCmd)
+	root, err := delegate.Create(rootCmd)
 	if err != nil {
 		return nil, nil, "", fmt.Errorf("failed to create cache entry sandbox: %v", err)
 	}
@@ -310,7 +300,7 @@ func NewCacheFactory(opts *config.Config, cluster string) (CacheFactory, sb.Cont
 				}
 
 				// expect sandbox to come back started
-				if sandbox, err := bf.delegate.Create("", []string{"/init"}); err != nil {
+				if sandbox, err := bf.delegate.Create([]string{"/init"}); err != nil {
 					bf.buffer <- nil
 					bf.errors <- err
 				} else {
@@ -331,7 +321,7 @@ func NewCacheFactory(opts *config.Config, cluster string) (CacheFactory, sb.Cont
 }
 
 // Returns a sandbox ready for a cache interpreter
-func (bf *BufferedCacheFactory) Create(rootDir string, startCmd []string) (sb.ContainerSandbox, error) {
+func (bf *BufferedCacheFactory) Create(startCmd []string) (sb.ContainerSandbox, error) {
 	sandbox, err := <-bf.buffer, <-bf.errors
 	if err != nil {
 		return nil, err

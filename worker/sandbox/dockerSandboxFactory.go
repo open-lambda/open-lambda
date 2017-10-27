@@ -56,7 +56,7 @@ func NewDockerSBFactory(opts *config.Config) (*DockerSBFactory, error) {
 }
 
 // Create creates a docker sandbox from the handler and sandbox directory.
-func (df *DockerSBFactory) Create(handlerDir, workingDir, rootDir string) (Sandbox, error) {
+func (df *DockerSBFactory) Create(handlerDir, workingDir string) (Sandbox, error) {
 	id_bytes, err := exec.Command("uuidgen").Output()
 	if err != nil {
 		return nil, err
@@ -166,7 +166,7 @@ func NewBufferedDockerSBFactory(opts *config.Config, delegate SandboxFactory) (*
 				bufDir := filepath.Join(olMntDir, fmt.Sprintf("%d", newIdx))
 				if handlerDir, sandboxDir, err := mkSBDirs(bufDir); err != nil {
 					bf.errors <- err
-				} else if sandbox, err := bf.delegate.Create(handlerDir, sandboxDir, ""); err != nil {
+				} else if sandbox, err := bf.delegate.Create(handlerDir, sandboxDir); err != nil {
 					bf.errors <- err
 				} else if err := sandbox.Start(); err != nil {
 					bf.errors <- err
@@ -188,7 +188,7 @@ func NewBufferedDockerSBFactory(opts *config.Config, delegate SandboxFactory) (*
 
 // Create mounts the handler and sandbox directories to the ones already
 // mounted in the sandbox, and returns that sandbox.
-func (bf *BufferedDockerSBFactory) Create(handlerDir, workingDir, rootDir string) (Sandbox, error) {
+func (bf *BufferedDockerSBFactory) Create(handlerDir, workingDir string) (Sandbox, error) {
 	mntFlag := uintptr(syscall.MS_BIND)
 	select {
 	case info := <-bf.buffer:

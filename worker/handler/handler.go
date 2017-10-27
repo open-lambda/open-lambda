@@ -295,31 +295,38 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 	// create sandbox if needed
 	if h.sandbox == nil {
 		hit := false
+		sandbox, err := hms.sbFactory.Create(hm.codeDir, hm.workingDir)
+		if err != nil {
+			return nil, err
+		}
+
+		h.sandbox = sandbox
+		h.id = h.sandbox.ID()
+		h.hostDir = h.sandbox.HostDir()
+
+		if sbState, err := h.sandbox.State(); err != nil {
+			return nil, err
+		} else if sbState == state.Stopped {
+			if err := h.sandbox.Start(); err != nil {
+				return nil, err
+			}
+		} else if sbState == state.Paused {
+			if err := h.sandbox.Unpause(); err != nil {
+				return nil, err
+			}
+		}
+
 		if hms.cacheMgr == nil {
-			sandbox, err := hms.sbFactory.Create(hm.codeDir, hm.workingDir, "")
-			if err != nil {
-				return nil, err
-			}
-
-			h.sandbox = sandbox
-			if sbState, err := h.sandbox.State(); err != nil {
-				return nil, err
-			} else if sbState == state.Stopped {
-				if err := h.sandbox.Start(); err != nil {
-					return nil, err
-				}
-			} else if sbState == state.Paused {
-				if err := h.sandbox.Unpause(); err != nil {
-					return nil, err
-				}
-			}
-
-			err = h.sandbox.RunServer()
-			if err != nil {
+			if err := h.sandbox.RunServer(); err != nil {
 				return nil, err
 			}
 		} else {
-			if h.sandbox, h.fs, hit, err = hms.cacheMgr.Provision(hms.sbFactory, hm.codeDir, hm.workingDir, hm.pkgs); err != nil {
+			container, ok := h.sandbox.(sb.ContainerSandbox)
+			if !ok {
+				return nil, fmt.Errorf("import cache only supports container sandboxes")
+			}
+
+			if h.fs, hit, err = hms.cacheMgr.Provision(container, hm.pkgs); err != nil {
 				return nil, err
 			}
 
@@ -329,11 +336,6 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 				atomic.AddInt64(hms.misses, 1)
 			}
 		}
-
-		h.id = h.sandbox.ID()
-		h.hostDir = h.sandbox.HostDir()
-
-		sockPath := fmt.Sprintf("%s/ol.sock", h.hostDir)
 
 		// wait up to 20s for server to initialize
 		start := time.Now()
@@ -372,6 +374,7 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 				return nil, fmt.Errorf("handler server failed to initialize after 20s")
 			}
 		} else {
+			sockPath := fmt.Sprintf("%s/ol.sock", h.hostDir)
 			for ok := true; ok; ok = os.IsNotExist(err) {
 				_, err = os.Stat(sockPath)
 				if time.Since(start).Seconds() > 20 {

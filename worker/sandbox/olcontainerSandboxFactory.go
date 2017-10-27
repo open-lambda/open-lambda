@@ -76,7 +76,7 @@ func NewOLContainerSBFactory(opts *config.Config) (*OLContainerSBFactory, error)
 }
 
 // Create creates a docker sandbox from the handler and sandbox directory.
-func (sf *OLContainerSBFactory) Create(handlerDir, workingDir, parentDir string) (Sandbox, error) {
+func (sf *OLContainerSBFactory) Create(handlerDir, workingDir string) (Sandbox, error) {
 	defer func(start time.Time) {
 		log.Printf("create olcontainer took %v\n", time.Since(start))
 	}(time.Now())
@@ -87,17 +87,7 @@ func (sf *OLContainerSBFactory) Create(handlerDir, workingDir, parentDir string)
 	}
 	id := strings.TrimSpace(string(id_bytes[:]))
 
-	/*
-		var rootDir string
-		if parentDir == "" {
-	*/
 	rootDir := filepath.Join(rootSandboxDir, fmt.Sprintf("sb_%s", id))
-	/*
-		} else {
-			rootDir = filepath.Join(parentDir, "tmp", fmt.Sprintf("sb_%s", id))
-		}
-	*/
-
 	if err := os.Mkdir(rootDir, 0777); err != nil {
 		return nil, err
 	}
@@ -221,7 +211,7 @@ func NewBufferedOLContainerSBFactory(opts *config.Config, delegate SandboxFactor
 					return // kill signal
 				}
 
-				if sandbox, err := bf.delegate.Create("", "", ""); err != nil {
+				if sandbox, err := bf.delegate.Create("", ""); err != nil {
 					bf.errors <- err
 				} else if sandbox, ok := sandbox.(*OLContainerSandbox); !ok {
 					bf.errors <- err
@@ -244,7 +234,7 @@ func NewBufferedOLContainerSBFactory(opts *config.Config, delegate SandboxFactor
 
 // Create mounts the handler and sandbox directories to the ones already
 // mounted in the sandbox, and returns that sandbox.
-func (bf *BufferedOLContainerSBFactory) Create(handlerDir, workingDir, parentDir string) (Sandbox, error) {
+func (bf *BufferedOLContainerSBFactory) Create(handlerDir, workingDir string) (Sandbox, error) {
 	defer func(start time.Time) {
 		log.Printf("create buffered olcontainer took %v\n", time.Since(start))
 	}(time.Now())
