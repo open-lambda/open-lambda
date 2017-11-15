@@ -40,7 +40,7 @@ func NewDockerSBFactory(opts *config.Config) (*DockerSBFactory, error) {
 		dockerutil.DOCKER_LABEL_TYPE:    dockerutil.SANDBOX,
 	}
 	env := []string{fmt.Sprintf("ol.config=%s", opts.SandboxConfJson())}
-	cmd := []string{"/ol-init"}
+	cmd := []string{"/spin"}
 
 	df := &DockerSBFactory{
 		client:    client,

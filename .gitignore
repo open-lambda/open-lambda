@@ -51,6 +51,7 @@
 /registry/pushserver
 /registry/regpush
 /lambda/ol-init
+/lambda/spin
 /lambda/ns.so
 /lambda/fdclient
 /testing/test_worker

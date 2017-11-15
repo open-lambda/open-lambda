@@ -1,6 +1,9 @@
 .PHONY: all
 
-all: ol-init
+all: spin ol-init
+
+spin: spin.c
+	gcc -Wall -O2 spin.c -o spin
 
 ol-init: ol-init.c
 	gcc -Wall -O2 ol-init.c -o ol-init
@@ -8,4 +11,4 @@ ol-init: ol-init.c
 .PHONY: clean
 
 clean:
-	rm -f ol-init
+	rm -f ol-init spin

@@ -329,53 +329,41 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 			}
 		}
 
+		// use StdoutPipe of olcontainer to sync with lambda server
+		ready := make(chan bool, 1)
+		defer close(ready)
+		go func() {
+			pipeDir := filepath.Join(h.hostDir, "server_pipe")
+			pipe, err := os.OpenFile(pipeDir, (os.O_CREATE | os.O_RDWR), 0777)
+			if err != nil {
+				log.Printf("Cannot open pipe: %v\n", err)
+				return
+			}
+			defer pipe.Close()
+
+			// wait for "ready"
+			buf := make([]byte, 5)
+			_, err = pipe.Read(buf)
+			if err != nil {
+				log.Printf("Cannot read from stdout of sandbox :: %v\n", err)
+			} else if string(buf) != "ready" {
+				log.Printf("Expect to see `ready` but got %s\n", string(buf))
+			}
+			ready <- true
+		}()
+
 		// wait up to 20s for server to initialize
 		start := time.Now()
-		// TODO: make pipe compatible with non-olcontainer
-		if olcontainer, ok := h.sandbox.(*sb.OLContainerSandbox); ok {
-			// use StdoutPipe of olcontainer to sync with lambda server
-			ready := make(chan bool, 1)
-			defer close(ready)
-			go func() {
-				pipeDir := filepath.Join(olcontainer.HostDir(), "server_pipe")
-				pipe, err := os.OpenFile(pipeDir, os.O_RDWR, 0777)
-				if err != nil {
-					log.Fatalf("Cannot open pipe: %v\n", err)
-				}
-				defer pipe.Close()
+		timeout := time.NewTimer(20 * time.Second)
+		defer timeout.Stop()
 
-				// wait for "ready"
-				buf := make([]byte, 5)
-				_, err = pipe.Read(buf)
-				if err != nil {
-					log.Printf("Cannot read from stdout of olcontainer: %v\n", err)
-				} else if string(buf) != "ready" {
-					log.Printf("Expect to see `ready` but got %s\n", string(buf))
-				}
-				ready <- true
-			}()
-
-			// wait up to 20s for server to initialize
-			timeout := time.NewTimer(20 * time.Second)
-			defer timeout.Stop()
-
-			select {
-			case <-ready:
-				if config.Timing {
-					log.Printf("wait for server took %v\n", time.Since(start))
-				}
-			case <-timeout.C:
-				return nil, fmt.Errorf("handler server failed to initialize after 20s")
+		select {
+		case <-ready:
+			if config.Timing {
+				log.Printf("wait for server took %v\n", time.Since(start))
 			}
-		} else {
-			sockPath := fmt.Sprintf("%s/ol.sock", h.hostDir)
-			for ok := true; ok; ok = os.IsNotExist(err) {
-				_, err = os.Stat(sockPath)
-				if time.Since(start).Seconds() > 20 {
-					return nil, fmt.Errorf("handler server failed to initialize after 20s")
-				}
-				time.Sleep(1 * time.Millisecond)
-			}
+		case <-timeout.C:
+			return nil, fmt.Errorf("handler server failed to initialize after 20s")
 		}
 
 		// we are up so we can add ourselves for reuse

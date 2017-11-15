@@ -114,7 +114,7 @@ def lambda_server():
     server.add_socket(socket)
     # notify worker server that we are ready through stdout
     # flush is necessary, and don't put it after tornado start; won't work
-    with open('/host/server_pipe', 'w') as pipe:
+    with open('/host/server_pipe', 'a') as pipe:
         pipe.write('ready')
     tornado.ioloop.IOLoop.instance().start()
     server.start(PROCESSES_DEFAULT)
@@ -143,11 +143,11 @@ if __name__ == '__main__':
         pass
 
     curr = 0.0
-    while not os.path.exists(PKGS_PATH):
+    while not os.path.exists(PKG_PATH):
         time.sleep(0.005)
         curr += 0.005
         if curr > 1.0:
-            print('packages.txt missing (path=%s)' % PKGS_PATH)
+            print('packages.txt missing (path=%s)' % PKG_PATH)
             sys.stdout.flush()
             sys.exit(1)
 

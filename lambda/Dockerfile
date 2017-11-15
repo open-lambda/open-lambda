@@ -9,5 +9,6 @@ RUN pip install tornado
 
 COPY server.py /
 COPY ol-init /
+COPY spin /
 
 CMD ["python", "/server.py"]
