@@ -34,11 +34,9 @@ type Config struct {
 	Max_runners int `json:"max_runners"`
 
 	// cache options
-	Handler_cache_size          int    `json:"handler_cache_size"` //kb
-	Import_cache_size           int    `json:"import_cache_size"`  //kb
-	Import_cache_buffer         int    `json:"import_cache_buffer"`
-	Import_cache_buffer_threads int    `json:"import_cache_buffer_threads"`
-	Import_cache_dir            string `json:"import_cache_dir"`
+	Handler_cache_size int    `json:"handler_cache_size"` //kb
+	Import_cache_size  int    `json:"import_cache_size"`  //kb
+	Import_cache_dir   string `json:"import_cache_dir"`
 
 	// olregistry options
 	// addresses of olregistry cluster
@@ -57,9 +55,6 @@ type Config struct {
 	Worker_port string `json:"worker_port"`
 
 	// sandbox factory options
-	// number of sandbox buffers; if zero, no buffer will be used
-	Sandbox_buffer         int `json:"sandbox_buffer"`
-	Sandbox_buffer_threads int `json:"sandbox_buffer_threads"`
 	// if olcontainer -> number of cgroup to init
 	Cg_pool_size int `json:"cg_pool_size"`
 
