@@ -65,7 +65,7 @@ func configPath(cluster string, name string) string {
 }
 
 // BasePath gets location for storing base handler files (e.g., Ubuntu
-// install files) for olcontainer mode
+// install files) for sock mode
 func basePath(cluster string) string {
 	return path.Join(cluster, "base")
 }
@@ -589,11 +589,11 @@ func kill(ctx *cli.Context) error {
 	return nil
 }
 
-// manage olcontainers directly
-func olcontainer_sandbox(ctx *cli.Context) (err error) {
+// manage socks directly
+func sock_sandbox(ctx *cli.Context) (err error) {
 	cluster := parseCluster(ctx.String("cluster"), true)
 
-	// create a base directory to run olcontainer handlers
+	// create a base directory to run sock handlers
 	handlerDir := path.Join(basePath(cluster), "lambda")
 	err = dutil.DumpDockerImage(client, "lambda", handlerDir)
 	if err != nil {
@@ -602,7 +602,7 @@ func olcontainer_sandbox(ctx *cli.Context) (err error) {
 		return err
 	}
 
-	// create a base directory to run olcontainer cache entries
+	// create a base directory to run sock cache entries
 	cacheDir := path.Join(basePath(cluster), "cache-entry")
 	err = dutil.DumpDockerImage(client, "cache-entry", cacheDir)
 	if err != nil {
@@ -611,14 +611,14 @@ func olcontainer_sandbox(ctx *cli.Context) (err error) {
 		return err
 	}
 
-	// configure template to use olcontainer containers
+	// configure template to use sock containers
 	c, err := config.ParseConfig(templatePath(cluster))
 	if err != nil {
 		return err
 	}
-	c.Sandbox = "olcontainer"
-	c.OLContainer_handler_base = handlerDir
-	c.OLContainer_cache_base = cacheDir
+	c.Sandbox = "sock"
+	c.SOCK_handler_base = handlerDir
+	c.SOCK_cache_base = cacheDir
 	if err := c.Save(templatePath(cluster)); err != nil {
 		return err
 	}
@@ -935,14 +935,14 @@ OPTIONS:
 			Action: upload,
 		},
 		cli.Command{
-			Name:        "olcontainer-sandbox",
+			Name:        "sock-sandbox",
 			Usage:       "Use OpenLambda barebones container implementation",
-			UsageText:   "admin olcontainer-sandbox --cluster=NAME",
+			UsageText:   "admin sock-sandbox --cluster=NAME",
 			Description: "Creates a root file system in the cluster directory and configures OpenLambda to use barebones container implementation",
 			Flags: []cli.Flag{
 				clusterFlag,
 			},
-			Action: olcontainer_sandbox,
+			Action: sock_sandbox,
 		},
 		cli.Command{
 			Name:      "kill",

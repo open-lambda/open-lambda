@@ -22,8 +22,8 @@ var SHARED uintptr = uintptr(syscall.MS_SHARED)
 
 var unshareFlags []string = []string{"-ipu"}
 
-// OLContainerSBFactory is a SandboxFactory that creats docker sandboxes.
-type OLContainerSBFactory struct {
+// SOCKSBFactory is a SandboxFactory that creats docker sandboxes.
+type SOCKSBFactory struct {
 	opts      *config.Config
 	cgf       *CgroupFactory
 	baseDir   string
@@ -32,8 +32,8 @@ type OLContainerSBFactory struct {
 	indexPort string
 }
 
-// NewOLContainerSBFactory creates a OLContainerSBFactory.
-func NewOLContainerSBFactory(opts *config.Config) (*OLContainerSBFactory, error) {
+// NewSOCKSBFactory creates a SOCKSBFactory.
+func NewSOCKSBFactory(opts *config.Config) (*SOCKSBFactory, error) {
 	for _, cgroup := range CGroupList {
 		cgroupPath := filepath.Join("/sys/fs/cgroup", cgroup, OLCGroupName)
 		if err := os.MkdirAll(cgroupPath, 0700); err != nil {
@@ -49,7 +49,7 @@ func NewOLContainerSBFactory(opts *config.Config) (*OLContainerSBFactory, error)
 		return nil, fmt.Errorf("failed to make root sandbox dir private :: %v", err)
 	}
 
-	baseDir := opts.OLContainer_handler_base
+	baseDir := opts.SOCK_handler_base
 	pkgsDir := filepath.Join(baseDir, "packages")
 
 	_, err := exec.Command("/bin/sh", "-c", fmt.Sprintf("cp -rT %s %s", opts.Pkgs_dir, pkgsDir)).Output()
@@ -62,7 +62,7 @@ func NewOLContainerSBFactory(opts *config.Config) (*OLContainerSBFactory, error)
 		return nil, err
 	}
 
-	sf := &OLContainerSBFactory{
+	sf := &SOCKSBFactory{
 		opts:      opts,
 		cgf:       cgf,
 		baseDir:   baseDir,
@@ -75,10 +75,10 @@ func NewOLContainerSBFactory(opts *config.Config) (*OLContainerSBFactory, error)
 }
 
 // Create creates a docker sandbox from the handler and sandbox directory.
-func (sf *OLContainerSBFactory) Create(handlerDir, workingDir string) (Sandbox, error) {
+func (sf *SOCKSBFactory) Create(handlerDir, workingDir string) (Sandbox, error) {
 	if config.Timing {
 		defer func(start time.Time) {
-			log.Printf("create olcontainer took %v\n", time.Since(start))
+			log.Printf("create sock took %v\n", time.Since(start))
 		}(time.Now())
 	}
 
@@ -101,7 +101,7 @@ func (sf *OLContainerSBFactory) Create(handlerDir, workingDir string) (Sandbox, 
 		startCmd = append(startCmd, sf.indexPort)
 	}
 
-	// NOTE: mount points are expected to exist in OLContainer_handler_base directory
+	// NOTE: mount points are expected to exist in SOCK_handler_base directory
 
 	if err := syscall.Mount(sf.baseDir, rootDir, "", BIND, ""); err != nil {
 		return nil, fmt.Errorf("failed to bind root dir: %s -> %s :: %v\n", sf.baseDir, rootDir, err)
@@ -111,7 +111,7 @@ func (sf *OLContainerSBFactory) Create(handlerDir, workingDir string) (Sandbox, 
 		return nil, fmt.Errorf("failed to make root dir private :: %v", err)
 	}
 
-	sandbox, err := NewOLContainerSandbox(sf.cgf, sf.opts, rootDir, id, startCmd, unshareFlags)
+	sandbox, err := NewSOCKSandbox(sf.cgf, sf.opts, rootDir, id, startCmd, unshareFlags)
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +158,7 @@ func (sf *OLContainerSBFactory) Create(handlerDir, workingDir string) (Sandbox, 
 	return sandbox, nil
 }
 
-func (sf *OLContainerSBFactory) Cleanup() {
+func (sf *SOCKSBFactory) Cleanup() {
 	for _, cgroup := range CGroupList {
 		cgroupPath := filepath.Join("/sys/fs/cgroup", cgroup, OLCGroupName)
 		os.RemoveAll(cgroupPath)

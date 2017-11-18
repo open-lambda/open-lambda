@@ -114,8 +114,8 @@ func (cf *DockerCacheFactory) Cleanup() {
 	return
 }
 
-// OLContainerCacheFactory is a SandboxFactory that creates olcontainers for the cache.
-type OLContainerCacheFactory struct {
+// SOCKCacheFactory is a SandboxFactory that creates socks for the cache.
+type SOCKCacheFactory struct {
 	opts     *config.Config
 	cgf      *sb.CgroupFactory
 	baseDir  string
@@ -124,8 +124,8 @@ type OLContainerCacheFactory struct {
 	idxPtr   *int64
 }
 
-// NewOLContainerCacheFactory creates a CacheFactory that uses olcontainers.
-func NewOLContainerCacheFactory(opts *config.Config, cluster, baseDir, pkgsDir, cacheDir string, idxPtr *int64) (*OLContainerCacheFactory, error) {
+// NewSOCKCacheFactory creates a CacheFactory that uses socks.
+func NewSOCKCacheFactory(opts *config.Config, cluster, baseDir, pkgsDir, cacheDir string, idxPtr *int64) (*SOCKCacheFactory, error) {
 	for _, cgroup := range sb.CGroupList {
 		cgroupPath := path.Join("/sys/fs/cgroup", cgroup, sb.OLCGroupName)
 		if err := os.MkdirAll(cgroupPath, 0700); err != nil {
@@ -153,11 +153,11 @@ func NewOLContainerCacheFactory(opts *config.Config, cluster, baseDir, pkgsDir, 
 		log.Printf("failed to copy packages to cache entry base image :: %v", err)
 	}
 
-	return &OLContainerCacheFactory{opts, cgf, baseDir, pkgsDir, cacheDir, idxPtr}, nil
+	return &SOCKCacheFactory{opts, cgf, baseDir, pkgsDir, cacheDir, idxPtr}, nil
 }
 
 // Create creates a docker sandbox from the pool directory.
-func (cf *OLContainerCacheFactory) Create(startCmd []string) (sb.ContainerSandbox, error) {
+func (cf *SOCKCacheFactory) Create(startCmd []string) (sb.ContainerSandbox, error) {
 	if config.Timing {
 		defer func(start time.Time) {
 			log.Printf("create cache container took %v\n", time.Since(start))
@@ -191,7 +191,7 @@ func (cf *OLContainerCacheFactory) Create(startCmd []string) (sb.ContainerSandbo
 		return nil, err
 	}
 
-	// NOTE: mount points are expected to exist in OLContainer_handler_base directory
+	// NOTE: mount points are expected to exist in SOCK_handler_base directory
 
 	if err := syscall.Mount(cf.baseDir, rootDir, "", sb.BIND, ""); err != nil {
 		return nil, fmt.Errorf("failed to bind root dir: %s -> %s :: %v\n", cf.baseDir, rootDir, err)
@@ -201,7 +201,7 @@ func (cf *OLContainerCacheFactory) Create(startCmd []string) (sb.ContainerSandbo
 		return nil, fmt.Errorf("failed to make root dir private :: %v", err)
 	}
 
-	sandbox, err := sb.NewOLContainerSandbox(cf.cgf, cf.opts, rootDir, id, startCmd, unshareFlags)
+	sandbox, err := sb.NewSOCKSandbox(cf.cgf, cf.opts, rootDir, id, startCmd, unshareFlags)
 	if err != nil {
 		return nil, err
 	}
@@ -221,7 +221,7 @@ func (cf *OLContainerCacheFactory) Create(startCmd []string) (sb.ContainerSandbo
 	return sandbox, nil
 }
 
-func (cf *OLContainerCacheFactory) Cleanup() {
+func (cf *SOCKCacheFactory) Cleanup() {
 	for _, cgroup := range sb.CGroupList {
 		cgroupPath := path.Join("/sys/fs/cgroup", cgroup, sb.OLCGroupName)
 		os.Remove(cgroupPath)
@@ -257,8 +257,8 @@ func NewCacheFactory(opts *config.Config, cluster string) (CacheFactory, sb.Cont
 		if err != nil {
 			return nil, nil, "", err
 		}
-	} else if opts.Sandbox == "olcontainer" {
-		factory, err = NewOLContainerCacheFactory(opts, cluster, opts.OLContainer_cache_base, pkgsDir, cacheDir, idxPtr)
+	} else if opts.Sandbox == "sock" {
+		factory, err = NewSOCKCacheFactory(opts, cluster, opts.SOCK_cache_base, pkgsDir, cacheDir, idxPtr)
 		if err != nil {
 			return nil, nil, "", err
 		}

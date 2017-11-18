@@ -18,7 +18,7 @@ void errExit(char *msg) {
 }
 
 void usage() {
-  printf("Usage: init <root> <program> [ARGS...]\n");
+  printf("Usage: sock-init <root> <program> [ARGS...]\n");
   exit(EXIT_FAILURE);
 }
 
@@ -46,13 +46,13 @@ static unsigned long parse_propagation(const char *str)
 void debug_status(int status, int pid, int child_pid) {
 #ifdef DDEBUG
     if (WIFEXITED(status)) {
-      fprintf(stderr, "olcontainer_init: exited, status=%d pid=%d (child pid=%d)\n", WEXITSTATUS(status), pid, child_pid);
+      fprintf(stderr, "sock-init: exited, status=%d pid=%d (child pid=%d)\n", WEXITSTATUS(status), pid, child_pid);
     } else if (WIFSIGNALED(status)) {
-      fprintf(stderr, "olcontainer_init: killed by signal %d pid=%d (child pid=%d)\n", WTERMSIG(status), pid, child_pid);
+      fprintf(stderr, "sock-init: killed by signal %d pid=%d (child pid=%d)\n", WTERMSIG(status), pid, child_pid);
     } else if (WIFSTOPPED(status)) {
-      fprintf(stderr, "olcontainer_init: stopped by signal %d pid=%d (child pid=%d)\n", WSTOPSIG(status), pid, child_pid);
+      fprintf(stderr, "sock-init: stopped by signal %d pid=%d (child pid=%d)\n", WSTOPSIG(status), pid, child_pid);
     } else if (WIFCONTINUED(status)) {
-      fprintf(stderr, "olcontainer_init: continued pid=%d (child pid=%d)\n", pid, child_pid);
+      fprintf(stderr, "sock-init: continued pid=%d (child pid=%d)\n", pid, child_pid);
     }
 #endif
 }

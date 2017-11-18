@@ -16,8 +16,8 @@ func InitSandboxFactory(config *config.Config) (sf SandboxFactory, err error) {
 	if config.Sandbox == "docker" {
 		return NewDockerSBFactory(config)
 
-	} else if config.Sandbox == "olcontainer" {
-		return NewOLContainerSBFactory(config)
+	} else if config.Sandbox == "sock" {
+		return NewSOCKSBFactory(config)
 	}
 
 	return nil, fmt.Errorf("invalid sandbox type: '%s'", config.Sandbox)

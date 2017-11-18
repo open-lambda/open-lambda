@@ -18,7 +18,7 @@ type Config struct {
 	path string
 	// registry type: "local" or "olregistry"
 	Registry string `json:"registry"`
-	// sandbox type: "docker" or "olcontainer"
+	// sandbox type: "docker" or "sock"
 	// currently ignored as cgroup sandbox is not fully integrated
 	Sandbox string `json:"sandbox"`
 	// registry directory for storing local copies of handler code
@@ -45,17 +45,15 @@ type Config struct {
 	// sandbox options
 	// worker directory, which contains handler code, pid file, logs, etc.
 	Worker_dir string `json:"worker_dir"`
-	// initialization path for olcontainer; currently ignored
-	OLContainer_init_path string `json: "olcontainer_init_path"`
-	// base path for olcontainer handlers
-	OLContainer_handler_base string `json: "olcontainer_handler_base"`
-	// base path for olcontainer import cache
-	OLContainer_cache_base string `json: "olcontainer_cache_base"`
+	// base path for sock handlers
+	SOCK_handler_base string `json: "sock_handler_base"`
+	// base path for sock import cache
+	SOCK_cache_base string `json: "sock_cache_base"`
 	// port the worker server listens to
 	Worker_port string `json:"worker_port"`
 
 	// sandbox factory options
-	// if olcontainer -> number of cgroup to init
+	// if sock -> number of cgroup to init
 	Cg_pool_size int `json:"cg_pool_size"`
 
 	// for unit testing to skip pull path
@@ -167,54 +165,38 @@ func (c *Config) Defaults() error {
 		c.Pkgs_dir = path
 	}
 
-	// olcontainer sandboxes require some extra settings
-	if c.Sandbox == "olcontainer" {
-		// olcontainer_init path
-		if c.OLContainer_init_path == "" {
-			return fmt.Errorf("must specify OLContainer_init_path")
+	// sock sandboxes require some extra settings
+	if c.Sandbox == "sock" {
+		// sock base paths
+		if c.SOCK_handler_base == "" {
+			return fmt.Errorf("must specify sock_handler_base")
 		}
 
-		if !path.IsAbs(c.OLContainer_init_path) {
+		if !path.IsAbs(c.SOCK_handler_base) {
 			if c.path == "" {
-				return fmt.Errorf("OLContainer_init_path cannot be relative, unless config is loaded from file")
+				return fmt.Errorf("sock_handler_base cannot be relative, unless config is loaded from file")
 			}
-			path, err := filepath.Abs(path.Join(path.Dir(c.path), c.OLContainer_init_path))
+			path, err := filepath.Abs(path.Join(path.Dir(c.path), c.SOCK_handler_base))
 			if err != nil {
 				return err
 			}
-			c.OLContainer_init_path = path
-		}
-
-		// olcontainer base paths
-		if c.OLContainer_handler_base == "" {
-			return fmt.Errorf("must specify olcontainer_handler_base")
-		}
-
-		if !path.IsAbs(c.OLContainer_handler_base) {
-			if c.path == "" {
-				return fmt.Errorf("olcontainer_handler_base cannot be relative, unless config is loaded from file")
-			}
-			path, err := filepath.Abs(path.Join(path.Dir(c.path), c.OLContainer_handler_base))
-			if err != nil {
-				return err
-			}
-			c.OLContainer_handler_base = path
+			c.SOCK_handler_base = path
 		}
 
 		if c.Import_cache_size != 0 {
-			if c.OLContainer_cache_base == "" {
-				return fmt.Errorf("must specify olcontainer_cache_base if using import cache")
+			if c.SOCK_cache_base == "" {
+				return fmt.Errorf("must specify sock_cache_base if using import cache")
 			}
 
-			if !path.IsAbs(c.OLContainer_cache_base) {
+			if !path.IsAbs(c.SOCK_cache_base) {
 				if c.path == "" {
-					return fmt.Errorf("olcontainer_cache_base cannot be relative, unless config is loaded from file")
+					return fmt.Errorf("sock_cache_base cannot be relative, unless config is loaded from file")
 				}
-				path, err := filepath.Abs(path.Join(path.Dir(c.path), c.OLContainer_cache_base))
+				path, err := filepath.Abs(path.Join(path.Dir(c.path), c.SOCK_cache_base))
 				if err != nil {
 					return err
 				}
-				c.OLContainer_cache_base = path
+				c.SOCK_cache_base = path
 			}
 		}
 	}

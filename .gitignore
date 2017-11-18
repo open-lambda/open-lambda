@@ -56,4 +56,4 @@
 /lambda/fdclient
 /testing/test_worker
 /testing/test_cache
-/olcontainer/olcontainer_init
+/sock/sock-init

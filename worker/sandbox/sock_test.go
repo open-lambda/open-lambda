@@ -29,19 +29,19 @@ func Init() {
 	}
 
 	// test dir, base dir
-	testDir, err = ioutil.TempDir(os.TempDir(), "olcontainer_test")
+	testDir, err = ioutil.TempDir(os.TempDir(), "sock_test")
 	if err != nil {
 		log.Fatal("cannot create temp dir")
 	}
 	baseDir = path.Join(testDir, "base")
-	fmt.Printf("Using %s for olcontainer testing\n", testDir)
+	fmt.Printf("Using %s for sock testing\n", testDir)
 
 	// conf
 	conf, err = config.ParseConfig(os.Getenv("WORKER_CONFIG"))
 	if err != nil {
 		log.Fatal(err)
 	}
-	conf.OLContainer_handler_base = baseDir
+	conf.SOCK_handler_base = baseDir
 
 	// ubuntu FS base
 	fmt.Printf("dump lambda root to %s\n", baseDir)
@@ -58,7 +58,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestCreate(t *testing.T) {
-	factory, err := NewOLContainerSBFactory(conf, baseDir)
+	factory, err := NewSOCKSBFactory(conf, baseDir)
 	if err != nil {
 		t.Fatal(err.Error())
 	}

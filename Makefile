@@ -18,7 +18,7 @@ LAMBDA_DIR = $(abspath ./lambda)
 PIPBENCH_DIR = $(abspath ./pipbench)
 
 .PHONY: all
-all : .git/hooks/pre-commit imgs/lambda imgs/cache-entry imgs/pip-installer bin/admin olcontainer/olcontainer_init
+all : .git/hooks/pre-commit imgs/lambda imgs/cache-entry imgs/pip-installer bin/admin sock/sock-init
 
 .git/hooks/pre-commit: util/pre-commit
 	cp util/pre-commit .git/hooks/pre-commit
@@ -52,17 +52,17 @@ test : test-config imgs/lambda
 	#cd $(WORKER_DIR) && $(GO) test ./handler -v
 	cd $(WORKER_DIR) && $(GO) test ./server -v
 
-olcontainer/olcontainer_init : olcontainer/olcontainer_init.c
-	${MAKE} -C olcontainer
+sock/sock-init : sock/sock-init.c
+	${MAKE} -C sock
 
 # TODO: eventually merge this with default tests
-.PHONY: olcontainertest olcontainertest-config
-olcontainertest-config :
-	$(eval export WORKER_CONFIG := $(PWD)/testing/worker-config-olcontainer.json)
+.PHONY: socktest socktest-config
+socktest-config :
+	$(eval export WORKER_CONFIG := $(PWD)/testing/worker-config-sock.json)
 
-olcontainertest : olcontainertest-config imgs/lambda olcontainer/olcontainer_init
+socktest : socktest-config imgs/lambda sock/sock-init
 	mkdir -p /tmp/olpkgs
-	cd $(WORKER_DIR) && $(GO) test -tags olcontainertest ./sandbox/ -v
+	cd $(WORKER_DIR) && $(GO) test -tags socktest ./sandbox/ -v
 
 .PHONY: cachetest cachetest-config
 cachetest-config :
@@ -79,7 +79,7 @@ clean :
 	rm -rf registry/bin
 	rm -f imgs/lambda imgs/cache-entry imgs/olregistry
 	rm -rf testing/test_worker testing/test_cache
-	rm -f olcontainer/olcontainer_init
+	rm -f sock/sock-init
 	${MAKE} -C lambda clean
 	${MAKE} -C cache-entry clean
 
