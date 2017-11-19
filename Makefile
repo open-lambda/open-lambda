@@ -1,6 +1,5 @@
 PWD = $(shell pwd)
 
-CLIENT_BIN:=worker/prof/client/client
 LAMBDA_BIN=lambda/bin
 REG_BIN:=registry/bin
 
