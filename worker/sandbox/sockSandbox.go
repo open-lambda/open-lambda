@@ -73,8 +73,13 @@ func (s *SOCKSandbox) Channel() (channel *SandboxChannel, err error) {
 		return nil, fmt.Errorf("cannot call channel before calling mountDirs")
 	}
 
+	sockPath := filepath.Join(s.hostDir, "ol.sock")
+	if len(sockPath) > 108 {
+		return nil, fmt.Errorf("socket path length cannot exceed 108 characters (try moving cluster closer to the root directory")
+	}
+
 	dial := func(proto, addr string) (net.Conn, error) {
-		return net.Dial("unix", filepath.Join(s.hostDir, "ol.sock"))
+		return net.Dial("unix", sockPath)
 	}
 	tr := http.Transport{Dial: dial}
 

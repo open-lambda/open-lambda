@@ -34,7 +34,6 @@ type DockerSandbox struct {
 	nspid      string
 	container  *docker.Container
 	client     *docker.Client
-	tr         http.Transport
 	installed  map[string]bool
 	index_host string
 	index_port string
@@ -42,17 +41,11 @@ type DockerSandbox struct {
 
 // NewDockerSandbox creates a DockerSandbox.
 func NewDockerSandbox(host_id, hostDir, index_host, index_port string, container *docker.Container, client *docker.Client) *DockerSandbox {
-	dial := func(proto, addr string) (net.Conn, error) {
-		return net.Dial("unix", filepath.Join(hostDir, "ol.sock"))
-	}
-	tr := http.Transport{Dial: dial, DisableKeepAlives: true}
-
 	sandbox := &DockerSandbox{
 		host_id:    host_id,
 		hostDir:    hostDir,
 		container:  container,
 		client:     client,
-		tr:         tr,
 		installed:  make(map[string]bool),
 		index_host: index_host,
 		index_port: index_port,
@@ -114,11 +107,18 @@ func (s *DockerSandbox) State() (hstate state.HandlerState, err error) {
 
 // Channel returns a file socket channel for direct communication with the sandbox.
 func (s *DockerSandbox) Channel() (channel *SandboxChannel, err error) {
-	if err := s.InspectUpdate(); err != nil {
-		return nil, s.dockerError(err)
+	sockPath := filepath.Join(s.hostDir, "ol.sock")
+	if len(sockPath) > 108 {
+		return nil, fmt.Errorf("socket path length cannot exceed 108 characters (try moving cluster closer to the root directory")
 	}
+
+	dial := func(proto, addr string) (net.Conn, error) {
+		return net.Dial("unix", sockPath)
+	}
+	tr := http.Transport{Dial: dial}
+
 	// the server name doesn't matter since we have a sock file
-	return &SandboxChannel{Url: "http://container", Transport: s.tr}, nil
+	return &SandboxChannel{Url: "http://container/", Transport: tr}, nil
 }
 
 // Start starts the container.
