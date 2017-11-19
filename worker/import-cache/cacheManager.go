@@ -69,7 +69,7 @@ func InitCacheManager(opts *config.Config) (cm *CacheManager, err error) {
 	return cm, nil
 }
 
-func (cm *CacheManager) Provision(sandbox sb.ContainerSandbox, pkgs []string) (fs *ForkServer, hit bool, err error) {
+func (cm *CacheManager) Provision(sandbox sb.Container, pkgs []string) (fs *ForkServer, hit bool, err error) {
 	if config.Timing {
 		defer func(start time.Time) {
 			log.Printf("provision took %v\n", time.Since(start))

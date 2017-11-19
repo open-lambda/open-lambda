@@ -17,8 +17,8 @@ var BIND uintptr = uintptr(syscall.MS_BIND)
 var BIND_RO uintptr = uintptr(syscall.MS_BIND | syscall.MS_RDONLY | syscall.MS_REMOUNT)
 var PRIVATE uintptr = uintptr(syscall.MS_PRIVATE)
 
-// SOCKSBFactory is a SandboxFactory that creats docker sandboxes.
-type SOCKSBFactory struct {
+// SOCKContainerFactory is a ContainerFactory that creats docker containeres.
+type SOCKContainerFactory struct {
 	opts         *config.Config
 	cgf          *CgroupFactory
 	idxPtr       *int64
@@ -30,14 +30,14 @@ type SOCKSBFactory struct {
 	unshareFlags []string
 }
 
-// NewSOCKSBFactory creates a SOCKSBFactory.
-func NewSOCKSBFactory(opts *config.Config, baseDir, rootDir, prefix string, unshareFlags []string) (*SOCKSBFactory, error) {
+// NewSOCKContainerFactory creates a SOCKContainerFactory.
+func NewSOCKContainerFactory(opts *config.Config, baseDir, rootDir, prefix string, unshareFlags []string) (*SOCKContainerFactory, error) {
 	if err := os.MkdirAll(rootDir, 0777); err != nil {
-		return nil, fmt.Errorf("failed to make root sandbox dir :: %v", err)
+		return nil, fmt.Errorf("failed to make root container dir :: %v", err)
 	} else if err := syscall.Mount(rootDir, rootDir, "", BIND, ""); err != nil {
-		return nil, fmt.Errorf("failed to bind root sandbox dir: %v", err)
+		return nil, fmt.Errorf("failed to bind root container dir: %v", err)
 	} else if err := syscall.Mount("none", rootDir, "", PRIVATE, ""); err != nil {
-		return nil, fmt.Errorf("failed to make root sandbox dir private :: %v", err)
+		return nil, fmt.Errorf("failed to make root container dir private :: %v", err)
 	}
 
 	pkgsDir := filepath.Join(baseDir, "packages")
@@ -55,7 +55,7 @@ func NewSOCKSBFactory(opts *config.Config, baseDir, rootDir, prefix string, unsh
 	var sharedIdx int64 = -1
 	idxPtr := &sharedIdx
 
-	sf := &SOCKSBFactory{
+	sf := &SOCKContainerFactory{
 		opts:         opts,
 		cgf:          cgf,
 		idxPtr:       idxPtr,
@@ -70,8 +70,8 @@ func NewSOCKSBFactory(opts *config.Config, baseDir, rootDir, prefix string, unsh
 	return sf, nil
 }
 
-// Create creates a docker sandbox from the handler and sandbox directory.
-func (sf *SOCKSBFactory) Create(handlerDir, workingDir string) (Sandbox, error) {
+// Create creates a docker container from the handler and container directory.
+func (sf *SOCKContainerFactory) Create(handlerDir, workingDir string) (Container, error) {
 	if config.Timing {
 		defer func(start time.Time) {
 			log.Printf("create sock took %v\n", time.Since(start))
@@ -118,19 +118,19 @@ func (sf *SOCKSBFactory) Create(handlerDir, workingDir string) (Sandbox, error) 
 		return nil, err
 	}
 
-	sandbox, err := NewSOCKSandbox(sf.cgf, sf.opts, rootDir, id, startCmd, sf.unshareFlags)
+	container, err := NewSOCKContainer(sf.cgf, sf.opts, rootDir, id, startCmd, sf.unshareFlags)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := sandbox.MountDirs(hostDir, handlerDir); err != nil {
+	if err := container.MountDirs(hostDir, handlerDir); err != nil {
 		return nil, err
 	}
 
-	return sandbox, nil
+	return container, nil
 }
 
-func (sf *SOCKSBFactory) Cleanup() {
+func (sf *SOCKContainerFactory) Cleanup() {
 	for _, cgroup := range CGroupList {
 		cgroupPath := filepath.Join("/sys/fs/cgroup", cgroup, OLCGroupName)
 		os.RemoveAll(cgroupPath)

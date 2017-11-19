@@ -945,9 +945,9 @@ OPTIONS:
 			Action: upload,
 		},
 		cli.Command{
-			Name:        "sock-sandbox",
+			Name:        "sock-container",
 			Usage:       "Use OpenLambda barebones container implementation",
-			UsageText:   "admin sock-sandbox --cluster=NAME",
+			UsageText:   "admin sock-container --cluster=NAME",
 			Description: "Creates a root file system in the cluster directory and configures OpenLambda to use barebones container implementation",
 			Flags: []cli.Flag{
 				clusterFlag,

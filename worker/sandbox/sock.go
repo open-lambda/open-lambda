@@ -2,7 +2,7 @@
 
 Provides the mechanism for managing a given SOCK container-based lambda.
 
-Must be paired with a SOCKSandboxManager which handles pulling handler
+Must be paired with a SOCKContainerManager which handles pulling handler
 code, initializing containers, etc.
 
 */
@@ -28,7 +28,7 @@ import (
 	"github.com/open-lambda/open-lambda/worker/handler/state"
 )
 
-type SOCKSandbox struct {
+type SOCKContainer struct {
 	opts         *config.Config
 	cgf          *CgroupFactory
 	id           string
@@ -43,14 +43,14 @@ type SOCKSandbox struct {
 	pipe         *os.File
 }
 
-func NewSOCKSandbox(cgf *CgroupFactory, opts *config.Config, rootDir, id string, startCmd, unshareFlags []string) (*SOCKSandbox, error) {
+func NewSOCKContainer(cgf *CgroupFactory, opts *config.Config, rootDir, id string, startCmd, unshareFlags []string) (*SOCKContainer, error) {
 	// create container cgroups
 	cgId, err := cgf.GetCg(id)
 	if err != nil {
 		return nil, err
 	}
 
-	sandbox := &SOCKSandbox{
+	sandbox := &SOCKContainer{
 		cgf:          cgf,
 		opts:         opts,
 		id:           id,
@@ -64,16 +64,16 @@ func NewSOCKSandbox(cgf *CgroupFactory, opts *config.Config, rootDir, id string,
 	return sandbox, nil
 }
 
-func (s *SOCKSandbox) State() (hstate state.HandlerState, err error) {
-	return s.status, nil
+func (c *SOCKContainer) State() (hstate state.HandlerState, err error) {
+	return c.status, nil
 }
 
-func (s *SOCKSandbox) Channel() (channel *SandboxChannel, err error) {
-	if s.hostDir == "" {
+func (c *SOCKContainer) Channel() (channel *Channel, err error) {
+	if c.hostDir == "" {
 		return nil, fmt.Errorf("cannot call channel before calling mountDirs")
 	}
 
-	sockPath := filepath.Join(s.hostDir, "ol.sock")
+	sockPath := filepath.Join(c.hostDir, "ol.sock")
 	if len(sockPath) > 108 {
 		return nil, fmt.Errorf("socket path length cannot exceed 108 characters (try moving cluster closer to the root directory")
 	}
@@ -84,39 +84,39 @@ func (s *SOCKSandbox) Channel() (channel *SandboxChannel, err error) {
 	tr := http.Transport{Dial: dial}
 
 	// the server name doesn't matter since we have a sock file
-	return &SandboxChannel{Url: "http://container/", Transport: tr}, nil
+	return &Channel{Url: "http://container/", Transport: tr}, nil
 }
 
-func (s *SOCKSandbox) Start() error {
+func (c *SOCKContainer) Start() error {
 	defer func(start time.Time) {
 		if config.Timing {
 			log.Printf("create container took %v\n", time.Since(start))
 		}
 	}(time.Now())
 
-	initArgs := append(s.unshareFlags, s.rootDir)
-	initArgs = append(initArgs, s.startCmd...)
+	initArgs := append(c.unshareFlags, c.rootDir)
+	initArgs = append(initArgs, c.startCmd...)
 
-	s.initCmd = exec.Command(
+	c.initCmd = exec.Command(
 		"/usr/local/bin/sock-init",
 		initArgs...,
 	)
 
-	s.initCmd.Env = []string{fmt.Sprintf("ol.config=%s", s.opts.SandboxConfJson())}
+	c.initCmd.Env = []string{fmt.Sprintf("ol.config=%s", c.opts.SandboxConfJson())}
 
 	// let the init program prints error to log, for debugging
-	s.initCmd.Stderr = os.Stdout
+	c.initCmd.Stderr = os.Stdout
 
 	// setup the pipe
-	pipeDir := filepath.Join(s.HostDir(), "init_pipe")
+	pipeDir := filepath.Join(c.HostDir(), "init_pipe")
 	pipe, err := os.OpenFile(pipeDir, os.O_RDWR, 0777)
 	if err != nil {
 		log.Fatalf("Cannot open pipe: %v\n", err)
 	}
-	s.pipe = pipe
+	c.pipe = pipe
 
 	start := time.Now()
-	if err := s.initCmd.Start(); err != nil {
+	if err := c.initCmd.Start(); err != nil {
 		return err
 	}
 
@@ -125,7 +125,7 @@ func (s *SOCKSandbox) Start() error {
 	go func() {
 		// message will be either 5 byte \0 padded pid (<65536), or "ready"
 		pid := make([]byte, 6)
-		n, err := s.Pipe().Read(pid[:5])
+		n, err := c.Pipe().Read(pid[:5])
 		if err != nil {
 			log.Printf("Cannot read from stdout of sock: %v\n", err)
 		} else if n != 5 {
@@ -140,13 +140,13 @@ func (s *SOCKSandbox) Start() error {
 	defer timeout.Stop()
 
 	select {
-	case s.initPid = <-ready:
+	case c.initPid = <-ready:
 		if config.Timing {
 			log.Printf("wait for sock_init took %v\n", time.Since(start))
 		}
 	case <-timeout.C:
 		// clean up go routine
-		if n, err := s.Pipe().Write([]byte("timeo")); err != nil {
+		if n, err := c.Pipe().Write([]byte("timeo")); err != nil {
 			return err
 		} else if n != 5 {
 			return fmt.Errorf("Cannot write `timeo` to pipe\n")
@@ -154,22 +154,18 @@ func (s *SOCKSandbox) Start() error {
 		return fmt.Errorf("sock_init failed to spawn after 5s")
 	}
 
-	if err := s.CGroupEnter(s.initPid); err != nil {
+	if err := c.CGroupEnter(c.initPid); err != nil {
 		return err
 	}
 
-	s.status = state.Running
+	c.status = state.Running
 	return nil
 }
 
-func (s *SOCKSandbox) Stop() error {
-	if err := s.WaitForUnpause(5 * time.Second); err != nil {
-		return err
-	}
-
+func (c *SOCKContainer) Stop() error {
 	start := time.Now()
 
-	pid, _ := strconv.Atoi(s.initPid)
+	pid, _ := strconv.Atoi(c.initPid)
 	proc, err := os.FindProcess(pid)
 	if err != nil {
 		return fmt.Errorf("failed to find init process with pid=%d :: %v", pid, err)
@@ -180,43 +176,43 @@ func (s *SOCKSandbox) Stop() error {
 	}
 
 	// let the initCmd (sock_init) to clean up all children
-	_, err = s.initCmd.Process.Wait()
+	_, err = c.initCmd.Process.Wait()
 	if err != nil {
-		log.Printf("failed to wait on initCmd pid=%d :: %v", s.initCmd.Process.Pid, err)
+		log.Printf("failed to wait on initCmd pid=%d :: %v", c.initCmd.Process.Pid, err)
 	}
 	if config.Timing {
 		log.Printf("kill processes took %v", time.Since(start))
 	}
 
-	s.status = state.Stopped
+	c.status = state.Stopped
 	return nil
 }
 
-func (s *SOCKSandbox) Pause() error {
-	freezerPath := filepath.Join("/sys/fs/cgroup/freezer", OLCGroupName, s.cgId, "freezer.state")
+func (c *SOCKContainer) Pause() error {
+	freezerPath := filepath.Join("/sys/fs/cgroup/freezer", OLCGroupName, c.cgId, "freezer.state")
 	err := ioutil.WriteFile(freezerPath, []byte("FROZEN"), os.ModeAppend)
 	if err != nil {
 		return err
 	}
 
-	s.status = state.Paused
+	c.status = state.Paused
 	return nil
 }
 
-func (s *SOCKSandbox) Unpause() error {
-	statePath := filepath.Join("/sys/fs/cgroup/freezer", OLCGroupName, s.cgId, "freezer.state")
+func (c *SOCKContainer) Unpause() error {
+	statePath := filepath.Join("/sys/fs/cgroup/freezer", OLCGroupName, c.cgId, "freezer.state")
 
 	err := ioutil.WriteFile(statePath, []byte("THAWED"), os.ModeAppend)
 	if err != nil {
 		return err
 	}
 
-	return nil
+	return c.waitForUnpause(5 * time.Second)
 }
 
-func (s *SOCKSandbox) WaitForUnpause(timeout time.Duration) error {
+func (c *SOCKContainer) waitForUnpause(timeout time.Duration) error {
 	// TODO: should we check parent_freezing to be sure?
-	selfFreezingPath := filepath.Join("/sys/fs/cgroup/freezer", OLCGroupName, s.cgId, "freezer.self_freezing")
+	selfFreezingPath := filepath.Join("/sys/fs/cgroup/freezer", OLCGroupName, c.cgId, "freezer.self_freezing")
 
 	start := time.Now()
 	for time.Since(start) < timeout {
@@ -226,7 +222,7 @@ func (s *SOCKSandbox) WaitForUnpause(timeout time.Duration) error {
 		}
 
 		if strings.TrimSpace(string(freezerState[:])) == "0" {
-			s.status = state.Running
+			c.status = state.Running
 			return nil
 		}
 		time.Sleep(1 * time.Millisecond)
@@ -235,48 +231,48 @@ func (s *SOCKSandbox) WaitForUnpause(timeout time.Duration) error {
 	return fmt.Errorf("sock didn't unpause after %v", timeout)
 }
 
-func (s *SOCKSandbox) Remove() error {
+func (c *SOCKContainer) Remove() error {
 	if config.Timing {
 		defer func(start time.Time) {
 			log.Printf("remove took %v\n", time.Since(start))
 		}(time.Now())
 	}
 
-	if err := syscall.Unmount(s.rootDir, syscall.MNT_DETACH); err != nil {
-		log.Printf("unmount root dir %s failed :: %v\n", s.rootDir, err)
+	if err := syscall.Unmount(c.rootDir, syscall.MNT_DETACH); err != nil {
+		log.Printf("unmount root dir %s failed :: %v\n", c.rootDir, err)
 	}
 
-	if err := os.RemoveAll(s.rootDir); err != nil {
-		log.Printf("remove root dir %s failed :: %v\n", s.rootDir, err)
+	if err := os.RemoveAll(c.rootDir); err != nil {
+		log.Printf("remove root dir %s failed :: %v\n", c.rootDir, err)
 	}
 
-	if err := os.RemoveAll(s.hostDir); err != nil {
-		log.Printf("remove host dir %s failed :: %v\n", s.hostDir, err)
+	if err := os.RemoveAll(c.hostDir); err != nil {
+		log.Printf("remove host dir %s failed :: %v\n", c.hostDir, err)
 	}
 
 	//TODO somehow wait for the processes to exit?
 	time.Sleep(100 * time.Millisecond)
 	// remove cgroups
-	if err := s.cgf.PutCg(s.id, s.cgId); err != nil {
+	if err := c.cgf.PutCg(c.id, c.cgId); err != nil {
 		log.Printf("Unable to delete cgroups: %v", err)
 	}
 
 	return nil
 }
 
-func (s *SOCKSandbox) Logs() (string, error) {
+func (c *SOCKContainer) Logs() (string, error) {
 	// TODO(ed)
 	return "TODO", nil
 }
 
-func (s *SOCKSandbox) CGroupEnter(pid string) (err error) {
+func (c *SOCKContainer) CGroupEnter(pid string) (err error) {
 	if pid == "" {
 		return fmt.Errorf("empty pid passed to cgroupenter")
 	}
 
 	// put process into each cgroup
 	for _, cgroup := range CGroupList {
-		tasksPath := filepath.Join("/sys/fs/cgroup/", cgroup, OLCGroupName, s.cgId, "tasks")
+		tasksPath := filepath.Join("/sys/fs/cgroup/", cgroup, OLCGroupName, c.cgId, "tasks")
 
 		err := ioutil.WriteFile(tasksPath, []byte(pid), os.ModeAppend)
 		if err != nil {
@@ -287,18 +283,18 @@ func (s *SOCKSandbox) CGroupEnter(pid string) (err error) {
 	return nil
 }
 
-func (s *SOCKSandbox) NSPid() string {
-	return s.initPid
+func (c *SOCKContainer) NSPid() string {
+	return c.initPid
 }
 
-func (s *SOCKSandbox) ID() string {
-	return s.id
+func (c *SOCKContainer) ID() string {
+	return c.id
 }
 
-func (s *SOCKSandbox) RunServer() error {
-	pid, err := strconv.Atoi(s.initPid)
+func (c *SOCKContainer) RunServer() error {
+	pid, err := strconv.Atoi(c.initPid)
 	if err != nil {
-		log.Printf("bad initPid string: %s :: %v", s.initPid, err)
+		log.Printf("bad initPid string: %s :: %v", c.initPid, err)
 		return err
 	}
 
@@ -313,11 +309,11 @@ func (s *SOCKSandbox) RunServer() error {
 	go func() {
 		// wait for signal handler to be "ready"
 		buf := make([]byte, 5)
-		_, err = s.Pipe().Read(buf)
+		_, err = c.Pipe().Read(buf)
 		if err != nil {
 			log.Fatalf("Cannot read from stdout of sock: %v\n", err)
 		} else if string(buf) != "ready" {
-			log.Fatalf("In sockSandbox: Expect to see `ready` but sees %s\n", string(buf))
+			log.Fatalf("In sockContainer: Expect to see `ready` but sees %s\n", string(buf))
 		}
 		ready <- true
 	}()
@@ -333,7 +329,7 @@ func (s *SOCKSandbox) RunServer() error {
 			log.Printf("wait for init signal handler took %v\n", time.Since(start))
 		}
 	case <-timeout.C:
-		if n, err := s.Pipe().Write([]byte("timeo")); err != nil {
+		if n, err := c.Pipe().Write([]byte("timeo")); err != nil {
 			return err
 		} else if n != 5 {
 			return fmt.Errorf("Cannot write `timeo` to pipe\n")
@@ -350,20 +346,20 @@ func (s *SOCKSandbox) RunServer() error {
 	return nil
 }
 
-func (s *SOCKSandbox) MemoryCGroupPath() string {
-	return fmt.Sprintf("/sys/fs/cgroup/memory/%s/%s/", OLCGroupName, s.cgId)
+func (c *SOCKContainer) MemoryCGroupPath() string {
+	return fmt.Sprintf("/sys/fs/cgroup/memory/%s/%s/", OLCGroupName, c.cgId)
 }
 
-func (s *SOCKSandbox) RootDir() string {
-	return s.rootDir
+func (c *SOCKContainer) RootDir() string {
+	return c.rootDir
 }
 
-func (s *SOCKSandbox) HostDir() string {
-	return s.hostDir
+func (c *SOCKContainer) HostDir() string {
+	return c.hostDir
 }
 
-func (s *SOCKSandbox) MountDirs(hostDir, handlerDir string) error {
-	s.hostDir = hostDir
+func (c *SOCKContainer) MountDirs(hostDir, handlerDir string) error {
+	c.hostDir = hostDir
 
 	pipDir := filepath.Join(hostDir, "pip")
 	if err := os.Mkdir(pipDir, 0777); err != nil {
@@ -375,18 +371,18 @@ func (s *SOCKSandbox) MountDirs(hostDir, handlerDir string) error {
 		return err
 	}
 
-	sbHostDir := filepath.Join(s.rootDir, "host")
+	sbHostDir := filepath.Join(c.rootDir, "host")
 	if err := syscall.Mount(hostDir, sbHostDir, "", BIND, ""); err != nil {
 		return fmt.Errorf("failed to bind host dir: %v", err.Error())
 	}
 
-	sbTmpDir := filepath.Join(s.rootDir, "tmp")
+	sbTmpDir := filepath.Join(c.rootDir, "tmp")
 	if err := syscall.Mount(tmpDir, sbTmpDir, "", BIND, ""); err != nil {
 		return fmt.Errorf("failed to bind tmp dir: %v", err.Error())
 	}
 
 	if handlerDir != "" {
-		sbHandlerDir := filepath.Join(s.rootDir, "handler")
+		sbHandlerDir := filepath.Join(c.rootDir, "handler")
 		if err := syscall.Mount(handlerDir, sbHandlerDir, "", BIND, ""); err != nil {
 			return fmt.Errorf("failed to bind handler dir: %s -> %s :: %v", handlerDir, sbHandlerDir, err.Error())
 		} else if err := syscall.Mount("none", sbHandlerDir, "", BIND_RO, ""); err != nil {
@@ -397,6 +393,6 @@ func (s *SOCKSandbox) MountDirs(hostDir, handlerDir string) error {
 	return nil
 }
 
-func (s *SOCKSandbox) Pipe() *os.File {
-	return s.pipe
+func (c *SOCKContainer) Pipe() *os.File {
+	return c.pipe
 }

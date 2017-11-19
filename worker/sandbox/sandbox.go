@@ -7,14 +7,13 @@ import (
 
 /*
 
-Defines the sandbox interface. This interface abstracts all mechanisms
-surrounding a given sandbox type (Docker container, cgroup, etc).
+Defines interfaces for sandboxing methods (e.g., container, unikernel).
+Currently, only containers are supported. No need to increase complexity by
+generalizing for other sandboxing methods before they are implemented.
 
 */
 
 import (
-	"time"
-
 	"github.com/open-lambda/open-lambda/worker/handler/state"
 )
 
@@ -22,58 +21,59 @@ const OLCGroupName = "openlambda"
 
 var CGroupList []string = []string{"blkio", "cpu", "devices", "freezer", "hugetlb", "memory", "perf_event", "systemd"}
 
-type SandboxChannel struct {
+type Channel struct {
 	Url       string
 	Transport http.Transport
 }
 
-type Sandbox interface {
-	// Starts a given sandbox
+type Sandbox interface{}
+
+type Container interface {
+	Sandbox
+
+	// Starts the container.
 	Start() error
 
-	// Stops a given sandbox
+	// Stops the container.
 	Stop() error
 
-	// Pauses a given sandbox
+	// Pauses the container.
 	Pause() error
 
-	// Unpauses a given sandbox
+	// Unpauses the container.
 	Unpause() error
 
-	// Frees all resources associated with a given lambda
-	// (will stop if needed)
+	// Frees all resources associated with the container.
+	// Assumes that the container has been stopped.
 	Remove() error
 
-	// Return recent log output for sandbox
+	// Return recent logs for the container.
 	Logs() (string, error)
 
-	// Get current state
+	// Get current state of the container.
 	State() (state.HandlerState, error)
 
-	// What communication channel can we use to forward requests?
-	Channel() (*SandboxChannel, error)
+	// Communication channel to forward requests.
+	Channel() (*Channel, error)
 
+	// Return ID of the container.
 	ID() string
 
+	// Start the Python server inside of the container.
 	RunServer() error
 
+	// Path to this container's memory cgroup for accounting.
 	MemoryCGroupPath() string
 
-	WaitForUnpause(timeout time.Duration) error
-
-	// Directory that new processes need to chroot into from host's view
+	// Directory that new processes need to chroot into from host's view.
 	RootDir() string
 
-	// Directory in the cluster directory to communicate with sandbox
+	// Directory used by the worker to communicate with container.
 	HostDir() string
 
 	Pipe() *os.File
-}
 
-type ContainerSandbox interface {
-	Sandbox
-
-	// Put the passed process into the cgroups of the container
+	// Put the given process into the cgroups of the container
 	CGroupEnter(pid string) error
 
 	// PID of a process in the container's namespaces (for joining)

@@ -12,7 +12,7 @@ import (
 )
 
 type ForkServer struct {
-	Sandbox  sb.ContainerSandbox
+	Sandbox  sb.Container
 	Pid      string
 	SockPath string
 	Packages map[string]bool

@@ -27,7 +27,7 @@ type HandlerManagerSet struct {
 	mutex      sync.Mutex
 	hmMap      map[string]*HandlerManager
 	regMgr     registry.RegistryManager
-	sbFactory  sb.SandboxFactory
+	sbFactory  sb.ContainerFactory
 	cacheMgr   *cache.CacheManager
 	config     *config.Config
 	lru        *HandlerLRU
@@ -60,7 +60,7 @@ type Handler struct {
 	id      string
 	mutex   sync.Mutex
 	hm      *HandlerManager
-	sandbox sb.Sandbox
+	sandbox sb.Container
 	fs      *cache.ForkServer
 	hostDir string
 	runners int
@@ -74,7 +74,7 @@ func NewHandlerManagerSet(opts *config.Config) (hms *HandlerManagerSet, err erro
 		return nil, err
 	}
 
-	sf, err := sb.InitHandlerSandboxFactory(opts)
+	sf, err := sb.InitHandlerContainerFactory(opts)
 	if err != nil {
 		return nil, err
 	}
@@ -277,7 +277,7 @@ func (hm *HandlerManager) TryRemoveHandler(h *Handler) error {
 // RunStart runs the lambda handled by this Handler. It checks if the code has
 // been pulled, sandbox been created, and sandbox been started. The channel of
 // the sandbox of this lambda is returned.
-func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
+func (h *Handler) RunStart() (ch *sb.Channel, err error) {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
@@ -313,12 +313,7 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 				return nil, err
 			}
 		} else {
-			container, ok := h.sandbox.(sb.ContainerSandbox)
-			if !ok {
-				return nil, fmt.Errorf("import cache only supports container sandboxes")
-			}
-
-			if h.fs, hit, err = hms.cacheMgr.Provision(container, hm.pkgs); err != nil {
+			if h.fs, hit, err = hms.cacheMgr.Provision(sandbox, hm.pkgs); err != nil {
 				return nil, err
 			}
 
@@ -385,9 +380,6 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 	}
 
 	log.Printf("handler hits: %v, import hits: %v, misses: %v", *hms.hhits, *hms.ihits, *hms.misses)
-	if err := h.sandbox.WaitForUnpause(5 * time.Second); err != nil {
-		return nil, err
-	}
 	return h.sandbox.Channel()
 }
 

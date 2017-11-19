@@ -12,8 +12,8 @@ import (
 	"github.com/open-lambda/open-lambda/worker/config"
 )
 
-// DockerSBFactory is a SandboxFactory that creats docker sandboxes.
-type DockerSBFactory struct {
+// DockerContainerFactory is a ContainerFactory that creats docker containers.
+type DockerContainerFactory struct {
 	client    *docker.Client
 	labels    map[string]string
 	caps      []string
@@ -25,8 +25,8 @@ type DockerSBFactory struct {
 	idxPtr    *int64
 }
 
-// NewDockerSBFactory creates a DockerSBFactory.
-func NewDockerSBFactory(opts *config.Config, image, pidMode string, caps []string, labels map[string]string) (*DockerSBFactory, error) {
+// NewDockerContainerFactory creates a DockerContainerFactory.
+func NewDockerContainerFactory(opts *config.Config, image, pidMode string, caps []string, labels map[string]string) (*DockerContainerFactory, error) {
 	client, err := docker.NewClientFromEnv()
 	if err != nil {
 		return nil, err
@@ -35,7 +35,7 @@ func NewDockerSBFactory(opts *config.Config, image, pidMode string, caps []strin
 	var sharedIdx int64 = -1
 	idxPtr := &sharedIdx
 
-	df := &DockerSBFactory{
+	df := &DockerContainerFactory{
 		client:    client,
 		labels:    labels,
 		caps:      caps,
@@ -51,7 +51,7 @@ func NewDockerSBFactory(opts *config.Config, image, pidMode string, caps []strin
 }
 
 // Create creates a docker sandbox from the handler and sandbox directory.
-func (df *DockerSBFactory) Create(handlerDir, workingDir string) (Sandbox, error) {
+func (df *DockerContainerFactory) Create(handlerDir, workingDir string) (Container, error) {
 	id := fmt.Sprintf("%d", atomic.AddInt64(df.idxPtr, 1))
 	hostDir := filepath.Join(workingDir, id)
 	if err := os.MkdirAll(hostDir, 0777); err != nil {
@@ -91,10 +91,10 @@ func (df *DockerSBFactory) Create(handlerDir, workingDir string) (Sandbox, error
 		return nil, err
 	}
 
-	sandbox := NewDockerSandbox(id, hostDir, df.indexHost, df.indexPort, container, df.client)
+	sandbox := NewDockerContainer(id, hostDir, df.indexHost, df.indexPort, container, df.client)
 	return sandbox, nil
 }
 
-func (df *DockerSBFactory) Cleanup() {
+func (df *DockerContainerFactory) Cleanup() {
 	return
 }

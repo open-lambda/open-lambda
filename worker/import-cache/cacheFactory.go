@@ -11,22 +11,22 @@ import (
 )
 
 type CacheFactory interface {
-	Create() (sb.ContainerSandbox, error)
+	Create() (sb.Container, error)
 	Cleanup()
 }
 
 type cacheFactory struct {
-	delegate sb.SandboxFactory
+	delegate sb.ContainerFactory
 	cacheDir string
 }
 
-func NewCacheFactory(opts *config.Config) (CacheFactory, sb.ContainerSandbox, string, error) {
+func NewCacheFactory(opts *config.Config) (CacheFactory, sb.Container, string, error) {
 	cacheDir := opts.Import_cache_dir
 	if err := os.MkdirAll(opts.Import_cache_dir, os.ModeDir); err != nil {
 		return nil, nil, "", fmt.Errorf("failed to create pool directory at %s :: %v", cacheDir, err)
 	}
 
-	delegate, err := sb.InitCacheSandboxFactory(opts)
+	delegate, err := sb.InitCacheContainerFactory(opts)
 	if err != nil {
 		return nil, nil, "", fmt.Errorf("failed to initialize cache sandbox factory :: %v", err)
 	}
@@ -47,15 +47,10 @@ func NewCacheFactory(opts *config.Config) (CacheFactory, sb.ContainerSandbox, st
 	return factory, root, rootEntryDir, nil
 }
 
-func (cf *cacheFactory) Create() (sb.ContainerSandbox, error) {
-	sandbox, err := cf.delegate.Create("", cf.cacheDir)
+func (cf *cacheFactory) Create() (sb.Container, error) {
+	container, err := cf.delegate.Create("", cf.cacheDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cache entry sandbox :: %v", err)
-	}
-
-	container, ok := sandbox.(sb.ContainerSandbox)
-	if !ok {
-		return nil, fmt.Errorf("cache only supports container sandboxes")
 	}
 
 	if err := container.Start(); err != nil {
