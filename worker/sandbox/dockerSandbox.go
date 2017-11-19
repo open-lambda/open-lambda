@@ -331,10 +331,6 @@ func (s *DockerSandbox) RootDir() string {
 	return "/"
 }
 
-func (s *DockerSandbox) ChrootDir() string {
-	return "/"
-}
-
 func (s *DockerSandbox) HostDir() string {
 	return s.hostDir
 }

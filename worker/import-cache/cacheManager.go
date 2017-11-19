@@ -20,7 +20,6 @@ import (
 
 type CacheManager struct {
 	factory CacheFactory
-	cluster string
 	servers []*ForkServer
 	matcher CacheMatcher
 	seq     int
@@ -42,7 +41,6 @@ func InitCacheManager(opts *config.Config) (cm *CacheManager, err error) {
 
 	var full int32 = 0
 	cm = &CacheManager{
-		cluster: opts.Cluster_name,
 		servers: servers,
 		matcher: NewSubsetMatcher(),
 		seq:     0,
@@ -120,7 +118,6 @@ func (cm *CacheManager) Provision(sandbox sb.ContainerSandbox, pkgs []string) (f
 	fs.Hit()
 
 	// signal interpreter to forkenter into sandbox's namespace
-	//chrootDir := filepath.Join("/tmp", fmt.Sprintf("sb_%s", sandbox.ID()))
 	pid, err := forkRequest(fs.SockPath, sandbox.NSPid(), sandbox.RootDir(), toCache, true)
 	if err != nil {
 		fs.Mutex.Unlock()
@@ -161,7 +158,7 @@ func (cm *CacheManager) newCacheEntry(baseFS *ForkServer, toCache []string) (*Fo
 	baseFS.Children += 1
 
 	// get container for new entry
-	sandbox, err := cm.factory.Create([]string{"/init"})
+	sandbox, err := cm.factory.Create()
 	if err != nil {
 		fs.Kill()
 		return nil, err
@@ -175,7 +172,6 @@ func (cm *CacheManager) newCacheEntry(baseFS *ForkServer, toCache []string) (*Fo
 	}
 
 	// signal interpreter to forkenter into sandbox's namespace
-	//chrootDir := filepath.Join("/tmp", fmt.Sprintf("cache_%s", sandbox.ID()))
 	pid, err := forkRequest(baseFS.SockPath, sandbox.NSPid(), sandbox.RootDir(), toCache, false)
 	if err != nil {
 		fs.Kill()
@@ -190,7 +186,7 @@ func (cm *CacheManager) newCacheEntry(baseFS *ForkServer, toCache []string) (*Fo
 }
 
 func (cm *CacheManager) initCacheRoot(opts *config.Config) (memCGroupPath string, err error) {
-	factory, rootSB, rootDir, err := InitCacheFactory(opts, cm.cluster)
+	factory, rootSB, rootDir, err := NewCacheFactory(opts)
 	if err != nil {
 		return "", err
 	}
@@ -227,7 +223,9 @@ func (cm *CacheManager) initCacheRoot(opts *config.Config) (memCGroupPath string
 	start = time.Now()
 	select {
 	case <-ready:
-		log.Printf("wait for server took %v\n", time.Since(start))
+		if opts.Timing {
+			log.Printf("wait for server took %v\n", time.Since(start))
+		}
 	case <-timeout.C:
 		if n, err := pipe.Write([]byte("timeo")); err != nil {
 			return "", err

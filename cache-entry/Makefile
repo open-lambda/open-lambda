@@ -1,9 +1,12 @@
 .PHONY: all
 
-all: init ns.so
+all: spin ol-init ns.so
 
-init: init.c
-	gcc -O2 -o init init.c
+spin: spin.c
+	gcc -O2 -o spin spin.c
+
+ol-init: ol-init.c
+	gcc -Wall -O2 ol-init.c -o ol-init
 
 ns.so: nsmodule/nsmodule.c nsmodule/setup.py 
 	cd nsmodule && python setup.py build_ext --inplace
@@ -18,4 +21,4 @@ fdclient: nsmodule/fdclient.go
 
 clean:
 	rm -rf nsmodule/build
-	rm -f fdclient ns.so
+	rm -f ol-init spin fdclient ns.so

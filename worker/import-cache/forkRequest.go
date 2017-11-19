@@ -64,14 +64,13 @@ sendFds(char *sockPath, char *pid, char *rootdir, int rootdirLen, char *pkgs, in
     char *path;
     int k;
 
-    // Namespaces to be merged (all but 'user') - MUST merge 'mnt' last
-
-    const int NUM_NS = 3;
+    const int NUM_NS = 4;
     int nsfds[NUM_NS];
     const char *ns[NUM_NS];
     ns[0] = "ipc";
     ns[1] = "uts";
     ns[2] = "pid";
+    ns[3] = "mnt";
 
     // Get fds for all namespaces.
 

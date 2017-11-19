@@ -85,6 +85,11 @@ func packagesPath(cluster string) string {
 	return path.Join(cluster, "packages")
 }
 
+// cachePath gets the import-cache directory of the cluster
+func cachePath(cluster string) string {
+	return path.Join(cluster, "import-cache")
+}
+
 // clusterNodes finds all docker containers belongs to a cluster and returns
 // a mapping from the type of the container to its container ID.
 func clusterNodes(cluster string) (map[string]([]string), error) {
@@ -134,19 +139,24 @@ func newCluster(ctx *cli.Context) error {
 		return err
 	}
 
+	if err := os.Mkdir(cachePath(cluster), 0700); err != nil {
+		return err
+	}
+
 	// config dir and template
 	if err := os.Mkdir(path.Join(cluster, "config"), 0700); err != nil {
 		return err
 	}
 	c := &config.Config{
-		Worker_port:    "?",
-		Cluster_name:   cluster,
-		Registry:       "local",
-		Sandbox:        "docker",
-		Reg_dir:        registryPath(cluster),
-		Pkgs_dir:       packagesPath(cluster),
-		Worker_dir:     workerPath(cluster, "default"),
-		Sandbox_config: map[string]interface{}{"processes": 10},
+		Worker_port:      "?",
+		Cluster_name:     cluster,
+		Registry:         "local",
+		Sandbox:          "docker",
+		Reg_dir:          registryPath(cluster),
+		Pkgs_dir:         packagesPath(cluster),
+		Worker_dir:       workerPath(cluster, "default"),
+		Import_cache_dir: cachePath(cluster),
+		Sandbox_config:   map[string]interface{}{"processes": 10},
 	}
 	if err := c.Defaults(); err != nil {
 		return err

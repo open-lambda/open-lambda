@@ -74,7 +74,7 @@ func NewHandlerManagerSet(opts *config.Config) (hms *HandlerManagerSet, err erro
 		return nil, err
 	}
 
-	sf, err := sb.InitSandboxFactory(opts)
+	sf, err := sb.InitHandlerSandboxFactory(opts)
 	if err != nil {
 		return nil, err
 	}
@@ -334,7 +334,7 @@ func (h *Handler) RunStart() (ch *sb.SandboxChannel, err error) {
 		defer close(ready)
 		go func() {
 			pipeDir := filepath.Join(h.hostDir, "server_pipe")
-			pipe, err := os.OpenFile(pipeDir, (os.O_CREATE | os.O_RDWR), 0777)
+			pipe, err := os.OpenFile(pipeDir, os.O_RDWR, 0777)
 			if err != nil {
 				log.Printf("Cannot open pipe: %v\n", err)
 				return

@@ -37,52 +37,10 @@ PyMODINIT_FUNC initns(void)
 /* Global variables */
 
 int sock, conn, initialized;
-const int NUM_NS = 3;
-int oldns[6], newns[3], root_fd;
+const int NUM_NS = 4;
+int newns[4], root_fd;
 
 /* Helper functions */
-
-/*
- * Initializes "oldns" to store the original file descriptors
- * representing the namespaces of the process before any setns
- * calls. These are used to return to the original namespaces
- * after forking.
- *
- * Returns 0 on success, -1 on error.
- */
-int initOldNS(void) {
-    int k, ipid, pidlen;
-    char *oldpath;
-    const char *ns[NUM_NS];
-
-    /* Namespaces to be merged (all but 'user') - MUST merge 'mnt' last */
-    ns[0] = "cgroup";
-    ns[1] = "ipc";
-    ns[2] = "uts";
-    ns[3] = "net";
-    ns[4] = "pid";
-    ns[5] = "mnt";
-
-    ipid = getpid();
-    pidlen = floor(log10(abs(ipid)));
-
-    char mypid[pidlen];
-    sprintf(mypid, "%d", ipid);
-
-    for(k = 0; k < NUM_NS; k++) {
-        oldpath = (char*)malloc(10+strlen(mypid)+strlen(ns[k]));
-        sprintf(oldpath, "/proc/%s/ns/%s", mypid, ns[k]);
-
-        oldns[k] = open(oldpath, O_RDONLY);
-        if (oldns[k] == -1) {
-            return -1;
-        }
-
-    }
-
-    return 0;
-}
-
 /*
  * Initializes and binds a unix socket at the passed path. The
  * socket is not returned, but rather stored in the global
@@ -184,7 +142,6 @@ static PyObject *ns_reset(PyObject *self, PyObject *args) {
     } else {
         sock = 0;
         conn = 0;
-        memset(oldns, 0, sizeof(oldns));
         memset(newns, 0, sizeof(newns));
         initialized = 0;
     }
@@ -227,14 +184,6 @@ static PyObject *ns_fdlisten(PyObject *self, PyObject *args) {
             PyErr_SetString(PyExc_RuntimeError, "Failed to parse arguments.");
             return NULL;
         }
-
-/*
-        / Remember original namespace fds /
-        if(initOldNS() == -1) {
-            PyErr_SetString(PyExc_RuntimeError, "Failed to open original namespace file.");
-            return NULL;
-        }
-*/
 
         /* Bind socket */
         PySys_WriteStdout("ns_fdlisten: BIND SOCKET\n");
@@ -433,15 +382,6 @@ static PyObject *ns_forkenter(PyObject *self, PyObject *args) {
         PyErr_SetString(PyExc_RuntimeError, "Parent failed to close socket connection (s2).");
         return NULL;
     }
-
-/*
-    for(k = 0; k < NUM_NS; k++) {
-        if (setns(oldns[k], 0) == -1) {
-            PyErr_SetString(PyExc_RuntimeError, "Parent failed to join original namespace.");
-            return NULL;
-        }
-    }	
-*/
 
     return ret;
 }

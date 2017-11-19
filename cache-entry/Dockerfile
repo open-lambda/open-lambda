@@ -9,8 +9,9 @@ RUN pip install rethinkdb
 RUN pip install tornado
 RUN pip install requests
 
-COPY init /
+COPY spin /
+COPY ol-init /
 COPY ns.so /
 COPY server.py /
 
-CMD ["/init"]
+CMD ["/spin"]

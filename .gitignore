@@ -50,6 +50,8 @@
 /registry/bin
 /registry/pushserver
 /registry/regpush
+/cache-entry/ol-init
+/cache-entry/spin
 /lambda/ol-init
 /lambda/spin
 /lambda/ns.so
