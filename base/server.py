@@ -48,7 +48,7 @@ def create_link(pkg):
     # the path where the package was already installed to, relative to the install cache
     pkg_src_dir = '%s/%s' % (INSTALL_CACHE_PATH, pkg)
     if os.path.exists(pkg_src_dir):
-        link_name = '/host/pip/%s' % name
+        link_name = '/host/pip/%s' % pkg
         if os.path.exists(link_name):
             print('link failed, path already exists, assuming okay: %s' % link_name)
             sys.stdout.flush()
