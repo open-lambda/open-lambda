@@ -28,6 +28,7 @@ type SOCKContainerFactory struct {
 	indexHost    string
 	indexPort    string
 	unshareFlags []string
+	usage        string
 }
 
 // NewSOCKContainerFactory creates a SOCKContainerFactory.
@@ -65,6 +66,7 @@ func NewSOCKContainerFactory(opts *config.Config, baseDir, rootDir, prefix strin
 		indexHost:    opts.Index_host,
 		indexPort:    opts.Index_port,
 		unshareFlags: unshareFlags,
+		usage:        prefix,
 	}
 
 	return sf, nil
@@ -85,6 +87,7 @@ func (sf *SOCKContainerFactory) Create(handlerDir, workingDir string) (Container
 	}
 
 	startCmd := []string{"/ol-init"}
+	startCmd = append(startCmd, sf.usage)
 	if sf.indexHost != "" {
 		startCmd = append(startCmd, sf.indexHost)
 	}

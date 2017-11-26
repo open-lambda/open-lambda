@@ -1,5 +1,5 @@
 #!/usr/bin/python
-import traceback, json, sys, socket, os, time, hashlib
+import traceback, json, sys, socket, os, importlib, pip, hashlib, signal
 import rethinkdb
 import tornado.ioloop
 import tornado.web
@@ -7,8 +7,10 @@ import tornado.httpserver
 import tornado.netutil
 from subprocess import check_output
 
+
 HOST_PATH = '/host'
 SOCK_PATH = '%s/ol.sock' % HOST_PATH
+FS_PATH = '%s/fs.sock' % HOST_PATH
 STDOUT_PATH = '%s/stdout' % HOST_PATH
 STDERR_PATH = '%s/stderr' % HOST_PATH
 
@@ -125,10 +127,10 @@ def init_server():
     tornado.ioloop.IOLoop.instance().start()
     server.start(PROCESSES_DEFAULT)
 
-def setup_installer():
+def setup_installer(installer_args):
     try:
-        mirror_host = sys.argv[1]
-        mirror_port = sys.argv[2]
+        mirror_host = installer_args[1]
+        mirror_port = installer_args[2]
         return create_mirror_pkg_installer(mirror_host, mirror_port)
     except:
         return create_official_pkg_installer()
@@ -151,23 +153,120 @@ def forward_stdio():
             fd.write('failed to open stdout/stderr with: %s\n' % e)
             sys.exit(1)
 
-if __name__ == '__main__':
-    forward_stdio()
+# listen for fds to forkenter
+def fdlisten(installer):
+    import ns
+ 
+    signal = "cache"
+    r = -1
+    count = 0
+    # only child meant to serve ever escapes the loop
+    while r != 0 or signal == "cache":
+        if r == 0:
+            print('RESET')
+            sys.stdout.flush()
+            ns.reset()
 
-    if len(sys.argv) != 1 and len(sys.argv) != 3:
-        print('Usage: python %s or python %s <index_host> <index_sock>' % (sys.argv[0], sys.argv[0]))
-        sys.exit(1)
+        print('LISTENING')
+        sys.stdout.flush()
+        data = ns.fdlisten(FS_PATH).split()
+        sys.stdout.flush()
 
-    installer = setup_installer()
+        r = ns.forkenter()
+        sys.stdout.flush()
+        if r == 0:
+            redirect()
+
+            mods = []
+            pkgs = []
+            for info in data[:-1]:
+                split = info.split(':')
+                mods.append(split[0])
+                if split[1] != '':
+                    pkgs.append(split[1])
+
+            # use install cache
+            remains = []
+            for pkg in pkgs:
+                if create_link(pkg):
+                    print('using install cache: %s' % pkg)
+                else:
+                    remains.append(pkg)
+            pkgs = remains
+
+            # install from pip mirror
+            for pkg in pkgs:
+                print('installing: %s' % pkg)
+                try:
+                    installer(pkg)
+                except Exception as e:
+                    print('install %s failed with: %s' % (split[1], e))
+            
+	    sys.path.insert(1, '/host/pip')
+            # import modules
+            for mod in mods:
+                print('importing: %s' % mod)
+                try:
+                    globals()[mod] = importlib.import_module(mod)
+                except Exception as e:
+                    print('failed to import %s with: %s' % (mod, e))
+
+            signal = data[-1]
+            print('signal: %s' % signal)
+
+            sys.stdout.flush()
+            sys.stderr.flush()
+
+        print('')
+        sys.stdout.flush()
+
+        count += 1
+
+    print('SERVING HANDLERS')
+    sys.stdout.flush()
+    lambda_init()
+
+def redirect():
+    sys.stdout.close()
+    sys.stderr.close()
+    sys.stdout = open(STDOUT_PATH, 'w')
+    sys.stderr = open(STDERR_PATH, 'w')
+
+def install_from_file(installer):
     wait_for_mount()
     if os.path.exists(PKGS_LIST_FILE):
         do_installs(installer)
     else:
         print('no packages list file found, assuming lambda doesn\'t import any non-runtime included packages')
         sys.stdout.flush()
- 
+
+def lambda_init():
     import_lambda_func()
     config = load_config()
     if config != None:
         setup_db_conn(config)
     init_server()
+
+def cache_entry_init(installer):
+    fdlisten(installer)
+
+if __name__ == '__main__':
+    forward_stdio()
+
+    if len(sys.argv) != 2 and len(sys.argv) != 4:
+        print('Usage: python <lambda | cache-entry> %s or python %s <lambda | cache-entry> <index_host> <index_sock>' % (sys.argv[0], sys.argv[0]))
+        sys.exit(1)
+
+    installer_args = []
+    if len(sys.argv) == 4:
+        installer_args = sys.argv[2:4]
+    installer = setup_installer(installer_args)
+    
+    if sys.argv[1] == 'handler':
+        install_from_file(installer)
+        lambda_init()
+    elif sys.argv[1] == 'cache':
+        cache_entry_init(installer)
+    else:
+        print('Usage: python <lambda | cache-entry> %s or python %s <lambda | cache-entry> <index_host> <index_sock>' % (sys.argv[0], sys.argv[0]))
+        sys.exit(1)
