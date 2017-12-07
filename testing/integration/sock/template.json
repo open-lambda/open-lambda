@@ -1,0 +1,14 @@
+{
+    "cluster_name": "/tmp/.oltest/sock",
+    "sandbox": "sock",
+    "registry": "local",
+    "reg_dir": "../handlers",
+    "pkgs_dir": "../packages",
+    "worker_dir": "default",
+    "handler_cache_size": 1048576,
+    "import_cache_size": 1048576,
+    "import_cache_dir": "../import-cache",
+    "sandbox_config": {"processes": 10},
+    "sock_handler_base": "../base/lambda",
+    "sock_cache_base": "../base/cache-entry"
+}

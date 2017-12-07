@@ -1,0 +1,11 @@
+{
+    "cluster_name": "/tmp/.oltest/docker",
+    "sandbox": "docker",
+    "registry": "local",
+    "reg_dir": "../handlers",
+    "pkgs_dir": "../packages",
+    "worker_dir": "default",
+    "handler_cache_size": 1048576,
+    "import_cache_size": 0,
+    "sandbox_config": {}
+}
