@@ -32,7 +32,7 @@ def init():
     if initialized:
         return
     
-    config = json.loads(os.environ['ol.config'])
+    config = json.loads(os.environ.get('ol.config', "{}"))
     if config != None and config.get('db', None) == 'rethinkdb':
         host = config.get('rethinkdb.host', 'localhost')
         port = config.get('rethinkdb.port', 28015)
@@ -47,9 +47,8 @@ def init():
 
 # create symbolic links from install cache to dist-packages, return if success
 def create_link(pkg):
-    hsh = hashlib.sha256(pkg).hexdigest()
     # assume no version (e.g. "==1.2.1")
-    pkgdir = '%s/%s/%s/%s/%s' % (PKGS_PATH, hsh[:2], hsh[2:4], hsh[4:], pkg)
+    pkgdir = os.path.join(PKGS_PATH, pkg)
     if os.path.exists(pkgdir):
         for name in os.listdir(pkgdir):
             source = pkgdir + '/' + name
