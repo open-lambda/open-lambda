@@ -8,14 +8,17 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	r "github.com/open-lambda/open-lambda/registry/src"
 	"github.com/open-lambda/open-lambda/worker/config"
 )
 
+const SEPARATOR = ":"
+
 // RegistryManager is the common interface for lambda code pulling functions.
 type RegistryManager interface {
-	Pull(name string) (codeDir string, pkgs []string, err error)
+	Pull(name string) (handlerDir string, imports, installs []string, err error)
 }
 
 func InitRegistryManager(config *config.Config) (rm RegistryManager, err error) {
@@ -51,28 +54,23 @@ func NewLocalManager(opts *config.Config) (*LocalManager, error) {
 }
 
 // Pull checks the lambda handler actually exists in the registry directory.
-func (lm *LocalManager) Pull(name string) (string, []string, error) {
-	handlerDir := filepath.Join(lm.regDir, name)
+func (lm *LocalManager) Pull(name string) (handlerDir string,
+	imports, installs []string, err error) {
+
+	handlerDir = filepath.Join(lm.regDir, name)
 	if _, err := os.Stat(handlerDir); os.IsNotExist(err) {
-		return "", nil, fmt.Errorf("handler does not exist: %s", handlerDir)
+		return "", nil, nil, fmt.Errorf("handler does not exist: %s", handlerDir)
 	} else if err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
 
 	pkgPath := filepath.Join(handlerDir, "packages.txt")
-	_, err := os.Stat(pkgPath)
-	if os.IsNotExist(err) {
-		return handlerDir, []string{}, nil
-	} else if err == nil {
-		pkgs, err := parsePkgFile(pkgPath)
-		if err != nil {
-			return "", nil, err
-		}
-
-		return handlerDir, pkgs, nil
+	imports, installs, err = parsePkgFile(pkgPath)
+	if err != nil {
+		return "", nil, nil, err
 	}
 
-	return "", nil, err
+	return handlerDir, imports, installs, nil
 }
 
 // NewOLStoreManager creates an olstore manager.
@@ -83,10 +81,10 @@ func NewOLStoreManager(opts *config.Config) (*OLStoreManager, error) {
 }
 
 // Pull pulls lambda handler tarball from olstore and decompress it to a local directory.
-func (om *OLStoreManager) Pull(name string) (string, []string, error) {
-	handlerDir := filepath.Join(om.regDir, name)
+func (om *OLStoreManager) Pull(name string) (handlerDir string, imports, installs []string, err error) {
+	handlerDir = filepath.Join(om.regDir, name)
 	if err := os.Mkdir(handlerDir, os.ModeDir); err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
 
 	pfiles := om.pullclient.Pull(name)
@@ -97,36 +95,39 @@ func (om *OLStoreManager) Pull(name string) (string, []string, error) {
 	cmd := exec.Command("tar", "-xzf", "-", "--directory", handlerDir)
 	cmd.Stdin = r
 	if output, err := cmd.CombinedOutput(); err != nil {
-		return "", nil, fmt.Errorf("%s: %s", err, string(output))
+		return "", nil, nil, fmt.Errorf("%s: %s", err, string(output))
 	}
 
 	pkgPath := filepath.Join(handlerDir, "packages.txt")
-	_, err := os.Stat(pkgPath)
-	if os.IsNotExist(err) {
-		return handlerDir, []string{}, nil
-	} else if err == nil {
-		pkgs, err := parsePkgFile(pkgPath)
-		if err != nil {
-			return "", nil, err
-		}
-
-		return handlerDir, pkgs, nil
+	imports, installs, err = parsePkgFile(pkgPath)
+	if err != nil {
+		return "", nil, nil, err
 	}
 
-	return "", nil, err
+	return handlerDir, imports, installs, nil
 }
 
-func parsePkgFile(path string) (pkgs []string, err error) {
+func parsePkgFile(path string) (imports, installs []string, err error) {
+	_, err = os.Stat(path)
+	if os.IsNotExist(err) {
+		return []string{}, []string{}, nil
+	}
+
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer file.Close()
 
 	scnr := bufio.NewScanner(file)
 	for scnr.Scan() {
-		pkgs = append(pkgs, scnr.Text())
+		pkgs := strings.Split(scnr.Text(), SEPARATOR)
+		if len(pkgs) != 2 {
+			return nil, nil, fmt.Errorf("malformed packages.txt, missing separator")
+		}
+		imports = append(imports, pkgs[0])
+		installs = append(installs, pkgs[0])
 	}
 
-	return pkgs, nil
+	return imports, installs, nil
 }

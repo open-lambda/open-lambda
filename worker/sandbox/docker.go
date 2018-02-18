@@ -28,26 +28,22 @@ import (
 
 // DockerContainer is a sandbox inside a docker container.
 type DockerContainer struct {
-	host_id    string
-	hostDir    string
-	nspid      string
-	container  *docker.Container
-	client     *docker.Client
-	installed  map[string]bool
-	index_host string
-	index_port string
+	host_id   string
+	hostDir   string
+	nspid     string
+	container *docker.Container
+	client    *docker.Client
+	installed map[string]bool
 }
 
 // NewDockerContainer creates a DockerContainer.
-func NewDockerContainer(host_id, hostDir, index_host, index_port string, container *docker.Container, client *docker.Client) *DockerContainer {
+func NewDockerContainer(host_id, hostDir string, container *docker.Container, client *docker.Client) *DockerContainer {
 	sandbox := &DockerContainer{
-		host_id:    host_id,
-		hostDir:    hostDir,
-		container:  container,
-		client:     client,
-		installed:  make(map[string]bool),
-		index_host: index_host,
-		index_port: index_port,
+		host_id:   host_id,
+		hostDir:   hostDir,
+		container: container,
+		client:    client,
+		installed: make(map[string]bool),
 	}
 
 	return sandbox
@@ -297,9 +293,6 @@ func (c *DockerContainer) DockerID() string {
 
 func (c *DockerContainer) RunServer() error {
 	cmd := []string{"python", "server.py"}
-	if c.index_host != "" && c.index_port != "" {
-		cmd = append(cmd, c.index_host, c.index_port)
-	}
 
 	execOpts := docker.CreateExecOptions{
 		AttachStdin:  false,

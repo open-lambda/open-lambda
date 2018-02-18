@@ -14,15 +14,13 @@ import (
 
 // DockerContainerFactory is a ContainerFactory that creats docker containers.
 type DockerContainerFactory struct {
-	client    *docker.Client
-	labels    map[string]string
-	caps      []string
-	pidMode   string
-	image     string
-	pkgsDir   string
-	indexHost string
-	indexPort string
-	idxPtr    *int64
+	client  *docker.Client
+	labels  map[string]string
+	caps    []string
+	pidMode string
+	image   string
+	pkgsDir string
+	idxPtr  *int64
 }
 
 // NewDockerContainerFactory creates a DockerContainerFactory.
@@ -36,15 +34,13 @@ func NewDockerContainerFactory(opts *config.Config, image, pidMode string, caps 
 	idxPtr := &sharedIdx
 
 	df := &DockerContainerFactory{
-		client:    client,
-		labels:    labels,
-		caps:      caps,
-		pidMode:   pidMode,
-		image:     image,
-		pkgsDir:   opts.Pkgs_dir,
-		indexHost: opts.Index_host,
-		indexPort: opts.Index_port,
-		idxPtr:    idxPtr,
+		client:  client,
+		labels:  labels,
+		caps:    caps,
+		pidMode: pidMode,
+		image:   image,
+		pkgsDir: opts.Pkgs_dir,
+		idxPtr:  idxPtr,
 	}
 
 	return df, nil
@@ -91,7 +87,7 @@ func (df *DockerContainerFactory) Create(handlerDir, workingDir string) (Contain
 		return nil, err
 	}
 
-	sandbox := NewDockerContainer(id, hostDir, df.indexHost, df.indexPort, container, df.client)
+	sandbox := NewDockerContainer(id, hostDir, container, df.client)
 	return sandbox, nil
 }
 

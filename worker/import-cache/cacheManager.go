@@ -69,7 +69,7 @@ func InitCacheManager(opts *config.Config) (cm *CacheManager, err error) {
 	return cm, nil
 }
 
-func (cm *CacheManager) Provision(sandbox sb.Container, pkgs []string) (fs *ForkServer, hit bool, err error) {
+func (cm *CacheManager) Provision(sandbox sb.Container, imports []string) (fs *ForkServer, hit bool, err error) {
 	if config.Timing {
 		defer func(start time.Time) {
 			log.Printf("provision took %v\n", time.Since(start))
@@ -78,7 +78,7 @@ func (cm *CacheManager) Provision(sandbox sb.Container, pkgs []string) (fs *Fork
 
 	cm.mutex.Lock()
 
-	fs, toCache, hit := cm.matcher.Match(cm.servers, pkgs)
+	fs, toCache, hit := cm.matcher.Match(cm.servers, imports)
 	if fs == nil {
 		cm.mutex.Unlock()
 		return nil, false, errors.New("no match?")
@@ -137,18 +137,18 @@ func (cm *CacheManager) Provision(sandbox sb.Container, pkgs []string) (fs *Fork
 func (cm *CacheManager) newCacheEntry(baseFS *ForkServer, toCache []string) (*ForkServer, error) {
 	// make hashset of packages for new entry
 	var err error
-	pkgs := make(map[string]bool)
+	imports := make(map[string]bool)
 	size := 0.0
-	for key, val := range baseFS.Packages {
-		pkgs[key] = val
+	for key, val := range baseFS.Imports {
+		imports[key] = val
 	}
 	for k := 0; k < len(toCache); k++ {
-		pkgs[toCache[k]] = true
+		imports[toCache[k]] = true
 		size += cm.sizes[strings.ToLower(toCache[k])]
 	}
 
 	fs := &ForkServer{
-		Packages: pkgs,
+		Imports:  imports,
 		Hits:     0.0,
 		Parent:   baseFS,
 		Children: 0,
@@ -239,7 +239,7 @@ func (cm *CacheManager) initCacheRoot(opts *config.Config) (memCGroupPath string
 		Sandbox:  rootSB,
 		Pid:      "-1",
 		SockPath: fmt.Sprintf("%s/fs.sock", rootDir),
-		Packages: make(map[string]bool),
+		Imports:  make(map[string]bool),
 		Hits:     0.0,
 		Parent:   nil,
 		Children: 0,

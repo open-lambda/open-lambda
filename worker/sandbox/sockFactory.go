@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sync/atomic"
 	"syscall"
@@ -25,8 +24,6 @@ type SOCKContainerFactory struct {
 	rootDir      string
 	baseDir      string
 	pkgsDir      string
-	indexHost    string
-	indexPort    string
 	unshareFlags []string
 }
 
@@ -41,10 +38,10 @@ func NewSOCKContainerFactory(opts *config.Config, baseDir, rootDir, prefix strin
 	}
 
 	pkgsDir := filepath.Join(baseDir, "packages")
-
-	_, err := exec.Command("/bin/sh", "-c", fmt.Sprintf("cp -rT %s %s", opts.Pkgs_dir, pkgsDir)).Output()
-	if err != nil {
-		log.Printf("failed to copy packages to lambda base image :: %v", err)
+	if err := syscall.Mount(opts.Pkgs_dir, pkgsDir, "", BIND, ""); err != nil {
+		return nil, fmt.Errorf("failed to bind packages dir: %s -> %s :: %v\n", opts.Pkgs_dir, pkgsDir, err)
+	} else if err := syscall.Mount("none", pkgsDir, "", BIND_RO, ""); err != nil {
+		return nil, fmt.Errorf("failed to bind pkgs dir RO: %s :: %v\n", pkgsDir, err)
 	}
 
 	cgf, err := NewCgroupFactory(prefix, opts.Cg_pool_size)
@@ -62,8 +59,6 @@ func NewSOCKContainerFactory(opts *config.Config, baseDir, rootDir, prefix strin
 		rootDir:      rootDir,
 		baseDir:      baseDir,
 		pkgsDir:      pkgsDir,
-		indexHost:    opts.Index_host,
-		indexPort:    opts.Index_port,
 		unshareFlags: unshareFlags,
 	}
 
@@ -85,12 +80,6 @@ func (sf *SOCKContainerFactory) Create(handlerDir, workingDir string) (Container
 	}
 
 	startCmd := []string{"/ol-init"}
-	if sf.indexHost != "" {
-		startCmd = append(startCmd, sf.indexHost)
-	}
-	if sf.indexPort != "" {
-		startCmd = append(startCmd, sf.indexPort)
-	}
 
 	// NOTE: mount points are expected to exist in SOCK_handler_base directory
 

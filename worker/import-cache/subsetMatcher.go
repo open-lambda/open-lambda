@@ -7,23 +7,23 @@ func NewSubsetMatcher() *SubsetMatcher {
 	return &SubsetMatcher{}
 }
 
-func (sm *SubsetMatcher) Match(servers []*ForkServer, pkgs []string) (*ForkServer, []string, bool) {
+func (sm *SubsetMatcher) Match(servers []*ForkServer, imports []string) (*ForkServer, []string, bool) {
 	best_fs := servers[0]
 	best_score := 0
-	best_toCache := pkgs
+	best_toCache := imports
 	for i := 1; i < len(servers); i++ {
 		matched := 0
 		toCache := make([]string, 0, 0)
-		for j := 0; j < len(pkgs); j++ {
-			if servers[i].Packages[pkgs[j]] {
+		for j := 0; j < len(imports); j++ {
+			if servers[i].Imports[imports[j]] {
 				matched += 1
 			} else {
-				toCache = append(toCache, pkgs[j])
+				toCache = append(toCache, imports[j])
 			}
 		}
 
 		// constrain to subset
-		if matched > best_score && len(servers[i].Packages) <= matched {
+		if matched > best_score && len(servers[i].Imports) <= matched {
 			best_fs = servers[i]
 			best_score = matched
 			best_toCache = toCache

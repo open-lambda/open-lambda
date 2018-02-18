@@ -187,7 +187,7 @@ import (
  * Returns the PID of the spawned process upon success.
  */
 
-func forkRequest(sockPath, targetPid, rootDir string, pkgList []string, handler bool) (string, error) {
+func forkRequest(sockPath, targetPid, rootDir string, imports []string, handler bool) (string, error) {
 	b := benchmarker.GetBenchmarker()
 	var t *benchmarker.Timer
 	if b != nil {
@@ -205,21 +205,21 @@ func forkRequest(sockPath, targetPid, rootDir string, pkgList []string, handler 
 		signal = "cache"
 	}
 
-	pkgStr := strings.Join(append(pkgList, signal), " ")
+	signalStr := strings.Join(append(imports, signal), " ")
 
-	csock := C.CString(sockPath)
-	cpid := C.CString(targetPid)
-	croot := C.CString(rootDir)
-	cpkgs := C.CString(pkgStr)
+	cSock := C.CString(sockPath)
+	cPid := C.CString(targetPid)
+	cRoot := C.CString(rootDir)
+	cSignal := C.CString(signalStr)
 
-	defer C.free(unsafe.Pointer(csock))
-	defer C.free(unsafe.Pointer(cpid))
-	defer C.free(unsafe.Pointer(croot))
-	defer C.free(unsafe.Pointer(cpkgs))
+	defer C.free(unsafe.Pointer(cSock))
+	defer C.free(unsafe.Pointer(cPid))
+	defer C.free(unsafe.Pointer(cRoot))
+	defer C.free(unsafe.Pointer(cSignal))
 
 	var err error
 	for k := 0; k < 5; k++ {
-		ret, err := C.sendFds(csock, cpid, croot, C.int(len(rootDir)+1), cpkgs, C.int(len(pkgStr)+1))
+		ret, err := C.sendFds(cSock, cPid, cRoot, C.int(len(rootDir)+1), cSignal, C.int(len(signalStr)+1))
 		if err == nil {
 			pid := C.GoString(ret)
 			C.free(unsafe.Pointer(ret))

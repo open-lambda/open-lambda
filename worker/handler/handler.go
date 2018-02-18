@@ -16,6 +16,7 @@ import (
 	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/handler/state"
 	"github.com/open-lambda/open-lambda/worker/import-cache"
+	"github.com/open-lambda/open-lambda/worker/pip-manager"
 	"github.com/open-lambda/open-lambda/worker/registry"
 
 	sb "github.com/open-lambda/open-lambda/worker/sandbox"
@@ -27,6 +28,7 @@ type HandlerManagerSet struct {
 	mutex      sync.Mutex
 	hmMap      map[string]*HandlerManager
 	regMgr     registry.RegistryManager
+	pipMgr     pip.InstallManager
 	sbFactory  sb.ContainerFactory
 	cacheMgr   *cache.CacheManager
 	config     *config.Config
@@ -49,7 +51,8 @@ type HandlerManager struct {
 	lastPull    *time.Time
 	code        []byte
 	codeDir     string
-	pkgs        []string
+	imports     []string
+	installs    []string
 }
 
 // Handler handles requests to run a lambda on a worker server. It handles
@@ -74,6 +77,11 @@ func NewHandlerManagerSet(opts *config.Config) (hms *HandlerManagerSet, err erro
 		return nil, err
 	}
 
+	pm, err := pip.InitInstallManager(opts)
+	if err != nil {
+		return nil, err
+	}
+
 	sf, err := sb.InitHandlerContainerFactory(opts)
 	if err != nil {
 		return nil, err
@@ -90,6 +98,7 @@ func NewHandlerManagerSet(opts *config.Config) (hms *HandlerManagerSet, err erro
 	hms = &HandlerManagerSet{
 		hmMap:      make(map[string]*HandlerManager),
 		regMgr:     rm,
+		pipMgr:     pm,
 		sbFactory:  sf,
 		cacheMgr:   cm,
 		config:     opts,
@@ -101,12 +110,6 @@ func NewHandlerManagerSet(opts *config.Config) (hms *HandlerManagerSet, err erro
 	}
 
 	hms.lru = NewHandlerLRU(hms, opts.Handler_cache_size) //kb
-
-	/*
-		if cm != nil {
-			go handlerSet.killOrphans()
-		}
-	*/
 
 	return hms, nil
 }
@@ -125,7 +128,8 @@ func (hms *HandlerManagerSet) Get(name string) (h *Handler, err error) {
 			handlers:   list.New(),
 			hElements:  make(map[*Handler]*list.Element),
 			workingDir: workingDir,
-			pkgs:       []string{},
+			imports:    []string{},
+			installs:   []string{},
 		}
 
 		hm = hms.hmMap[name]
@@ -163,7 +167,7 @@ func (hms *HandlerManagerSet) Get(name string) (h *Handler, err error) {
 
 	// get code if needed
 	if hm.lastPull == nil {
-		codeDir, pkgs, err := hms.regMgr.Pull(hm.name)
+		codeDir, imports, installs, err := hms.regMgr.Pull(hm.name)
 		if err != nil {
 			return nil, err
 		}
@@ -171,36 +175,13 @@ func (hms *HandlerManagerSet) Get(name string) (h *Handler, err error) {
 		now := time.Now()
 		hm.lastPull = &now
 		hm.codeDir = codeDir
-		hm.pkgs = pkgs
+		hm.imports = imports
+		hm.installs = installs
 	}
 	hm.mutex.Unlock()
 
 	return h, nil
 }
-
-/*
-func (h *HandlerSet) killOrphans() {
-	var toDelete string
-	for {
-		if toDelete != "" {
-			h.mutex.Lock()
-			handler := h.handlers[toDelete]
-			delete(h.handlers, toDelete)
-			h.mutex.Unlock()
-			go handler.nuke()
-		}
-		toDelete = ""
-		for _, handler := range h.handlers {
-			handler.mutex.Lock()
-			if handler.fs != nil && handler.fs.Dead {
-				toDelete = handler.name
-			}
-			time.Sleep(50 * time.Microsecond)
-			handler.mutex.Unlock()
-		}
-	}
-}
-*/
 
 // Dump prints the name and state of the Handlers currently in the HandlerSet.
 func (hms *HandlerManagerSet) Dump() {
@@ -287,6 +268,13 @@ func (h *Handler) RunStart() (ch *sb.Channel, err error) {
 	// create sandbox if needed
 	if h.sandbox == nil {
 		hit := false
+
+		// TODO: do this in the background
+		err = hms.pipMgr.Install(hm.installs)
+		if err != nil {
+			return nil, err
+		}
+
 		sandbox, err := hms.sbFactory.Create(hm.codeDir, hm.workingDir)
 		if err != nil {
 			return nil, err
@@ -313,7 +301,7 @@ func (h *Handler) RunStart() (ch *sb.Channel, err error) {
 				return nil, err
 			}
 		} else {
-			if h.fs, hit, err = hms.cacheMgr.Provision(sandbox, hm.pkgs); err != nil {
+			if h.fs, hit, err = hms.cacheMgr.Provision(sandbox, hm.imports); err != nil {
 				return nil, err
 			}
 

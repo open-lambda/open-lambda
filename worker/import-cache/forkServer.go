@@ -15,7 +15,7 @@ type ForkServer struct {
 	Sandbox  sb.Container
 	Pid      string
 	SockPath string
-	Packages map[string]bool
+	Imports  map[string]bool
 	Hits     float64
 	Parent   *ForkServer
 	Children int

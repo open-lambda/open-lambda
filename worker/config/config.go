@@ -25,9 +25,8 @@ type Config struct {
 	Reg_dir string `json:"reg_dir"`
 	// name of the cluster
 	Cluster_name string `json:"cluster_name"`
-	// pip mirror address for installing python packages
-	Index_host string `json:"index_host"`
-	Index_port string `json:"index_port"`
+	// pip index address for installing python packages
+	Pip_index string `json:"pip_mirror"`
 	// packages directory for unpack-only installations
 	Pkgs_dir string `json:"pkgs_dir"`
 	// max number of concurrent runners per sandbox

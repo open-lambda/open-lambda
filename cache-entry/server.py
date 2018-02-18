@@ -1,5 +1,5 @@
 #!/usr/bin/python
-import traceback, json, sys, socket, os, importlib, pip, hashlib, signal
+import traceback, json, sys, os, importlib
 import rethinkdb
 import tornado.ioloop
 import tornado.web
@@ -9,21 +9,16 @@ from subprocess import check_output
 
 import ns
 
-PKGS_PATH = '/packages'
-HOST_PATH = '/host'
+HOST_DIR = '/host'
+PKGS_DIR = '/packages'
+HANDLER_DIR = '/handler'
 
-FS_PATH = '%s/fs.sock' % HOST_PATH
-SOCK_PATH = '%s/ol.sock' % HOST_PATH
+sys.path.append(PKGS_DIR)
 
-STDOUT_PATH = '%s/stdout' % HOST_PATH
-STDERR_PATH = '%s/stderr' % HOST_PATH
-
-# debug use
-# HOST_ERR = sys.stderr
-
-global INDEX_HOST
-global INDEX_PORT
-MIRROR = False
+FS_PATH = os.path.join(HOST_DIR, 'fs.sock')
+SOCK_PATH = os.path.join(HOST_DIR, 'ol.sock')
+STDOUT_PATH = os.path.join(HOST_DIR, 'stdout')
+STDERR_PATH = os.path.join(HOST_DIR, 'stderr')
 
 PROCESSES_DEFAULT = 10
 initialized = False
@@ -35,7 +30,7 @@ def init():
     global initialized, config, db_conn, lambda_func
 
     # assume submitted .py file is /handler/lambda_func.py
-    sys.path.append('/handler')
+    sys.path.append(HANDLER_DIR)
     import lambda_func
 
     # need alternate config mechanism
@@ -66,12 +61,6 @@ tornado_app = tornado.web.Application([
     (r".*", SockFileHandler),
 ])
 
-def install(pkg):
-    if MIRROR:
-        check_output(' '.join(['pip', 'install', '-t', '/host/pip', '--no-cache-dir', '--index-url', 'http://%s:%s/simple' % (INDEX_HOST, INDEX_PORT), '--trusted-host', INDEX_HOST, pkg]), shell=True)
-    else:
-        check_output(' '.join(['pip', 'install', '-t', '/host/pip', pkg]), shell=True)
-
 # listen on sock file with Tornado
 def lambda_server():
     global HOST_PIPE
@@ -85,21 +74,6 @@ def lambda_server():
     tornado.ioloop.IOLoop.instance().start()
     server.start(PROCESSES_DEFAULT)
 
-# create symbolic links from install cache to dist-packages, return if success
-def create_link(pkg):
-    hsh = hashlib.sha256(pkg).hexdigest()
-    # assume no version (e.g. "==1.2.1")
-    pkgdir = '%s/%s/%s/%s/%s' % (PKGS_PATH, hsh[:2], hsh[2:4], hsh[4:], pkg)
-    if os.path.exists(pkgdir):
-        for name in os.listdir(pkgdir):
-            source = pkgdir + '/' + name
-            link_name = '/host/pip/%s' % name
-            if os.path.exists(link_name):
-                continue # should we report this?
-            os.symlink(source, link_name)
-        return True
-    return False
-
 # listen for fds to forkenter
 def fdlisten():
     signal = "cache"
@@ -109,45 +83,21 @@ def fdlisten():
     while r != 0 or signal == "cache":
         if r == 0:
             print('RESET')
-            sys.stdout.flush()
+            flush()
             ns.reset()
 
         print('LISTENING')
-        sys.stdout.flush()
+        flush()
         data = ns.fdlisten(FS_PATH).split()
-        sys.stdout.flush()
+        flush()
+
+        mods = data[:-1]
+        signal = data[-1]
 
         r = ns.forkenter()
         sys.stdout.flush()
         if r == 0:
             redirect()
-
-            mods = []
-            pkgs = []
-            for info in data[:-1]:
-                split = info.split(':')
-                mods.append(split[0])
-                if split[1] != '':
-                    pkgs.append(split[1])
-
-            # use install cache
-            remains = []
-            for pkg in pkgs:
-                if create_link(pkg):
-                    print('using install cache: %s' % pkg)
-                else:
-                    remains.append(pkg)
-            pkgs = remains
-
-            # install from pip mirror
-            for pkg in pkgs:
-                print('installing: %s' % pkg)
-                try:
-                    install(pkg)
-                except Exception as e:
-                    print('install %s failed with: %s' % (split[1], e))
-            
-	    sys.path.insert(1, '/host/pip')
             # import modules
             for mod in mods:
                 print('importing: %s' % mod)
@@ -156,21 +106,22 @@ def fdlisten():
                 except Exception as e:
                     print('failed to import %s with: %s' % (mod, e))
 
-            signal = data[-1]
             print('signal: %s' % signal)
-
-            sys.stdout.flush()
-            sys.stderr.flush()
+            flush()
 
         print('')
-        sys.stdout.flush()
+        flush()
 
         count += 1
 
     print('SERVING HANDLERS')
-    sys.stdout.flush()
+    flush()
     init()
     lambda_server()
+
+def flush():
+    sys.stdout.flush()
+    sys.stderr.flush()
 
 def redirect():
     sys.stdout.close()
@@ -179,20 +130,5 @@ def redirect():
     sys.stderr = open(STDERR_PATH, 'w')
 
 if __name__ == '__main__':
-    global INDEX_HOST
-    global INDEX_PORT
-    sys.stdout = open(STDOUT_PATH, 'w')
-    sys.stderr = open(STDERR_PATH, 'w')
-
-    if len(sys.argv) != 1 and len(sys.argv) != 3:
-        print('Usage: python %s or python %s <index_host> <index_sock>' % (sys.argv[0], sys.argv[0]))
-        sys.exit(1)
-
-    try:
-        INDEX_HOST = sys.argv[1]
-        INDEX_PORT = sys.argv[2]
-        MIRROR = True
-    except:
-        pass
-
+    redirect()
     fdlisten()

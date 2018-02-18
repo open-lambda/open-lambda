@@ -1,5 +1,5 @@
 #!/usr/bin/python
-import traceback, json, sys, socket, os, time, hashlib
+import traceback, json, sys, socket, os, time
 import rethinkdb
 import tornado.ioloop
 import tornado.web
@@ -14,8 +14,8 @@ STDERR_PATH = '%s/stderr' % HOST_PATH
 # debug use
 # HOST_ERR = sys.stderr
 
-PKGS_PATH = '/packages'
-PKG_PATH = '/handler/packages.txt'
+sys.path.append('/handler')  # handler code
+sys.path.append('/packages') # pip packages
 
 global INDEX_HOST
 global INDEX_PORT
@@ -39,52 +39,16 @@ def init():
         print 'Connect to %s:%d' % (host, port)
         db_conn = rethinkdb.connect(host, port)
 
-    sys.path.append('/host/pip')
     sys.path.append('/handler')
     import lambda_func # assume submitted .py file is /handler/lambda_func.py
 
     initialized = True
-
-# create symbolic links from install cache to dist-packages, return if success
-def create_link(pkg):
-    hsh = hashlib.sha256(pkg).hexdigest()
-    # assume no version (e.g. "==1.2.1")
-    pkgdir = '%s/%s/%s/%s/%s' % (PKGS_PATH, hsh[:2], hsh[2:4], hsh[4:], pkg)
-    if os.path.exists(pkgdir):
-        for name in os.listdir(pkgdir):
-            source = pkgdir + '/' + name
-            link_name = '/host/pip/%s' % name
-            if os.path.exists(link_name):
-                print('link failed, path already exists: %s' % link_name)
-                sys.stdout.flush()
-                continue
-            os.symlink(source, link_name)
-        return True
-    return False
 
 def install(pkg):
     if MIRROR:
         check_output(' '.join(['pip', 'install', '-t', '/host/pip', '--no-cache-dir', '--index-url', 'http://%s:%s/simple' % (INDEX_HOST, INDEX_PORT), '--trusted-host', INDEX_HOST, pkg]), shell=True)
     else:
         check_output(' '.join(['pip', 'install', '-t', '/host/pip', pkg]), shell=True)
-
-def do_installs():
-    with open(PKG_PATH) as fd:
-        for line in fd:
-            pkg = line.strip().split(':')[1]
-            if pkg != '':
-                if create_link(pkg):
-                    print('using install cache: %s' % pkg)
-                    sys.stdout.flush()
-                else:
-                    print('installing: %s' % pkg)
-                    sys.stdout.flush()
-                    try:
-                        install(pkg)
-                        sys.stdout.flush()
-                    except Exception as e:
-                        print('failed to install %s with %s' % (pkg, e))
-                        sys.stdout.flush()
 
 class SockFileHandler(tornado.web.RequestHandler):
     def post(self):
@@ -108,7 +72,6 @@ tornado_app = tornado.web.Application([
 
 # listen on sock file with Tornado
 def lambda_server():
-    do_installs()
     server = tornado.httpserver.HTTPServer(tornado_app)
     socket = tornado.netutil.bind_unix_socket(SOCK_PATH)
     server.add_socket(socket)
@@ -141,14 +104,5 @@ if __name__ == '__main__':
         MIRROR = True
     except:
         pass
-
-    curr = 0.0
-    while not os.path.exists(PKG_PATH):
-        time.sleep(0.005)
-        curr += 0.005
-        if curr > 1.0:
-            print('packages.txt missing (path=%s)' % PKG_PATH)
-            sys.stdout.flush()
-            sys.exit(1)
 
     lambda_server()
