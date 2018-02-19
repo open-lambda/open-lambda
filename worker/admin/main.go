@@ -26,22 +26,29 @@ import (
 
 var client *docker.Client
 
+const OLCONF = "/.ol.conf"
+
 // TODO: notes about setup process
 // TODO: notes about creating a directory in local
 
 // Parse parses the cluster name. If required is true but
 // the cluster name is empty, program will exit with an error.
 func parseCluster(cluster string, required bool) string {
-	if cluster != "" {
-		if abscluster, err := filepath.Abs(cluster); err != nil {
-			log.Fatal("failed to get abs cluster dir: ", err)
-		} else {
-			return abscluster
+	if cluster == "" {
+		buf, err := ioutil.ReadFile(OLCONF)
+		if err != nil {
+			log.Fatalf("no cluster directory specified and failed to read %s", OLCONF)
 		}
-	} else if required {
-		log.Fatal("please specify a cluster directory")
+
+		cluster = strings.TrimSpace(string(buf))
 	}
-	return cluster
+
+	abscluster, err := filepath.Abs(cluster)
+	if err != nil {
+		log.Fatal("failed to get abs cluster dir: ", err)
+	}
+
+	return abscluster
 }
 
 // logPath gets the logging directory of the cluster
@@ -164,6 +171,8 @@ func newCluster(ctx *cli.Context) error {
 	if err := c.Save(templatePath(cluster)); err != nil {
 		return err
 	}
+
+	dump_sock_images(ctx)
 
 	fmt.Printf("Cluster Directory: %s\n\n", cluster)
 	fmt.Printf("Worker Defaults: \n%s\n\n", c.DumpStr())
@@ -599,8 +608,7 @@ func kill(ctx *cli.Context) error {
 	return nil
 }
 
-// manage socks directly
-func sock_sandbox(ctx *cli.Context) (err error) {
+func dump_sock_images(ctx *cli.Context) (err error) {
 	cluster := parseCluster(ctx.String("cluster"), true)
 
 	// create a base directory to run sock handlers
@@ -626,7 +634,6 @@ func sock_sandbox(ctx *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	c.Sandbox = "sock"
 	c.SOCK_handler_base = handlerDir
 	c.SOCK_cache_base = cacheDir
 	if err := c.Save(templatePath(cluster)); err != nil {
@@ -985,16 +992,6 @@ OPTIONS:
 				},
 			},
 			Action: upload,
-		},
-		cli.Command{
-			Name:        "sock-container",
-			Usage:       "Use OpenLambda barebones container implementation",
-			UsageText:   "admin sock-container --cluster=NAME",
-			Description: "Creates a root file system in the cluster directory and configures OpenLambda to use barebones container implementation",
-			Flags: []cli.Flag{
-				clusterFlag,
-			},
-			Action: sock_sandbox,
 		},
 		cli.Command{
 			Name:      "kill",
