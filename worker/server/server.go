@@ -240,11 +240,11 @@ func (s *Server) cleanup() {
 
 // Main starts a server.
 func Main(config_path string) {
-	log.Printf("Parse config\n")
 	conf, err := config.ParseConfig(config_path)
 	if err != nil {
 		log.Fatal(err)
 	}
+	log.Printf("Config: %+v", conf)
 
 	// start serving
 	log.Printf("Create server\n")

@@ -44,7 +44,7 @@ bin/admin : $(WORKER_GO_FILES)
 .PHONY: test test-config
 
 test-config :
-	$(eval export WORKER_CONFIG := $(PWD)/testing/worker-config.json)
+	$(eval export WORKER_CONFIG := $(PWD)/testing/configs/worker-config.json)
 
 # run go unit tests in initialized environment
 test : test-config imgs/lambda
@@ -57,7 +57,7 @@ sock/sock-init : sock/sock-init.c
 # TODO: eventually merge this with default tests
 .PHONY: socktest socktest-config
 socktest-config :
-	$(eval export WORKER_CONFIG := $(PWD)/testing/worker-config-sock.json)
+	$(eval export WORKER_CONFIG := $(PWD)/testing/configs/worker-config-sock.json)
 
 socktest : socktest-config imgs/lambda sock/sock-init
 	mkdir -p /tmp/olpkgs
@@ -65,7 +65,7 @@ socktest : socktest-config imgs/lambda sock/sock-init
 
 .PHONY: cachetest cachetest-config
 cachetest-config :
-	$(eval export WORKER_CONFIG := $(PWD)/testing/worker-config-cache.json)
+	$(eval export WORKER_CONFIG := $(PWD)/testing/configs/worker-config-cache.json)
 
 # run go unit tests in initialized environment
 cachetest : cachetest-config imgs/lambda imgs/cache-entry

@@ -2,7 +2,6 @@ package registry
 
 import (
 	"bufio"
-	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -10,7 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	r "github.com/open-lambda/open-lambda/registry/src"
+	minio "github.com/minio/minio-go"
+
 	"github.com/open-lambda/open-lambda/worker/config"
 )
 
@@ -22,10 +22,10 @@ type RegistryManager interface {
 }
 
 func InitRegistryManager(config *config.Config) (rm RegistryManager, err error) {
-	if config.Registry == "olregistry" {
-		rm, err = NewOLStoreManager(config)
-	} else if config.Registry == "local" {
+	if config.Registry == "local" {
 		rm, err = NewLocalManager(config)
+	} else if config.Registry == "remote" {
+		rm, err = NewRemoteManager(config)
 	} else {
 		return nil, errors.New("invalid 'registry' field in config")
 	}
@@ -38,19 +38,13 @@ type LocalManager struct {
 	regDir string
 }
 
-// OLStoreManager pulls code from olstore and stores it in a local directory.
-type OLStoreManager struct {
-	regDir     string
-	pullclient *r.PullClient
-}
-
 // NewLocalManager creates a local manager.
 func NewLocalManager(opts *config.Config) (*LocalManager, error) {
-	if err := os.MkdirAll(opts.Reg_dir, os.ModeDir); err != nil {
-		return nil, fmt.Errorf("fail to create directory at %s: ", opts.Reg_dir, err)
+	if err := os.MkdirAll(opts.Registry_dir, os.ModeDir); err != nil {
+		return nil, fmt.Errorf("fail to create directory at %s: ", opts.Registry_dir, err)
 	}
 
-	return &LocalManager{opts.Reg_dir}, nil
+	return &LocalManager{opts.Registry_dir}, nil
 }
 
 // Pull checks the lambda handler actually exists in the registry directory.
@@ -73,29 +67,46 @@ func (lm *LocalManager) Pull(name string) (handlerDir string,
 	return handlerDir, imports, installs, nil
 }
 
-// NewOLStoreManager creates an olstore manager.
-func NewOLStoreManager(opts *config.Config) (*OLStoreManager, error) {
-	pullClient := r.InitPullClient(opts.Reg_cluster, r.DATABASE, r.TABLE)
+// RemoteManager pulls code from olstore and stores it in a local directory.
+type RemoteManager struct {
+	regDir string
+	client *minio.Client
+}
 
-	return &OLStoreManager{opts.Reg_dir, pullClient}, nil
+// NewRemoteManager creates an olstore manager.
+func NewRemoteManager(opts *config.Config) (*RemoteManager, error) {
+	client, err := minio.New(opts.Registry_server, opts.Registry_access_key, opts.Registry_secret_key, false)
+	if err != nil {
+		return nil, err
+	}
+
+	return &RemoteManager{opts.Registry_dir, client}, nil
 }
 
 // Pull pulls lambda handler tarball from olstore and decompress it to a local directory.
-func (om *OLStoreManager) Pull(name string) (handlerDir string, imports, installs []string, err error) {
-	handlerDir = filepath.Join(om.regDir, name)
+func (rm *RemoteManager) Pull(name string) (handlerDir string, imports, installs []string, err error) {
+	handlerDir = filepath.Join(rm.regDir, name)
+	if _, err = os.Stat(handlerDir); err == nil {
+		if err := os.RemoveAll(handlerDir); err != nil {
+			return "", nil, nil, err
+		}
+	} else if !os.IsNotExist(err) {
+		return "", nil, nil, err
+	}
+
 	if err := os.Mkdir(handlerDir, os.ModeDir); err != nil {
 		return "", nil, nil, err
 	}
 
-	pfiles := om.pullclient.Pull(name)
-	handler := pfiles[r.HANDLER].([]byte)
-	r := bytes.NewReader(handler)
+	tmpPath := filepath.Join("/tmp", fmt.Sprintf("%s.tar.gz", name))
+	defer os.Remove(tmpPath)
+	if err := rm.client.FGetObject(config.REGISTRY_BUCKET, name, tmpPath, minio.GetObjectOptions{}); err != nil {
+		return "", nil, nil, err
+	}
 
-	// TODO: try to uncompress without execing - faster?
-	cmd := exec.Command("tar", "-xzf", "-", "--directory", handlerDir)
-	cmd.Stdin = r
+	cmd := exec.Command("tar", "-xvzf", tmpPath, "--directory", handlerDir)
 	if output, err := cmd.CombinedOutput(); err != nil {
-		return "", nil, nil, fmt.Errorf("%s: %s", err, string(output))
+		return "", nil, nil, fmt.Errorf("%s :: %s", err, string(output))
 	}
 
 	pkgPath := filepath.Join(handlerDir, "packages.txt")

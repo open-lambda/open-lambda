@@ -11,6 +11,10 @@ import (
 
 var Timing bool
 
+const REGISTRY_BUCKET = "registry"
+const REGISTRY_ACCESS_KEY = "ol_registry_access"
+const REGISTRY_SECRET_KEY = "ol_registry_secret"
+
 // Config represents the configuration for a worker server.
 type Config struct {
 	// base path for path parameters in this config; must be non-empty if any
@@ -22,7 +26,13 @@ type Config struct {
 	// currently ignored as cgroup sandbox is not fully integrated
 	Sandbox string `json:"sandbox"`
 	// registry directory for storing local copies of handler code
-	Reg_dir string `json:"reg_dir"`
+	Registry_dir string `json:"registry_dir"`
+	// address of remote registry
+	Registry_server string `json:"registry_server"`
+	// access key for remote minio registry
+	Registry_access_key string `json:"registry_access_key"`
+	// secret key for remote minio registry
+	Registry_secret_key string `json:"registry_secret_key"`
 	// name of the cluster
 	Cluster_name string `json:"cluster_name"`
 	// pip index address for installing python packages
@@ -36,10 +46,6 @@ type Config struct {
 	Handler_cache_size int    `json:"handler_cache_size"` //kb
 	Import_cache_size  int    `json:"import_cache_size"`  //kb
 	Import_cache_dir   string `json:"import_cache_dir"`
-
-	// olregistry options
-	// addresses of olregistry cluster
-	Reg_cluster []string `json:"reg_cluster"`
 
 	// sandbox options
 	// worker directory, which contains handler code, pid file, logs, etc.
@@ -114,23 +120,19 @@ func (c *Config) Defaults() error {
 		c.Worker_port = "8080"
 	}
 
-	if c.Registry == "olregistry" && len(c.Reg_cluster) == 0 {
-		return fmt.Errorf("must specify reg_cluster")
-	}
-
-	if c.Reg_dir == "" {
+	if c.Registry_dir == "" {
 		return fmt.Errorf("must specify local registry directory")
 	}
 
-	if !path.IsAbs(c.Reg_dir) {
+	if !path.IsAbs(c.Registry_dir) {
 		if c.path == "" {
-			return fmt.Errorf("Reg_dir cannot be relative, unless config is loaded from file")
+			return fmt.Errorf("Registry_dir cannot be relative, unless config is loaded from file")
 		}
-		path, err := filepath.Abs(path.Join(path.Dir(c.path), c.Reg_dir))
+		path, err := filepath.Abs(path.Join(path.Dir(c.path), c.Registry_dir))
 		if err != nil {
 			return err
 		}
-		c.Reg_dir = path
+		c.Registry_dir = path
 	}
 
 	// worker dir

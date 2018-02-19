@@ -65,7 +65,7 @@ func TestCreate(t *testing.T) {
 
 	handler_name := "hello"
 
-	handler_dir := path.Join(conf.Reg_dir, handler_name)
+	handler_dir := path.Join(conf.Registry_dir, handler_name)
 	sandbox_dir := path.Join(testDir, "sandbox1")
 
 	s, err := factory.Create(handler_dir, sandbox_dir, "", "")

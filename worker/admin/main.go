@@ -12,11 +12,12 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	docker "github.com/fsouza/go-dockerclient"
+	minio "github.com/minio/minio-go"
 	dutil "github.com/open-lambda/open-lambda/worker/dockerutil"
 
-	"github.com/open-lambda/open-lambda/registry"
 	"github.com/open-lambda/open-lambda/worker/config"
 	pip "github.com/open-lambda/open-lambda/worker/pip-manager"
 	"github.com/open-lambda/open-lambda/worker/server"
@@ -27,7 +28,6 @@ var client *docker.Client
 
 // TODO: notes about setup process
 // TODO: notes about creating a directory in local
-// TODO: docker registry setup
 
 // Parse parses the cluster name. If required is true but
 // the cluster name is empty, program will exit with an error.
@@ -152,7 +152,7 @@ func newCluster(ctx *cli.Context) error {
 		Cluster_name:     cluster,
 		Registry:         "local",
 		Sandbox:          "docker",
-		Reg_dir:          registryPath(cluster),
+		Registry_dir:     registryPath(cluster),
 		Pkgs_dir:         packagesPath(cluster),
 		Worker_dir:       workerPath(cluster, "default"),
 		Import_cache_dir: cachePath(cluster),
@@ -642,79 +642,123 @@ func write_dns(rootDir string) error {
 	return ioutil.WriteFile(dnsPath, []byte("nameserver 8.8.8.8\n"), 0644)
 }
 
-// olstore_exec corresponds to the "olstore-exec" command of the admin tool.
-func olstore_exec(ctx *cli.Context) error {
-	port := ctx.Int("port")
-	ips := ctx.String("ips")
-
-	pushs := registry.InitPushServer(port, strings.Split(ips, ","))
-	pushs.Run()
-	return fmt.Errorf("Push Server Crashed\n")
-}
-
-// olstore corresponds to the "olstore" commanf of the admin tool. It starts an
-// olstore that listens to a given port and connects with all rethink db
-// instances of the cluster. It calls olstore_exec to starts the olstore.
-func olstore(ctx *cli.Context) error {
+// Starts a container running Minio, logs its AccessKey and SecretKey.
+func registry(ctx *cli.Context) error {
 	cluster := parseCluster(ctx.String("cluster"), true)
+
+	access_key := ctx.String("access-key")
+	secret_key := ctx.String("secret-key")
 	port := ctx.Int("port")
+	image := "minio/minio"
 
-	// get rethinkdb addrs
-	nodes, err := clusterNodes(cluster)
-	if err != nil {
-		return err
-	}
-
-	ips := []string{}
-	for _, cid := range nodes["db"] {
-		container, err := client.InspectContainer(cid)
+	_, err := client.InspectImage(image)
+	if err == docker.ErrNoSuchImage {
+		fmt.Printf("Pulling Minio image...\n")
+		err := client.PullImage(
+			docker.PullImageOptions{
+				Repository: image,
+				Tag:        "latest",
+			},
+			docker.AuthConfiguration{},
+		)
 		if err != nil {
 			return err
 		}
-
-		ips = append(ips, container.NetworkSettings.IPAddress)
+	} else if err != nil {
+		return err
 	}
 
-	if len(ips) == 0 {
-		fmt.Printf("No rethinkdb instances running this cluster\n")
-		return nil
+	ports := map[docker.Port][]docker.PortBinding{"9000/tcp": []docker.PortBinding{docker.PortBinding{HostIP: "0.0.0.0", HostPort: fmt.Sprintf("%d", port)}}}
+	cmd := []string{"server", "/data"}
+	volumes := []string{"/mnt/data:/data", "/mnt/config:/root/.minio"}
+	labels := map[string]string{
+		dutil.DOCKER_LABEL_CLUSTER: cluster,
+		dutil.DOCKER_LABEL_TYPE:    "registry",
+	}
+	env := []string{
+		fmt.Sprintf("MINIO_ACCESS_KEY=%s", access_key),
+		fmt.Sprintf("MINIO_SECRET_KEY=%s", secret_key),
 	}
 
-	// stdout+stderr both go to log
-	log_path := logPath(cluster, fmt.Sprintf("olstore.out"))
-	f, err := os.Create(log_path)
+	// create and start container
+	container, err := client.CreateContainer(
+		docker.CreateContainerOptions{
+			Config: &docker.Config{
+				Cmd:    cmd,
+				Env:    env,
+				Image:  image,
+				Labels: labels,
+			},
+			HostConfig: &docker.HostConfig{
+				Binds:        volumes,
+				PortBindings: ports,
+			},
+		},
+	)
 	if err != nil {
 		return err
 	}
-	attr := os.ProcAttr{
-		Files: []*os.File{nil, f, f},
+	if err := client.StartContainer(container.ID, container.HostConfig); err != nil {
+		return err
 	}
-	cmd := []string{
-		os.Args[0],
-		"olstore-exec",
-		"-ips=" + strings.Join(ips, ","),
-		fmt.Sprintf("-port=%v", port),
-	}
-	proc, err := os.StartProcess(os.Args[0], cmd, &attr)
+
+	regClient, err := minio.New(fmt.Sprintf("localhost:%d", port), access_key, secret_key, false)
 	if err != nil {
 		return err
 	}
 
-	pidpath := pidPath(cluster, "olstore")
-	if err := ioutil.WriteFile(pidpath, []byte(fmt.Sprintf("%d", proc.Pid)), 0644); err != nil {
+	start := time.Now()
+	var bucketErr error
+	for {
+		if time.Since(start) > 10*time.Second {
+			return fmt.Errorf("failed to connect to bucket after 10s :: %v", bucketErr)
+		}
+
+		if exists, err := regClient.BucketExists(config.REGISTRY_BUCKET); err != nil {
+			bucketErr = err
+			continue
+		} else if !exists {
+			if err := regClient.MakeBucket(config.REGISTRY_BUCKET, "us-east-1"); err != nil {
+				bucketErr = err
+				continue
+			}
+		} else {
+			break
+		}
+	}
+
+	c, err := config.ParseConfig(templatePath(cluster))
+	if err != nil {
+		return err
+	}
+	c.Registry = "remote"
+	c.Registry_access_key = access_key
+	c.Registry_secret_key = secret_key
+	if err := c.Save(templatePath(cluster)); err != nil {
 		return err
 	}
 
-	fmt.Printf("Started olstore: pid %d, port %v, log at %s\n", proc.Pid, port, log_path)
 	return nil
 }
 
 // uploads corresponds to the "upload" command of the admin tool.
 func upload(ctx *cli.Context) error {
-	server := ctx.String("server")
-	name := ctx.String("name")
-	fname := ctx.String("file")
-	registry.Push(server, name, fname)
+	access_key := ctx.String("access-key")
+	secret_key := ctx.String("secret-key")
+	address := ctx.String("address")
+	handler := ctx.String("handler")
+	file := ctx.String("file")
+
+	regClient, err := minio.New(address, access_key, secret_key, false)
+	if err != nil {
+		return err
+	}
+
+	opts := minio.PutObjectOptions{ContentType: "application/gzip", ContentEncoding: "binary"}
+	if _, err := regClient.FPutObject(config.REGISTRY_BUCKET, handler, file, opts); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -804,7 +848,7 @@ OPTIONS:
 		cli.Command{
 			Name:        "new",
 			Usage:       "Create a cluster",
-			UsageText:   "admin new --cluseter=NAME",
+			UsageText:   "admin new --cluster=NAME",
 			Description: "A cluster directory of the given name will be created with internal structure initialized.",
 			Flags:       []cli.Flag{clusterFlag},
 			Action:      newCluster,
@@ -890,48 +934,46 @@ OPTIONS:
 			Action: nginx,
 		},
 		cli.Command{
-			Name:        "olstore",
-			Usage:       "Start one olstore containers in a cluster",
-			UsageText:   "admin olstore --cluster=NAME [-p|--port=PORT]",
-			Description: "Start one olstore that connectes with all databases in the cluster.",
+			Name:        "registry",
+			Usage:       "Start the code registry.",
+			UsageText:   "admin registry [-p|-port=PORT]",
+			Description: "Start the code reigstry.",
 			Flags: []cli.Flag{
 				clusterFlag,
-				cli.IntFlag{
-					Name:  "port, p",
-					Usage: "Push/pull lambdas at `PORT`",
-					Value: 7080,
-				},
-			},
-			Action: olstore,
-		},
-		cli.Command{
-			Name:        "olstore-exec",
-			Usage:       "Start one olstore",
-			UsageText:   "admin olstore-exec [-p|-port=PORT] [--ips=ADDRS]",
-			Description: "Start one olstore registry for storing lambda code.",
-			Flags: []cli.Flag{
-				cli.IntFlag{
-					Name:  "port, p",
-					Usage: "Push/pull lambdas at `PORT`",
-					Value: 7080,
+				cli.StringFlag{
+					Name:  "access-key",
+					Usage: "Minio access key",
 				},
 				cli.StringFlag{
-					Name:  "ips",
-					Usage: "comma-separated rethinkdb `ADDRS`",
+					Name:  "secret-key",
+					Usage: "Minio secret key",
+				},
+				cli.IntFlag{
+					Name:  "port, p",
+					Usage: "Push/pull lambdas at `PORT`",
+					Value: 9000,
 				},
 			},
-			Action: olstore_exec,
+			Action: registry,
 		},
 		cli.Command{
 			Name:        "upload",
-			Usage:       "Upload a file to registry",
-			UsageText:   "admin upload --cluster=NAME [--server=ADDR] [--handler=NAME] [--file=PATH]",
-			Description: "Upload a file to registry. The file must be a compressed file.",
+			Usage:       "Upload handler code to the registry",
+			UsageText:   "admin upload --cluster=NAME --handler=NAME --file=PATH",
+			Description: "Upload a file to registry. The file must be a tarball.",
 			Flags: []cli.Flag{
 				clusterFlag,
 				cli.StringFlag{
-					Name:  "server",
-					Usage: "`ADDR` of olstore that receives the file",
+					Name:  "access-key",
+					Usage: "Minio access key",
+				},
+				cli.StringFlag{
+					Name:  "secret-key",
+					Usage: "Minio secret key",
+				},
+				cli.StringFlag{
+					Name:  "address",
+					Usage: "Address+port of remote Minio server",
 				},
 				cli.StringFlag{
 					Name:  "handler",
