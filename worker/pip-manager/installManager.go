@@ -19,7 +19,6 @@ type InstallManager interface {
 
 type Installer struct {
 	cmd       string
-	dir       string
 	args      []string
 	installed map[string]bool
 }
@@ -35,9 +34,12 @@ func InitInstallManager(opts *config.Config) (*Installer, error) {
 
 	installer := &Installer{
 		cmd:       cmd,
-		dir:       opts.Pkgs_dir,
 		args:      args,
 		installed: make(map[string]bool),
+	}
+
+	if err := installer.Install(opts.Startup_pkgs); err != nil {
+		return nil, err
 	}
 
 	return installer, nil

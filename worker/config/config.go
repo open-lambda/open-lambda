@@ -37,8 +37,8 @@ type Config struct {
 	Cluster_name string `json:"cluster_name"`
 	// pip index address for installing python packages
 	Pip_index string `json:"pip_mirror"`
-	// packages directory for unpack-only installations
-	Pkgs_dir string `json:"pkgs_dir"`
+	// directory to install packages to, that sandboxes will read from
+	Pkgs_dir string
 	// max number of concurrent runners per sandbox
 	Max_runners int `json:"max_runners"`
 
@@ -69,6 +69,9 @@ type Config struct {
 	Benchmark_file string `json:"benchmark_log"`
 
 	Timing bool `json:"timing"`
+
+	// list of packages to install on startup
+	Startup_pkgs []string `json:"startup_pkgs"`
 }
 
 // SandboxConfJson marshals the Sandbox_config of the Config into a JSON string.
@@ -149,21 +152,6 @@ func (c *Config) Defaults() error {
 		c.Worker_dir = path
 	}
 
-	if c.Pkgs_dir == "" {
-		return fmt.Errorf("must specify packages directory")
-	}
-
-	if !path.IsAbs(c.Pkgs_dir) {
-		if c.path == "" {
-			return fmt.Errorf("Pkgs_dir cannot be relative, unless config is loaded from file")
-		}
-		path, err := filepath.Abs(path.Join(path.Dir(c.path), c.Pkgs_dir))
-		if err != nil {
-			return err
-		}
-		c.Pkgs_dir = path
-	}
-
 	// sock sandboxes require some extra settings
 	if c.Sandbox == "sock" {
 		if c.SOCK_base_path == "" {
@@ -179,6 +167,22 @@ func (c *Config) Defaults() error {
 				return err
 			}
 			c.SOCK_base_path = path
+		}
+		c.Pkgs_dir = filepath.Join(c.SOCK_base_path, "packages")
+	} else {
+		if c.Pkgs_dir == "" {
+			return fmt.Errorf("must specify packages directory")
+		}
+
+		if !path.IsAbs(c.Pkgs_dir) {
+			if c.path == "" {
+				return fmt.Errorf("Pkgs_dir cannot be relative, unless config is loaded from file")
+			}
+			path, err := filepath.Abs(path.Join(path.Dir(c.path), c.Pkgs_dir))
+			if err != nil {
+				return err
+			}
+			c.Pkgs_dir = path
 		}
 	}
 

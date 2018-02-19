@@ -759,26 +759,14 @@ func upload(ctx *cli.Context) error {
 func setconf(ctx *cli.Context) error {
 	cluster := parseCluster(ctx.String("cluster"), false)
 
-	confMap := make(map[string]interface{})
-	for _, arg := range ctx.Args() {
-		split := strings.Split(strings.TrimSpace(arg), "=")
-		if len(split) != 2 {
-			return fmt.Errorf("malformed config option: %s (should be KEY=VALUE)", arg)
-		}
-		confMap[split[0]] = split[1]
-	}
-
-	confMapJSON, err := json.Marshal(confMap)
-	if err != nil {
-		return err
+	if len(ctx.Args()) != 1 {
+		log.Fatal("Usage: admin setconf <json_options>")
 	}
 
 	if c, err := config.ParseConfig(templatePath(cluster)); err != nil {
 		return err
-	} else if err := json.Unmarshal(confMapJSON, c); err != nil {
+	} else if err := json.Unmarshal([]byte(ctx.Args()[0]), c); err != nil {
 		return fmt.Errorf("failed to set config options :: %v", err)
-	} else if err := c.Defaults(); err != nil {
-		return err
 	} else if err := c.Save(templatePath(cluster)); err != nil {
 		return err
 	}
@@ -1042,7 +1030,7 @@ OPTIONS:
 		cli.Command{
 			Name:      "setconf",
 			Usage:     "Set a configuration option in the cluster's template.",
-			UsageText: "admin setconf [--cluster=NAME] KEY=VALUE [KEY=VALUE...]",
+			UsageText: "admin setconf [--cluster=NAME] options (options is JSON string)",
 			Flags:     []cli.Flag{clusterFlag},
 			Action:    setconf,
 		},

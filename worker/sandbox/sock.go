@@ -361,11 +361,6 @@ func (c *SOCKContainer) HostDir() string {
 func (c *SOCKContainer) MountDirs(hostDir, handlerDir string) error {
 	c.hostDir = hostDir
 
-	pipDir := filepath.Join(hostDir, "pip")
-	if err := os.Mkdir(pipDir, 0777); err != nil {
-		return err
-	}
-
 	tmpDir := filepath.Join(hostDir, "tmp")
 	if err := os.Mkdir(tmpDir, 0777); err != nil {
 		return err

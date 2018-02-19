@@ -17,6 +17,7 @@ const SOCK_INIT = "/sock-init"
 var BIND uintptr = uintptr(syscall.MS_BIND)
 var BIND_RO uintptr = uintptr(syscall.MS_BIND | syscall.MS_RDONLY | syscall.MS_REMOUNT)
 var PRIVATE uintptr = uintptr(syscall.MS_PRIVATE)
+var SHARED uintptr = uintptr(syscall.MS_SHARED)
 
 // SOCKContainerFactory is a ContainerFactory that creats docker containeres.
 type SOCKContainerFactory struct {
@@ -25,7 +26,6 @@ type SOCKContainerFactory struct {
 	idxPtr       *int64
 	rootDir      string
 	baseDir      string
-	pkgsDir      string
 	initArgs     []string
 	unshareFlags []string
 }
@@ -42,13 +42,6 @@ func NewSOCKContainerFactory(opts *config.Config, rootDir, prefix string, initAr
 		return nil, fmt.Errorf("failed to make root container dir private :: %v", err)
 	}
 
-	pkgsDir := filepath.Join(baseDir, "packages")
-	if err := syscall.Mount(opts.Pkgs_dir, pkgsDir, "", BIND, ""); err != nil {
-		return nil, fmt.Errorf("failed to bind packages dir: %s -> %s :: %v\n", opts.Pkgs_dir, pkgsDir, err)
-	} else if err := syscall.Mount("none", pkgsDir, "", BIND_RO, ""); err != nil {
-		return nil, fmt.Errorf("failed to bind pkgs dir RO: %s :: %v\n", pkgsDir, err)
-	}
-
 	cgf, err := NewCgroupFactory(prefix, opts.Cg_pool_size)
 	if err != nil {
 		return nil, err
@@ -63,7 +56,6 @@ func NewSOCKContainerFactory(opts *config.Config, rootDir, prefix string, initAr
 		idxPtr:       idxPtr,
 		rootDir:      rootDir,
 		baseDir:      baseDir,
-		pkgsDir:      pkgsDir,
 		initArgs:     initArgs,
 		unshareFlags: unshareFlags,
 	}
@@ -131,7 +123,6 @@ func (sf *SOCKContainerFactory) Cleanup() {
 		os.RemoveAll(cgroupPath)
 	}
 
-	syscall.Unmount(sf.pkgsDir, syscall.MNT_DETACH)
 	syscall.Unmount(sf.rootDir, syscall.MNT_DETACH)
 	os.RemoveAll(sf.rootDir)
 }
