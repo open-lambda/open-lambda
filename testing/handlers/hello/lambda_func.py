@@ -1,2 +1,2 @@
-def handler(conn, event):
+def handler(event):
     return 'hello'

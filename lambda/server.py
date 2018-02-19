@@ -1,59 +1,41 @@
-#!/usr/bin/python
-import traceback, json, sys, socket, os, time
-import rethinkdb
+import os, sys, json, argparse, importlib, traceback
 import tornado.ioloop
 import tornado.web
 import tornado.httpserver
 import tornado.netutil
-from subprocess import check_output
 
-HOST_PATH = '/host'
-SOCK_PATH = '%s/ol.sock' % HOST_PATH
-STDOUT_PATH = '%s/stdout' % HOST_PATH
-STDERR_PATH = '%s/stderr' % HOST_PATH
-# debug use
-# HOST_ERR = sys.stderr
+HOST_DIR = '/host'
+PKGS_DIR = '/packages'
+HANDLER_DIR = '/handler'
 
-sys.path.append('/handler')  # handler code
-sys.path.append('/packages') # pip packages
+sys.path.append(PKGS_DIR)
+sys.path.append(HANDLER_DIR)
 
-global INDEX_HOST
-global INDEX_PORT
-MIRROR = False
+FS_PATH = os.path.join(HOST_DIR, 'fs.sock')
+SOCK_PATH = os.path.join(HOST_DIR, 'ol.sock')
+STDOUT_PATH = os.path.join(HOST_DIR, 'stdout')
+STDERR_PATH = os.path.join(HOST_DIR, 'stderr')
 
 PROCESSES_DEFAULT = 10
 initialized = False
-config = None
-db_conn = None
 
-# run once per process
+parser = argparse.ArgumentParser(description='Listen and serve cache requests or lambda invocations.')
+parser.add_argument('--cache', action='store_true', default=False, help='Begin as a cache entry.')
+
+# run after forking into sandbox
 def init():
-    global initialized, config, db_conn, lambda_func
+    global initialized, lambda_func
     if initialized:
         return
-    
-    config = json.loads(os.environ['ol.config'])
-    if config != None and config.get('db', None) == 'rethinkdb':
-        host = config.get('rethinkdb.host', 'localhost')
-        port = config.get('rethinkdb.port', 28015)
-        print 'Connect to %s:%d' % (host, port)
-        db_conn = rethinkdb.connect(host, port)
 
-    sys.path.append('/handler')
-    import lambda_func # assume submitted .py file is /handler/lambda_func.py
+    # assume submitted .py file is /handler/lambda_func.py
+    import lambda_func
 
     initialized = True
-
-def install(pkg):
-    if MIRROR:
-        check_output(' '.join(['pip', 'install', '-t', '/host/pip', '--no-cache-dir', '--index-url', 'http://%s:%s/simple' % (INDEX_HOST, INDEX_PORT), '--trusted-host', INDEX_HOST, pkg]), shell=True)
-    else:
-        check_output(' '.join(['pip', 'install', '-t', '/host/pip', pkg]), shell=True)
 
 class SockFileHandler(tornado.web.RequestHandler):
     def post(self):
         try:
-            init()
             data = self.request.body
             try :
                 event = json.loads(data)
@@ -61,7 +43,7 @@ class SockFileHandler(tornado.web.RequestHandler):
                 self.set_status(400)
                 self.write('bad POST data: "%s"'%str(data))
                 return
-            self.write(json.dumps(lambda_func.handler(db_conn, event)))
+            self.write(json.dumps(lambda_func.handler(event)))
         except Exception:
             self.set_status(500) # internal error
             self.write(traceback.format_exc())
@@ -72,37 +54,79 @@ tornado_app = tornado.web.Application([
 
 # listen on sock file with Tornado
 def lambda_server():
+    global HOST_PIPE
+    init()
     server = tornado.httpserver.HTTPServer(tornado_app)
     socket = tornado.netutil.bind_unix_socket(SOCK_PATH)
     server.add_socket(socket)
     # notify worker server that we are ready through stdout
     # flush is necessary, and don't put it after tornado start; won't work
-    with open('/host/server_pipe', 'a') as pipe:
+    with open('/host/server_pipe', 'w') as pipe:
         pipe.write('ready')
     tornado.ioloop.IOLoop.instance().start()
     server.start(PROCESSES_DEFAULT)
 
-if __name__ == '__main__':
-    global INDEX_HOST
-    global INDEX_PORT
+# listen for fds to forkenter
+def cache_loop():
+    import ns
 
-    try:
-        sys.stdout = open(STDOUT_PATH, 'w')
-        sys.stderr = open(STDERR_PATH, 'w')
-    except Exception as e:
-        with open('/ERROR', 'w') as fd:
-            fd.write('failed to open stdout/stderr with: %s\n' % e)
-            sys.exit(1)
+    signal = "cache"
+    r = -1
+    count = 0
+    # only child meant to serve ever escapes the loop
+    while r != 0 or signal == "cache":
+        if r == 0:
+            print('RESET')
+            flush()
+            ns.reset()
 
-    if len(sys.argv) != 1 and len(sys.argv) != 3:
-        print('Usage: python %s or python %s <index_host> <index_sock>' % (sys.argv[0], sys.argv[0]))
-        sys.exit(1)
+        print('LISTENING')
+        flush()
+        data = ns.fdlisten(FS_PATH).split()
+        flush()
 
-    try:
-        INDEX_HOST = sys.argv[1]
-        INDEX_PORT = sys.argv[2]
-        MIRROR = True
-    except:
-        pass
+        mods = data[:-1]
+        signal = data[-1]
 
+        r = ns.forkenter()
+        sys.stdout.flush()
+        if r == 0:
+            redirect()
+            # import modules
+            for mod in mods:
+                print('importing: %s' % mod)
+                try:
+                    globals()[mod] = importlib.import_module(mod)
+                except Exception as e:
+                    print('failed to import %s with: %s' % (mod, e))
+
+            print('signal: %s' % signal)
+            flush()
+
+        print('')
+        flush()
+
+        count += 1
+
+    print('SERVING HANDLERS')
+    flush()
     lambda_server()
+
+def flush():
+    sys.stdout.flush()
+    sys.stderr.flush()
+
+def redirect():
+    sys.stdout.close()
+    sys.stderr.close()
+    sys.stdout = open(STDOUT_PATH, 'w')
+    sys.stderr = open(STDERR_PATH, 'w')
+
+if __name__ == '__main__':
+    args = parser.parse_args()
+    redirect()
+
+    if args.cache:
+        cache_loop()
+    else:
+        lambda_server()

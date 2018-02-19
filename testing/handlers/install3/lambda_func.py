@@ -2,5 +2,5 @@ import jedi
 import requests
 import simplejson
 
-def handler(conn, event):
+def handler(event):
     return 'imported'

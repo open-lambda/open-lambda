@@ -50,10 +50,8 @@ type Config struct {
 	// sandbox options
 	// worker directory, which contains handler code, pid file, logs, etc.
 	Worker_dir string `json:"worker_dir"`
-	// base path for sock handlers
-	SOCK_handler_base string `json: "sock_handler_base"`
-	// base path for sock import cache
-	SOCK_cache_base string `json: "sock_cache_base"`
+	// base image path for sock containers
+	SOCK_base_path string `json: "sock_base_path"`
 	// port the worker server listens to
 	Worker_port string `json:"worker_port"`
 
@@ -168,37 +166,19 @@ func (c *Config) Defaults() error {
 
 	// sock sandboxes require some extra settings
 	if c.Sandbox == "sock" {
-		// sock base paths
-		if c.SOCK_handler_base == "" {
-			return fmt.Errorf("must specify sock_handler_base")
+		if c.SOCK_base_path == "" {
+			return fmt.Errorf("must specify sock_base_path")
 		}
 
-		if !path.IsAbs(c.SOCK_handler_base) {
+		if !path.IsAbs(c.SOCK_base_path) {
 			if c.path == "" {
-				return fmt.Errorf("sock_handler_base cannot be relative, unless config is loaded from file")
+				return fmt.Errorf("sock_base_path cannot be relative unless config is loaded from file")
 			}
-			path, err := filepath.Abs(path.Join(path.Dir(c.path), c.SOCK_handler_base))
+			path, err := filepath.Abs(path.Join(path.Dir(c.path), c.SOCK_base_path))
 			if err != nil {
 				return err
 			}
-			c.SOCK_handler_base = path
-		}
-
-		if c.Import_cache_size != 0 {
-			if c.SOCK_cache_base == "" {
-				return fmt.Errorf("must specify sock_cache_base if using import cache")
-			}
-
-			if !path.IsAbs(c.SOCK_cache_base) {
-				if c.path == "" {
-					return fmt.Errorf("sock_cache_base cannot be relative, unless config is loaded from file")
-				}
-				path, err := filepath.Abs(path.Join(path.Dir(c.path), c.SOCK_cache_base))
-				if err != nil {
-					return err
-				}
-				c.SOCK_cache_base = path
-			}
+			c.SOCK_base_path = path
 		}
 	}
 

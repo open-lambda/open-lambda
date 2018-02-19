@@ -12,6 +12,8 @@ import (
 	"github.com/open-lambda/open-lambda/worker/config"
 )
 
+const SOCK_INIT = "/sock-init"
+
 var BIND uintptr = uintptr(syscall.MS_BIND)
 var BIND_RO uintptr = uintptr(syscall.MS_BIND | syscall.MS_RDONLY | syscall.MS_REMOUNT)
 var PRIVATE uintptr = uintptr(syscall.MS_PRIVATE)
@@ -24,11 +26,14 @@ type SOCKContainerFactory struct {
 	rootDir      string
 	baseDir      string
 	pkgsDir      string
+	initArgs     []string
 	unshareFlags []string
 }
 
 // NewSOCKContainerFactory creates a SOCKContainerFactory.
-func NewSOCKContainerFactory(opts *config.Config, baseDir, rootDir, prefix string, unshareFlags []string) (*SOCKContainerFactory, error) {
+func NewSOCKContainerFactory(opts *config.Config, rootDir, prefix string, initArgs, unshareFlags []string) (*SOCKContainerFactory, error) {
+	baseDir := opts.SOCK_base_path
+
 	if err := os.MkdirAll(rootDir, 0777); err != nil {
 		return nil, fmt.Errorf("failed to make root container dir :: %v", err)
 	} else if err := syscall.Mount(rootDir, rootDir, "", BIND, ""); err != nil {
@@ -59,6 +64,7 @@ func NewSOCKContainerFactory(opts *config.Config, baseDir, rootDir, prefix strin
 		rootDir:      rootDir,
 		baseDir:      baseDir,
 		pkgsDir:      pkgsDir,
+		initArgs:     initArgs,
 		unshareFlags: unshareFlags,
 	}
 
@@ -79,7 +85,7 @@ func (sf *SOCKContainerFactory) Create(handlerDir, workingDir string) (Container
 		return nil, err
 	}
 
-	startCmd := []string{"/ol-init"}
+	startCmd := append([]string{SOCK_INIT}, sf.initArgs...)
 
 	// NOTE: mount points are expected to exist in SOCK_handler_base directory
 

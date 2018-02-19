@@ -8,7 +8,13 @@ import (
 )
 
 const cacheSandboxDir = "/tmp/olcache"
-const handlerSandboxDir string = "/tmp/olsbs"
+const handlerSandboxDir = "/tmp/olsbs"
+
+const cacheCGroupName = "cache"
+const handlerCGroupName = "handler"
+
+var cacheInitArgs []string = []string{"--cache"}
+var handlerInitArgs []string = []string{}
 
 var cacheUnshareFlags []string = []string{"-iu"}
 var handlerUnshareFlags []string = []string{"-ipu"}
@@ -29,7 +35,7 @@ func InitCacheContainerFactory(opts *config.Config) (ContainerFactory, error) {
 		return NewDockerContainerFactory(opts, dockerutil.CACHE_IMAGE, "host", []string{"SYS_ADMIN"}, labels)
 
 	} else if opts.Sandbox == "sock" {
-		return NewSOCKContainerFactory(opts, opts.SOCK_cache_base, cacheSandboxDir, "cache", cacheUnshareFlags)
+		return NewSOCKContainerFactory(opts, cacheSandboxDir, cacheCGroupName, cacheInitArgs, cacheUnshareFlags)
 	}
 
 	return nil, fmt.Errorf("invalid sandbox type: '%s'", opts.Sandbox)
@@ -45,7 +51,7 @@ func InitHandlerContainerFactory(opts *config.Config) (ContainerFactory, error) 
 		return NewDockerContainerFactory(opts, dockerutil.HANDLER_IMAGE, "", nil, labels)
 
 	} else if opts.Sandbox == "sock" {
-		return NewSOCKContainerFactory(opts, opts.SOCK_handler_base, handlerSandboxDir, "handler", handlerUnshareFlags)
+		return NewSOCKContainerFactory(opts, handlerSandboxDir, handlerCGroupName, handlerInitArgs, handlerUnshareFlags)
 	}
 
 	return nil, fmt.Errorf("invalid sandbox type: '%s'", opts.Sandbox)

@@ -1,5 +1,5 @@
 import jedi
 import requests
 
-def handler(conn, event):
+def handler(event):
     return 'imported'

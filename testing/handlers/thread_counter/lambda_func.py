@@ -11,7 +11,7 @@ def worker():
         counter += 1
         time.sleep(0.001)
 
-def handler(db_conn, event):
+def handler(event):
     global t
     if t == None:
         print 'Init worker thread'

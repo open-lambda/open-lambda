@@ -1,2 +1,2 @@
-def handler(db_conn, event):
+def handler(event):
     return event

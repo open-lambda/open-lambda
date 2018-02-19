@@ -138,10 +138,6 @@ func newCluster(ctx *cli.Context) error {
 		return err
 	}
 
-	if err := os.Mkdir(basePath(cluster), 0700); err != nil {
-		return err
-	}
-
 	if err := os.Mkdir(packagesPath(cluster), 0700); err != nil {
 		return err
 	}
@@ -172,7 +168,7 @@ func newCluster(ctx *cli.Context) error {
 		return err
 	}
 
-	dump_sock_images(ctx)
+	dump_sock_image(ctx)
 
 	fmt.Printf("Cluster Directory: %s\n\n", cluster)
 	fmt.Printf("Worker Defaults: \n%s\n\n", c.DumpStr())
@@ -608,24 +604,14 @@ func kill(ctx *cli.Context) error {
 	return nil
 }
 
-func dump_sock_images(ctx *cli.Context) (err error) {
+func dump_sock_image(ctx *cli.Context) (err error) {
 	cluster := parseCluster(ctx.String("cluster"), true)
 
 	// create a base directory to run sock handlers
-	handlerDir := path.Join(basePath(cluster), "lambda")
-	err = dutil.DumpDockerImage(client, "lambda", handlerDir)
+	err = dutil.DumpDockerImage(client, "lambda", basePath(cluster))
 	if err != nil {
 		return err
-	} else if err = write_dns(handlerDir); err != nil {
-		return err
-	}
-
-	// create a base directory to run sock cache entries
-	cacheDir := path.Join(basePath(cluster), "cache-entry")
-	err = dutil.DumpDockerImage(client, "cache-entry", cacheDir)
-	if err != nil {
-		return err
-	} else if err = write_dns(cacheDir); err != nil {
+	} else if err = write_dns(basePath(cluster)); err != nil {
 		return err
 	}
 
@@ -634,8 +620,7 @@ func dump_sock_images(ctx *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	c.SOCK_handler_base = handlerDir
-	c.SOCK_cache_base = cacheDir
+	c.SOCK_base_path = basePath(cluster)
 	if err := c.Save(templatePath(cluster)); err != nil {
 		return err
 	}

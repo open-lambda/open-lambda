@@ -47,15 +47,10 @@
 /imgs
 /util/cluster
 /bin
-/registry/bin
-/registry/pushserver
-/registry/regpush
-/cache-entry/ol-init
-/cache-entry/spin
-/lambda/ol-init
+/lambda/sock-init
 /lambda/spin
 /lambda/ns.so
 /lambda/fdclient
 /testing/test_worker
 /testing/test_cache
-/sock/sock-init
+/sock-init/sock-init
