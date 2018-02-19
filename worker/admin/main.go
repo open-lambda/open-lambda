@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -754,6 +755,37 @@ func upload(ctx *cli.Context) error {
 	return nil
 }
 
+// setconf sets a configuration option in the cluster's template
+func setconf(ctx *cli.Context) error {
+	cluster := parseCluster(ctx.String("cluster"), false)
+
+	confMap := make(map[string]interface{})
+	for _, arg := range ctx.Args() {
+		split := strings.Split(strings.TrimSpace(arg), "=")
+		if len(split) != 2 {
+			return fmt.Errorf("malformed config option: %s (should be KEY=VALUE)", arg)
+		}
+		confMap[split[0]] = split[1]
+	}
+
+	confMapJSON, err := json.Marshal(confMap)
+	if err != nil {
+		return err
+	}
+
+	if c, err := config.ParseConfig(templatePath(cluster)); err != nil {
+		return err
+	} else if err := json.Unmarshal(confMapJSON, c); err != nil {
+		return fmt.Errorf("failed to set config options :: %v", err)
+	} else if err := c.Defaults(); err != nil {
+		return err
+	} else if err := c.Save(templatePath(cluster)); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // installs requirements to an unpack-only pip mirror
 func install(ctx *cli.Context) error {
 	index := ctx.String("index")
@@ -928,7 +960,7 @@ OPTIONS:
 		cli.Command{
 			Name:        "registry",
 			Usage:       "Start the code registry.",
-			UsageText:   "admin registry [-p|-port=PORT]",
+			UsageText:   "admin registry [-p|-port=PORT] [--access-key=KEY] [--secret-key=KEY]",
 			Description: "Start the code reigstry.",
 			Flags: []cli.Flag{
 				clusterFlag,
@@ -951,7 +983,7 @@ OPTIONS:
 		cli.Command{
 			Name:        "upload",
 			Usage:       "Upload handler code to the registry",
-			UsageText:   "admin upload --cluster=NAME --handler=NAME --file=PATH",
+			UsageText:   "admin upload --cluster=NAME --handler=NAME --file=PATH [--access-key=KEY] [--secret-key=KEY]",
 			Description: "Upload a file to registry. The file must be a tarball.",
 			Flags: []cli.Flag{
 				clusterFlag,
@@ -1006,6 +1038,13 @@ OPTIONS:
 			},
 			ArgsUsage: "Requirements to install",
 			Action:    install,
+		},
+		cli.Command{
+			Name:      "setconf",
+			Usage:     "Set a configuration option in the cluster's template.",
+			UsageText: "admin setconf [--cluster=NAME] KEY=VALUE [KEY=VALUE...]",
+			Flags:     []cli.Flag{clusterFlag},
+			Action:    setconf,
 		},
 	}
 	app.Run(os.Args)
