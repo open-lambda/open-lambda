@@ -5,7 +5,6 @@ LAMBDA_BIN=lambda/bin
 WORKER_GO_FILES = $(shell find worker/ -name '*.go')
 LAMBDA_FILES = $(shell find lambda)
 POOL_FILES = $(shell find cache-entry)
-PIP_FILES = $(shell find pip-installer)
 
 TEST_CLUSTER=testing/test-cluster
 KILL_WORKER=./bin/admin kill -cluster=$(TEST_CLUSTER);rm -rf $(TEST_CLUSTER)/workers/*
@@ -55,7 +54,7 @@ LAMBDA_DIR = $(abspath ./lambda)
 PIPBENCH_DIR = $(abspath ./pipbench)
 
 .PHONY: all
-all: clean-test .git/hooks/pre-commit sock/sock-init imgs/lambda imgs/pip-installer bin/admin
+all: clean-test .git/hooks/pre-commit sock/sock-init imgs/lambda bin/admin
 
 .git/hooks/pre-commit: util/pre-commit
 	cp util/pre-commit .git/hooks/pre-commit
@@ -67,10 +66,6 @@ imgs/lambda: $(LAMBDA_FILES)
 	${MAKE} -C lambda
 	docker build -t lambda lambda
 	touch imgs/lambda
-
-imgs/pip-installer: $(PIP_FILES)
-	docker build -t pip-installer pip-installer
-	touch imgs/pip-installer
 
 bin/admin: $(WORKER_GO_FILES)
 	cd $(ADMIN_DIR) && $(GO) install
