@@ -237,7 +237,7 @@ func (cm *CacheManager) initCacheRoot(opts *config.Config) (memCGroupPath string
 
 	fs := &ForkServer{
 		Sandbox:  rootSB,
-		Pid:      "-1",
+		Pid:      rootSB.NSPid(),
 		SockPath: fmt.Sprintf("%s/fs.sock", rootDir),
 		Imports:  make(map[string]bool),
 		Hits:     0.0,

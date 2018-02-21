@@ -34,16 +34,18 @@ type DockerContainer struct {
 	container *docker.Container
 	client    *docker.Client
 	installed map[string]bool
+	cache     bool
 }
 
 // NewDockerContainer creates a DockerContainer.
-func NewDockerContainer(host_id, hostDir string, container *docker.Container, client *docker.Client) *DockerContainer {
+func NewDockerContainer(host_id, hostDir string, cache bool, container *docker.Container, client *docker.Client) *DockerContainer {
 	sandbox := &DockerContainer{
 		host_id:   host_id,
 		hostDir:   hostDir,
 		container: container,
 		client:    client,
 		installed: make(map[string]bool),
+		cache:     cache,
 	}
 
 	return sandbox
@@ -293,6 +295,9 @@ func (c *DockerContainer) DockerID() string {
 
 func (c *DockerContainer) RunServer() error {
 	cmd := []string{"python", "server.py"}
+	if c.cache {
+		cmd = append(cmd, "--cache")
+	}
 
 	execOpts := docker.CreateExecOptions{
 		AttachStdin:  false,

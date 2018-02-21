@@ -32,7 +32,7 @@ func InitCacheContainerFactory(opts *config.Config) (ContainerFactory, error) {
 			dockerutil.DOCKER_LABEL_TYPE:    dockerutil.CACHE,
 		}
 
-		return NewDockerContainerFactory(opts, dockerutil.CACHE_IMAGE, "host", []string{"SYS_ADMIN"}, labels)
+		return NewDockerContainerFactory(opts, "host", []string{"SYS_ADMIN"}, labels, true)
 
 	} else if opts.Sandbox == "sock" {
 		return NewSOCKContainerFactory(opts, cacheSandboxDir, cacheCGroupName, cacheInitArgs, cacheUnshareFlags)
@@ -48,7 +48,7 @@ func InitHandlerContainerFactory(opts *config.Config) (ContainerFactory, error) 
 			dockerutil.DOCKER_LABEL_TYPE:    dockerutil.HANDLER,
 		}
 
-		return NewDockerContainerFactory(opts, dockerutil.HANDLER_IMAGE, "", nil, labels)
+		return NewDockerContainerFactory(opts, "", nil, labels, false)
 
 	} else if opts.Sandbox == "sock" {
 		return NewSOCKContainerFactory(opts, handlerSandboxDir, handlerCGroupName, handlerInitArgs, handlerUnshareFlags)

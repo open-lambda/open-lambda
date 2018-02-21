@@ -10,6 +10,7 @@ import (
 	docker "github.com/fsouza/go-dockerclient"
 
 	"github.com/open-lambda/open-lambda/worker/config"
+	"github.com/open-lambda/open-lambda/worker/dockerutil"
 )
 
 // DockerContainerFactory is a ContainerFactory that creats docker containers.
@@ -18,13 +19,13 @@ type DockerContainerFactory struct {
 	labels  map[string]string
 	caps    []string
 	pidMode string
-	image   string
 	pkgsDir string
 	idxPtr  *int64
+	cache   bool
 }
 
 // NewDockerContainerFactory creates a DockerContainerFactory.
-func NewDockerContainerFactory(opts *config.Config, image, pidMode string, caps []string, labels map[string]string) (*DockerContainerFactory, error) {
+func NewDockerContainerFactory(opts *config.Config, pidMode string, caps []string, labels map[string]string, cache bool) (*DockerContainerFactory, error) {
 	client, err := docker.NewClientFromEnv()
 	if err != nil {
 		return nil, err
@@ -38,9 +39,9 @@ func NewDockerContainerFactory(opts *config.Config, image, pidMode string, caps 
 		labels:  labels,
 		caps:    caps,
 		pidMode: pidMode,
-		image:   image,
 		pkgsDir: opts.Pkgs_dir,
 		idxPtr:  idxPtr,
+		cache:   cache,
 	}
 
 	return df, nil
@@ -73,7 +74,7 @@ func (df *DockerContainerFactory) Create(handlerDir, workingDir string) (Contain
 		docker.CreateContainerOptions{
 			Config: &docker.Config{
 				Cmd:    []string{"/spin"},
-				Image:  df.image,
+				Image:  dockerutil.LAMBDA_IMAGE,
 				Labels: df.labels,
 			},
 			HostConfig: &docker.HostConfig{
@@ -87,7 +88,7 @@ func (df *DockerContainerFactory) Create(handlerDir, workingDir string) (Contain
 		return nil, err
 	}
 
-	sandbox := NewDockerContainer(id, hostDir, container, df.client)
+	sandbox := NewDockerContainer(id, hostDir, df.cache, container, df.client)
 	return sandbox, nil
 }
 

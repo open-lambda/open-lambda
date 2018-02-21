@@ -123,7 +123,7 @@ test-docker-both: bin/admin imgs/lambda test-cluster
 	$(subst CONDITION, $(DOCKER_BOTH), $(RUN_TEST))
 
 .PHONY: clean
-clean: clean-test-cluster
+clean: clean-test
 	rm -rf bin
 	rm -rf registry/bin
 	rm -f imgs/lambda

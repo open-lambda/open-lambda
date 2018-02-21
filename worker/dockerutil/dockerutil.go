@@ -15,11 +15,8 @@ const (
 	DOCKER_LABEL_CLUSTER = "ol.cluster" // cluster name
 	DOCKER_LABEL_TYPE    = "ol.type"    // container type (sb, olstore, rethinkdb, etc)
 	HANDLER              = "handler"
-	HANDLER_IMAGE        = "lambda"
 	CACHE                = "cache"
-	CACHE_IMAGE          = "cache-entry"
-	POOL_IMAGE           = "server-pool"
-	INSTALLER_IMAGE      = "pip-installer"
+	LAMBDA_IMAGE         = "lambda"
 )
 
 // ImageExists checks if an image of name exists.

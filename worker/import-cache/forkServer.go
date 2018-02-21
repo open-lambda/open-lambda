@@ -47,15 +47,13 @@ func (fs *ForkServer) Kill() error {
 	}
 	proc.Kill()
 
-	go func() {
-		fs.Sandbox.Unpause()
-		fs.Sandbox.Stop()
-		fs.Sandbox.Remove()
-	}()
-
 	if fs.Parent != nil {
 		fs.Parent.Children -= 1
 	}
+
+	fs.Sandbox.Unpause()
+	fs.Sandbox.Stop()
+	fs.Sandbox.Remove()
 
 	return nil
 }
