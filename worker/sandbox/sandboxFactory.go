@@ -7,17 +7,17 @@ import (
 	"github.com/open-lambda/open-lambda/worker/dockerutil"
 )
 
-const cacheSandboxDir = "/tmp/olcache"
-const handlerSandboxDir = "/tmp/olsbs"
+const cacheUnshareFlags = "-iu"
+const handlerUnshareFlags = "-ipu"
 
 const cacheCGroupName = "cache"
 const handlerCGroupName = "handler"
 
+const cacheSandboxDir = "/tmp/olcache"
+const handlerSandboxDir = "/tmp/olsbs"
+
 var cacheInitArgs []string = []string{"--cache"}
 var handlerInitArgs []string = []string{}
-
-var cacheUnshareFlags []string = []string{"-iu"}
-var handlerUnshareFlags []string = []string{"-ipu"}
 
 // ContainerFactory is the common interface for creating containers.
 type ContainerFactory interface {
@@ -35,7 +35,7 @@ func InitCacheContainerFactory(opts *config.Config) (ContainerFactory, error) {
 		return NewDockerContainerFactory(opts, "host", []string{"SYS_ADMIN"}, labels, true)
 
 	} else if opts.Sandbox == "sock" {
-		return NewSOCKContainerFactory(opts, cacheSandboxDir, cacheCGroupName, cacheInitArgs, cacheUnshareFlags)
+		return NewSOCKContainerFactory(opts, cacheSandboxDir, cacheCGroupName, cacheUnshareFlags, cacheInitArgs)
 	}
 
 	return nil, fmt.Errorf("invalid sandbox type: '%s'", opts.Sandbox)
@@ -51,7 +51,7 @@ func InitHandlerContainerFactory(opts *config.Config) (ContainerFactory, error) 
 		return NewDockerContainerFactory(opts, "", nil, labels, false)
 
 	} else if opts.Sandbox == "sock" {
-		return NewSOCKContainerFactory(opts, handlerSandboxDir, handlerCGroupName, handlerInitArgs, handlerUnshareFlags)
+		return NewSOCKContainerFactory(opts, handlerSandboxDir, handlerCGroupName, handlerUnshareFlags, handlerInitArgs)
 	}
 
 	return nil, fmt.Errorf("invalid sandbox type: '%s'", opts.Sandbox)

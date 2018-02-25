@@ -26,6 +26,7 @@ import (
 
 	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/handler/state"
+	"github.com/open-lambda/open-lambda/worker/util"
 )
 
 type SOCKContainer struct {
@@ -38,12 +39,12 @@ type SOCKContainer struct {
 	status       state.HandlerState
 	initPid      string
 	initCmd      *exec.Cmd
+	unshareFlags string
 	startCmd     []string
-	unshareFlags []string
 	pipe         *os.File
 }
 
-func NewSOCKContainer(cgf *CgroupFactory, opts *config.Config, rootDir, id string, startCmd, unshareFlags []string) (*SOCKContainer, error) {
+func NewSOCKContainer(cgf *CgroupFactory, opts *config.Config, rootDir, id, unshareFlags string, startCmd []string) (*SOCKContainer, error) {
 	// create container cgroups
 	cgId, err := cgf.GetCg(id)
 	if err != nil {
@@ -94,7 +95,7 @@ func (c *SOCKContainer) Start() error {
 		}
 	}(time.Now())
 
-	initArgs := append(c.unshareFlags, c.rootDir)
+	initArgs := []string{c.unshareFlags, c.rootDir}
 	initArgs = append(initArgs, c.startCmd...)
 
 	c.initCmd = exec.Command(
@@ -165,18 +166,40 @@ func (c *SOCKContainer) Start() error {
 func (c *SOCKContainer) Stop() error {
 	start := time.Now()
 
-	pid, _ := strconv.Atoi(c.initPid)
-	proc, err := os.FindProcess(pid)
-	if err != nil {
-		return fmt.Errorf("failed to find init process with pid=%d :: %v", pid, err)
-	}
-	err = proc.Signal(syscall.SIGTERM)
-	if err != nil {
-		log.Printf("failed to send kill signal to init process pid=%d :: %v", pid, err)
+	// If we're using the PID namespace, we can just kill the init process
+	// and the OS will SIGKILL the rest. If not (i.e., for import cache
+	// containers), we need to kill them all.
+	if strings.Contains(c.unshareFlags, "p") {
+		pid, _ := strconv.Atoi(c.initPid)
+		proc, err := os.FindProcess(pid)
+		if err != nil {
+			return fmt.Errorf("failed to find init process with pid=%d :: %v", pid, err)
+		}
+		err = proc.Signal(syscall.SIGTERM)
+		if err != nil {
+			log.Printf("failed to send kill signal to init process pid=%d :: %v", pid, err)
+		}
+	} else {
+		// kill any remaining processes
+		procsPath := filepath.Join("/sys/fs/cgroup/memory", OLCGroupName, c.cgId, "cgroup.procs")
+		pids, err := ioutil.ReadFile(procsPath)
+		if err != nil {
+			return err
+		}
+
+		for _, pidStr := range strings.Split(strings.TrimSpace(string(pids[:])), "\n") {
+			if pidStr == "" {
+				break
+			}
+
+			if err := util.KillPIDStr(pidStr); err != nil {
+				log.Printf("failed to kill pid %v, cleanup may fail :: %v", err)
+			}
+		}
 	}
 
-	// let the initCmd (sock_init) to clean up all children
-	_, err = c.initCmd.Process.Wait()
+	// wait for the initCmd to clean up its children
+	_, err := c.initCmd.Process.Wait()
 	if err != nil {
 		log.Printf("failed to wait on initCmd pid=%d :: %v", c.initCmd.Process.Pid, err)
 	}
@@ -250,8 +273,6 @@ func (c *SOCKContainer) Remove() error {
 		log.Printf("remove host dir %s failed :: %v\n", c.hostDir, err)
 	}
 
-	//TODO somehow wait for the processes to exit?
-	time.Sleep(100 * time.Millisecond)
 	// remove cgroups
 	if err := c.cgf.PutCg(c.id, c.cgId); err != nil {
 		log.Printf("Unable to delete cgroups: %v", err)
@@ -318,7 +339,7 @@ func (c *SOCKContainer) RunServer() error {
 		ready <- true
 	}()
 
-	// wait up to 5s for server sock_init to spawn
+	// wait up to 5s for SOCK server to spawn
 	timeout := time.NewTimer(5 * time.Second)
 	defer timeout.Stop()
 

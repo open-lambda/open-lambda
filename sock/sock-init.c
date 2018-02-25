@@ -182,7 +182,7 @@ int main(int argc, char *argv[]) {
 
   // start user proc
   res = execve(argv[optind+1], &argv[optind+1], environ);
-  fprintf(stderr, "cgroup_init: failed\n");
+  fprintf(stderr, "sock-init: failed\n");
   if (res != 0) {
     errExit("failed to do execve");
   }

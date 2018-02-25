@@ -47,9 +47,9 @@
 /imgs
 /util/cluster
 /bin
-/lambda/sock-init
+/lambda/ol-init
 /lambda/spin
 /lambda/ns.so
 /lambda/fdclient
-/sock-init/sock-init
+/sock/sock-init
 /testing/test-cluster

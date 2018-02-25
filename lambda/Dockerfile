@@ -10,7 +10,7 @@ RUN pip install tornado
 RUN pip install requests
 
 COPY spin /
-COPY sock-init /
+COPY ol-init /
 COPY ns.so /
 COPY server.py /
 
