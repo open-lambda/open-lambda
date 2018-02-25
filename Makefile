@@ -31,7 +31,7 @@ define RUN_TEST=
 	./bin/admin setconf -cluster=$(TEST_CLUSTER) CONDITION
 	./bin/admin workers -cluster=$(TEST_CLUSTER)
 	@echo
-	@echo "Sleeping (to wait for installations)..."
+	@echo "Sleeping (to wait for worker setup)..."
 	@sleep 10
 	@echo "Requesting lambdas..."
 	$(RUN_LAMBDA)/echo -d '{}'
@@ -78,7 +78,7 @@ test-all: test-sock-all test-docker-all
 
 test-sock-all: test-sock-nocache test-sock-handler test-sock-import test-sock-both
 
-test-docker-all: test-docker-nocache test-docker-handler test-docker-import test-docker-both
+test-docker-all: test-docker-nocache test-docker-handler
 
 test-cluster: imgs/test-cluster
 
