@@ -238,7 +238,6 @@ func (s *Server) cleanup() {
 	s.handlers.Cleanup()
 }
 
-// Main starts a server.
 func Main(config_path string) {
 	conf, err := config.ParseConfig(config_path)
 	if err != nil {
@@ -246,8 +245,6 @@ func Main(config_path string) {
 	}
 	log.Printf("Config: %+v", conf)
 
-	// start serving
-	log.Printf("Create server\n")
 	server, err := NewServer(conf)
 	if err != nil {
 		log.Fatal(err)

@@ -10,7 +10,7 @@ TEST_CLUSTER=testing/test-cluster
 KILL_WORKER=./bin/admin kill -cluster=$(TEST_CLUSTER);rm -rf $(TEST_CLUSTER)/workers/*
 RUN_LAMBDA=curl -XPOST localhost:8080/runLambda
 
-STARTUP_PKGS='{"startup_pkgs": ["jedi", "requests", "simplejson"]}'
+STARTUP_PKGS='{"startup_pkgs": ["parso", "jedi", "urllib3", "idna", "chardet", "certifi", "requests", "simplejson"]}'
 REGISTRY_DIR='{"registry_dir": "$(abspath testing/registry)"}'
 
 SOCK_NOCACHE='{"sandbox": "sock", "handler_cache_size": 0, "import_cache_size": 0, "cg_pool_size": 10}'
@@ -32,7 +32,7 @@ define RUN_TEST=
 	./bin/admin workers -cluster=$(TEST_CLUSTER)
 	@echo
 	@echo "Sleeping (to wait for worker setup)..."
-	@sleep 10
+	@sleep 15
 	@echo "Requesting lambdas..."
 	$(RUN_LAMBDA)/echo -d '{}'
 	@echo
