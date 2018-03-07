@@ -115,7 +115,134 @@ a single OpenLambda worker per machine is currently supported.
 
 ### Admin Tool Commands
 
-TODO(Tyler): document the admin tool commands.
+The simplest admin command, `worker-exec`, allows you to launch a
+foreground OpenLambda process.  For example:
+
+```
+  admin worker-exec --config=worker.json
+```
+
+The above command starts running a single worker with a configuration
+specified in the worker.json file (described in detail later).  All
+log output goes to the terminal (i.e., stdout), and you can stop the
+process with ctrl-C.
+
+Suppose worker.json contains the following line:
+
+```
+  "worker_port": "8080"
+```
+
+While the process is running, you may ping it from another terminal
+with the following command:
+
+```
+  curl http://localhost:8080/status
+```
+
+If the worker is ready, the status request will return a "ready"
+message.
+
+Of course, you will typically want to run one (or maybe more) workers
+as servers in the background on your machine.  Most of the remaining
+admin commands allow you to manage these long-running workers.
+
+An OpenLambda worker requires a local file-system location to store
+handler code, logs, and various other data.  Thus, when starting a new
+local cluster, the first step is to indicate where the cluster data
+should reside with the `new` command:
+
+```
+   admin new --cluster=<ROOT>
+```
+
+For OpenLambda, a local cluster's name is the same as the file
+location.  Thus, <ROOT> should refer to a local directory that will be
+created for all OpenLambda files.  The layout of these files in the
+<ROOT> directory is described in detail below.  You will need to pass
+the cluster name/location to all future admin commands that manage the
+cluster.
+
+The "<ROOT>/config/template.json" file in the cluster located at
+"<ROOT>" will contain many configuration options specified as
+keys/values in JSON.  These setting will be used for every new
+OpenLambda worker.  You can modify these values by specifying override
+values (again in JSON) using the `setconf` command.  For example:
+
+```
+  ./admin setconf --cluster=<ROOT> '{"sandbox": "sock", "registry": "local"}'
+```
+
+In the above example, the configuration is modified so that workers
+will use the local registry and the "sock" sandboxing engine.
+
+Once configuration is complete, you can launch a specified number of
+workers (currently only one is supported?) using the following
+command:
+
+```
+  ./admin workers --cluster=<NAME> --num-workers=<NUM> --port=<PORT>
+```
+
+This will create a specified number of workers listening on ports
+starting at the given value.  For example, suppose <NUM>=3 and
+<PORT>=8080.  The `workers` command will create three workers
+listening on ports 8080, 8081, and 8082.  The `workers` command is
+basically a convenience wrapper around the `worker-exec` command.  The
+`workers` command does three things for you: (1) creates a config file
+for each worker, based on template.json, (2) invokes `worker-exec` for
+each requested worker instance, and (3) makes the workers run in the
+background so they continue executing even if you exit the terminal.
+
+When you want to stop a local OpenLambda cluster, you can do so by
+executing the of `kill` command:
+
+```
+  ./admin kill --cluster=<NAME>
+```
+
+This will halt any processes or containers associated with the
+cluster.
+
+In addition to the above commands for managing OpenLambda workers, two
+admin commands are also available for managing an OpenLambda handler
+store.  First, you may launch the OpenLambda registry with the
+following `registry` command:
+
+```
+   ./admin registry --port=<PORT> --access-key=<KEY> --secret-key=<SECRET>
+```
+
+The registry will start listening on the designated port.  You may
+generate the KEY and SECRET randomly yourself if you wish (or you may
+use some other hard-to-guess SECRET).  Keep these values handy for
+later uploading handlers.
+
+The "<ROOT>/config/template.json" file specifies registry mode and
+various registry options.  You may manually set these, but as a
+convenience, the `registry` command will automatically
+populate the configuration file for you when you launch the registry
+process.  Thus, to avoid manual misconfiguration, we recommend running
+`./admin registry` before running `./admin workers`.  Or, if you wish
+to use the local-directory mode for your registry, simply never run
+`./admin registry` (the default configs use local-directory mode).
+
+After the registry is running, you may upload handlers to it via the
+following command:
+
+```
+  ./admin upload --cluster=<NAME> --handler=<HANDLER-NAME> --file=<TAR> --access-key=<KEY> --secret-key=<SECRET>
+```
+
+The above command should use the KEY/SECRET pair used when you
+launched the registry earlier.  The <TAR> can refer to a handler
+bundle.  This is just a .tar.gz containing (at a minimum) a
+lambda_func.py file (for the code) and a packages.txt file (to specify
+the Python dependencies).
+
+### Writing Handlers
+
+TODO(Tyler): describe how to write and upload handlers
 
 ### Cluster Directory
 
