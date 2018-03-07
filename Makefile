@@ -23,6 +23,8 @@ DOCKER_HANDLER='{"sandbox": "docker", "handler_cache_size": 10000000, "import_ca
 DOCKER_IMPORT='{"sandbox": "docker", "handler_cache_size": 0, "import_cache_size": 10000000, "cg_pool_size": 0}'
 DOCKER_BOTH='{"sandbox": "docker", "handler_cache_size": 10000000, "import_cache_size": 10000000, "cg_pool_size": 0}'
 
+WORKER_TIMEOUT=60
+
 define RUN_TEST=
 	@echo "Killing worker if running..."
 	-$(KILL_WORKER)
@@ -31,9 +33,13 @@ define RUN_TEST=
 	./bin/admin setconf -cluster=$(TEST_CLUSTER) CONDITION
 	./bin/admin workers -cluster=$(TEST_CLUSTER)
 	@echo
-	@echo "Sleeping (to wait for worker setup)..."
-	@sleep 15
-	@echo "Requesting lambdas..."
+	@echo "Waiting for worker to initialize..."
+	@for i in $$(seq 1 $(WORKER_TIMEOUT)); \
+	do \
+		[ $$i -gt 1 ] && sleep 2; \
+		./bin/admin status -cluster=$(TEST_CLUSTER) 1>/dev/null && s=0 && break || s=$$?; \
+	done; ([ $$s -eq 0 ] || (echo "Worker failed to initialize after $(WORKER_TIMEOUT)s" && exit 1))
+	@echo "Worker ready. Requesting lambdas..."
 	$(RUN_LAMBDA)/echo -d '{}'
 	@echo
 	$(RUN_LAMBDA)/install -d '{}'

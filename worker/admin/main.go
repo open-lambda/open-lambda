@@ -206,55 +206,67 @@ func status(ctx *cli.Context) error {
 		fmt.Printf("Other clusters with no containers may exist without being listed.\n")
 		fmt.Printf("\n")
 		fmt.Printf("For info about a specific cluster, use -cluster=<cluster-dir>\n")
-	} else {
-		// print worker connection info
-		logs, err := ioutil.ReadDir(path.Join(cluster, "logs"))
-		if err != nil {
-			return err
-		}
-		fmt.Printf("Worker Pings:\n")
-		for _, fi := range logs {
-			if strings.HasSuffix(fi.Name(), ".pid") {
-				name := fi.Name()[:len(fi.Name())-4]
-				c, err := config.ParseConfig(configPath(cluster, name))
-				if err != nil {
-					return err
-				}
 
-				url := fmt.Sprintf("http://localhost:%s/status", c.Worker_port)
-				response, err := http.Get(url)
-				if err != nil {
-					fmt.Printf("  Could not send GET to %s\n", url)
-					continue
-				}
-				defer response.Body.Close()
-				body, err := ioutil.ReadAll(response.Body)
-				if err != nil {
-					fmt.Printf("  Failed to read body from GET to %s\n", url)
-					continue
-				}
-				fmt.Printf("  %s => %s [%s]\n", url, body, response.Status)
+		return nil
+	}
+
+	var pingErr bool
+
+	// print worker connection info
+	logs, err := ioutil.ReadDir(path.Join(cluster, "logs"))
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Worker Pings:\n")
+	for _, fi := range logs {
+		if strings.HasSuffix(fi.Name(), ".pid") {
+			name := fi.Name()[:len(fi.Name())-4]
+			c, err := config.ParseConfig(configPath(cluster, name))
+			if err != nil {
+				return err
 			}
-		}
-		fmt.Printf("\n")
 
-		// print containers
-		fmt.Printf("Cluster containers:\n")
-		nodes, err := clusterNodes(cluster)
-		if err != nil {
-			return err
-		}
-
-		for typ, cids := range nodes {
-			fmt.Printf("  %s containers:\n", typ)
-			for _, cid := range cids {
-				container, err := client.InspectContainer(cid)
-				if err != nil {
-					return err
-				}
-				fmt.Printf("    %s [%s] => %s\n", container.Name, container.Config.Image, container.State.StateString())
+			url := fmt.Sprintf("http://localhost:%s/status", c.Worker_port)
+			response, err := http.Get(url)
+			if err != nil {
+				fmt.Printf("  Could not send GET to %s\n", url)
+				pingErr = true
+				continue
 			}
+			defer response.Body.Close()
+			body, err := ioutil.ReadAll(response.Body)
+			if err != nil {
+				fmt.Printf("  Failed to read body from GET to %s\n", url)
+				pingErr = true
+				continue
+			}
+			fmt.Printf("  %s => %s [%s]\n", url, body, response.Status)
 		}
+	}
+	fmt.Printf("\n")
+
+	// print containers
+	fmt.Printf("Cluster containers:\n")
+	nodes, err := clusterNodes(cluster)
+	if err != nil {
+		return err
+	}
+
+	for typ, cids := range nodes {
+		fmt.Printf("  %s containers:\n", typ)
+		for _, cid := range cids {
+			container, err := client.InspectContainer(cid)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("    %s [%s] => %s\n", container.Name, container.Config.Image, container.State.StateString())
+		}
+	}
+	fmt.Printf("\n")
+
+	if pingErr {
+		return fmt.Errorf("At least one worker failed the status check")
 	}
 
 	return nil

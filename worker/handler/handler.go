@@ -72,25 +72,35 @@ type Handler struct {
 
 // NewHandlerSet creates an empty HandlerSet
 func NewHandlerManagerSet(opts *config.Config) (hms *HandlerManagerSet, err error) {
+	var t time.Time
+
+	t = time.Now()
 	rm, err := registry.InitRegistryManager(opts)
 	if err != nil {
 		return nil, err
 	}
+	log.Printf("Initialized registry manager (took %v)", time.Since(t))
 
+	t = time.Now()
 	pm, err := pip.InitInstallManager(opts)
 	if err != nil {
 		return nil, err
 	}
+	log.Printf("Initialized installation manager (took %v)", time.Since(t))
 
+	t = time.Now()
 	sf, err := sb.InitHandlerContainerFactory(opts)
 	if err != nil {
 		return nil, err
 	}
+	log.Printf("Initialized handler container factory (took %v)", time.Since(t))
 
+	t = time.Now()
 	cm, err := cache.InitCacheManager(opts)
 	if err != nil {
 		return nil, err
 	}
+	log.Printf("Initialized cache manager (took %v)", time.Since(t))
 
 	var hhits int64 = 0
 	var ihits int64 = 0
