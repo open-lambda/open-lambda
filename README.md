@@ -246,7 +246,80 @@ TODO(Tyler): describe how to write and upload handlers
 
 ### Cluster Directory
 
-TODO(Tyler): document the layout of the cluster directory.
+Suppose you just ran the following:
+
+```
+admin new --cluster=./my-cluster
+```
+
+You'll find seven subdirectories in the `my-cluster' directory:
+`config`, `logs`, `base`, `packages`, `import-cache`, `registry`, and
+`workers`.
+
+The config directory will contain, at a minimum, a `template.json`
+file.  Once you start workers, each worker will have an additional
+config file in this directory named `worker-<N>.json` (the admin tool
+creates these by copying first copying `template.json`, then
+populating additional fields specific to the worker).
+
+Each running worker will create two files in the `logs` directory:
+`worker-<N>.out` and `worker-<N>.pid`.  The ".out" files contain the
+log output of the workers; this is a good place to start if the
+workers are not reachable or if they are returning unexpected errors.
+The ".pid" files each contain a single number representing the process
+ID of the corresponding worker process; this is mostly useful to the
+admin kill tool for identifying processes to halt.
+
+All OpenLambda handlers run on the same base image, which is stored in
+the `my-cluster/base` directory.  This contains a standard Ubuntu
+image with additional OpenLambda-specific components.  This base is
+accessed on a read-only basis by every handler.
+
+TODO: `packages` and `import-cache`.
+
+As discussed earlier, OpenLambda can use a separate registry service
+to store handlers, or it can store them in a local directory; the
+latter is more convenient for development and testing.  Unless
+configured otherwise, OpenLambda will treat the
+`./my-cluster/registry` directory as a handler store.  Creating a
+handler named "X" is as simple as creating a directory named
+`./my-cluster/registry/X` and writing your code therein.  No
+compression is necessary in this mode; the handler code for "X" can be
+saved here: `./my-cluster/registry/X/lambda_func.py`.
+
+Each worker has its own directory for various state.  The storage for
+worker N is rooted at `./my-cluster/workers/worker-<N>`.  Within that
+directory, handler containers will have scratch space at
+`./handlers/<handler-name>/<instance-number>`.  For example, all
+containers created to service invocations of the "echo" handler will
+have scratch space directories inside the `./handlers/echo` directory.
+
+Suppose there is an instance of the "echo" handler with ID "3".  That
+container will have it's scratch space at `./handlers/echo/3` (within
+the worker root, `./my-cluster/workers/worker-<N>`).  The handler may
+write temporary files in that directory as necessary.  In addition to
+these, there will be three files: `server_pipe` sock file (used by the
+worker process to communicate with the handler) and `stdout` and
+`stderr` files (handler output is redirected here).  When debugging a
+handler, checking these output files can be quite useful.
+
+Note that the same directory can appear at different locations in the
+host and in a guest container.  For example, containers for two
+handlers named "function-A" and "function-B" might have scratch space
+on the host allocated at the following two locations:
+
+```
+./my-cluster/workers/worker-0/handlers/function-A/123
+./my-cluster/workers/worker-0/handlers/function-B/321
+```
+
+As a developer debugging the functions, you may want to peek in the
+above directories to look for handler output and generated files.
+However, in order to write code for a handler that generates output in
+the above locations, you will need to write files to the `/host`
+directory (regardless of whether you're writing code for function-A or
+function-B) because that is where scratch space is always mapped
+within a lambda container.
 
 ## Configuration
 
