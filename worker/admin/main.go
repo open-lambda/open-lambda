@@ -150,15 +150,14 @@ func newCluster(ctx *cli.Context) error {
 		return err
 	}
 	c := &config.Config{
-		Worker_port:      "?",
-		Cluster_name:     cluster,
-		Registry:         "local",
-		Sandbox:          "docker",
-		Registry_dir:     registryPath(cluster),
-		Pkgs_dir:         packagesPath(cluster),
-		Worker_dir:       workerPath(cluster, "default"),
-		Import_cache_dir: cachePath(cluster),
-		Sandbox_config:   map[string]interface{}{"processes": 10},
+		Worker_port:    "?",
+		Cluster_name:   cluster,
+		Registry:       "local",
+		Sandbox:        "docker",
+		Registry_dir:   registryPath(cluster),
+		Pkgs_dir:       packagesPath(cluster),
+		Worker_dir:     workerPath(cluster, "default"),
+		Sandbox_config: map[string]interface{}{"processes": 10},
 	}
 	if err := c.Defaults(); err != nil {
 		return err

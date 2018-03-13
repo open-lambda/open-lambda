@@ -43,9 +43,8 @@ type Config struct {
 	Max_runners int `json:"max_runners"`
 
 	// cache options
-	Handler_cache_size int    `json:"handler_cache_size"` //kb
-	Import_cache_size  int    `json:"import_cache_size"`  //kb
-	Import_cache_dir   string `json:"import_cache_dir"`
+	Handler_cache_size int `json:"handler_cache_size"` //kb
+	Import_cache_size  int `json:"import_cache_size"`  //kb
 
 	// sandbox options
 	// worker directory, which contains handler code, pid file, logs, etc.
@@ -183,24 +182,6 @@ func (c *Config) Defaults() error {
 				return err
 			}
 			c.Pkgs_dir = path
-		}
-	}
-
-	// import cache
-	if c.Import_cache_size != 0 {
-		if c.Import_cache_dir == "" {
-			return fmt.Errorf("must specify import_cache_dir if using import cache")
-		}
-
-		if !path.IsAbs(c.Import_cache_dir) {
-			if c.path == "" {
-				return fmt.Errorf("Import_cache_dir cannot be relative, unless config is loaded from file")
-			}
-			path, err := filepath.Abs(path.Join(path.Dir(c.path), c.Import_cache_dir))
-			if err != nil {
-				return err
-			}
-			c.Import_cache_dir = path
 		}
 	}
 

@@ -21,8 +21,8 @@ type cacheFactory struct {
 }
 
 func NewCacheFactory(opts *config.Config) (CacheFactory, sb.Container, string, error) {
-	cacheDir := opts.Import_cache_dir
-	if err := os.MkdirAll(opts.Import_cache_dir, os.ModeDir); err != nil {
+	cacheDir := filepath.Join(opts.Worker_dir, "import-cache")
+	if err := os.MkdirAll(cacheDir, os.ModeDir); err != nil {
 		return nil, nil, "", fmt.Errorf("failed to create pool directory at %s :: %v", cacheDir, err)
 	}
 
