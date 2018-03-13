@@ -252,8 +252,8 @@ Suppose you just ran the following:
 admin new --cluster=./my-cluster
 ```
 
-You'll find seven subdirectories in the `my-cluster' directory:
-`config`, `logs`, `base`, `packages`, `import-cache`, `registry`, and
+You'll find six subdirectories in the `my-cluster' directory:
+`config`, `logs`, `base`, `packages`, `registry`, and
 `workers`.
 
 The config directory will contain, at a minimum, a `template.json`
@@ -270,12 +270,14 @@ The ".pid" files each contain a single number representing the process
 ID of the corresponding worker process; this is mostly useful to the
 admin kill tool for identifying processes to halt.
 
-All OpenLambda handlers run on the same base image, which is stored in
-the `my-cluster/base` directory.  This contains a standard Ubuntu
-image with additional OpenLambda-specific components.  This base is
-accessed on a read-only basis by every handler.
+All OpenLambda handlers run on the same base image, which is dumped via
+Docker into the `my-cluster/base` directory.  This contains a standard Ubuntu
+image with additional OpenLambda-specific components. This base is
+accessed on a read-only basis by every handler when using SOCK containers.
 
-TODO: `packages` and `import-cache`.
+The `./my-cluster/packages` directory is mapped (via a read-only bind mount) 
+into all containers started by the worker, and contains all of the PyPI 
+packages installed to workers on this machine.
 
 As discussed earlier, OpenLambda can use a separate registry service
 to store handlers, or it can store them in a local directory; the
@@ -293,6 +295,9 @@ directory, handler containers will have scratch space at
 `./handlers/<handler-name>/<instance-number>`.  For example, all
 containers created to service invocations of the "echo" handler will
 have scratch space directories inside the `./handlers/echo` directory.
+Additionally, there is a directory `./my-cluster/workers/worker-<N>/import-cache`
+that contains the communication directory mapped into each import cache
+entry container.
 
 Suppose there is an instance of the "echo" handler with ID "3".  That
 container will have it's scratch space at `./handlers/echo/3` (within
