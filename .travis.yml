@@ -1,3 +1,13 @@
+language: go
+go:
+  - "1.7.6"
+
+notifications:
+  email:
+    recipients:
+      - ed.nmi.oakes@gmail.com
+      - tylerharter@gmail.com
+
 install:
   - sudo ./quickstart/deps.sh
 
