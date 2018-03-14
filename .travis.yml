@@ -1,0 +1,5 @@
+install:
+  - sudo ./quickstart/deps.sh
+
+script:
+  - sudo make test-all
