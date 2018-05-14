@@ -6,7 +6,7 @@ RUN apt-get -y install python python-dev python-pip build-essential
 RUN pip install --upgrade pip
 RUN pip install virtualenv
 RUN pip install rethinkdb
-RUN pip install tornado
+RUN pip install tornado==4.5.3
 RUN pip install requests
 
 COPY spin /
