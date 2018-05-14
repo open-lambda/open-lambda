@@ -9,7 +9,7 @@ func NewSubsetMatcher() *SubsetMatcher {
 
 func (sm *SubsetMatcher) Match(servers []*ForkServer, imports []string) (*ForkServer, []string, bool) {
 	best_fs := servers[0]
-	best_score := 0
+	best_score := -1
 	best_toCache := imports
 	for i := 1; i < len(servers); i++ {
 		matched := 0
@@ -30,5 +30,5 @@ func (sm *SubsetMatcher) Match(servers []*ForkServer, imports []string) (*ForkSe
 		}
 	}
 
-	return best_fs, best_toCache, best_score != 0
+	return best_fs, best_toCache, best_score != -1
 }
