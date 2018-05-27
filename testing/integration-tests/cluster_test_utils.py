@@ -16,7 +16,7 @@ def kill_worker():
     template = """{bin} kill -cluster={cluster_dir}; rm -rf {cluster_dir}/workers/*"""
     data = { 'bin': ADMIN_BIN, 'cluster_dir': TEST_CLUSTER_DIR }
     cmd = template.format(**data)
-    subprocess.call(cmd, shell=True)
+    subprocess.check_output(cmd, shell=True)
 
 def is_worker_active():
     template = """{bin} status -cluster={cluster_dir}"""
@@ -30,13 +30,13 @@ def set_worker_conf(conf):
     template = """{bin} setconf -cluster={cluster_dir} '{conf}'"""
     data = { 'bin': ADMIN_BIN, 'cluster_dir': TEST_CLUSTER_DIR, 'conf': conf }
     cmd = template.format(**data)
-    subprocess.call(cmd, shell=True)
+    subprocess.check_output(cmd, shell=True)
 
 def start_test_worker():
     template = """{bin} workers -cluster={cluster_dir}"""
     data = { 'bin': ADMIN_BIN, 'cluster_dir': TEST_CLUSTER_DIR }
     cmd = template.format(**data)
-    subprocess.call(cmd, shell=True)
+    subprocess.check_output(cmd, shell=True)
 
 def init_worker(conf):
     set_worker_conf(conf)
@@ -48,7 +48,7 @@ def assert_worker_is_ready():
         if is_worker_active():
             return 
     raise IOError('Worker failed to initialize after ' 
-            + str(WORKER_TIMEOUT * 2) + 'seconds.')
+            + str(WORKER_TIMEOUT * 2) + ' seconds.')
 
 def run_lambda(name):
     conn = httplib.HTTPConnection('localhost', 8080, timeout=15)
@@ -56,7 +56,8 @@ def run_lambda(name):
     conn.request('POST', url, '{}')
     response = conn.getresponse()
     if response.status != 200:
-        template = """"Request to run lambda '{name}'failed with status code{status}."""
+        template = 'Request to run lambda "{name}" failed ' 
+        + 'with status code {status}.'
         data = { 'name': name, 'status': response.status }
         msg = template.format(**data)
         raise IOError(msg)
