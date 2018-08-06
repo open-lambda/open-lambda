@@ -76,8 +76,8 @@ func (i *Installer) Install(pkgs []string) error {
 			// lock. We will also have to release reader locks on eviction of
 			// handlers/cache entries.
 			i.mutex.Unlock()
-			pkgState.mutex.RLock()
 		}
+		pkgState.mutex.RLock()
 	}
 
 	return nil
