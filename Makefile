@@ -135,5 +135,6 @@ clean: clean-test
 	rm -f imgs/lambda
 	rm -rf testing/test_worker
 	${MAKE} -C lambda clean
+	${MAKE} -C sock clean
 
 FORCE:
