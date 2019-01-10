@@ -73,7 +73,7 @@ github.com/urfave/cli
 golang.org/x/crypto/argon2
 golang.org/x/crypto/ssh/terminal
 golang.org/x/crypto/blake2b
-# golang.org/x/net v0.0.0-20190108225652-1e06a53dbb7e
+# golang.org/x/net v0.0.0-20190110044637-be1c187aa6c6
 golang.org/x/net/http/httpguts
 golang.org/x/net/publicsuffix
 golang.org/x/net/idna

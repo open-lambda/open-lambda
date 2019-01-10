@@ -970,5 +970,8 @@ OPTIONS:
 			Action:    setconf,
 		},
 	}
-	app.Run(os.Args)
+	err := app.Run(os.Args)
+	if err != nil {
+		log.Fatal(err)
+	}
 }

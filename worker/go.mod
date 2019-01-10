@@ -10,7 +10,7 @@ require (
 	github.com/smartystreets/assertions v0.0.0-20180927180507-b2de0cb4f26d // indirect
 	github.com/smartystreets/goconvey v0.0.0-20181108003508-044398e4856c // indirect
 	github.com/urfave/cli v1.20.0
-	golang.org/x/net v0.0.0-20190108225652-1e06a53dbb7e // indirect
+	golang.org/x/net v0.0.0-20190110044637-be1c187aa6c6 // indirect
 	golang.org/x/text v0.3.0 // indirect
 	gopkg.in/ini.v1 v1.41.0 // indirect
 )
