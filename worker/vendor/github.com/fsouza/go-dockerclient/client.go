@@ -10,6 +10,7 @@ package docker
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -24,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -31,11 +33,8 @@ import (
 
 	"github.com/docker/docker/opts"
 	"github.com/docker/docker/pkg/homedir"
-	"github.com/docker/docker/pkg/jsonmessage"
 	"github.com/docker/docker/pkg/stdcopy"
-	"github.com/hashicorp/go-cleanhttp"
-	"golang.org/x/net/context"
-	"golang.org/x/net/context/ctxhttp"
+	"github.com/fsouza/go-dockerclient/internal/jsonmessage"
 )
 
 const (
@@ -59,6 +58,7 @@ var (
 	apiVersion119, _ = NewAPIVersion("1.19")
 	apiVersion124, _ = NewAPIVersion("1.24")
 	apiVersion125, _ = NewAPIVersion("1.25")
+	apiVersion135, _ = NewAPIVersion("1.35")
 )
 
 // APIVersion is an internal representation of a version of the Remote API.
@@ -70,7 +70,7 @@ type APIVersion []int
 // <minor> and <patch> are integer numbers.
 func NewAPIVersion(input string) (APIVersion, error) {
 	if !strings.Contains(input, ".") {
-		return nil, fmt.Errorf("Unable to parse version %q", input)
+		return nil, fmt.Errorf("unable to parse version %q", input)
 	}
 	raw := strings.Split(input, "-")
 	arr := strings.Split(raw[0], ".")
@@ -79,7 +79,7 @@ func NewAPIVersion(input string) (APIVersion, error) {
 	for i, val := range arr {
 		ret[i], err = strconv.Atoi(val)
 		if err != nil {
-			return nil, fmt.Errorf("Unable to parse version %q: %q is not an integer", input, val)
+			return nil, fmt.Errorf("unable to parse version %q: %q is not an integer", input, val)
 		}
 	}
 	return ret, nil
@@ -151,7 +151,6 @@ type Client struct {
 	requestedAPIVersion APIVersion
 	serverAPIVersion    APIVersion
 	expectedAPIVersion  APIVersion
-	nativeHTTPClient    *http.Client
 }
 
 // Dialer is an interface that allows network connections to be dialed
@@ -212,18 +211,26 @@ func NewVersionedClient(endpoint string, apiVersionString string) (*Client, erro
 		}
 	}
 	c := &Client{
-		HTTPClient:          cleanhttp.DefaultClient(),
+		HTTPClient:          defaultClient(),
 		Dialer:              &net.Dialer{},
 		endpoint:            endpoint,
 		endpointURL:         u,
 		eventMonitor:        new(eventMonitoringState),
 		requestedAPIVersion: requestedAPIVersion,
 	}
-	c.initializeNativeClient()
+	c.initializeNativeClient(defaultTransport)
 	return c, nil
 }
 
-// NewVersionnedTLSClient has been DEPRECATED, please use NewVersionedTLSClient.
+// WithTransport replaces underlying HTTP client of Docker Client by accepting
+// a function that returns pointer to a transport object.
+func (c *Client) WithTransport(trFunc func() *http.Transport) {
+	c.initializeNativeClient(trFunc)
+}
+
+// NewVersionnedTLSClient is like NewVersionedClient, but with ann extra n.
+//
+// Deprecated: Use NewVersionedTLSClient instead.
 func NewVersionnedTLSClient(endpoint string, cert, key, ca, apiVersionString string) (*Client, error) {
 	return NewVersionedTLSClient(endpoint, cert, key, ca, apiVersionString)
 }
@@ -322,11 +329,11 @@ func NewVersionedTLSClientFromBytes(endpoint string, certPEMBlock, keyPEMBlock, 
 	} else {
 		caPool := x509.NewCertPool()
 		if !caPool.AppendCertsFromPEM(caPEMCert) {
-			return nil, errors.New("Could not add RootCA pem")
+			return nil, errors.New("could not add RootCA pem")
 		}
 		tlsConfig.RootCAs = caPool
 	}
-	tr := cleanhttp.DefaultTransport()
+	tr := defaultTransport()
 	tr.TLSClientConfig = tlsConfig
 	if err != nil {
 		return nil, err
@@ -340,19 +347,15 @@ func NewVersionedTLSClientFromBytes(endpoint string, certPEMBlock, keyPEMBlock, 
 		eventMonitor:        new(eventMonitoringState),
 		requestedAPIVersion: requestedAPIVersion,
 	}
-	c.initializeNativeClient()
+	c.initializeNativeClient(defaultTransport)
 	return c, nil
 }
 
-// SetTimeout takes a timeout and applies it to both the HTTPClient and
-// nativeHTTPClient. It should not be called concurrently with any other Client
-// methods.
+// SetTimeout takes a timeout and applies it to the HTTPClient. It should not
+// be called concurrently with any other Client methods.
 func (c *Client) SetTimeout(t time.Duration) {
 	if c.HTTPClient != nil {
 		c.HTTPClient.Timeout = t
-	}
-	if c.nativeHTTPClient != nil {
-		c.nativeHTTPClient.Timeout = t
 	}
 }
 
@@ -384,7 +387,7 @@ func (c *Client) Endpoint() string {
 //
 // See https://goo.gl/wYfgY1 for more details.
 func (c *Client) Ping() error {
-	return c.PingWithContext(nil)
+	return c.PingWithContext(context.TODO())
 }
 
 // PingWithContext pings the docker server
@@ -411,7 +414,7 @@ func (c *Client) getServerAPIVersionString() (version string, err error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("Received unexpected status %d while trying to retrieve the server version", resp.StatusCode)
+		return "", fmt.Errorf("received unexpected status %d while trying to retrieve the server version", resp.StatusCode)
 	}
 	var versionResponse map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&versionResponse); err != nil {
@@ -445,12 +448,10 @@ func (c *Client) do(method, path string, doOptions doOptions) (*http.Response, e
 			return nil, err
 		}
 	}
-	httpClient := c.HTTPClient
 	protocol := c.endpointURL.Scheme
 	var u string
 	switch protocol {
 	case unixProtocol, namedPipeProtocol:
-		httpClient = c.nativeHTTPClient
 		u = c.getFakeNativeURL(path)
 	default:
 		u = c.getURL(path)
@@ -476,7 +477,7 @@ func (c *Client) do(method, path string, doOptions doOptions) (*http.Response, e
 		ctx = context.Background()
 	}
 
-	resp, err := ctxhttp.Do(ctx, httpClient, req)
+	resp, err := c.HTTPClient.Do(req.WithContext(ctx))
 	if err != nil {
 		if strings.Contains(err.Error(), "connection refused") {
 			return nil, ErrConnectionRefused
@@ -498,6 +499,7 @@ type streamOptions struct {
 	in             io.Reader
 	stdout         io.Writer
 	stderr         io.Writer
+	reqSent        chan struct{}
 	// timeout is the initial connection timeout
 	timeout time.Duration
 	// Timeout with no data is received, it's reset every time new data
@@ -576,6 +578,9 @@ func (c *Client) stream(method, path string, streamOptions streamOptions) error 
 			dial.SetDeadline(time.Now().Add(streamOptions.timeout))
 		}
 
+		if streamOptions.reqSent != nil {
+			close(streamOptions.reqSent)
+		}
 		if resp, err = http.ReadResponse(breader, req); err != nil {
 			// Cancel timeout for future I/O operations
 			if streamOptions.timeout > 0 {
@@ -588,11 +593,14 @@ func (c *Client) stream(method, path string, streamOptions streamOptions) error 
 			return chooseError(subCtx, err)
 		}
 	} else {
-		if resp, err = ctxhttp.Do(subCtx, c.HTTPClient, req); err != nil {
+		if resp, err = c.HTTPClient.Do(req.WithContext(subCtx)); err != nil {
 			if strings.Contains(err.Error(), "connection refused") {
 				return ErrConnectionRefused
 			}
 			return chooseError(subCtx, err)
+		}
+		if streamOptions.reqSent != nil {
+			close(streamOptions.reqSent)
 		}
 	}
 	defer resp.Body.Close()
@@ -631,16 +639,18 @@ func handleStreamResponse(resp *http.Response, streamOptions *streamOptions) err
 		_, err = io.Copy(streamOptions.stdout, resp.Body)
 		return err
 	}
-	if st, ok := streamOptions.stdout.(interface {
-		io.Writer
-		FD() uintptr
-		IsTerminal() bool
-	}); ok {
+	if st, ok := streamOptions.stdout.(stream); ok {
 		err = jsonmessage.DisplayJSONMessagesToStream(resp.Body, st, nil)
 	} else {
 		err = jsonmessage.DisplayJSONMessagesStream(resp.Body, streamOptions.stdout, 0, false, nil)
 	}
 	return err
+}
+
+type stream interface {
+	io.Writer
+	FD() uintptr
+	IsTerminal() bool
 }
 
 type proxyReader struct {
@@ -752,6 +762,7 @@ func (c *Client) hijack(method, path string, hijackOptions hijackOptions) (Close
 	errs := make(chan error, 1)
 	quit := make(chan struct{})
 	go func() {
+		//lint:ignore SA1019 this is needed here
 		clientconn := httputil.NewClientConn(dial, nil)
 		defer clientconn.Close()
 		clientconn.Do(req)
@@ -864,13 +875,6 @@ func (c *Client) getFakeNativeURL(path string) string {
 	return fmt.Sprintf("%s%s", urlStr, path)
 }
 
-type jsonMessage struct {
-	Status   string `json:"status,omitempty"`
-	Progress string `json:"progress,omitempty"`
-	Error    string `json:"error,omitempty"`
-	Stream   string `json:"stream,omitempty"`
-}
-
 func queryString(opts interface{}) string {
 	if opts == nil {
 		return ""
@@ -909,6 +913,10 @@ func addQueryStringValue(items url.Values, key string, v reflect.Value) {
 		if v.Int() > 0 {
 			items.Add(key, strconv.FormatInt(v.Int(), 10))
 		}
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		if v.Uint() > 0 {
+			items.Add(key, strconv.FormatUint(v.Uint(), 10))
+		}
 	case reflect.Float32, reflect.Float64:
 		if v.Float() > 0 {
 			items.Add(key, strconv.FormatFloat(v.Float(), 'f', -1, 64))
@@ -946,12 +954,20 @@ type Error struct {
 }
 
 func newError(resp *http.Response) *Error {
+	type ErrMsg struct {
+		Message string `json:"message"`
+	}
 	defer resp.Body.Close()
 	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return &Error{Status: resp.StatusCode, Message: fmt.Sprintf("cannot read body, err: %v", err)}
 	}
-	return &Error{Status: resp.StatusCode, Message: string(data)}
+	var emsg ErrMsg
+	err = json.Unmarshal(data, &emsg)
+	if err != nil {
+		return &Error{Status: resp.StatusCode, Message: string(data)}
+	}
+	return &Error{Status: resp.StatusCode, Message: emsg.Message}
 }
 
 func (e *Error) Error() string {
@@ -1032,4 +1048,42 @@ func getDockerEnv() (*dockerEnv, error) {
 		dockerTLSVerify: dockerTLSVerify,
 		dockerCertPath:  dockerCertPath,
 	}, nil
+}
+
+// defaultTransport returns a new http.Transport with similar default values to
+// http.DefaultTransport, but with idle connections and keepalives disabled.
+func defaultTransport() *http.Transport {
+	transport := defaultPooledTransport()
+	transport.DisableKeepAlives = true
+	transport.MaxIdleConnsPerHost = -1
+	return transport
+}
+
+// defaultPooledTransport returns a new http.Transport with similar default
+// values to http.DefaultTransport. Do not use this for transient transports as
+// it can leak file descriptors over time. Only use this for transports that
+// will be re-used for the same host(s).
+func defaultPooledTransport() *http.Transport {
+	transport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+		MaxIdleConnsPerHost:   runtime.GOMAXPROCS(0) + 1,
+	}
+	return transport
+}
+
+// defaultClient returns a new http.Client with similar default values to
+// http.Client, but with a non-shared Transport, idle connections disabled, and
+// keepalives disabled.
+func defaultClient() *http.Client {
+	return &http.Client{
+		Transport: defaultTransport(),
+	}
 }

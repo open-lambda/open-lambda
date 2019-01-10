@@ -5,7 +5,7 @@
 package docker
 
 import (
-	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -14,9 +14,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"time"
-
-	"golang.org/x/net/context"
 )
 
 // APIImages represent an image returned in the ListImages call.
@@ -54,6 +53,7 @@ type Image struct {
 	VirtualSize     int64     `json:"VirtualSize,omitempty" yaml:"VirtualSize,omitempty" toml:"VirtualSize,omitempty"`
 	RepoDigests     []string  `json:"RepoDigests,omitempty" yaml:"RepoDigests,omitempty" toml:"RepoDigests,omitempty"`
 	RootFS          *RootFS   `json:"RootFS,omitempty" yaml:"RootFS,omitempty" toml:"RootFS,omitempty"`
+	OS              string    `json:"Os,omitempty" yaml:"Os,omitempty" toml:"Os,omitempty"`
 }
 
 // ImagePre012 serves the same purpose as the Image type except that it is for
@@ -313,6 +313,11 @@ func (c *Client) PullImage(opts PullImageOptions, auth AuthConfiguration) error 
 	if err != nil {
 		return err
 	}
+	if opts.Tag == "" && strings.Contains(opts.Repository, "@") {
+		parts := strings.SplitN(opts.Repository, "@", 2)
+		opts.Repository = parts[0]
+		opts.Tag = parts[1]
+	}
 	return c.createImage(queryString(&opts), headers, nil, opts.OutputStream, opts.RawJSONStream, opts.InactivityTimeout, opts.Context)
 }
 
@@ -466,6 +471,8 @@ type BuildImageOptions struct {
 	NetworkMode         string             `qs:"networkmode"`
 	InactivityTimeout   time.Duration      `qs:"-"`
 	CgroupParent        string             `qs:"cgroupparent"`
+	SecurityOpt         []string           `qs:"securityopt"`
+	Target              string             `gs:"target"`
 	Context             context.Context
 }
 
@@ -550,7 +557,7 @@ func (c *Client) BuildImage(opts BuildImageOptions) error {
 	})
 }
 
-func (c *Client) versionedAuthConfigs(authConfigs AuthConfigurations) interface{} {
+func (c *Client) versionedAuthConfigs(authConfigs AuthConfigurations) registryAuth {
 	if c.serverAPIVersion == nil {
 		c.checkAPIVersion()
 	}
@@ -602,24 +609,18 @@ func isURL(u string) bool {
 	return p.Scheme == "http" || p.Scheme == "https"
 }
 
-func headersWithAuth(auths ...interface{}) (map[string]string, error) {
+func headersWithAuth(auths ...registryAuth) (map[string]string, error) {
 	var headers = make(map[string]string)
 
 	for _, auth := range auths {
-		switch auth.(type) {
-		case AuthConfiguration:
-			var buf bytes.Buffer
-			if err := json.NewEncoder(&buf).Encode(auth); err != nil {
-				return nil, err
-			}
-			headers["X-Registry-Auth"] = base64.URLEncoding.EncodeToString(buf.Bytes())
-		case AuthConfigurations, AuthConfigurations119:
-			var buf bytes.Buffer
-			if err := json.NewEncoder(&buf).Encode(auth); err != nil {
-				return nil, err
-			}
-			headers["X-Registry-Config"] = base64.URLEncoding.EncodeToString(buf.Bytes())
+		if auth.isEmpty() {
+			continue
 		}
+		data, err := json.Marshal(auth)
+		if err != nil {
+			return nil, err
+		}
+		headers[auth.headerKey()] = base64.URLEncoding.EncodeToString(data)
 	}
 
 	return headers, nil

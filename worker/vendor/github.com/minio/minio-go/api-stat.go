@@ -47,6 +47,10 @@ func (c Client) BucketExists(bucketName string) (bool, error) {
 		return false, err
 	}
 	if resp != nil {
+		resperr := httpRespToErrorResponse(resp, bucketName, "")
+		if ToErrorResponse(resperr).Code == "NoSuchBucket" {
+			return false, nil
+		}
 		if resp.StatusCode != http.StatusOK {
 			return false, httpRespToErrorResponse(resp, bucketName, "")
 		}
@@ -66,6 +70,9 @@ var defaultFilterKeys = []string{
 	"x-amz-bucket-region",
 	"x-amz-request-id",
 	"x-amz-id-2",
+	"Content-Security-Policy",
+	"X-Xss-Protection",
+
 	// Add new headers to be ignored.
 }
 
@@ -115,7 +122,7 @@ func (c Client) statObject(ctx context.Context, bucketName, objectName string, o
 		return ObjectInfo{}, err
 	}
 	if resp != nil {
-		if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
 			return ObjectInfo{}, httpRespToErrorResponse(resp, bucketName, objectName)
 		}
 	}
