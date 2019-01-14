@@ -15,13 +15,14 @@ import (
 
 // DockerContainerFactory is a ContainerFactory that creats docker containers.
 type DockerContainerFactory struct {
-	client  *docker.Client
-	labels  map[string]string
-	caps    []string
-	pidMode string
-	pkgsDir string
-	idxPtr  *int64
-	cache   bool
+	client         *docker.Client
+	labels         map[string]string
+	caps           []string
+	pidMode        string
+	pkgsDir        string
+	idxPtr         *int64
+	cache          bool
+	docker_runtime string
 }
 
 // NewDockerContainerFactory creates a DockerContainerFactory.
@@ -42,6 +43,7 @@ func NewDockerContainerFactory(opts *config.Config, pidMode string, caps []strin
 		pkgsDir: opts.Pkgs_dir,
 		idxPtr:  idxPtr,
 		cache:   cache,
+		docker_runtime: opts.Docker_runtime,
 	}
 
 	return df, nil
@@ -81,6 +83,7 @@ func (df *DockerContainerFactory) Create(handlerDir, workingDir string) (Contain
 				Binds:   volumes,
 				CapAdd:  df.caps,
 				PidMode: df.pidMode,
+				Runtime: df.docker_runtime,
 			},
 		},
 	)
