@@ -1,7 +1,6 @@
 # go-dockerclient
 
 [![Travis Build Status](https://travis-ci.org/fsouza/go-dockerclient.svg?branch=master)](https://travis-ci.org/fsouza/go-dockerclient)
-[![AppVeyor Build Status](https://ci.appveyor.com/api/projects/status/4m374pti06ubg2l7?svg=true)](https://ci.appveyor.com/project/fsouza/go-dockerclient)
 [![GoDoc](https://img.shields.io/badge/api-Godoc-blue.svg?style=flat-square)](https://godoc.org/github.com/fsouza/go-dockerclient)
 
 This package presents a client for the Docker remote API. It also provides
@@ -119,11 +118,12 @@ Commited code must pass:
 Running `make test` will check all of these. If your editor does not
 automatically call ``gofmt -s``, make sure you invoke it manually.
 
-## Vendoring
+## Vendoring / Modules
 
-go-dockerclient uses [dep](https://github.com/golang/dep/) for vendoring. If
-you're using dep, you should be able to pick go-dockerclient releases and get
-the proper dependencies.
+go-dockerclient supports [dep](https://github.com/golang/dep/) for vendoring
+and can also be installed as a module. If you're using dep or Go modules, you
+should be able to pick go-dockerclient releases and get the proper
+dependencies.
 
 With other vendoring tools, users might need to specify go-dockerclient's
 dependencies manually.

@@ -20,6 +20,8 @@ import (
 	"github.com/open-lambda/open-lambda/worker/registry"
 
 	sb "github.com/open-lambda/open-lambda/worker/sandbox"
+
+	"github.com/shirou/gopsutil/mem"
 )
 
 // HandlerSet represents a collection of Handlers of a worker server. It
@@ -38,6 +40,11 @@ type HandlerManagerSet struct {
 	hhits      *int64
 	ihits      *int64
 	misses     *int64
+	sbSoftLimit      float64
+	sbHardLimit      float64
+	maxNumSbCreating int
+	numSbCreating    int
+	sbCreatingCond   *sync.Cond
 }
 
 type HandlerManager struct {
@@ -117,11 +124,30 @@ func NewHandlerManagerSet(opts *config.Config) (hms *HandlerManagerSet, err erro
 		hhits:      &hhits,
 		ihits:      &ihits,
 		misses:     &misses,
+		sbSoftLimit:      opts.Create_sandbox_soft_limit,
+		sbHardLimit:      opts.Create_sandbox_hard_limit,
+		maxNumSbCreating: opts.Max_num_sandbox_creating,
+		numSbCreating:    0,
 	}
+	sbCreatingMutex := &sync.Mutex{}
+	hms.sbCreatingCond = sync.NewCond(sbCreatingMutex)
 
 	hms.lru = NewHandlerLRU(hms, opts.Handler_cache_size) //kb
 
 	return hms, nil
+}
+
+var memUsage float64 = 0.0
+var memLastUpdateTime time.Time = time.Now()
+
+func getMemUsage() float64 {
+	if (time.Since(memLastUpdateTime)) > time.Second {
+		v, _ := mem.VirtualMemory()
+		total, free := int(v.Total), int(v.Free)
+		memUsage = 1.0 - float64(free) / float64(total)
+		memLastUpdateTime = time.Now()
+	}
+	return memUsage
 }
 
 // Get always returns a Handler, creating one if necessarily.
@@ -283,6 +309,16 @@ func (h *Handler) RunStart() (ch *sb.Channel, err error) {
 
 	// create sandbox if needed
 	if h.sandbox == nil {
+		// if memUsage exceeds the sbSoftLimit, we would create at most maxNumSbCreating
+		// sandboxes at the same time; if memUsage exceeds the sbHardLimit, we would block 
+		// all the creation requests until there are more free mem.
+		hms.sbCreatingCond.L.Lock()
+		for (getMemUsage() > hms.sbSoftLimit && hms.numSbCreating > hms.maxNumSbCreating) || getMemUsage() > hms.sbHardLimit {
+			hms.sbCreatingCond.Wait()
+		}
+		hms.numSbCreating += 1
+		hms.sbCreatingCond.L.Unlock()
+
 		hit := false
 
 		// TODO: do this in the background
@@ -326,6 +362,15 @@ func (h *Handler) RunStart() (ch *sb.Channel, err error) {
 			} else {
 				atomic.AddInt64(hms.misses, 1)
 			}
+		}
+
+		// a new sandbox has been created, attempts to wake up blocked 
+		// sandbox creation requests, if any.
+		hms.sbCreatingCond.L.Lock()
+		hms.numSbCreating -= 1
+		hms.sbCreatingCond.L.Unlock()
+		if getMemUsage() < hms.sbHardLimit {
+			hms.sbCreatingCond.Broadcast()
 		}
 
 		// use StdoutPipe of olcontainer to sync with lambda server
@@ -429,6 +474,13 @@ func (h *Handler) nuke() {
 	}
 	if err := h.sandbox.Remove(); err != nil {
 		log.Printf("failed to remove sandbox :: %v", err.Error())
+	}
+
+	// a sandbox has been destroyed, attempts to wake up blocked
+	// sandbox creation requests, if any.
+	hms := h.hm.hms
+	if getMemUsage() < hms.sbHardLimit {
+		hms.sbCreatingCond.Broadcast()
 	}
 }
 

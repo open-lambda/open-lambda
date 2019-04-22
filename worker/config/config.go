@@ -46,6 +46,13 @@ type Config struct {
 	Handler_cache_size int `json:"handler_cache_size"` //kb
 	Import_cache_size  int `json:"import_cache_size"`  //kb
 
+	// mem usage limits for creating sandboxes
+	Create_sandbox_soft_limit float64 `json:"create_sandbox_soft_limit"` //mem usage percentage, from 0.0 (0%) to 1.0 (100%)
+	Create_sandbox_hard_limit float64 `json:"create_sandbox_hard_limit"` //mem usage percentage, from 0.0 (0%) to 1.0 (100%)
+
+	// max number of sandboxes being created at the same time (after hit soft limit)
+	Max_num_sandbox_creating int `json:"max_num_sandbox_creating"`
+
 	// sandbox options
 	// worker directory, which contains handler code, pid file, logs, etc.
 	Worker_dir string `json:"worker_dir"`
@@ -125,6 +132,20 @@ func (c *Config) Defaults() error {
 
 	if c.Registry_dir == "" {
 		return fmt.Errorf("must specify local registry directory")
+	}
+
+	// mem usage limits for creating sandboxes
+	if c.Create_sandbox_soft_limit == 0.0 {
+		c.Create_sandbox_soft_limit = 0.5
+	} 
+
+	if c.Create_sandbox_hard_limit == 0.0 {
+		c.Create_sandbox_hard_limit = 0.9
+	} 
+
+	// max number of sandboxes being created at the same time (after hit soft limit)
+	if c.Max_num_sandbox_creating == 0 {
+		c.Max_num_sandbox_creating = 4
 	}
 
 	if !path.IsAbs(c.Registry_dir) {
