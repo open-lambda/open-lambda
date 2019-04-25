@@ -153,6 +153,12 @@ func (hms *HandlerManagerSet) Get(name string) (h *Handler, err error) {
 			hm:      hm,
 			runners: 1,
 		}
+
+		// we are up so we can add ourselves for reuse
+		if hms.maxRunners == 0 || h.runners < hms.maxRunners {
+			hm.hElements[h] = hm.handlers.PushFront(h)
+			hm.maxHandlers = max(hm.maxHandlers, hm.handlers.Len())
+		}
 	} else {
 		hEle := hm.handlers.Front()
 		h = hEle.Value.(*Handler)
@@ -357,14 +363,6 @@ func (h *Handler) RunStart() (ch *sb.Channel, err error) {
 			}
 		case <-timeout.C:
 			return nil, fmt.Errorf("handler server failed to initialize after 20s")
-		}
-
-		// we are up so we can add ourselves for reuse
-		if hms.maxRunners == 0 || h.runners < hms.maxRunners {
-			hm.mutex.Lock()
-			hm.hElements[h] = hm.handlers.PushFront(h)
-			hm.maxHandlers = max(hm.maxHandlers, hm.handlers.Len())
-			hm.mutex.Unlock()
 		}
 
 	} else if sbState, _ := h.sandbox.State(); sbState == state.Paused {
