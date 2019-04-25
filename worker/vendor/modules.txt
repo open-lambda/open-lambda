@@ -5,6 +5,8 @@ github.com/Azure/go-ansiterm
 github.com/Microsoft/go-winio
 # github.com/Nvveen/Gotty v0.0.0-20120604004816-cd527374f1e5
 github.com/Nvveen/Gotty
+# github.com/StackExchange/wmi v0.0.0-20181212234831-e0a55b97c705
+github.com/StackExchange/wmi
 # github.com/containerd/continuity v0.0.0-20181203112020-004b46473808
 github.com/containerd/continuity/pathdriver
 # github.com/docker/docker v0.7.3-0.20180827131323-0c5f8d2b9b23
@@ -43,6 +45,9 @@ github.com/fsouza/go-dockerclient/internal/jsonmessage
 github.com/fsouza/go-dockerclient/internal/term
 # github.com/go-ini/ini v1.41.0
 github.com/go-ini/ini
+# github.com/go-ole/go-ole v1.2.4
+github.com/go-ole/go-ole
+github.com/go-ole/go-ole/oleutil
 # github.com/gogo/protobuf v1.2.0
 github.com/gogo/protobuf/proto
 # github.com/konsorten/go-windows-terminal-sequences v1.0.1
@@ -65,6 +70,9 @@ github.com/opencontainers/image-spec/specs-go
 github.com/opencontainers/runc/libcontainer/user
 # github.com/pkg/errors v0.8.1
 github.com/pkg/errors
+# github.com/shirou/gopsutil v2.18.12+incompatible
+github.com/shirou/gopsutil/mem
+github.com/shirou/gopsutil/internal/common
 # github.com/sirupsen/logrus v1.3.0
 github.com/sirupsen/logrus
 # github.com/urfave/cli v1.20.0
@@ -78,8 +86,8 @@ golang.org/x/net/http/httpguts
 golang.org/x/net/publicsuffix
 golang.org/x/net/idna
 # golang.org/x/sys v0.0.0-20190102155601-82a175fd1598
-golang.org/x/sys/windows
 golang.org/x/sys/unix
+golang.org/x/sys/windows
 golang.org/x/sys/cpu
 # golang.org/x/text v0.3.0
 golang.org/x/text/secure/bidirule
