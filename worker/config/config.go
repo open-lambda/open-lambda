@@ -136,7 +136,7 @@ func (c *Config) Defaults() error {
 
 	// mem usage limits for creating sandboxes
 	if c.Create_sandbox_soft_limit == 0.0 {
-		c.Create_sandbox_soft_limit = 0.5
+		c.Create_sandbox_soft_limit = 0.8
 	} 
 
 	if c.Create_sandbox_hard_limit == 0.0 {
