@@ -44,7 +44,9 @@ type HandlerManagerSet struct {
 	sbHardLimit      float64
 	maxNumSbCreating int
 	numSbCreating    int
-	sbCreatingCond   *sync.Cond
+	// sbCreatingCond   *sync.Cond
+    sbCreatingLock   sync.Mutex
+    sbCreatingChan   chan bool
 }
 
 type HandlerManager struct {
@@ -129,8 +131,9 @@ func NewHandlerManagerSet(opts *config.Config) (hms *HandlerManagerSet, err erro
 		maxNumSbCreating: opts.Max_num_sandbox_creating,
 		numSbCreating:    0,
 	}
-	sbCreatingMutex := &sync.Mutex{}
-	hms.sbCreatingCond = sync.NewCond(sbCreatingMutex)
+    // sbCreatingMutex := &sync.Mutex{}
+	// hms.sbCreatingCond = sync.NewCond(sbCreatingMutex)
+    hms.sbCreatingChan = make(chan bool, 1)
 
 	hms.lru = NewHandlerLRU(hms, opts.Handler_cache_size) //kb
 
@@ -312,12 +315,21 @@ func (h *Handler) RunStart() (ch *sb.Channel, err error) {
 		// if memUsage exceeds the sbSoftLimit, we would create at most maxNumSbCreating
 		// sandboxes at the same time; if memUsage exceeds the sbHardLimit, we would block 
 		// all the creation requests until there are more free mem.
-		hms.sbCreatingCond.L.Lock()
+		hms.sbCreatingLock.Lock()
 		for (getMemUsage() > hms.sbSoftLimit && hms.numSbCreating > hms.maxNumSbCreating) || getMemUsage() > hms.sbHardLimit {
-			hms.sbCreatingCond.Wait()
+		    hms.sbCreatingLock.Unlock()
+			// hms.sbCreatingCond.Wait()
+            select {
+            case <-hms.sbCreatingChan:
+		        hms.sbCreatingLock.Lock()
+                continue
+            case <-time.After(4 * time.Second):
+		        hms.sbCreatingLock.Lock()
+                continue
+            }
 		}
 		hms.numSbCreating += 1
-		hms.sbCreatingCond.L.Unlock()
+		hms.sbCreatingLock.Unlock()
 
 		hit := false
 
@@ -366,11 +378,12 @@ func (h *Handler) RunStart() (ch *sb.Channel, err error) {
 
 		// a new sandbox has been created, attempts to wake up blocked 
 		// sandbox creation requests, if any.
-		hms.sbCreatingCond.L.Lock()
+		hms.sbCreatingLock.Lock()
 		hms.numSbCreating -= 1
-		hms.sbCreatingCond.L.Unlock()
+		hms.sbCreatingLock.Unlock()
 		if getMemUsage() < hms.sbHardLimit {
-			hms.sbCreatingCond.Broadcast()
+			// hms.sbCreatingCond.Broadcast()
+            hms.sbCreatingChan <- true
 		}
 
 		// use StdoutPipe of olcontainer to sync with lambda server
@@ -480,7 +493,8 @@ func (h *Handler) nuke() {
 	// sandbox creation requests, if any.
 	hms := h.hm.hms
 	if getMemUsage() < hms.sbHardLimit {
-		hms.sbCreatingCond.Broadcast()
+		// hms.sbCreatingCond.Broadcast()
+        hms.sbCreatingChan <- true
 	}
 }
 
