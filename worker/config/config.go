@@ -46,11 +46,14 @@ type Config struct {
 	Handler_cache_size int `json:"handler_cache_size"` //kb
 	Import_cache_size  int `json:"import_cache_size"`  //kb
 
-	// average memory usage for each handler
-	Average_handler_memory_usage int `json:"average_handler_memory_usage"` //kb
-
 	// mem usage limit for creating sandboxes
-	Create_sandbox_hard_limit int `json:"create_sandbox_hard_limit"` //kb
+	Sandbox_create_hard_limit int `json:"sandbox_create_hard_limit"` //kb
+
+	// size limit of the queue containing handlers waiting to create sandbox
+	Sandbox_create_queue_size int `json:"sanbox_create_queue_size"`
+
+	// time interval to update average handler memory usage
+	Handler_usage_update_interval int `json:"handler_usage_update_interval"` // seconds
 
 	// sandbox options
 	// worker directory, which contains handler code, pid file, logs, etc.
@@ -131,6 +134,14 @@ func (c *Config) Defaults() error {
 
 	if c.Registry_dir == "" {
 		return fmt.Errorf("must specify local registry directory")
+	}
+
+	if c.Sandbox_create_queue_size == 0 {
+		c.Sandbox_create_queue_size = 100
+	}
+
+	if c.Handler_usage_update_interval == 0 {
+		c.Handler_usage_update_interval = 10
 	}
 
 	if !path.IsAbs(c.Registry_dir) {
