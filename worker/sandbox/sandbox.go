@@ -2,15 +2,12 @@ package sandbox
 
 import (
 	"net/http"
-	"os"
 )
 
 /*
-
 Defines interfaces for sandboxing methods (e.g., container, unikernel).
 Currently, only containers are supported. No need to increase complexity by
 generalizing for other sandboxing methods before they are implemented.
-
 */
 
 import (
@@ -70,8 +67,6 @@ type Container interface {
 
 	// Directory used by the worker to communicate with container.
 	HostDir() string
-
-	Pipe() *os.File
 
 	// Put the given process into the cgroups of the container
 	CGroupEnter(pid string) error

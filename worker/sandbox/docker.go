@@ -327,7 +327,3 @@ func (c *DockerContainer) RootDir() string {
 func (c *DockerContainer) HostDir() string {
 	return c.hostDir
 }
-
-func (c *DockerContainer) Pipe() *os.File {
-	return nil
-}
