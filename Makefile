@@ -60,10 +60,7 @@ LAMBDA_DIR = $(abspath ./lambda)
 PIPBENCH_DIR = $(abspath ./pipbench)
 
 .PHONY: all
-all: clean-test .git/hooks/pre-commit sock/sock-init imgs/lambda bin/admin
-
-.git/hooks/pre-commit: util/pre-commit
-	cp util/pre-commit .git/hooks/pre-commit
+all: clean-test sock/sock-init imgs/lambda bin/admin
 
 sock/sock-init: sock/sock-init.c
 	${MAKE} -C sock
