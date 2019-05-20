@@ -36,13 +36,13 @@ func NewDockerContainerFactory(opts *config.Config, pidMode string, caps []strin
 	idxPtr := &sharedIdx
 
 	df := &DockerContainerFactory{
-		client:  client,
-		labels:  labels,
-		caps:    caps,
-		pidMode: pidMode,
-		pkgsDir: opts.Pkgs_dir,
-		idxPtr:  idxPtr,
-		cache:   cache,
+		client:         client,
+		labels:         labels,
+		caps:           caps,
+		pidMode:        pidMode,
+		pkgsDir:        opts.Pkgs_dir,
+		idxPtr:         idxPtr,
+		cache:          cache,
 		docker_runtime: opts.Docker_runtime,
 	}
 

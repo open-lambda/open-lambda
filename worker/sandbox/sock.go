@@ -126,7 +126,7 @@ func (c *SOCKContainer) Start() error {
 	go func() {
 		// message will be either 5 byte \0 padded pid (<65536), or "ready"
 		pid := make([]byte, 6)
-		n, err := c.Pipe().Read(pid[:5])
+		n, err := c.pipe.Read(pid[:5])
 		if err != nil {
 			log.Printf("Cannot read from stdout of sock: %v\n", err)
 		} else if n != 5 {
@@ -147,7 +147,7 @@ func (c *SOCKContainer) Start() error {
 		}
 	case <-timeout.C:
 		// clean up go routine
-		if n, err := c.Pipe().Write([]byte("timeo")); err != nil {
+		if n, err := c.pipe.Write([]byte("timeo")); err != nil {
 			return err
 		} else if n != 5 {
 			return fmt.Errorf("Cannot write `timeo` to pipe\n")
@@ -330,7 +330,7 @@ func (c *SOCKContainer) RunServer() error {
 	go func() {
 		// wait for signal handler to be "ready"
 		buf := make([]byte, 5)
-		_, err = c.Pipe().Read(buf)
+		_, err = c.pipe.Read(buf)
 		if err != nil {
 			log.Fatalf("Cannot read from stdout of sock: %v\n", err)
 		} else if string(buf) != "ready" {
@@ -350,7 +350,7 @@ func (c *SOCKContainer) RunServer() error {
 			log.Printf("wait for init signal handler took %v\n", time.Since(start))
 		}
 	case <-timeout.C:
-		if n, err := c.Pipe().Write([]byte("timeo")); err != nil {
+		if n, err := c.pipe.Write([]byte("timeo")); err != nil {
 			return err
 		} else if n != 5 {
 			return fmt.Errorf("Cannot write `timeo` to pipe\n")
@@ -407,8 +407,4 @@ func (c *SOCKContainer) MountDirs(hostDir, handlerDir string) error {
 	}
 
 	return nil
-}
-
-func (c *SOCKContainer) Pipe() *os.File {
-	return c.pipe
 }
