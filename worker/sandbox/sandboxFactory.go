@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/open-lambda/open-lambda/worker/config"
-	"github.com/open-lambda/open-lambda/worker/dockerutil"
+	"github.com/open-lambda/open-lambda/worker/sandbox/dockerutil"
 	"github.com/open-lambda/open-lambda/worker/util"
 )
 
