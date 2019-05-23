@@ -16,7 +16,7 @@ import (
 
 	docker "github.com/fsouza/go-dockerclient"
 	minio "github.com/minio/minio-go"
-	dutil "github.com/open-lambda/open-lambda/worker/dockerutil"
+	dutil "github.com/open-lambda/open-lambda/worker/sandbox/dockerutil"
 
 	"github.com/open-lambda/open-lambda/worker/config"
 	"github.com/open-lambda/open-lambda/worker/server"

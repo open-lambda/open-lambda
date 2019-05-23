@@ -10,7 +10,7 @@ import (
 	docker "github.com/fsouza/go-dockerclient"
 
 	"github.com/open-lambda/open-lambda/worker/config"
-	"github.com/open-lambda/open-lambda/worker/dockerutil"
+	"github.com/open-lambda/open-lambda/worker/sandbox/dockerutil"
 )
 
 // DockerContainerFactory is a ContainerFactory that creats docker containers.
