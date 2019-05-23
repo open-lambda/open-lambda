@@ -22,17 +22,16 @@ import (
 	sb "github.com/open-lambda/open-lambda/worker/sandbox"
 )
 
-// HandlerSet represents a collection of Handlers of a worker server. It
-// manages the Handler by HandlerLRU.
-type HandlerManagerSet struct {
+// Organizes all lambda functions (the code) and lambda instances (that serve events)
+type LambdaMgr struct {
 	mutex      sync.Mutex
-	hmMap      map[string]*HandlerManager
+	lfuncMap   map[string]*LambdaFunc
 	regMgr     registry.RegistryManager
 	pipMgr     pip.InstallManager
 	sbFactory  sb.ContainerFactory
 	cacheMgr   *cache.CacheManager
 	config     *config.Config
-	lru        *HandlerLRU
+	lru        *LambdaInstanceLRU
 	workerDir  string
 	maxRunners int
 	hhits      *int64
@@ -40,29 +39,28 @@ type HandlerManagerSet struct {
 	misses     *int64
 }
 
-type HandlerManager struct {
-	name        string
-	mutex       sync.Mutex
-	hms         *HandlerManagerSet
-	handlers    *list.List
-	hElements   map[*Handler]*list.Element
-	workingDir  string
-	maxHandlers int
-	lastPull    *time.Time
-	code        []byte
-	codeDir     string
-	imports     []string
-	installs    []string
+// Represents a single lambda function (the code)
+type LambdaFunc struct {
+	name         string
+	mutex        sync.Mutex
+	lmgr         *LambdaMgr
+	instances    *list.List
+	listEl       map[*LambdaInstance]*list.Element
+	workingDir   string
+	maxInstances int
+	lastPull     *time.Time
+	code         []byte
+	codeDir      string
+	imports      []string
+	installs     []string
 }
 
-// Handler handles requests to run a lambda on a worker server. It handles
-// concurrency and communicates with the sandbox manager to change the
-// state of the container that servers the lambda.
-type Handler struct {
+// Wraps a sandbox that runs a process that can handle lambda events
+type LambdaInstance struct {
 	name    string
 	id      string
 	mutex   sync.Mutex
-	hm      *HandlerManager
+	lfunc   *LambdaFunc
 	sandbox sb.Container
 	fs      *cache.ForkServer
 	hostDir string
@@ -70,8 +68,7 @@ type Handler struct {
 	usage   int
 }
 
-// NewHandlerSet creates an empty HandlerSet
-func NewHandlerManagerSet(opts *config.Config) (hms *HandlerManagerSet, err error) {
+func NewLambdaMgr(opts *config.Config) (mgr *LambdaMgr, err error) {
 	var t time.Time
 
 	t = time.Now()
@@ -105,8 +102,8 @@ func NewHandlerManagerSet(opts *config.Config) (hms *HandlerManagerSet, err erro
 	var hhits int64 = 0
 	var ihits int64 = 0
 	var misses int64 = 0
-	hms = &HandlerManagerSet{
-		hmMap:      make(map[string]*HandlerManager),
+	mgr = &LambdaMgr{
+		lfuncMap:   make(map[string]*LambdaFunc),
 		regMgr:     rm,
 		pipMgr:     pm,
 		sbFactory:  sf,
@@ -119,206 +116,206 @@ func NewHandlerManagerSet(opts *config.Config) (hms *HandlerManagerSet, err erro
 		misses:     &misses,
 	}
 
-	hms.lru = NewHandlerLRU(hms, opts.Handler_cache_size) //kb
+	mgr.lru = NewLambdaInstanceLRU(mgr, opts.Handler_cache_size) //kb
 
-	return hms, nil
+	return mgr, nil
 }
 
-// Get always returns a Handler, creating one if necessarily.
-func (hms *HandlerManagerSet) Get(name string) (h *Handler, err error) {
-	hms.mutex.Lock()
+// Returns an existing instance (if there is one), or creates a new one
+func (mgr *LambdaMgr) Get(name string) (linst *LambdaInstance, err error) {
+	mgr.mutex.Lock()
 
-	hm := hms.hmMap[name]
+	lfunc := mgr.lfuncMap[name]
 
-	if hm == nil {
-		workingDir := filepath.Join(hms.workerDir, "handlers", name)
-		hms.hmMap[name] = &HandlerManager{
+	if lfunc == nil {
+		workingDir := filepath.Join(mgr.workerDir, "handlers", name)
+		mgr.lfuncMap[name] = &LambdaFunc{
 			name:       name,
-			hms:        hms,
-			handlers:   list.New(),
-			hElements:  make(map[*Handler]*list.Element),
+			lmgr:       mgr,
+			instances:  list.New(),
+			listEl:     make(map[*LambdaInstance]*list.Element),
 			workingDir: workingDir,
 			imports:    []string{},
 			installs:   []string{},
 		}
 
-		hm = hms.hmMap[name]
+		lfunc = mgr.lfuncMap[name]
 	}
 
-	// find or create handler
-	hm.mutex.Lock()
-	if hm.handlers.Front() == nil {
-		h = &Handler{
+	// find or create instance
+	lfunc.mutex.Lock()
+	if lfunc.instances.Front() == nil {
+		linst = &LambdaInstance{
 			name:    name,
-			hm:      hm,
+			lfunc:   lfunc,
 			runners: 1,
 		}
 	} else {
-		hEle := hm.handlers.Front()
-		h = hEle.Value.(*Handler)
+		listEl := lfunc.instances.Front()
+		linst = listEl.Value.(*LambdaInstance)
 
 		// remove from lru if necessary
-		h.mutex.Lock()
-		if h.runners == 0 {
-			hms.lru.Remove(h)
+		linst.mutex.Lock()
+		if linst.runners == 0 {
+			mgr.lru.Remove(linst)
 		}
 
-		h.runners += 1
+		linst.runners += 1
 
-		if h.hm.hms.maxRunners != 0 && h.runners == h.hm.hms.maxRunners {
-			hm.handlers.Remove(hEle)
-			delete(hm.hElements, h)
+		if linst.lfunc.lmgr.maxRunners != 0 && linst.runners == linst.lfunc.lmgr.maxRunners {
+			lfunc.instances.Remove(listEl)
+			delete(lfunc.listEl, linst)
 		}
-		h.mutex.Unlock()
+		linst.mutex.Unlock()
 	}
 	// not perfect, but removal from the LRU needs to be atomic
-	// with respect to the LRU and the HandlerManager
-	hms.mutex.Unlock()
+	// with respect to the LRU and the LambdaMgr
+	mgr.mutex.Unlock()
 
 	// get code if needed
-	if hm.lastPull == nil {
-		codeDir, imports, installs, err := hms.regMgr.Pull(hm.name)
+	if lfunc.lastPull == nil {
+		codeDir, imports, installs, err := mgr.regMgr.Pull(lfunc.name)
 		if err != nil {
 			return nil, err
 		}
 
 		now := time.Now()
-		hm.lastPull = &now
-		hm.codeDir = codeDir
-		hm.imports = imports
-		hm.installs = installs
+		lfunc.lastPull = &now
+		lfunc.codeDir = codeDir
+		lfunc.imports = imports
+		lfunc.installs = installs
 	}
-	hm.mutex.Unlock()
+	lfunc.mutex.Unlock()
 
-	return h, nil
+	return linst, nil
 }
 
-// Dump prints the name and state of the Handlers currently in the HandlerSet.
-func (hms *HandlerManagerSet) Dump() {
-	hms.mutex.Lock()
-	defer hms.mutex.Unlock()
+// Dump prints the name and state of the instances currently in the LambdaMgr.
+func (mgr *LambdaMgr) Dump() {
+	mgr.mutex.Lock()
+	defer mgr.mutex.Unlock()
 
-	log.Printf("HANDLERS:\n")
-	for name, hm := range hms.hmMap {
-		hm.mutex.Lock()
-		log.Printf(" %v: %d", name, hm.maxHandlers)
-		for e := hm.handlers.Front(); e != nil; e = e.Next() {
-			h := e.Value.(*Handler)
-			state, _ := h.sandbox.State()
-			log.Printf(" > %v: %v\n", h.id, state.String())
+	log.Printf("LAMBDA INSTANCES:\n")
+	for name, lfunc := range mgr.lfuncMap {
+		lfunc.mutex.Lock()
+		log.Printf(" %v: %d", name, lfunc.maxInstances)
+		for e := lfunc.instances.Front(); e != nil; e = e.Next() {
+			linst := e.Value.(*LambdaInstance)
+			state, _ := linst.sandbox.State()
+			log.Printf(" > %v: %v\n", linst.id, state.String())
 		}
-		hm.mutex.Unlock()
+		lfunc.mutex.Unlock()
 	}
 }
 
-func (hms *HandlerManagerSet) Cleanup() {
-	hms.mutex.Lock()
-	defer hms.mutex.Unlock()
+func (mgr *LambdaMgr) Cleanup() {
+	mgr.mutex.Lock()
+	defer mgr.mutex.Unlock()
 
-	for _, hm := range hms.hmMap {
-		for e := hm.handlers.Front(); e != nil; e = e.Next() {
-			e.Value.(*Handler).nuke()
+	for _, lfunc := range mgr.lfuncMap {
+		for e := lfunc.instances.Front(); e != nil; e = e.Next() {
+			e.Value.(*LambdaInstance).nuke()
 		}
 	}
 
-	hms.sbFactory.Cleanup()
+	mgr.sbFactory.Cleanup()
 
-	if hms.cacheMgr != nil {
-		hms.cacheMgr.Cleanup()
+	if mgr.cacheMgr != nil {
+		mgr.cacheMgr.Cleanup()
 	}
 }
 
-// must be called with handler lock
-func (hm *HandlerManager) AddHandler(h *Handler) {
-	hms := hm.hms
+// must be called with instance lock
+func (lfunc *LambdaFunc) AddInstance(linst *LambdaInstance) {
+	mgr := lfunc.lmgr
 
 	// if we finish first
 	// no deadlock can occur here despite taking the locks in the
 	// opposite order because hm -> h in Get has no reference
-	// in the handler list
-	if hms.maxRunners != 0 && h.runners == hms.maxRunners-1 {
-		hm.mutex.Lock()
-		hm.hElements[h] = hm.handlers.PushFront(h)
-		hm.maxHandlers = max(hm.maxHandlers, hm.handlers.Len())
-		hm.mutex.Unlock()
+	// in the instance list
+	if mgr.maxRunners != 0 && linst.runners == mgr.maxRunners-1 {
+		lfunc.mutex.Lock()
+		lfunc.listEl[linst] = lfunc.instances.PushFront(linst)
+		lfunc.maxInstances = max(lfunc.maxInstances, lfunc.instances.Len())
+		lfunc.mutex.Unlock()
 	}
 }
 
-func (hm *HandlerManager) TryRemoveHandler(h *Handler) error {
-	hm.mutex.Lock()
-	defer hm.mutex.Unlock()
-	h.mutex.Lock()
-	defer h.mutex.Unlock()
+func (lfunc *LambdaFunc) TryRemoveInstance(linst *LambdaInstance) error {
+	lfunc.mutex.Lock()
+	defer lfunc.mutex.Unlock()
+	linst.mutex.Lock()
+	defer linst.mutex.Unlock()
 
 	// someone has come in and has started running
-	if h.runners > 0 {
+	if linst.runners > 0 {
 		return errors.New("concurrent runner entered system")
 	}
 
-	// remove reference to handler in HandlerManager
-	// this ensures h is the last reference to the Handler
-	if hEle := hm.hElements[h]; hEle != nil {
-		hm.handlers.Remove(hEle)
-		delete(hm.hElements, h)
+	// remove reference to instance in LambdaMgr
+	// this ensures h is the last reference to the Instance
+	if listEl := lfunc.listEl[linst]; listEl != nil {
+		lfunc.instances.Remove(listEl)
+		delete(lfunc.listEl, linst)
 	}
 
 	return nil
 }
 
-// RunStart runs the lambda handled by this Handler. It checks if the code has
+// RunStart runs the lambda handled by this Instance. It checks if the code has
 // been pulled, sandbox been created, and sandbox been started. The channel of
 // the sandbox of this lambda is returned.
-func (h *Handler) RunStart() (ch *sb.Channel, err error) {
-	h.mutex.Lock()
-	defer h.mutex.Unlock()
+func (linst *LambdaInstance) RunStart() (ch *sb.Channel, err error) {
+	linst.mutex.Lock()
+	defer linst.mutex.Unlock()
 
-	hm := h.hm
-	hms := h.hm.hms
+	lfunc := linst.lfunc
+	mgr := linst.lfunc.lmgr
 
 	// create sandbox if needed
-	if h.sandbox == nil {
+	if linst.sandbox == nil {
 		hit := false
 
 		// TODO: do this in the background
-		err = hms.pipMgr.Install(hm.installs)
+		err = mgr.pipMgr.Install(lfunc.installs)
 		if err != nil {
 			return nil, err
 		}
 
-		sandbox, err := hms.sbFactory.Create(hm.codeDir, hm.workingDir)
+		sandbox, err := mgr.sbFactory.Create(lfunc.codeDir, lfunc.workingDir)
 		if err != nil {
 			return nil, err
 		}
 
-		h.sandbox = sandbox
-		h.id = h.sandbox.ID()
-		h.hostDir = h.sandbox.HostDir()
+		linst.sandbox = sandbox
+		linst.id = linst.sandbox.ID()
+		linst.hostDir = linst.sandbox.HostDir()
 
-		if sbState, err := h.sandbox.State(); err != nil {
+		if sbState, err := linst.sandbox.State(); err != nil {
 			return nil, err
 		} else if sbState == state.Stopped {
-			if err := h.sandbox.Start(); err != nil {
+			if err := linst.sandbox.Start(); err != nil {
 				return nil, err
 			}
 		} else if sbState == state.Paused {
-			if err := h.sandbox.Unpause(); err != nil {
+			if err := linst.sandbox.Unpause(); err != nil {
 				return nil, err
 			}
 		}
 
-		if hms.cacheMgr == nil {
-			if err := h.sandbox.RunServer(); err != nil {
+		if mgr.cacheMgr == nil {
+			if err := linst.sandbox.RunServer(); err != nil {
 				return nil, err
 			}
 		} else {
-			if h.fs, hit, err = hms.cacheMgr.Provision(sandbox, hm.imports); err != nil {
+			if linst.fs, hit, err = mgr.cacheMgr.Provision(sandbox, lfunc.imports); err != nil {
 				return nil, err
 			}
 
 			if hit {
-				atomic.AddInt64(hms.ihits, 1)
+				atomic.AddInt64(mgr.ihits, 1)
 			} else {
-				atomic.AddInt64(hms.misses, 1)
+				atomic.AddInt64(mgr.misses, 1)
 			}
 		}
 
@@ -326,7 +323,7 @@ func (h *Handler) RunStart() (ch *sb.Channel, err error) {
 		ready := make(chan bool, 1)
 		defer close(ready)
 		go func() {
-			pipeDir := filepath.Join(h.hostDir, "server_pipe")
+			pipeDir := filepath.Join(linst.hostDir, "server_pipe")
 			pipe, err := os.OpenFile(pipeDir, os.O_RDWR, 0777)
 			if err != nil {
 				log.Printf("Cannot open pipe: %v\n", err)
@@ -356,87 +353,87 @@ func (h *Handler) RunStart() (ch *sb.Channel, err error) {
 				log.Printf("wait for server took %v\n", time.Since(start))
 			}
 		case <-timeout.C:
-			return nil, fmt.Errorf("handler server failed to initialize after 20s")
+			return nil, fmt.Errorf("instance server failed to initialize after 20s")
 		}
 
 		// we are up so we can add ourselves for reuse
-		if hms.maxRunners == 0 || h.runners < hms.maxRunners {
-			hm.mutex.Lock()
-			hm.hElements[h] = hm.handlers.PushFront(h)
-			hm.maxHandlers = max(hm.maxHandlers, hm.handlers.Len())
-			hm.mutex.Unlock()
+		if mgr.maxRunners == 0 || linst.runners < mgr.maxRunners {
+			lfunc.mutex.Lock()
+			lfunc.listEl[linst] = lfunc.instances.PushFront(linst)
+			lfunc.maxInstances = max(lfunc.maxInstances, lfunc.instances.Len())
+			lfunc.mutex.Unlock()
 		}
 
-	} else if sbState, _ := h.sandbox.State(); sbState == state.Paused {
+	} else if sbState, _ := linst.sandbox.State(); sbState == state.Paused {
 		// unpause if paused
-		atomic.AddInt64(hms.hhits, 1)
-		if err := h.sandbox.Unpause(); err != nil {
+		atomic.AddInt64(mgr.hhits, 1)
+		if err := linst.sandbox.Unpause(); err != nil {
 			return nil, err
 		}
 	} else {
-		atomic.AddInt64(hms.hhits, 1)
+		atomic.AddInt64(mgr.hhits, 1)
 	}
 
-	log.Printf("handler hits: %v, import hits: %v, misses: %v", *hms.hhits, *hms.ihits, *hms.misses)
-	return h.sandbox.Channel()
+	log.Printf("handler hits: %v, import hits: %v, misses: %v", *mgr.hhits, *mgr.ihits, *mgr.misses)
+	return linst.sandbox.Channel()
 }
 
 // RunFinish notifies that a request to run the lambda has completed. If no
-// request is being run in its sandbox, sandbox will be paused and the handler
-// be added to the HandlerLRU.
-func (h *Handler) RunFinish() {
-	h.mutex.Lock()
+// request is being run in its sandbox, sandbox will be paused and the instance
+// be added to the InstanceLRU.
+func (linst *LambdaInstance) RunFinish() {
+	linst.mutex.Lock()
 
-	hm := h.hm
-	hms := h.hm.hms
+	lfunc := linst.lfunc
+	mgr := linst.lfunc.lmgr
 
-	h.runners -= 1
+	linst.runners -= 1
 
 	// are we the last?
-	if h.runners == 0 {
-		if err := h.sandbox.Pause(); err != nil {
+	if linst.runners == 0 {
+		if err := linst.sandbox.Pause(); err != nil {
 			// TODO(tyler): better way to handle this?  If
-			// we can't pause, the handler gets to keep
+			// we can't pause, the instance gets to keep
 			// running for free...
-			log.Printf("Could not pause %v: %v!  Error: %v\n", h.name, h.id, err)
+			log.Printf("Could not pause %v: %v!  Error: %v\n", linst.name, linst.id, err)
 		}
 
-		if handlerUsage(h) > hms.lru.soft_limit {
-			h.mutex.Unlock()
+		if lambdaInstanceUsage(linst) > mgr.lru.soft_limit {
+			linst.mutex.Unlock()
 
 			// we were potentially the last runner
-			// try to remove us from the handler manager
-			if err := hm.TryRemoveHandler(h); err == nil {
+			// try to remove us from the instance manager
+			if err := lfunc.TryRemoveInstance(linst); err == nil {
 				// we were the last one so... bye
-				go h.nuke()
+				go linst.nuke()
 			}
 			return
 		}
 
-		hm.AddHandler(h)
-		hms.lru.Add(h)
+		lfunc.AddInstance(linst)
+		mgr.lru.Add(linst)
 	} else {
-		hm.AddHandler(h)
+		lfunc.AddInstance(linst)
 	}
 
-	h.mutex.Unlock()
+	linst.mutex.Unlock()
 }
 
-func (h *Handler) nuke() {
-	if err := h.sandbox.Unpause(); err != nil {
+func (linst *LambdaInstance) nuke() {
+	if err := linst.sandbox.Unpause(); err != nil {
 		log.Printf("failed to unpause sandbox :: %v", err.Error())
 	}
-	if err := h.sandbox.Stop(); err != nil {
+	if err := linst.sandbox.Stop(); err != nil {
 		log.Printf("failed to stop sandbox :: %v", err.Error())
 	}
-	if err := h.sandbox.Remove(); err != nil {
+	if err := linst.sandbox.Remove(); err != nil {
 		log.Printf("failed to remove sandbox :: %v", err.Error())
 	}
 }
 
-// Sandbox returns the sandbox of this Handler.
-func (h *Handler) Sandbox() sb.Sandbox {
-	return h.sandbox
+// Sandbox returns the sandbox of this Instance.
+func (linst *LambdaInstance) Sandbox() sb.Sandbox {
+	return linst.sandbox
 }
 
 func max(i1, i2 int) int {
