@@ -26,7 +26,7 @@ const (
 // these requests to its sandboxes.
 type Server struct {
 	config   *config.Config
-	handlers *handler.HandlerManagerSet
+	lambda_mgr *handler.LambdaMgr
 }
 
 // httpErr is a wrapper for an http error and the return code of the request.
@@ -42,27 +42,27 @@ func newHttpErr(msg string, code int) *httpErr {
 
 // NewServer creates a server based on the passed config."
 func NewServer(config *config.Config) (*Server, error) {
-	handlers, err := handler.NewHandlerManagerSet(config)
+	lambda_mgr, err := handler.NewLambdaMgr(config)
 	if err != nil {
 		return nil, err
 	}
 
 	server := &Server{
 		config:   config,
-		handlers: handlers,
+		lambda_mgr: lambda_mgr,
 	}
 
 	return server, nil
 }
 
 // ForwardToSandbox forwards a run lambda request to a sandbox.
-func (s *Server) ForwardToSandbox(handler *handler.Handler, r *http.Request, input []byte) ([]byte, *http.Response, error) {
-	channel, err := handler.RunStart()
+func (s *Server) ForwardToSandbox(linst *handler.LambdaInstance, r *http.Request, input []byte) ([]byte, *http.Response, error) {
+	channel, err := linst.RunStart()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	defer handler.RunFinish()
+	defer linst.RunFinish()
 
 	if config.Timing {
 		defer func(start time.Time) {
@@ -157,14 +157,14 @@ func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 	}
 
 	// forward to sandbox
-	var handler *handler.Handler
-	if h, err := s.handlers.Get(img); err != nil {
+	var linst *handler.LambdaInstance
+	if rv, err := s.lambda_mgr.Get(img); err != nil {
 		return newHttpErr(err.Error(), http.StatusInternalServerError)
 	} else {
-		handler = h
+		linst = rv
 	}
 
-	wbody, w2, err := s.ForwardToSandbox(handler, r, rbody)
+	wbody, w2, err := s.ForwardToSandbox(linst, r, rbody)
 	if err != nil {
 		return newHttpErr(err.Error(), http.StatusInternalServerError)
 	}
@@ -213,7 +213,7 @@ func (s *Server) Status(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 
-	s.handlers.Dump()
+	s.lambda_mgr.Dump()
 }
 
 // getUrlComponents parses request URL into its "/" delimated components
@@ -235,7 +235,7 @@ func getUrlComponents(r *http.Request) []string {
 }
 
 func (s *Server) cleanup() {
-	s.handlers.Cleanup()
+	s.lambda_mgr.Cleanup()
 }
 
 func Main(config_path string) {
