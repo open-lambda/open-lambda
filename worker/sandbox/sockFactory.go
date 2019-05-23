@@ -36,9 +36,13 @@ func NewSOCKContainerFactory(opts *config.Config, rootDir, prefix, unshareFlags 
 
 	if err := os.MkdirAll(rootDir, 0777); err != nil {
 		return nil, fmt.Errorf("failed to make root container dir :: %v", err)
-	} else if err := syscall.Mount(rootDir, rootDir, "", BIND, ""); err != nil {
+	}
+
+	if err := syscall.Mount(rootDir, rootDir, "", BIND, ""); err != nil {
 		return nil, fmt.Errorf("failed to bind root container dir: %v", err)
-	} else if err := syscall.Mount("none", rootDir, "", PRIVATE, ""); err != nil {
+	}
+
+	if err := syscall.Mount("none", rootDir, "", PRIVATE, ""); err != nil {
 		return nil, fmt.Errorf("failed to make root container dir private :: %v", err)
 	}
 
@@ -64,7 +68,7 @@ func NewSOCKContainerFactory(opts *config.Config, rootDir, prefix, unshareFlags 
 }
 
 // Create creates a docker container from the handler and container directory.
-func (sf *SOCKContainerFactory) Create(handlerDir, workingDir string) (Container, error) {
+func (sf *SOCKContainerFactory) Create(codeDir, workingDir string) (Container, error) {
 	if config.Timing {
 		defer func(start time.Time) {
 			log.Printf("create sock took %v\n", time.Since(start))
@@ -72,49 +76,11 @@ func (sf *SOCKContainerFactory) Create(handlerDir, workingDir string) (Container
 	}
 
 	id := fmt.Sprintf("%d", atomic.AddInt64(sf.idxPtr, 1))
-	rootDir := filepath.Join(sf.rootDir, id)
-	if err := os.Mkdir(rootDir, 0777); err != nil {
-		return nil, err
-	}
+	containerRootDir := filepath.Join(sf.rootDir, id)
+	scratchDir := filepath.Join(workingDir, id)
 
 	startCmd := append([]string{OL_INIT}, sf.initArgs...)
-
-	// NOTE: mount points are expected to exist in SOCK_handler_base directory
-
-	if err := syscall.Mount(sf.baseDir, rootDir, "", BIND, ""); err != nil {
-		return nil, fmt.Errorf("failed to bind root dir: %s -> %s :: %v\n", sf.baseDir, rootDir, err)
-	} else if err := syscall.Mount("none", rootDir, "", BIND_RO, ""); err != nil {
-		return nil, fmt.Errorf("failed to bind root dir RO: %s :: %v\n", rootDir, err)
-	} else if err := syscall.Mount("none", rootDir, "", PRIVATE, ""); err != nil {
-		return nil, fmt.Errorf("failed to make root dir private :: %v", err)
-	}
-
-	hostDir := filepath.Join(workingDir, id)
-	if err := os.MkdirAll(hostDir, 0777); err != nil {
-		return nil, err
-	}
-
-	// pipe for synchronization before init is ready
-	pipe := filepath.Join(hostDir, "init_pipe")
-	if err := syscall.Mkfifo(pipe, 0777); err != nil {
-		return nil, err
-	}
-	// pipe for synchronization before socket is ready
-	pipe = filepath.Join(hostDir, "server_pipe")
-	if err := syscall.Mkfifo(pipe, 0777); err != nil {
-		return nil, err
-	}
-
-	container, err := NewSOCKContainer(sf.cgf, sf.opts, rootDir, id, sf.unshareFlags, startCmd)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := container.MountDirs(hostDir, handlerDir); err != nil {
-		return nil, err
-	}
-
-	return container, nil
+	return NewSOCKContainer(id, containerRootDir, sf.baseDir, codeDir, scratchDir, sf.cgf, sf.opts, sf.unshareFlags, startCmd), nil
 }
 
 func (sf *SOCKContainerFactory) Cleanup() {

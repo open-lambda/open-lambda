@@ -30,39 +30,38 @@ import (
 )
 
 type SOCKContainer struct {
-	opts         *config.Config
-	cgf          *CgroupFactory
-	id           string
-	cgId         string
-	rootDir      string
-	hostDir      string
-	status       state.HandlerState
-	initPid      string
-	initCmd      *exec.Cmd
-	unshareFlags string
-	startCmd     []string
-	pipe         *os.File
+	opts             *config.Config
+	cgf              *CgroupFactory
+	id               string
+	cgId             string
+	containerRootDir string
+	baseDir          string
+	codeDir          string
+	scratchDir       string
+	status           state.HandlerState
+	initPid          string
+	initCmd          *exec.Cmd
+	unshareFlags     string
+	startCmd         []string
+	pipe             *os.File
 }
 
-func NewSOCKContainer(cgf *CgroupFactory, opts *config.Config, rootDir, id, unshareFlags string, startCmd []string) (*SOCKContainer, error) {
-	// create container cgroups
-	cgId, err := cgf.GetCg(id)
-	if err != nil {
-		return nil, err
-	}
+func NewSOCKContainer(
+	id, containerRootDir, baseDir, codeDir, scratchDir string,
+	cgf *CgroupFactory, opts *config.Config, unshareFlags string, startCmd []string) *SOCKContainer {
 
-	sandbox := &SOCKContainer{
-		cgf:          cgf,
-		opts:         opts,
-		id:           id,
-		cgId:         cgId,
-		rootDir:      rootDir,
-		unshareFlags: unshareFlags,
-		status:       state.Stopped,
-		startCmd:     startCmd,
+	return &SOCKContainer{
+		id:               id,
+		containerRootDir: containerRootDir,
+		baseDir:          baseDir,
+		codeDir:          codeDir,
+		scratchDir:       scratchDir,
+		cgf:              cgf,
+		opts:             opts,
+		unshareFlags:     unshareFlags,
+		status:           state.Stopped,
+		startCmd:         startCmd,
 	}
-
-	return sandbox, nil
 }
 
 func (c *SOCKContainer) State() (hstate state.HandlerState, err error) {
@@ -70,11 +69,7 @@ func (c *SOCKContainer) State() (hstate state.HandlerState, err error) {
 }
 
 func (c *SOCKContainer) Channel() (channel *Channel, err error) {
-	if c.hostDir == "" {
-		return nil, fmt.Errorf("cannot call channel before calling mountDirs")
-	}
-
-	sockPath := filepath.Join(c.hostDir, "ol.sock")
+	sockPath := filepath.Join(c.scratchDir, "ol.sock")
 	if len(sockPath) > 108 {
 		return nil, fmt.Errorf("socket path length cannot exceed 108 characters (try moving cluster closer to the root directory")
 	}
@@ -88,14 +83,80 @@ func (c *SOCKContainer) Channel() (channel *Channel, err error) {
 	return &Channel{Url: "http://container/", Transport: tr}, nil
 }
 
-func (c *SOCKContainer) Start() error {
+func (c *SOCKContainer) Start() (err error) {
 	defer func(start time.Time) {
 		if config.Timing {
 			log.Printf("create container took %v\n", time.Since(start))
 		}
 	}(time.Now())
 
-	initArgs := []string{c.unshareFlags, c.rootDir}
+	// FILE SYSTEM STEP 1: mount base
+	if err := os.Mkdir(c.containerRootDir, 0777); err != nil {
+		return err
+	}
+
+	if err := syscall.Mount(c.baseDir, c.containerRootDir, "", BIND, ""); err != nil {
+		return fmt.Errorf("failed to bind root dir: %s -> %s :: %v\n", c.baseDir, c.containerRootDir, err)
+	}
+
+	if err := syscall.Mount("none", c.containerRootDir, "", BIND_RO, ""); err != nil {
+		return fmt.Errorf("failed to bind root dir RO: %s :: %v\n", c.containerRootDir, err)
+	}
+
+	if err := syscall.Mount("none", c.containerRootDir, "", PRIVATE, ""); err != nil {
+		return fmt.Errorf("failed to make root dir private :: %v", err)
+	}
+
+	// FILE SYSTEM STEP 2: code dir
+	if c.codeDir != "" {
+		sbCodeDir := filepath.Join(c.containerRootDir, "hanler")
+
+		if err := syscall.Mount(c.codeDir, sbCodeDir, "", BIND, ""); err != nil {
+			return fmt.Errorf("failed to bind code dir: %s -> %s :: %v", c.codeDir, sbCodeDir, err.Error())
+		}
+
+		if err := syscall.Mount("none", sbCodeDir, "", BIND_RO, ""); err != nil {
+			return fmt.Errorf("failed to bind code dir RO: %v", err.Error())
+		}
+	}
+
+	// FILE SYSTEM STEP 3: scratch dir (tmp and communication)
+	if err := os.MkdirAll(c.scratchDir, 0777); err != nil {
+		return err
+	}
+
+	tmpDir := filepath.Join(c.scratchDir, "tmp")
+	if err := os.Mkdir(tmpDir, 0777); err != nil {
+		return err
+	}
+
+	sbScratchDir := filepath.Join(c.containerRootDir, "host")
+	if err := syscall.Mount(c.scratchDir, sbScratchDir, "", BIND, ""); err != nil {
+		return fmt.Errorf("failed to bind scratch dir: %v", err.Error())
+	}
+
+	sbTmpDir := filepath.Join(c.containerRootDir, "tmp")
+	if err := syscall.Mount(tmpDir, sbTmpDir, "", BIND, ""); err != nil {
+		return fmt.Errorf("failed to bind tmp dir: %v", err.Error())
+	}
+
+	pipe := filepath.Join(c.scratchDir, "init_pipe") // communicate with init process
+	if err := syscall.Mkfifo(pipe, 0777); err != nil {
+		return err
+	}
+
+	c.pipe, err = os.OpenFile(pipe, os.O_RDWR, 0777)
+	if err != nil {
+		return fmt.Errorf("Cannot open pipe: %v\n", err)
+	}
+
+	pipe = filepath.Join(c.scratchDir, "server_pipe") // communicate with lambda server
+	if err := syscall.Mkfifo(pipe, 0777); err != nil {
+		return err
+	}
+
+	// START INIT PROC (sets up namespaces)
+	initArgs := []string{c.unshareFlags, c.containerRootDir}
 	initArgs = append(initArgs, c.startCmd...)
 
 	c.initCmd = exec.Command(
@@ -104,29 +165,23 @@ func (c *SOCKContainer) Start() error {
 	)
 
 	c.initCmd.Env = []string{fmt.Sprintf("ol.config=%s", c.opts.SandboxConfJson())}
-
-	// let the init program prints error to log, for debugging
-	c.initCmd.Stderr = os.Stdout
-
-	// setup the pipe
-	pipeDir := filepath.Join(c.HostDir(), "init_pipe")
-	pipe, err := os.OpenFile(pipeDir, os.O_RDWR, 0777)
-	if err != nil {
-		log.Fatalf("Cannot open pipe: %v\n", err)
-	}
-	c.pipe = pipe
+	c.initCmd.Stderr = os.Stdout // for debugging
 
 	start := time.Now()
 	if err := c.initCmd.Start(); err != nil {
 		return err
 	}
 
+	// wait up to 5s for server sock_init to spawn
 	ready := make(chan string, 1)
 	defer close(ready)
 	go func() {
 		// message will be either 5 byte \0 padded pid (<65536), or "ready"
 		pid := make([]byte, 6)
 		n, err := c.pipe.Read(pid[:5])
+
+		// TODO: return early
+
 		if err != nil {
 			log.Printf("Cannot read from stdout of sock: %v\n", err)
 		} else if n != 5 {
@@ -136,7 +191,6 @@ func (c *SOCKContainer) Start() error {
 		}
 	}()
 
-	// wait up to 5s for server sock_init to spawn
 	timeout := time.NewTimer(5 * time.Second)
 	defer timeout.Stop()
 
@@ -154,6 +208,13 @@ func (c *SOCKContainer) Start() error {
 		}
 		return fmt.Errorf("sock_init failed to spawn after 5s")
 	}
+
+	// JOIN A CGROUP
+	cgId, err := c.cgf.GetCg(c.id)
+	if err != nil {
+		return err
+	}
+	c.cgId = cgId
 
 	if err := c.CGroupEnter(c.initPid); err != nil {
 		return err
@@ -261,16 +322,16 @@ func (c *SOCKContainer) Remove() error {
 		}(time.Now())
 	}
 
-	if err := syscall.Unmount(c.rootDir, syscall.MNT_DETACH); err != nil {
-		log.Printf("unmount root dir %s failed :: %v\n", c.rootDir, err)
+	if err := syscall.Unmount(c.containerRootDir, syscall.MNT_DETACH); err != nil {
+		log.Printf("unmount root dir %s failed :: %v\n", c.containerRootDir, err)
 	}
 
-	if err := os.RemoveAll(c.rootDir); err != nil {
-		log.Printf("remove root dir %s failed :: %v\n", c.rootDir, err)
+	if err := os.RemoveAll(c.containerRootDir); err != nil {
+		log.Printf("remove root dir %s failed :: %v\n", c.containerRootDir, err)
 	}
 
-	if err := os.RemoveAll(c.hostDir); err != nil {
-		log.Printf("remove host dir %s failed :: %v\n", c.hostDir, err)
+	if err := os.RemoveAll(c.scratchDir); err != nil {
+		log.Printf("remove host dir %s failed :: %v\n", c.scratchDir, err)
 	}
 
 	// remove cgroups
@@ -372,39 +433,9 @@ func (c *SOCKContainer) MemoryCGroupPath() string {
 }
 
 func (c *SOCKContainer) RootDir() string {
-	return c.rootDir
+	return c.containerRootDir
 }
 
 func (c *SOCKContainer) HostDir() string {
-	return c.hostDir
-}
-
-func (c *SOCKContainer) MountDirs(hostDir, handlerDir string) error {
-	c.hostDir = hostDir
-
-	tmpDir := filepath.Join(hostDir, "tmp")
-	if err := os.Mkdir(tmpDir, 0777); err != nil {
-		return err
-	}
-
-	sbHostDir := filepath.Join(c.rootDir, "host")
-	if err := syscall.Mount(hostDir, sbHostDir, "", BIND, ""); err != nil {
-		return fmt.Errorf("failed to bind host dir: %v", err.Error())
-	}
-
-	sbTmpDir := filepath.Join(c.rootDir, "tmp")
-	if err := syscall.Mount(tmpDir, sbTmpDir, "", BIND, ""); err != nil {
-		return fmt.Errorf("failed to bind tmp dir: %v", err.Error())
-	}
-
-	if handlerDir != "" {
-		sbHandlerDir := filepath.Join(c.rootDir, "handler")
-		if err := syscall.Mount(handlerDir, sbHandlerDir, "", BIND, ""); err != nil {
-			return fmt.Errorf("failed to bind handler dir: %s -> %s :: %v", handlerDir, sbHandlerDir, err.Error())
-		} else if err := syscall.Mount("none", sbHandlerDir, "", BIND_RO, ""); err != nil {
-			return fmt.Errorf("failed to bind handler dir RO: %v", err.Error())
-		}
-	}
-
-	return nil
+	return c.scratchDir
 }
