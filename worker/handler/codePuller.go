@@ -80,9 +80,9 @@ func (cp *CodePuller) Pull(name string) (targetDir string, err error) {
 	} else {
 		// registry type = file
 		paths := []string{
-			filepath.Join(cp.prefix, name),
 			filepath.Join(cp.prefix, name) + ".tar.gz",
 			filepath.Join(cp.prefix, name) + ".py",
+			filepath.Join(cp.prefix, name),
 		}
 
 		for i := 0; i < len(paths); i++ {
