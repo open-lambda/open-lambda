@@ -11,34 +11,28 @@ import (
 
 var Timing bool
 
-const REGISTRY_BUCKET = "registry"
-const REGISTRY_ACCESS_KEY = "ol_registry_access"
-const REGISTRY_SECRET_KEY = "ol_registry_secret"
-
 // Config represents the configuration for a worker server.
 type Config struct {
 	// base path for path parameters in this config; must be non-empty if any
 	// path (e.g., Worker_dir) is relative
 	path string
-	// registry type: "local" or "olregistry"
+
+	// location where code packages are stored.  Could be URL or local file path.
 	Registry string `json:"registry"`
+
 	// sandbox type: "docker" or "sock"
 	// currently ignored as cgroup sandbox is not fully integrated
 	Sandbox string `json:"sandbox"`
-	// registry directory for storing local copies of handler code
-	Registry_dir string `json:"registry_dir"`
-	// address of remote registry
-	Registry_server string `json:"registry_server"`
-	// access key for remote minio registry
-	Registry_access_key string `json:"registry_access_key"`
-	// secret key for remote minio registry
-	Registry_secret_key string `json:"registry_secret_key"`
+
 	// name of the cluster
 	Cluster_name string `json:"cluster_name"`
+
 	// pip index address for installing python packages
 	Pip_index string `json:"pip_mirror"`
+
 	// directory to install packages to, that sandboxes will read from
 	Pkgs_dir string
+
 	// max number of concurrent runners per sandbox
 	Max_runners int `json:"max_runners"`
 
@@ -49,8 +43,10 @@ type Config struct {
 	// sandbox options
 	// worker directory, which contains handler code, pid file, logs, etc.
 	Worker_dir string `json:"worker_dir"`
+
 	// base image path for sock containers
 	SOCK_base_path string `json: "sock_base_path"`
+
 	// port the worker server listens to
 	Worker_port string `json:"worker_port"`
 
@@ -121,21 +117,6 @@ func (c *Config) Defaults() error {
 
 	if c.Worker_port == "" {
 		c.Worker_port = "8080"
-	}
-
-	if c.Registry_dir == "" {
-		return fmt.Errorf("must specify local registry directory")
-	}
-
-	if !path.IsAbs(c.Registry_dir) {
-		if c.path == "" {
-			return fmt.Errorf("Registry_dir cannot be relative, unless config is loaded from file")
-		}
-		path, err := filepath.Abs(path.Join(path.Dir(c.path), c.Registry_dir))
-		if err != nil {
-			return err
-		}
-		c.Registry_dir = path
 	}
 
 	// worker dir
