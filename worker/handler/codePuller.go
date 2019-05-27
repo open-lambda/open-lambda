@@ -26,19 +26,16 @@ const SEPARATOR = ":"
 // TODO: garbage collect old directories not used by any handler
 // anymore
 
-// TODO: implement check on version before pulling something we
-// already have (this can be timestamp from HTTP or on local file)
-
-type CacheEntry struct {
-	version string // could be a timestamp for a file or web resource
-	path    string // where code is extracted to a dir
-}
-
 type CodePuller struct {
 	codeCacheDir string   // where to download/copy code
 	prefix       string   // combine with name to get file path or URL
 	nextId       int64    // used to generate directory names for lambda code dirs
 	dirCache     sync.Map // key=lambda name, value=version, directory path
+}
+
+type CacheEntry struct {
+	version string // could be a timestamp for a file or web resource
+	path    string // where code is extracted to a dir
 }
 
 func NewCodePuller(codeCacheDir, pullPrefix string) (cp *CodePuller, err error) {
@@ -47,6 +44,10 @@ func NewCodePuller(codeCacheDir, pullPrefix string) (cp *CodePuller, err error) 
 	}
 
 	return &CodePuller{codeCacheDir: codeCacheDir, prefix: pullPrefix, nextId: 0}, nil
+}
+
+func (cp *CodePuller) isRemote() (bool) {
+	return strings.HasPrefix(cp.prefix, "http://") || strings.HasPrefix(cp.prefix, "https://")
 }
 
 func (cp *CodePuller) Pull(name string) (targetDir string, err error) {
@@ -58,7 +59,7 @@ func (cp *CodePuller) Pull(name string) (targetDir string, err error) {
 		return "", fmt.Errorf(msg, name)
 	}
 
-	if strings.HasPrefix(cp.prefix, "http://") || strings.HasPrefix(cp.prefix, "https://") {
+	if cp.isRemote() {
 		// registry type = web
 		urls := []string{
 			cp.prefix + "/" + name + ".tar.gz",
@@ -121,12 +122,16 @@ func (cp *CodePuller) pullLocalFile(src, lambdaName string) (targetDir string, e
 		return "", fmt.Errorf("%s not a file or directory", src)
 	}
 
-	// for regular files, we cache based on mod time
+	// for regular files, we cache based on mod time.  We don't
+	// cache at the file level if this is a remote store (because
+	// caching is handled at the web level)
 	version := stat.ModTime().String()
-	cacheEntry := cp.getCache(lambdaName)
-	if cacheEntry != nil && cacheEntry.version == version {
-		// hit:
-		return cacheEntry.path, nil
+	if !cp.isRemote() {
+		cacheEntry := cp.getCache(lambdaName)
+		if cacheEntry != nil && cacheEntry.version == version {
+			// hit:
+			return cacheEntry.path, nil
+		}
 	}
 
 	// miss:
@@ -149,22 +154,42 @@ func (cp *CodePuller) pullLocalFile(src, lambdaName string) (targetDir string, e
 		return "", fmt.Errorf("lambda file %s not a .ta.rgz or .py", src)
 	}
 
-	cp.putCache(lambdaName, version, targetDir)
+	if !cp.isRemote() {
+		cp.putCache(lambdaName, version, targetDir)
+	}
 
 	return targetDir, nil
 }
 
 func (cp *CodePuller) pullRemoteFile(src, lambdaName string) (targetDir string, err error) {
-	resp, err := http.Get(src)
+	// grab latest lambda code if it's changed (pass
+	// If-Modified-Since so this can be determined on server side
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", src, nil)
+	if err != nil {
+		return "", err
+	}
+
+	cacheEntry := cp.getCache(lambdaName)
+	if cacheEntry != nil{
+		req.Header.Set("If-Modified-Since", cacheEntry.version)
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == 404 {
+	if resp.StatusCode == http.StatusNotFound {
 		return "", notFound404
 	}
 
+	if resp.StatusCode == http.StatusNotModified {
+		return cacheEntry.path, nil
+	}
+
+	// download to local file, then use pullLocalFile to finish
 	dir, err := ioutil.TempDir("", "ol-")
 	if err != nil {
 		return "", err
@@ -183,7 +208,17 @@ func (cp *CodePuller) pullRemoteFile(src, lambdaName string) (targetDir string, 
 		return "", err
 	}
 
-	return cp.pullLocalFile(localPath, targetDir)
+	targetDir, err = cp.pullLocalFile(localPath, lambdaName)
+
+	// record directory in cache, by mod time
+	if err == nil {
+		version := resp.Header.Get("Last-Modified")
+		if version != "" {
+			cp.putCache(lambdaName, version, targetDir)
+		}
+	}
+
+	return targetDir, err
 }
 
 func (cp *CodePuller) getCache(name string) *CacheEntry {
