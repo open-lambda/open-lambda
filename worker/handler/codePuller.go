@@ -10,9 +10,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
-	"sync/atomic"
 	"regexp"
+	"strings"
+	"sync"
+	"sync/atomic"
 )
 
 var notFound404 = errors.New("file does not exist")
@@ -22,13 +23,22 @@ const SEPARATOR = ":"
 // TODO: for web registries, support an HTTP-based access key
 // (https://en.wikipedia.org/wiki/Basic_access_authentication)
 
+// TODO: garbage collect old directories not used by any handler
+// anymore
+
 // TODO: implement check on version before pulling something we
 // already have (this can be timestamp from HTTP or on local file)
 
+type CacheEntry struct {
+	version string // could be a timestamp for a file or web resource
+	path    string // where code is extracted to a dir
+}
+
 type CodePuller struct {
-	codeCacheDir string // where to download/copy code
-	prefix string // combine with name to get file path or URL
-	nextId int64 // used to generate directory names for lambda code dirs
+	codeCacheDir string   // where to download/copy code
+	prefix       string   // combine with name to get file path or URL
+	nextId       int64    // used to generate directory names for lambda code dirs
+	dirCache     sync.Map // key=lambda name, value=version, directory path
 }
 
 func NewCodePuller(codeCacheDir, pullPrefix string) (cp *CodePuller, err error) {
@@ -48,9 +58,6 @@ func (cp *CodePuller) Pull(name string) (targetDir string, err error) {
 		return "", fmt.Errorf(msg, name)
 	}
 
-	dirName := fmt.Sprintf("%d-name", atomic.AddInt64(&cp.nextId, 1))
-	targetDir = filepath.Join(cp.codeCacheDir, dirName)
-
 	if strings.HasPrefix(cp.prefix, "http://") || strings.HasPrefix(cp.prefix, "https://") {
 		// registry type = web
 		urls := []string{
@@ -59,7 +66,7 @@ func (cp *CodePuller) Pull(name string) (targetDir string, err error) {
 		}
 
 		for i := 0; i < len(urls); i++ {
-			err = cp.pullRemoteFile(urls[i], targetDir)
+			targetDir, err = cp.pullRemoteFile(urls[i], name)
 			if err == nil {
 				return targetDir, nil
 			} else if err != notFound404 {
@@ -79,7 +86,7 @@ func (cp *CodePuller) Pull(name string) (targetDir string, err error) {
 
 		for i := 0; i < len(paths); i++ {
 			if _, err := os.Stat(paths[i]); !os.IsNotExist(err) {
-				err = cp.pullLocalFile(paths[i], targetDir)
+				targetDir, err = cp.pullLocalFile(paths[i], name)
 				return targetDir, err
 			}
 		}
@@ -88,56 +95,79 @@ func (cp *CodePuller) Pull(name string) (targetDir string, err error) {
 	}
 }
 
-func (cp *CodePuller) pullLocalFile(src, dst string) (err error) {
-        stat, err := os.Stat(src)
+func (cp *CodePuller) newCodeDir(lambdaName string) (targetDir string) {
+	targetDir = fmt.Sprintf("%d-%s", atomic.AddInt64(&cp.nextId, 1), lambdaName)
+	targetDir = filepath.Join(cp.codeCacheDir, targetDir)
+	return targetDir
+}
+
+func (cp *CodePuller) pullLocalFile(src, lambdaName string) (targetDir string, err error) {
+	stat, err := os.Stat(src)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	if stat.Mode().IsDir() {
-		cmd := exec.Command("cp", "-r", src, dst)
-		if output, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("%s :: %s", err, string(output))
-		}
-	} else if stat.Mode().IsRegular() {
-		if err := os.Mkdir(dst, os.ModeDir); err != nil {
-			return err
-		}
+		// this is really just a debug mode, and is not
+		// expected to be efficient
+		targetDir = cp.newCodeDir(lambdaName)
 
-		if strings.HasSuffix(src, ".py") {
-			cmd := exec.Command("cp", src, filepath.Join(dst, "lambda_func.py"))
-			if output, err := cmd.CombinedOutput(); err != nil {
-				return fmt.Errorf("%s :: %s", err, string(output))
-			}	
-		} else if strings.HasSuffix(src, ".tar.gz") {
-			cmd := exec.Command("tar", "-xzf", src, "--directory", dst)
-			if output, err := cmd.CombinedOutput(); err != nil {
-				return fmt.Errorf("%s :: %s", err, string(output))
-			}
-		} else {
-			return fmt.Errorf("%s not a directory, .ta.rgz, .py", src)
+		cmd := exec.Command("cp", "-r", src, targetDir)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			return "", fmt.Errorf("%s :: %s", err, string(output))
 		}
-	} else {
-		return fmt.Errorf("%s not a file or directory", src)
+		return targetDir, nil
+	} else if !stat.Mode().IsRegular() {
+		return "", fmt.Errorf("%s not a file or directory", src)
 	}
 
-	return nil
+	// for regular files, we cache based on mod time
+	version := stat.ModTime().String()
+	cacheEntry := cp.getCache(lambdaName)
+	if cacheEntry != nil && cacheEntry.version == version {
+		// hit:
+		return cacheEntry.path, nil
+	}
+
+	// miss:
+	targetDir = cp.newCodeDir(lambdaName)
+	if err := os.Mkdir(targetDir, os.ModeDir); err != nil {
+		return "", err
+	}
+
+	if strings.HasSuffix(src, ".py") {
+		cmd := exec.Command("cp", src, filepath.Join(targetDir, "lambda_func.py"))
+		if output, err := cmd.CombinedOutput(); err != nil {
+			return "", fmt.Errorf("%s :: %s", err, string(output))
+		}
+	} else if strings.HasSuffix(src, ".tar.gz") {
+		cmd := exec.Command("tar", "-xzf", src, "--directory", targetDir)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			return "", fmt.Errorf("%s :: %s", err, string(output))
+		}
+	} else {
+		return "", fmt.Errorf("lambda file %s not a .ta.rgz or .py", src)
+	}
+
+	cp.putCache(lambdaName, version, targetDir)
+
+	return targetDir, nil
 }
 
-func (cp *CodePuller) pullRemoteFile(src, dst string) (err error) {
+func (cp *CodePuller) pullRemoteFile(src, lambdaName string) (targetDir string, err error) {
 	resp, err := http.Get(src)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 404 {
-		return notFound404
+		return "", notFound404
 	}
 
 	dir, err := ioutil.TempDir("", "ol-")
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer os.RemoveAll(dir)
 
@@ -145,15 +175,27 @@ func (cp *CodePuller) pullRemoteFile(src, dst string) (err error) {
 	localPath := filepath.Join(dir, parts[len(parts)-1])
 	out, err := os.Create(localPath)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer out.Close()
 
 	if _, err = io.Copy(out, resp.Body); err != nil {
-	    return err
+		return "", err
 	}
 
-	return cp.pullLocalFile(localPath, dst)
+	return cp.pullLocalFile(localPath, targetDir)
+}
+
+func (cp *CodePuller) getCache(name string) *CacheEntry {
+	entry, found := cp.dirCache.Load(name)
+	if !found {
+		return nil
+	}
+	return entry.(*CacheEntry)
+}
+
+func (cp *CodePuller) putCache(name, version, path string) {
+	cp.dirCache.Store(name, &CacheEntry{version, path})
 }
 
 func parsePkgFile(path string) (imports, installs []string, err error) {
