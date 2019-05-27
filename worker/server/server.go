@@ -25,7 +25,7 @@ const (
 // Server is a worker server that listens to run lambda requests and forward
 // these requests to its sandboxes.
 type Server struct {
-	config   *config.Config
+	config     *config.Config
 	lambda_mgr *handler.LambdaMgr
 }
 
@@ -48,7 +48,7 @@ func NewServer(config *config.Config) (*Server, error) {
 	}
 
 	server := &Server{
-		config:   config,
+		config:     config,
 		lambda_mgr: lambda_mgr,
 	}
 

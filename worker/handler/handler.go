@@ -25,7 +25,7 @@ import (
 type LambdaMgr struct {
 	mutex      sync.Mutex
 	lfuncMap   map[string]*LambdaFunc
-	codePuller     *CodePuller
+	codePuller *CodePuller
 	pipMgr     pip.InstallManager
 	sbFactory  sb.ContainerFactory
 	cacheMgr   *cache.CacheManager
@@ -103,7 +103,7 @@ func NewLambdaMgr(opts *config.Config) (mgr *LambdaMgr, err error) {
 	var misses int64 = 0
 	mgr = &LambdaMgr{
 		lfuncMap:   make(map[string]*LambdaFunc),
-		codePuller:     cp,
+		codePuller: cp,
 		pipMgr:     pm,
 		sbFactory:  sf,
 		cacheMgr:   cm,
@@ -161,7 +161,7 @@ func (mgr *LambdaMgr) Get(name string) (linst *LambdaInstance, err error) {
 
 		linst.runners += 1
 
-		if linst.lfunc.lmgr.maxRunners != 0 && linst.runners == linst.lfunc.lmgr.maxRunners {
+		if mgr.maxRunners != 0 && linst.runners == mgr.maxRunners {
 			lfunc.instances.Remove(listEl)
 			delete(lfunc.listEl, linst)
 		}
@@ -172,7 +172,9 @@ func (mgr *LambdaMgr) Get(name string) (linst *LambdaInstance, err error) {
 	mgr.mutex.Unlock()
 
 	// get code if needed
-	if lfunc.lastPull == nil {
+	now := time.Now()
+	cache_ns := int64(mgr.config.Registry_cache_ms) * 1000000
+	if lfunc.lastPull == nil || int64(now.Sub(*lfunc.lastPull)) > cache_ns {
 		codeDir, err := mgr.codePuller.Pull(lfunc.name)
 		if err != nil {
 			return nil, err
@@ -182,8 +184,7 @@ func (mgr *LambdaMgr) Get(name string) (linst *LambdaInstance, err error) {
 		if err != nil {
 			return nil, err
 		}
-		
-		now := time.Now()
+
 		lfunc.lastPull = &now
 		lfunc.codeDir = codeDir
 		lfunc.imports = imports

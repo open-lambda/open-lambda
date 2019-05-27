@@ -20,6 +20,9 @@ type Config struct {
 	// location where code packages are stored.  Could be URL or local file path.
 	Registry string `json:"registry"`
 
+	// how long should some previously pulled code be used without a check for a newer version?
+	Registry_cache_ms int `json:"registry_cache_ms"`
+
 	// sandbox type: "docker" or "sock"
 	// currently ignored as cgroup sandbox is not fully integrated
 	Sandbox string `json:"sandbox"`
@@ -117,6 +120,10 @@ func (c *Config) Defaults() error {
 
 	if c.Worker_port == "" {
 		c.Worker_port = "8080"
+	}
+
+	if c.Registry_cache_ms == 0 {
+		c.Registry_cache_ms = 5000 // 5 seconds
 	}
 
 	// worker dir
