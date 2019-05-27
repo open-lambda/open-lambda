@@ -11,7 +11,7 @@ KILL_WORKER=./bin/admin kill -cluster=$(TEST_CLUSTER);rm -rf $(TEST_CLUSTER)/wor
 RUN_LAMBDA=curl -XPOST localhost:8080/runLambda
 
 STARTUP_PKGS='{"startup_pkgs": ["parso", "jedi", "urllib3", "idna", "chardet", "certifi", "requests", "simplejson"]}'
-REGISTRY_DIR='{"registry_dir": "$(abspath testing/registry)"}'
+REGISTRY_DIR='{"registry": "$(abspath testing/registry)"}'
 
 SOCK_NOCACHE='{"sandbox": "sock", "handler_cache_size": 0, "import_cache_size": 0, "cg_pool_size": 10}'
 SOCK_HANDLER='{"sandbox": "sock", "handler_cache_size": 10000000, "import_cache_size": 0, "cg_pool_size": 10}'

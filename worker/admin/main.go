@@ -12,10 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"time"
 
 	docker "github.com/fsouza/go-dockerclient"
-	minio "github.com/minio/minio-go"
 	dutil "github.com/open-lambda/open-lambda/worker/sandbox/dockerutil"
 
 	"github.com/open-lambda/open-lambda/worker/config"
@@ -152,9 +150,8 @@ func newCluster(ctx *cli.Context) error {
 	c := &config.Config{
 		Worker_port:    "?",
 		Cluster_name:   cluster,
-		Registry:       "local",
+		Registry:       registryPath(cluster),
 		Sandbox:        "docker",
-		Registry_dir:   registryPath(cluster),
 		Pkgs_dir:       packagesPath(cluster),
 		Worker_dir:     workerPath(cluster, "default"),
 		Sandbox_config: map[string]interface{}{"processes": 10},
@@ -644,126 +641,6 @@ func write_dns(rootDir string) error {
 	return ioutil.WriteFile(dnsPath, []byte("nameserver 8.8.8.8\n"), 0644)
 }
 
-// Starts a container running Minio, logs its AccessKey and SecretKey.
-func registry(ctx *cli.Context) error {
-	cluster := parseCluster(ctx.String("cluster"), true)
-
-	access_key := ctx.String("access-key")
-	secret_key := ctx.String("secret-key")
-	port := ctx.Int("port")
-	image := "minio/minio"
-
-	_, err := client.InspectImage(image)
-	if err == docker.ErrNoSuchImage {
-		fmt.Printf("Pulling Minio image...\n")
-		err := client.PullImage(
-			docker.PullImageOptions{
-				Repository: image,
-				Tag:        "latest",
-			},
-			docker.AuthConfiguration{},
-		)
-		if err != nil {
-			return err
-		}
-	} else if err != nil {
-		return err
-	}
-
-	ports := map[docker.Port][]docker.PortBinding{"9000/tcp": []docker.PortBinding{docker.PortBinding{HostIP: "0.0.0.0", HostPort: fmt.Sprintf("%d", port)}}}
-	cmd := []string{"server", "/data"}
-	volumes := []string{"/mnt/data:/data", "/mnt/config:/root/.minio"}
-	labels := map[string]string{
-		dutil.DOCKER_LABEL_CLUSTER: cluster,
-		dutil.DOCKER_LABEL_TYPE:    "registry",
-	}
-	env := []string{
-		fmt.Sprintf("MINIO_ACCESS_KEY=%s", access_key),
-		fmt.Sprintf("MINIO_SECRET_KEY=%s", secret_key),
-	}
-
-	// create and start container
-	container, err := client.CreateContainer(
-		docker.CreateContainerOptions{
-			Config: &docker.Config{
-				Cmd:    cmd,
-				Env:    env,
-				Image:  image,
-				Labels: labels,
-			},
-			HostConfig: &docker.HostConfig{
-				Binds:        volumes,
-				PortBindings: ports,
-			},
-		},
-	)
-	if err != nil {
-		return err
-	}
-	if err := client.StartContainer(container.ID, container.HostConfig); err != nil {
-		return err
-	}
-
-	regClient, err := minio.New(fmt.Sprintf("localhost:%d", port), access_key, secret_key, false)
-	if err != nil {
-		return err
-	}
-
-	start := time.Now()
-	var bucketErr error
-	for {
-		if time.Since(start) > 10*time.Second {
-			return fmt.Errorf("failed to connect to bucket after 10s :: %v", bucketErr)
-		}
-
-		if exists, err := regClient.BucketExists(config.REGISTRY_BUCKET); err != nil {
-			bucketErr = err
-			continue
-		} else if !exists {
-			if err := regClient.MakeBucket(config.REGISTRY_BUCKET, "us-east-1"); err != nil {
-				bucketErr = err
-				continue
-			}
-		} else {
-			break
-		}
-	}
-
-	c, err := config.ParseConfig(templatePath(cluster))
-	if err != nil {
-		return err
-	}
-	c.Registry = "remote"
-	c.Registry_access_key = access_key
-	c.Registry_secret_key = secret_key
-	if err := c.Save(templatePath(cluster)); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// uploads corresponds to the "upload" command of the admin tool.
-func upload(ctx *cli.Context) error {
-	access_key := ctx.String("access-key")
-	secret_key := ctx.String("secret-key")
-	address := ctx.String("address")
-	handler := ctx.String("handler")
-	file := ctx.String("file")
-
-	regClient, err := minio.New(address, access_key, secret_key, false)
-	if err != nil {
-		return err
-	}
-
-	opts := minio.PutObjectOptions{ContentType: "application/gzip", ContentEncoding: "binary"}
-	if _, err := regClient.FPutObject(config.REGISTRY_BUCKET, handler, file, opts); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // setconf sets a configuration option in the cluster's template
 func setconf(ctx *cli.Context) error {
 	cluster := parseCluster(ctx.String("cluster"), false)
@@ -901,59 +778,6 @@ OPTIONS:
 				},
 			},
 			Action: nginx,
-		},
-		cli.Command{
-			Name:        "registry",
-			Usage:       "Start the code registry.",
-			UsageText:   "admin registry [-p|-port=PORT] [--access-key=KEY] [--secret-key=KEY]",
-			Description: "Start the code reigstry.",
-			Flags: []cli.Flag{
-				clusterFlag,
-				cli.StringFlag{
-					Name:  "access-key",
-					Usage: "Minio access key",
-				},
-				cli.StringFlag{
-					Name:  "secret-key",
-					Usage: "Minio secret key",
-				},
-				cli.IntFlag{
-					Name:  "port, p",
-					Usage: "Push/pull lambdas at `PORT`",
-					Value: 9000,
-				},
-			},
-			Action: registry,
-		},
-		cli.Command{
-			Name:        "upload",
-			Usage:       "Upload handler code to the registry",
-			UsageText:   "admin upload --cluster=NAME --handler=NAME --file=PATH [--access-key=KEY] [--secret-key=KEY]",
-			Description: "Upload a file to registry. The file must be a tarball.",
-			Flags: []cli.Flag{
-				clusterFlag,
-				cli.StringFlag{
-					Name:  "access-key",
-					Usage: "Minio access key",
-				},
-				cli.StringFlag{
-					Name:  "secret-key",
-					Usage: "Minio secret key",
-				},
-				cli.StringFlag{
-					Name:  "address",
-					Usage: "Address+port of remote Minio server",
-				},
-				cli.StringFlag{
-					Name:  "handler",
-					Usage: "`NAME` of the handler",
-				},
-				cli.StringFlag{
-					Name:  "file",
-					Usage: "`PATH` to the file",
-				},
-			},
-			Action: upload,
 		},
 		cli.Command{
 			Name:      "kill",

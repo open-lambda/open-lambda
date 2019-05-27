@@ -109,7 +109,7 @@ func (c *SOCKContainer) Start() (err error) {
 
 	// FILE SYSTEM STEP 2: code dir
 	if c.codeDir != "" {
-		sbCodeDir := filepath.Join(c.containerRootDir, "hanler")
+		sbCodeDir := filepath.Join(c.containerRootDir, "handler")
 
 		if err := syscall.Mount(c.codeDir, sbCodeDir, "", BIND, ""); err != nil {
 			return fmt.Errorf("failed to bind code dir: %s -> %s :: %v", c.codeDir, sbCodeDir, err.Error())

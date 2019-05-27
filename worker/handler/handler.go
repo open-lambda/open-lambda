@@ -17,7 +17,6 @@ import (
 	"github.com/open-lambda/open-lambda/worker/handler/state"
 	"github.com/open-lambda/open-lambda/worker/import-cache"
 	"github.com/open-lambda/open-lambda/worker/pip-manager"
-	"github.com/open-lambda/open-lambda/worker/registry"
 
 	sb "github.com/open-lambda/open-lambda/worker/sandbox"
 )
@@ -26,7 +25,7 @@ import (
 type LambdaMgr struct {
 	mutex      sync.Mutex
 	lfuncMap   map[string]*LambdaFunc
-	regMgr     registry.RegistryManager
+	codePuller     *CodePuller
 	pipMgr     pip.InstallManager
 	sbFactory  sb.ContainerFactory
 	cacheMgr   *cache.CacheManager
@@ -72,7 +71,7 @@ func NewLambdaMgr(opts *config.Config) (mgr *LambdaMgr, err error) {
 	var t time.Time
 
 	t = time.Now()
-	rm, err := registry.InitRegistryManager(opts)
+	cp, err := NewCodePuller(filepath.Join(opts.Worker_dir, "lambda_code"), opts.Registry)
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +103,7 @@ func NewLambdaMgr(opts *config.Config) (mgr *LambdaMgr, err error) {
 	var misses int64 = 0
 	mgr = &LambdaMgr{
 		lfuncMap:   make(map[string]*LambdaFunc),
-		regMgr:     rm,
+		codePuller:     cp,
 		pipMgr:     pm,
 		sbFactory:  sf,
 		cacheMgr:   cm,
@@ -174,11 +173,16 @@ func (mgr *LambdaMgr) Get(name string) (linst *LambdaInstance, err error) {
 
 	// get code if needed
 	if lfunc.lastPull == nil {
-		codeDir, imports, installs, err := mgr.regMgr.Pull(lfunc.name)
+		codeDir, err := mgr.codePuller.Pull(lfunc.name)
 		if err != nil {
 			return nil, err
 		}
 
+		imports, installs, err := parsePkgFile(codeDir)
+		if err != nil {
+			return nil, err
+		}
+		
 		now := time.Now()
 		lfunc.lastPull = &now
 		lfunc.codeDir = codeDir
