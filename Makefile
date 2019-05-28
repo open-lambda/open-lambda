@@ -58,7 +58,7 @@ LAMBDA_DIR = $(abspath ./lambda)
 PIPBENCH_DIR = $(abspath ./pipbench)
 
 .PHONY: all
-all: clean-test sock/sock-init imgs/lambda bin/ol
+all: bin/ol clean-test sock/sock-init imgs/lambda
 
 sock/sock-init: sock/sock-init.c
 	${MAKE} -C sock
@@ -69,7 +69,7 @@ imgs/lambda: $(LAMBDA_FILES)
 	touch imgs/lambda
 
 bin/ol: $(OL_GO_FILES)
-	cd $(OL_DIR) && $(GO) build
+	cd $(OL_DIR) && $(GO) build -mod vendor
 	mkdir -p bin
 	cp $(OL_DIR)/ol ./bin
 
