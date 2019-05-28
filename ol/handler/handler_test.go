@@ -6,8 +6,8 @@ import (
 	"time"
 
 	docker "github.com/fsouza/go-dockerclient"
-	"github.com/open-lambda/open-lambda/worker/handler/state"
-	"github.com/open-lambda/open-lambda/worker/sandbox/dockerutil"
+	"github.com/open-lambda/open-lambda/ol/handler/state"
+	"github.com/open-lambda/open-lambda/ol/sandbox/dockerutil"
 )
 
 func getClient() *docker.Client {

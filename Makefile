@@ -2,12 +2,12 @@ PWD = $(shell pwd)
 
 LAMBDA_BIN=lambda/bin
 
-WORKER_GO_FILES = $(shell find worker/ -name '*.go')
+OL_GO_FILES = $(shell find ol/ -name '*.go')
 LAMBDA_FILES = $(shell find lambda)
 POOL_FILES = $(shell find cache-entry)
 
 TEST_CLUSTER=testing/test-cluster
-KILL_WORKER=./bin/admin kill -cluster=$(TEST_CLUSTER);rm -rf $(TEST_CLUSTER)/workers/*
+KILL_WORKER=./bin/ol kill -cluster=$(TEST_CLUSTER);rm -rf $(TEST_CLUSTER)/workers/*
 RUN_LAMBDA=curl -XPOST localhost:8080/runLambda
 
 STARTUP_PKGS='{"startup_pkgs": ["parso", "jedi", "urllib3", "idna", "chardet", "certifi", "requests", "simplejson"]}'
@@ -30,14 +30,14 @@ define RUN_TEST=
 	-$(KILL_WORKER)
 	@echo
 	@echo "Starting worker..."
-	./bin/admin setconf -cluster=$(TEST_CLUSTER) CONDITION
-	./bin/admin workers -cluster=$(TEST_CLUSTER)
+	./bin/ol setconf -cluster=$(TEST_CLUSTER) CONDITION
+	./bin/ol workers -cluster=$(TEST_CLUSTER)
 	@echo
 	@echo "Waiting for worker to initialize..."
 	@for i in $$(seq 1 $(WORKER_TIMEOUT)); \
 	do \
 		[ $$i -gt 1 ] && sleep 2; \
-		./bin/admin status -cluster=$(TEST_CLUSTER) 1>/dev/null && s=0 && break || s=$$?; \
+		./bin/ol status -cluster=$(TEST_CLUSTER) 1>/dev/null && s=0 && break || s=$$?; \
 	done; ([ $$s -eq 0 ] || (echo "Worker failed to initialize after $(WORKER_TIMEOUT)s" && exit 1))
 	@echo "Worker ready. Requesting lambdas..."
 	$(RUN_LAMBDA)/echo -d '{}'
@@ -51,16 +51,14 @@ define RUN_TEST=
 	@echo
 endef
 
-GO = $(abspath ./hack/go.sh)
-GO_PATH = hack/go
-WORKER_DIR = $(GO_PATH)/src/github.com/open-lambda/open-lambda/worker
-ADMIN_DIR = $(GO_PATH)/src/github.com/open-lambda/open-lambda/worker/admin
+GO = go
+OL_DIR = $(abspath ./ol)
 
 LAMBDA_DIR = $(abspath ./lambda)
 PIPBENCH_DIR = $(abspath ./pipbench)
 
 .PHONY: all
-all: clean-test sock/sock-init imgs/lambda bin/admin
+all: clean-test sock/sock-init imgs/lambda bin/ol
 
 sock/sock-init: sock/sock-init.c
 	${MAKE} -C sock
@@ -70,10 +68,10 @@ imgs/lambda: $(LAMBDA_FILES)
 	docker build -t lambda lambda
 	touch imgs/lambda
 
-bin/admin: $(WORKER_GO_FILES)
-	cd $(ADMIN_DIR) && $(GO) install
+bin/ol: $(OL_GO_FILES)
+	cd $(OL_DIR) && $(GO) build
 	mkdir -p bin
-	cp $(GO_PATH)/bin/admin ./bin
+	cp $(OL_DIR)/ol ./bin
 
 .PHONY: test-all test-sock-all test-docker-all test-cluster
 
@@ -87,9 +85,9 @@ test-cluster: imgs/test-cluster
 
 imgs/test-cluster: 
 	@echo "Starting test cluster..."
-	./bin/admin new -cluster=$(TEST_CLUSTER)
-	./bin/admin setconf -cluster=$(TEST_CLUSTER) $(REGISTRY_DIR)
-	./bin/admin setconf -cluster=$(TEST_CLUSTER) $(STARTUP_PKGS)
+	./bin/ol new -cluster=$(TEST_CLUSTER)
+	./bin/ol setconf -cluster=$(TEST_CLUSTER) $(REGISTRY_DIR)
+	./bin/ol setconf -cluster=$(TEST_CLUSTER) $(STARTUP_PKGS)
 	@echo
 	touch imgs/test-cluster
 
@@ -101,28 +99,28 @@ clean-test:
 	rm -rf $(TEST_CLUSTER) imgs/test-cluster
 	@echo
 
-test-sock-nocache: bin/admin imgs/lambda test-cluster
+test-sock-nocache: bin/ol imgs/lambda test-cluster
 	$(subst CONDITION, $(SOCK_NOCACHE), $(RUN_TEST))
 
-test-sock-handler: bin/admin imgs/lambda test-cluster
+test-sock-handler: bin/ol imgs/lambda test-cluster
 	$(subst CONDITION, $(SOCK_HANDLER), $(RUN_TEST))
 
-test-sock-import: bin/admin imgs/lambda test-cluster
+test-sock-import: bin/ol imgs/lambda test-cluster
 	$(subst CONDITION, $(SOCK_IMPORT), $(RUN_TEST))
 
-test-sock-both: bin/admin imgs/lambda test-cluster
+test-sock-both: bin/ol imgs/lambda test-cluster
 	$(subst CONDITION, $(SOCK_BOTH), $(RUN_TEST))
 
-test-docker-nocache: bin/admin imgs/lambda test-cluster
+test-docker-nocache: bin/ol imgs/lambda test-cluster
 	$(subst CONDITION, $(DOCKER_NOCACHE), $(RUN_TEST))
 
-test-docker-handler: bin/admin imgs/lambda test-cluster
+test-docker-handler: bin/ol imgs/lambda test-cluster
 	$(subst CONDITION, $(DOCKER_HANDLER), $(RUN_TEST))
 
-test-docker-import: bin/admin imgs/lambda test-cluster
+test-docker-import: bin/ol imgs/lambda test-cluster
 	$(subst CONDITION, $(DOCKER_IMPORT), $(RUN_TEST))
 
-test-docker-both: bin/admin imgs/lambda test-cluster
+test-docker-both: bin/ol imgs/lambda test-cluster
 	$(subst CONDITION, $(DOCKER_BOTH), $(RUN_TEST))
 
 .PHONY: clean

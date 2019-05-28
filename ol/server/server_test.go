@@ -13,8 +13,8 @@ import (
 	"time"
 
 	docker "github.com/fsouza/go-dockerclient"
-	"github.com/open-lambda/open-lambda/worker/config"
-	"github.com/open-lambda/open-lambda/worker/sandbox/dockerutil"
+	"github.com/open-lambda/open-lambda/ol/config"
+	"github.com/open-lambda/open-lambda/ol/sandbox/dockerutil"
 )
 
 var server *Server

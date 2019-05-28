@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/open-lambda/open-lambda/worker/config"
+	"github.com/open-lambda/open-lambda/ol/config"
 )
 
 const OL_INIT = "/ol-init"

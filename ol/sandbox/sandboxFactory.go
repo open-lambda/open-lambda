@@ -3,9 +3,9 @@ package sandbox
 import (
 	"fmt"
 
-	"github.com/open-lambda/open-lambda/worker/config"
-	"github.com/open-lambda/open-lambda/worker/sandbox/dockerutil"
-	"github.com/open-lambda/open-lambda/worker/util"
+	"github.com/open-lambda/open-lambda/ol/config"
+	"github.com/open-lambda/open-lambda/ol/sandbox/dockerutil"
+	"github.com/open-lambda/open-lambda/ol/util"
 )
 
 const cacheUnshareFlags = "-iu"

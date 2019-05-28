@@ -13,9 +13,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	sb "github.com/open-lambda/open-lambda/worker/sandbox"
+	sb "github.com/open-lambda/open-lambda/ol/sandbox"
 
-	"github.com/open-lambda/open-lambda/worker/config"
+	"github.com/open-lambda/open-lambda/ol/config"
 )
 
 type CacheManager struct {

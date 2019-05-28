@@ -5,7 +5,7 @@ import (
 	"os/exec"
 	"sync"
 
-	"github.com/open-lambda/open-lambda/worker/config"
+	"github.com/open-lambda/open-lambda/ol/config"
 )
 
 /*

@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	sb "github.com/open-lambda/open-lambda/worker/sandbox"
+	sb "github.com/open-lambda/open-lambda/ol/sandbox"
 )
 
 type ForkServer struct {

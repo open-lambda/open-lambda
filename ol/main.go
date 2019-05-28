@@ -14,10 +14,10 @@ import (
 	"syscall"
 
 	docker "github.com/fsouza/go-dockerclient"
-	dutil "github.com/open-lambda/open-lambda/worker/sandbox/dockerutil"
+	dutil "github.com/open-lambda/open-lambda/ol/sandbox/dockerutil"
 
-	"github.com/open-lambda/open-lambda/worker/config"
-	"github.com/open-lambda/open-lambda/worker/server"
+	"github.com/open-lambda/open-lambda/ol/config"
+	"github.com/open-lambda/open-lambda/ol/server"
 	"github.com/urfave/cli"
 )
 
