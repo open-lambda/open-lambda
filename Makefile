@@ -69,6 +69,7 @@ imgs/lambda: $(LAMBDA_FILES)
 	touch imgs/lambda
 
 bin/ol: $(OL_GO_FILES)
+	env
 	cd $(OL_DIR) && $(GO) build -mod vendor
 	mkdir -p bin
 	cp $(OL_DIR)/ol ./bin
