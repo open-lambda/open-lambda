@@ -174,7 +174,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/open-lambda/open-lambda/worker/benchmarker"
+	"github.com/open-lambda/open-lambda/ol/benchmarker"
 )
 
 /*

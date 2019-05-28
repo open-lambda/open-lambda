@@ -22,8 +22,8 @@ import (
 	"path/filepath"
 
 	docker "github.com/fsouza/go-dockerclient"
-	"github.com/open-lambda/open-lambda/worker/benchmarker"
-	"github.com/open-lambda/open-lambda/worker/handler/state"
+	"github.com/open-lambda/open-lambda/ol/benchmarker"
+	"github.com/open-lambda/open-lambda/ol/handler/state"
 )
 
 // DockerContainer is a sandbox inside a docker container.

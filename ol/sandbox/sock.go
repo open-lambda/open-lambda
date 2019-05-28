@@ -24,9 +24,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/open-lambda/open-lambda/worker/config"
-	"github.com/open-lambda/open-lambda/worker/handler/state"
-	"github.com/open-lambda/open-lambda/worker/util"
+	"github.com/open-lambda/open-lambda/ol/config"
+	"github.com/open-lambda/open-lambda/ol/handler/state"
+	"github.com/open-lambda/open-lambda/ol/util"
 )
 
 type SOCKContainer struct {

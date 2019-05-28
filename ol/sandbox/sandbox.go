@@ -11,7 +11,7 @@ generalizing for other sandboxing methods before they are implemented.
 */
 
 import (
-	"github.com/open-lambda/open-lambda/worker/handler/state"
+	"github.com/open-lambda/open-lambda/ol/handler/state"
 )
 
 const OLCGroupName = "openlambda"

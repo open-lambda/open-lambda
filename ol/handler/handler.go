@@ -13,12 +13,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/open-lambda/open-lambda/worker/config"
-	"github.com/open-lambda/open-lambda/worker/handler/state"
-	"github.com/open-lambda/open-lambda/worker/import-cache"
-	"github.com/open-lambda/open-lambda/worker/pip-manager"
+	"github.com/open-lambda/open-lambda/ol/config"
+	"github.com/open-lambda/open-lambda/ol/handler/state"
+	"github.com/open-lambda/open-lambda/ol/import-cache"
+	"github.com/open-lambda/open-lambda/ol/pip-manager"
 
-	sb "github.com/open-lambda/open-lambda/worker/sandbox"
+	sb "github.com/open-lambda/open-lambda/ol/sandbox"
 )
 
 // Organizes all lambda functions (the code) and lambda instances (that serve events)
