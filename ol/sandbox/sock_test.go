@@ -100,7 +100,7 @@ func TestCreate(t *testing.T) {
 	time.Sleep(1000 * time.Millisecond)
 
 	// forward request
-	url := fmt.Sprintf("http://container/runLambda/%s", handler_name)
+	url := fmt.Sprintf("http://container/run/%s", handler_name)
 	req, err := http.NewRequest("POST", url, bytes.NewReader([]byte("{}")))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	client := &http.Client{Transport: &channel.Transport}
