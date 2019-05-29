@@ -24,14 +24,21 @@ static PyMethodDef NsMethods[] = {
      "Fork a child into the namespace defined by the global namespace file descriptor array."},
     {"reset", ns_reset, METH_VARARGS,
      "Reset global variables."},
-     {NULL, NULL, 0, NULL}
+    {NULL, NULL, 0, NULL}
 };
 
-PyMODINIT_FUNC initns(void)
+static struct PyModuleDef nsMod = {
+    PyModuleDef_HEAD_INIT,
+    "ns",
+    NULL,
+    -1,
+    NsMethods
+};
+
+PyMODINIT_FUNC
+PyInit_ns(void)
 {
-    PyObject *m = Py_InitModule("ns", NsMethods);
-    if (m == NULL)
-        return;
+    return PyModule_Create(&nsMod);
 }
 
 /* Global variables */
@@ -49,23 +56,23 @@ int newns[4], root_fd;
  * Returns 0 on success, -1 on error.
  */
 int initSock(char *sockpath) {
-	int len;
-	struct sockaddr_un local;
+    int len;
+    struct sockaddr_un local;
 
-	if ((sock = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
-		perror("socket");
-		exit(1);
-	}
+    if ((sock = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
+	perror("socket");
+	exit(1);
+    }
 
-	local.sun_family = AF_UNIX;
-	strcpy(local.sun_path, sockpath);
-	unlink(local.sun_path);
-	len = strlen(local.sun_path) + sizeof(local.sun_family);
+    local.sun_family = AF_UNIX;
+    strcpy(local.sun_path, sockpath);
+    unlink(local.sun_path);
+    len = strlen(local.sun_path) + sizeof(local.sun_family);
 
-	if (bind(sock, (struct sockaddr*)&local, len) == -1) {
-		perror("bind");
-		exit(1);
-	}
+    if (bind(sock, (struct sockaddr*)&local, len) == -1) {
+	perror("bind");
+	exit(1);
+    }
 
     // notify worker that the socket is ready
     int pipefd = open("/host/server_pipe", O_WRONLY);
@@ -90,39 +97,39 @@ int initSock(char *sockpath) {
  * Returns the received file descriptor or -1 on error.
  */
 int recvfd(int sock) {
-	int n, fd;
-	char cms[CMSG_SPACE(sizeof(int))], buf[1];
+    int n, fd;
+    char cms[CMSG_SPACE(sizeof(int))], buf[1];
 
-	struct iovec iov;
-	struct msghdr msg;
-	struct cmsghdr *cmsg;
+    struct iovec iov;
+    struct msghdr msg;
+    struct cmsghdr *cmsg;
 
-	iov.iov_base = buf;
-	iov.iov_len = 1;
+    iov.iov_base = buf;
+    iov.iov_len = 1;
 
-	memset(&msg, 0, sizeof msg);
-	msg.msg_name = 0;
-	msg.msg_namelen = 0;
-	msg.msg_iov = &iov;
-	msg.msg_iovlen = 1;
+    memset(&msg, 0, sizeof msg);
+    msg.msg_name = 0;
+    msg.msg_namelen = 0;
+    msg.msg_iov = &iov;
+    msg.msg_iovlen = 1;
 
-	msg.msg_control = cms;
-	msg.msg_controllen = sizeof cms;
+    msg.msg_control = cms;
+    msg.msg_controllen = sizeof cms;
 
-	if((n = recvmsg(sock, &msg, 0)) < 0) {
+    if((n = recvmsg(sock, &msg, 0)) < 0) {
         perror("recvmsg");
-		return -1;
+	return -1;
     }
 
-	if(n == 0){
-		perror("unexpected EOF");
-		return -1;
-	}
+    if(n == 0){
+	perror("unexpected EOF");
+	return -1;
+    }
 
-	cmsg = CMSG_FIRSTHDR(&msg);
-	memmove(&fd, CMSG_DATA(cmsg), sizeof(int));
+    cmsg = CMSG_FIRSTHDR(&msg);
+    memmove(&fd, CMSG_DATA(cmsg), sizeof(int));
 
-	return fd;
+    return fd;
 }
 
 /* Python C wrapper functions */
@@ -194,8 +201,8 @@ static PyObject *ns_fdlisten(PyObject *self, PyObject *args) {
         }
 
 	if (listen(sock, 1) == -1) {
-        PyErr_SetString(PyExc_RuntimeError, "Listen on socket failed.");
-        return NULL;
+	    PyErr_SetString(PyExc_RuntimeError, "Listen on socket failed.");
+	    return NULL;
 	}
 
         initialized = 1;
@@ -287,7 +294,7 @@ static PyObject *ns_forkenter(PyObject *self, PyObject *args) {
         close(pipefd[0]); // close pipe read fd
         waitpid(r, &status, 0); // wait for child to die
 
-    /* Child process */
+	/* Child process */
     } else if (!r) {
         // join the passed namespaces
         for(k = 0; k < NUM_NS; k++) {
@@ -311,7 +318,7 @@ static PyObject *ns_forkenter(PyObject *self, PyObject *args) {
             close(pipefd[1]);
             exit(0);
 
-        /* Grandchild process */
+	    /* Grandchild process */
         } else if (!gc_pid) {
             // chroot to new root directory
             if (fchdir(root_fd) != 0) {
@@ -344,8 +351,8 @@ static PyObject *ns_forkenter(PyObject *self, PyObject *args) {
     }
 
     if (close(root_fd) != 0) {
-            PyErr_SetString(PyExc_RuntimeError, "close passed root file descriptor failed.");
-            return NULL;
+	PyErr_SetString(PyExc_RuntimeError, "close passed root file descriptor failed.");
+	return NULL;
     }
 
     ret = Py_BuildValue("i", gc_pid);
@@ -354,15 +361,15 @@ static PyObject *ns_forkenter(PyObject *self, PyObject *args) {
 
     if (!gc_pid) {
         /*
-        if (close(conn) == -1) {
-            PyErr_SetString(PyExc_RuntimeError, "Child failed to close socket connection (s2).");
-            return NULL;
-        }
+	  if (close(conn) == -1) {
+	  PyErr_SetString(PyExc_RuntimeError, "Child failed to close socket connection (s2).");
+	  return NULL;
+	  }
 
-        if (close(sock) == -1) {
-            PyErr_SetString(PyExc_RuntimeError, "Child failed to close socket connection (s).");
-            return NULL;
-        }
+	  if (close(sock) == -1) {
+	  PyErr_SetString(PyExc_RuntimeError, "Child failed to close socket connection (s).");
+	  return NULL;
+	  }
         */
 
         return ret;
