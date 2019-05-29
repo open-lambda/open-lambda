@@ -69,6 +69,8 @@ imgs/lambda: $(LAMBDA_FILES)
 	touch imgs/lambda
 
 bin/ol: $(OL_GO_FILES)
+        unset GOPATH
+        unset GOROOT
 	env
 	cd $(OL_DIR) && $(GO) build -mod vendor
 	mkdir -p bin
