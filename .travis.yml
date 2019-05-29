@@ -3,16 +3,13 @@ dist: xenial
 
 language: go
 go:
-  - "1.11.4"
+  - "1.12.5"
 
 notifications:
   email:
     recipients:
       - ed.nmi.oakes@gmail.com
       - tylerharter@gmail.com
-
-install:
-  - sudo ./quickstart/deps.sh
 
 script:
   - sudo ./travis.sh

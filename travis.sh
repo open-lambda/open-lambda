@@ -1,9 +1,9 @@
 #!/bin/bash
 
-GO_FILES=$(cd worker && find . -type f ! -path './vendor/*' -name '*.go')
+GO_FILES=$(cd ol && find . -type f ! -path './vendor/*' -name '*.go')
 
 # format test
-if [[ $(cd worker && gofmt -d $GO_FILES) ]]; then
+if [[ $(cd ol && gofmt -d $GO_FILES) ]]; then
 	cat <<EOF
 Error: format check failed
 Please format "worker" directory with the following command and commit again:
@@ -14,4 +14,4 @@ EOF
 fi
 
 # build test
-make
+make bin/ol
