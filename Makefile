@@ -7,8 +7,8 @@ LAMBDA_FILES = $(shell find lambda)
 POOL_FILES = $(shell find cache-entry)
 
 TEST_CLUSTER=testing/test-cluster
-KILL_WORKER=./bin/ol kill -cluster=$(TEST_CLUSTER);rm -rf $(TEST_CLUSTER)/workers/*
-RUN_LAMBDA=curl -XPOST localhost:8080/runLambda
+KILL_WORKER=./bin/ol kill -path=$(TEST_CLUSTER)
+RUN_LAMBDA=curl -XPOST localhost:5000/runLambda
 
 STARTUP_PKGS='{"startup_pkgs": ["parso", "jedi", "urllib3", "idna", "chardet", "certifi", "requests", "simplejson"]}'
 REGISTRY_DIR='{"registry": "$(abspath testing/registry)"}'
@@ -30,14 +30,14 @@ define RUN_TEST=
 	-$(KILL_WORKER)
 	@echo
 	@echo "Starting worker..."
-	./bin/ol setconf -cluster=$(TEST_CLUSTER) CONDITION
-	./bin/ol workers -cluster=$(TEST_CLUSTER)
+	./bin/ol setconf -path=$(TEST_CLUSTER) CONDITION
+	./bin/ol worker -path=$(TEST_CLUSTER) --detach
 	@echo
 	@echo "Waiting for worker to initialize..."
 	@for i in $$(seq 1 $(WORKER_TIMEOUT)); \
 	do \
 		[ $$i -gt 1 ] && sleep 2; \
-		./bin/ol status -cluster=$(TEST_CLUSTER) 1>/dev/null && s=0 && break || s=$$?; \
+		./bin/ol status -path=$(TEST_CLUSTER) 1>/dev/null && s=0 && break || s=$$?; \
 	done; ([ $$s -eq 0 ] || (echo "Worker failed to initialize after $(WORKER_TIMEOUT)s" && exit 1))
 	@echo "Worker ready. Requesting lambdas..."
 	$(RUN_LAMBDA)/echo -d '{}'
@@ -86,9 +86,9 @@ test-cluster: imgs/test-cluster
 
 imgs/test-cluster: 
 	@echo "Starting test cluster..."
-	./bin/ol new -cluster=$(TEST_CLUSTER)
-	./bin/ol setconf -cluster=$(TEST_CLUSTER) $(REGISTRY_DIR)
-	./bin/ol setconf -cluster=$(TEST_CLUSTER) $(STARTUP_PKGS)
+	./bin/ol new -path=$(TEST_CLUSTER)
+	./bin/ol setconf -path=$(TEST_CLUSTER) $(REGISTRY_DIR)
+	./bin/ol setconf -path=$(TEST_CLUSTER) $(STARTUP_PKGS)
 	@echo
 	touch imgs/test-cluster
 

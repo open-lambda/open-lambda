@@ -138,13 +138,13 @@ func worker(ctx *cli.Context) error {
 		return err
 	}
 
+	confPath := filepath.Join(olPath, "config.json")
+
 	// should we run as a background process?
 	detach := ctx.Bool("detach")
 
-	if !detach {
-		server.Main(olPath)
-	} else {
-		conf, err := config.ParseConfig(filepath.Join(olPath, "config.json"))
+	if detach {
+		conf, err := config.ParseConfig(confPath)
 		if err != nil {
 			return err
 		}
@@ -161,7 +161,6 @@ func worker(ctx *cli.Context) error {
 		cmd := []string{
 			os.Args[0],
 			"worker",
-			"-detach",
 			"-path=" + olPath,
 		}
 		proc, err := os.StartProcess(os.Args[0], cmd, &attr)
@@ -175,6 +174,8 @@ func worker(ctx *cli.Context) error {
 		}
 
 		fmt.Printf("Started worker: pid %d, port %s, log at %s\n", proc.Pid, conf.Worker_port, logPath)
+	} else {
+		server.Main(confPath)
 	}
 
 	return nil
@@ -283,7 +284,7 @@ OPTIONS:
 		cli.Command{
 			Name:        "worker",
 			Usage:       "Start one OL server",
-			UsageText:   "ol worker [--path=NAME]",
+			UsageText:   "ol worker [--path=NAME] [--detach]",
 			Description: "Start one or more workers in cluster using the same config template.",
 			Flags: []cli.Flag{
 				pathFlag,
