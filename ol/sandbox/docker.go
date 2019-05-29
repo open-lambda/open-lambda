@@ -294,7 +294,7 @@ func (c *DockerContainer) DockerID() string {
 }
 
 func (c *DockerContainer) RunServer() error {
-	cmd := []string{"python", "server.py"}
+	cmd := []string{"python3", "server.py"}
 	if c.cache {
 		cmd = append(cmd, "--cache")
 	}

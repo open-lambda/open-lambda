@@ -46,7 +46,7 @@ func NewCodePuller(codeCacheDir, pullPrefix string) (cp *CodePuller, err error) 
 	return &CodePuller{codeCacheDir: codeCacheDir, prefix: pullPrefix, nextId: 0}, nil
 }
 
-func (cp *CodePuller) isRemote() (bool) {
+func (cp *CodePuller) isRemote() bool {
 	return strings.HasPrefix(cp.prefix, "http://") || strings.HasPrefix(cp.prefix, "https://")
 }
 
@@ -171,7 +171,7 @@ func (cp *CodePuller) pullRemoteFile(src, lambdaName string) (targetDir string, 
 	}
 
 	cacheEntry := cp.getCache(lambdaName)
-	if cacheEntry != nil{
+	if cacheEntry != nil {
 		req.Header.Set("If-Modified-Since", cacheEntry.version)
 	}
 

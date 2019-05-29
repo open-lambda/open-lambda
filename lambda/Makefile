@@ -9,8 +9,8 @@ ol-init: ol-init.c
 	gcc -Wall -O2 ol-init.c -o ol-init
 
 ns.so: nsmodule/nsmodule.c nsmodule/setup.py 
-	cd nsmodule && python setup.py build_ext --inplace
-	mv nsmodule/ns.so .
+	cd nsmodule && python3 setup.py build_ext --inplace
+	mv nsmodule/ns.*.so ./ns.so
 
 # for testing only
 fdclient: nsmodule/fdclient.go
@@ -20,4 +20,4 @@ fdclient: nsmodule/fdclient.go
 .PHONY: clean
 
 clean:
-	rm -rf nsmodule/build ol-init spin fdclient ns.so
+	rm -rf nsmodule/build ol-init spin fdclient ns.*.so

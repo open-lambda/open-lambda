@@ -12,14 +12,14 @@ char **params;
  * Launch the lambda server.
  */
 void signal_handler() {
-	if (fork() == 0) {
-		execv(params[0], params);
-		exit(1);
-	}
+    if (fork() == 0) {
+	execv(params[0], params);
+	exit(1);
+    }
 }
 
 void sigterm_handler() {
-	exit(0);
+    exit(0);
 }
 
 /*
@@ -27,33 +27,33 @@ void sigterm_handler() {
  * the signal. Reset the signal handler after caught to default.
  */
 void install_handler() {
-	struct sigaction setup_action;
-	sigset_t block_mask;
+    struct sigaction setup_action;
+    sigset_t block_mask;
 
-	sigfillset(&block_mask);
-	setup_action.sa_handler = signal_handler;
-	setup_action.sa_mask = block_mask;
-	setup_action.sa_flags = SA_RESETHAND;
-	sigaction(SIGUSR1, &setup_action, NULL);
+    sigfillset(&block_mask);
+    setup_action.sa_handler = signal_handler;
+    setup_action.sa_mask = block_mask;
+    setup_action.sa_flags = SA_RESETHAND;
+    sigaction(SIGUSR1, &setup_action, NULL);
 
-	setup_action.sa_handler = sigterm_handler;
-	sigaction(SIGTERM, &setup_action, NULL);
+    setup_action.sa_handler = sigterm_handler;
+    sigaction(SIGTERM, &setup_action, NULL);
 }
 
 int main(int argc, char *argv[]) {
-	int k;
+    int k;
 
-	params = (char**)malloc((3+argc-1)*sizeof(char*));
-	params[0] = "/usr/bin/python";
-	params[1] = "/server.py";
-	for (k = 1; k < argc; k++) {
-		params[k+1] = argv[k];
-	}
-	params[argc+1] = NULL;
+    params = (char**)malloc((3+argc-1)*sizeof(char*));
+    params[0] = "/usr/bin/python3";
+    params[1] = "/server.py";
+    for (k = 1; k < argc; k++) {
+	params[k+1] = argv[k];
+    }
+    params[argc+1] = NULL;
 
-	install_handler();
+    install_handler();
 
-	// notify worker server that signal handler is installed throught stdout
+    // notify worker server that signal handler is installed throught stdout
     int fd = open("/host/init_pipe", O_WRONLY);
     if (fd < 0) {
         fprintf(stderr, "cannot open pipe\n");
@@ -65,9 +65,9 @@ int main(int argc, char *argv[]) {
     }
     close(fd);
 
-	while (1) {
-		pause(); // sleep forever, we're init for the ns
-	}
+    while (1) {
+	pause(); // sleep forever, we're init for the ns
+    }
 
-	return 0;
+    return 0;
 }
