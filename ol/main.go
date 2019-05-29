@@ -276,8 +276,8 @@ OPTIONS:
 			Usage:       "Create a OpenLambda environment",
 			UsageText:   "ol new [--path=PATH]",
 			Description: "A cluster directory of the given name will be created with internal structure initialized.",
-			Flags: []cli.Flag{pathFlag},
-			Action: newOL,
+			Flags:       []cli.Flag{pathFlag},
+			Action:      newOL,
 		},
 		cli.Command{
 			Name:      "setconf",
