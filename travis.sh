@@ -1,5 +1,8 @@
 #!/bin/bash
 
+unset GOPATH
+unset GOROOT
+
 GO_FILES=$(cd ol && find . -type f ! -path './vendor/*' -name '*.go')
 
 # format test
