@@ -6,9 +6,9 @@ GO_FILES=$(cd ol && find . -type f ! -path './vendor/*' -name '*.go')
 if [[ $(cd ol && gofmt -d $GO_FILES) ]]; then
 	cat <<EOF
 Error: format check failed
-Please format "worker" directory with the following command and commit again:
+Please format "ol" directory with the following command and commit again:
 
-    gofmt -w -l \$(find $PWD/worker ! -path '*/vendor/*' -name '*.go')
+    gofmt -w -l \$(find $PWD/ol ! -path '*/vendor/*' -name '*.go')
 EOF
 	exit 1
 fi
