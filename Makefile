@@ -8,7 +8,7 @@ POOL_FILES = $(shell find cache-entry)
 
 TEST_CLUSTER=testing/test-cluster
 KILL_WORKER=./bin/ol kill -path=$(TEST_CLUSTER)
-RUN_LAMBDA=curl -XPOST localhost:5000/runLambda
+RUN_LAMBDA=curl -XPOST localhost:5000/run
 
 STARTUP_PKGS='{"startup_pkgs": ["parso", "jedi", "urllib3", "idna", "chardet", "certifi", "requests", "simplejson"]}'
 REGISTRY_DIR='{"registry": "$(abspath testing/registry)"}'

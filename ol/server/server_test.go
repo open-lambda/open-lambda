@@ -49,7 +49,7 @@ func RunServer() *Server {
 		log.Fatal(err)
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/runLambda/", server.RunLambda)
+	mux.HandleFunc("/run/", server.RunLambda)
 	s := &http.Server{Addr: ":8080", Handler: mux}
 	go func() {
 		log.Fatal(s.Serve(listener))
@@ -59,7 +59,7 @@ func RunServer() *Server {
 }
 
 func testReq(lambda_name string, post string) (string, error) {
-	url := "http://localhost:8080/runLambda/" + lambda_name
+	url := "http://localhost:8080/run/" + lambda_name
 	req, err := http.NewRequest("POST", url, strings.NewReader(post))
 	if err != nil {
 		return "", err

@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	RUN_PATH    = "/runLambda/"
+	RUN_PATH    = "/run/"
 	STATUS_PATH = "/status"
 )
 
@@ -129,7 +129,7 @@ func (s *Server) ForwardToSandbox(linst *handler.LambdaInstance, r *http.Request
 
 // RunLambdaErr handles the run lambda request and return an http error if any.
 func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
-	// components represent runLambda[0]/<name_of_sandbox>[1]/<extra_things>...
+	// components represent run[0]/<name_of_sandbox>[1]/<extra_things>...
 	// ergo we want [1] for name of sandbox
 	urlParts := getUrlComponents(r)
 	if len(urlParts) < 2 {
@@ -182,7 +182,7 @@ func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 
 // RunLambda expects POST requests like this:
 //
-// curl -X POST localhost:8080/runLambda/<lambda-name> -d '{}'
+// curl -X POST localhost:8080/run/<lambda-name> -d '{}'
 func (s *Server) RunLambda(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Receive request to %s\n", r.URL.Path)
 
