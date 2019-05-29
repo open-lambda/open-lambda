@@ -39,8 +39,12 @@ type CacheEntry struct {
 }
 
 func NewCodePuller(codeCacheDir, pullPrefix string) (cp *CodePuller, err error) {
+	if err := os.RemoveAll(codeCacheDir); err != nil {
+		return nil, fmt.Errorf("fail to create directory at %s :: %s: ", codeCacheDir, err)
+	}
+
 	if err := os.MkdirAll(codeCacheDir, os.ModeDir); err != nil {
-		return nil, fmt.Errorf("fail to create directory at %s: ", codeCacheDir, err)
+		return nil, fmt.Errorf("fail to create directory at %s :: %s ", codeCacheDir, err)
 	}
 
 	return &CodePuller{codeCacheDir: codeCacheDir, prefix: pullPrefix, nextId: 0}, nil
