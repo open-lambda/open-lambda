@@ -70,6 +70,16 @@ type LambdaInstance struct {
 func NewLambdaMgr(opts *config.Config) (mgr *LambdaMgr, err error) {
 	var t time.Time
 
+	// start with a fresh worker directory
+	if err := os.RemoveAll(opts.Worker_dir); err != nil {
+		return nil, err
+	}
+
+	if err := os.MkdirAll(opts.Worker_dir, 0700); err != nil {
+		return nil, err
+	}
+
+	// init code puller, pip manager, handler cache, and init cache
 	t = time.Now()
 	cp, err := NewCodePuller(filepath.Join(opts.Worker_dir, "lambda_code"), opts.Registry)
 	if err != nil {

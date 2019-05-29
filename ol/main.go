@@ -47,6 +47,11 @@ func newOL(ctx *cli.Context) error {
 		return err
 	}
 
+	workerDir := filepath.Join(olPath, "worker")
+	if err := os.Mkdir(workerDir, 0700); err != nil {
+		return err
+	}
+
 	registryDir := filepath.Join(olPath, "registry")
 	if err := os.Mkdir(registryDir, 0700); err != nil {
 		return err
@@ -73,7 +78,7 @@ func newOL(ctx *cli.Context) error {
 
 	// config dir and template
 	c := &config.Config{
-		Worker_dir:     olPath,
+		Worker_dir:     workerDir,
 		Cluster_name:   olPath, // TODO: why?
 		Worker_port:    "5000",
 		Registry:       registryDir,
