@@ -11,5 +11,11 @@ notifications:
       - ed.nmi.oakes@gmail.com
       - tylerharter@gmail.com
 
+install:
+  - wget -q -O /tmp/go1.12.5.linux-amd64.tar.gz https://dl.google.com/go/go1.12.5.linux-amd64.tar.gz
+  - tar -C /usr/local -xzf /tmp/go1.12.5.linux-amd64.tar.gz
+  - ln -s /usr/local/go/bin/go /usr/bin/go
+  - ln -s /usr/local/go/bin/gofmt /usr/bin/gofmt
+
 script:
   - sudo ./travis.sh
