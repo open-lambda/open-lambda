@@ -1,8 +1,8 @@
 PWD = $(shell pwd)
 
 GO = go
-OL_DIR = $(abspath ./ol)
-OL_GO_FILES = $(shell find ol/ -name '*.go')
+OL_DIR = $(abspath ./src)
+OL_GO_FILES = $(shell find src/ -name '*.go')
 LAMBDA_FILES = $(shell find lambda)
 
 .PHONY: all
@@ -21,7 +21,7 @@ imgs/lambda: $(LAMBDA_FILES)
 
 bin/ol: $(OL_GO_FILES)
 	env
-	cd $(OL_DIR) && $(GO) build -mod vendor
+	cd $(OL_DIR) && $(GO) build -mod vendor -o ol
 	mkdir -p bin
 	cp $(OL_DIR)/ol ./bin
 
