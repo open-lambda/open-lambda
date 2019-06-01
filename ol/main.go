@@ -186,7 +186,7 @@ func worker(ctx *cli.Context) error {
 
 		for i := 0; i < 3000; i++ {
 			// is the worker still alive?
-			_, err := os.FindProcess(proc.Pid)
+			err := proc.Signal(syscall.Signal(0))
 			if err != nil {
 				return fmt.Errorf("worker process %d does not a appear to be running :: %s", proc.Pid, err)
 			}
@@ -251,7 +251,15 @@ func kill(ctx *cli.Context) error {
 		fmt.Printf("Failed to kill process with PID %d.  May require manual cleanup.\n", pid)
 	}
 
-	return nil
+	for i := 0; i < 3000; i++ {
+		err := p.Signal(syscall.Signal(0))
+		if err != nil {
+			return nil // good, process must have stopped
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	return fmt.Errorf("worker didn't stop after 30s")
 }
 
 // setconf sets a configuration option in the cluster's template

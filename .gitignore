@@ -52,4 +52,5 @@
 /lambda/ns.so
 /lambda/fdclient
 /sock/sock-init
-/testing/test-cluster
+/test-cluster
+/test.json
