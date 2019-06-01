@@ -21,7 +21,7 @@ import (
 const (
 	RUN_PATH    = "/run/"
 	STATUS_PATH = "/status"
-	PID_PATH = "/pid"
+	PID_PATH    = "/pid"
 )
 
 // Server is a worker server that listens to run lambda requests and forward
