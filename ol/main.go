@@ -9,7 +9,9 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
+	"time"
 
 	docker "github.com/fsouza/go-dockerclient"
 	dutil "github.com/open-lambda/open-lambda/ol/sandbox/dockerutil"
@@ -178,7 +180,43 @@ func worker(ctx *cli.Context) error {
 			return err
 		}
 
-		fmt.Printf("Started worker: pid %d, port %s, log at %s\n", proc.Pid, conf.Worker_port, logPath)
+		fmt.Printf("Starting worker: pid=%d, port=%s, log=%s\n", proc.Pid, conf.Worker_port, logPath)
+
+		var ping_err error
+
+		for i := 0; i < 3000; i++ {
+			// is the worker still alive?
+			err := proc.Signal(syscall.Signal(0))
+			if err != nil {
+				return fmt.Errorf("worker process %d does not a appear to be running :: %s", proc.Pid, err)
+			}
+
+			// is it reachable?
+			url := fmt.Sprintf("http://localhost:%s/pid", conf.Worker_port)
+			response, err := http.Get(url)
+			if err != nil {
+				ping_err = err
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+			defer response.Body.Close()
+
+			// are we talking with the expected PID?
+			body, err := ioutil.ReadAll(response.Body)
+			pid, err := strconv.Atoi(strings.TrimSpace(string(body)))
+			if err != nil {
+				return fmt.Errorf("/pid did not return an int :: %s", err)
+			}
+
+			if pid == proc.Pid {
+				fmt.Printf("ready\n")
+				return nil // server is started and ready for requests
+			} else {
+				return fmt.Errorf("expected PID %v but found %v (port conflict?)", proc.Pid, pid)
+			}
+		}
+
+		return fmt.Errorf("worker still not reachable after 30 seconds :: %s", ping_err)
 	} else {
 		server.Main(confPath)
 	}
@@ -213,7 +251,15 @@ func kill(ctx *cli.Context) error {
 		fmt.Printf("Failed to kill process with PID %d.  May require manual cleanup.\n", pid)
 	}
 
-	return nil
+	for i := 0; i < 3000; i++ {
+		err := p.Signal(syscall.Signal(0))
+		if err != nil {
+			return nil // good, process must have stopped
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	return fmt.Errorf("worker didn't stop after 30s")
 }
 
 // setconf sets a configuration option in the cluster's template

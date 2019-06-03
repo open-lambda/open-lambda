@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -20,6 +21,7 @@ import (
 const (
 	RUN_PATH    = "/run/"
 	STATUS_PATH = "/status"
+	PID_PATH    = "/pid"
 )
 
 // Server is a worker server that listens to run lambda requests and forward
@@ -216,6 +218,16 @@ func (s *Server) Status(w http.ResponseWriter, r *http.Request) {
 	s.lambda_mgr.Dump()
 }
 
+// GetPid returns process ID, useful for making sure we're talking to the expected server
+func (s *Server) GetPid(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Receive request to %s\n", r.URL.Path)
+
+	wbody := []byte(strconv.Itoa(os.Getpid()) + "\n")
+	if _, err := w.Write(wbody); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+}
+
 // getUrlComponents parses request URL into its "/" delimated components
 func getUrlComponents(r *http.Request) []string {
 	path := r.URL.Path
@@ -257,6 +269,7 @@ func Main(config_path string) {
 	port := fmt.Sprintf(":%s", conf.Worker_port)
 	http.HandleFunc(RUN_PATH, server.RunLambda)
 	http.HandleFunc(STATUS_PATH, server.Status)
+	http.HandleFunc(PID_PATH, server.GetPid)
 
 	log.Printf("Execute handler by POSTing to localhost%s%s%s\n", port, RUN_PATH, "<lambda>")
 	log.Printf("Get status by sending request to localhost%s%s\n", port, STATUS_PATH)
