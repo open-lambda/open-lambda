@@ -17,4 +17,4 @@ EOF
 fi
 
 # build test
-make bin/ol
+make ./ol

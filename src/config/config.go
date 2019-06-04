@@ -9,14 +9,10 @@ import (
 	"path/filepath"
 )
 
-var Timing bool
+var Conf *Config
 
 // Config represents the configuration for a worker server.
 type Config struct {
-	// base path for path parameters in this config; must be non-empty if any
-	// path (e.g., Worker_dir) is relative
-	path string
-
 	// location where code packages are stored.  Could be URL or local file path.
 	Registry string `json:"registry"`
 
@@ -66,6 +62,7 @@ type Config struct {
 	// write benchmark times to separate log file
 	Benchmark_file string `json:"benchmark_log"`
 
+	// should timing info be logged?
 	Timing bool `json:"timing"`
 
 	// list of packages to install on startup
@@ -75,9 +72,76 @@ type Config struct {
 	Docker_runtime string `json:"docker_runtime"`
 }
 
+// Defaults verifies the fields of Config are correct, and initializes some
+// if they are empty.
+func LoadDefaults(olPath string) error {
+	workerDir := filepath.Join(olPath, "worker")
+	registryDir := filepath.Join(olPath, "registry")
+	baseImgDir := filepath.Join(olPath, "lambda")
+	packagesDir := filepath.Join(baseImgDir, "packages")
+
+	Conf = &Config{
+		Worker_dir:        workerDir,
+		Cluster_name:      olPath, // TODO: why?
+		Worker_port:       "5000",
+		Registry:          registryDir,
+		Sandbox:           "sock",
+		Pkgs_dir:          packagesDir,
+		Sandbox_config:    map[string]interface{}{"processes": 10},
+		SOCK_base_path:    baseImgDir,
+		Registry_cache_ms: 5000, // 5 seconds
+		Handler_cache_mb:  256,  // TODO: base on available mem
+		Import_cache_mb:   256,  // TODO: base on available mem
+	}
+
+	return check()
+}
+
+// ParseConfig reads a file and tries to parse it as a JSON string to a Config
+// instance.
+func LoadFile(path string) error {
+	config_raw, err := ioutil.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("could not open config (%v): %v\n", path, err.Error())
+	}
+
+	if err := json.Unmarshal(config_raw, &Conf); err != nil {
+		log.Printf("FILE: %v\n", config_raw)
+		return fmt.Errorf("could not parse config (%v): %v\n", path, err.Error())
+	}
+
+	return check()
+}
+
+func check() error {
+	if !path.IsAbs(Conf.Worker_dir) {
+		return fmt.Errorf("Worker_dir cannot be relative")
+	}
+
+	if Conf.Sandbox == "sock" {
+		if Conf.SOCK_base_path == "" {
+			return fmt.Errorf("must specify sock_base_path")
+		}
+
+		if !path.IsAbs(Conf.SOCK_base_path) {
+			return fmt.Errorf("sock_base_path cannot be relative")
+		}
+	} else {
+		if Conf.Pkgs_dir == "" {
+			return fmt.Errorf("must specify packages directory")
+		}
+
+		if !path.IsAbs(Conf.Pkgs_dir) {
+			return fmt.Errorf("Pkgs_dir cannot be relative")
+		}
+	}
+
+	return nil
+}
+
 // SandboxConfJson marshals the Sandbox_config of the Config into a JSON string.
-func (c *Config) SandboxConfJson() string {
-	s, err := json.Marshal(c.Sandbox_config)
+func SandboxConfJson() string {
+	s, err := json.Marshal(Conf.Sandbox_config)
 	if err != nil {
 		panic(err)
 	}
@@ -85,8 +149,8 @@ func (c *Config) SandboxConfJson() string {
 }
 
 // Dump prints the Config as a JSON string.
-func (c *Config) Dump() {
-	s, err := json.Marshal(c)
+func Dump() {
+	s, err := json.Marshal(Conf)
 	if err != nil {
 		panic(err)
 	}
@@ -94,8 +158,8 @@ func (c *Config) Dump() {
 }
 
 // DumpStr returns the Config as an indented JSON string.
-func (c *Config) DumpStr() string {
-	s, err := json.MarshalIndent(c, "", "\t")
+func DumpStr() string {
+	s, err := json.MarshalIndent(Conf, "", "\t")
 	if err != nil {
 		panic(err)
 	}
@@ -103,102 +167,10 @@ func (c *Config) DumpStr() string {
 }
 
 // Save writes the Config as an indented JSON to path with 644 mode.
-func (c *Config) Save(path string) error {
-	s, err := json.MarshalIndent(c, "", "\t")
+func Save(path string) error {
+	s, err := json.MarshalIndent(Conf, "", "\t")
 	if err != nil {
 		return err
 	}
 	return ioutil.WriteFile(path, s, 0644)
-}
-
-// Defaults verifies the fields of Config are correct, and initializes some
-// if they are empty.
-func (c *Config) Defaults() error {
-	if c.Cluster_name == "" {
-		c.Cluster_name = "default"
-	}
-
-	if c.Worker_port == "" {
-		c.Worker_port = "8080"
-	}
-
-	if c.Registry_cache_ms == 0 {
-		c.Registry_cache_ms = 5000 // 5 seconds
-	}
-
-	// worker dir
-	if c.Worker_dir == "" {
-		return fmt.Errorf("must specify local worker directory")
-	}
-
-	if !path.IsAbs(c.Worker_dir) {
-		if c.path == "" {
-			return fmt.Errorf("Worker_dir cannot be relative, unless config is loaded from file")
-		}
-		path, err := filepath.Abs(path.Join(path.Dir(c.path), c.Worker_dir))
-		if err != nil {
-			return err
-		}
-		c.Worker_dir = path
-	}
-
-	// sock sandboxes require some extra settings
-	if c.Sandbox == "sock" {
-		if c.SOCK_base_path == "" {
-			return fmt.Errorf("must specify sock_base_path")
-		}
-
-		if !path.IsAbs(c.SOCK_base_path) {
-			if c.path == "" {
-				return fmt.Errorf("sock_base_path cannot be relative unless config is loaded from file")
-			}
-			path, err := filepath.Abs(path.Join(path.Dir(c.path), c.SOCK_base_path))
-			if err != nil {
-				return err
-			}
-			c.SOCK_base_path = path
-		}
-		c.Pkgs_dir = filepath.Join(c.SOCK_base_path, "packages")
-	} else {
-		if c.Pkgs_dir == "" {
-			return fmt.Errorf("must specify packages directory")
-		}
-
-		if !path.IsAbs(c.Pkgs_dir) {
-			if c.path == "" {
-				return fmt.Errorf("Pkgs_dir cannot be relative, unless config is loaded from file")
-			}
-			path, err := filepath.Abs(path.Join(path.Dir(c.path), c.Pkgs_dir))
-			if err != nil {
-				return err
-			}
-			c.Pkgs_dir = path
-		}
-	}
-
-	Timing = c.Timing
-
-	return nil
-}
-
-// ParseConfig reads a file and tries to parse it as a JSON string to a Config
-// instance.
-func ParseConfig(path string) (*Config, error) {
-	config_raw, err := ioutil.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("could not open config (%v): %v\n", path, err.Error())
-	}
-	var config Config
-
-	if err := json.Unmarshal(config_raw, &config); err != nil {
-		log.Printf("FILE: %v\n", config_raw)
-		return nil, fmt.Errorf("could not parse config (%v): %v\n", path, err.Error())
-	}
-
-	config.path = path
-	if err := config.Defaults(); err != nil {
-		return nil, err
-	}
-
-	return &config, nil
 }

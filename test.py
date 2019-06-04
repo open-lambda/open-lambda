@@ -68,13 +68,13 @@ def TestConf(launch_worker=True, **keywords):
     print("PUSH conf:", keywords)
     put_conf(new)
     if launch_worker:
-        run(['./bin/ol', 'worker', '-p='+OLDIR, '--detach'])
+        run(['./ol', 'worker', '-p='+OLDIR, '--detach'])
     yield new
 
     # cleanup
     print("POP conf:", keywords)
     if launch_worker:
-        run(['./bin/ol', 'kill', '-p='+OLDIR])
+        run(['./ol', 'kill', '-p='+OLDIR])
     put_conf(orig)
 
 
@@ -194,11 +194,11 @@ def main():
     # general setup
     if os.path.exists(OLDIR):
         try:
-            run(['./bin/ol', 'kill', '-p='+OLDIR])
+            run(['./ol', 'kill', '-p='+OLDIR])
         except:
             print('could not kill cluster')
         run(['rm', '-rf', OLDIR])
-    run(['./bin/ol', 'new', '-p='+OLDIR])
+    run(['./ol', 'new', '-p='+OLDIR])
 
     # run tests with various configs
     tests()

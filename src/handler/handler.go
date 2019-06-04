@@ -29,7 +29,6 @@ type LambdaMgr struct {
 	pipMgr     pip.InstallManager
 	sbFactory  sb.ContainerFactory
 	cacheMgr   *cache.CacheManager
-	config     *config.Config
 	lru        *LambdaInstanceLRU
 	workerDir  string
 	maxRunners int
@@ -67,42 +66,42 @@ type LambdaInstance struct {
 	usage   int
 }
 
-func NewLambdaMgr(opts *config.Config) (mgr *LambdaMgr, err error) {
+func NewLambdaMgr() (mgr *LambdaMgr, err error) {
 	var t time.Time
 
 	// start with a fresh worker directory
-	if err := os.RemoveAll(opts.Worker_dir); err != nil {
+	if err := os.RemoveAll(config.Conf.Worker_dir); err != nil {
 		return nil, err
 	}
 
-	if err := os.MkdirAll(opts.Worker_dir, 0700); err != nil {
+	if err := os.MkdirAll(config.Conf.Worker_dir, 0700); err != nil {
 		return nil, err
 	}
 
 	// init code puller, pip manager, handler cache, and init cache
 	t = time.Now()
-	cp, err := NewCodePuller(filepath.Join(opts.Worker_dir, "lambda_code"), opts.Registry)
+	cp, err := NewCodePuller(filepath.Join(config.Conf.Worker_dir, "lambda_code"), config.Conf.Registry)
 	if err != nil {
 		return nil, err
 	}
 	log.Printf("Initialized registry manager (took %v)", time.Since(t))
 
 	t = time.Now()
-	pm, err := pip.InitInstallManager(opts)
+	pm, err := pip.InitInstallManager()
 	if err != nil {
 		return nil, err
 	}
 	log.Printf("Initialized installation manager (took %v)", time.Since(t))
 
 	t = time.Now()
-	sf, err := sb.InitHandlerContainerFactory(opts)
+	sf, err := sb.InitHandlerContainerFactory()
 	if err != nil {
 		return nil, err
 	}
 	log.Printf("Initialized handler container factory (took %v)", time.Since(t))
 
 	t = time.Now()
-	cm, err := cache.InitCacheManager(opts)
+	cm, err := cache.InitCacheManager()
 	if err != nil {
 		return nil, err
 	}
@@ -117,15 +116,14 @@ func NewLambdaMgr(opts *config.Config) (mgr *LambdaMgr, err error) {
 		pipMgr:     pm,
 		sbFactory:  sf,
 		cacheMgr:   cm,
-		config:     opts,
-		workerDir:  opts.Worker_dir,
-		maxRunners: opts.Max_runners,
+		workerDir:  config.Conf.Worker_dir,
+		maxRunners: config.Conf.Max_runners,
 		hhits:      &hhits,
 		ihits:      &ihits,
 		misses:     &misses,
 	}
 
-	mgr.lru = NewLambdaInstanceLRU(mgr, opts.Handler_cache_mb)
+	mgr.lru = NewLambdaInstanceLRU(mgr, config.Conf.Handler_cache_mb)
 
 	return mgr, nil
 }
@@ -183,7 +181,7 @@ func (mgr *LambdaMgr) Get(name string) (linst *LambdaInstance, err error) {
 
 	// get code if needed
 	now := time.Now()
-	cache_ns := int64(mgr.config.Registry_cache_ms) * 1000000
+	cache_ns := int64(config.Conf.Registry_cache_ms) * 1000000
 	if lfunc.lastPull == nil || int64(now.Sub(*lfunc.lastPull)) > cache_ns {
 		codeDir, err := mgr.codePuller.Pull(lfunc.name)
 		if err != nil {
@@ -364,7 +362,7 @@ func (linst *LambdaInstance) RunStart() (ch *sb.Channel, err error) {
 
 		select {
 		case <-ready:
-			if config.Timing {
+			if config.Conf.Timing {
 				log.Printf("wait for server took %v\n", time.Since(start))
 			}
 		case <-timeout.C:

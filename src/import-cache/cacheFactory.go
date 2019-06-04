@@ -20,13 +20,13 @@ type cacheFactory struct {
 	cacheDir string
 }
 
-func NewCacheFactory(opts *config.Config) (CacheFactory, sb.Container, string, error) {
-	cacheDir := filepath.Join(opts.Worker_dir, "import-cache")
+func NewCacheFactory() (CacheFactory, sb.Container, string, error) {
+	cacheDir := filepath.Join(config.Conf.Worker_dir, "import-cache")
 	if err := os.MkdirAll(cacheDir, os.ModeDir); err != nil {
 		return nil, nil, "", fmt.Errorf("failed to create pool directory at %s :: %v", cacheDir, err)
 	}
 
-	delegate, err := sb.InitCacheContainerFactory(opts)
+	delegate, err := sb.InitCacheContainerFactory()
 	if err != nil {
 		return nil, nil, "", fmt.Errorf("failed to initialize cache sandbox factory :: %v", err)
 	}

@@ -30,14 +30,14 @@ type Installer struct {
 	pkgStates map[string]*PackageState
 }
 
-func InitInstallManager(opts *config.Config) (*Installer, error) {
+func InitInstallManager() (*Installer, error) {
 	cmd := "pip"
 	args := []string{"install", "--no-deps"}
-	if opts.Pip_index != "" {
-		args = append(args, "-i", opts.Pip_index)
+	if config.Conf.Pip_index != "" {
+		args = append(args, "-i", config.Conf.Pip_index)
 	}
 
-	args = append(args, "-t", opts.Pkgs_dir)
+	args = append(args, "-t", config.Conf.Pkgs_dir)
 
 	installer := &Installer{
 		cmd:       cmd,
@@ -46,7 +46,7 @@ func InitInstallManager(opts *config.Config) (*Installer, error) {
 		pkgStates: make(map[string]*PackageState),
 	}
 
-	if err := installer.Install(opts.Startup_pkgs); err != nil {
+	if err := installer.Install(config.Conf.Startup_pkgs); err != nil {
 		return nil, err
 	}
 

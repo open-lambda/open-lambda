@@ -44,62 +44,41 @@ func newOL(ctx *cli.Context) error {
 	}
 
 	fmt.Printf("Init OL dir at %v\n", olPath)
-
 	if err := os.Mkdir(olPath, 0700); err != nil {
 		return err
 	}
 
-	workerDir := filepath.Join(olPath, "worker")
-	if err := os.Mkdir(workerDir, 0700); err != nil {
+	if err := config.LoadDefaults(olPath); err != nil {
 		return err
 	}
 
-	registryDir := filepath.Join(olPath, "registry")
-	if err := os.Mkdir(registryDir, 0700); err != nil {
+	if err := config.Save(filepath.Join(olPath, "config.json")); err != nil {
 		return err
 	}
 
-	packagesDir := filepath.Join(olPath, "packages")
-	if err := os.Mkdir(packagesDir, 0700); err != nil {
+	if err := os.Mkdir(config.Conf.Worker_dir, 0700); err != nil {
+		return err
+	}
+
+	if err := os.Mkdir(config.Conf.Registry, 0700); err != nil {
 		return err
 	}
 
 	// create a base directory to run sock handlers
-	baseImgDir := filepath.Join(olPath, "lambda")
-	fmt.Printf("Create lambda base at %v (may take several minutes)\n", baseImgDir)
-	err = dutil.DumpDockerImage(client, "lambda", baseImgDir)
+	fmt.Printf("Create lambda base at %v (may take several minutes)\n", config.Conf.SOCK_base_path)
+	err = dutil.DumpDockerImage(client, "lambda", config.Conf.SOCK_base_path)
 	if err != nil {
 		return err
 	}
 
 	// need this because Docker containers don't have a dns server in /etc/resolv.conf
-	dnsPath := filepath.Join(baseImgDir, "etc/resolv.conf")
+	dnsPath := filepath.Join(config.Conf.SOCK_base_path, "etc", "resolv.conf")
 	if err := ioutil.WriteFile(dnsPath, []byte("nameserver 8.8.8.8\n"), 0644); err != nil {
 		return err
 	}
 
-	// config dir and template
-	c := &config.Config{
-		Worker_dir:     workerDir,
-		Cluster_name:   olPath, // TODO: why?
-		Worker_port:    "5000",
-		Registry:       registryDir,
-		Sandbox:        "sock",
-		Pkgs_dir:       packagesDir,
-		Sandbox_config: map[string]interface{}{"processes": 10},
-		SOCK_base_path: baseImgDir,
-	}
-
-	if err := c.Defaults(); err != nil {
-		return err
-	}
-
-	if err := c.Save(filepath.Join(olPath, "config.json")); err != nil {
-		return err
-	}
-
 	fmt.Printf("Working Directory: %s\n\n", olPath)
-	fmt.Printf("Worker Defaults: \n%s\n\n", c.DumpStr())
+	fmt.Printf("Worker Defaults: \n%s\n\n", config.DumpStr())
 	fmt.Printf("You may now start a server using the \"worker\" command\n")
 
 	return nil
@@ -113,12 +92,12 @@ func status(ctx *cli.Context) error {
 	}
 
 	fmt.Printf("Worker Ping:\n")
-	c, err := config.ParseConfig(filepath.Join(olPath, "config.json"))
+	err = config.LoadFile(filepath.Join(olPath, "config.json"))
 	if err != nil {
 		return err
 	}
 
-	url := fmt.Sprintf("http://localhost:%s/status", c.Worker_port)
+	url := fmt.Sprintf("http://localhost:%s/status", config.Conf.Worker_port)
 	response, err := http.Get(url)
 	if err != nil {
 		return fmt.Errorf("  Could not send GET to %s\n", url)
@@ -151,7 +130,7 @@ func worker(ctx *cli.Context) error {
 	detach := ctx.Bool("detach")
 
 	if detach {
-		conf, err := config.ParseConfig(confPath)
+		err := config.LoadFile(confPath)
 		if err != nil {
 			return err
 		}
@@ -180,7 +159,7 @@ func worker(ctx *cli.Context) error {
 			return err
 		}
 
-		fmt.Printf("Starting worker: pid=%d, port=%s, log=%s\n", proc.Pid, conf.Worker_port, logPath)
+		fmt.Printf("Starting worker: pid=%d, port=%s, log=%s\n", proc.Pid, config.Conf.Worker_port, logPath)
 
 		var ping_err error
 
@@ -192,7 +171,7 @@ func worker(ctx *cli.Context) error {
 			}
 
 			// is it reachable?
-			url := fmt.Sprintf("http://localhost:%s/pid", conf.Worker_port)
+			url := fmt.Sprintf("http://localhost:%s/pid", config.Conf.Worker_port)
 			response, err := http.Get(url)
 			if err != nil {
 				ping_err = err
@@ -275,11 +254,11 @@ func setconf(ctx *cli.Context) error {
 		log.Fatal("Usage: admin setconf <json_options>")
 	}
 
-	if c, err := config.ParseConfig(configPath); err != nil {
+	if err := config.LoadFile(configPath); err != nil {
 		return err
-	} else if err := json.Unmarshal([]byte(ctx.Args()[0]), c); err != nil {
+	} else if err := json.Unmarshal([]byte(ctx.Args()[0]), config.Conf); err != nil {
 		return fmt.Errorf("failed to set config options :: %v", err)
-	} else if err := c.Save(configPath); err != nil {
+	} else if err := config.Save(configPath); err != nil {
 		return err
 	}
 

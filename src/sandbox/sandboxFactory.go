@@ -26,46 +26,46 @@ type ContainerFactory interface {
 	Cleanup()
 }
 
-func InitCacheContainerFactory(opts *config.Config) (ContainerFactory, error) {
-	if opts.Sandbox == "docker" {
+func InitCacheContainerFactory() (ContainerFactory, error) {
+	if config.Conf.Sandbox == "docker" {
 		labels := map[string]string{
-			dockerutil.DOCKER_LABEL_CLUSTER: opts.Cluster_name,
+			dockerutil.DOCKER_LABEL_CLUSTER: config.Conf.Cluster_name,
 			dockerutil.DOCKER_LABEL_TYPE:    dockerutil.CACHE,
 		}
 
-		return NewDockerContainerFactory(opts, "host", []string{"SYS_ADMIN"}, labels, true)
+		return NewDockerContainerFactory("host", []string{"SYS_ADMIN"}, labels, true)
 
-	} else if opts.Sandbox == "sock" {
+	} else if config.Conf.Sandbox == "sock" {
 		uuid, err := util.UUID()
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate uuid :: %v", err)
 		}
 		sandboxDir := fmt.Sprintf("%s-%s", cacheSandboxDir, uuid)
 
-		return NewSOCKContainerFactory(opts, sandboxDir, cacheCGroupName, cacheUnshareFlags, cacheInitArgs)
+		return NewSOCKContainerFactory(sandboxDir, cacheCGroupName, cacheUnshareFlags, cacheInitArgs)
 	}
 
-	return nil, fmt.Errorf("invalid sandbox type: '%s'", opts.Sandbox)
+	return nil, fmt.Errorf("invalid sandbox type: '%s'", config.Conf.Sandbox)
 }
 
-func InitHandlerContainerFactory(opts *config.Config) (ContainerFactory, error) {
-	if opts.Sandbox == "docker" {
+func InitHandlerContainerFactory() (ContainerFactory, error) {
+	if config.Conf.Sandbox == "docker" {
 		labels := map[string]string{
-			dockerutil.DOCKER_LABEL_CLUSTER: opts.Cluster_name,
+			dockerutil.DOCKER_LABEL_CLUSTER: config.Conf.Cluster_name,
 			dockerutil.DOCKER_LABEL_TYPE:    dockerutil.HANDLER,
 		}
 
-		return NewDockerContainerFactory(opts, "", nil, labels, false)
+		return NewDockerContainerFactory("", nil, labels, false)
 
-	} else if opts.Sandbox == "sock" {
+	} else if config.Conf.Sandbox == "sock" {
 		uuid, err := util.UUID()
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate uuid :: %v", err)
 		}
 		sandboxDir := fmt.Sprintf("%s-%s", handlerSandboxDir, uuid)
 
-		return NewSOCKContainerFactory(opts, sandboxDir, handlerCGroupName, handlerUnshareFlags, handlerInitArgs)
+		return NewSOCKContainerFactory(sandboxDir, handlerCGroupName, handlerUnshareFlags, handlerInitArgs)
 	}
 
-	return nil, fmt.Errorf("invalid sandbox type: '%s'", opts.Sandbox)
+	return nil, fmt.Errorf("invalid sandbox type: '%s'", config.Conf.Sandbox)
 }

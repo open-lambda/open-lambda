@@ -30,7 +30,6 @@ import (
 )
 
 type SOCKContainer struct {
-	opts             *config.Config
 	cgf              *CgroupFactory
 	id               string
 	cgId             string
@@ -48,7 +47,7 @@ type SOCKContainer struct {
 
 func NewSOCKContainer(
 	id, containerRootDir, baseDir, codeDir, scratchDir string,
-	cgf *CgroupFactory, opts *config.Config, unshareFlags string, startCmd []string) *SOCKContainer {
+	cgf *CgroupFactory, unshareFlags string, startCmd []string) *SOCKContainer {
 
 	return &SOCKContainer{
 		id:               id,
@@ -57,7 +56,6 @@ func NewSOCKContainer(
 		codeDir:          codeDir,
 		scratchDir:       scratchDir,
 		cgf:              cgf,
-		opts:             opts,
 		unshareFlags:     unshareFlags,
 		status:           state.Stopped,
 		startCmd:         startCmd,
@@ -85,7 +83,7 @@ func (c *SOCKContainer) Channel() (channel *Channel, err error) {
 
 func (c *SOCKContainer) Start() (err error) {
 	defer func(start time.Time) {
-		if config.Timing {
+		if config.Conf.Timing {
 			log.Printf("create container took %v\n", time.Since(start))
 		}
 	}(time.Now())
@@ -164,7 +162,7 @@ func (c *SOCKContainer) Start() (err error) {
 		initArgs...,
 	)
 
-	c.initCmd.Env = []string{fmt.Sprintf("ol.config=%s", c.opts.SandboxConfJson())}
+	c.initCmd.Env = []string{fmt.Sprintf("ol.config=%s", config.SandboxConfJson())}
 	c.initCmd.Stderr = os.Stdout // for debugging
 
 	start := time.Now()
@@ -196,7 +194,7 @@ func (c *SOCKContainer) Start() (err error) {
 
 	select {
 	case c.initPid = <-ready:
-		if config.Timing {
+		if config.Conf.Timing {
 			log.Printf("wait for sock_init took %v\n", time.Since(start))
 		}
 	case <-timeout.C:
@@ -264,7 +262,7 @@ func (c *SOCKContainer) Stop() error {
 	if err != nil {
 		log.Printf("failed to wait on initCmd pid=%d :: %v", c.initCmd.Process.Pid, err)
 	}
-	if config.Timing {
+	if config.Conf.Timing {
 		log.Printf("kill processes took %v", time.Since(start))
 	}
 
@@ -316,7 +314,7 @@ func (c *SOCKContainer) waitForUnpause(timeout time.Duration) error {
 }
 
 func (c *SOCKContainer) Remove() error {
-	if config.Timing {
+	if config.Conf.Timing {
 		defer func(start time.Time) {
 			log.Printf("remove took %v\n", time.Since(start))
 		}(time.Now())
@@ -407,7 +405,7 @@ func (c *SOCKContainer) RunServer() error {
 	start := time.Now()
 	select {
 	case <-ready:
-		if config.Timing {
+		if config.Conf.Timing {
 			log.Printf("wait for init signal handler took %v\n", time.Since(start))
 		}
 	case <-timeout.C:

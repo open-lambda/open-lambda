@@ -26,7 +26,7 @@ type DockerContainerFactory struct {
 }
 
 // NewDockerContainerFactory creates a DockerContainerFactory.
-func NewDockerContainerFactory(opts *config.Config, pidMode string, caps []string, labels map[string]string, cache bool) (*DockerContainerFactory, error) {
+func NewDockerContainerFactory(pidMode string, caps []string, labels map[string]string, cache bool) (*DockerContainerFactory, error) {
 	client, err := docker.NewClientFromEnv()
 	if err != nil {
 		return nil, err
@@ -40,10 +40,10 @@ func NewDockerContainerFactory(opts *config.Config, pidMode string, caps []strin
 		labels:         labels,
 		caps:           caps,
 		pidMode:        pidMode,
-		pkgsDir:        opts.Pkgs_dir,
+		pkgsDir:        config.Conf.Pkgs_dir,
 		idxPtr:         idxPtr,
 		cache:          cache,
-		docker_runtime: opts.Docker_runtime,
+		docker_runtime: config.Conf.Docker_runtime,
 	}
 
 	return df, nil

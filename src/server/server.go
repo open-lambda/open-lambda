@@ -27,7 +27,6 @@ const (
 // Server is a worker server that listens to run lambda requests and forward
 // these requests to its sandboxes.
 type Server struct {
-	config     *config.Config
 	lambda_mgr *handler.LambdaMgr
 }
 
@@ -43,14 +42,13 @@ func newHttpErr(msg string, code int) *httpErr {
 }
 
 // NewServer creates a server based on the passed config."
-func NewServer(config *config.Config) (*Server, error) {
-	lambda_mgr, err := handler.NewLambdaMgr(config)
+func NewServer() (*Server, error) {
+	lambda_mgr, err := handler.NewLambdaMgr()
 	if err != nil {
 		return nil, err
 	}
 
 	server := &Server{
-		config:     config,
 		lambda_mgr: lambda_mgr,
 	}
 
@@ -66,7 +64,7 @@ func (s *Server) ForwardToSandbox(linst *handler.LambdaInstance, r *http.Request
 
 	defer linst.RunFinish()
 
-	if config.Timing {
+	if config.Conf.Timing {
 		defer func(start time.Time) {
 			log.Printf("forward request took %v\n", time.Since(start))
 		}(time.Now())
@@ -251,22 +249,22 @@ func (s *Server) cleanup() {
 }
 
 func Main(config_path string) {
-	conf, err := config.ParseConfig(config_path)
+	err := config.LoadFile(config_path)
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("Config: %+v", conf)
+	log.Printf("Config: %+v", config.Conf)
 
-	server, err := NewServer(conf)
+	server, err := NewServer()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	if conf.Benchmark_file != "" {
-		benchmarker.CreateBenchmarkerSingleton(conf.Benchmark_file)
+	if config.Conf.Benchmark_file != "" {
+		benchmarker.CreateBenchmarkerSingleton(config.Conf.Benchmark_file)
 	}
 
-	port := fmt.Sprintf(":%s", conf.Worker_port)
+	port := fmt.Sprintf(":%s", config.Conf.Worker_port)
 	http.HandleFunc(RUN_PATH, server.RunLambda)
 	http.HandleFunc(STATUS_PATH, server.Status)
 	http.HandleFunc(PID_PATH, server.GetPid)
