@@ -25,9 +25,8 @@ type Evictor struct {
 	usagePath string
 }
 
-//func NewEvictor(pkgfile, rootCID string, kb_limit int, full *bool) (*Evictor, error) {
-func NewEvictor(cm *CacheManager, pkgfile, memCGroupPath string, kb_limit int) (*Evictor, error) {
-	byte_limit := 1024 * kb_limit
+func NewEvictor(cm *CacheManager, pkgfile, memCGroupPath string, mb_limit int) (*Evictor, error) {
+	byte_limit := mb_limit * 1024 * 1024
 
 	eventfd, err := C.eventfd(0, C.EFD_CLOEXEC)
 	if err != nil {

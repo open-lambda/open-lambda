@@ -19,20 +19,20 @@ type LambdaInstanceLRU struct {
 	mgr   *LambdaMgr
 	queue *list.List // front is recent
 	// TODO(tyler): set hard limit to prevent new containers from starting?
-	soft_limit int
-	soft_cond  *sync.Cond
-	size       int
+	soft_limit_bytes int
+	soft_cond        *sync.Cond
+	size             int
 }
 
 // NewLambdaInstanceLRU creates a LambdaInstanceLRU with a given soft_limit and starts the
 // evictor in a go routine.
-func NewLambdaInstanceLRU(mgr *LambdaMgr, soft_limit int) *LambdaInstanceLRU {
+func NewLambdaInstanceLRU(mgr *LambdaMgr, soft_limit_mb int) *LambdaInstanceLRU {
 	lru := &LambdaInstanceLRU{
-		imap:       make(map[*LambdaInstance]*list.Element),
-		mgr:        mgr,
-		queue:      list.New(),
-		soft_limit: soft_limit * 1024,
-		size:       0,
+		imap:             make(map[*LambdaInstance]*list.Element),
+		mgr:              mgr,
+		queue:            list.New(),
+		soft_limit_bytes: soft_limit_mb * 1024 * 1024,
+		size:             0,
 	}
 	lru.soft_cond = sync.NewCond(&lru.mutex)
 	// TODO(tyler): start a configurable number of tasks
@@ -63,7 +63,7 @@ func (lru *LambdaInstanceLRU) Add(inst *LambdaInstance) {
 	lru.size += inst.usage
 	lru.imap[inst] = entry
 
-	if lru.size > lru.soft_limit {
+	if lru.size > lru.soft_limit_bytes {
 		lru.soft_cond.Signal()
 	}
 }
@@ -88,11 +88,11 @@ func (lru *LambdaInstanceLRU) Remove(inst *LambdaInstance) {
 func (lru *LambdaInstanceLRU) Evictor() {
 	for {
 		lru.mutex.Lock()
-		for lru.size <= lru.soft_limit {
+		for lru.size <= lru.soft_limit_bytes {
 			lru.soft_cond.Wait()
 		}
 		lru.mutex.Unlock()
-		log.Printf("EVICTING INSTANCE: %v used / %v limit", lru.size, lru.soft_limit)
+		log.Printf("EVICTING INSTANCE: %v used / %v limit", lru.size, lru.soft_limit_bytes)
 
 		// lock the LambdaMgr
 		lru.mgr.mutex.Lock()
