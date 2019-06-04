@@ -40,8 +40,8 @@ type Config struct {
 	Max_runners int `json:"max_runners"`
 
 	// cache options
-	Handler_cache_size int `json:"handler_cache_size"` //kb
-	Import_cache_size  int `json:"import_cache_size"`  //kb
+	Handler_cache_mb int `json:"handler_cache_mb"`
+	Import_cache_mb  int `json:"import_cache_mb"`
 
 	// sandbox options
 	// worker directory, which contains handler code, pid file, logs, etc.

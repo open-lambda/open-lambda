@@ -159,6 +159,35 @@ def call_each_once(lambda_count):
             call_each_once_exec(lambda_count=lambda_count)
 
 
+def tests():
+    startup_pkgs = ["parso", "jedi", "urllib3", "idna", "chardet", "certifi", "requests", "simplejson"]
+    test_reg = os.path.abspath("test-registry")
+    
+    with TestConf(launch_worker=False, registry=test_reg, startup_pkgs=startup_pkgs):
+        with TestConf(sandbox="sock", handler_cache_mb=0, import_cache_mb=0, cg_pool_size=10):
+            smoke_tests()
+        with TestConf(sandbox="sock", handler_cache_mb=256, import_cache_mb=0, cg_pool_size=10):
+            smoke_tests()
+        with TestConf(sandbox="sock", handler_cache_mb=0, import_cache_mb=256, cg_pool_size=10):
+            smoke_tests()
+        with TestConf(sandbox="sock", handler_cache_mb=256, import_cache_mb=256, cg_pool_size=10):
+            smoke_tests()
+        with TestConf(sandbox="docker", handler_cache_mb=0, import_cache_mb=0, cg_pool_size=0):
+            smoke_tests()
+        with TestConf(sandbox="docker", handler_cache_mb=256, import_cache_mb=0, cg_pool_size=0):
+            smoke_tests()
+
+    with TestConf(sandbox="sock", handler_cache_mb=256, import_cache_mb=256, cg_pool_size=10, registry=test_reg):
+        stress_one_lambda(procs=1, seconds=15)
+        stress_one_lambda(procs=2, seconds=15)
+        stress_one_lambda(procs=8, seconds=15)
+
+    with TestConf(launch_worker=False, sandbox="sock",
+                  handler_cache_mb=256, import_cache_mb=256, cg_pool_size=10):
+        call_each_once(lambda_count=100)
+        call_each_once(lambda_count=1000)
+
+
 def main():
     t0 = time.time()
     
@@ -172,32 +201,7 @@ def main():
     run(['./bin/ol', 'new', '-p='+OLDIR])
 
     # run tests with various configs
-    test_reg = os.path.abspath("test-registry")
-    
-    startup_pkgs = ["parso", "jedi", "urllib3", "idna", "chardet", "certifi", "requests", "simplejson"]
-
-    with TestConf(launch_worker=False, registry=test_reg, startup_pkgs=startup_pkgs):
-        with TestConf(sandbox="sock", handler_cache_size=0, import_cache_size=0, cg_pool_size=10):
-            smoke_tests()
-        with TestConf(sandbox="sock", handler_cache_size=10000000, import_cache_size=0, cg_pool_size=10):
-            smoke_tests()
-        with TestConf(sandbox="sock", handler_cache_size=0, import_cache_size=10000000, cg_pool_size=10):
-            smoke_tests()
-        with TestConf(sandbox="sock", handler_cache_size=10000000, import_cache_size=10000000, cg_pool_size=10):
-            smoke_tests()
-        with TestConf(sandbox="docker", handler_cache_size=0, import_cache_size=0, cg_pool_size=0):
-            smoke_tests()
-        with TestConf(sandbox="docker", handler_cache_size=10000000, import_cache_size=0, cg_pool_size=0):
-            smoke_tests()
-
-    with TestConf(sandbox="sock", handler_cache_size=10000000, import_cache_size=10000000, cg_pool_size=10, registry=test_reg):
-        stress_one_lambda(procs=1, seconds=15)
-        stress_one_lambda(procs=2, seconds=15)
-        stress_one_lambda(procs=8, seconds=15)
-
-    #with TestConf(launch_worker=False, sandbox="sock", handler_cache_size=10000000, import_cache_size=10000000, cg_pool_size=10):
-    #    call_each_once(lambda_count=50)
-    #    call_each_once(lambda_count=500)
+    tests()
 
     # save test results
     passed = len([t for t in results["runs"] if t["pass"]])

@@ -125,7 +125,7 @@ func NewLambdaMgr(opts *config.Config) (mgr *LambdaMgr, err error) {
 		misses:     &misses,
 	}
 
-	mgr.lru = NewLambdaInstanceLRU(mgr, opts.Handler_cache_size) //kb
+	mgr.lru = NewLambdaInstanceLRU(mgr, opts.Handler_cache_mb)
 
 	return mgr, nil
 }
@@ -413,7 +413,7 @@ func (linst *LambdaInstance) RunFinish() {
 			log.Printf("Could not pause %v: %v!  Error: %v\n", linst.name, linst.id, err)
 		}
 
-		if lambdaInstanceUsage(linst) > mgr.lru.soft_limit {
+		if lambdaInstanceUsage(linst) > mgr.lru.soft_limit_bytes {
 			linst.mutex.Unlock()
 
 			// we were potentially the last runner

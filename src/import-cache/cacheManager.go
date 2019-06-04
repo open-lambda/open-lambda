@@ -29,7 +29,7 @@ type CacheManager struct {
 }
 
 func InitCacheManager(opts *config.Config) (cm *CacheManager, err error) {
-	if opts.Import_cache_size == 0 {
+	if opts.Import_cache_mb == 0 {
 		return nil, nil
 	}
 
@@ -54,7 +54,7 @@ func InitCacheManager(opts *config.Config) (cm *CacheManager, err error) {
 		return nil, err
 	}
 
-	e, err := NewEvictor(cm, "", memCGroupPath, opts.Import_cache_size)
+	e, err := NewEvictor(cm, "", memCGroupPath, opts.Import_cache_mb)
 	if err != nil {
 		return nil, err
 	}
