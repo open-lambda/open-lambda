@@ -77,9 +77,9 @@ type Config struct {
 func LoadDefaults(olPath string) (error) {
 	workerDir := filepath.Join(olPath, "worker")
 	registryDir := filepath.Join(olPath, "registry")
-	packagesDir := filepath.Join(olPath, "packages")
 	baseImgDir := filepath.Join(olPath, "lambda")
-
+	packagesDir := filepath.Join(baseImgDir, "packages")
+	
 	Conf = &Config{
 		Worker_dir:     workerDir,
 		Cluster_name:   olPath, // TODO: why?

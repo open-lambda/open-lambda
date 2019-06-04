@@ -42,7 +42,7 @@ func newOL(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	
+
 	fmt.Printf("Init OL dir at %v\n", olPath)
 	if err := os.Mkdir(olPath, 0700); err != nil {
 		return err
@@ -51,7 +51,7 @@ func newOL(ctx *cli.Context) error {
 	if err := config.LoadDefaults(olPath); err != nil {
 		return err
 	}
-	
+
 	if err := config.Save(filepath.Join(olPath, "config.json")); err != nil {
 		return err
 	}
@@ -61,10 +61,6 @@ func newOL(ctx *cli.Context) error {
 	}
 
 	if err := os.Mkdir(config.Conf.Registry, 0700); err != nil {
-		return err
-	}
-
-	if err := os.Mkdir(config.Conf.Pkgs_dir, 0700); err != nil {
 		return err
 	}
 
