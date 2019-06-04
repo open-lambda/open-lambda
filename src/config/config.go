@@ -74,24 +74,24 @@ type Config struct {
 
 // Defaults verifies the fields of Config are correct, and initializes some
 // if they are empty.
-func LoadDefaults(olPath string) (error) {
+func LoadDefaults(olPath string) error {
 	workerDir := filepath.Join(olPath, "worker")
 	registryDir := filepath.Join(olPath, "registry")
 	baseImgDir := filepath.Join(olPath, "lambda")
 	packagesDir := filepath.Join(baseImgDir, "packages")
-	
+
 	Conf = &Config{
-		Worker_dir:     workerDir,
-		Cluster_name:   olPath, // TODO: why?
-		Worker_port:    "5000",
-		Registry:       registryDir,
-		Sandbox:        "sock",
-		Pkgs_dir:       packagesDir,
-		Sandbox_config: map[string]interface{}{"processes": 10},
-		SOCK_base_path: baseImgDir,
+		Worker_dir:        workerDir,
+		Cluster_name:      olPath, // TODO: why?
+		Worker_port:       "5000",
+		Registry:          registryDir,
+		Sandbox:           "sock",
+		Pkgs_dir:          packagesDir,
+		Sandbox_config:    map[string]interface{}{"processes": 10},
+		SOCK_base_path:    baseImgDir,
 		Registry_cache_ms: 5000, // 5 seconds
-		Handler_cache_mb: 256, // TODO: base on available mem
-		Import_cache_mb: 256, // TODO: base on available mem
+		Handler_cache_mb:  256,  // TODO: base on available mem
+		Import_cache_mb:   256,  // TODO: base on available mem
 	}
 
 	return check()
@@ -99,7 +99,7 @@ func LoadDefaults(olPath string) (error) {
 
 // ParseConfig reads a file and tries to parse it as a JSON string to a Config
 // instance.
-func LoadFile(path string) (error) {
+func LoadFile(path string) error {
 	config_raw, err := ioutil.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("could not open config (%v): %v\n", path, err.Error())
@@ -138,6 +138,7 @@ func check() error {
 
 	return nil
 }
+
 // SandboxConfJson marshals the Sandbox_config of the Config into a JSON string.
 func SandboxConfJson() string {
 	s, err := json.Marshal(Conf.Sandbox_config)
