@@ -68,13 +68,13 @@ def TestConf(launch_worker=True, **keywords):
     print("PUSH conf:", keywords)
     put_conf(new)
     if launch_worker:
-        run(['./bin/ol', 'worker', '-p='+OLDIR, '--detach'])
+        run(['./ol', 'worker', '-p='+OLDIR, '--detach'])
     yield new
 
     # cleanup
     print("POP conf:", keywords)
     if launch_worker:
-        run(['./bin/ol', 'kill', '-p='+OLDIR])
+        run(['./ol', 'kill', '-p='+OLDIR])
     put_conf(orig)
 
 
@@ -109,8 +109,8 @@ def test_smoke_install(num):
 def smoke_tests():
     test_smoke_echo()
     test_smoke_install(num=None)
-    test_smoke_install(num=2)
-    test_smoke_install(num=3)
+    #test_smoke_install(num=2)
+    #test_smoke_install(num=3)
 
 
 def stress_one_lambda_task(args):
@@ -176,7 +176,7 @@ def tests():
             smoke_tests()
         with TestConf(sandbox="docker", handler_cache_mb=256, import_cache_mb=0, cg_pool_size=0):
             smoke_tests()
-
+    return
     with TestConf(sandbox="sock", handler_cache_mb=256, import_cache_mb=256, cg_pool_size=10, registry=test_reg):
         stress_one_lambda(procs=1, seconds=15)
         stress_one_lambda(procs=2, seconds=15)
@@ -194,11 +194,11 @@ def main():
     # general setup
     if os.path.exists(OLDIR):
         try:
-            run(['./bin/ol', 'kill', '-p='+OLDIR])
+            run(['./ol', 'kill', '-p='+OLDIR])
         except:
             print('could not kill cluster')
         run(['rm', '-rf', OLDIR])
-    run(['./bin/ol', 'new', '-p='+OLDIR])
+    run(['./ol', 'new', '-p='+OLDIR])
 
     # run tests with various configs
     tests()

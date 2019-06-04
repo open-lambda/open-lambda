@@ -28,8 +28,8 @@ type CacheManager struct {
 	full    *int32
 }
 
-func InitCacheManager(opts *config.Config) (cm *CacheManager, err error) {
-	if opts.Import_cache_mb == 0 {
+func InitCacheManager() (cm *CacheManager, err error) {
+	if config.Conf.Import_cache_mb == 0 {
 		return nil, nil
 	}
 
@@ -49,12 +49,12 @@ func InitCacheManager(opts *config.Config) (cm *CacheManager, err error) {
 		full:    &full,
 	}
 
-	memCGroupPath, err := cm.initCacheRoot(opts)
+	memCGroupPath, err := cm.initCacheRoot()
 	if err != nil {
 		return nil, err
 	}
 
-	e, err := NewEvictor(cm, "", memCGroupPath, opts.Import_cache_mb)
+	e, err := NewEvictor(cm, "", memCGroupPath, config.Conf.Import_cache_mb)
 	if err != nil {
 		return nil, err
 	}
@@ -70,12 +70,6 @@ func InitCacheManager(opts *config.Config) (cm *CacheManager, err error) {
 }
 
 func (cm *CacheManager) Provision(sandbox sb.Container, imports []string) (fs *ForkServer, hit bool, err error) {
-	if config.Timing {
-		defer func(start time.Time) {
-			log.Printf("provision took %v\n", time.Since(start))
-		}(time.Now())
-	}
-
 	cm.mutex.Lock()
 
 	fs, toCache, hit := cm.matcher.Match(cm.servers, imports)
@@ -185,8 +179,8 @@ func (cm *CacheManager) newCacheEntry(baseFS *ForkServer, toCache []string) (*Fo
 	return fs, nil
 }
 
-func (cm *CacheManager) initCacheRoot(opts *config.Config) (memCGroupPath string, err error) {
-	factory, rootSB, rootDir, err := NewCacheFactory(opts)
+func (cm *CacheManager) initCacheRoot() (memCGroupPath string, err error) {
+	factory, rootSB, rootDir, err := NewCacheFactory()
 	if err != nil {
 		return "", err
 	}
@@ -223,7 +217,7 @@ func (cm *CacheManager) initCacheRoot(opts *config.Config) (memCGroupPath string
 	start = time.Now()
 	select {
 	case <-ready:
-		if opts.Timing {
+		if config.Conf.Timing {
 			log.Printf("wait for server took %v\n", time.Since(start))
 		}
 	case <-timeout.C:

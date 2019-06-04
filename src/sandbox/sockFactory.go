@@ -21,7 +21,6 @@ var SHARED uintptr = uintptr(syscall.MS_SHARED)
 
 // SOCKContainerFactory is a ContainerFactory that creats docker containeres.
 type SOCKContainerFactory struct {
-	opts         *config.Config
 	cgf          *CgroupFactory
 	idxPtr       *int64
 	rootDir      string
@@ -31,8 +30,8 @@ type SOCKContainerFactory struct {
 }
 
 // NewSOCKContainerFactory creates a SOCKContainerFactory.
-func NewSOCKContainerFactory(opts *config.Config, rootDir, prefix, unshareFlags string, initArgs []string) (*SOCKContainerFactory, error) {
-	baseDir := opts.SOCK_base_path
+func NewSOCKContainerFactory(rootDir, prefix, unshareFlags string, initArgs []string) (*SOCKContainerFactory, error) {
+	baseDir := config.Conf.SOCK_base_path
 
 	if err := os.MkdirAll(rootDir, 0777); err != nil {
 		return nil, fmt.Errorf("failed to make root container dir :: %v", err)
@@ -46,7 +45,7 @@ func NewSOCKContainerFactory(opts *config.Config, rootDir, prefix, unshareFlags 
 		return nil, fmt.Errorf("failed to make root container dir private :: %v", err)
 	}
 
-	cgf, err := NewCgroupFactory(prefix, opts.Cg_pool_size)
+	cgf, err := NewCgroupFactory(prefix, config.Conf.Cg_pool_size)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +54,6 @@ func NewSOCKContainerFactory(opts *config.Config, rootDir, prefix, unshareFlags 
 	idxPtr := &sharedIdx
 
 	sf := &SOCKContainerFactory{
-		opts:         opts,
 		cgf:          cgf,
 		idxPtr:       idxPtr,
 		rootDir:      rootDir,
@@ -69,7 +67,7 @@ func NewSOCKContainerFactory(opts *config.Config, rootDir, prefix, unshareFlags 
 
 // Create creates a docker container from the handler and container directory.
 func (sf *SOCKContainerFactory) Create(codeDir, workingDir string) (Container, error) {
-	if config.Timing {
+	if config.Conf.Timing {
 		defer func(start time.Time) {
 			log.Printf("create sock took %v\n", time.Since(start))
 		}(time.Now())
@@ -80,7 +78,7 @@ func (sf *SOCKContainerFactory) Create(codeDir, workingDir string) (Container, e
 	scratchDir := filepath.Join(workingDir, id)
 
 	startCmd := append([]string{OL_INIT}, sf.initArgs...)
-	return NewSOCKContainer(id, containerRootDir, sf.baseDir, codeDir, scratchDir, sf.cgf, sf.opts, sf.unshareFlags, startCmd), nil
+	return NewSOCKContainer(id, containerRootDir, sf.baseDir, codeDir, scratchDir, sf.cgf, sf.unshareFlags, startCmd), nil
 }
 
 func (sf *SOCKContainerFactory) Cleanup() {
