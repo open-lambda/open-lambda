@@ -195,9 +195,9 @@ def main():
         stress_one_lambda(procs=2, seconds=15)
         stress_one_lambda(procs=8, seconds=15)
 
-    with TestConf(launch_worker=False, sandbox="sock", handler_cache_size=10000000, import_cache_size=10000000, cg_pool_size=10):
-        call_each_once(lambda_count=50)
-        call_each_once(lambda_count=500)
+    #with TestConf(launch_worker=False, sandbox="sock", handler_cache_size=10000000, import_cache_size=10000000, cg_pool_size=10):
+    #    call_each_once(lambda_count=50)
+    #    call_each_once(lambda_count=500)
 
     # save test results
     passed = len([t for t in results["runs"] if t["pass"]])
