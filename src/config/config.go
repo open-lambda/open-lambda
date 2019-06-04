@@ -7,6 +7,7 @@ import (
 	"log"
 	"path"
 	"path/filepath"
+	"syscall"
 )
 
 var Conf *Config
@@ -80,6 +81,20 @@ func LoadDefaults(olPath string) error {
 	baseImgDir := filepath.Join(olPath, "lambda")
 	packagesDir := filepath.Join(baseImgDir, "packages")
 
+	// split anything above 512 MB evenly between handler and import cache
+	in := &syscall.Sysinfo_t{}
+	err := syscall.Sysinfo(in)
+	if err != nil {
+		return err
+	}
+	total_mb := uint64(in.Totalram) * uint64(in.Unit) / 1024 / 1024
+	handler_cache_mb := 0
+	import_cache_mb := 0
+	if total_mb > 512 {
+		handler_cache_mb = int((total_mb - 512) / 2)
+		import_cache_mb = int((total_mb - 512) / 2)
+	}
+
 	Conf = &Config{
 		Worker_dir:        workerDir,
 		Cluster_name:      olPath, // TODO: why?
@@ -90,8 +105,8 @@ func LoadDefaults(olPath string) error {
 		Sandbox_config:    map[string]interface{}{"processes": 10},
 		SOCK_base_path:    baseImgDir,
 		Registry_cache_ms: 5000, // 5 seconds
-		Handler_cache_mb:  256,  // TODO: base on available mem
-		Import_cache_mb:   256,  // TODO: base on available mem
+		Handler_cache_mb:  handler_cache_mb,
+		Import_cache_mb:   import_cache_mb,
 	}
 
 	return check()
