@@ -23,26 +23,15 @@ import (
 
 var client *docker.Client
 
-// TODO: notes about setup process
-// TODO: notes about creating a directory in local
-
-// Parse parses the cluster name. If required is true but
-// the cluster name is empty, program will exit with an error.
 func getOlPath(ctx *cli.Context) (string, error) {
 	olPath := ctx.String("path")
 	if olPath == "" {
-		olPath = "default"
+		olPath = "default-ol"
 	}
 	return filepath.Abs(olPath)
 }
 
-// newOL corresponds to the "new" command of the admin tool.
-func newOL(ctx *cli.Context) error {
-	olPath, err := getOlPath(ctx)
-	if err != nil {
-		return err
-	}
-
+func initOLDir(olPath string) (err error) {
 	fmt.Printf("Init OL dir at %v\n", olPath)
 	if err := os.Mkdir(olPath, 0700); err != nil {
 		return err
@@ -84,6 +73,16 @@ func newOL(ctx *cli.Context) error {
 	return nil
 }
 
+// newOL corresponds to the "new" command of the admin tool.
+func newOL(ctx *cli.Context) error {
+	olPath, err := getOlPath(ctx)
+	if err != nil {
+		return err
+	}
+
+	return initOLDir(olPath)
+}
+
 // status corresponds to the "status" command of the admin tool.
 func status(ctx *cli.Context) error {
 	olPath, err := getOlPath(ctx)
@@ -122,6 +121,15 @@ func worker(ctx *cli.Context) error {
 	olPath, err := getOlPath(ctx)
 	if err != nil {
 		return err
+	}
+
+	if _, err := os.Stat(olPath); os.IsNotExist(err) {
+		fmt.Printf("no OL directory found at %s\n", olPath)
+		if err := initOLDir(olPath); err != nil {
+			return err
+		}
+	} else {
+		fmt.Printf("using existing OL directory at %s\n", olPath)
 	}
 
 	confPath := filepath.Join(olPath, "config.json")
