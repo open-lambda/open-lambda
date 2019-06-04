@@ -135,11 +135,11 @@ def stress_one_lambda(procs, seconds):
 
 
 @test
-def call_each_once_exec(lambda_count):
+def call_each_once_exec(lambda_count, alloc_mb):
     # TODO: do in parallel
     t0 = time.time()
     for i in range(lambda_count):
-        r = requests.post("http://localhost:5000/run/L%d"%i, data="null")
+        r = requests.post("http://localhost:5000/run/L%d"%i, data=json.dumps({"alloc_mb": alloc_mb}))
         r.raise_for_status()
         assert r.text == str(i)
     seconds = time.time() - t0
@@ -147,22 +147,24 @@ def call_each_once_exec(lambda_count):
     return {"reqs_per_sec": lambda_count/seconds}
 
 
-def call_each_once(lambda_count):
+def call_each_once(lambda_count, alloc_mb=0):
     with tempfile.TemporaryDirectory() as reg_dir:
         # create dummy lambdas
         for i in range(lambda_count):
             with open(os.path.join(reg_dir, "L%d.py"%i), "w") as f:
                 f.write("def handler(event):\n")
+                f.write("    global s\n")
+                f.write("    s = '*' * %d * 1024**2\n" % alloc_mb)
                 f.write("    return %d\n" % i)
 
         with TestConf(registry=reg_dir):
-            call_each_once_exec(lambda_count=lambda_count)
+            call_each_once_exec(lambda_count=lambda_count, alloc_mb=alloc_mb)
 
 
 def tests():
     startup_pkgs = ["parso", "jedi", "urllib3", "idna", "chardet", "certifi", "requests", "simplejson"]
     test_reg = os.path.abspath("test-registry")
-    
+
     with TestConf(launch_worker=False, registry=test_reg, startup_pkgs=startup_pkgs):
         with TestConf(sandbox="sock", handler_cache_mb=0, import_cache_mb=0, cg_pool_size=10):
             smoke_tests()
@@ -184,8 +186,8 @@ def tests():
 
     with TestConf(launch_worker=False, sandbox="sock",
                   handler_cache_mb=256, import_cache_mb=256, cg_pool_size=10):
-        call_each_once(lambda_count=100)
-        call_each_once(lambda_count=1000)
+        call_each_once(lambda_count=100, alloc_mb=1)
+        call_each_once(lambda_count=1000, alloc_mb=10)
 
 
 def main():
