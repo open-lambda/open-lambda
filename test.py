@@ -203,6 +203,7 @@ def main():
     run(['./ol', 'new', '-p='+OLDIR])
 
     # run tests with various configs
+    setup_failed = False
     try:
         tests()
     except Exception:
@@ -213,6 +214,7 @@ def main():
         if os.path.exists(worker_out):
             with open(worker_out) as f:
                 results["worker_out"] = f.read().split("\n")
+        setup_failed = True
 
     # save test results
     passed = len([t for t in results["runs"] if t["pass"]])
@@ -225,6 +227,8 @@ def main():
     with open("test.json", "w") as f:
         json.dump(results, f, indent=2)
 
+    if setup_failed:
+        sys.exit(1)
     sys.exit(failed)
 
 
