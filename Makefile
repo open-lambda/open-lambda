@@ -25,7 +25,7 @@ ol: $(OL_GO_FILES)
 	mv $(OL_DIR)/ol ./ol
 
 test-all:
-	python3 test.py
+	python3 -u test.py
 
 clean:
 	rm -f ol

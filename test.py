@@ -203,7 +203,16 @@ def main():
     run(['./ol', 'new', '-p='+OLDIR])
 
     # run tests with various configs
-    tests()
+    try:
+        tests()
+    except Exception:
+        # most exceptions are caught per test, but we have this to
+        # catch cases where there is an error during setup/teardown
+        results["exception"] = traceback.format_exc().split("\n")
+        worker_out = os.path.join(OLDIR, "worker.out")
+        if os.path.exists(worker_out):
+            with open(worker_out) as f:
+                results["worker_out"] = f.read().split("\n")
 
     # save test results
     passed = len([t for t in results["runs"] if t["pass"]])
