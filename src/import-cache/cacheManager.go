@@ -69,7 +69,7 @@ func InitCacheManager() (cm *CacheManager, err error) {
 	return cm, nil
 }
 
-func (cm *CacheManager) Provision(sandbox sb.Container, imports []string) (fs *ForkServer, hit bool, err error) {
+func (cm *CacheManager) Provision(sandbox sb.Sandbox, imports []string) (fs *ForkServer, hit bool, err error) {
 	cm.mutex.Lock()
 
 	fs, toCache, hit := cm.matcher.Match(cm.servers, imports)

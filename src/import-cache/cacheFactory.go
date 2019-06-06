@@ -11,7 +11,7 @@ import (
 )
 
 type CacheFactory interface {
-	Create() (sb.Container, error)
+	Create() (sb.Sandbox, error)
 	Cleanup()
 }
 
@@ -20,7 +20,7 @@ type cacheFactory struct {
 	cacheDir string
 }
 
-func NewCacheFactory() (CacheFactory, sb.Container, string, error) {
+func NewCacheFactory() (CacheFactory, sb.Sandbox, string, error) {
 	cacheDir := filepath.Join(config.Conf.Worker_dir, "import-cache")
 	if err := os.MkdirAll(cacheDir, os.ModeDir); err != nil {
 		return nil, nil, "", fmt.Errorf("failed to create pool directory at %s :: %v", cacheDir, err)
@@ -47,17 +47,14 @@ func NewCacheFactory() (CacheFactory, sb.Container, string, error) {
 	return factory, root, rootEntryDir, nil
 }
 
-func (cf *cacheFactory) Create() (sb.Container, error) {
+func (cf *cacheFactory) Create() (sb.Sandbox, error) {
 	container, err := cf.delegate.Create("", cf.cacheDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cache entry sandbox :: %v", err)
 	}
 
 	if err := container.Start(); err != nil {
-		go func() {
-			container.Stop()
-			container.Remove()
-		}()
+		go container.Destroy() // TODO: cleanup in Start if we fail
 		return nil, err
 	}
 

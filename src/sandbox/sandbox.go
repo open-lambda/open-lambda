@@ -23,26 +23,21 @@ type Channel struct {
 	Transport http.Transport
 }
 
-type Sandbox interface{}
-
-type Container interface {
-	Sandbox
+type Sandbox interface{
+	// Return ID of the container.
+	ID() string
 
 	// Starts the container.
 	Start() error
 
-	// Stops the container.
-	Stop() error
+	// Frees all resources associated with the container.
+	Destroy() error
 
 	// Pauses the container.
 	Pause() error
 
 	// Unpauses the container.
 	Unpause() error
-
-	// Frees all resources associated with the container.
-	// Assumes that the container has been stopped.
-	Remove() error
 
 	// Return recent logs for the container.
 	Logs() (string, error)
@@ -52,9 +47,6 @@ type Container interface {
 
 	// Communication channel to forward requests.
 	Channel() (*Channel, error)
-
-	// Return ID of the container.
-	ID() string
 
 	// Start the Python server inside of the container.
 	RunServer() error

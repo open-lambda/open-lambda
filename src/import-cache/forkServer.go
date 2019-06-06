@@ -12,7 +12,7 @@ import (
 )
 
 type ForkServer struct {
-	Sandbox  sb.Container
+	Sandbox  sb.Sandbox
 	Pid      string
 	SockPath string
 	Imports  map[string]bool
@@ -51,9 +51,7 @@ func (fs *ForkServer) Kill() error {
 		fs.Parent.Children -= 1
 	}
 
-	fs.Sandbox.Unpause()
-	fs.Sandbox.Stop()
-	fs.Sandbox.Remove()
+	fs.Sandbox.Destroy()
 
 	return nil
 }

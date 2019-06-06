@@ -66,7 +66,7 @@ func NewSOCKContainerFactory(rootDir, prefix, unshareFlags string, initArgs []st
 }
 
 // Create creates a docker container from the handler and container directory.
-func (sf *SOCKContainerFactory) Create(codeDir, workingDir string) (Container, error) {
+func (sf *SOCKContainerFactory) Create(codeDir, workingDir string) (Sandbox, error) {
 	if config.Conf.Timing {
 		defer func(start time.Time) {
 			log.Printf("create sock took %v\n", time.Since(start))

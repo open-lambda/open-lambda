@@ -50,7 +50,7 @@ func NewDockerContainerFactory(pidMode string, caps []string, labels map[string]
 }
 
 // Create creates a docker sandbox from the handler and sandbox directory.
-func (df *DockerContainerFactory) Create(handlerDir, workingDir string) (Container, error) {
+func (df *DockerContainerFactory) Create(handlerDir, workingDir string) (Sandbox, error) {
 	id := fmt.Sprintf("%d", atomic.AddInt64(df.idxPtr, 1))
 	hostDir := filepath.Join(workingDir, id)
 	if err := os.MkdirAll(hostDir, 0777); err != nil {

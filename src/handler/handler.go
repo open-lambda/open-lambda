@@ -59,9 +59,8 @@ type LambdaInstance struct {
 	id      string
 	mutex   sync.Mutex
 	lfunc   *LambdaFunc
-	sandbox sb.Container
+	sandbox sb.Sandbox
 	fs      *cache.ForkServer
-	hostDir string
 	runners int
 	usage   int
 }
@@ -230,7 +229,7 @@ func (mgr *LambdaMgr) Cleanup() {
 		fmt.Printf("  Function: %s\n", lfunc.name)
 		for e := lfunc.instances.Front(); e != nil; e = e.Next() {
 			fmt.Printf("    Instance: %s\n", e.Value.(*LambdaInstance).id)
-			e.Value.(*LambdaInstance).nuke()
+			e.Value.(*LambdaInstance).sandbox.Destroy()
 		}
 	}
 
@@ -309,7 +308,6 @@ func (linst *LambdaInstance) RunStart() (ch *sb.Channel, err error) {
 
 		linst.sandbox = sandbox
 		linst.id = linst.sandbox.ID()
-		linst.hostDir = linst.sandbox.HostDir()
 
 		if sbState, err := linst.sandbox.State(); err != nil {
 			return nil, err
@@ -343,7 +341,7 @@ func (linst *LambdaInstance) RunStart() (ch *sb.Channel, err error) {
 		ready := make(chan bool, 1)
 		defer close(ready)
 		go func() {
-			pipeDir := filepath.Join(linst.hostDir, "server_pipe")
+			pipeDir := filepath.Join(linst.sandbox.HostDir(), "server_pipe")
 			pipe, err := os.OpenFile(pipeDir, os.O_RDWR, 0777)
 			if err != nil {
 				log.Printf("Cannot open pipe: %v\n", err)
@@ -418,18 +416,6 @@ func (linst *LambdaInstance) RunFinish() {
 			log.Printf("Could not pause %v: %v!  Error: %v\n", linst.name, linst.id, err)
 		}
 
-		if lambdaInstanceUsage(linst) > mgr.lru.soft_limit_bytes {
-			linst.mutex.Unlock()
-
-			// we were potentially the last runner
-			// try to remove us from the instance manager
-			if err := lfunc.TryRemoveInstance(linst); err == nil {
-				// we were the last one so... bye
-				go linst.nuke()
-			}
-			return
-		}
-
 		lfunc.AddInstance(linst)
 		mgr.lru.Add(linst)
 	} else {
@@ -437,23 +423,6 @@ func (linst *LambdaInstance) RunFinish() {
 	}
 
 	linst.mutex.Unlock()
-}
-
-func (linst *LambdaInstance) nuke() {
-	if err := linst.sandbox.Unpause(); err != nil {
-		log.Printf("failed to unpause sandbox :: %v", err.Error())
-	}
-	if err := linst.sandbox.Stop(); err != nil {
-		log.Printf("failed to stop sandbox :: %v", err.Error())
-	}
-	if err := linst.sandbox.Remove(); err != nil {
-		log.Printf("failed to remove sandbox :: %v", err.Error())
-	}
-}
-
-// Sandbox returns the sandbox of this Instance.
-func (linst *LambdaInstance) Sandbox() sb.Sandbox {
-	return linst.sandbox
 }
 
 func max(i1, i2 int) int {

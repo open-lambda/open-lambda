@@ -222,8 +222,55 @@ func (c *SOCKContainer) Start() (err error) {
 	return nil
 }
 
-func (c *SOCKContainer) Stop() error {
+func (c *SOCKContainer) Pause() error {
+	freezerPath := filepath.Join("/sys/fs/cgroup/freezer", OLCGroupName, c.cgId, "freezer.state")
+	err := ioutil.WriteFile(freezerPath, []byte("FROZEN"), os.ModeAppend)
+	if err != nil {
+		return err
+	}
+
+	c.status = state.Paused
+	return nil
+}
+
+func (c *SOCKContainer) Unpause() error {
+	statePath := filepath.Join("/sys/fs/cgroup/freezer", OLCGroupName, c.cgId, "freezer.state")
+
+	err := ioutil.WriteFile(statePath, []byte("THAWED"), os.ModeAppend)
+	if err != nil {
+		return err
+	}
+
+	timeout := 5 * time.Second
+
+	// TODO: should we check parent_freezing to be sure?
+	selfFreezingPath := filepath.Join("/sys/fs/cgroup/freezer", OLCGroupName, c.cgId, "freezer.self_freezing")
+
 	start := time.Now()
+	for time.Since(start) < timeout {
+		freezerState, err := ioutil.ReadFile(selfFreezingPath)
+		if err != nil {
+			return fmt.Errorf("failed to check self_freezing state :: %v", err)
+		}
+
+		if strings.TrimSpace(string(freezerState[:])) == "0" {
+			c.status = state.Running
+			return nil
+		}
+		time.Sleep(1 * time.Millisecond)
+	}
+
+	return fmt.Errorf("sock didn't unpause after %v", timeout)
+}
+
+func (c *SOCKContainer) Destroy() error {
+	c.Unpause()
+
+	if config.Conf.Timing {
+		defer func(start time.Time) {
+			log.Printf("remove took %v\n", time.Since(start))
+		}(time.Now())
+	}
 
 	// If we're using the PID namespace, we can just kill the init process
 	// and the OS will SIGKILL the rest. If not (i.e., for import cache
@@ -261,63 +308,6 @@ func (c *SOCKContainer) Stop() error {
 	_, err := c.initCmd.Process.Wait()
 	if err != nil {
 		log.Printf("failed to wait on initCmd pid=%d :: %v", c.initCmd.Process.Pid, err)
-	}
-	if config.Conf.Timing {
-		log.Printf("kill processes took %v", time.Since(start))
-	}
-
-	c.status = state.Stopped
-	return nil
-}
-
-func (c *SOCKContainer) Pause() error {
-	freezerPath := filepath.Join("/sys/fs/cgroup/freezer", OLCGroupName, c.cgId, "freezer.state")
-	err := ioutil.WriteFile(freezerPath, []byte("FROZEN"), os.ModeAppend)
-	if err != nil {
-		return err
-	}
-
-	c.status = state.Paused
-	return nil
-}
-
-func (c *SOCKContainer) Unpause() error {
-	statePath := filepath.Join("/sys/fs/cgroup/freezer", OLCGroupName, c.cgId, "freezer.state")
-
-	err := ioutil.WriteFile(statePath, []byte("THAWED"), os.ModeAppend)
-	if err != nil {
-		return err
-	}
-
-	return c.waitForUnpause(5 * time.Second)
-}
-
-func (c *SOCKContainer) waitForUnpause(timeout time.Duration) error {
-	// TODO: should we check parent_freezing to be sure?
-	selfFreezingPath := filepath.Join("/sys/fs/cgroup/freezer", OLCGroupName, c.cgId, "freezer.self_freezing")
-
-	start := time.Now()
-	for time.Since(start) < timeout {
-		freezerState, err := ioutil.ReadFile(selfFreezingPath)
-		if err != nil {
-			return fmt.Errorf("failed to check self_freezing state :: %v", err)
-		}
-
-		if strings.TrimSpace(string(freezerState[:])) == "0" {
-			c.status = state.Running
-			return nil
-		}
-		time.Sleep(1 * time.Millisecond)
-	}
-
-	return fmt.Errorf("sock didn't unpause after %v", timeout)
-}
-
-func (c *SOCKContainer) Remove() error {
-	if config.Conf.Timing {
-		defer func(start time.Time) {
-			log.Printf("remove took %v\n", time.Since(start))
-		}(time.Now())
 	}
 
 	if err := syscall.Unmount(c.containerRootDir, syscall.MNT_DETACH); err != nil {

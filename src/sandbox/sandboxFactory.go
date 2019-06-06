@@ -22,7 +22,7 @@ var handlerInitArgs []string = []string{}
 
 // ContainerFactory is the common interface for creating containers.
 type ContainerFactory interface {
-	Create(handlerDir, workingDir string) (Container, error)
+	Create(handlerDir, workingDir string) (Sandbox, error)
 	Cleanup()
 }
 

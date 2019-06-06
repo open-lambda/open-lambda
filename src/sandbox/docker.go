@@ -150,19 +150,6 @@ func (c *DockerContainer) Start() error {
 	return nil
 }
 
-// Stop stops the container.
-func (c *DockerContainer) Stop() error {
-	// TODO(tyler): is there any advantage to trying to stop
-	// before killing?  (i.e., use SIGTERM instead SIGKILL)
-	opts := docker.KillContainerOptions{ID: c.container.ID}
-	if err := c.client.KillContainer(opts); err != nil {
-		log.Printf("failed to kill container with error %v\n", err)
-		return c.dockerError(err)
-	}
-
-	return nil
-}
-
 // Pause pauses the container.
 func (c *DockerContainer) Pause() error {
 	b := benchmarker.GetBenchmarker()
@@ -208,8 +195,18 @@ func (c *DockerContainer) Unpause() error {
 	return nil
 }
 
-// Remove frees all resources associated with the lambda (stops the container if necessary).
-func (c *DockerContainer) Remove() error {
+// frees all resources associated with the lambda
+func (c *DockerContainer) Destroy() error {
+	c.Unpause()
+
+	// TODO(tyler): is there any advantage to trying to stop
+	// before killing?  (i.e., use SIGTERM instead SIGKILL)
+	opts := docker.KillContainerOptions{ID: c.container.ID}
+	if err := c.client.KillContainer(opts); err != nil {
+		log.Printf("failed to kill container with error %v\n", err)
+		return c.dockerError(err)
+	}
+
 	// remove sockets if they exist
 	if err := os.RemoveAll(filepath.Join(c.hostDir, "ol.sock")); err != nil {
 		return err
