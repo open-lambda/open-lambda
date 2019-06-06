@@ -278,7 +278,9 @@ func Main(config_path string) {
 	signal.Notify(c, os.Interrupt, syscall.SIGINT)
 	go func(s *Server) {
 		<-c
+		log.Printf("received kill signal, cleaning up")
 		s.cleanup()
+		log.Printf("exiting")
 		os.Exit(1)
 	}(server)
 

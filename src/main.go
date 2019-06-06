@@ -171,7 +171,7 @@ func worker(ctx *cli.Context) error {
 
 		var ping_err error
 
-		for i := 0; i < 3000; i++ {
+		for i := 0; i < 300; i++ {
 			// is the worker still alive?
 			err := proc.Signal(syscall.Signal(0))
 			if err != nil {
@@ -238,7 +238,7 @@ func kill(ctx *cli.Context) error {
 		fmt.Printf("Failed to kill process with PID %d.  May require manual cleanup.\n", pid)
 	}
 
-	for i := 0; i < 3000; i++ {
+	for i := 0; i < 300; i++ {
 		err := p.Signal(syscall.Signal(0))
 		if err != nil {
 			return nil // good, process must have stopped

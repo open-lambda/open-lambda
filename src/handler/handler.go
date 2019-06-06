@@ -225,17 +225,24 @@ func (mgr *LambdaMgr) Cleanup() {
 	mgr.mutex.Lock()
 	defer mgr.mutex.Unlock()
 
+	fmt.Printf("Cleanup Lambdas:\n")
 	for _, lfunc := range mgr.lfuncMap {
+		fmt.Printf("  Function: %s\n", lfunc.name)
 		for e := lfunc.instances.Front(); e != nil; e = e.Next() {
+			fmt.Printf("    Instance: %s\n", e.Value.(*LambdaInstance).id)
 			e.Value.(*LambdaInstance).nuke()
 		}
 	}
 
+	fmt.Printf("Cleanup Container Factory\n")
 	mgr.sbFactory.Cleanup()
 
 	if mgr.cacheMgr != nil {
+		fmt.Printf("Cleanup Cache Manager\n")
 		mgr.cacheMgr.Cleanup()
 	}
+
+	fmt.Printf("Finished Lambda Cleanup\n")
 }
 
 // must be called with instance lock
