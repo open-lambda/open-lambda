@@ -25,26 +25,21 @@ import (
 */
 import "C"
 
-type CacheFactory interface {
-	Create() (Sandbox, error)
-	Cleanup()
-}
-
-type cacheFactory struct {
+type CacheFactory struct {
 	delegate ContainerFactory
 	cacheDir string
 }
 
 type CacheManager struct {
-	factory CacheFactory
+	factory *CacheFactory
 	servers []*ForkServer
-	matcher CacheMatcher
 	seq     int
 	mutex   *sync.Mutex
 	sizes   map[string]float64
 	full    *int32
 }
 
+// TODO: make this part of the CacheManager
 type Evictor struct {
 	cm        *CacheManager
 	limit     int
@@ -66,18 +61,7 @@ type ForkServer struct {
 	Pipe     *os.File
 }
 
-type CacheMatcher interface {
-	Match(servers []*ForkServer, pkgs []string) (*ForkServer, []string, bool)
-}
-
-type CacheEvictor interface {
-	Evict(servers []*ForkServer) error
-}
-
-type SubsetMatcher struct {
-}
-
-func NewCacheFactory() (CacheFactory, Sandbox, string, error) {
+func NewCacheFactory() (*CacheFactory, Sandbox, string, error) {
 	cacheDir := filepath.Join(config.Conf.Worker_dir, "import-cache")
 	if err := os.MkdirAll(cacheDir, os.ModeDir); err != nil {
 		return nil, nil, "", fmt.Errorf("failed to create pool directory at %s :: %v", cacheDir, err)
@@ -88,7 +72,7 @@ func NewCacheFactory() (CacheFactory, Sandbox, string, error) {
 		return nil, nil, "", fmt.Errorf("failed to initialize cache sandbox factory :: %v", err)
 	}
 
-	factory := &cacheFactory{delegate, cacheDir}
+	factory := &CacheFactory{delegate, cacheDir}
 
 	root, err := factory.Create()
 	if err != nil {
@@ -104,11 +88,11 @@ func NewCacheFactory() (CacheFactory, Sandbox, string, error) {
 	return factory, root, rootEntryDir, nil
 }
 
-func (cf *cacheFactory) Create() (Sandbox, error) {
+func (cf *CacheFactory) Create() (Sandbox, error) {
 	return cf.delegate.Create("", cf.cacheDir)
 }
 
-func (cf *cacheFactory) Cleanup() {
+func (cf *CacheFactory) Cleanup() {
 	cf.delegate.Cleanup()
 }
 
@@ -126,7 +110,6 @@ func InitCacheManager() (cm *CacheManager, err error) {
 	var full int32 = 0
 	cm = &CacheManager{
 		servers: servers,
-		matcher: NewSubsetMatcher(),
 		seq:     0,
 		mutex:   &sync.Mutex{},
 		sizes:   sizes,
@@ -156,7 +139,7 @@ func InitCacheManager() (cm *CacheManager, err error) {
 func (cm *CacheManager) Provision(sandbox Sandbox, imports []string) (fs *ForkServer, hit bool, err error) {
 	cm.mutex.Lock()
 
-	fs, toCache, hit := cm.matcher.Match(cm.servers, imports)
+	fs, toCache, hit := cm.Match(imports)
 	if fs == nil {
 		cm.mutex.Unlock()
 		return nil, false, errors.New("no match?")
@@ -330,6 +313,33 @@ func (cm *CacheManager) initCacheRoot() (memCGroupPath string, err error) {
 	return rootSB.MemoryCGroupPath(), nil
 }
 
+func (cm *CacheManager) Match(imports []string) (*ForkServer, []string, bool) {
+	servers := cm.servers
+	best_fs := servers[0]
+	best_score := -1
+	best_toCache := imports
+	for i := 1; i < len(servers); i++ {
+		matched := 0
+		toCache := make([]string, 0, 0)
+		for j := 0; j < len(imports); j++ {
+			if servers[i].Imports[imports[j]] {
+				matched += 1
+			} else {
+				toCache = append(toCache, imports[j])
+			}
+		}
+
+		// constrain to subset
+		if matched > best_score && len(servers[i].Imports) <= matched {
+			best_fs = servers[i]
+			best_score = matched
+			best_toCache = toCache
+		}
+	}
+
+	return best_fs, best_toCache, best_score != -1
+}
+
 func (cm *CacheManager) Full() bool {
 	return atomic.LoadInt32(cm.full) == 1
 }
@@ -399,7 +409,6 @@ func NewEvictor(cm *CacheManager, pkgfile, memCGroupPath string, mb_limit int) (
 		limit:     byte_limit,
 		eventfd:   int(eventfd),
 		usagePath: usagePath,
-		//full:      full,
 	}
 
 	return e, nil
@@ -448,11 +457,8 @@ func (e *Evictor) evict() {
 	}
 
 	if idx != -1 {
-		// make sure no one else is using this one..
+		// TODO: make sure no one else is using this one
 		victim := servers[idx]
-		victim.Mutex.Lock()
-		victim.Mutex.Unlock()
-
 		e.cm.servers = append(servers[:idx], servers[idx+1:]...)
 		go victim.Kill()
 	} else {
@@ -466,8 +472,6 @@ func (fs *ForkServer) Hit() {
 		curr.Hits += 1.0
 		curr = curr.Parent
 	}
-
-	return
 }
 
 func (fs *ForkServer) Kill() error {
@@ -492,7 +496,6 @@ func (fs *ForkServer) Kill() error {
 }
 
 func (fs *ForkServer) WaitForEntryInit() error {
-
 	// use StdoutPipe of olcontainer to sync with lambda server
 	ready := make(chan bool, 1)
 	defer close(ready)
@@ -528,34 +531,4 @@ func (fs *ForkServer) WaitForEntryInit() error {
 	}
 
 	return nil
-}
-
-func NewSubsetMatcher() *SubsetMatcher {
-	return &SubsetMatcher{}
-}
-
-func (sm *SubsetMatcher) Match(servers []*ForkServer, imports []string) (*ForkServer, []string, bool) {
-	best_fs := servers[0]
-	best_score := -1
-	best_toCache := imports
-	for i := 1; i < len(servers); i++ {
-		matched := 0
-		toCache := make([]string, 0, 0)
-		for j := 0; j < len(imports); j++ {
-			if servers[i].Imports[imports[j]] {
-				matched += 1
-			} else {
-				toCache = append(toCache, imports[j])
-			}
-		}
-
-		// constrain to subset
-		if matched > best_score && len(servers[i].Imports) <= matched {
-			best_fs = servers[i]
-			best_score = matched
-			best_toCache = toCache
-		}
-	}
-
-	return best_fs, best_toCache, best_score != -1
 }
