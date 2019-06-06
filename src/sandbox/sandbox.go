@@ -23,7 +23,7 @@ type Channel struct {
 	Transport http.Transport
 }
 
-type Sandbox interface{
+type Sandbox interface {
 	// Return ID of the container.
 	ID() string
 
