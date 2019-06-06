@@ -47,9 +47,9 @@ type SOCKContainer struct {
 
 func NewSOCKContainer(
 	id, containerRootDir, baseDir, codeDir, scratchDir string,
-	cgf *CgroupFactory, unshareFlags string, startCmd []string) *SOCKContainer {
+	cgf *CgroupFactory, unshareFlags string, startCmd []string) (*SOCKContainer, error) {
 
-	return &SOCKContainer{
+	c := &SOCKContainer{
 		id:               id,
 		containerRootDir: containerRootDir,
 		baseDir:          baseDir,
@@ -60,6 +60,13 @@ func NewSOCKContainer(
 		status:           state.Stopped,
 		startCmd:         startCmd,
 	}
+
+	if err := c.start(); err != nil {
+		c.Destroy()
+		return nil, err
+	}
+
+	return c, nil
 }
 
 func (c *SOCKContainer) State() (hstate state.HandlerState, err error) {
@@ -81,7 +88,7 @@ func (c *SOCKContainer) Channel() (channel *Channel, err error) {
 	return &Channel{Url: "http://container/", Transport: tr}, nil
 }
 
-func (c *SOCKContainer) Start() (err error) {
+func (c *SOCKContainer) start() (err error) {
 	defer func(start time.Time) {
 		if config.Conf.Timing {
 			log.Printf("create container took %v\n", time.Since(start))
@@ -263,7 +270,13 @@ func (c *SOCKContainer) Unpause() error {
 	return fmt.Errorf("sock didn't unpause after %v", timeout)
 }
 
-func (c *SOCKContainer) Destroy() error {
+func (c *SOCKContainer) Destroy() {
+	if err := c.destroy(); err != nil {
+		log.Printf("Failed to cleanup container %v: %v", c.id, err)
+	}
+}
+
+func (c *SOCKContainer) destroy() error {
 	c.Unpause()
 
 	if config.Conf.Timing {

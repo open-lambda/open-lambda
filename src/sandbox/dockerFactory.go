@@ -91,8 +91,7 @@ func (df *DockerContainerFactory) Create(handlerDir, workingDir string) (Sandbox
 		return nil, err
 	}
 
-	sandbox := NewDockerContainer(id, hostDir, df.cache, container, df.client)
-	return sandbox, nil
+	return NewDockerContainer(id, hostDir, df.cache, container, df.client)
 }
 
 func (df *DockerContainerFactory) Cleanup() {

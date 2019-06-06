@@ -38,8 +38,8 @@ type DockerContainer struct {
 }
 
 // NewDockerContainer creates a DockerContainer.
-func NewDockerContainer(host_id, hostDir string, cache bool, container *docker.Container, client *docker.Client) *DockerContainer {
-	sandbox := &DockerContainer{
+func NewDockerContainer(host_id, hostDir string, cache bool, container *docker.Container, client *docker.Client) (*DockerContainer, error) {
+	c := &DockerContainer{
 		host_id:   host_id,
 		hostDir:   hostDir,
 		container: container,
@@ -48,7 +48,12 @@ func NewDockerContainer(host_id, hostDir string, cache bool, container *docker.C
 		cache:     cache,
 	}
 
-	return sandbox
+	if err := c.start(); err != nil {
+		c.Destroy()
+		return nil, err
+	}
+
+	return c, nil
 }
 
 // dockerError adds details (sandbox log, state, etc.) to an error.
@@ -119,7 +124,7 @@ func (c *DockerContainer) Channel() (channel *Channel, err error) {
 }
 
 // Start starts the container.
-func (c *DockerContainer) Start() error {
+func (c *DockerContainer) start() error {
 	b := benchmarker.GetBenchmarker()
 	var t *benchmarker.Timer
 	if b != nil {
@@ -195,8 +200,14 @@ func (c *DockerContainer) Unpause() error {
 	return nil
 }
 
+func (c *DockerContainer) Destroy() {
+	if err := c.destroy(); err != nil {
+		log.Printf("Failed to cleanup container %v: %v", c.container.ID, err)
+	}
+}
+
 // frees all resources associated with the lambda
-func (c *DockerContainer) Destroy() error {
+func (c *DockerContainer) destroy() error {
 	c.Unpause()
 
 	// TODO(tyler): is there any advantage to trying to stop

@@ -78,7 +78,7 @@ func (sf *SOCKContainerFactory) Create(codeDir, workingDir string) (Sandbox, err
 	scratchDir := filepath.Join(workingDir, id)
 
 	startCmd := append([]string{OL_INIT}, sf.initArgs...)
-	return NewSOCKContainer(id, containerRootDir, sf.baseDir, codeDir, scratchDir, sf.cgf, sf.unshareFlags, startCmd), nil
+	return NewSOCKContainer(id, containerRootDir, sf.baseDir, codeDir, scratchDir, sf.cgf, sf.unshareFlags, startCmd)
 }
 
 func (sf *SOCKContainerFactory) Cleanup() {

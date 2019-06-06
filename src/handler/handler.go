@@ -309,24 +309,12 @@ func (linst *LambdaInstance) RunStart() (ch *sb.Channel, err error) {
 		linst.sandbox = sandbox
 		linst.id = linst.sandbox.ID()
 
-		if sbState, err := linst.sandbox.State(); err != nil {
-			return nil, err
-		} else if sbState == state.Stopped {
-			if err := linst.sandbox.Start(); err != nil {
-				return nil, err
-			}
-		} else if sbState == state.Paused {
-			if err := linst.sandbox.Unpause(); err != nil {
-				return nil, err
-			}
-		}
-
 		if mgr.cacheMgr == nil {
 			if err := linst.sandbox.RunServer(); err != nil {
 				return nil, err
 			}
 		} else {
-			if linst.fs, hit, err = mgr.cacheMgr.Provision(sandbox, lfunc.imports); err != nil {
+			if linst.fs, hit, err = mgr.cacheMgr.Provision(linst.sandbox, lfunc.imports); err != nil {
 				return nil, err
 			}
 

@@ -27,11 +27,9 @@ type Sandbox interface {
 	// Return ID of the container.
 	ID() string
 
-	// Starts the container.
-	Start() error
-
 	// Frees all resources associated with the container.
-	Destroy() error
+	// Any errors are logged, but not propagated.
+	Destroy()
 
 	// Pauses the container.
 	Pause() error

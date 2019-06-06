@@ -48,17 +48,7 @@ func NewCacheFactory() (CacheFactory, sb.Sandbox, string, error) {
 }
 
 func (cf *cacheFactory) Create() (sb.Sandbox, error) {
-	container, err := cf.delegate.Create("", cf.cacheDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create cache entry sandbox :: %v", err)
-	}
-
-	if err := container.Start(); err != nil {
-		go container.Destroy() // TODO: cleanup in Start if we fail
-		return nil, err
-	}
-
-	return container, nil
+	return cf.delegate.Create("", cf.cacheDir)
 }
 
 func (cf *cacheFactory) Cleanup() {
