@@ -15,7 +15,6 @@ import (
 
 	"github.com/open-lambda/open-lambda/ol/config"
 	"github.com/open-lambda/open-lambda/ol/handler/state"
-	"github.com/open-lambda/open-lambda/ol/import-cache"
 	"github.com/open-lambda/open-lambda/ol/pip-manager"
 
 	sb "github.com/open-lambda/open-lambda/ol/sandbox"
@@ -28,7 +27,7 @@ type LambdaMgr struct {
 	codePuller *CodePuller
 	pipMgr     pip.InstallManager
 	sbFactory  sb.ContainerFactory
-	cacheMgr   *cache.CacheManager
+	cacheMgr   *sb.CacheManager
 	lru        *LambdaInstanceLRU
 	workerDir  string
 	maxRunners int
@@ -60,7 +59,7 @@ type LambdaInstance struct {
 	mutex   sync.Mutex
 	lfunc   *LambdaFunc
 	sandbox sb.Sandbox
-	fs      *cache.ForkServer
+	fs      *sb.ForkServer
 	runners int
 	usage   int
 }
@@ -100,7 +99,7 @@ func NewLambdaMgr() (mgr *LambdaMgr, err error) {
 	log.Printf("Initialized handler container factory (took %v)", time.Since(t))
 
 	t = time.Now()
-	cm, err := cache.InitCacheManager()
+	cm, err := sb.InitCacheManager()
 	if err != nil {
 		return nil, err
 	}

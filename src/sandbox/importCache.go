@@ -1,22 +1,39 @@
-package cache
+package sandbox
 
 import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
+	"math"
+	"os/exec"
 	"os"
 	"path/filepath"
+	"syscall"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	sb "github.com/open-lambda/open-lambda/ol/sandbox"
-
 	"github.com/open-lambda/open-lambda/ol/config"
 )
+
+/*
+#include <sys/eventfd.h>
+*/
+import "C"
+
+type CacheFactory interface {
+	Create() (Sandbox, error)
+	Cleanup()
+}
+
+type cacheFactory struct {
+	delegate ContainerFactory
+	cacheDir string
+}
 
 type CacheManager struct {
 	factory CacheFactory
@@ -26,6 +43,73 @@ type CacheManager struct {
 	mutex   *sync.Mutex
 	sizes   map[string]float64
 	full    *int32
+}
+
+type Evictor struct {
+	cm        *CacheManager
+	limit     int
+	eventfd   int
+	usagePath string
+}
+
+type ForkServer struct {
+	Sandbox  Sandbox
+	Pid      string
+	SockPath string
+	Imports  map[string]bool
+	Hits     float64
+	Parent   *ForkServer
+	Children int
+	Size     float64
+	Mutex    *sync.Mutex
+	Dead     bool
+	Pipe     *os.File
+}
+
+type CacheMatcher interface {
+	Match(servers []*ForkServer, pkgs []string) (*ForkServer, []string, bool)
+}
+
+type CacheEvictor interface {
+	Evict(servers []*ForkServer) error
+}
+
+type SubsetMatcher struct {
+}
+
+func NewCacheFactory() (CacheFactory, Sandbox, string, error) {
+	cacheDir := filepath.Join(config.Conf.Worker_dir, "import-cache")
+	if err := os.MkdirAll(cacheDir, os.ModeDir); err != nil {
+		return nil, nil, "", fmt.Errorf("failed to create pool directory at %s :: %v", cacheDir, err)
+	}
+
+	delegate, err := InitCacheContainerFactory()
+	if err != nil {
+		return nil, nil, "", fmt.Errorf("failed to initialize cache sandbox factory :: %v", err)
+	}
+
+	factory := &cacheFactory{delegate, cacheDir}
+
+	root, err := factory.Create()
+	if err != nil {
+		return nil, nil, "", fmt.Errorf("failed to create root cache entry :: %v", err)
+	}
+
+	if err := root.RunServer(); err != nil {
+		return nil, nil, "", fmt.Errorf("failed to start server in root cache entry :: %v", err)
+	}
+
+	rootEntryDir := filepath.Join(cacheDir, "0")
+
+	return factory, root, rootEntryDir, nil
+}
+
+func (cf *cacheFactory) Create() (Sandbox, error) {
+	return cf.delegate.Create("", cf.cacheDir)
+}
+
+func (cf *cacheFactory) Cleanup() {
+	cf.delegate.Cleanup()
 }
 
 func InitCacheManager() (cm *CacheManager, err error) {
@@ -69,7 +153,7 @@ func InitCacheManager() (cm *CacheManager, err error) {
 	return cm, nil
 }
 
-func (cm *CacheManager) Provision(sandbox sb.Sandbox, imports []string) (fs *ForkServer, hit bool, err error) {
+func (cm *CacheManager) Provision(sandbox Sandbox, imports []string) (fs *ForkServer, hit bool, err error) {
 	cm.mutex.Lock()
 
 	fs, toCache, hit := cm.matcher.Match(cm.servers, imports)
@@ -286,4 +370,192 @@ func (cm *CacheManager) Cleanup() {
 	}
 
 	cm.factory.Cleanup()
+}
+
+func NewEvictor(cm *CacheManager, pkgfile, memCGroupPath string, mb_limit int) (*Evictor, error) {
+	byte_limit := mb_limit * 1024 * 1024
+
+	eventfd, err := C.eventfd(0, C.EFD_CLOEXEC)
+	if err != nil {
+		return nil, err
+	}
+
+	usagePath := filepath.Join(memCGroupPath, "memory.usage_in_bytes")
+	usagefd, err := syscall.Open(usagePath, syscall.O_RDONLY, 0777)
+	if err != nil {
+		return nil, err
+	}
+
+	eventPath := filepath.Join(memCGroupPath, "cgroup.event_control")
+
+	eventStr := fmt.Sprintf("'%d %d %d'", eventfd, usagefd, byte_limit)
+	echo := exec.Command("echo", eventStr, ">", eventPath)
+	if err = echo.Run(); err != nil {
+		return nil, err
+	}
+
+	e := &Evictor{
+		cm:        cm,
+		limit:     byte_limit,
+		eventfd:   int(eventfd),
+		usagePath: usagePath,
+		//full:      full,
+	}
+
+	return e, nil
+}
+
+func (e *Evictor) CheckUsage() {
+	e.cm.mutex.Lock()
+	defer e.cm.mutex.Unlock()
+
+	usage := e.usage()
+	if usage > e.limit {
+		atomic.StoreInt32(e.cm.full, 1)
+		e.evict()
+	} else {
+		atomic.StoreInt32(e.cm.full, 0)
+	}
+}
+
+func (e *Evictor) usage() (usage int) {
+	buf, err := ioutil.ReadFile(e.usagePath)
+	if err != nil {
+		return 0
+	}
+
+	str := strings.TrimSpace(string(buf[:]))
+	usage, err = strconv.Atoi(str)
+	if err != nil {
+		panic(fmt.Sprintf("atoi failed: %v", err))
+	}
+
+	return usage
+}
+
+func (e *Evictor) evict() {
+	servers := e.cm.servers
+	idx := -1
+	worst := float64(math.Inf(+1))
+
+	for k := 1; k < len(servers); k++ {
+		if servers[k].Children == 0 {
+			if ratio := servers[k].Hits / servers[k].Size; ratio < worst {
+				idx = k
+				worst = ratio
+			}
+		}
+	}
+
+	if idx != -1 {
+		// make sure no one else is using this one..
+		victim := servers[idx]
+		victim.Mutex.Lock()
+		victim.Mutex.Unlock()
+
+		e.cm.servers = append(servers[:idx], servers[idx+1:]...)
+		go victim.Kill()
+	} else {
+		log.Printf("No victim found")
+	}
+}
+
+func (fs *ForkServer) Hit() {
+	curr := fs
+	for curr != nil {
+		curr.Hits += 1.0
+		curr = curr.Parent
+	}
+
+	return
+}
+
+func (fs *ForkServer) Kill() error {
+	fs.Dead = true
+	pid, err := strconv.Atoi(fs.Pid)
+	if err != nil {
+		return err
+	}
+	proc, err := os.FindProcess(pid)
+	if err != nil {
+		return err
+	}
+	proc.Kill()
+
+	if fs.Parent != nil {
+		fs.Parent.Children -= 1
+	}
+
+	fs.Sandbox.Destroy()
+
+	return nil
+}
+
+func (fs *ForkServer) WaitForEntryInit() error {
+
+	// use StdoutPipe of olcontainer to sync with lambda server
+	ready := make(chan bool, 1)
+	defer close(ready)
+	go func() {
+		defer fs.Pipe.Close()
+
+		// wait for "ready"
+		buf := make([]byte, 5)
+		_, err := fs.Pipe.Read(buf)
+		if err != nil {
+			log.Printf("Cannot read from stdout of olcontainer: %v\n", err)
+		} else if string(buf) != "ready" {
+			log.Printf("Expect to read `ready`, but found %v\n", string(buf))
+		} else {
+			ready <- true
+		}
+	}()
+
+	timeout := time.NewTimer(5 * time.Second)
+	defer timeout.Stop()
+
+	start := time.Now()
+	select {
+	case <-ready:
+		log.Printf("wait for server took %v\n", time.Since(start))
+	case <-timeout.C:
+		if n, err := fs.Pipe.Write([]byte("timeo")); err != nil {
+			return err
+		} else if n != 5 {
+			return fmt.Errorf("Cannot write `timeo` to pipe\n")
+		}
+		return fmt.Errorf("Cache entry failed to initialize after 5s")
+	}
+
+	return nil
+}
+
+func NewSubsetMatcher() *SubsetMatcher {
+	return &SubsetMatcher{}
+}
+
+func (sm *SubsetMatcher) Match(servers []*ForkServer, imports []string) (*ForkServer, []string, bool) {
+	best_fs := servers[0]
+	best_score := -1
+	best_toCache := imports
+	for i := 1; i < len(servers); i++ {
+		matched := 0
+		toCache := make([]string, 0, 0)
+		for j := 0; j < len(imports); j++ {
+			if servers[i].Imports[imports[j]] {
+				matched += 1
+			} else {
+				toCache = append(toCache, imports[j])
+			}
+		}
+
+		// constrain to subset
+		if matched > best_score && len(servers[i].Imports) <= matched {
+			best_fs = servers[i]
+			best_score = matched
+			best_toCache = toCache
+		}
+	}
+
+	return best_fs, best_toCache, best_score != -1
 }
