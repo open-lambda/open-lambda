@@ -74,6 +74,13 @@ func NewSOCKContainer(
 	return c, nil
 }
 
+// add ID to each log message so we know which logs correspond to
+// which containers
+func (c *SOCKContainer) printf(format string, args ...interface{}) {
+	msg := fmt.Sprintf(format, args...)
+	log.Printf("%s [SOCK %s]", strings.TrimRight(msg, "\n"), c.id)
+}
+
 func (c *SOCKContainer) State() (hstate state.HandlerState, err error) {
 	return c.status, nil
 }
@@ -96,7 +103,7 @@ func (c *SOCKContainer) Channel() (channel *Channel, err error) {
 func (c *SOCKContainer) start() (err error) {
 	defer func(start time.Time) {
 		if config.Conf.Timing {
-			log.Printf("create container took %v\n", time.Since(start))
+			c.printf("create container took %v\n", time.Since(start))
 		}
 	}(time.Now())
 
@@ -193,9 +200,9 @@ func (c *SOCKContainer) start() (err error) {
 		// TODO: return early
 
 		if err != nil {
-			log.Printf("Cannot read from stdout of sock: %v\n", err)
+			c.printf("Cannot read from stdout of sock: %v\n", err)
 		} else if n != 5 {
-			log.Printf("Expect to read 5 bytes, only %d read\n", n)
+			c.printf("Expect to read 5 bytes, only %d read\n", n)
 		} else {
 			ready <- string(pid[:bytes.IndexByte(pid, 0)])
 		}
@@ -207,7 +214,7 @@ func (c *SOCKContainer) start() (err error) {
 	select {
 	case c.initPid = <-ready:
 		if config.Conf.Timing {
-			log.Printf("wait for sock_init took %v\n", time.Since(start))
+			c.printf("wait for sock_init took %v\n", time.Since(start))
 		}
 	case <-timeout.C:
 		// clean up go routine
@@ -277,16 +284,18 @@ func (c *SOCKContainer) Unpause() error {
 
 func (c *SOCKContainer) Destroy() {
 	if err := c.destroy(); err != nil {
-		log.Printf("Failed to cleanup container %v: %v", c.id, err)
+		c.printf("Failed to cleanup container %v: %v", c.id, err)
 	}
 }
 
 func (c *SOCKContainer) destroy() error {
 	c.Unpause()
 
+	c.printf("destroy\n")
+
 	if config.Conf.Timing {
 		defer func(start time.Time) {
-			log.Printf("remove took %v\n", time.Since(start))
+			c.printf("remove took %v\n", time.Since(start))
 		}(time.Now())
 	}
 
@@ -301,7 +310,7 @@ func (c *SOCKContainer) destroy() error {
 		}
 		err = proc.Signal(syscall.SIGTERM)
 		if err != nil {
-			log.Printf("failed to send kill signal to init process pid=%d :: %v", pid, err)
+			c.printf("failed to send kill signal to init process pid=%d :: %v", pid, err)
 		}
 	} else {
 		// kill any remaining processes
@@ -320,42 +329,45 @@ func (c *SOCKContainer) destroy() error {
 
 			pid, err := strconv.Atoi(pidStr)
 			if err != nil {
-				log.Printf("bad pid string: %s :: %v", pidStr, err)
+				c.printf("bad pid string: %s :: %v", pidStr, err)
 			}
 
 			proc, err := os.FindProcess(pid)
 			if err != nil {
-				log.Printf("failed to find process with pid: %d :: %v", pid, err)
+				c.printf("failed to find process with pid: %d :: %v", pid, err)
 			}
 
 			err = proc.Signal(syscall.SIGKILL)
 			if err != nil {
-				log.Printf("failed to send kill signal to process with pid: %d :: %v", pid, err)
+				c.printf("failed to send kill signal to process with pid: %d :: %v", pid, err)
 			}
 		}
 	}
 
 	// wait for the initCmd to clean up its children
+	c.printf("wait for init to die\n")
 	_, err := c.initCmd.Process.Wait()
 	if err != nil {
-		log.Printf("failed to wait on initCmd pid=%d :: %v", c.initCmd.Process.Pid, err)
+		c.printf("failed to wait on initCmd pid=%d :: %v", c.initCmd.Process.Pid, err)
 	}
 
+	c.printf("unmount and remove dirs\n")
+
 	if err := syscall.Unmount(c.containerRootDir, syscall.MNT_DETACH); err != nil {
-		log.Printf("unmount root dir %s failed :: %v\n", c.containerRootDir, err)
+		c.printf("unmount root dir %s failed :: %v\n", c.containerRootDir, err)
 	}
 
 	if err := os.RemoveAll(c.containerRootDir); err != nil {
-		log.Printf("remove root dir %s failed :: %v\n", c.containerRootDir, err)
+		c.printf("remove root dir %s failed :: %v\n", c.containerRootDir, err)
 	}
 
 	if err := os.RemoveAll(c.scratchDir); err != nil {
-		log.Printf("remove host dir %s failed :: %v\n", c.scratchDir, err)
+		c.printf("remove host dir %s failed :: %v\n", c.scratchDir, err)
 	}
 
 	// remove cgroups
 	if err := c.cgf.PutCg(c.id, c.cgId); err != nil {
-		log.Printf("Unable to delete cgroups: %v", err)
+		c.printf("Unable to delete cgroups: %v", err)
 	}
 
 	return nil
@@ -399,13 +411,13 @@ func (c *SOCKContainer) runServer(cacheMgr *CacheManager, imports []string) erro
 
 	pid, err := strconv.Atoi(c.initPid)
 	if err != nil {
-		log.Printf("bad initPid string: %s :: %v", c.initPid, err)
+		c.printf("bad initPid string: %s :: %v", c.initPid, err)
 		return err
 	}
 
 	proc, err := os.FindProcess(pid)
 	if err != nil {
-		log.Printf("failed to find initPid process with pid=%d :: %v", pid, err)
+		c.printf("failed to find initPid process with pid=%d :: %v", pid, err)
 		return err
 	}
 
@@ -431,7 +443,7 @@ func (c *SOCKContainer) runServer(cacheMgr *CacheManager, imports []string) erro
 	select {
 	case <-ready:
 		if config.Conf.Timing {
-			log.Printf("wait for init signal handler took %v\n", time.Since(start))
+			c.printf("wait for init signal handler took %v\n", time.Since(start))
 		}
 	case <-timeout.C:
 		if n, err := c.pipe.Write([]byte("timeo")); err != nil {
@@ -444,7 +456,7 @@ func (c *SOCKContainer) runServer(cacheMgr *CacheManager, imports []string) erro
 
 	err = proc.Signal(syscall.SIGUSR1)
 	if err != nil {
-		log.Printf("failed to send SIGUSR1 to pid=%d :: %v", pid, err)
+		c.printf("failed to send SIGUSR1 to pid=%d :: %v", pid, err)
 		return err
 	}
 

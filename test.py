@@ -22,27 +22,43 @@ def test(fn):
         result["params"] = kwargs
         result["pass"] = None
         result["seconds"] = None
+        result["total_seconds"] = None
         result["stats"] = None
         result["conf"] = curr_conf
         result["exception"] = None
         result["worker_tail"] = None
 
-        t0 = time.time()
+        total_t0 = time.time()
         try:
-            result["stats"] = fn(**kwargs)
+            # setup worker
+            run(['./ol', 'worker', '-p='+OLDIR, '--detach'])
+
+            # run test/benchmark
+            test_t0 = time.time()
+            rv = fn(**kwargs)
+            test_t1 = time.time()
+            result["seconds"] = test_t1 - test_t0
+
+            # cleanup worker
+            run(['./ol', 'kill', '-p='+OLDIR])
             result["pass"] = True
         except Exception:
+            rv = None
             result["pass"] = False
             result["exception"] = traceback.format_exc().split("\n")
-        t1 = time.time()
-        result["seconds"] = t1-t0
-            
+        total_t1 = time.time()
+        result["total_seconds"] = total_t1-total_t0
+        result["stats"] = rv
+
         with open(os.path.join(OLDIR, "worker.out")) as f:
-            result["worker_tail"] = f.read().split("\n")[-20:]
+            result["worker_tail"] = f.read().split("\n")
+            if result["pass"]:
+                # truncate because we probably won't use it for debugging
+                result["worker_tail"] = result["worker_tail"][-10:]
 
         results["runs"].append(result)
         print(json.dumps(result, indent=2))
-        return result["stats"]
+        return rv
 
     return wrapper
 
@@ -55,7 +71,7 @@ def put_conf(conf):
 
         
 @contextmanager
-def TestConf(launch_worker=True, **keywords):
+def TestConf(**keywords):
     with open(os.path.join(OLDIR, "config.json")) as f:
         orig = json.load(f)
     new = copy.deepcopy(orig)
@@ -67,14 +83,11 @@ def TestConf(launch_worker=True, **keywords):
     # setup
     print("PUSH conf:", keywords)
     put_conf(new)
-    if launch_worker:
-        run(['./ol', 'worker', '-p='+OLDIR, '--detach'])
+
     yield new
 
     # cleanup
     print("POP conf:", keywords)
-    if launch_worker:
-        run(['./ol', 'kill', '-p='+OLDIR])
     put_conf(orig)
 
 
@@ -83,34 +96,25 @@ def run(cmd):
     p = Popen(cmd, stdout=sys.stdout, stderr=sys.stderr)
     rc = p.wait()
     if rc:
-        raise Exception("command failed: " + " ".join(cmd))
+        raise Exception("command failed: " + " ".join(cmd) + ", ")
 
 
 @test
-def test_smoke_echo():
+def smoke_tests():
     msg = '"hello world"'
     r = requests.post("http://localhost:5000/run/echo", data=msg)
     if r.status_code != 200:
         raise Exception("STATUS %d: %s" % (r.status_code, r.text))
     assert r.text == msg
 
-
-@test
-def test_smoke_install(num):
-    name = "install"
-    if num != None:
-        name += str(num)
-    r = requests.post("http://localhost:5000/run/"+name, data="{}")
-    if r.status_code != 200:
-        raise Exception("STATUS %d: %s" % (r.status_code, r.text))
-    assert r.json() == "imported"
-
-
-def smoke_tests():
-    test_smoke_echo()
-    test_smoke_install(num=None)
-    test_smoke_install(num=2)
-    test_smoke_install(num=3)
+    for i in range(3):
+        name = "install"
+        if i != 0:
+            name += str(i+1)
+        r = requests.post("http://localhost:5000/run/"+name, data="{}")
+        if r.status_code != 200:
+            raise Exception("STATUS %d: %s" % (r.status_code, r.text))
+        assert r.json() == "imported"    
 
 
 def stress_one_lambda_task(args):
@@ -165,7 +169,7 @@ def tests():
     startup_pkgs = ["parso", "jedi", "urllib3", "idna", "chardet", "certifi", "requests", "simplejson"]
     test_reg = os.path.abspath("test-registry")
 
-    with TestConf(launch_worker=False, registry=test_reg, startup_pkgs=startup_pkgs):
+    with TestConf(registry=test_reg, startup_pkgs=startup_pkgs):
         with TestConf(sandbox="sock", handler_cache_mb=0, import_cache_mb=0, cg_pool_size=10):
             smoke_tests()
         with TestConf(sandbox="sock", handler_cache_mb=256, import_cache_mb=0, cg_pool_size=10):
@@ -184,8 +188,7 @@ def tests():
         stress_one_lambda(procs=2, seconds=15)
         stress_one_lambda(procs=8, seconds=15)
 
-    with TestConf(launch_worker=False, sandbox="sock",
-                  handler_cache_mb=256, import_cache_mb=256, cg_pool_size=10):
+    with TestConf(sandbox="sock", handler_cache_mb=256, import_cache_mb=256, cg_pool_size=10):
         call_each_once(lambda_count=100, alloc_mb=1)
         call_each_once(lambda_count=1000, alloc_mb=10)
 
@@ -203,18 +206,7 @@ def main():
     run(['./ol', 'new', '-p='+OLDIR])
 
     # run tests with various configs
-    setup_failed = False
-    try:
-        tests()
-    except Exception:
-        # most exceptions are caught per test, but we have this to
-        # catch cases where there is an error during setup/teardown
-        results["exception"] = traceback.format_exc().split("\n")
-        worker_out = os.path.join(OLDIR, "worker.out")
-        if os.path.exists(worker_out):
-            with open(worker_out) as f:
-                results["worker_out"] = f.read().split("\n")
-        setup_failed = True
+    tests()
 
     # save test results
     passed = len([t for t in results["runs"] if t["pass"]])
@@ -227,8 +219,6 @@ def main():
     with open("test.json", "w") as f:
         json.dump(results, f, indent=2)
 
-    if setup_failed:
-        sys.exit(1)
     sys.exit(failed)
 
 
