@@ -18,8 +18,9 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 
 	docker "github.com/fsouza/go-dockerclient"
 	"github.com/open-lambda/open-lambda/ol/benchmarker"
@@ -263,36 +264,6 @@ func (c *DockerContainer) Logs() (string, error) {
 	return ret, nil
 }
 
-// Put the passed process into the cgroup of this docker container.
-func (c *DockerContainer) CGroupEnter(pid string) (err error) {
-	b := benchmarker.GetBenchmarker()
-	var t *benchmarker.Timer
-	if b != nil {
-		t = b.CreateTimer("cgclassify process into docker container", "us")
-	}
-
-	controllers := "memory,cpu,devices,perf_event,cpuset,blkio,pids,freezer,net_cls,net_prio,hugetlb"
-	cgroupArg := fmt.Sprintf("%s:/docker/%s", controllers, c.container.ID)
-	cmd := exec.Command("cgclassify", "--sticky", "-g", cgroupArg, pid)
-
-	if t != nil {
-		t.Start()
-	}
-
-	if err := cmd.Run(); err != nil {
-		if t != nil {
-			t.Error("Failed to run cgclassify")
-		}
-		return err
-	}
-
-	if t != nil {
-		t.End()
-	}
-
-	return nil
-}
-
 // NSPid returns the pid of the first process of the docker container.
 func (c *DockerContainer) NSPid() string {
 	return c.nspid
@@ -329,8 +300,20 @@ func (c *DockerContainer) runServer() error {
 	return nil
 }
 
-func (c *DockerContainer) MemoryCGroupPath() string {
-	return fmt.Sprintf("/sys/fs/cgroup/memory/docker/%s/", c.container.ID)
+func (c *DockerContainer) MemUsageKB() int {
+	usagePath := fmt.Sprintf("/sys/fs/cgroup/memory/docker/%s/memory.usage_in_bytes", c.container.ID)
+	buf, err := ioutil.ReadFile(usagePath)
+	if err != nil {
+		panic(fmt.Sprintf("get usage failed: %v", err))
+	}
+
+	str := strings.TrimSpace(string(buf[:]))
+	usage, err := strconv.Atoi(str)
+	if err != nil {
+		panic(fmt.Sprintf("atoi failed: %v", err))
+	}
+
+	return usage / 1024
 }
 
 func (c *DockerContainer) RootDir() string {

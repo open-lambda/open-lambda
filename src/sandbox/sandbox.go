@@ -46,17 +46,14 @@ type Sandbox interface {
 	// Communication channel to forward requests.
 	Channel() (*Channel, error)
 
-	// Path to this container's memory cgroup for accounting.
-	MemoryCGroupPath() string
+	// How much memory does the cgroup report for this container?
+	MemUsageKB() int
 
 	// Directory that new processes need to chroot into from host's view.
 	RootDir() string
 
 	// Directory used by the worker to communicate with container.
 	HostDir() string
-
-	// Put the given process into the cgroups of the container
-	CGroupEnter(pid string) error
 
 	// PID of a process in the container's namespaces (for joining)
 	NSPid() string

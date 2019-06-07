@@ -204,7 +204,7 @@ func (cm *CacheManager) Provision(sandbox *SOCKContainer, imports []string) (err
 	fs.Mutex.Unlock()
 
 	// change cgroup of spawned lambda server
-	if err = sandbox.CGroupEnter(pid); err != nil {
+	if err = sandbox.cgroupEnter(pid); err != nil {
 		return err
 	}
 
@@ -326,7 +326,7 @@ func (cm *CacheManager) initCacheRoot(cacheFactory *SOCKContainerFactory) (memCG
 
 	cm.servers = append(cm.servers, fs)
 
-	return rootSB.MemoryCGroupPath(), nil
+	return rootSB.memoryCGroupPath(), nil
 }
 
 func (cm *CacheManager) Match(imports []string) (*ForkServer, []string) {
@@ -401,7 +401,7 @@ func NewEvictor(cm *CacheManager, pkgfile, memCGroupPath string, mb_limit int) (
 	usagePath := filepath.Join(memCGroupPath, "memory.usage_in_bytes")
 	usagefd, err := syscall.Open(usagePath, syscall.O_RDONLY, 0777)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("could not open %s :: %s", usagePath, err)
 	}
 
 	eventPath := filepath.Join(memCGroupPath, "cgroup.event_control")
@@ -409,7 +409,7 @@ func NewEvictor(cm *CacheManager, pkgfile, memCGroupPath string, mb_limit int) (
 	eventStr := fmt.Sprintf("'%d %d %d'", eventfd, usagefd, byte_limit)
 	echo := exec.Command("echo", eventStr, ">", eventPath)
 	if err = echo.Run(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("could not write to %s :: %s", eventPath, err)
 	}
 
 	e := &Evictor{

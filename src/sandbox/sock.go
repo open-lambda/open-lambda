@@ -226,7 +226,7 @@ func (c *SOCKContainer) start() (err error) {
 	}
 	c.cgId = cgId
 
-	if err := c.CGroupEnter(c.initPid); err != nil {
+	if err := c.cgroupEnter(c.initPid); err != nil {
 		return err
 	}
 
@@ -366,7 +366,7 @@ func (c *SOCKContainer) Logs() (string, error) {
 	return "TODO", nil
 }
 
-func (c *SOCKContainer) CGroupEnter(pid string) (err error) {
+func (c *SOCKContainer) cgroupEnter(pid string) (err error) {
 	if pid == "" {
 		return fmt.Errorf("empty pid passed to cgroupenter")
 	}
@@ -451,8 +451,24 @@ func (c *SOCKContainer) runServer(cacheMgr *CacheManager, imports []string) erro
 	return nil
 }
 
-func (c *SOCKContainer) MemoryCGroupPath() string {
-	return fmt.Sprintf("/sys/fs/cgroup/memory/%s/%s/", OLCGroupName, c.cgId)
+func (c *SOCKContainer) memoryCGroupPath() string {
+	return fmt.Sprintf("/sys/fs/cgroup/memory/%s/%s", OLCGroupName, c.cgId)
+}
+
+func (c *SOCKContainer) MemUsageKB() int {
+	usagePath := filepath.Join(c.memoryCGroupPath(), "memory.usage_in_bytes")
+	buf, err := ioutil.ReadFile(usagePath)
+	if err != nil {
+		panic(fmt.Sprintf("get usage failed: %v", err))
+	}
+
+	str := strings.TrimSpace(string(buf[:]))
+	usage, err := strconv.Atoi(str)
+	if err != nil {
+		panic(fmt.Sprintf("atoi failed: %v", err))
+	}
+
+	return usage / 1024
 }
 
 func (c *SOCKContainer) RootDir() string {

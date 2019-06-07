@@ -3,11 +3,7 @@ package handler
 import (
 	"container/list"
 	"fmt"
-	"io/ioutil"
 	"log"
-	"path"
-	"strconv"
-	"strings"
 	"sync"
 )
 
@@ -59,7 +55,7 @@ func (lru *LambdaInstanceLRU) Add(inst *LambdaInstance) {
 		panic("cannot double insert in LRU")
 	}
 	entry := lru.queue.PushFront(inst)
-	inst.usage = lambdaInstanceUsage(inst)
+	inst.usage = inst.sandbox.MemUsageKB() * 1024
 	lru.size += inst.usage
 	lru.imap[inst] = entry
 
@@ -138,20 +134,4 @@ func (lru *LambdaInstanceLRU) Dump() {
 		h := e.Value.(*LambdaInstance)
 		fmt.Printf("> %s\n", h.name)
 	}
-}
-
-func lambdaInstanceUsage(inst *LambdaInstance) (usage int) {
-	usagePath := path.Join(inst.sandbox.MemoryCGroupPath(), "memory.usage_in_bytes")
-	buf, err := ioutil.ReadFile(usagePath)
-	if err != nil {
-		panic(fmt.Sprintf("get usage failed: %v", err))
-	}
-
-	str := strings.TrimSpace(string(buf[:]))
-	usage, err = strconv.Atoi(str)
-	if err != nil {
-		panic(fmt.Sprintf("atoi failed: %v", err))
-	}
-
-	return usage
 }
