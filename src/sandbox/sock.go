@@ -26,7 +26,6 @@ import (
 
 	"github.com/open-lambda/open-lambda/ol/config"
 	"github.com/open-lambda/open-lambda/ol/handler/state"
-	"github.com/open-lambda/open-lambda/ol/util"
 )
 
 type SOCKContainer struct {
@@ -312,13 +311,26 @@ func (c *SOCKContainer) destroy() error {
 			return err
 		}
 
+		// TODO: this is racy: what if processes are being created as we're killing them?
+		// can we freeze the cgroup, then kill them?
 		for _, pidStr := range strings.Split(strings.TrimSpace(string(pids[:])), "\n") {
 			if pidStr == "" {
 				break
 			}
 
-			if err := util.KillPIDStr(pidStr); err != nil {
-				log.Printf("failed to kill pid %v, cleanup may fail :: %v", err)
+			pid, err := strconv.Atoi(pidStr)
+			if err != nil {
+				log.Printf("bad pid string: %s :: %v", pidStr, err)
+			}
+
+			proc, err := os.FindProcess(pid)
+			if err != nil {
+				log.Printf("failed to find process with pid: %d :: %v", pid, err)
+			}
+
+			err = proc.Signal(syscall.SIGKILL)
+			if err != nil {
+				log.Printf("failed to send kill signal to process with pid: %d :: %v", pid, err)
 			}
 		}
 	}
