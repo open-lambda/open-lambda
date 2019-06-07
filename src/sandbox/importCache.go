@@ -25,6 +25,12 @@ import (
 */
 import "C"
 
+type ImportCacheContainerFactory struct {
+	handlerFactory *SOCKContainerFactory
+	cacheFactory   *SOCKContainerFactory
+	*CacheManager
+}
+
 type CacheFactory struct {
 	delegate ContainerFactory
 	cacheDir string
@@ -61,26 +67,39 @@ type ForkServer struct {
 	Pipe     *os.File
 }
 
-func NewCacheFactory() (*CacheFactory, Sandbox, string, error) {
+func NewImportCacheContainerFactory(handlerFactory, cacheFactory *SOCKContainerFactory) (*ImportCacheContainerFactory, error) {
+	cacheMgr, err := NewCacheManager(cacheFactory)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ImportCacheContainerFactory{
+		handlerFactory: handlerFactory,
+		cacheFactory:   cacheFactory,
+		CacheManager:   cacheMgr,
+	}, nil
+}
+
+func (ic *ImportCacheContainerFactory) Create(handlerDir, workingDir string, imports []string) (Sandbox, error) {
+	return ic.handlerFactory.CreateFromImportCache(handlerDir, workingDir, imports, ic.CacheManager)
+}
+
+func (ic *ImportCacheContainerFactory) Cleanup() {
+	ic.handlerFactory.Cleanup()
+	ic.cacheFactory.Cleanup()
+}
+
+func NewCacheFactory(cacheFactory *SOCKContainerFactory) (*CacheFactory, Sandbox, string, error) {
 	cacheDir := filepath.Join(config.Conf.Worker_dir, "import-cache")
 	if err := os.MkdirAll(cacheDir, os.ModeDir); err != nil {
 		return nil, nil, "", fmt.Errorf("failed to create pool directory at %s :: %v", cacheDir, err)
 	}
 
-	delegate, err := InitCacheContainerFactory()
-	if err != nil {
-		return nil, nil, "", fmt.Errorf("failed to initialize cache sandbox factory :: %v", err)
-	}
-
-	factory := &CacheFactory{delegate, cacheDir}
+	factory := &CacheFactory{cacheFactory, cacheDir}
 
 	root, err := factory.Create()
 	if err != nil {
 		return nil, nil, "", fmt.Errorf("failed to create root cache entry :: %v", err)
-	}
-
-	if err := root.RunServer(); err != nil {
-		return nil, nil, "", fmt.Errorf("failed to start server in root cache entry :: %v", err)
 	}
 
 	rootEntryDir := filepath.Join(cacheDir, "0")
@@ -89,18 +108,14 @@ func NewCacheFactory() (*CacheFactory, Sandbox, string, error) {
 }
 
 func (cf *CacheFactory) Create() (Sandbox, error) {
-	return cf.delegate.Create("", cf.cacheDir)
+	return cf.delegate.Create("", cf.cacheDir, []string{})
 }
 
 func (cf *CacheFactory) Cleanup() {
 	cf.delegate.Cleanup()
 }
 
-func InitCacheManager() (cm *CacheManager, err error) {
-	if config.Conf.Import_cache_mb == 0 {
-		return nil, nil
-	}
-
+func NewCacheManager(cacheFactory *SOCKContainerFactory) (cm *CacheManager, err error) {
 	servers := make([]*ForkServer, 0, 0)
 	sizes, err := readPkgSizes("/ol/open-lambda/worker/cache-manager/package_sizes.txt")
 	if err != nil {
@@ -116,7 +131,7 @@ func InitCacheManager() (cm *CacheManager, err error) {
 		full:    &full,
 	}
 
-	memCGroupPath, err := cm.initCacheRoot()
+	memCGroupPath, err := cm.initCacheRoot(cacheFactory)
 	if err != nil {
 		return nil, err
 	}
@@ -246,8 +261,8 @@ func (cm *CacheManager) newCacheEntry(baseFS *ForkServer, toCache []string) (*Fo
 	return fs, nil
 }
 
-func (cm *CacheManager) initCacheRoot() (memCGroupPath string, err error) {
-	factory, rootSB, rootDir, err := NewCacheFactory()
+func (cm *CacheManager) initCacheRoot(cacheFactory *SOCKContainerFactory) (memCGroupPath string, err error) {
+	factory, rootSB, rootDir, err := NewCacheFactory(cacheFactory)
 	if err != nil {
 		return "", err
 	}
@@ -372,16 +387,6 @@ func readPkgSizes(path string) (map[string]float64, error) {
 	}
 
 	return sizes, nil
-}
-
-func (cm *CacheManager) Cleanup() {
-	log.Printf("Cleanup Fork Servers:\n")
-	for _, server := range cm.servers {
-		log.Printf("  Kill Fork Server: %s [PID]\n", server.Pid)
-		server.Kill()
-	}
-
-	cm.factory.Cleanup()
 }
 
 func NewEvictor(cm *CacheManager, pkgfile, memCGroupPath string, mb_limit int) (*Evictor, error) {

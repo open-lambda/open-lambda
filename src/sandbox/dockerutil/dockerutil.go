@@ -13,9 +13,6 @@ import (
 
 const (
 	DOCKER_LABEL_CLUSTER = "ol.cluster" // cluster name
-	DOCKER_LABEL_TYPE    = "ol.type"    // container type (sb, olstore, rethinkdb, etc)
-	HANDLER              = "handler"
-	CACHE                = "cache"
 	LAMBDA_IMAGE         = "lambda"
 )
 

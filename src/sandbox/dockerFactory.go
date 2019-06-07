@@ -26,7 +26,7 @@ type DockerContainerFactory struct {
 }
 
 // NewDockerContainerFactory creates a DockerContainerFactory.
-func NewDockerContainerFactory(pidMode string, caps []string, labels map[string]string, cache bool) (*DockerContainerFactory, error) {
+func NewDockerContainerFactory(pidMode string, caps []string, cache bool) (*DockerContainerFactory, error) {
 	client, err := docker.NewClientFromEnv()
 	if err != nil {
 		return nil, err
@@ -34,6 +34,10 @@ func NewDockerContainerFactory(pidMode string, caps []string, labels map[string]
 
 	var sharedIdx int64 = -1
 	idxPtr := &sharedIdx
+
+	labels := map[string]string{
+		dockerutil.DOCKER_LABEL_CLUSTER: config.Conf.Cluster_name,
+	}
 
 	df := &DockerContainerFactory{
 		client:         client,
@@ -50,7 +54,7 @@ func NewDockerContainerFactory(pidMode string, caps []string, labels map[string]
 }
 
 // Create creates a docker sandbox from the handler and sandbox directory.
-func (df *DockerContainerFactory) Create(handlerDir, workingDir string) (Sandbox, error) {
+func (df *DockerContainerFactory) Create(handlerDir, workingDir string, imports []string) (Sandbox, error) {
 	id := fmt.Sprintf("%d", atomic.AddInt64(df.idxPtr, 1))
 	hostDir := filepath.Join(workingDir, id)
 	if err := os.MkdirAll(hostDir, 0777); err != nil {

@@ -123,7 +123,7 @@ func (lru *LambdaInstanceLRU) Evictor() {
 
 		lru.mgr.mutex.Unlock()
 
-		go inst.sandbox.Destroy()
+		inst.sandbox.Destroy()
 	}
 }
 

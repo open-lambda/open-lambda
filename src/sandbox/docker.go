@@ -53,6 +53,11 @@ func NewDockerContainer(host_id, hostDir string, cache bool, container *docker.C
 		return nil, err
 	}
 
+	if err := c.runServer(); err != nil {
+		c.Destroy()
+		return nil, err
+	}
+
 	return c, nil
 }
 
@@ -301,7 +306,7 @@ func (c *DockerContainer) DockerID() string {
 	return c.container.ID
 }
 
-func (c *DockerContainer) RunServer() error {
+func (c *DockerContainer) runServer() error {
 	cmd := []string{"python3", "server.py"}
 	if c.cache {
 		cmd = append(cmd, "--cache")

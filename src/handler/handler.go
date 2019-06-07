@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/open-lambda/open-lambda/ol/config"
@@ -27,13 +26,9 @@ type LambdaMgr struct {
 	codePuller *CodePuller
 	pipMgr     pip.InstallManager
 	sbFactory  sb.ContainerFactory
-	cacheMgr   *sb.CacheManager
 	lru        *LambdaInstanceLRU
 	workerDir  string
 	maxRunners int
-	hhits      *int64
-	ihits      *int64
-	misses     *int64
 }
 
 // Represents a single lambda function (the code)
@@ -59,7 +54,6 @@ type LambdaInstance struct {
 	mutex   sync.Mutex
 	lfunc   *LambdaFunc
 	sandbox sb.Sandbox
-	fs      *sb.ForkServer
 	runners int
 	usage   int
 }
@@ -99,26 +93,14 @@ func NewLambdaMgr() (mgr *LambdaMgr, err error) {
 	log.Printf("Initialized handler container factory (took %v)", time.Since(t))
 
 	t = time.Now()
-	cm, err := sb.InitCacheManager()
-	if err != nil {
-		return nil, err
-	}
-	log.Printf("Initialized cache manager (took %v)", time.Since(t))
 
-	var hhits int64 = 0
-	var ihits int64 = 0
-	var misses int64 = 0
 	mgr = &LambdaMgr{
 		lfuncMap:   make(map[string]*LambdaFunc),
 		codePuller: cp,
 		pipMgr:     pm,
 		sbFactory:  sf,
-		cacheMgr:   cm,
 		workerDir:  config.Conf.Worker_dir,
 		maxRunners: config.Conf.Max_runners,
-		hhits:      &hhits,
-		ihits:      &ihits,
-		misses:     &misses,
 	}
 
 	mgr.lru = NewLambdaInstanceLRU(mgr, config.Conf.Handler_cache_mb)
@@ -235,11 +217,6 @@ func (mgr *LambdaMgr) Cleanup() {
 	log.Printf("Cleanup Container Factory\n")
 	mgr.sbFactory.Cleanup()
 
-	if mgr.cacheMgr != nil {
-		log.Printf("Cleanup Cache Manager\n")
-		mgr.cacheMgr.Cleanup()
-	}
-
 	log.Printf("Finished Lambda Cleanup\n")
 }
 
@@ -292,37 +269,18 @@ func (linst *LambdaInstance) RunStart() (ch *sb.Channel, err error) {
 
 	// create sandbox if needed
 	if linst.sandbox == nil {
-		hit := false
-
-		// TODO: do this in the background
 		err = mgr.pipMgr.Install(lfunc.installs)
 		if err != nil {
 			return nil, err
 		}
 
-		sandbox, err := mgr.sbFactory.Create(lfunc.codeDir, lfunc.workingDir)
+		sandbox, err := mgr.sbFactory.Create(lfunc.codeDir, lfunc.workingDir, lfunc.imports)
 		if err != nil {
 			return nil, err
 		}
 
 		linst.sandbox = sandbox
 		linst.id = linst.sandbox.ID()
-
-		if mgr.cacheMgr == nil {
-			if err := linst.sandbox.RunServer(); err != nil {
-				return nil, err
-			}
-		} else {
-			if linst.fs, hit, err = mgr.cacheMgr.Provision(linst.sandbox, lfunc.imports); err != nil {
-				return nil, err
-			}
-
-			if hit {
-				atomic.AddInt64(mgr.ihits, 1)
-			} else {
-				atomic.AddInt64(mgr.misses, 1)
-			}
-		}
 
 		// use StdoutPipe of olcontainer to sync with lambda server
 		ready := make(chan bool, 1)
@@ -371,15 +329,11 @@ func (linst *LambdaInstance) RunStart() (ch *sb.Channel, err error) {
 
 	} else if sbState, _ := linst.sandbox.State(); sbState == state.Paused {
 		// unpause if paused
-		atomic.AddInt64(mgr.hhits, 1)
 		if err := linst.sandbox.Unpause(); err != nil {
 			return nil, err
 		}
-	} else {
-		atomic.AddInt64(mgr.hhits, 1)
 	}
 
-	log.Printf("handler hits: %v, import hits: %v, misses: %v", *mgr.hhits, *mgr.ihits, *mgr.misses)
 	return linst.sandbox.Channel()
 }
 

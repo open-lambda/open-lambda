@@ -47,7 +47,8 @@ type SOCKContainer struct {
 
 func NewSOCKContainer(
 	id, containerRootDir, baseDir, codeDir, scratchDir string,
-	cgf *CgroupFactory, unshareFlags string, startCmd []string) (*SOCKContainer, error) {
+	cgf *CgroupFactory, unshareFlags string, startCmd []string,
+	cacheMgr *CacheManager, imports []string) (*SOCKContainer, error) {
 
 	c := &SOCKContainer{
 		id:               id,
@@ -62,6 +63,11 @@ func NewSOCKContainer(
 	}
 
 	if err := c.start(); err != nil {
+		c.Destroy()
+		return nil, err
+	}
+
+	if err := c.runServer(cacheMgr, imports); err != nil {
 		c.Destroy()
 		return nil, err
 	}
@@ -374,7 +380,12 @@ func (c *SOCKContainer) ID() string {
 	return c.id
 }
 
-func (c *SOCKContainer) RunServer() error {
+func (c *SOCKContainer) runServer(cacheMgr *CacheManager, imports []string) error {
+	if cacheMgr != nil {
+		_, _, err := cacheMgr.Provision(c, imports)
+		return err
+	}
+
 	pid, err := strconv.Atoi(c.initPid)
 	if err != nil {
 		log.Printf("bad initPid string: %s :: %v", c.initPid, err)

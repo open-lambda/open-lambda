@@ -30,7 +30,25 @@ type SOCKContainerFactory struct {
 }
 
 // NewSOCKContainerFactory creates a SOCKContainerFactory.
-func NewSOCKContainerFactory(rootDir, prefix, unshareFlags string, initArgs []string) (*SOCKContainerFactory, error) {
+func NewSOCKContainerFactory(rootDir string, isImportCache bool) (cf *SOCKContainerFactory, err error) {
+	var prefix string
+	var unshareFlags string
+	var initArgs []string
+
+	if isImportCache {
+		prefix = "cache"
+
+		// we cannot move processes forked in the import cache
+		// across PID namespaces
+		unshareFlags = "-iu"
+
+		initArgs = []string{"--cache"}
+	} else {
+		prefix = "handlers"
+		unshareFlags = "-ipu"
+		initArgs = []string{}
+	}
+
 	baseDir := config.Conf.SOCK_base_path
 
 	if err := os.MkdirAll(rootDir, 0777); err != nil {
@@ -66,7 +84,11 @@ func NewSOCKContainerFactory(rootDir, prefix, unshareFlags string, initArgs []st
 }
 
 // Create creates a docker container from the handler and container directory.
-func (sf *SOCKContainerFactory) Create(codeDir, workingDir string) (Sandbox, error) {
+func (sf *SOCKContainerFactory) Create(codeDir, workingDir string, imports []string) (Sandbox, error) {
+	return sf.CreateFromImportCache(codeDir, workingDir, imports, nil)
+}
+
+func (sf *SOCKContainerFactory) CreateFromImportCache(codeDir, workingDir string, imports []string, cacheMgr *CacheManager) (Sandbox, error) {
 	if config.Conf.Timing {
 		defer func(start time.Time) {
 			log.Printf("create sock took %v\n", time.Since(start))
@@ -78,7 +100,8 @@ func (sf *SOCKContainerFactory) Create(codeDir, workingDir string) (Sandbox, err
 	scratchDir := filepath.Join(workingDir, id)
 
 	startCmd := append([]string{OL_INIT}, sf.initArgs...)
-	return NewSOCKContainer(id, containerRootDir, sf.baseDir, codeDir, scratchDir, sf.cgf, sf.unshareFlags, startCmd)
+	return NewSOCKContainer(id, containerRootDir, sf.baseDir, codeDir, scratchDir, sf.cgf,
+		sf.unshareFlags, startCmd, cacheMgr, imports)
 }
 
 func (sf *SOCKContainerFactory) Cleanup() {

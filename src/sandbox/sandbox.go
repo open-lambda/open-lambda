@@ -46,9 +46,6 @@ type Sandbox interface {
 	// Communication channel to forward requests.
 	Channel() (*Channel, error)
 
-	// Start the Python server inside of the container.
-	RunServer() error
-
 	// Path to this container's memory cgroup for accounting.
 	MemoryCGroupPath() string
 
