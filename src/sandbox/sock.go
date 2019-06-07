@@ -394,8 +394,7 @@ func (c *SOCKContainer) ID() string {
 
 func (c *SOCKContainer) runServer(cacheMgr *CacheManager, imports []string) error {
 	if cacheMgr != nil {
-		_, _, err := cacheMgr.Provision(c, imports)
-		return err
+		return cacheMgr.Provision(c, imports)
 	}
 
 	pid, err := strconv.Atoi(c.initPid)

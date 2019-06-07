@@ -54,7 +54,7 @@ type Evictor struct {
 }
 
 type ForkServer struct {
-	Sandbox  Sandbox
+	sandbox  *SOCKContainer
 	Pid      string
 	SockPath string
 	Imports  map[string]bool
@@ -89,7 +89,7 @@ func (ic *ImportCacheContainerFactory) Cleanup() {
 	ic.cacheFactory.Cleanup()
 }
 
-func NewCacheFactory(cacheFactory *SOCKContainerFactory) (*CacheFactory, Sandbox, string, error) {
+func NewCacheFactory(cacheFactory *SOCKContainerFactory) (*CacheFactory, *SOCKContainer, string, error) {
 	cacheDir := filepath.Join(config.Conf.Worker_dir, "import-cache")
 	if err := os.MkdirAll(cacheDir, os.ModeDir); err != nil {
 		return nil, nil, "", fmt.Errorf("failed to create pool directory at %s :: %v", cacheDir, err)
@@ -107,8 +107,9 @@ func NewCacheFactory(cacheFactory *SOCKContainerFactory) (*CacheFactory, Sandbox
 	return factory, root, rootEntryDir, nil
 }
 
-func (cf *CacheFactory) Create() (Sandbox, error) {
-	return cf.delegate.Create("", cf.cacheDir, []string{})
+func (cf *CacheFactory) Create() (*SOCKContainer, error) {
+	c, err := cf.delegate.Create("", cf.cacheDir, []string{})
+	return c.(*SOCKContainer), err
 }
 
 func (cf *CacheFactory) Cleanup() {
@@ -151,13 +152,13 @@ func NewCacheManager(cacheFactory *SOCKContainerFactory) (cm *CacheManager, err 
 	return cm, nil
 }
 
-func (cm *CacheManager) Provision(sandbox Sandbox, imports []string) (fs *ForkServer, hit bool, err error) {
+func (cm *CacheManager) Provision(sandbox *SOCKContainer, imports []string) (err error) {
 	cm.mutex.Lock()
 
-	fs, toCache, hit := cm.Match(imports)
+	fs, toCache := cm.Match(imports)
 	if fs == nil {
 		cm.mutex.Unlock()
-		return nil, false, errors.New("no match?")
+		return errors.New("no match?")
 	}
 
 	if len(toCache) != 0 && !cm.Full() {
@@ -168,7 +169,7 @@ func (cm *CacheManager) Provision(sandbox Sandbox, imports []string) (fs *ForkSe
 
 		if err != nil {
 			cm.mutex.Unlock()
-			return nil, false, err
+			return err
 		}
 
 		cm.servers = append(cm.servers, fs)
@@ -179,7 +180,7 @@ func (cm *CacheManager) Provision(sandbox Sandbox, imports []string) (fs *ForkSe
 		cm.mutex.Unlock()
 
 		if err := fs.WaitForEntryInit(); err != nil {
-			return nil, false, err
+			return err
 		}
 
 		toCache = []string{}
@@ -197,17 +198,17 @@ func (cm *CacheManager) Provision(sandbox Sandbox, imports []string) (fs *ForkSe
 	pid, err := forkRequest(fs.SockPath, sandbox.NSPid(), sandbox.RootDir(), toCache, true)
 	if err != nil {
 		fs.Mutex.Unlock()
-		return nil, false, err
+		return err
 	}
 
 	fs.Mutex.Unlock()
 
 	// change cgroup of spawned lambda server
 	if err = sandbox.CGroupEnter(pid); err != nil {
-		return nil, false, err
+		return err
 	}
 
-	return fs, hit, nil
+	return nil
 }
 
 func (cm *CacheManager) newCacheEntry(baseFS *ForkServer, toCache []string) (*ForkServer, error) {
@@ -254,7 +255,7 @@ func (cm *CacheManager) newCacheEntry(baseFS *ForkServer, toCache []string) (*Fo
 		return nil, err
 	}
 
-	fs.Sandbox = sandbox
+	fs.sandbox = sandbox
 	fs.Pid = pid
 	fs.SockPath = fmt.Sprintf("%s/fs.sock", sandbox.HostDir())
 
@@ -312,7 +313,7 @@ func (cm *CacheManager) initCacheRoot(cacheFactory *SOCKContainerFactory) (memCG
 	}
 
 	fs := &ForkServer{
-		Sandbox:  rootSB,
+		sandbox:  rootSB,
 		Pid:      rootSB.NSPid(),
 		SockPath: fmt.Sprintf("%s/fs.sock", rootDir),
 		Imports:  make(map[string]bool),
@@ -328,7 +329,7 @@ func (cm *CacheManager) initCacheRoot(cacheFactory *SOCKContainerFactory) (memCG
 	return rootSB.MemoryCGroupPath(), nil
 }
 
-func (cm *CacheManager) Match(imports []string) (*ForkServer, []string, bool) {
+func (cm *CacheManager) Match(imports []string) (*ForkServer, []string) {
 	servers := cm.servers
 	best_fs := servers[0]
 	best_score := -1
@@ -352,7 +353,7 @@ func (cm *CacheManager) Match(imports []string) (*ForkServer, []string, bool) {
 		}
 	}
 
-	return best_fs, best_toCache, best_score != -1
+	return best_fs, best_toCache
 }
 
 func (cm *CacheManager) Full() bool {
@@ -497,7 +498,7 @@ func (fs *ForkServer) Kill() error {
 		fs.Parent.Children -= 1
 	}
 
-	fs.Sandbox.Destroy()
+	fs.sandbox.Destroy()
 
 	return nil
 }
