@@ -375,7 +375,9 @@ func readPkgSizes(path string) (map[string]float64, error) {
 }
 
 func (cm *CacheManager) Cleanup() {
+	log.Printf("Cleanup Fork Servers:\n")
 	for _, server := range cm.servers {
+		log.Printf("  Kill Fork Server: %s [PID]\n", server.Pid)
 		server.Kill()
 	}
 
