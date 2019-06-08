@@ -238,43 +238,15 @@ func (c *SOCKContainer) start(cgPool *CgroupPool) (err error) {
 }
 
 func (c *SOCKContainer) Pause() error {
-	freezerPath := c.cg.Path("freezer", "freezer.state")
-	err := ioutil.WriteFile(freezerPath, []byte("FROZEN"), os.ModeAppend)
-	if err != nil {
-		return err
-	}
-
+	c.cg.Pause()
 	c.status = state.Paused
 	return nil
 }
 
 func (c *SOCKContainer) Unpause() error {
-	freezerPath := c.cg.Path("freezer", "freezer.state")
-	err := ioutil.WriteFile(freezerPath, []byte("THAWED"), os.ModeAppend)
-	if err != nil {
-		return err
-	}
-
-	timeout := 5 * time.Second
-
-	// TODO: should we check parent_freezing to be sure?
-	selfFreezingPath := c.cg.Path("freezer", "freezer.self_freezing")
-
-	start := time.Now()
-	for time.Since(start) < timeout {
-		freezerState, err := ioutil.ReadFile(selfFreezingPath)
-		if err != nil {
-			return fmt.Errorf("failed to check self_freezing state :: %v", err)
-		}
-
-		if strings.TrimSpace(string(freezerState[:])) == "0" {
-			c.status = state.Running
-			return nil
-		}
-		time.Sleep(1 * time.Millisecond)
-	}
-
-	return fmt.Errorf("sock didn't unpause after %v", timeout)
+	err := c.cg.Unpause()
+	c.status = state.Running
+	return err
 }
 
 func (c *SOCKContainer) Destroy() {
@@ -284,8 +256,6 @@ func (c *SOCKContainer) Destroy() {
 }
 
 func (c *SOCKContainer) destroy() error {
-	c.Unpause()
-
 	c.printf("destroy\n")
 
 	if config.Conf.Timing {
@@ -294,49 +264,15 @@ func (c *SOCKContainer) destroy() error {
 		}(time.Now())
 	}
 
-	// If we're using the PID namespace, we can just kill the init process
-	// and the OS will SIGKILL the rest. If not (i.e., for import cache
-	// containers), we need to kill them all.
-	if strings.Contains(c.unshareFlags, "p") {
-		pid, _ := strconv.Atoi(c.initPid)
-		proc, err := os.FindProcess(pid)
-		if err != nil {
-			return fmt.Errorf("failed to find init process with pid=%d :: %v", pid, err)
-		}
-		err = proc.Signal(syscall.SIGTERM)
-		if err != nil {
-			c.printf("failed to send kill signal to init process pid=%d :: %v", pid, err)
-		}
-	} else {
-		// kill any remaining processes
-		procsPath := c.cg.Path("memory", "cgroup.procs")
-		pids, err := ioutil.ReadFile(procsPath)
-		if err != nil {
-			return err
-		}
-
-		// TODO: this is racy: what if processes are being created as we're killing them?
-		// can we freeze the cgroup, then kill them?
-		for _, pidStr := range strings.Split(strings.TrimSpace(string(pids[:])), "\n") {
-			if pidStr == "" {
-				break
-			}
-
-			pid, err := strconv.Atoi(pidStr)
-			if err != nil {
-				c.printf("bad pid string: %s :: %v", pidStr, err)
-			}
-
-			proc, err := os.FindProcess(pid)
-			if err != nil {
-				c.printf("failed to find process with pid: %d :: %v", pid, err)
-			}
-
-			err = proc.Signal(syscall.SIGKILL)
-			if err != nil {
-				c.printf("failed to send kill signal to process with pid: %d :: %v", pid, err)
-			}
-		}
+	c.printf("Pause/KillAllProcs/Unpause\n")
+	if err := c.cg.Pause(); err != nil {
+		return err
+	}
+	if err := c.cg.KillAllProcs(); err != nil {
+		return err
+	}
+	if err := c.cg.Unpause(); err != nil {
+		return err
 	}
 
 	// wait for the initCmd to clean up its children

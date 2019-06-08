@@ -4,6 +4,10 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strconv"
+	"strings"
+	"syscall"
+	"time"
 )
 
 var cgroupList []string = []string{
@@ -48,7 +52,8 @@ func (pool *CgroupPool) cgTask() {
 		// get a new or recycled cgroup
 		select {
 		case cg = <-pool.recycled:
-			// TODO: make sure it is in a clean state (e.g., thawed)
+			// restore cgroup to clean state
+			cg.Unpause()
 		default:
 			pool.nextId += 1
 			cg = &Cgroup{
@@ -120,6 +125,77 @@ func (cg *Cgroup) AddPid(pid string) error {
 	return nil
 }
 
+func (cg *Cgroup) setFreezeState(state string) error {
+	freezerPath := cg.Path("freezer", "freezer.state")
+	err := ioutil.WriteFile(freezerPath, []byte(state), os.ModeAppend)
+	if err != nil {
+		return err
+	}
+
+	timeout := 5 * time.Second
+
+	start := time.Now()
+	for time.Since(start) < timeout {
+		freezerState, err := ioutil.ReadFile(freezerPath)
+		if err != nil {
+			return fmt.Errorf("failed to check self_freezing state :: %v", err)
+		}
+
+		if strings.TrimSpace(string(freezerState[:])) == state {
+			return nil
+		}
+		time.Sleep(1 * time.Millisecond)
+	}
+
+	return fmt.Errorf("sock didn't pause/unpause after %v", timeout)
+}
+
+func (cg *Cgroup) Pause() error {
+	return cg.setFreezeState("FROZEN")
+}
+
+func (cg *Cgroup) Unpause() error {
+	return cg.setFreezeState("THAWED")
+}
+
+// recommended cleanup protocol:
+// 1. Pause (otherwise new procs may be spawned while KillAllProcs runs)
+// 2. KillAllProcs
+// 3. Unpause (otherwise kill cannot finish)
+func (cg *Cgroup) KillAllProcs() error {
+	procsPath := cg.Path("memory", "cgroup.procs")
+	pids, err := ioutil.ReadFile(procsPath)
+	if err != nil {
+		return err
+	}
+
+	// TODO: this is racy: what if processes are being created as we're killing them?
+	// can we freeze the cgroup, then kill them?
+	for _, pidStr := range strings.Split(strings.TrimSpace(string(pids[:])), "\n") {
+		if pidStr == "" {
+			break
+		}
+
+		pid, err := strconv.Atoi(pidStr)
+		if err != nil {
+			return fmt.Errorf("bad pid string: %s :: %v", pidStr, err)
+		}
+
+		proc, err := os.FindProcess(pid)
+		if err != nil {
+			fmt.Errorf("failed to find process with pid: %d :: %v", pid, err)
+		}
+
+		// forced termination (not trappable)
+		err = proc.Signal(syscall.SIGKILL)
+		if err != nil {
+			fmt.Errorf("failed to send kill signal to process with pid: %d :: %v", pid, err)
+		}
+	}
+
+	return nil
+}
+
 func (cg *Cgroup) Init() {
 	for _, resource := range cgroupList {
 		if err := os.MkdirAll(cg.Path(resource, ""), 0700); err != nil {
@@ -129,6 +205,8 @@ func (cg *Cgroup) Init() {
 }
 
 func (cg *Cgroup) Release() {
+	// TODO: assert that there are no tasks remaining
+
 	// if there's room in the recycled channel, add it there.
 	// Otherwise, just delete it.
 	select {

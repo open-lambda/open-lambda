@@ -133,9 +133,7 @@ func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 	// ergo we want [1] for name of sandbox
 	urlParts := getUrlComponents(r)
 	if len(urlParts) < 2 {
-		return newHttpErr(
-			"Name of image to run required",
-			http.StatusBadRequest)
+		return newHttpErr("Name of image to run required", http.StatusBadRequest)
 	}
 	img := urlParts[1]
 	i := strings.Index(img, "?")
@@ -150,9 +148,7 @@ func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 		var err error
 		rbody, err = ioutil.ReadAll(r.Body)
 		if err != nil {
-			return newHttpErr(
-				err.Error(),
-				http.StatusInternalServerError)
+			return newHttpErr(err.Error(), http.StatusInternalServerError)
 		}
 	}
 
