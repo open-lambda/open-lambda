@@ -195,7 +195,7 @@ func (cm *CacheManager) Provision(sandbox *SOCKContainer, imports []string) (err
 	fs.Hit()
 
 	// signal interpreter to forkenter into sandbox's namespace
-	pid, err := forkRequest(fs.SockPath, sandbox.NSPid(), sandbox.RootDir(), toCache, true)
+	pid, err := forkRequest(fs.SockPath, sandbox.initPid, sandbox.containerRootDir, toCache, true)
 	if err != nil {
 		fs.Mutex.Unlock()
 		return err
@@ -204,7 +204,7 @@ func (cm *CacheManager) Provision(sandbox *SOCKContainer, imports []string) (err
 	fs.Mutex.Unlock()
 
 	// change cgroup of spawned lambda server
-	if err = sandbox.cgroupEnter(pid); err != nil {
+	if err = sandbox.cg.AddPid(pid); err != nil {
 		return err
 	}
 
@@ -249,7 +249,7 @@ func (cm *CacheManager) newCacheEntry(baseFS *ForkServer, toCache []string) (*Fo
 	}
 
 	// signal interpreter to forkenter into sandbox's namespace
-	pid, err := forkRequest(baseFS.SockPath, sandbox.NSPid(), sandbox.RootDir(), toCache, false)
+	pid, err := forkRequest(baseFS.SockPath, sandbox.initPid, sandbox.containerRootDir, toCache, false)
 	if err != nil {
 		fs.Kill()
 		return nil, err
@@ -314,7 +314,7 @@ func (cm *CacheManager) initCacheRoot(cacheFactory *SOCKContainerFactory) (memCG
 
 	fs := &ForkServer{
 		sandbox:  rootSB,
-		Pid:      rootSB.NSPid(),
+		Pid:      rootSB.initPid,
 		SockPath: fmt.Sprintf("%s/fs.sock", rootDir),
 		Imports:  make(map[string]bool),
 		Hits:     0.0,
@@ -326,7 +326,7 @@ func (cm *CacheManager) initCacheRoot(cacheFactory *SOCKContainerFactory) (memCG
 
 	cm.servers = append(cm.servers, fs)
 
-	return rootSB.memoryCGroupPath(), nil
+	return rootSB.cg.Path("memory", ""), nil
 }
 
 func (cm *CacheManager) Match(imports []string) (*ForkServer, []string) {

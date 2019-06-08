@@ -14,10 +14,6 @@ import (
 	"github.com/open-lambda/open-lambda/ol/handler/state"
 )
 
-const OLCGroupName = "openlambda"
-
-var CGroupList []string = []string{"blkio", "cpu", "devices", "freezer", "hugetlb", "memory", "perf_event", "systemd"}
-
 type Channel struct {
 	Url       string
 	Transport http.Transport
@@ -49,12 +45,6 @@ type Sandbox interface {
 	// How much memory does the cgroup report for this container?
 	MemUsageKB() int
 
-	// Directory that new processes need to chroot into from host's view.
-	RootDir() string
-
 	// Directory used by the worker to communicate with container.
 	HostDir() string
-
-	// PID of a process in the container's namespaces (for joining)
-	NSPid() string
 }

@@ -62,6 +62,7 @@ func NewLambdaMgr() (mgr *LambdaMgr, err error) {
 	var t time.Time
 
 	// start with a fresh worker directory
+	log.Printf("Cleanup old dirs")
 	if err := os.RemoveAll(config.Conf.Worker_dir); err != nil {
 		return nil, err
 	}
@@ -71,20 +72,23 @@ func NewLambdaMgr() (mgr *LambdaMgr, err error) {
 	}
 
 	// init code puller, pip manager, handler cache, and init cache
+	log.Printf("Create CodePuller")
 	t = time.Now()
 	cp, err := NewCodePuller(filepath.Join(config.Conf.Worker_dir, "lambda_code"), config.Conf.Registry)
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("Initialized registry manager (took %v)", time.Since(t))
+	log.Printf("Initialized CodePuller (took %v)", time.Since(t))
 
+	log.Printf("Create InstallManager")
 	t = time.Now()
 	pm, err := pip.InitInstallManager()
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("Initialized installation manager (took %v)", time.Since(t))
+	log.Printf("Create InstallManager (took %v)", time.Since(t))
 
+	log.Printf("Create ContainerFactory")
 	t = time.Now()
 	sf, err := sb.InitHandlerContainerFactory()
 	if err != nil {

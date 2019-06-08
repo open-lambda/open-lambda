@@ -50,10 +50,6 @@ type Config struct {
 	// port the worker server listens to
 	Worker_port string `json:"worker_port"`
 
-	// sandbox factory options
-	// if sock -> number of cgroup to init
-	Cg_pool_size int `json:"cg_pool_size"`
-
 	// for unit testing to skip pull path
 	Skip_pull_existing bool `json:"Skip_pull_existing"`
 

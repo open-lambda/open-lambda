@@ -29,11 +29,9 @@ import (
 )
 
 type SOCKContainer struct {
-	cgf              *CgroupFactory
+	cg               *Cgroup
 	id               string
-	cgId             string
 	containerRootDir string
-	baseDir          string
 	codeDir          string
 	scratchDir       string
 	status           state.HandlerState
@@ -45,23 +43,21 @@ type SOCKContainer struct {
 }
 
 func NewSOCKContainer(
-	id, containerRootDir, baseDir, codeDir, scratchDir string,
-	cgf *CgroupFactory, unshareFlags string, startCmd []string,
+	id, containerRootDir, codeDir, scratchDir string,
+	cgPool *CgroupPool, unshareFlags string, startCmd []string,
 	cacheMgr *CacheManager, imports []string) (*SOCKContainer, error) {
 
 	c := &SOCKContainer{
 		id:               id,
 		containerRootDir: containerRootDir,
-		baseDir:          baseDir,
 		codeDir:          codeDir,
 		scratchDir:       scratchDir,
-		cgf:              cgf,
 		unshareFlags:     unshareFlags,
 		status:           state.Stopped,
 		startCmd:         startCmd,
 	}
 
-	if err := c.start(); err != nil {
+	if err := c.start(cgPool); err != nil {
 		c.Destroy()
 		return nil, err
 	}
@@ -79,6 +75,10 @@ func NewSOCKContainer(
 func (c *SOCKContainer) printf(format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
 	log.Printf("%s [SOCK %s]", strings.TrimRight(msg, "\n"), c.id)
+}
+
+func (c *SOCKContainer) ID() string {
+	return c.id
 }
 
 func (c *SOCKContainer) State() (hstate state.HandlerState, err error) {
@@ -100,7 +100,7 @@ func (c *SOCKContainer) Channel() (channel *Channel, err error) {
 	return &Channel{Url: "http://container/", Transport: tr}, nil
 }
 
-func (c *SOCKContainer) start() (err error) {
+func (c *SOCKContainer) start(cgPool *CgroupPool) (err error) {
 	defer func(start time.Time) {
 		if config.Conf.Timing {
 			c.printf("create container took %v\n", time.Since(start))
@@ -112,8 +112,9 @@ func (c *SOCKContainer) start() (err error) {
 		return err
 	}
 
-	if err := syscall.Mount(c.baseDir, c.containerRootDir, "", BIND, ""); err != nil {
-		return fmt.Errorf("failed to bind root dir: %s -> %s :: %v\n", c.baseDir, c.containerRootDir, err)
+	baseDir := config.Conf.SOCK_base_path
+	if err := syscall.Mount(baseDir, c.containerRootDir, "", BIND, ""); err != nil {
+		return fmt.Errorf("failed to bind root dir: %s -> %s :: %v\n", baseDir, c.containerRootDir, err)
 	}
 
 	if err := syscall.Mount("none", c.containerRootDir, "", BIND_RO, ""); err != nil {
@@ -227,13 +228,8 @@ func (c *SOCKContainer) start() (err error) {
 	}
 
 	// JOIN A CGROUP
-	cgId, err := c.cgf.GetCg(c.id)
-	if err != nil {
-		return err
-	}
-	c.cgId = cgId
-
-	if err := c.cgroupEnter(c.initPid); err != nil {
+	c.cg = cgPool.GetCg()
+	if err := c.cg.AddPid(c.initPid); err != nil {
 		return err
 	}
 
@@ -242,7 +238,7 @@ func (c *SOCKContainer) start() (err error) {
 }
 
 func (c *SOCKContainer) Pause() error {
-	freezerPath := filepath.Join("/sys/fs/cgroup/freezer", OLCGroupName, c.cgId, "freezer.state")
+	freezerPath := c.cg.Path("freezer", "freezer.state")
 	err := ioutil.WriteFile(freezerPath, []byte("FROZEN"), os.ModeAppend)
 	if err != nil {
 		return err
@@ -253,9 +249,8 @@ func (c *SOCKContainer) Pause() error {
 }
 
 func (c *SOCKContainer) Unpause() error {
-	statePath := filepath.Join("/sys/fs/cgroup/freezer", OLCGroupName, c.cgId, "freezer.state")
-
-	err := ioutil.WriteFile(statePath, []byte("THAWED"), os.ModeAppend)
+	freezerPath := c.cg.Path("freezer", "freezer.state")
+	err := ioutil.WriteFile(freezerPath, []byte("THAWED"), os.ModeAppend)
 	if err != nil {
 		return err
 	}
@@ -263,7 +258,7 @@ func (c *SOCKContainer) Unpause() error {
 	timeout := 5 * time.Second
 
 	// TODO: should we check parent_freezing to be sure?
-	selfFreezingPath := filepath.Join("/sys/fs/cgroup/freezer", OLCGroupName, c.cgId, "freezer.self_freezing")
+	selfFreezingPath := c.cg.Path("freezer", "freezer.self_freezing")
 
 	start := time.Now()
 	for time.Since(start) < timeout {
@@ -314,7 +309,7 @@ func (c *SOCKContainer) destroy() error {
 		}
 	} else {
 		// kill any remaining processes
-		procsPath := filepath.Join("/sys/fs/cgroup/memory", OLCGroupName, c.cgId, "cgroup.procs")
+		procsPath := c.cg.Path("memory", "cgroup.procs")
 		pids, err := ioutil.ReadFile(procsPath)
 		if err != nil {
 			return err
@@ -365,10 +360,7 @@ func (c *SOCKContainer) destroy() error {
 		c.printf("remove host dir %s failed :: %v\n", c.scratchDir, err)
 	}
 
-	// remove cgroups
-	if err := c.cgf.PutCg(c.id, c.cgId); err != nil {
-		c.printf("Unable to delete cgroups: %v", err)
-	}
+	c.cg.Release()
 
 	return nil
 }
@@ -376,32 +368,6 @@ func (c *SOCKContainer) destroy() error {
 func (c *SOCKContainer) Logs() (string, error) {
 	// TODO(ed)
 	return "TODO", nil
-}
-
-func (c *SOCKContainer) cgroupEnter(pid string) (err error) {
-	if pid == "" {
-		return fmt.Errorf("empty pid passed to cgroupenter")
-	}
-
-	// put process into each cgroup
-	for _, cgroup := range CGroupList {
-		tasksPath := filepath.Join("/sys/fs/cgroup/", cgroup, OLCGroupName, c.cgId, "tasks")
-
-		err := ioutil.WriteFile(tasksPath, []byte(pid), os.ModeAppend)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (c *SOCKContainer) NSPid() string {
-	return c.initPid
-}
-
-func (c *SOCKContainer) ID() string {
-	return c.id
 }
 
 func (c *SOCKContainer) runServer(cacheMgr *CacheManager, imports []string) error {
@@ -463,12 +429,8 @@ func (c *SOCKContainer) runServer(cacheMgr *CacheManager, imports []string) erro
 	return nil
 }
 
-func (c *SOCKContainer) memoryCGroupPath() string {
-	return fmt.Sprintf("/sys/fs/cgroup/memory/%s/%s", OLCGroupName, c.cgId)
-}
-
 func (c *SOCKContainer) MemUsageKB() int {
-	usagePath := filepath.Join(c.memoryCGroupPath(), "memory.usage_in_bytes")
+	usagePath := c.cg.Path("memory", "memory.usage_in_bytes")
 	buf, err := ioutil.ReadFile(usagePath)
 	if err != nil {
 		panic(fmt.Sprintf("get usage failed: %v", err))
@@ -481,10 +443,6 @@ func (c *SOCKContainer) MemUsageKB() int {
 	}
 
 	return usage / 1024
-}
-
-func (c *SOCKContainer) RootDir() string {
-	return c.containerRootDir
 }
 
 func (c *SOCKContainer) HostDir() string {

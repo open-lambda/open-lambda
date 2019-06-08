@@ -170,25 +170,25 @@ def tests():
     test_reg = os.path.abspath("test-registry")
 
     with TestConf(registry=test_reg, startup_pkgs=startup_pkgs):
-        with TestConf(sandbox="sock", handler_cache_mb=0, import_cache_mb=0, cg_pool_size=10):
+        with TestConf(sandbox="sock", handler_cache_mb=0, import_cache_mb=0):
             smoke_tests()
-        with TestConf(sandbox="sock", handler_cache_mb=256, import_cache_mb=0, cg_pool_size=10):
+        with TestConf(sandbox="sock", handler_cache_mb=256, import_cache_mb=0):
             smoke_tests()
-        with TestConf(sandbox="sock", handler_cache_mb=0, import_cache_mb=256, cg_pool_size=10):
+        with TestConf(sandbox="sock", handler_cache_mb=0, import_cache_mb=256):
             smoke_tests()
-        with TestConf(sandbox="sock", handler_cache_mb=256, import_cache_mb=256, cg_pool_size=10):
+        with TestConf(sandbox="sock", handler_cache_mb=256, import_cache_mb=256):
             smoke_tests()
-        with TestConf(sandbox="docker", handler_cache_mb=0, import_cache_mb=0, cg_pool_size=0):
+        with TestConf(sandbox="docker", handler_cache_mb=0, import_cache_mb=0):
             smoke_tests()
-        with TestConf(sandbox="docker", handler_cache_mb=256, import_cache_mb=0, cg_pool_size=0):
+        with TestConf(sandbox="docker", handler_cache_mb=256, import_cache_mb=0):
             smoke_tests()
 
-    with TestConf(sandbox="sock", handler_cache_mb=256, import_cache_mb=256, cg_pool_size=10, registry=test_reg):
+    with TestConf(sandbox="sock", handler_cache_mb=256, import_cache_mb=256, registry=test_reg):
         stress_one_lambda(procs=1, seconds=15)
         stress_one_lambda(procs=2, seconds=15)
         stress_one_lambda(procs=8, seconds=15)
 
-    with TestConf(sandbox="sock", handler_cache_mb=256, import_cache_mb=256, cg_pool_size=10):
+    with TestConf(sandbox="sock", handler_cache_mb=256, import_cache_mb=256):
         call_each_once(lambda_count=100, alloc_mb=1)
         call_each_once(lambda_count=1000, alloc_mb=10)
 

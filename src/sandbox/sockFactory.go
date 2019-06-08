@@ -21,35 +21,30 @@ var SHARED uintptr = uintptr(syscall.MS_SHARED)
 
 // SOCKContainerFactory is a ContainerFactory that creats docker containeres.
 type SOCKContainerFactory struct {
-	cgf          *CgroupFactory
+	cgPool       *CgroupPool
 	idxPtr       *int64
 	rootDir      string
-	baseDir      string
 	unshareFlags string
 	initArgs     []string
 }
 
 // NewSOCKContainerFactory creates a SOCKContainerFactory.
 func NewSOCKContainerFactory(rootDir string, isImportCache bool) (cf *SOCKContainerFactory, err error) {
-	var prefix string
 	var unshareFlags string
 	var initArgs []string
+	var cgPool *CgroupPool
 
 	if isImportCache {
-		prefix = "cache"
-
 		// we cannot move processes forked in the import cache
 		// across PID namespaces
 		unshareFlags = "-iu"
-
 		initArgs = []string{"--cache"}
+		cgPool = NewCgroupPool("sock-cache")
 	} else {
-		prefix = "handlers"
 		unshareFlags = "-ipu"
 		initArgs = []string{}
+		cgPool = NewCgroupPool("sock-handlers")
 	}
-
-	baseDir := config.Conf.SOCK_base_path
 
 	if err := os.MkdirAll(rootDir, 0777); err != nil {
 		return nil, fmt.Errorf("failed to make root container dir :: %v", err)
@@ -63,19 +58,13 @@ func NewSOCKContainerFactory(rootDir string, isImportCache bool) (cf *SOCKContai
 		return nil, fmt.Errorf("failed to make root container dir private :: %v", err)
 	}
 
-	cgf, err := NewCgroupFactory(prefix, config.Conf.Cg_pool_size)
-	if err != nil {
-		return nil, err
-	}
-
 	var sharedIdx int64 = -1
 	idxPtr := &sharedIdx
 
 	sf := &SOCKContainerFactory{
-		cgf:          cgf,
+		cgPool:       cgPool,
 		idxPtr:       idxPtr,
 		rootDir:      rootDir,
-		baseDir:      baseDir,
 		initArgs:     initArgs,
 		unshareFlags: unshareFlags,
 	}
@@ -100,16 +89,12 @@ func (sf *SOCKContainerFactory) CreateFromImportCache(codeDir, workingDir string
 	scratchDir := filepath.Join(workingDir, id)
 
 	startCmd := append([]string{OL_INIT}, sf.initArgs...)
-	return NewSOCKContainer(id, containerRootDir, sf.baseDir, codeDir, scratchDir, sf.cgf,
+	return NewSOCKContainer(id, containerRootDir, codeDir, scratchDir, sf.cgPool,
 		sf.unshareFlags, startCmd, cacheMgr, imports)
 }
 
 func (sf *SOCKContainerFactory) Cleanup() {
-	for _, cgroup := range CGroupList {
-		cgroupPath := filepath.Join("/sys/fs/cgroup", cgroup, OLCGroupName)
-		os.RemoveAll(cgroupPath)
-	}
-
+	sf.cgPool.Destroy()
 	syscall.Unmount(sf.rootDir, syscall.MNT_DETACH)
 	os.RemoveAll(sf.rootDir)
 }

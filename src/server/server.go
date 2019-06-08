@@ -255,15 +255,19 @@ func Main(config_path string) {
 	}
 	log.Printf("Config: %+v", config.Conf)
 
+	log.Printf("Start Server")
 	server, err := NewServer()
 	if err != nil {
+		log.Printf("Could not create server")
 		log.Fatal(err)
 	}
 
+	log.Printf("Create Benchmark")
 	if config.Conf.Benchmark_file != "" {
 		benchmarker.CreateBenchmarkerSingleton(config.Conf.Benchmark_file)
 	}
 
+	log.Printf("Setups Handlers")
 	port := fmt.Sprintf(":%s", config.Conf.Worker_port)
 	http.HandleFunc(RUN_PATH, server.RunLambda)
 	http.HandleFunc(STATUS_PATH, server.Status)
