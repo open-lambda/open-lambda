@@ -55,8 +55,6 @@ type Evictor struct {
 
 type ForkServer struct {
 	sandbox  *SOCKContainer
-	Pid      string
-	SockPath string
 	Imports  map[string]bool
 	Hits     float64
 	Parent   *ForkServer
@@ -87,24 +85,6 @@ func (ic *ImportCacheContainerFactory) Create(handlerDir, workingDir string, imp
 func (ic *ImportCacheContainerFactory) Cleanup() {
 	ic.handlerFactory.Cleanup()
 	ic.cacheFactory.Cleanup()
-}
-
-func NewCacheFactory(cacheFactory *SOCKContainerFactory) (*CacheFactory, *SOCKContainer, string, error) {
-	cacheDir := filepath.Join(config.Conf.Worker_dir, "import-cache")
-	if err := os.MkdirAll(cacheDir, os.ModeDir); err != nil {
-		return nil, nil, "", fmt.Errorf("failed to create pool directory at %s :: %v", cacheDir, err)
-	}
-
-	factory := &CacheFactory{cacheFactory, cacheDir}
-
-	root, err := factory.Create()
-	if err != nil {
-		return nil, nil, "", fmt.Errorf("failed to create root cache entry :: %v", err)
-	}
-
-	rootEntryDir := filepath.Join(cacheDir, "0")
-
-	return factory, root, rootEntryDir, nil
 }
 
 func (cf *CacheFactory) Create() (*SOCKContainer, error) {
@@ -195,20 +175,9 @@ func (cm *CacheManager) Provision(sandbox *SOCKContainer, imports []string) (err
 	fs.Hit()
 
 	// signal interpreter to forkenter into sandbox's namespace
-	pid, err := forkRequest(fs.SockPath, sandbox.initPid, sandbox.containerRootDir, toCache, true)
-	if err != nil {
-		fs.Mutex.Unlock()
-		return err
-	}
-
+	err = fs.sandbox.Fork(sandbox, toCache, true)
 	fs.Mutex.Unlock()
-
-	// change cgroup of spawned lambda server
-	if err = sandbox.cg.AddPid(pid); err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 func (cm *CacheManager) newCacheEntry(baseFS *ForkServer, toCache []string) (*ForkServer, error) {
@@ -249,25 +218,29 @@ func (cm *CacheManager) newCacheEntry(baseFS *ForkServer, toCache []string) (*Fo
 	}
 
 	// signal interpreter to forkenter into sandbox's namespace
-	pid, err := forkRequest(baseFS.SockPath, sandbox.initPid, sandbox.containerRootDir, toCache, false)
+	err = baseFS.sandbox.Fork(sandbox, toCache, false)
 	if err != nil {
 		fs.Kill()
 		return nil, err
 	}
 
 	fs.sandbox = sandbox
-	fs.Pid = pid
-	fs.SockPath = fmt.Sprintf("%s/fs.sock", sandbox.HostDir())
 
 	return fs, nil
 }
 
 func (cm *CacheManager) initCacheRoot(cacheFactory *SOCKContainerFactory) (memCGroupPath string, err error) {
-	factory, rootSB, rootDir, err := NewCacheFactory(cacheFactory)
-	if err != nil {
-		return "", err
+	cacheDir := filepath.Join(config.Conf.Worker_dir, "import-cache")
+	if err := os.MkdirAll(cacheDir, os.ModeDir); err != nil {
+		return "", fmt.Errorf("failed to create pool directory at %s :: %v", cacheDir, err)
 	}
-	cm.factory = factory
+
+	cm.factory = &CacheFactory{cacheFactory, cacheDir}
+
+	rootSB, err := cm.factory.Create()
+	if err != nil {
+		return "", fmt.Errorf("failed to create root cache entry :: %v", err)
+	}
 
 	// open pipe before forkenter
 	pipeDir := filepath.Join(rootSB.HostDir(), "server_pipe")
@@ -314,8 +287,6 @@ func (cm *CacheManager) initCacheRoot(cacheFactory *SOCKContainerFactory) (memCG
 
 	fs := &ForkServer{
 		sandbox:  rootSB,
-		Pid:      rootSB.initPid,
-		SockPath: fmt.Sprintf("%s/fs.sock", rootDir),
 		Imports:  make(map[string]bool),
 		Hits:     0.0,
 		Parent:   nil,
@@ -484,15 +455,6 @@ func (fs *ForkServer) Hit() {
 
 func (fs *ForkServer) Kill() error {
 	fs.Dead = true
-	pid, err := strconv.Atoi(fs.Pid)
-	if err != nil {
-		return err
-	}
-	proc, err := os.FindProcess(pid)
-	if err != nil {
-		return err
-	}
-	proc.Kill()
 
 	if fs.Parent != nil {
 		fs.Parent.Children -= 1

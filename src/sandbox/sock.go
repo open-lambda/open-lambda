@@ -45,7 +45,7 @@ type SOCKContainer struct {
 func NewSOCKContainer(
 	id, containerRootDir, codeDir, scratchDir string,
 	cgPool *CgroupPool, unshareFlags string, startCmd []string,
-	cacheMgr *CacheManager, imports []string) (*SOCKContainer, error) {
+	cacheMgr *CacheManager, imports []string) (sandbox *SOCKContainer, err error) {
 
 	c := &SOCKContainer{
 		id:               id,
@@ -62,7 +62,13 @@ func NewSOCKContainer(
 		return nil, err
 	}
 
-	if err := c.runServer(cacheMgr, imports); err != nil {
+	if cacheMgr != nil {
+		err = cacheMgr.Provision(c, imports)
+	} else {
+		err = c.runServer()
+	}
+
+	if err != nil {
 		c.Destroy()
 		return nil, err
 	}
@@ -306,11 +312,7 @@ func (c *SOCKContainer) Logs() (string, error) {
 	return "TODO", nil
 }
 
-func (c *SOCKContainer) runServer(cacheMgr *CacheManager, imports []string) error {
-	if cacheMgr != nil {
-		return cacheMgr.Provision(c, imports)
-	}
-
+func (c *SOCKContainer) runServer() error {
 	pid, err := strconv.Atoi(c.initPid)
 	if err != nil {
 		c.printf("bad initPid string: %s :: %v", c.initPid, err)
@@ -383,4 +385,21 @@ func (c *SOCKContainer) MemUsageKB() int {
 
 func (c *SOCKContainer) HostDir() string {
 	return c.scratchDir
+}
+
+// fork a new process from the Zygote in src, relocate it to be the server in dst
+func (src *SOCKContainer) Fork(dst *SOCKContainer, imports []string, handler bool) error {
+	sockPath := fmt.Sprintf("%s/fs.sock", src.HostDir())
+	targetPid := dst.initPid
+	rootDir := dst.containerRootDir
+	pid, err := forkRequest(sockPath, targetPid, rootDir, imports, handler)
+	if err != nil {
+		return err
+	}
+
+	if err = dst.cg.AddPid(pid); err != nil {
+		return err
+	}
+
+	return nil
 }
