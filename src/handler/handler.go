@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/open-lambda/open-lambda/ol/config"
-	"github.com/open-lambda/open-lambda/ol/handler/state"
 	"github.com/open-lambda/open-lambda/ol/pip-manager"
 
 	sb "github.com/open-lambda/open-lambda/ol/sandbox"
@@ -198,8 +197,7 @@ func (mgr *LambdaMgr) Dump() {
 		log.Printf(" %v: %d", name, lfunc.maxInstances)
 		for e := lfunc.instances.Front(); e != nil; e = e.Next() {
 			linst := e.Value.(*LambdaInstance)
-			state, _ := linst.sandbox.State()
-			log.Printf(" > %v: %v\n", linst.id, state.String())
+			log.Printf(" > %v\n", linst.id)
 		}
 		lfunc.mutex.Unlock()
 	}
@@ -331,8 +329,8 @@ func (linst *LambdaInstance) RunStart() (ch *sb.Channel, err error) {
 			lfunc.mutex.Unlock()
 		}
 
-	} else if sbState, _ := linst.sandbox.State(); sbState == state.Paused {
-		// unpause if paused
+	} else {
+		// unpause if necessary
 		if err := linst.sandbox.Unpause(); err != nil {
 			return nil, err
 		}

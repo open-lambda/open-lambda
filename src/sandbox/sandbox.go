@@ -10,10 +10,6 @@ Currently, only containers are supported. No need to increase complexity by
 generalizing for other sandboxing methods before they are implemented.
 */
 
-import (
-	"github.com/open-lambda/open-lambda/ol/handler/state"
-)
-
 type Channel struct {
 	Url       string
 	Transport http.Transport
@@ -35,9 +31,6 @@ type Sandbox interface {
 
 	// Return recent logs for the container.
 	Logs() (string, error)
-
-	// Get current state of the container.
-	State() (state.HandlerState, error)
 
 	// Communication channel to forward requests.
 	Channel() (*Channel, error)

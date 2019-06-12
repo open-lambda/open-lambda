@@ -107,7 +107,7 @@ func (c *DockerContainer) State() (hstate state.HandlerState, err error) {
 			hstate = state.Running
 		}
 	} else {
-		hstate = state.Stopped
+		return hstate, fmt.Errorf("unexpected state")
 	}
 
 	return hstate, nil
@@ -163,6 +163,13 @@ func (c *DockerContainer) start() error {
 
 // Pause pauses the container.
 func (c *DockerContainer) Pause() error {
+	st, err := c.State()
+	if err != nil {
+		return err
+	} else if st == state.Paused {
+		return nil
+	}
+
 	b := benchmarker.GetBenchmarker()
 	var t *benchmarker.Timer
 	if b != nil {
@@ -184,6 +191,13 @@ func (c *DockerContainer) Pause() error {
 
 // Unpause unpauses the container.
 func (c *DockerContainer) Unpause() error {
+	st, err := c.State()
+	if err != nil {
+		return err
+	} else if st == state.Running {
+		return nil
+	}
+
 	b := benchmarker.GetBenchmarker()
 	var t *benchmarker.Timer
 	if b != nil {

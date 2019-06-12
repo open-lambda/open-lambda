@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/open-lambda/open-lambda/ol/config"
-	"github.com/open-lambda/open-lambda/ol/handler/state"
 )
 
 type SOCKContainer struct {
@@ -35,11 +34,9 @@ type SOCKContainer struct {
 	containerRootDir string
 	codeDir          string
 	scratchDir       string
-	status           state.HandlerState
 	initPid          string
 	initCmd          *exec.Cmd
 	unshareFlags     string
-	startCmd         []string
 	pipe             *os.File
 
 	// just used to prevent concurrent calls to Fork
@@ -57,11 +54,9 @@ func NewSOCKContainer(
 		codeDir:          codeDir,
 		scratchDir:       scratchDir,
 		unshareFlags:     unshareFlags,
-		status:           state.Stopped,
-		startCmd:         startCmd,
 	}
 
-	if err := c.start(cgPool); err != nil {
+	if err := c.start(startCmd, cgPool); err != nil {
 		c.Destroy()
 		return nil, err
 	}
@@ -91,10 +86,6 @@ func (c *SOCKContainer) ID() string {
 	return c.id
 }
 
-func (c *SOCKContainer) State() (hstate state.HandlerState, err error) {
-	return c.status, nil
-}
-
 func (c *SOCKContainer) Channel() (channel *Channel, err error) {
 	sockPath := filepath.Join(c.scratchDir, "ol.sock")
 	if len(sockPath) > 108 {
@@ -110,7 +101,7 @@ func (c *SOCKContainer) Channel() (channel *Channel, err error) {
 	return &Channel{Url: "http://container/", Transport: tr}, nil
 }
 
-func (c *SOCKContainer) start(cgPool *CgroupPool) (err error) {
+func (c *SOCKContainer) start(startCmd []string, cgPool *CgroupPool) (err error) {
 	defer func(start time.Time) {
 		if config.Conf.Timing {
 			c.printf("create container took %v\n", time.Since(start))
@@ -185,7 +176,7 @@ func (c *SOCKContainer) start(cgPool *CgroupPool) (err error) {
 
 	// START INIT PROC (sets up namespaces)
 	initArgs := []string{c.unshareFlags, c.containerRootDir}
-	initArgs = append(initArgs, c.startCmd...)
+	initArgs = append(initArgs, startCmd...)
 
 	c.initCmd = exec.Command(
 		"/usr/local/bin/sock-init",
@@ -243,19 +234,16 @@ func (c *SOCKContainer) start(cgPool *CgroupPool) (err error) {
 		return err
 	}
 
-	c.status = state.Running
 	return nil
 }
 
 func (c *SOCKContainer) Pause() error {
 	c.cg.Pause()
-	c.status = state.Paused
 	return nil
 }
 
 func (c *SOCKContainer) Unpause() error {
 	err := c.cg.Unpause()
-	c.status = state.Running
 	return err
 }
 
