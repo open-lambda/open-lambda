@@ -1,7 +1,6 @@
 package sandbox
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -41,7 +40,6 @@ type CacheManager struct {
 	servers []*ForkServer
 	seq     int
 	mutex   *sync.Mutex
-	sizes   map[string]float64
 	full    *int32
 }
 
@@ -79,7 +77,17 @@ func NewImportCacheContainerFactory(handlerFactory, cacheFactory *SOCKContainerF
 }
 
 func (ic *ImportCacheContainerFactory) Create(handlerDir, workingDir string, imports []string) (Sandbox, error) {
-	return ic.handlerFactory.CreateFromImportCache(handlerDir, workingDir, imports, ic.CacheManager)
+	parent, err := ic.CacheManager.FindOrMakeParent(imports)
+	if err != nil {
+		return nil, err
+	}
+
+	child, err := ic.handlerFactory.CreateFromParent(handlerDir, workingDir, imports, parent)
+	if err != nil {
+		return nil, err
+	}
+
+	return child, nil
 }
 
 func (ic *ImportCacheContainerFactory) Cleanup() {
@@ -98,7 +106,6 @@ func (cf *CacheFactory) Cleanup() {
 
 func NewCacheManager(cacheFactory *SOCKContainerFactory) (cm *CacheManager, err error) {
 	servers := make([]*ForkServer, 0, 0)
-	sizes, err := readPkgSizes("/ol/open-lambda/worker/cache-manager/package_sizes.txt")
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +115,6 @@ func NewCacheManager(cacheFactory *SOCKContainerFactory) (cm *CacheManager, err 
 		servers: servers,
 		seq:     0,
 		mutex:   &sync.Mutex{},
-		sizes:   sizes,
 		full:    &full,
 	}
 
@@ -132,65 +138,88 @@ func NewCacheManager(cacheFactory *SOCKContainerFactory) (cm *CacheManager, err 
 	return cm, nil
 }
 
-func (cm *CacheManager) Provision(sandbox *SOCKContainer, imports []string) (err error) {
+func (cm *CacheManager) FindOrMakeParent(imports []string) (parent *SOCKContainer, err error) {
 	cm.mutex.Lock()
 
-	fs, toCache := cm.Match(imports)
-	if fs == nil {
-		cm.mutex.Unlock()
-		return errors.New("no match?")
+	// find parent with greatest import subset
+	servers := cm.servers
+	best_fs := servers[0]
+	best_score := -1
+	best_toCache := imports
+	for i := 1; i < len(servers); i++ {
+		matched := 0
+		toCache := make([]string, 0, 0)
+		for j := 0; j < len(imports); j++ {
+			if servers[i].Imports[imports[j]] {
+				matched += 1
+			} else {
+				toCache = append(toCache, imports[j])
+			}
+		}
+
+		// constrain to subset
+		if matched > best_score && len(servers[i].Imports) <= matched {
+			best_fs = servers[i]
+			best_score = matched
+			best_toCache = toCache
+		}
 	}
 
-	if len(toCache) != 0 && !cm.Full() {
-		baseFS := fs
+	if best_fs == nil {
+		cm.mutex.Unlock()
+		return nil, errors.New("no match?")
+	}
+
+	// create new, better cache entry
+	if len(best_toCache) != 0 && !cm.Full() {
+		baseFS := best_fs
 		baseFS.Mutex.Lock()
-		fs, err = cm.newCacheEntry(baseFS, toCache)
+		best_fs, err = cm.newCacheEntry(baseFS, best_toCache)
 		baseFS.Mutex.Unlock()
 
 		if err != nil {
 			cm.mutex.Unlock()
-			return err
+			return nil, err
 		}
 
-		cm.servers = append(cm.servers, fs)
+		cm.servers = append(cm.servers, best_fs)
 		cm.seq++
 
 		// this lock must be taken here to avoid us from being victimized
-		fs.Mutex.Lock()
+		best_fs.Mutex.Lock()
 		cm.mutex.Unlock()
 
-		if err := fs.WaitForEntryInit(); err != nil {
-			return err
+		if err := best_fs.WaitForEntryInit(); err != nil {
+			return nil, err
 		}
 
-		toCache = []string{}
+		best_toCache = []string{}
 	} else {
 		// we must take this lock to prevent the fork server from being
 		// reclaimed while we are waiting to create the container... not ideal
-		fs.Mutex.Lock()
+		best_fs.Mutex.Lock()
 		cm.mutex.Unlock()
 	}
 
 	// keep track of number of hits
-	fs.Hit()
+	best_fs.Hit()
 
 	// signal interpreter to forkenter into sandbox's namespace
-	err = fs.sandbox.Fork(sandbox, toCache, true)
-	fs.Mutex.Unlock()
-	return err
+	best_fs.Mutex.Unlock()
+
+	return best_fs.sandbox, nil
 }
 
 func (cm *CacheManager) newCacheEntry(baseFS *ForkServer, toCache []string) (*ForkServer, error) {
 	// make hashset of packages for new entry
 	var err error
 	imports := make(map[string]bool)
-	size := 0.0
+
 	for key, val := range baseFS.Imports {
 		imports[key] = val
 	}
 	for k := 0; k < len(toCache); k++ {
 		imports[toCache[k]] = true
-		size += cm.sizes[strings.ToLower(toCache[k])]
 	}
 
 	fs := &ForkServer{
@@ -300,65 +329,8 @@ func (cm *CacheManager) initCacheRoot(cacheFactory *SOCKContainerFactory) (memCG
 	return rootSB.cg.Path("memory", ""), nil
 }
 
-func (cm *CacheManager) Match(imports []string) (*ForkServer, []string) {
-	servers := cm.servers
-	best_fs := servers[0]
-	best_score := -1
-	best_toCache := imports
-	for i := 1; i < len(servers); i++ {
-		matched := 0
-		toCache := make([]string, 0, 0)
-		for j := 0; j < len(imports); j++ {
-			if servers[i].Imports[imports[j]] {
-				matched += 1
-			} else {
-				toCache = append(toCache, imports[j])
-			}
-		}
-
-		// constrain to subset
-		if matched > best_score && len(servers[i].Imports) <= matched {
-			best_fs = servers[i]
-			best_score = matched
-			best_toCache = toCache
-		}
-	}
-
-	return best_fs, best_toCache
-}
-
 func (cm *CacheManager) Full() bool {
 	return atomic.LoadInt32(cm.full) == 1
-}
-
-func readPkgSizes(path string) (map[string]float64, error) {
-	sizes := make(map[string]float64)
-	file, err := os.Open(path)
-	if err != nil {
-		log.Printf("invalid package sizes path %v, using 0 for all", path)
-		return make(map[string]float64), nil
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		if err = scanner.Err(); err != nil {
-			return nil, err
-		}
-
-		split := strings.Split(scanner.Text(), ":")
-		if len(split) != 2 {
-			return nil, errors.New("malformed package size file")
-		}
-
-		size, err := strconv.Atoi(split[1])
-		if err != nil {
-			return nil, err
-		}
-		sizes[strings.ToLower(split[1])] = float64(size)
-	}
-
-	return sizes, nil
 }
 
 func NewEvictor(cm *CacheManager, pkgfile, memCGroupPath string, mb_limit int) (*Evictor, error) {

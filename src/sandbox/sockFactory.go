@@ -74,10 +74,10 @@ func NewSOCKContainerFactory(rootDir string, isImportCache bool) (cf *SOCKContai
 
 // Create creates a docker container from the handler and container directory.
 func (sf *SOCKContainerFactory) Create(codeDir, workingDir string, imports []string) (Sandbox, error) {
-	return sf.CreateFromImportCache(codeDir, workingDir, imports, nil)
+	return sf.CreateFromParent(codeDir, workingDir, imports, nil)
 }
 
-func (sf *SOCKContainerFactory) CreateFromImportCache(codeDir, workingDir string, imports []string, cacheMgr *CacheManager) (Sandbox, error) {
+func (sf *SOCKContainerFactory) CreateFromParent(codeDir, workingDir string, imports []string, parent *SOCKContainer) (Sandbox, error) {
 	if config.Conf.Timing {
 		defer func(start time.Time) {
 			log.Printf("create sock took %v\n", time.Since(start))
@@ -90,7 +90,7 @@ func (sf *SOCKContainerFactory) CreateFromImportCache(codeDir, workingDir string
 
 	startCmd := append([]string{OL_INIT}, sf.initArgs...)
 	return NewSOCKContainer(id, containerRootDir, codeDir, scratchDir, sf.cgPool,
-		sf.unshareFlags, startCmd, cacheMgr, imports)
+		sf.unshareFlags, startCmd, parent, imports)
 }
 
 func (sf *SOCKContainerFactory) Cleanup() {

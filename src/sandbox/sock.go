@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -40,12 +41,15 @@ type SOCKContainer struct {
 	unshareFlags     string
 	startCmd         []string
 	pipe             *os.File
+
+	// just used to prevent concurrent calls to Fork
+	forkMutex sync.Mutex
 }
 
 func NewSOCKContainer(
 	id, containerRootDir, codeDir, scratchDir string,
 	cgPool *CgroupPool, unshareFlags string, startCmd []string,
-	cacheMgr *CacheManager, imports []string) (sandbox *SOCKContainer, err error) {
+	parent *SOCKContainer, imports []string) (sandbox *SOCKContainer, err error) {
 
 	c := &SOCKContainer{
 		id:               id,
@@ -62,8 +66,8 @@ func NewSOCKContainer(
 		return nil, err
 	}
 
-	if cacheMgr != nil {
-		err = cacheMgr.Provision(c, imports)
+	if parent != nil {
+		err = parent.Fork(c, imports, true)
 	} else {
 		err = c.runServer()
 	}
@@ -389,6 +393,9 @@ func (c *SOCKContainer) HostDir() string {
 
 // fork a new process from the Zygote in src, relocate it to be the server in dst
 func (src *SOCKContainer) Fork(dst *SOCKContainer, imports []string, handler bool) error {
+	src.forkMutex.Lock()
+	defer src.forkMutex.Unlock()
+
 	sockPath := fmt.Sprintf("%s/fs.sock", src.HostDir())
 	targetPid := dst.initPid
 	rootDir := dst.containerRootDir
