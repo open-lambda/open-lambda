@@ -103,7 +103,7 @@ func (c *SOCKContainer) Channel() (channel *Channel, err error) {
 	if c.dead {
 		return nil, DEAD_SOCK
 	}
-	defer func(){
+	defer func() {
 		c.destroyOnErr(err)
 	}()
 
@@ -263,7 +263,7 @@ func (c *SOCKContainer) Pause() (err error) {
 	if c.dead {
 		return DEAD_SOCK
 	}
-	defer func(){
+	defer func() {
 		c.destroyOnErr(err)
 	}()
 
@@ -277,7 +277,7 @@ func (c *SOCKContainer) Unpause() (err error) {
 	if c.dead {
 		return DEAD_SOCK
 	}
-	defer func(){
+	defer func() {
 		c.destroyOnErr(err)
 	}()
 
@@ -421,7 +421,7 @@ func (c *SOCKContainer) MemUsageKB() (kb int, err error) {
 	if c.dead {
 		return 0, DEAD_SOCK
 	}
-	defer func(){
+	defer func() {
 		c.destroyOnErr(err)
 	}()
 
@@ -451,7 +451,7 @@ func (c *SOCKContainer) Fork(dst *SOCKContainer, imports []string, handler bool)
 	if c.dead {
 		return DEAD_SOCK
 	}
-	defer func(){
+	defer func() {
 		c.destroyOnErr(err)
 	}()
 

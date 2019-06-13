@@ -27,11 +27,11 @@ import "C"
 type ImportCacheContainerFactory struct {
 	handlerFactory *SOCKContainerFactory
 	cacheFactory   *SOCKContainerFactory
-	cacheDir string
-	mutex   sync.Mutex
-	servers []*ForkServer
-	seq     int
-	full    int32
+	cacheDir       string
+	mutex          sync.Mutex
+	servers        []*ForkServer
+	seq            int
+	full           int32
 }
 
 // TODO: make this part of the CacheManager
@@ -57,8 +57,8 @@ func NewImportCacheContainerFactory(handlerFactory, cacheFactory *SOCKContainerF
 	ic := &ImportCacheContainerFactory{
 		handlerFactory: handlerFactory,
 		cacheFactory:   cacheFactory,
-		servers: make([]*ForkServer, 0, 0),
-		seq:     0,
+		servers:        make([]*ForkServer, 0, 0),
+		seq:            0,
 	}
 
 	if err := ic.initCacheRoot(); err != nil {
@@ -189,7 +189,7 @@ func (ic *ImportCacheContainerFactory) newCacheEntry(baseFS *ForkServer, toCache
 		Parent:   baseFS,
 		Children: 0,
 		Mutex:    &sync.Mutex{},
-		sandbox: sandbox,
+		sandbox:  sandbox,
 	}
 
 	baseFS.Children += 1
