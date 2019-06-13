@@ -28,7 +28,20 @@ import (
 	"github.com/open-lambda/open-lambda/ol/config"
 )
 
+type SockError string
+
+const (
+	DEAD_SOCK = SockError("SOCK container has died")
+)
+
+func (e SockError) Error() string {
+	return string(e)
+}
+
 type SOCKContainer struct {
+	sync.Mutex
+	dead bool
+
 	cg               *Cgroup
 	id               string
 	containerRootDir string
@@ -38,9 +51,6 @@ type SOCKContainer struct {
 	initCmd          *exec.Cmd
 	unshareFlags     string
 	pipe             *os.File
-
-	// just used to prevent concurrent calls to Fork
-	forkMutex sync.Mutex
 }
 
 func NewSOCKContainer(
@@ -57,6 +67,7 @@ func NewSOCKContainer(
 	}
 
 	if err := c.start(startCmd, cgPool); err != nil {
+		c.printf("failed to start: %v", err)
 		c.Destroy()
 		return nil, err
 	}
@@ -87,6 +98,15 @@ func (c *SOCKContainer) ID() string {
 }
 
 func (c *SOCKContainer) Channel() (channel *Channel, err error) {
+	c.Mutex.Lock()
+	defer c.Mutex.Unlock()
+	if c.dead {
+		return nil, DEAD_SOCK
+	}
+	defer func(){
+		c.destroyOnErr(err)
+	}()
+
 	sockPath := filepath.Join(c.scratchDir, "ol.sock")
 	if len(sockPath) > 108 {
 		return nil, fmt.Errorf("socket path length cannot exceed 108 characters (try moving cluster closer to the root directory")
@@ -237,19 +257,50 @@ func (c *SOCKContainer) start(startCmd []string, cgPool *CgroupPool) (err error)
 	return nil
 }
 
-func (c *SOCKContainer) Pause() error {
+func (c *SOCKContainer) Pause() (err error) {
+	c.Mutex.Lock()
+	defer c.Mutex.Unlock()
+	if c.dead {
+		return DEAD_SOCK
+	}
+	defer func(){
+		c.destroyOnErr(err)
+	}()
+
 	c.cg.Pause()
 	return nil
 }
 
-func (c *SOCKContainer) Unpause() error {
-	err := c.cg.Unpause()
-	return err
+func (c *SOCKContainer) Unpause() (err error) {
+	c.Mutex.Lock()
+	defer c.Mutex.Unlock()
+	if c.dead {
+		return DEAD_SOCK
+	}
+	defer func(){
+		c.destroyOnErr(err)
+	}()
+
+	return c.cg.Unpause()
 }
 
 func (c *SOCKContainer) Destroy() {
+	c.Mutex.Lock()
+	if c.dead {
+		return
+	}
+	defer c.Mutex.Unlock()
+
 	if err := c.destroy(); err != nil {
-		c.printf("Failed to cleanup container %v: %v", c.id, err)
+		panic(fmt.Errorf("Failed to cleanup container %v: %v", c.id, err))
+	}
+}
+
+func (c *SOCKContainer) destroyOnErr(origErr error) {
+	if origErr != nil {
+		if err := c.destroy(); err != nil {
+			panic(fmt.Errorf("Failed to cleanup container %v: %v", c.id, err))
+		}
 	}
 }
 
@@ -262,22 +313,26 @@ func (c *SOCKContainer) destroy() error {
 		}(time.Now())
 	}
 
-	c.printf("Pause/KillAllProcs/Unpause\n")
-	if err := c.cg.Pause(); err != nil {
-		return err
-	}
-	if err := c.cg.KillAllProcs(); err != nil {
-		return err
-	}
-	if err := c.cg.Unpause(); err != nil {
-		return err
+	if c.cg != nil {
+		c.printf("Pause/KillAllProcs/Unpause\n")
+		if err := c.cg.Pause(); err != nil {
+			return err
+		}
+		if err := c.cg.KillAllProcs(); err != nil {
+			return err
+		}
+		if err := c.cg.Unpause(); err != nil {
+			return err
+		}
 	}
 
 	// wait for the initCmd to clean up its children
-	c.printf("wait for init to die\n")
-	_, err := c.initCmd.Process.Wait()
-	if err != nil {
-		c.printf("failed to wait on initCmd pid=%d :: %v", c.initCmd.Process.Pid, err)
+	if c.initCmd != nil {
+		c.printf("wait for init to die\n")
+		_, err := c.initCmd.Process.Wait()
+		if err != nil {
+			c.printf("failed to wait on initCmd pid=%d :: %v", c.initCmd.Process.Pid, err)
+		}
 	}
 
 	c.printf("unmount and remove dirs\n")
@@ -296,6 +351,7 @@ func (c *SOCKContainer) destroy() error {
 
 	c.cg.Release()
 
+	c.dead = true
 	return nil
 }
 
@@ -359,32 +415,47 @@ func (c *SOCKContainer) runServer() error {
 	return nil
 }
 
-func (c *SOCKContainer) MemUsageKB() int {
+func (c *SOCKContainer) MemUsageKB() (kb int, err error) {
+	c.Mutex.Lock()
+	defer c.Mutex.Unlock()
+	if c.dead {
+		return 0, DEAD_SOCK
+	}
+	defer func(){
+		c.destroyOnErr(err)
+	}()
+
 	usagePath := c.cg.Path("memory", "memory.usage_in_bytes")
 	buf, err := ioutil.ReadFile(usagePath)
 	if err != nil {
-		panic(fmt.Sprintf("get usage failed: %v", err))
+		fmt.Errorf("get usage failed: %v", err)
 	}
 
 	str := strings.TrimSpace(string(buf[:]))
 	usage, err := strconv.Atoi(str)
 	if err != nil {
-		panic(fmt.Sprintf("atoi failed: %v", err))
+		return 0, fmt.Errorf("atoi failed: %v", err)
 	}
 
-	return usage / 1024
+	return usage / 1024, nil
 }
 
 func (c *SOCKContainer) HostDir() string {
 	return c.scratchDir
 }
 
-// fork a new process from the Zygote in src, relocate it to be the server in dst
-func (src *SOCKContainer) Fork(dst *SOCKContainer, imports []string, handler bool) error {
-	src.forkMutex.Lock()
-	defer src.forkMutex.Unlock()
+// fork a new process from the Zygote in c, relocate it to be the server in dst
+func (c *SOCKContainer) Fork(dst *SOCKContainer, imports []string, handler bool) (err error) {
+	c.Mutex.Lock()
+	defer c.Mutex.Unlock()
+	if c.dead {
+		return DEAD_SOCK
+	}
+	defer func(){
+		c.destroyOnErr(err)
+	}()
 
-	sockPath := fmt.Sprintf("%s/fs.sock", src.HostDir())
+	sockPath := fmt.Sprintf("%s/fs.sock", c.HostDir())
 	targetPid := dst.initPid
 	rootDir := dst.containerRootDir
 	pid, err := forkRequest(sockPath, targetPid, rootDir, imports, handler)

@@ -55,7 +55,8 @@ func (lru *LambdaInstanceLRU) Add(inst *LambdaInstance) {
 		panic("cannot double insert in LRU")
 	}
 	entry := lru.queue.PushFront(inst)
-	inst.usage = inst.sandbox.MemUsageKB() * 1024
+	kb, _ := inst.sandbox.MemUsageKB()
+	inst.usage = kb * 1024
 	lru.size += inst.usage
 	lru.imap[inst] = entry
 

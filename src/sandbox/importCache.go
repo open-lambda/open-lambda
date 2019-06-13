@@ -27,25 +27,16 @@ import "C"
 type ImportCacheContainerFactory struct {
 	handlerFactory *SOCKContainerFactory
 	cacheFactory   *SOCKContainerFactory
-	*CacheManager
-}
-
-type CacheFactory struct {
-	delegate ContainerFactory
 	cacheDir string
-}
-
-type CacheManager struct {
-	factory *CacheFactory
+	mutex   sync.Mutex
 	servers []*ForkServer
 	seq     int
-	mutex   *sync.Mutex
-	full    *int32
+	full    int32
 }
 
 // TODO: make this part of the CacheManager
 type Evictor struct {
-	cm        *CacheManager
+	ic        *ImportCacheContainerFactory
 	limit     int
 	eventfd   int
 	usagePath string
@@ -59,25 +50,31 @@ type ForkServer struct {
 	Children int
 	Size     float64
 	Mutex    *sync.Mutex
-	Dead     bool
 	Pipe     *os.File
 }
 
 func NewImportCacheContainerFactory(handlerFactory, cacheFactory *SOCKContainerFactory) (*ImportCacheContainerFactory, error) {
-	cacheMgr, err := NewCacheManager(cacheFactory)
+	ic := &ImportCacheContainerFactory{
+		handlerFactory: handlerFactory,
+		cacheFactory:   cacheFactory,
+		servers: make([]*ForkServer, 0, 0),
+		seq:     0,
+	}
+
+	if err := ic.initCacheRoot(); err != nil {
+		return nil, err
+	}
+
+	_, err := NewEvictor(ic, config.Conf.Import_cache_mb)
 	if err != nil {
 		return nil, err
 	}
 
-	return &ImportCacheContainerFactory{
-		handlerFactory: handlerFactory,
-		cacheFactory:   cacheFactory,
-		CacheManager:   cacheMgr,
-	}, nil
+	return ic, nil
 }
 
 func (ic *ImportCacheContainerFactory) Create(handlerDir, workingDir string, imports []string) (Sandbox, error) {
-	parent, err := ic.CacheManager.FindOrMakeParent(imports)
+	parent, err := ic.FindOrMakeParent(imports)
 	if err != nil {
 		return nil, err
 	}
@@ -90,59 +87,11 @@ func (ic *ImportCacheContainerFactory) Create(handlerDir, workingDir string, imp
 	return child, nil
 }
 
-func (ic *ImportCacheContainerFactory) Cleanup() {
-	ic.handlerFactory.Cleanup()
-	ic.cacheFactory.Cleanup()
-}
-
-func (cf *CacheFactory) Create() (*SOCKContainer, error) {
-	c, err := cf.delegate.Create("", cf.cacheDir, []string{})
-	return c.(*SOCKContainer), err
-}
-
-func (cf *CacheFactory) Cleanup() {
-	cf.delegate.Cleanup()
-}
-
-func NewCacheManager(cacheFactory *SOCKContainerFactory) (cm *CacheManager, err error) {
-	servers := make([]*ForkServer, 0, 0)
-	if err != nil {
-		return nil, err
-	}
-
-	var full int32 = 0
-	cm = &CacheManager{
-		servers: servers,
-		seq:     0,
-		mutex:   &sync.Mutex{},
-		full:    &full,
-	}
-
-	memCGroupPath, err := cm.initCacheRoot(cacheFactory)
-	if err != nil {
-		return nil, err
-	}
-
-	e, err := NewEvictor(cm, "", memCGroupPath, config.Conf.Import_cache_mb)
-	if err != nil {
-		return nil, err
-	}
-
-	go func(cm *CacheManager) {
-		for {
-			time.Sleep(50 * time.Millisecond)
-			e.CheckUsage()
-		}
-	}(cm)
-
-	return cm, nil
-}
-
-func (cm *CacheManager) FindOrMakeParent(imports []string) (parent *SOCKContainer, err error) {
-	cm.mutex.Lock()
+func (ic *ImportCacheContainerFactory) FindOrMakeParent(imports []string) (parent *SOCKContainer, err error) {
+	ic.mutex.Lock()
 
 	// find parent with greatest import subset
-	servers := cm.servers
+	servers := ic.servers
 	best_fs := servers[0]
 	best_score := -1
 	best_toCache := imports
@@ -166,28 +115,28 @@ func (cm *CacheManager) FindOrMakeParent(imports []string) (parent *SOCKContaine
 	}
 
 	if best_fs == nil {
-		cm.mutex.Unlock()
+		ic.mutex.Unlock()
 		return nil, errors.New("no match?")
 	}
 
 	// create new, better cache entry
-	if len(best_toCache) != 0 && !cm.Full() {
+	if len(best_toCache) != 0 && !ic.Full() {
 		baseFS := best_fs
 		baseFS.Mutex.Lock()
-		best_fs, err = cm.newCacheEntry(baseFS, best_toCache)
+		best_fs, err = ic.newCacheEntry(baseFS, best_toCache)
 		baseFS.Mutex.Unlock()
 
 		if err != nil {
-			cm.mutex.Unlock()
+			ic.mutex.Unlock()
 			return nil, err
 		}
 
-		cm.servers = append(cm.servers, best_fs)
-		cm.seq++
+		ic.servers = append(ic.servers, best_fs)
+		ic.seq++
 
 		// this lock must be taken here to avoid us from being victimized
 		best_fs.Mutex.Lock()
-		cm.mutex.Unlock()
+		ic.mutex.Unlock()
 
 		if err := best_fs.WaitForEntryInit(); err != nil {
 			return nil, err
@@ -198,7 +147,7 @@ func (cm *CacheManager) FindOrMakeParent(imports []string) (parent *SOCKContaine
 		// we must take this lock to prevent the fork server from being
 		// reclaimed while we are waiting to create the container... not ideal
 		best_fs.Mutex.Lock()
-		cm.mutex.Unlock()
+		ic.mutex.Unlock()
 	}
 
 	// keep track of number of hits
@@ -210,7 +159,13 @@ func (cm *CacheManager) FindOrMakeParent(imports []string) (parent *SOCKContaine
 	return best_fs.sandbox, nil
 }
 
-func (cm *CacheManager) newCacheEntry(baseFS *ForkServer, toCache []string) (*ForkServer, error) {
+func (ic *ImportCacheContainerFactory) Cleanup() {
+	// TODO: release all containers
+	ic.handlerFactory.Cleanup()
+	ic.cacheFactory.Cleanup()
+}
+
+func (ic *ImportCacheContainerFactory) newCacheEntry(baseFS *ForkServer, toCache []string) (*ForkServer, error) {
 	// make hashset of packages for new entry
 	var err error
 	imports := make(map[string]bool)
@@ -222,22 +177,22 @@ func (cm *CacheManager) newCacheEntry(baseFS *ForkServer, toCache []string) (*Fo
 		imports[toCache[k]] = true
 	}
 
+	// get container for new entry
+	sandbox, err := ic.cacheFactory.CreateFromParent("", ic.cacheDir, []string{}, nil)
+	if err != nil {
+		return nil, err
+	}
+
 	fs := &ForkServer{
 		Imports:  imports,
 		Hits:     0.0,
 		Parent:   baseFS,
 		Children: 0,
 		Mutex:    &sync.Mutex{},
+		sandbox: sandbox,
 	}
 
 	baseFS.Children += 1
-
-	// get container for new entry
-	sandbox, err := cm.factory.Create()
-	if err != nil {
-		fs.Kill()
-		return nil, err
-	}
 
 	// open pipe before forkenter
 	pipeDir := filepath.Join(sandbox.HostDir(), "server_pipe")
@@ -253,22 +208,18 @@ func (cm *CacheManager) newCacheEntry(baseFS *ForkServer, toCache []string) (*Fo
 		return nil, err
 	}
 
-	fs.sandbox = sandbox
-
 	return fs, nil
 }
 
-func (cm *CacheManager) initCacheRoot(cacheFactory *SOCKContainerFactory) (memCGroupPath string, err error) {
+func (ic *ImportCacheContainerFactory) initCacheRoot() (err error) {
 	cacheDir := filepath.Join(config.Conf.Worker_dir, "import-cache")
 	if err := os.MkdirAll(cacheDir, os.ModeDir); err != nil {
-		return "", fmt.Errorf("failed to create pool directory at %s :: %v", cacheDir, err)
+		return fmt.Errorf("failed to create pool directory at %s :: %v", cacheDir, err)
 	}
 
-	cm.factory = &CacheFactory{cacheFactory, cacheDir}
-
-	rootSB, err := cm.factory.Create()
+	rootSB, err := ic.cacheFactory.CreateFromParent("", ic.cacheDir, []string{}, nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to create root cache entry :: %v", err)
+		return fmt.Errorf("failed to create root cache entry :: %v", err)
 	}
 
 	// open pipe before forkenter
@@ -307,11 +258,11 @@ func (cm *CacheManager) initCacheRoot(cacheFactory *SOCKContainerFactory) (memCG
 		}
 	case <-timeout.C:
 		if n, err := pipe.Write([]byte("timeo")); err != nil {
-			return "", err
+			return err
 		} else if n != 5 {
-			return "", fmt.Errorf("Cannot write `timeo` to pipe\n")
+			return fmt.Errorf("Cannot write `timeo` to pipe\n")
 		}
-		return "", errors.New("root forkserver failed to start after 5s")
+		return errors.New("root forkserver failed to start after 5s")
 	}
 
 	fs := &ForkServer{
@@ -324,16 +275,16 @@ func (cm *CacheManager) initCacheRoot(cacheFactory *SOCKContainerFactory) (memCG
 		Size:     1.0, // divide-by-zero
 	}
 
-	cm.servers = append(cm.servers, fs)
+	ic.servers = append(ic.servers, fs)
 
-	return rootSB.cg.Path("memory", ""), nil
+	return nil
 }
 
-func (cm *CacheManager) Full() bool {
-	return atomic.LoadInt32(cm.full) == 1
+func (ic *ImportCacheContainerFactory) Full() bool {
+	return atomic.LoadInt32(&ic.full) == 1
 }
 
-func NewEvictor(cm *CacheManager, pkgfile, memCGroupPath string, mb_limit int) (*Evictor, error) {
+func NewEvictor(ic *ImportCacheContainerFactory, mb_limit int) (*Evictor, error) {
 	byte_limit := mb_limit * 1024 * 1024
 
 	eventfd, err := C.eventfd(0, C.EFD_CLOEXEC)
@@ -341,14 +292,14 @@ func NewEvictor(cm *CacheManager, pkgfile, memCGroupPath string, mb_limit int) (
 		return nil, err
 	}
 
-	usagePath := filepath.Join(memCGroupPath, "memory.usage_in_bytes")
+	usagePath := filepath.Join(ic.cacheFactory.cgPool.Path("memory"), "memory.usage_in_bytes")
 	usagefd, err := syscall.Open(usagePath, syscall.O_RDONLY, 0777)
 	if err != nil {
 		return nil, fmt.Errorf("could not open %s :: %s", usagePath, err)
 	}
 
-	eventPath := filepath.Join(memCGroupPath, "cgroup.event_control")
-
+	// TODO: do we even use the eventfd?
+	eventPath := filepath.Join(ic.cacheFactory.cgPool.Path("memory"), "cgroup.event_control")
 	eventStr := fmt.Sprintf("'%d %d %d'", eventfd, usagefd, byte_limit)
 	echo := exec.Command("echo", eventStr, ">", eventPath)
 	if err = echo.Run(); err != nil {
@@ -356,25 +307,31 @@ func NewEvictor(cm *CacheManager, pkgfile, memCGroupPath string, mb_limit int) (
 	}
 
 	e := &Evictor{
-		cm:        cm,
+		ic:        ic,
 		limit:     byte_limit,
 		eventfd:   int(eventfd),
 		usagePath: usagePath,
 	}
 
+	go e.EvictorTask()
+
 	return e, nil
 }
 
-func (e *Evictor) CheckUsage() {
-	e.cm.mutex.Lock()
-	defer e.cm.mutex.Unlock()
+func (e *Evictor) EvictorTask() {
+	for {
+		time.Sleep(50 * time.Millisecond)
+		e.ic.mutex.Lock()
 
-	usage := e.usage()
-	if usage > e.limit {
-		atomic.StoreInt32(e.cm.full, 1)
-		e.evict()
-	} else {
-		atomic.StoreInt32(e.cm.full, 0)
+		usage := e.usage()
+		if usage > e.limit {
+			atomic.StoreInt32(&e.ic.full, 1)
+			e.evict()
+		} else {
+			atomic.StoreInt32(&e.ic.full, 0)
+		}
+
+		e.ic.mutex.Unlock()
 	}
 }
 
@@ -394,7 +351,7 @@ func (e *Evictor) usage() (usage int) {
 }
 
 func (e *Evictor) evict() {
-	servers := e.cm.servers
+	servers := e.ic.servers
 	idx := -1
 	worst := float64(math.Inf(+1))
 
@@ -410,7 +367,7 @@ func (e *Evictor) evict() {
 	if idx != -1 {
 		// TODO: make sure no one else is using this one
 		victim := servers[idx]
-		e.cm.servers = append(servers[:idx], servers[idx+1:]...)
+		e.ic.servers = append(servers[:idx], servers[idx+1:]...)
 		go victim.Kill()
 	} else {
 		log.Printf("No victim found")
@@ -426,8 +383,6 @@ func (fs *ForkServer) Hit() {
 }
 
 func (fs *ForkServer) Kill() error {
-	fs.Dead = true
-
 	if fs.Parent != nil {
 		fs.Parent.Children -= 1
 	}

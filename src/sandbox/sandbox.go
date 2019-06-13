@@ -29,15 +29,15 @@ type Sandbox interface {
 	// Unpauses the container.
 	Unpause() error
 
-	// Return recent logs for the container.
-	Logs() (string, error)
-
 	// Communication channel to forward requests.
 	Channel() (*Channel, error)
 
 	// How much memory does the cgroup report for this container?
-	MemUsageKB() int
+	MemUsageKB() (int, error)
 
 	// Directory used by the worker to communicate with container.
 	HostDir() string
+
+	// Return recent logs for the container.
+	Logs() (string, error)
 }

@@ -15,6 +15,7 @@ FS_PATH = os.path.join(HOST_DIR, 'fs.sock')
 SOCK_PATH = os.path.join(HOST_DIR, 'ol.sock')
 STDOUT_PATH = os.path.join(HOST_DIR, 'stdout')
 STDERR_PATH = os.path.join(HOST_DIR, 'stderr')
+SERVER_PIPE_PATH = os.path.join(HOST_DIR, 'server_pipe')
 
 PROCESSES_DEFAULT = 10
 initialized = False
@@ -61,7 +62,7 @@ def lambda_server():
     server.add_socket(socket)
     # notify worker server that we are ready through stdout
     # flush is necessary, and don't put it after tornado start; won't work
-    with open('/host/server_pipe', 'w') as pipe:
+    with open(SERVER_PIPE_PATH, 'w') as pipe:
         pipe.write('ready')
     tornado.ioloop.IOLoop.instance().start()
     server.start(PROCESSES_DEFAULT)

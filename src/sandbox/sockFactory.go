@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -26,6 +27,9 @@ type SOCKContainerFactory struct {
 	rootDir      string
 	unshareFlags string
 	initArgs     []string
+
+	sync.Mutex
+	sandboxes []*SOCKContainer
 }
 
 // NewSOCKContainerFactory creates a SOCKContainerFactory.
@@ -77,7 +81,7 @@ func (sf *SOCKContainerFactory) Create(codeDir, workingDir string, imports []str
 	return sf.CreateFromParent(codeDir, workingDir, imports, nil)
 }
 
-func (sf *SOCKContainerFactory) CreateFromParent(codeDir, workingDir string, imports []string, parent *SOCKContainer) (Sandbox, error) {
+func (sf *SOCKContainerFactory) CreateFromParent(codeDir, workingDir string, imports []string, parent *SOCKContainer) (*SOCKContainer, error) {
 	if config.Conf.Timing {
 		defer func(start time.Time) {
 			log.Printf("create sock took %v\n", time.Since(start))
@@ -89,11 +93,25 @@ func (sf *SOCKContainerFactory) CreateFromParent(codeDir, workingDir string, imp
 	scratchDir := filepath.Join(workingDir, id)
 
 	startCmd := append([]string{OL_INIT}, sf.initArgs...)
-	return NewSOCKContainer(id, containerRootDir, codeDir, scratchDir, sf.cgPool,
+
+	c, err := NewSOCKContainer(id, containerRootDir, codeDir, scratchDir, sf.cgPool,
 		sf.unshareFlags, startCmd, parent, imports)
+
+	// TODO: have some way to clean up this structure as sandboxes are released
+	sf.Mutex.Lock()
+	sf.sandboxes = append(sf.sandboxes, c)
+	sf.Mutex.Unlock()
+
+	return c, err
 }
 
 func (sf *SOCKContainerFactory) Cleanup() {
+	sf.Mutex.Lock()
+	for _, sandbox := range sf.sandboxes {
+		sandbox.Destroy()
+	}
+	sf.Mutex.Unlock()
+
 	sf.cgPool.Destroy()
 	syscall.Unmount(sf.rootDir, syscall.MNT_DETACH)
 	os.RemoveAll(sf.rootDir)
