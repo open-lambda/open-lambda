@@ -54,11 +54,17 @@ type ForkServer struct {
 }
 
 func NewImportCacheContainerFactory(handlerFactory, cacheFactory *SOCKContainerFactory) (*ImportCacheContainerFactory, error) {
+	cacheDir := filepath.Join(config.Conf.Worker_dir, "import-cache")
+	if err := os.MkdirAll(cacheDir, os.ModeDir); err != nil {
+		return nil, fmt.Errorf("failed to create pool directory at %s :: %v", cacheDir, err)
+	}
+
 	ic := &ImportCacheContainerFactory{
 		handlerFactory: handlerFactory,
 		cacheFactory:   cacheFactory,
 		servers:        make([]*ForkServer, 0, 0),
 		seq:            0,
+		cacheDir: cacheDir,
 	}
 
 	if err := ic.initCacheRoot(); err != nil {
@@ -212,11 +218,6 @@ func (ic *ImportCacheContainerFactory) newCacheEntry(baseFS *ForkServer, toCache
 }
 
 func (ic *ImportCacheContainerFactory) initCacheRoot() (err error) {
-	cacheDir := filepath.Join(config.Conf.Worker_dir, "import-cache")
-	if err := os.MkdirAll(cacheDir, os.ModeDir); err != nil {
-		return fmt.Errorf("failed to create pool directory at %s :: %v", cacheDir, err)
-	}
-
 	rootSB, err := ic.cacheFactory.CreateFromParent("", ic.cacheDir, []string{}, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create root cache entry :: %v", err)

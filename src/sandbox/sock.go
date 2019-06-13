@@ -314,16 +314,12 @@ func (c *SOCKContainer) destroy() error {
 	}
 
 	if c.cg != nil {
-		c.printf("Pause/KillAllProcs/Unpause\n")
-		if err := c.cg.Pause(); err != nil {
-			return err
-		}
+		c.printf("kill all procs in CG\n")
 		if err := c.cg.KillAllProcs(); err != nil {
 			return err
 		}
-		if err := c.cg.Unpause(); err != nil {
-			return err
-		}
+
+		c.cg.Release()
 	}
 
 	// wait for the initCmd to clean up its children
@@ -348,8 +344,6 @@ func (c *SOCKContainer) destroy() error {
 	if err := os.RemoveAll(c.scratchDir); err != nil {
 		c.printf("remove host dir %s failed :: %v\n", c.scratchDir, err)
 	}
-
-	c.cg.Release()
 
 	c.dead = true
 	return nil
