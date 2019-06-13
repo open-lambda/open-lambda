@@ -133,16 +133,14 @@ func worker(ctx *cli.Context) error {
 	}
 
 	confPath := filepath.Join(olPath, "config.json")
+	if err := config.LoadFile(confPath); err != nil {
+		return err
+	}
 
 	// should we run as a background process?
 	detach := ctx.Bool("detach")
 
 	if detach {
-		err := config.LoadFile(confPath)
-		if err != nil {
-			return err
-		}
-
 		// stdout+stderr both go to log
 		logPath := filepath.Join(olPath, "worker.out")
 		f, err := os.Create(logPath)
@@ -205,10 +203,17 @@ func worker(ctx *cli.Context) error {
 
 		return fmt.Errorf("worker still not reachable after 30 seconds :: %s", ping_err)
 	} else {
-		server.Main(confPath)
+		switch config.Conf.Server_mode {
+		case "lambda":
+			server.LambdaMain()
+		case "sock":
+			server.SockMain()
+		default:
+			return fmt.Errorf("unknown Server_mode %s", config.Conf.Server_mode)
+		}
 	}
 
-	return nil
+	return fmt.Errorf("this code should not be reachable!")
 }
 
 // kill corresponds to the "kill" command of the admin tool.
@@ -323,7 +328,7 @@ OPTIONS:
 			Name:        "worker",
 			Usage:       "Start one OL server",
 			UsageText:   "ol worker [--path=NAME] [--detach]",
-			Description: "Start one or more workers in cluster using the same config template.",
+			Description: "Start a lambda server.",
 			Flags: []cli.Flag{
 				pathFlag,
 				cli.BoolFlag{

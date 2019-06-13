@@ -40,7 +40,9 @@ type Config struct {
 	Handler_cache_mb int `json:"handler_cache_mb"`
 	Import_cache_mb  int `json:"import_cache_mb"`
 
-	// sandbox options
+	// what kind of server should be launched?  (e.g., lambda or sock)
+	Server_mode string `json:"server_mode"`
+
 	// worker directory, which contains handler code, pid file, logs, etc.
 	Worker_dir string `json:"worker_dir"`
 
@@ -93,6 +95,7 @@ func LoadDefaults(olPath string) error {
 
 	Conf = &Config{
 		Worker_dir:        workerDir,
+		Server_mode:       "lambda",
 		Cluster_name:      olPath, // TODO: why?
 		Worker_port:       "5000",
 		Registry:          registryDir,

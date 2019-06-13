@@ -24,9 +24,9 @@ const (
 	PID_PATH    = "/pid"
 )
 
-// Server is a worker server that listens to run lambda requests and forward
+// LambdaServer is a worker server that listens to run lambda requests and forward
 // these requests to its sandboxes.
-type Server struct {
+type LambdaServer struct {
 	lambda_mgr *handler.LambdaMgr
 }
 
@@ -41,14 +41,14 @@ func newHttpErr(msg string, code int) *httpErr {
 	return &httpErr{msg: msg, code: code}
 }
 
-// NewServer creates a server based on the passed config."
-func NewServer() (*Server, error) {
+// NewLambdaServer creates a server based on the passed config."
+func NewLambdaServer() (*LambdaServer, error) {
 	lambda_mgr, err := handler.NewLambdaMgr()
 	if err != nil {
 		return nil, err
 	}
 
-	server := &Server{
+	server := &LambdaServer{
 		lambda_mgr: lambda_mgr,
 	}
 
@@ -56,7 +56,7 @@ func NewServer() (*Server, error) {
 }
 
 // ForwardToSandbox forwards a run lambda request to a sandbox.
-func (s *Server) ForwardToSandbox(linst *handler.LambdaInstance, r *http.Request, input []byte) ([]byte, *http.Response, error) {
+func (s *LambdaServer) ForwardToSandbox(linst *handler.LambdaInstance, r *http.Request, input []byte) ([]byte, *http.Response, error) {
 	channel, err := linst.RunStart()
 	if err != nil {
 		return nil, nil, err
@@ -128,7 +128,7 @@ func (s *Server) ForwardToSandbox(linst *handler.LambdaInstance, r *http.Request
 }
 
 // RunLambdaErr handles the run lambda request and return an http error if any.
-func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
+func (s *LambdaServer) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 	// components represent run[0]/<name_of_sandbox>[1]/<extra_things>...
 	// ergo we want [1] for name of sandbox
 	urlParts := getUrlComponents(r)
@@ -179,7 +179,7 @@ func (s *Server) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
 // RunLambda expects POST requests like this:
 //
 // curl -X POST localhost:8080/run/<lambda-name> -d '{}'
-func (s *Server) RunLambda(w http.ResponseWriter, r *http.Request) {
+func (s *LambdaServer) RunLambda(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Receive request to %s\n", r.URL.Path)
 
 	// write response headers
@@ -201,7 +201,7 @@ func (s *Server) RunLambda(w http.ResponseWriter, r *http.Request) {
 }
 
 // Status writes "ready" to the response.
-func (s *Server) Status(w http.ResponseWriter, r *http.Request) {
+func (s *LambdaServer) Status(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Receive request to %s\n", r.URL.Path)
 
 	wbody := []byte("ready\n")
@@ -213,7 +213,7 @@ func (s *Server) Status(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetPid returns process ID, useful for making sure we're talking to the expected server
-func (s *Server) GetPid(w http.ResponseWriter, r *http.Request) {
+func (s *LambdaServer) GetPid(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Receive request to %s\n", r.URL.Path)
 
 	wbody := []byte(strconv.Itoa(os.Getpid()) + "\n")
@@ -240,19 +240,13 @@ func getUrlComponents(r *http.Request) []string {
 	return components
 }
 
-func (s *Server) cleanup() {
+func (s *LambdaServer) cleanup() {
 	s.lambda_mgr.Cleanup()
 }
 
-func Main(config_path string) {
-	err := config.LoadFile(config_path)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Printf("Config: %+v", config.Conf)
-
-	log.Printf("Start Server")
-	server, err := NewServer()
+func LambdaMain() {
+	log.Printf("Start Lambda Server")
+	server, err := NewLambdaServer()
 	if err != nil {
 		log.Printf("Could not create server")
 		log.Fatal(err)
@@ -276,7 +270,7 @@ func Main(config_path string) {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	signal.Notify(c, os.Interrupt, syscall.SIGINT)
-	go func(s *Server) {
+	go func(s *LambdaServer) {
 		<-c
 		log.Printf("received kill signal, cleaning up")
 		s.cleanup()
