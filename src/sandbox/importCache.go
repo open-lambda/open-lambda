@@ -64,7 +64,7 @@ func NewImportCacheContainerFactory(handlerFactory, cacheFactory *SOCKContainerF
 		cacheFactory:   cacheFactory,
 		servers:        make([]*ForkServer, 0, 0),
 		seq:            0,
-		cacheDir: cacheDir,
+		cacheDir:       cacheDir,
 	}
 
 	if err := ic.initCacheRoot(); err != nil {

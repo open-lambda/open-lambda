@@ -3,12 +3,12 @@ package sandbox
 import (
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
-	"log"
 )
 
 var cgroupList []string = []string{
@@ -67,7 +67,7 @@ func (pool *CgroupPool) cgTask() {
 
 	// loop until we get the quit message
 	pool.printf("start creating/serving CGs")
-	Loop:
+Loop:
 	for {
 		var cg *Cgroup
 
@@ -97,7 +97,7 @@ func (pool *CgroupPool) cgTask() {
 
 	// empty queues, freeing all cgroups
 	pool.printf("empty queues and release CGs")
-	Empty:
+Empty:
 	for {
 		select {
 		case cg := <-pool.ready:
@@ -215,7 +215,7 @@ func (cg *Cgroup) KillAllProcs() error {
 	if err != nil {
 		return err
 	}
-	
+
 	for _, pidStr := range pids {
 		pid, err := strconv.Atoi(pidStr)
 		if err != nil {
@@ -238,14 +238,14 @@ func (cg *Cgroup) KillAllProcs() error {
 		return err
 	}
 
-	Loop:
+Loop:
 	for i := 0; ; i++ {
 		pids, err := cg.GetPIDs()
 		if err != nil {
 			return err
 		} else if len(pids) == 0 {
 			break Loop
-		} else if i % 1000 == 0 {
+		} else if i%1000 == 0 {
 			cg.pool.printf("waiting for %d procs in %s to die", len(pids), cg.Name)
 		}
 		time.Sleep(1 * time.Millisecond)
