@@ -9,11 +9,13 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/open-lambda/open-lambda/ol/config"
 )
 
 var cgroupList []string = []string{
 	"blkio", "cpu", "devices", "freezer", "hugetlb",
-	"memory", "perf_event", "systemd"}
+	"memory", "perf_event", "systemd", "pids"}
 
 // if there are fewer than CGROUP_RESERVE available, more will be created.
 // If there are more than 2*CGROUP_RESERVE available, they'll be released.
@@ -260,6 +262,13 @@ func (cg *Cgroup) Init() {
 		if err := syscall.Mkdir(path, 0700); err != nil {
 			panic(fmt.Errorf("Mkdir %s: %s", path, err))
 		}
+	}
+
+	// set limits based on config
+	path := cg.Path("pids", "pids.max")
+	err := ioutil.WriteFile(path, []byte(fmt.Sprintf("%d", config.Conf.Sock_cgroups.Max_procs)), os.ModeAppend)
+	if err != nil {
+		panic(fmt.Errorf("Error setting pids.max: %s", err))
 	}
 }
 

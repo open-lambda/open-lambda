@@ -41,7 +41,8 @@ func initOLDir(olPath string) (err error) {
 		return err
 	}
 
-	if err := config.Save(filepath.Join(olPath, "config.json")); err != nil {
+	confPath := filepath.Join(olPath, "config.json")
+	if err := config.Save(confPath); err != nil {
 		return err
 	}
 
@@ -68,7 +69,8 @@ func initOLDir(olPath string) (err error) {
 
 	fmt.Printf("Working Directory: %s\n\n", olPath)
 	fmt.Printf("Worker Defaults: \n%s\n\n", config.DumpStr())
-	fmt.Printf("You may now start a server using the \"worker\" command\n")
+	fmt.Printf("You may modify the defaults here: %s\n\n", confPath)
+	fmt.Printf("You may now start a server using the \"ol worker\" command\n")
 
 	return nil
 }

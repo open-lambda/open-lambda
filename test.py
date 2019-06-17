@@ -151,6 +151,16 @@ def call_each_once_exec(lambda_count, alloc_mb):
     return {"reqs_per_sec": lambda_count/seconds}
 
 
+@test
+def fork_bomb():
+    limit = curr_conf["sock_cgroups"]["max_procs"]
+    r = requests.post("http://localhost:5000/run/fbomb", data=json.dumps({"times": limit*2}))
+    r.raise_for_status()
+    # the function returns the number of children that we were able to fork
+    actual = int(r.text)
+    assert(1 <= actual <= limit)
+
+
 def call_each_once(lambda_count, alloc_mb=0):
     with tempfile.TemporaryDirectory() as reg_dir:
         # create dummy lambdas
@@ -170,19 +180,24 @@ def tests():
     test_reg = os.path.abspath("test-registry")
 
     with TestConf(registry=test_reg, startup_pkgs=startup_pkgs):
-        with TestConf(sandbox="sock", handler_cache_mb=0, import_cache_mb=0):
+        # do smoke tests under various configs
+        with TestConf(handler_cache_mb=0, import_cache_mb=0):
             smoke_tests()
-        with TestConf(sandbox="sock", handler_cache_mb=256, import_cache_mb=0):
+        with TestConf(handler_cache_mb=256, import_cache_mb=0):
             smoke_tests()
-        with TestConf(sandbox="sock", handler_cache_mb=0, import_cache_mb=256):
+        with TestConf(handler_cache_mb=0, import_cache_mb=256):
             smoke_tests()
-        with TestConf(sandbox="sock", handler_cache_mb=256, import_cache_mb=256):
+        with TestConf(handler_cache_mb=256, import_cache_mb=256):
             smoke_tests()
         with TestConf(sandbox="docker", handler_cache_mb=0, import_cache_mb=0):
             smoke_tests()
         with TestConf(sandbox="docker", handler_cache_mb=256, import_cache_mb=0):
             smoke_tests()
 
+        # test resource limits
+        fork_bomb()
+        
+    # test heavy load
     with TestConf(sandbox="sock", handler_cache_mb=256, import_cache_mb=256, registry=test_reg):
         stress_one_lambda(procs=1, seconds=15)
         stress_one_lambda(procs=2, seconds=15)

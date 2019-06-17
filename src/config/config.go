@@ -69,6 +69,13 @@ type Config struct {
 
 	// which OCI implementation to use for the docker sandbox (e.g., runc or runsc)
 	Docker_runtime string `json:"docker_runtime"`
+
+	// settings to use for cgroups used by SOCK
+	Sock_cgroups SockCgroupConfig `json:"sock_cgroups"`
+}
+
+type SockCgroupConfig struct {
+	Max_procs int `json:"max_procs"`
 }
 
 // Defaults verifies the fields of Config are correct, and initializes some
@@ -106,6 +113,9 @@ func LoadDefaults(olPath string) error {
 		Registry_cache_ms: 5000, // 5 seconds
 		Handler_cache_mb:  handler_cache_mb,
 		Import_cache_mb:   import_cache_mb,
+		Sock_cgroups: SockCgroupConfig{
+			Max_procs: 10,
+		},
 	}
 
 	return check()
