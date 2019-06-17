@@ -22,19 +22,19 @@ type Handler func(http.ResponseWriter, []string, map[string]interface{}) error
 // SOCKServer is a worker server that listens to run lambda requests and forward
 // these requests to its sandboxes.
 type SOCKServer struct {
-	cachePool   *sandbox.SOCKContainerFactory
-	handlerPool *sandbox.SOCKContainerFactory
+	cachePool   *sandbox.SOCKPool
+	handlerPool *sandbox.SOCKPool
 	sandboxes   sync.Map
 }
 
 // NewSOCKServer creates a server based on the passed config."
 func NewSOCKServer() (*SOCKServer, error) {
-	cache, err := sandbox.NewSOCKContainerFactory(filepath.Join(config.Conf.Worker_dir, "cache-alone"), true)
+	cache, err := sandbox.NewSOCKPool(filepath.Join(config.Conf.Worker_dir, "cache-alone"), true)
 	if err != nil {
 		return nil, err
 	}
 
-	handler, err := sandbox.NewSOCKContainerFactory(filepath.Join(config.Conf.Worker_dir, "handler-alone"), false)
+	handler, err := sandbox.NewSOCKPool(filepath.Join(config.Conf.Worker_dir, "handler-alone"), false)
 	if err != nil {
 		return nil, err
 	}

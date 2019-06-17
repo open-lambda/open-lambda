@@ -73,7 +73,6 @@ func (s *LambdaServer) ForwardToSandbox(linst *handler.LambdaInstance, r *http.R
 	// forward request to sandbox.  r and w are the server
 	// request and response respectively.  r2 and w2 are the
 	// sandbox request and response respectively.
-	url := fmt.Sprintf("%s%s", channel.Url, r.URL.Path)
 
 	// TODO(tyler): some sort of smarter backoff.  Or, a better
 	// way to detect a started sandbox.
@@ -86,6 +85,7 @@ func (s *LambdaServer) ForwardToSandbox(linst *handler.LambdaInstance, r *http.R
 			t = b.CreateTimer("lambda request", "us")
 		}
 
+		url := "http://container" + r.URL.String()
 		r2, err := http.NewRequest(r.Method, url, bytes.NewReader(input))
 		if err != nil {
 			return nil, nil, err
@@ -93,7 +93,7 @@ func (s *LambdaServer) ForwardToSandbox(linst *handler.LambdaInstance, r *http.R
 
 		r2.Close = true
 		r2.Header.Set("Content-Type", r.Header.Get("Content-Type"))
-		client := &http.Client{Transport: &channel.Transport}
+		client := &http.Client{Transport: channel}
 		if t != nil {
 			t.Start()
 		}

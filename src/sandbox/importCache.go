@@ -25,8 +25,8 @@ import (
 import "C"
 
 type ImportCacheContainerFactory struct {
-	handlerFactory *SOCKContainerFactory
-	cacheFactory   *SOCKContainerFactory
+	handlerFactory *SOCKPool
+	cacheFactory   *SOCKPool
 	cacheDir       string
 	mutex          sync.Mutex
 	servers        []*ForkServer
@@ -43,7 +43,7 @@ type Evictor struct {
 }
 
 type ForkServer struct {
-	sandbox  *SOCKContainer
+	sandbox  Sandbox
 	Imports  map[string]bool
 	Hits     float64
 	Parent   *ForkServer
@@ -53,7 +53,7 @@ type ForkServer struct {
 	Pipe     *os.File
 }
 
-func NewImportCacheContainerFactory(handlerFactory, cacheFactory *SOCKContainerFactory) (*ImportCacheContainerFactory, error) {
+func NewImportCacheContainerFactory(handlerFactory, cacheFactory *SOCKPool) (*ImportCacheContainerFactory, error) {
 	cacheDir := filepath.Join(config.Conf.Worker_dir, "import-cache")
 	if err := os.MkdirAll(cacheDir, os.ModeDir); err != nil {
 		return nil, fmt.Errorf("failed to create pool directory at %s :: %v", cacheDir, err)
@@ -93,7 +93,7 @@ func (ic *ImportCacheContainerFactory) Create(handlerDir, workingDir string, imp
 	return child, nil
 }
 
-func (ic *ImportCacheContainerFactory) FindOrMakeParent(imports []string) (parent *SOCKContainer, err error) {
+func (ic *ImportCacheContainerFactory) FindOrMakeParent(imports []string) (parent Sandbox, err error) {
 	ic.mutex.Lock()
 
 	// find parent with greatest import subset
@@ -208,7 +208,7 @@ func (ic *ImportCacheContainerFactory) newCacheEntry(baseFS *ForkServer, toCache
 	}
 
 	// signal interpreter to forkenter into sandbox's namespace
-	err = baseFS.sandbox.Fork(sandbox, toCache, false)
+	err = baseFS.sandbox.fork(sandbox, toCache, false)
 	if err != nil {
 		fs.Kill()
 		return nil, err

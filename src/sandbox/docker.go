@@ -39,7 +39,7 @@ type DockerContainer struct {
 }
 
 // NewDockerContainer creates a DockerContainer.
-func NewDockerContainer(host_id, hostDir string, cache bool, container *docker.Container, client *docker.Client) (*DockerContainer, error) {
+func NewDockerContainer(host_id, hostDir string, cache bool, container *docker.Container, client *docker.Client) (Sandbox, error) {
 	c := &DockerContainer{
 		host_id:   host_id,
 		hostDir:   hostDir,
@@ -59,7 +59,8 @@ func NewDockerContainer(host_id, hostDir string, cache bool, container *docker.C
 		return nil, err
 	}
 
-	return c, nil
+	// wrap to make thread-safe and handle container death
+	return &safeSandbox{Sandbox: c}, nil
 }
 
 // dockerError adds details (sandbox log, state, etc.) to an error.
@@ -114,7 +115,7 @@ func (c *DockerContainer) State() (hstate state.HandlerState, err error) {
 }
 
 // Channel returns a file socket channel for direct communication with the sandbox.
-func (c *DockerContainer) Channel() (channel *Channel, err error) {
+func (c *DockerContainer) Channel() (*http.Transport, error) {
 	sockPath := filepath.Join(c.hostDir, "ol.sock")
 	if len(sockPath) > 108 {
 		return nil, fmt.Errorf("socket path length cannot exceed 108 characters (try moving cluster closer to the root directory")
@@ -123,10 +124,7 @@ func (c *DockerContainer) Channel() (channel *Channel, err error) {
 	dial := func(proto, addr string) (net.Conn, error) {
 		return net.Dial("unix", sockPath)
 	}
-	tr := http.Transport{Dial: dial}
-
-	// the server name doesn't matter since we have a sock file
-	return &Channel{Url: "http://container/", Transport: tr}, nil
+	return &http.Transport{Dial: dial}, nil
 }
 
 // Start starts the container.
@@ -222,7 +220,7 @@ func (c *DockerContainer) Unpause() error {
 
 func (c *DockerContainer) Destroy() {
 	if err := c.destroy(); err != nil {
-		log.Printf("Failed to cleanup container %v: %v", c.container.ID, err)
+		panic(fmt.Sprintf("Failed to cleanup container %v: %v", c.container.ID, err))
 	}
 }
 
@@ -336,4 +334,8 @@ func (c *DockerContainer) RootDir() string {
 
 func (c *DockerContainer) HostDir() string {
 	return c.hostDir
+}
+
+func (c *DockerContainer) fork(dst Sandbox, imports []string, isLeaf bool) (err error) {
+	panic("DockerContainer does not implement cross-container forks")
 }

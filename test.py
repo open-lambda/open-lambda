@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import os, sys, json, time, requests, copy, traceback, tempfile
 from collections import OrderedDict
-from subprocess import Popen
+from subprocess import Popen, check_output
 from multiprocessing import Pool
 from contextlib import contextmanager        
                 
@@ -29,8 +29,9 @@ def test(fn):
         result["worker_tail"] = None
 
         total_t0 = time.time()
-        try:
+        try:           
             # setup worker
+            mounts0 = mount_count()
             run(['./ol', 'worker', '-p='+OLDIR, '--detach'])
 
             # run test/benchmark
@@ -41,6 +42,11 @@ def test(fn):
 
             # cleanup worker
             run(['./ol', 'kill', '-p='+OLDIR])
+            mounts1 = mount_count()
+
+            if mounts0 != mounts1:
+                raise Exception("mounts are leaking (%d before, %d after)" % (mounts0, mounts1))
+
             result["pass"] = True
         except Exception:
             rv = None
@@ -68,6 +74,13 @@ def put_conf(conf):
     with open(os.path.join(OLDIR, "config.json"), "w") as f:
         json.dump(conf, f, indent=2)
     curr_conf = conf
+
+
+def mount_count():
+    output = check_output(["mount"])
+    output = str(output, "utf-8")
+    output = output.split("\n")
+    return len(output)
 
         
 @contextmanager

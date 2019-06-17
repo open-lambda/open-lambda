@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
@@ -24,7 +25,7 @@ type LambdaMgr struct {
 	lfuncMap   map[string]*LambdaFunc
 	codePuller *CodePuller
 	pipMgr     pip.InstallManager
-	sbFactory  sb.ContainerFactory
+	sbPool     sb.SandboxPool
 	lru        *LambdaInstanceLRU
 	workerDir  string
 	maxRunners int
@@ -89,7 +90,7 @@ func NewLambdaMgr() (mgr *LambdaMgr, err error) {
 
 	log.Printf("Create ContainerFactory")
 	t = time.Now()
-	sf, err := sb.InitHandlerContainerFactory()
+	sbp, err := sb.SandboxPoolFromConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +102,7 @@ func NewLambdaMgr() (mgr *LambdaMgr, err error) {
 		lfuncMap:   make(map[string]*LambdaFunc),
 		codePuller: cp,
 		pipMgr:     pm,
-		sbFactory:  sf,
+		sbPool:     sbp,
 		workerDir:  config.Conf.Worker_dir,
 		maxRunners: config.Conf.Max_runners,
 	}
@@ -204,22 +205,8 @@ func (mgr *LambdaMgr) Dump() {
 }
 
 func (mgr *LambdaMgr) Cleanup() {
-	mgr.mutex.Lock()
-	defer mgr.mutex.Unlock()
-
-	log.Printf("Cleanup Lambdas:\n")
-	for _, lfunc := range mgr.lfuncMap {
-		log.Printf("  Function: %s\n", lfunc.name)
-		for e := lfunc.instances.Front(); e != nil; e = e.Next() {
-			log.Printf("    Instance: %s\n", e.Value.(*LambdaInstance).id)
-			e.Value.(*LambdaInstance).sandbox.Destroy()
-		}
-	}
-
-	log.Printf("Cleanup Container Factory\n")
-	mgr.sbFactory.Cleanup()
-
-	log.Printf("Finished Lambda Cleanup\n")
+	mgr.mutex.Lock() // we don't unlock, because nobody else should use this anyway
+	mgr.sbPool.Cleanup()
 }
 
 // must be called with instance lock
@@ -262,7 +249,7 @@ func (lfunc *LambdaFunc) TryRemoveInstance(linst *LambdaInstance) error {
 // RunStart runs the lambda handled by this Instance. It checks if the code has
 // been pulled, sandbox been created, and sandbox been started. The channel of
 // the sandbox of this lambda is returned.
-func (linst *LambdaInstance) RunStart() (ch *sb.Channel, err error) {
+func (linst *LambdaInstance) RunStart() (tr *http.Transport, err error) {
 	linst.mutex.Lock()
 	defer linst.mutex.Unlock()
 
@@ -276,7 +263,7 @@ func (linst *LambdaInstance) RunStart() (ch *sb.Channel, err error) {
 			return nil, err
 		}
 
-		sandbox, err := mgr.sbFactory.Create(lfunc.codeDir, lfunc.workingDir, lfunc.imports)
+		sandbox, err := mgr.sbPool.Create(lfunc.codeDir, lfunc.workingDir, lfunc.imports)
 		if err != nil {
 			return nil, err
 		}

@@ -20,8 +20,8 @@ var BIND_RO uintptr = uintptr(syscall.MS_BIND | syscall.MS_RDONLY | syscall.MS_R
 var PRIVATE uintptr = uintptr(syscall.MS_PRIVATE)
 var SHARED uintptr = uintptr(syscall.MS_SHARED)
 
-// SOCKContainerFactory is a ContainerFactory that creats docker containeres.
-type SOCKContainerFactory struct {
+// SOCKPool is a ContainerFactory that creats docker containeres.
+type SOCKPool struct {
 	cgPool       *CgroupPool
 	idxPtr       *int64
 	rootDir      string
@@ -29,11 +29,11 @@ type SOCKContainerFactory struct {
 	initArgs     []string
 
 	sync.Mutex
-	sandboxes []*SOCKContainer
+	sandboxes []Sandbox
 }
 
-// NewSOCKContainerFactory creates a SOCKContainerFactory.
-func NewSOCKContainerFactory(rootDir string, isImportCache bool) (cf *SOCKContainerFactory, err error) {
+// NewSOCKPool creates a SOCKPool.
+func NewSOCKPool(rootDir string, isImportCache bool) (cf *SOCKPool, err error) {
 	var unshareFlags string
 	var initArgs []string
 	var cgPool *CgroupPool
@@ -65,7 +65,7 @@ func NewSOCKContainerFactory(rootDir string, isImportCache bool) (cf *SOCKContai
 	var sharedIdx int64 = -1
 	idxPtr := &sharedIdx
 
-	sf := &SOCKContainerFactory{
+	pool := &SOCKPool{
 		cgPool:       cgPool,
 		idxPtr:       idxPtr,
 		rootDir:      rootDir,
@@ -73,46 +73,49 @@ func NewSOCKContainerFactory(rootDir string, isImportCache bool) (cf *SOCKContai
 		unshareFlags: unshareFlags,
 	}
 
-	return sf, nil
+	return pool, nil
 }
 
-// Create creates a docker container from the handler and container directory.
-func (sf *SOCKContainerFactory) Create(codeDir, workingDir string, imports []string) (Sandbox, error) {
-	return sf.CreateFromParent(codeDir, workingDir, imports, nil)
+func (pool *SOCKPool) Create(codeDir, workingDir string, imports []string) (Sandbox, error) {
+	return pool.CreateFromParent(codeDir, workingDir, imports, nil)
 }
 
-func (sf *SOCKContainerFactory) CreateFromParent(codeDir, workingDir string, imports []string, parent *SOCKContainer) (*SOCKContainer, error) {
+func (pool *SOCKPool) CreateFromParent(codeDir, workingDir string, imports []string, parent Sandbox) (Sandbox, error) {
 	if config.Conf.Timing {
 		defer func(start time.Time) {
 			log.Printf("create sock took %v\n", time.Since(start))
 		}(time.Now())
 	}
 
-	id := fmt.Sprintf("%d", atomic.AddInt64(sf.idxPtr, 1))
-	containerRootDir := filepath.Join(sf.rootDir, id)
+	id := fmt.Sprintf("%d", atomic.AddInt64(pool.idxPtr, 1))
+	containerRootDir := filepath.Join(pool.rootDir, id)
 	scratchDir := filepath.Join(workingDir, id)
 
-	startCmd := append([]string{OL_INIT}, sf.initArgs...)
+	startCmd := append([]string{OL_INIT}, pool.initArgs...)
 
-	c, err := NewSOCKContainer(id, containerRootDir, codeDir, scratchDir, sf.cgPool,
-		sf.unshareFlags, startCmd, parent, imports)
+	c, err := NewSOCKContainer(id, containerRootDir, codeDir, scratchDir, pool.cgPool,
+		pool.unshareFlags, startCmd, parent, imports)
+
+	if err != nil {
+		return nil, err
+	}
 
 	// TODO: have some way to clean up this structure as sandboxes are released
-	sf.Mutex.Lock()
-	sf.sandboxes = append(sf.sandboxes, c)
-	sf.Mutex.Unlock()
+	pool.Mutex.Lock()
+	pool.sandboxes = append(pool.sandboxes, c)
+	pool.Mutex.Unlock()
 
-	return c, err
+	return c, nil
 }
 
-func (sf *SOCKContainerFactory) Cleanup() {
-	sf.Mutex.Lock()
-	for _, sandbox := range sf.sandboxes {
+func (pool *SOCKPool) Cleanup() {
+	pool.Mutex.Lock()
+	for _, sandbox := range pool.sandboxes {
 		sandbox.Destroy()
 	}
-	sf.Mutex.Unlock()
+	pool.Mutex.Unlock()
 
-	sf.cgPool.Destroy()
-	syscall.Unmount(sf.rootDir, syscall.MNT_DETACH)
-	os.RemoveAll(sf.rootDir)
+	pool.cgPool.Destroy()
+	syscall.Unmount(pool.rootDir, syscall.MNT_DETACH)
+	os.RemoveAll(pool.rootDir)
 }

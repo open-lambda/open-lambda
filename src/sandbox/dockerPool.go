@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
 	"syscall"
 
@@ -13,8 +14,8 @@ import (
 	"github.com/open-lambda/open-lambda/ol/sandbox/dockerutil"
 )
 
-// DockerContainerFactory is a ContainerFactory that creats docker containers.
-type DockerContainerFactory struct {
+// DockerPool is a ContainerFactory that creats docker containers.
+type DockerPool struct {
 	client         *docker.Client
 	labels         map[string]string
 	caps           []string
@@ -23,10 +24,13 @@ type DockerContainerFactory struct {
 	idxPtr         *int64
 	cache          bool
 	docker_runtime string
+
+	sync.Mutex
+	sandboxes []Sandbox
 }
 
-// NewDockerContainerFactory creates a DockerContainerFactory.
-func NewDockerContainerFactory(pidMode string, caps []string, cache bool) (*DockerContainerFactory, error) {
+// NewDockerPool creates a DockerPool.
+func NewDockerPool(pidMode string, caps []string, cache bool) (*DockerPool, error) {
 	client, err := docker.NewClientFromEnv()
 	if err != nil {
 		return nil, err
@@ -39,7 +43,7 @@ func NewDockerContainerFactory(pidMode string, caps []string, cache bool) (*Dock
 		dockerutil.DOCKER_LABEL_CLUSTER: config.Conf.Cluster_name,
 	}
 
-	df := &DockerContainerFactory{
+	pool := &DockerPool{
 		client:         client,
 		labels:         labels,
 		caps:           caps,
@@ -50,12 +54,12 @@ func NewDockerContainerFactory(pidMode string, caps []string, cache bool) (*Dock
 		docker_runtime: config.Conf.Docker_runtime,
 	}
 
-	return df, nil
+	return pool, nil
 }
 
 // Create creates a docker sandbox from the handler and sandbox directory.
-func (df *DockerContainerFactory) Create(handlerDir, workingDir string, imports []string) (Sandbox, error) {
-	id := fmt.Sprintf("%d", atomic.AddInt64(df.idxPtr, 1))
+func (pool *DockerPool) Create(handlerDir, workingDir string, imports []string) (Sandbox, error) {
+	id := fmt.Sprintf("%d", atomic.AddInt64(pool.idxPtr, 1))
 	hostDir := filepath.Join(workingDir, id)
 	if err := os.MkdirAll(hostDir, 0777); err != nil {
 		return nil, err
@@ -63,7 +67,7 @@ func (df *DockerContainerFactory) Create(handlerDir, workingDir string, imports 
 
 	volumes := []string{
 		fmt.Sprintf("%s:%s", hostDir, "/host"),
-		fmt.Sprintf("%s:%s:ro", df.pkgsDir, "/packages"),
+		fmt.Sprintf("%s:%s:ro", pool.pkgsDir, "/packages"),
 	}
 
 	if handlerDir != "" {
@@ -76,18 +80,18 @@ func (df *DockerContainerFactory) Create(handlerDir, workingDir string, imports 
 		return nil, err
 	}
 
-	container, err := df.client.CreateContainer(
+	container, err := pool.client.CreateContainer(
 		docker.CreateContainerOptions{
 			Config: &docker.Config{
 				Cmd:    []string{"/spin"},
 				Image:  dockerutil.LAMBDA_IMAGE,
-				Labels: df.labels,
+				Labels: pool.labels,
 			},
 			HostConfig: &docker.HostConfig{
 				Binds:   volumes,
-				CapAdd:  df.caps,
-				PidMode: df.pidMode,
-				Runtime: df.docker_runtime,
+				CapAdd:  pool.caps,
+				PidMode: pool.pidMode,
+				Runtime: pool.docker_runtime,
 			},
 		},
 	)
@@ -95,9 +99,23 @@ func (df *DockerContainerFactory) Create(handlerDir, workingDir string, imports 
 		return nil, err
 	}
 
-	return NewDockerContainer(id, hostDir, df.cache, container, df.client)
+	c, err := NewDockerContainer(id, hostDir, pool.cache, container, pool.client)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: have some way to clean up this structure as sandboxes are released
+	pool.Mutex.Lock()
+	pool.sandboxes = append(pool.sandboxes, c)
+	pool.Mutex.Unlock()
+
+	return c, nil
 }
 
-func (df *DockerContainerFactory) Cleanup() {
-	return
+func (pool *DockerPool) Cleanup() {
+	pool.Mutex.Lock()
+	for _, sandbox := range pool.sandboxes {
+		sandbox.Destroy()
+	}
+	pool.Mutex.Unlock()
 }

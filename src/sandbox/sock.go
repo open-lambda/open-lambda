@@ -21,27 +21,13 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
 	"github.com/open-lambda/open-lambda/ol/config"
 )
 
-type SockError string
-
-const (
-	DEAD_SOCK = SockError("SOCK container has died")
-)
-
-func (e SockError) Error() string {
-	return string(e)
-}
-
 type SOCKContainer struct {
-	sync.Mutex
-	dead bool
-
 	cg               *Cgroup
 	id               string
 	containerRootDir string
@@ -56,7 +42,7 @@ type SOCKContainer struct {
 func NewSOCKContainer(
 	id, containerRootDir, codeDir, scratchDir string,
 	cgPool *CgroupPool, unshareFlags string, startCmd []string,
-	parent *SOCKContainer, imports []string) (sandbox *SOCKContainer, err error) {
+	parent Sandbox, imports []string) (sandbox Sandbox, err error) {
 
 	c := &SOCKContainer{
 		id:               id,
@@ -73,7 +59,7 @@ func NewSOCKContainer(
 	}
 
 	if parent != nil {
-		err = parent.Fork(c, imports, true)
+		err = parent.fork(c, imports, true)
 	} else {
 		err = c.runServer()
 	}
@@ -83,7 +69,8 @@ func NewSOCKContainer(
 		return nil, err
 	}
 
-	return c, nil
+	// wrap to make thread-safe and handle container death
+	return &safeSandbox{Sandbox: c}, nil
 }
 
 // add ID to each log message so we know which logs correspond to
@@ -97,16 +84,7 @@ func (c *SOCKContainer) ID() string {
 	return c.id
 }
 
-func (c *SOCKContainer) Channel() (channel *Channel, err error) {
-	c.Mutex.Lock()
-	defer c.Mutex.Unlock()
-	if c.dead {
-		return nil, DEAD_SOCK
-	}
-	defer func() {
-		c.destroyOnErr(err)
-	}()
-
+func (c *SOCKContainer) Channel() (tr *http.Transport, err error) {
 	sockPath := filepath.Join(c.scratchDir, "ol.sock")
 	if len(sockPath) > 108 {
 		return nil, fmt.Errorf("socket path length cannot exceed 108 characters (try moving cluster closer to the root directory")
@@ -115,10 +93,7 @@ func (c *SOCKContainer) Channel() (channel *Channel, err error) {
 	dial := func(proto, addr string) (net.Conn, error) {
 		return net.Dial("unix", sockPath)
 	}
-	tr := http.Transport{Dial: dial}
-
-	// the server name doesn't matter since we have a sock file
-	return &Channel{Url: "http://container/", Transport: tr}, nil
+	return &http.Transport{Dial: dial}, nil
 }
 
 func (c *SOCKContainer) start(startCmd []string, cgPool *CgroupPool) (err error) {
@@ -258,49 +233,17 @@ func (c *SOCKContainer) start(startCmd []string, cgPool *CgroupPool) (err error)
 }
 
 func (c *SOCKContainer) Pause() (err error) {
-	c.Mutex.Lock()
-	defer c.Mutex.Unlock()
-	if c.dead {
-		return DEAD_SOCK
-	}
-	defer func() {
-		c.destroyOnErr(err)
-	}()
-
 	c.cg.Pause()
 	return nil
 }
 
 func (c *SOCKContainer) Unpause() (err error) {
-	c.Mutex.Lock()
-	defer c.Mutex.Unlock()
-	if c.dead {
-		return DEAD_SOCK
-	}
-	defer func() {
-		c.destroyOnErr(err)
-	}()
-
 	return c.cg.Unpause()
 }
 
 func (c *SOCKContainer) Destroy() {
-	c.Mutex.Lock()
-	if c.dead {
-		return
-	}
-	defer c.Mutex.Unlock()
-
 	if err := c.destroy(); err != nil {
-		panic(fmt.Errorf("Failed to cleanup container %v: %v", c.id, err))
-	}
-}
-
-func (c *SOCKContainer) destroyOnErr(origErr error) {
-	if origErr != nil {
-		if err := c.destroy(); err != nil {
-			panic(fmt.Errorf("Failed to cleanup container %v: %v", c.id, err))
-		}
+		panic(fmt.Sprintf("failed to destroy SOCK sandbox: %v", err))
 	}
 }
 
@@ -345,13 +288,7 @@ func (c *SOCKContainer) destroy() error {
 		c.printf("remove host dir %s failed :: %v\n", c.scratchDir, err)
 	}
 
-	c.dead = true
 	return nil
-}
-
-func (c *SOCKContainer) Logs() (string, error) {
-	// TODO(ed)
-	return "TODO", nil
 }
 
 func (c *SOCKContainer) runServer() error {
@@ -410,15 +347,6 @@ func (c *SOCKContainer) runServer() error {
 }
 
 func (c *SOCKContainer) MemUsageKB() (kb int, err error) {
-	c.Mutex.Lock()
-	defer c.Mutex.Unlock()
-	if c.dead {
-		return 0, DEAD_SOCK
-	}
-	defer func() {
-		c.destroyOnErr(err)
-	}()
-
 	usagePath := c.cg.Path("memory", "memory.usage_in_bytes")
 	buf, err := ioutil.ReadFile(usagePath)
 	if err != nil {
@@ -439,25 +367,18 @@ func (c *SOCKContainer) HostDir() string {
 }
 
 // fork a new process from the Zygote in c, relocate it to be the server in dst
-func (c *SOCKContainer) Fork(dst *SOCKContainer, imports []string, handler bool) (err error) {
-	c.Mutex.Lock()
-	defer c.Mutex.Unlock()
-	if c.dead {
-		return DEAD_SOCK
-	}
-	defer func() {
-		c.destroyOnErr(err)
-	}()
+func (c *SOCKContainer) fork(dst Sandbox, imports []string, isLeaf bool) (err error) {
+	dstSock := dst.(*SOCKContainer)
 
 	sockPath := fmt.Sprintf("%s/fs.sock", c.HostDir())
-	targetPid := dst.initPid
-	rootDir := dst.containerRootDir
-	pid, err := forkRequest(sockPath, targetPid, rootDir, imports, handler)
+	targetPid := dstSock.initPid
+	rootDir := dstSock.containerRootDir
+	pid, err := forkRequest(sockPath, targetPid, rootDir, imports, isLeaf)
 	if err != nil {
 		return err
 	}
 
-	if err = dst.cg.AddPid(pid); err != nil {
+	if err = dstSock.cg.AddPid(pid); err != nil {
 		return err
 	}
 
