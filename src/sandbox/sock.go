@@ -36,41 +36,7 @@ type SOCKContainer struct {
 	initPid          string
 	initCmd          *exec.Cmd
 	unshareFlags     string
-	pipe             *os.File
-}
-
-func NewSOCKContainer(
-	id, containerRootDir, codeDir, scratchDir string,
-	cgPool *CgroupPool, unshareFlags string, startCmd []string,
-	parent Sandbox, imports []string) (sandbox Sandbox, err error) {
-
-	c := &SOCKContainer{
-		id:               id,
-		containerRootDir: containerRootDir,
-		codeDir:          codeDir,
-		scratchDir:       scratchDir,
-		unshareFlags:     unshareFlags,
-	}
-
-	if err := c.start(startCmd, cgPool); err != nil {
-		c.printf("failed to start: %v", err)
-		c.Destroy()
-		return nil, err
-	}
-
-	if parent != nil {
-		err = parent.fork(c, imports, true)
-	} else {
-		err = c.runServer()
-	}
-
-	if err != nil {
-		c.Destroy()
-		return nil, err
-	}
-
-	// wrap to make thread-safe and handle container death
-	return &safeSandbox{Sandbox: c}, nil
+	initPipe         *os.File
 }
 
 // add ID to each log message so we know which logs correspond to
@@ -154,18 +120,18 @@ func (c *SOCKContainer) start(startCmd []string, cgPool *CgroupPool) (err error)
 		return fmt.Errorf("failed to bind tmp dir: %v", err.Error())
 	}
 
-	pipe := filepath.Join(c.scratchDir, "init_pipe") // communicate with init process
-	if err := syscall.Mkfifo(pipe, 0777); err != nil {
+	initPipe := filepath.Join(c.scratchDir, "init_pipe") // communicate with init process
+	if err := syscall.Mkfifo(initPipe, 0777); err != nil {
 		return err
 	}
 
-	c.pipe, err = os.OpenFile(pipe, os.O_RDWR, 0777)
+	c.initPipe, err = os.OpenFile(initPipe, os.O_RDWR, 0777)
 	if err != nil {
-		return fmt.Errorf("Cannot open pipe: %v\n", err)
+		return fmt.Errorf("Cannot open init pipe: %v\n", err)
 	}
 
-	pipe = filepath.Join(c.scratchDir, "server_pipe") // communicate with lambda server
-	if err := syscall.Mkfifo(pipe, 0777); err != nil {
+	serverPipe := filepath.Join(c.scratchDir, "server_pipe") // communicate with lambda server
+	if err := syscall.Mkfifo(serverPipe, 0777); err != nil {
 		return err
 	}
 
@@ -192,7 +158,7 @@ func (c *SOCKContainer) start(startCmd []string, cgPool *CgroupPool) (err error)
 	go func() {
 		// message will be either 5 byte \0 padded pid (<65536), or "ready"
 		pid := make([]byte, 6)
-		n, err := c.pipe.Read(pid[:5])
+		n, err := c.initPipe.Read(pid[:5])
 
 		// TODO: return early
 
@@ -215,7 +181,7 @@ func (c *SOCKContainer) start(startCmd []string, cgPool *CgroupPool) (err error)
 		}
 	case <-timeout.C:
 		// clean up go routine
-		if n, err := c.pipe.Write([]byte("timeo")); err != nil {
+		if n, err := c.initPipe.Write([]byte("timeo")); err != nil {
 			return err
 		} else if n != 5 {
 			return fmt.Errorf("Cannot write `timeo` to pipe\n")
@@ -225,6 +191,7 @@ func (c *SOCKContainer) start(startCmd []string, cgPool *CgroupPool) (err error)
 
 	// JOIN A CGROUP
 	c.cg = cgPool.GetCg()
+	c.printf("add init PID %s to CG", c.initPid)
 	if err := c.cg.AddPid(c.initPid); err != nil {
 		return err
 	}
@@ -248,8 +215,6 @@ func (c *SOCKContainer) Destroy() {
 }
 
 func (c *SOCKContainer) destroy() error {
-	c.printf("destroy\n")
-
 	if config.Conf.Timing {
 		defer func(start time.Time) {
 			c.printf("remove took %v\n", time.Since(start))
@@ -284,13 +249,15 @@ func (c *SOCKContainer) destroy() error {
 		c.printf("remove root dir %s failed :: %v\n", c.containerRootDir, err)
 	}
 
-	if err := os.RemoveAll(c.scratchDir); err != nil {
-		c.printf("remove host dir %s failed :: %v\n", c.scratchDir, err)
-	}
+	// TODO: find balance between cleaning up, and preserving this for debug
+	// if err := os.RemoveAll(c.scratchDir); err != nil {
+	//     c.printf("remove host dir %s failed :: %v\n", c.scratchDir, err)
+	//}
 
 	return nil
 }
 
+// this forks init proc, then does execve to start server.py
 func (c *SOCKContainer) runServer() error {
 	pid, err := strconv.Atoi(c.initPid)
 	if err != nil {
@@ -309,7 +276,7 @@ func (c *SOCKContainer) runServer() error {
 	go func() {
 		// wait for signal handler to be "ready"
 		buf := make([]byte, 5)
-		_, err = c.pipe.Read(buf)
+		_, err = c.initPipe.Read(buf)
 		if err != nil {
 			log.Fatalf("Cannot read from stdout of sock: %v\n", err)
 		} else if string(buf) != "ready" {
@@ -329,7 +296,7 @@ func (c *SOCKContainer) runServer() error {
 			c.printf("wait for init signal handler took %v\n", time.Since(start))
 		}
 	case <-timeout.C:
-		if n, err := c.pipe.Write([]byte("timeo")); err != nil {
+		if n, err := c.initPipe.Write([]byte("timeo")); err != nil {
 			return err
 		} else if n != 5 {
 			return fmt.Errorf("Cannot write `timeo` to pipe\n")
@@ -366,18 +333,38 @@ func (c *SOCKContainer) HostDir() string {
 	return c.scratchDir
 }
 
+func (c *SOCKContainer) DebugString() string {
+	var s string = fmt.Sprintf("SOCK %s\n", c.ID())
+
+	s += fmt.Sprintf("HOST DIR: %s\n", c.HostDir())
+
+	if pids, err := c.cg.GetPIDs(); err == nil {
+		s += fmt.Sprintf("PIDS: %s\n", strings.Join(pids, ", "))
+	} else {
+		s += fmt.Sprintf("PIDS: unknown (%s)\n", err)
+	}
+
+	if state, err := ioutil.ReadFile(c.cg.Path("freezer", "freezer.state")); err == nil {
+		s += fmt.Sprintf("FREEZE STATE: %s\n", state)
+	} else {
+		s += fmt.Sprintf("FREEZE STATE: unknown (%s)\n", err)
+	}
+
+	return s
+}
+
 // fork a new process from the Zygote in c, relocate it to be the server in dst
 func (c *SOCKContainer) fork(dst Sandbox, imports []string, isLeaf bool) (err error) {
 	dstSock := dst.(*SOCKContainer)
 
-	sockPath := fmt.Sprintf("%s/fs.sock", c.HostDir())
 	targetPid := dstSock.initPid
 	rootDir := dstSock.containerRootDir
-	pid, err := forkRequest(sockPath, targetPid, rootDir, imports, isLeaf)
+	pid, err := c.forkRequest(targetPid, rootDir, imports, isLeaf)
 	if err != nil {
 		return err
 	}
 
+	c.printf("add forked PID %s to CG", pid)
 	if err = dstSock.cg.AddPid(pid); err != nil {
 		return err
 	}

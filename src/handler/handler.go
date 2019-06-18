@@ -5,7 +5,6 @@ package handler
 import (
 	"container/list"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -270,43 +269,6 @@ func (linst *LambdaInstance) RunStart() (tr *http.Transport, err error) {
 
 		linst.sandbox = sandbox
 		linst.id = linst.sandbox.ID()
-
-		// use StdoutPipe of olcontainer to sync with lambda server
-		ready := make(chan bool, 1)
-		defer close(ready)
-		go func() {
-			pipeDir := filepath.Join(linst.sandbox.HostDir(), "server_pipe")
-			pipe, err := os.OpenFile(pipeDir, os.O_RDWR, 0777)
-			if err != nil {
-				log.Printf("Cannot open pipe: %v\n", err)
-				return
-			}
-			defer pipe.Close()
-
-			// wait for "ready"
-			buf := make([]byte, 5)
-			_, err = pipe.Read(buf)
-			if err != nil {
-				log.Printf("Cannot read from stdout of sandbox :: %v\n", err)
-			} else if string(buf) != "ready" {
-				log.Printf("Expect to see `ready` but got %s\n", string(buf))
-			}
-			ready <- true
-		}()
-
-		// wait up to 20s for server to initialize
-		start := time.Now()
-		timeout := time.NewTimer(20 * time.Second)
-		defer timeout.Stop()
-
-		select {
-		case <-ready:
-			if config.Conf.Timing {
-				log.Printf("wait for server took %v\n", time.Since(start))
-			}
-		case <-timeout.C:
-			return nil, fmt.Errorf("instance server failed to initialize after 20s")
-		}
 
 		// we are up so we can add ourselves for reuse
 		if mgr.maxRunners == 0 || linst.runners < mgr.maxRunners {

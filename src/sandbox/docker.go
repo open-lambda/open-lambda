@@ -59,6 +59,11 @@ func NewDockerContainer(host_id, hostDir string, cache bool, container *docker.C
 		return nil, err
 	}
 
+	if err := waitForServerPipeReady(c.HostDir()); err != nil {
+		c.Destroy()
+		return nil, err
+	}
+
 	// wrap to make thread-safe and handle container death
 	return &safeSandbox{Sandbox: c}, nil
 }
@@ -334,6 +339,10 @@ func (c *DockerContainer) RootDir() string {
 
 func (c *DockerContainer) HostDir() string {
 	return c.hostDir
+}
+
+func (c *DockerContainer) DebugString() string {
+	return fmt.Sprintf("SANDBOX %s (DOCKER)\n", c.ID())
 }
 
 func (c *DockerContainer) fork(dst Sandbox, imports []string, isLeaf bool) (err error) {

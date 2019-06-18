@@ -20,10 +20,12 @@ var BIND_RO uintptr = uintptr(syscall.MS_BIND | syscall.MS_RDONLY | syscall.MS_R
 var PRIVATE uintptr = uintptr(syscall.MS_PRIVATE)
 var SHARED uintptr = uintptr(syscall.MS_SHARED)
 
+var nextId int64 = 0
+
 // SOCKPool is a ContainerFactory that creats docker containeres.
 type SOCKPool struct {
+	name         string
 	cgPool       *CgroupPool
-	idxPtr       *int64
 	rootDir      string
 	unshareFlags string
 	initArgs     []string
@@ -36,19 +38,21 @@ type SOCKPool struct {
 func NewSOCKPool(rootDir string, isImportCache bool) (cf *SOCKPool, err error) {
 	var unshareFlags string
 	var initArgs []string
-	var cgPool *CgroupPool
+	var name string
 
 	if isImportCache {
 		// we cannot move processes forked in the import cache
 		// across PID namespaces
 		unshareFlags = "-iu"
 		initArgs = []string{"--cache"}
-		cgPool = NewCgroupPool("sock-cache")
+		name = "sock-cache"
 	} else {
 		unshareFlags = "-ipu"
 		initArgs = []string{}
-		cgPool = NewCgroupPool("sock-handlers")
+		name = "sock-handlers"
 	}
+
+	cgPool := NewCgroupPool(name)
 
 	if err := os.MkdirAll(rootDir, 0777); err != nil {
 		return nil, fmt.Errorf("failed to make root container dir :: %v", err)
@@ -62,12 +66,9 @@ func NewSOCKPool(rootDir string, isImportCache bool) (cf *SOCKPool, err error) {
 		return nil, fmt.Errorf("failed to make root container dir private :: %v", err)
 	}
 
-	var sharedIdx int64 = -1
-	idxPtr := &sharedIdx
-
 	pool := &SOCKPool{
+		name:         name,
 		cgPool:       cgPool,
-		idxPtr:       idxPtr,
 		rootDir:      rootDir,
 		initArgs:     initArgs,
 		unshareFlags: unshareFlags,
@@ -76,36 +77,66 @@ func NewSOCKPool(rootDir string, isImportCache bool) (cf *SOCKPool, err error) {
 	return pool, nil
 }
 
-func (pool *SOCKPool) Create(codeDir, workingDir string, imports []string) (Sandbox, error) {
-	return pool.CreateFromParent(codeDir, workingDir, imports, nil)
+func (pool *SOCKPool) Create(codeDir, scratchPrefix string, imports []string) (Sandbox, error) {
+	return pool.CreateFromParent(codeDir, scratchPrefix, imports, nil)
 }
 
-func (pool *SOCKPool) CreateFromParent(codeDir, workingDir string, imports []string, parent Sandbox) (Sandbox, error) {
+func (pool *SOCKPool) CreateFromParent(codeDir, scratchPrefix string, imports []string, parent Sandbox) (sb Sandbox, err error) {
 	if config.Conf.Timing {
 		defer func(start time.Time) {
 			log.Printf("create sock took %v\n", time.Since(start))
 		}(time.Now())
 	}
 
-	id := fmt.Sprintf("%d", atomic.AddInt64(pool.idxPtr, 1))
+	log.Printf("%v.CreateFromParent(%v, %v, %v, %v)", pool.name, codeDir, scratchPrefix, imports, parent)
+
+	id := fmt.Sprintf("%d", atomic.AddInt64(&nextId, 1))
 	containerRootDir := filepath.Join(pool.rootDir, id)
-	scratchDir := filepath.Join(workingDir, id)
+	scratchDir := filepath.Join(scratchPrefix, id)
 
 	startCmd := append([]string{OL_INIT}, pool.initArgs...)
 
-	c, err := NewSOCKContainer(id, containerRootDir, codeDir, scratchDir, pool.cgPool,
-		pool.unshareFlags, startCmd, parent, imports)
+	var c *SOCKContainer = &SOCKContainer{
+		id:               id,
+		containerRootDir: containerRootDir,
+		codeDir:          codeDir,
+		scratchDir:       scratchDir,
+		unshareFlags:     pool.unshareFlags,
+	}
 
-	if err != nil {
+	defer func() {
+		if err != nil {
+			c.Destroy()
+		}
+	}()
+
+	if err := c.start(startCmd, pool.cgPool); err != nil {
+		return nil, fmt.Errorf("failed to start: %v", err)
+	}
+
+	if parent != nil {
+		if err := parent.fork(c, imports, true); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := c.runServer(); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := waitForServerPipeReady(c.HostDir()); err != nil {
 		return nil, err
 	}
 
+	// wrap to make thread-safe and handle container death
+	safeSB := &safeSandbox{Sandbox: c}
+
 	// TODO: have some way to clean up this structure as sandboxes are released
 	pool.Mutex.Lock()
-	pool.sandboxes = append(pool.sandboxes, c)
+	pool.sandboxes = append(pool.sandboxes, safeSB)
 	pool.Mutex.Unlock()
 
-	return c, nil
+	return safeSB, nil
 }
 
 func (pool *SOCKPool) Cleanup() {
@@ -118,4 +149,12 @@ func (pool *SOCKPool) Cleanup() {
 	pool.cgPool.Destroy()
 	syscall.Unmount(pool.rootDir, syscall.MNT_DETACH)
 	os.RemoveAll(pool.rootDir)
+}
+
+func (pool *SOCKPool) PrintDebug() {
+	pool.Mutex.Lock()
+	for _, sandbox := range pool.sandboxes {
+		fmt.Printf("----\n%s\n----\n", sandbox.DebugString())
+	}
+	pool.Mutex.Unlock()
 }

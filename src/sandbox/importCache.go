@@ -50,7 +50,6 @@ type ForkServer struct {
 	Children int
 	Size     float64
 	Mutex    *sync.Mutex
-	Pipe     *os.File
 }
 
 func NewImportCacheContainerFactory(handlerFactory, cacheFactory *SOCKPool) (*ImportCacheContainerFactory, error) {
@@ -144,10 +143,6 @@ func (ic *ImportCacheContainerFactory) FindOrMakeParent(imports []string) (paren
 		best_fs.Mutex.Lock()
 		ic.mutex.Unlock()
 
-		if err := best_fs.WaitForEntryInit(); err != nil {
-			return nil, err
-		}
-
 		best_toCache = []string{}
 	} else {
 		// we must take this lock to prevent the fork server from being
@@ -200,13 +195,6 @@ func (ic *ImportCacheContainerFactory) newCacheEntry(baseFS *ForkServer, toCache
 
 	baseFS.Children += 1
 
-	// open pipe before forkenter
-	pipeDir := filepath.Join(sandbox.HostDir(), "server_pipe")
-	fs.Pipe, err = os.OpenFile(pipeDir, os.O_RDWR, 0777)
-	if err != nil {
-		log.Fatalf("Cannot open pipe: %v\n", err)
-	}
-
 	// signal interpreter to forkenter into sandbox's namespace
 	err = baseFS.sandbox.fork(sandbox, toCache, false)
 	if err != nil {
@@ -221,49 +209,6 @@ func (ic *ImportCacheContainerFactory) initCacheRoot() (err error) {
 	rootSB, err := ic.cacheFactory.CreateFromParent("", ic.cacheDir, []string{}, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create root cache entry :: %v", err)
-	}
-
-	// open pipe before forkenter
-	pipeDir := filepath.Join(rootSB.HostDir(), "server_pipe")
-	pipe, err := os.OpenFile(pipeDir, os.O_RDWR, 0777)
-	if err != nil {
-		log.Fatalf("Cannot open pipe: %v\n", err)
-	}
-
-	start := time.Now()
-	// use StdoutPipe of olcontainer to sync with lambda server
-	ready := make(chan bool, 1)
-	defer close(ready)
-	go func() {
-		defer pipe.Close()
-
-		// wait for "ready"
-		buf := make([]byte, 5)
-		_, err := pipe.Read(buf)
-		if err != nil {
-			log.Printf("Cannot read from stdout of olcontainer: %v\n", err)
-		} else if string(buf) != "ready" {
-			log.Printf("Expect to read `ready`, only found %s\n", string(buf))
-		}
-		ready <- true
-	}()
-
-	timeout := time.NewTimer(5 * time.Second)
-	defer timeout.Stop()
-
-	start = time.Now()
-	select {
-	case <-ready:
-		if config.Conf.Timing {
-			log.Printf("wait for server took %v\n", time.Since(start))
-		}
-	case <-timeout.C:
-		if n, err := pipe.Write([]byte("timeo")); err != nil {
-			return err
-		} else if n != 5 {
-			return fmt.Errorf("Cannot write `timeo` to pipe\n")
-		}
-		return errors.New("root forkserver failed to start after 5s")
 	}
 
 	fs := &ForkServer{
@@ -283,6 +228,13 @@ func (ic *ImportCacheContainerFactory) initCacheRoot() (err error) {
 
 func (ic *ImportCacheContainerFactory) Full() bool {
 	return atomic.LoadInt32(&ic.full) == 1
+}
+
+func (ic *ImportCacheContainerFactory) PrintDebug() {
+	fmt.Printf("CACHE SANDBOXES:\n\n")
+	ic.cacheFactory.PrintDebug()
+	fmt.Printf("HANDLER SANDBOXES:\n\n")
+	ic.handlerFactory.PrintDebug()
 }
 
 func NewEvictor(ic *ImportCacheContainerFactory, mb_limit int) (*Evictor, error) {
@@ -389,44 +341,6 @@ func (fs *ForkServer) Kill() error {
 	}
 
 	fs.sandbox.Destroy()
-
-	return nil
-}
-
-func (fs *ForkServer) WaitForEntryInit() error {
-	// use StdoutPipe of olcontainer to sync with lambda server
-	ready := make(chan bool, 1)
-	defer close(ready)
-	go func() {
-		defer fs.Pipe.Close()
-
-		// wait for "ready"
-		buf := make([]byte, 5)
-		_, err := fs.Pipe.Read(buf)
-		if err != nil {
-			log.Printf("Cannot read from stdout of olcontainer: %v\n", err)
-		} else if string(buf) != "ready" {
-			log.Printf("Expect to read `ready`, but found %v\n", string(buf))
-		} else {
-			ready <- true
-		}
-	}()
-
-	timeout := time.NewTimer(5 * time.Second)
-	defer timeout.Stop()
-
-	start := time.Now()
-	select {
-	case <-ready:
-		log.Printf("wait for server took %v\n", time.Since(start))
-	case <-timeout.C:
-		if n, err := fs.Pipe.Write([]byte("timeo")); err != nil {
-			return err
-		} else if n != 5 {
-			return fmt.Errorf("Cannot write `timeo` to pipe\n")
-		}
-		return fmt.Errorf("Cache entry failed to initialize after 5s")
-	}
 
 	return nil
 }

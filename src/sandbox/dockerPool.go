@@ -58,9 +58,9 @@ func NewDockerPool(pidMode string, caps []string, cache bool) (*DockerPool, erro
 }
 
 // Create creates a docker sandbox from the handler and sandbox directory.
-func (pool *DockerPool) Create(handlerDir, workingDir string, imports []string) (Sandbox, error) {
+func (pool *DockerPool) Create(handlerDir, scratchPrefix string, imports []string) (Sandbox, error) {
 	id := fmt.Sprintf("%d", atomic.AddInt64(pool.idxPtr, 1))
-	hostDir := filepath.Join(workingDir, id)
+	hostDir := filepath.Join(scratchPrefix, id)
 	if err := os.MkdirAll(hostDir, 0777); err != nil {
 		return nil, err
 	}
@@ -116,6 +116,14 @@ func (pool *DockerPool) Cleanup() {
 	pool.Mutex.Lock()
 	for _, sandbox := range pool.sandboxes {
 		sandbox.Destroy()
+	}
+	pool.Mutex.Unlock()
+}
+
+func (pool *DockerPool) PrintDebug() {
+	pool.Mutex.Lock()
+	for _, sandbox := range pool.sandboxes {
+		fmt.Printf("----\n%s\n----\n", sandbox.DebugString())
 	}
 	pool.Mutex.Unlock()
 }

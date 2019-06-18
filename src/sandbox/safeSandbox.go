@@ -6,7 +6,10 @@ package sandbox
 // 3. calls on a destroyed sandbox just return a DEAD_SANDBOX error (no harm is done)
 
 import (
+	"fmt"
+	"log"
 	"net/http"
+	"strings"
 	"sync"
 )
 
@@ -26,14 +29,21 @@ type safeSandbox struct {
 	dead bool
 }
 
+func (sb *safeSandbox) printf(format string, args ...interface{}) {
+	msg := fmt.Sprintf(format, args...)
+	log.Printf("%s [SB %s]", strings.TrimRight(msg, "\n"), sb.Sandbox.ID())
+}
+
 func (sb *safeSandbox) destroyOnErr(origErr error) {
 	if origErr != nil {
+		sb.printf("Destroy() due to %v", origErr)
 		sb.Sandbox.Destroy()
 		sb.dead = true
 	}
 }
 
 func (sb *safeSandbox) Destroy() {
+	sb.printf("Destroy()")
 	sb.Mutex.Lock()
 	defer sb.Mutex.Unlock()
 
@@ -44,6 +54,7 @@ func (sb *safeSandbox) Destroy() {
 }
 
 func (sb *safeSandbox) Pause() (err error) {
+	sb.printf("Pause()")
 	sb.Mutex.Lock()
 	defer sb.Mutex.Unlock()
 	if sb.dead {
@@ -57,6 +68,7 @@ func (sb *safeSandbox) Pause() (err error) {
 }
 
 func (sb *safeSandbox) Unpause() (err error) {
+	sb.printf("Unpause()")
 	sb.Mutex.Lock()
 	defer sb.Mutex.Unlock()
 	if sb.dead {
@@ -70,6 +82,7 @@ func (sb *safeSandbox) Unpause() (err error) {
 }
 
 func (sb *safeSandbox) Channel() (tr *http.Transport, err error) {
+	sb.printf("Channel()")
 	sb.Mutex.Lock()
 	defer sb.Mutex.Unlock()
 	if sb.dead {
@@ -83,6 +96,7 @@ func (sb *safeSandbox) Channel() (tr *http.Transport, err error) {
 }
 
 func (sb *safeSandbox) MemUsageKB() (kb int, err error) {
+	sb.printf("MemUsageKB()")
 	sb.Mutex.Lock()
 	defer sb.Mutex.Unlock()
 	if sb.dead {
@@ -96,6 +110,7 @@ func (sb *safeSandbox) MemUsageKB() (kb int, err error) {
 }
 
 func (sb *safeSandbox) fork(dst Sandbox, imports []string, isLeaf bool) (err error) {
+	sb.printf("fork(dst, %v, %v)", imports, isLeaf)
 	sb.Mutex.Lock()
 	defer sb.Mutex.Unlock()
 	if sb.dead {
@@ -106,4 +121,13 @@ func (sb *safeSandbox) fork(dst Sandbox, imports []string, isLeaf bool) (err err
 	}()
 
 	return sb.Sandbox.fork(dst, imports, isLeaf)
+}
+
+func (sb *safeSandbox) DebugString() string {
+	sb.Mutex.Lock()
+	defer sb.Mutex.Unlock()
+	if sb.dead {
+		return fmt.Sprintf("SANDBOX %s: DEAD\n", sb.Sandbox.ID())
+	}
+	return sb.Sandbox.DebugString()
 }

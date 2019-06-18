@@ -47,32 +47,43 @@ func NewSOCKServer() (*SOCKServer, error) {
 	return server, nil
 }
 
-func (s *SOCKServer) GetSandbox(id string) *sandbox.SOCKContainer {
+func (s *SOCKServer) GetSandbox(id string) sandbox.Sandbox {
 	val, ok := s.sandboxes.Load(id)
 	if !ok {
 		return nil
 	}
-
-	return val.(*sandbox.SOCKContainer)
+	return val.(sandbox.Sandbox)
 }
 
 func (s *SOCKServer) Create(w http.ResponseWriter, rsrc []string, args map[string]interface{}) error {
+	// leaves are only in handler pool
+	var pool *sandbox.SOCKPool
+	if leaf, ok := args["leaf"]; !ok || leaf.(bool) {
+		pool = s.handlerPool
+	} else {
+		pool = s.cachePool
+	}
+
 	// create args
 	codeDir := args["code"].(string)
-	workingDir, err := ioutil.TempDir("", "ol")
+
+	scratchPrefix := filepath.Join(config.Conf.Worker_dir, "scratch")
+
+	imports := []string{}
+
+	var parent sandbox.Sandbox = nil
+	if p, ok := args["parent"]; ok {
+		parent = s.GetSandbox(p.(string))
+	}
+
+	// spin it up
+	c, err := pool.CreateFromParent(codeDir, scratchPrefix, imports, parent)
 	if err != nil {
 		return err
 	}
-	imports := []string{}
-	var parent *sandbox.SOCKContainer
-
-	log.Printf("CreateFromParent(%v, %v, %v, %v)", codeDir, workingDir, imports, parent)
-	c, err := s.handlerPool.CreateFromParent(codeDir, workingDir, imports, parent)
 	s.sandboxes.Store(c.ID(), c)
-	log.Printf("Container: %v", c)
 
 	w.Write([]byte(fmt.Sprintf("%v\n", c.ID())))
-
 	return nil
 }
 
@@ -84,6 +95,32 @@ func (s *SOCKServer) Destroy(w http.ResponseWriter, rsrc []string, args map[stri
 
 	c.Destroy()
 
+	return nil
+}
+
+func (s *SOCKServer) Pause(w http.ResponseWriter, rsrc []string, args map[string]interface{}) error {
+	c := s.GetSandbox(rsrc[0])
+	if c == nil {
+		return fmt.Errorf("no sandbox found with ID %s", rsrc[0])
+	}
+
+	return c.Pause()
+}
+
+func (s *SOCKServer) Unpause(w http.ResponseWriter, rsrc []string, args map[string]interface{}) error {
+	c := s.GetSandbox(rsrc[0])
+	if c == nil {
+		return fmt.Errorf("no sandbox found with ID %s", rsrc[0])
+	}
+
+	return c.Unpause()
+}
+
+func (s *SOCKServer) Debug(w http.ResponseWriter, rsrc []string, args map[string]interface{}) error {
+	fmt.Printf("CACHE POOL:\n\n")
+	s.cachePool.PrintDebug()
+	fmt.Printf("HANDLER POOL:\n\n")
+	s.handlerPool.PrintDebug()
 	return nil
 }
 
@@ -116,18 +153,19 @@ func (s *SOCKServer) HandleInternal(w http.ResponseWriter, r *http.Request) erro
 		return fmt.Errorf("no path arguments provided in URL")
 	}
 
-	var h Handler
-
-	switch rsrc[1] {
-	case "create":
-		h = s.Create
-	case "destroy":
-		h = s.Destroy
-	default:
-		return fmt.Errorf("unknown op %s", rsrc[1])
+	routes := map[string]Handler{
+		"create":  s.Create,
+		"destroy": s.Destroy,
+		"pause":   s.Pause,
+		"unpause": s.Unpause,
+		"debug":   s.Debug,
 	}
 
-	return h(w, rsrc[2:], args)
+	if h, ok := routes[rsrc[1]]; ok {
+		return h(w, rsrc[2:], args)
+	} else {
+		return fmt.Errorf("unknown op %s", rsrc[1])
+	}
 }
 
 func (s *SOCKServer) Handle(w http.ResponseWriter, r *http.Request) {
@@ -144,6 +182,11 @@ func (s *SOCKServer) cleanup() {
 }
 
 func SockMain() {
+	// start with a fresh env
+	if err := os.RemoveAll(config.Conf.Worker_dir); err != nil {
+		panic(err)
+	}
+
 	log.Printf("Start SOCK Server")
 	server, err := NewSOCKServer()
 	if err != nil {
