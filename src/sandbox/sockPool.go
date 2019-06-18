@@ -114,10 +114,12 @@ func (pool *SOCKPool) CreateFromParent(codeDir, scratchPrefix string, imports []
 		}
 	}()
 
+	// general setup (all SOCK sandboxes do this)
 	if err := c.start(startCmd, pool.cgPool); err != nil {
 		return nil, fmt.Errorf("failed to start: %v", err)
 	}
 
+	// specific setup (may actually start running user-supplied code)
 	if parent != nil {
 		if err := parent.fork(c, imports, true); err != nil {
 			return nil, err

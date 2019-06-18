@@ -167,19 +167,22 @@ func (cg *Cgroup) setFreezeState(state string) error {
 	timeout := 5 * time.Second
 
 	start := time.Now()
-	for time.Since(start) < timeout {
+	for {
 		freezerState, err := ioutil.ReadFile(freezerPath)
 		if err != nil {
 			return fmt.Errorf("failed to check self_freezing state :: %v", err)
 		}
 
-		if strings.TrimSpace(string(freezerState[:])) == state {
+		if strings.TrimSpace(string(freezerState)) == state {
 			return nil
 		}
+
+		if time.Since(start) > timeout {
+			return fmt.Errorf("cgroup stuck on %s after %v (should be %s)", freezerState, timeout, state)
+		}
+
 		time.Sleep(1 * time.Millisecond)
 	}
-
-	return fmt.Errorf("sock didn't pause/unpause after %v", timeout)
 }
 
 func (cg *Cgroup) Pause() error {

@@ -260,62 +260,6 @@ func (c *SOCKContainer) destroy() error {
 	return nil
 }
 
-// this forks init proc, then does execve to start server.py
-func (c *SOCKContainer) runServer() error {
-	pid, err := strconv.Atoi(c.guestInitPid)
-	if err != nil {
-		c.printf("bad guestInitPid string: %s :: %v", c.guestInitPid, err)
-		return err
-	}
-
-	proc, err := os.FindProcess(pid)
-	if err != nil {
-		c.printf("failed to find guest init process with pid=%d :: %v", pid, err)
-		return err
-	}
-
-	ready := make(chan bool, 1)
-	defer close(ready)
-	go func() {
-		// wait for signal handler to be "ready"
-		buf := make([]byte, 5)
-		_, err = c.initPipe.Read(buf)
-		if err != nil {
-			log.Fatalf("Cannot read from stdout of sock: %v\n", err)
-		} else if string(buf) != "ready" {
-			log.Fatalf("In sockContainer: Expect to see `ready` but sees %s\n", string(buf))
-		}
-		ready <- true
-	}()
-
-	// wait up to 5s for SOCK server to spawn
-	timeout := time.NewTimer(5 * time.Second)
-	defer timeout.Stop()
-
-	start := time.Now()
-	select {
-	case <-ready:
-		if config.Conf.Timing {
-			c.printf("wait for init signal handler took %v\n", time.Since(start))
-		}
-	case <-timeout.C:
-		if n, err := c.initPipe.Write([]byte("timeo")); err != nil {
-			return err
-		} else if n != 5 {
-			return fmt.Errorf("Cannot write `timeo` to pipe\n")
-		}
-		return fmt.Errorf("sock_init failed to spawn after 5s")
-	}
-
-	err = proc.Signal(syscall.SIGUSR1)
-	if err != nil {
-		c.printf("failed to send SIGUSR1 to pid=%d :: %v", pid, err)
-		return err
-	}
-
-	return nil
-}
-
 func (c *SOCKContainer) MemUsageKB() (kb int, err error) {
 	usagePath := c.cg.Path("memory", "memory.usage_in_bytes")
 	buf, err := ioutil.ReadFile(usagePath)
@@ -385,6 +329,62 @@ func (c *SOCKContainer) fork(dst Sandbox, imports []string, isLeaf bool) (err er
 
 	c.printf("add forked PID %s to CG", pid)
 	if err = dstSock.cg.AddPid(pid); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// this forks init proc, then does execve to start server.py
+func (c *SOCKContainer) runServer() error {
+	pid, err := strconv.Atoi(c.guestInitPid)
+	if err != nil {
+		c.printf("bad guestInitPid string: %s :: %v", c.guestInitPid, err)
+		return err
+	}
+
+	proc, err := os.FindProcess(pid)
+	if err != nil {
+		c.printf("failed to find guest init process with pid=%d :: %v", pid, err)
+		return err
+	}
+
+	ready := make(chan bool, 1)
+	defer close(ready)
+	go func() {
+		// wait for signal handler to be "ready"
+		buf := make([]byte, 5)
+		_, err = c.initPipe.Read(buf)
+		if err != nil {
+			log.Fatalf("Cannot read from stdout of sock: %v\n", err)
+		} else if string(buf) != "ready" {
+			log.Fatalf("In sockContainer: Expect to see `ready` but sees %s\n", string(buf))
+		}
+		ready <- true
+	}()
+
+	// wait up to 5s for SOCK server to spawn
+	timeout := time.NewTimer(5 * time.Second)
+	defer timeout.Stop()
+
+	start := time.Now()
+	select {
+	case <-ready:
+		if config.Conf.Timing {
+			c.printf("wait for init signal handler took %v\n", time.Since(start))
+		}
+	case <-timeout.C:
+		if n, err := c.initPipe.Write([]byte("timeo")); err != nil {
+			return err
+		} else if n != 5 {
+			return fmt.Errorf("Cannot write `timeo` to pipe\n")
+		}
+		return fmt.Errorf("sock_init failed to spawn after 5s")
+	}
+
+	err = proc.Signal(syscall.SIGUSR1)
+	if err != nil {
+		c.printf("failed to send SIGUSR1 to pid=%d :: %v", pid, err)
 		return err
 	}
 
