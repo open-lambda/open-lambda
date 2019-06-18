@@ -188,11 +188,69 @@ def call_each_once(lambda_count, alloc_mb=0):
             call_each_once_exec(lambda_count=lambda_count, alloc_mb=alloc_mb)
 
 
+def sock_churn_task(args):
+    echo_path, parent, t0, seconds = args
+    i = 0
+    while time.time() < t0 + seconds:
+        r = requests.post("http://localhost:5000/create", data=json.dumps({"code": echo_path, "leaf": True, "parent": parent}))
+        r.raise_for_status()
+        sandbox_id = r.text.strip()
+        r = requests.post("http://localhost:5000/destroy/"+sandbox_id, data="{}")
+        r.raise_for_status()
+        i += 1
+    return i
+
+
+@test
+def ping_test():
+    pings = 1000
+    t0 = time.time()
+    for i in range(pings):
+        r = requests.get("http://localhost:5000/status")
+        r.raise_for_status()
+    seconds = time.time() - t0
+    return {"pings_per_sec": pings/seconds}
+
+
+@test
+def sock_churn(baseline, procs, seconds, fork):
+    # baseline: how many sandboxes are sitting idly throughout the experiment
+    # procs: how many procs are concurrently creating and deleting other sandboxes
+
+    echo_path = os.path.abspath("test-registry/echo")
+
+    if fork:
+        r = requests.post("http://localhost:5000/create", data=json.dumps({"code": "", "leaf": False}))
+        r.raise_for_status()
+        parent = r.text
+    else:
+        parent = None
+
+    for i in range(baseline):
+        r = requests.post("http://localhost:5000/create", data=json.dumps({"code": echo_path, "leaf": True, "parent": parent}))
+        r.raise_for_status()
+
+    t0 = time.time()
+    with Pool(procs) as p:
+        reqs = sum(p.map(sock_churn_task, [(echo_path, parent, t0, seconds)] * procs, chunksize=1))
+
+    return {"sandboxes_per_sec": reqs/seconds}
+
+
 def tests():
     startup_pkgs = ["parso", "jedi", "urllib3", "idna", "chardet", "certifi", "requests", "simplejson"]
     test_reg = os.path.abspath("test-registry")
 
+    # test SOCK directly (without lambdas)
+    with TestConf(server_mode="sock"):
+        sock_churn(baseline=0, procs=1, seconds=15, fork=True)
+        sock_churn(baseline=32, procs=1, seconds=15, fork=True)
+        sock_churn(baseline=0, procs=15, seconds=15, fork=True)
+        sock_churn(baseline=32, procs=15, seconds=15, fork=True)
+
     with TestConf(registry=test_reg, startup_pkgs=startup_pkgs):
+        ping_test()
+
         # do smoke tests under various configs
         with TestConf(handler_cache_mb=0, import_cache_mb=0):
             smoke_tests()
@@ -209,7 +267,7 @@ def tests():
 
         # test resource limits
         fork_bomb()
-        
+
     # test heavy load
     with TestConf(sandbox="sock", handler_cache_mb=256, import_cache_mb=256, registry=test_reg):
         stress_one_lambda(procs=1, seconds=15)

@@ -15,7 +15,7 @@ type SandboxPool interface {
 	// Destroy all containers in this pool
 	Cleanup()
 
-	PrintDebug()
+	DebugString() string
 }
 
 /*

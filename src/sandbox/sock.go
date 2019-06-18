@@ -33,8 +33,8 @@ type SOCKContainer struct {
 	containerRootDir string
 	codeDir          string
 	scratchDir       string
-	initPid          string
-	initCmd          *exec.Cmd
+	hostInitCmd      *exec.Cmd
+	guestInitPid     string
 	unshareFlags     string
 	initPipe         *os.File
 }
@@ -139,16 +139,16 @@ func (c *SOCKContainer) start(startCmd []string, cgPool *CgroupPool) (err error)
 	initArgs := []string{c.unshareFlags, c.containerRootDir}
 	initArgs = append(initArgs, startCmd...)
 
-	c.initCmd = exec.Command(
-		"/usr/local/bin/sock-init",
+	c.hostInitCmd = exec.Command(
+		SOCK_HOST_INIT,
 		initArgs...,
 	)
 
-	c.initCmd.Env = []string{fmt.Sprintf("ol.config=%s", config.SandboxConfJson())}
-	c.initCmd.Stderr = os.Stdout // for debugging
+	c.hostInitCmd.Env = []string{fmt.Sprintf("ol.config=%s", config.SandboxConfJson())}
+	c.hostInitCmd.Stderr = os.Stdout // for debugging
 
 	start := time.Now()
-	if err := c.initCmd.Start(); err != nil {
+	if err := c.hostInitCmd.Start(); err != nil {
 		return err
 	}
 
@@ -159,8 +159,6 @@ func (c *SOCKContainer) start(startCmd []string, cgPool *CgroupPool) (err error)
 		// message will be either 5 byte \0 padded pid (<65536), or "ready"
 		pid := make([]byte, 6)
 		n, err := c.initPipe.Read(pid[:5])
-
-		// TODO: return early
 
 		if err != nil {
 			c.printf("Cannot read from stdout of sock: %v\n", err)
@@ -175,7 +173,7 @@ func (c *SOCKContainer) start(startCmd []string, cgPool *CgroupPool) (err error)
 	defer timeout.Stop()
 
 	select {
-	case c.initPid = <-ready:
+	case c.guestInitPid = <-ready:
 		if config.Conf.Timing {
 			c.printf("wait for sock_init took %v\n", time.Since(start))
 		}
@@ -191,8 +189,8 @@ func (c *SOCKContainer) start(startCmd []string, cgPool *CgroupPool) (err error)
 
 	// JOIN A CGROUP
 	c.cg = cgPool.GetCg()
-	c.printf("add init PID %s to CG", c.initPid)
-	if err := c.cg.AddPid(c.initPid); err != nil {
+	c.printf("add init PID %s to CG", c.guestInitPid)
+	if err := c.cg.AddPid(c.guestInitPid); err != nil {
 		return err
 	}
 
@@ -221,6 +219,7 @@ func (c *SOCKContainer) destroy() error {
 		}(time.Now())
 	}
 
+	// kill all procs INSIDE the cgroup
 	if c.cg != nil {
 		c.printf("kill all procs in CG\n")
 		if err := c.cg.KillAllProcs(); err != nil {
@@ -230,12 +229,16 @@ func (c *SOCKContainer) destroy() error {
 		c.cg.Release()
 	}
 
-	// wait for the initCmd to clean up its children
-	if c.initCmd != nil {
-		c.printf("wait for init to die\n")
-		_, err := c.initCmd.Process.Wait()
+	// kill the host init process OUTSIDE the cgroup
+	if c.hostInitCmd != nil {
+		if err := c.hostInitCmd.Process.Kill(); err != nil {
+			return err
+		}
+
+		c.printf("wait for host init process (PID %d) to die\n", c.hostInitCmd.Process.Pid)
+		_, err := c.hostInitCmd.Process.Wait()
 		if err != nil {
-			c.printf("failed to wait on initCmd pid=%d :: %v", c.initCmd.Process.Pid, err)
+			c.printf("failed to wait on hostInitCmd pid=%d :: %v", c.hostInitCmd.Process.Pid, err)
 		}
 	}
 
@@ -259,15 +262,15 @@ func (c *SOCKContainer) destroy() error {
 
 // this forks init proc, then does execve to start server.py
 func (c *SOCKContainer) runServer() error {
-	pid, err := strconv.Atoi(c.initPid)
+	pid, err := strconv.Atoi(c.guestInitPid)
 	if err != nil {
-		c.printf("bad initPid string: %s :: %v", c.initPid, err)
+		c.printf("bad guestInitPid string: %s :: %v", c.guestInitPid, err)
 		return err
 	}
 
 	proc, err := os.FindProcess(pid)
 	if err != nil {
-		c.printf("failed to find initPid process with pid=%d :: %v", pid, err)
+		c.printf("failed to find guest init process with pid=%d :: %v", pid, err)
 		return err
 	}
 
@@ -339,15 +342,31 @@ func (c *SOCKContainer) DebugString() string {
 	s += fmt.Sprintf("HOST DIR: %s\n", c.HostDir())
 
 	if pids, err := c.cg.GetPIDs(); err == nil {
-		s += fmt.Sprintf("PIDS: %s\n", strings.Join(pids, ", "))
+		s += fmt.Sprintf("CGROUP PIDS: %s\n", strings.Join(pids, ", "))
 	} else {
-		s += fmt.Sprintf("PIDS: unknown (%s)\n", err)
+		s += fmt.Sprintf("CGROUP PIDS: unknown (%s)\n", err)
 	}
 
+	s += fmt.Sprintf("GUEST INIT PID: %s\n", c.guestInitPid)
+
+	if c.hostInitCmd != nil && c.hostInitCmd.Process != nil {
+		s += fmt.Sprintf("HOST INIT PID: %d\n", c.hostInitCmd.Process.Pid)
+	} else {
+		s += fmt.Sprintf("HOST INIT PID: unknown\n")
+	}
+
+	s += fmt.Sprintf("CGROUPS: %s\n", c.cg.Path("<RESOURCE>", ""))
+
 	if state, err := ioutil.ReadFile(c.cg.Path("freezer", "freezer.state")); err == nil {
-		s += fmt.Sprintf("FREEZE STATE: %s\n", state)
+		s += fmt.Sprintf("FREEZE STATE: %s", state)
 	} else {
 		s += fmt.Sprintf("FREEZE STATE: unknown (%s)\n", err)
+	}
+
+	if kb, err := c.MemUsageKB(); err == nil {
+		s += fmt.Sprintf("MEMORY USED: %.3fMB\n", float64(kb)/1024.0)
+	} else {
+		s += fmt.Sprintf("MEMORY USED: unknown (%s)\n", err)
 	}
 
 	return s
@@ -357,7 +376,7 @@ func (c *SOCKContainer) DebugString() string {
 func (c *SOCKContainer) fork(dst Sandbox, imports []string, isLeaf bool) (err error) {
 	dstSock := dst.(*SOCKContainer)
 
-	targetPid := dstSock.initPid
+	targetPid := dstSock.guestInitPid
 	rootDir := dstSock.containerRootDir
 	pid, err := c.forkRequest(targetPid, rootDir, imports, isLeaf)
 	if err != nil {

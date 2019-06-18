@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -120,10 +121,15 @@ func (pool *DockerPool) Cleanup() {
 	pool.Mutex.Unlock()
 }
 
-func (pool *DockerPool) PrintDebug() {
+func (pool *DockerPool) DebugString() string {
 	pool.Mutex.Lock()
+	defer pool.Mutex.Unlock()
+
+	var sb strings.Builder
+
 	for _, sandbox := range pool.sandboxes {
-		fmt.Printf("----\n%s\n----\n", sandbox.DebugString())
+		sb.WriteString(fmt.Sprintf("----\n%s\n----\n", sandbox.DebugString()))
 	}
-	pool.Mutex.Unlock()
+
+	return sb.String()
 }

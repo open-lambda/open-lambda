@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -82,6 +83,7 @@ func (s *SOCKServer) Create(w http.ResponseWriter, rsrc []string, args map[strin
 		return err
 	}
 	s.sandboxes.Store(c.ID(), c)
+	log.Printf("Save ID '%s' to map\n", c.ID())
 
 	w.Write([]byte(fmt.Sprintf("%v\n", c.ID())))
 	return nil
@@ -90,7 +92,7 @@ func (s *SOCKServer) Create(w http.ResponseWriter, rsrc []string, args map[strin
 func (s *SOCKServer) Destroy(w http.ResponseWriter, rsrc []string, args map[string]interface{}) error {
 	c := s.GetSandbox(rsrc[0])
 	if c == nil {
-		return fmt.Errorf("no sandbox found with ID %s", rsrc[0])
+		return fmt.Errorf("no sandbox found with ID '%s'", rsrc[0])
 	}
 
 	c.Destroy()
@@ -101,7 +103,7 @@ func (s *SOCKServer) Destroy(w http.ResponseWriter, rsrc []string, args map[stri
 func (s *SOCKServer) Pause(w http.ResponseWriter, rsrc []string, args map[string]interface{}) error {
 	c := s.GetSandbox(rsrc[0])
 	if c == nil {
-		return fmt.Errorf("no sandbox found with ID %s", rsrc[0])
+		return fmt.Errorf("no sandbox found with ID '%s'", rsrc[0])
 	}
 
 	return c.Pause()
@@ -110,18 +112,29 @@ func (s *SOCKServer) Pause(w http.ResponseWriter, rsrc []string, args map[string
 func (s *SOCKServer) Unpause(w http.ResponseWriter, rsrc []string, args map[string]interface{}) error {
 	c := s.GetSandbox(rsrc[0])
 	if c == nil {
-		return fmt.Errorf("no sandbox found with ID %s", rsrc[0])
+		return fmt.Errorf("no sandbox found with ID '%s'", rsrc[0])
 	}
 
 	return c.Unpause()
 }
 
 func (s *SOCKServer) Debug(w http.ResponseWriter, rsrc []string, args map[string]interface{}) error {
-	fmt.Printf("CACHE POOL:\n\n")
-	s.cachePool.PrintDebug()
-	fmt.Printf("HANDLER POOL:\n\n")
-	s.handlerPool.PrintDebug()
+	str := fmt.Sprintf(
+		"CACHE SANDBOXES:\n\n%sHANDLER SANDBOXES:\n\n%s",
+		s.cachePool.DebugString(), s.handlerPool.DebugString())
+	fmt.Printf("%s\n", str)
+	w.Write([]byte(str))
 	return nil
+}
+
+// GetPid returns process ID, useful for making sure we're talking to the expected server
+func (s *SOCKServer) GetPid(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Receive request to %s\n", r.URL.Path)
+
+	wbody := []byte(strconv.Itoa(os.Getpid()) + "\n")
+	if _, err := w.Write(wbody); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
 }
 
 func (s *SOCKServer) HandleInternal(w http.ResponseWriter, r *http.Request) error {
@@ -170,7 +183,7 @@ func (s *SOCKServer) HandleInternal(w http.ResponseWriter, r *http.Request) erro
 
 func (s *SOCKServer) Handle(w http.ResponseWriter, r *http.Request) {
 	if err := s.HandleInternal(w, r); err != nil {
-		log.Printf("Create Error: %v", err)
+		log.Printf("Request Handler Failed: %v", err)
 		w.WriteHeader(500)
 		w.Write([]byte(fmt.Sprintf("%v\n", err)))
 	}
@@ -195,6 +208,7 @@ func SockMain() {
 	}
 
 	port := fmt.Sprintf(":%s", config.Conf.Worker_port)
+	http.HandleFunc(PID_PATH, server.GetPid)
 	http.HandleFunc("/", server.Handle)
 
 	// clean up if signal hits us

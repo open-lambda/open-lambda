@@ -230,11 +230,9 @@ func (ic *ImportCacheContainerFactory) Full() bool {
 	return atomic.LoadInt32(&ic.full) == 1
 }
 
-func (ic *ImportCacheContainerFactory) PrintDebug() {
-	fmt.Printf("CACHE SANDBOXES:\n\n")
-	ic.cacheFactory.PrintDebug()
-	fmt.Printf("HANDLER SANDBOXES:\n\n")
-	ic.handlerFactory.PrintDebug()
+func (ic *ImportCacheContainerFactory) DebugString() string {
+	return fmt.Sprintf("CACHE SANDBOXES:\n\n%sHANDLER SANDBOXES:\n\n%s",
+		ic.cacheFactory, ic.handlerFactory)
 }
 
 func NewEvictor(ic *ImportCacheContainerFactory, mb_limit int) (*Evictor, error) {

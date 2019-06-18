@@ -182,7 +182,6 @@ import (
  *
  * Returns the PID of the spawned process upon success.
  */
-
 func (c *SOCKContainer) forkRequest(targetPid, rootDir string, imports []string, handler bool) (string, error) {
 	b := benchmarker.GetBenchmarker()
 	var t *benchmarker.Timer
@@ -217,6 +216,7 @@ func (c *SOCKContainer) forkRequest(targetPid, rootDir string, imports []string,
 
 	var retErr error
 	for k := 0; k < 5; k++ {
+		// TODO: if sendFds hangs, we never recover
 		c.printf("sendFds to %s", sockPath)
 		ret, err := C.sendFds(cSock, cPid, cRoot, C.int(len(rootDir)+1), cSignal, C.int(len(signalStr)+1))
 		if err == nil {

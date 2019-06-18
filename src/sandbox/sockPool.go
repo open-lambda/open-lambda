@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -13,7 +14,10 @@ import (
 	"github.com/open-lambda/open-lambda/ol/config"
 )
 
-const OL_INIT = "/ol-init"
+// the first program is executed on the host, which sets up the
+// container, running the second program inside the container
+const SOCK_HOST_INIT = "/usr/local/bin/sock-init"
+const SOCK_GUEST_INIT = "/ol-init"
 
 var BIND uintptr = uintptr(syscall.MS_BIND)
 var BIND_RO uintptr = uintptr(syscall.MS_BIND | syscall.MS_RDONLY | syscall.MS_REMOUNT)
@@ -94,7 +98,7 @@ func (pool *SOCKPool) CreateFromParent(codeDir, scratchPrefix string, imports []
 	containerRootDir := filepath.Join(pool.rootDir, id)
 	scratchDir := filepath.Join(scratchPrefix, id)
 
-	startCmd := append([]string{OL_INIT}, pool.initArgs...)
+	startCmd := append([]string{SOCK_GUEST_INIT}, pool.initArgs...)
 
 	var c *SOCKContainer = &SOCKContainer{
 		id:               id,
@@ -151,10 +155,15 @@ func (pool *SOCKPool) Cleanup() {
 	os.RemoveAll(pool.rootDir)
 }
 
-func (pool *SOCKPool) PrintDebug() {
+func (pool *SOCKPool) DebugString() string {
 	pool.Mutex.Lock()
+	defer pool.Mutex.Unlock()
+
+	var sb strings.Builder
+
 	for _, sandbox := range pool.sandboxes {
-		fmt.Printf("----\n%s\n----\n", sandbox.DebugString())
+		sb.WriteString(fmt.Sprintf("%s--------\n", sandbox.DebugString()))
 	}
-	pool.Mutex.Unlock()
+
+	return sb.String()
 }
