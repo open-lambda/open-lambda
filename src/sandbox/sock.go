@@ -63,7 +63,16 @@ func (c *SOCKContainer) Channel() (tr *http.Transport, err error) {
 	return &http.Transport{Dial: dial}, nil
 }
 
-func (c *SOCKContainer) startSock2(bootPy []string) (err error) {
+func (c *SOCKContainer) writeBootstrapCode(bootPy []string) (err error) {
+	path := filepath.Join(c.containerRootDir, "host", "bootstrap.py")
+	code := []byte(strings.Join(bootPy, "\n"))
+	if err := ioutil.WriteFile(path, code, 0600); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *SOCKContainer) freshProc() (err error) {
 	// get FDs to cgroups
 	cgFiles := make([]*os.File, len(cgroupList))
 	for i, name := range cgroupList {
@@ -76,15 +85,8 @@ func (c *SOCKContainer) startSock2(bootPy []string) (err error) {
 		defer cgFiles[i].Close()
 	}
 
-	sbBootPath := filepath.Join("host", "bootstrap.py")
-	bootPath := filepath.Join(c.containerRootDir, sbBootPath)
-	code := []byte(strings.Join(bootPy, "\n"))
-	if err := ioutil.WriteFile(bootPath, code, 0600); err != nil {
-		return err
-	}
-
 	cmd := exec.Command(
-		"chroot", c.containerRootDir, "python3", "sock2.py", sbBootPath, strconv.Itoa(len(cgFiles)),
+		"chroot", c.containerRootDir, "python3", "sock2.py", "/host/bootstrap.py", strconv.Itoa(len(cgFiles)),
 	)
 	cmd.ExtraFiles = cgFiles
 
@@ -92,7 +94,13 @@ func (c *SOCKContainer) startSock2(bootPy []string) (err error) {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	return cmd.Start()
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+
+	// sock2.py forks off a process in a new container, so this
+	// won't block long
+	return cmd.Wait()
 }
 
 func (c *SOCKContainer) populateRoot() (err error) {
@@ -242,20 +250,14 @@ func (c *SOCKContainer) HostDir() string {
 func (c *SOCKContainer) DebugString() string {
 	var s string = fmt.Sprintf("SOCK %s\n", c.ID())
 
+	s += fmt.Sprintf("ROOT DIR: %s\n", c.containerRootDir)
+
 	s += fmt.Sprintf("HOST DIR: %s\n", c.HostDir())
 
 	if pids, err := c.cg.GetPIDs(); err == nil {
 		s += fmt.Sprintf("CGROUP PIDS: %s\n", strings.Join(pids, ", "))
 	} else {
 		s += fmt.Sprintf("CGROUP PIDS: unknown (%s)\n", err)
-	}
-
-	s += fmt.Sprintf("GUEST INIT PID: %s\n", c.guestInitPid)
-
-	if c.hostInitCmd != nil && c.hostInitCmd.Process != nil {
-		s += fmt.Sprintf("HOST INIT PID: %d\n", c.hostInitCmd.Process.Pid)
-	} else {
-		s += fmt.Sprintf("HOST INIT PID: unknown\n")
 	}
 
 	s += fmt.Sprintf("CGROUPS: %s\n", c.cg.Path("<RESOURCE>", ""))
@@ -276,75 +278,53 @@ func (c *SOCKContainer) DebugString() string {
 }
 
 // fork a new process from the Zygote in c, relocate it to be the server in dst
-func (c *SOCKContainer) fork(dst Sandbox, imports []string, isLeaf bool) (err error) {
+func (c *SOCKContainer) fork(dst Sandbox) (err error) {
 	dstSock := dst.(*SOCKContainer)
 
-	targetPid := dstSock.guestInitPid
+	origPids, err := c.cg.GetPIDs()
+	if err != nil {
+		return err
+	}
+
 	rootDir := dstSock.containerRootDir
-	pid, err := c.forkRequest(targetPid, rootDir, imports, isLeaf)
+	err = c.forkRequest(rootDir)
 	if err != nil {
 		return err
 	}
 
-	c.printf("add forked PID %s to CG", pid)
-	if err = dstSock.cg.AddPid(pid); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// this forks init proc, then does execve to start server.py
-func (c *SOCKContainer) runServer() error {
-	pid, err := strconv.Atoi(c.guestInitPid)
-	if err != nil {
-		c.printf("bad guestInitPid string: %s :: %v", c.guestInitPid, err)
-		return err
-	}
-
-	proc, err := os.FindProcess(pid)
-	if err != nil {
-		c.printf("failed to find guest init process with pid=%d :: %v", pid, err)
-		return err
-	}
-
-	ready := make(chan bool, 1)
-	defer close(ready)
-	go func() {
-		// wait for signal handler to be "ready"
-		buf := make([]byte, 5)
-		_, err = c.initPipe.Read(buf)
+	// move new PIDs to new cgroup.
+	//
+	// Make multiple passes in case new processes are being
+	// spawned (TODO: better way to do this?  This lets a forking
+	// process potentially kill our cache entry, which isn't
+	// great).
+	for {
+		currPids, err := c.cg.GetPIDs()
 		if err != nil {
-			log.Fatalf("Cannot read from stdout of sock: %v\n", err)
-		} else if string(buf) != "ready" {
-			log.Fatalf("In sockContainer: Expect to see `ready` but sees %s\n", string(buf))
-		}
-		ready <- true
-	}()
-
-	// wait up to 5s for SOCK server to spawn
-	timeout := time.NewTimer(5 * time.Second)
-	defer timeout.Stop()
-
-	start := time.Now()
-	select {
-	case <-ready:
-		if config.Conf.Timing {
-			c.printf("wait for init signal handler took %v\n", time.Since(start))
-		}
-	case <-timeout.C:
-		if n, err := c.initPipe.Write([]byte("timeo")); err != nil {
 			return err
-		} else if n != 5 {
-			return fmt.Errorf("Cannot write `timeo` to pipe\n")
 		}
-		return fmt.Errorf("sock_init failed to spawn after 5s")
-	}
 
-	err = proc.Signal(syscall.SIGUSR1)
-	if err != nil {
-		c.printf("failed to send SIGUSR1 to pid=%d :: %v", pid, err)
-		return err
+		moved := 0
+		
+		for _, pid := range(currPids) {
+			isOrig := false
+			for _, origPid := range(origPids) {
+				if pid == origPid {
+					isOrig = true
+					break
+				}
+			}
+			if !isOrig {
+				if err = dstSock.cg.AddPid(pid); err != nil {
+					return err
+				}
+				moved += 1
+			}
+		}
+
+		if moved == 0 {
+			break
+		}
 	}
 
 	return nil

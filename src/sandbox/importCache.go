@@ -198,7 +198,7 @@ func (ic *ImportCacheContainerFactory) newCacheEntry(baseFS *ForkServer, toCache
 	baseFS.Children += 1
 
 	// signal interpreter to forkenter into sandbox's namespace
-	err = baseFS.sandbox.fork(sandbox, toCache, false)
+	err = baseFS.sandbox.fork(sandbox)
 	if err != nil {
 		fs.Kill()
 		return nil, err

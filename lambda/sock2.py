@@ -1,18 +1,21 @@
 import os, sys, json, argparse, importlib, traceback, time
+import tornado.ioloop
+import tornado.web
+import tornado.httpserver
+import tornado.netutil
 import ns
 
 def web_server(sock_path):
     print("serve from Tornado")
 
-    import tornado.ioloop
-    import tornado.web
-    import tornado.httpserver
-    import tornado.netutil
-
-    import lambda_func
-
     class SockFileHandler(tornado.web.RequestHandler):
         def post(self):
+            # we don't import this until we get a request; this is a
+            # safeguard in case lambda_func is malicious (we don't
+            # want it to interfere with ongoing setup, such as the
+            # move to the new cgroups)
+            import lambda_func
+
             try:
                 data = self.request.body
                 try :
@@ -42,19 +45,16 @@ def fork_server(sock_path):
     assert sock >= 0
 
     while True:
-        root_fd = ns.read_fd(sock)
-
-        pid = os.fork()
-        assert(pid >= 0)
+        # the parent will have already waited for the child to exit
+        # before this even returns
+        pid = ns.fork_to_next_fd(sock)
 
         if pid == 0:
-            os.fchdir(root_fd)
-            os.chroot(".")
-            os.close(root_fd)
+            # child
             start_container()
-            sys.exit(1)
-        # else: parent continues, waiting for more fork requests
-        os.close(root_fd)
+
+            # start_container should never return, unless there's a bug in the user's code
+            os._exit(1)
 
 
 # 1. this assumes chroot has taken us to the location where the container should start.
@@ -70,7 +70,7 @@ def start_container():
         # orhpan the new process by exiting parent.  The parent
         # process is in a weird state because unshare only partially
         # works for the process that calls it.
-        return
+        os._exit(0)
 
     with open(bootstrap_path) as f:
         # this code can be whatever OL decides, but it will probably do the following:
@@ -98,10 +98,11 @@ def main():
     # join cgroups passed to us
     pid = str(os.getpid())
     for i in range(cgroup_fds):
-        print('sock2.py: join cgroup')
         # golang guarantees extras start at 3: https://golang.org/pkg/os/exec/#Cmd
-        f = os.fdopen(3 + i, "w")
+        fd = 3 + i
+        f = os.fdopen(fd, "w")
         f.write(pid)
+        print('sock2.py: joined cgroup, close FD %d' % fd)
         f.close()
 
     start_container()

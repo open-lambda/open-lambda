@@ -69,7 +69,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchPrefix
 		}(time.Now())
 	}
 
-	log.Printf("%v.CreateFromParent(%v, %v, %v, %v)", pool.name, codeDir, scratchPrefix, imports, parent)
+	log.Printf("%v.Create(%v, %v, %v, %v)", pool.name, codeDir, scratchPrefix, imports, parent)
 
 	id := fmt.Sprintf("%d", atomic.AddInt64(&nextId, 1))
 	containerRootDir := filepath.Join(pool.rootDir, id)
@@ -95,20 +95,29 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchPrefix
 	}
 
 	// create process (new, or forked from parent)
-	if parent == nil {
-		if isLeaf {
-			c.startSock2([]string{
-				"sys.path.append('/handler')",
-				"web_server('/host/ol.sock')",
-			})
-		} else {
-			c.startSock2([]string{
-				"sys.path.append('/handler')",
-				"fork_server('/host/ol.sock')",
-			})
+	var pyCode []string
+	if isLeaf {
+		pyCode = []string{
+			"sys.path.append('/handler')",
+			"web_server('/host/ol.sock')",
 		}
 	} else {
-		return nil, fmt.Errorf("not implemented")
+		pyCode = []string{
+			"fork_server('/host/ol.sock')",
+		}
+	}
+	if err := c.writeBootstrapCode(pyCode); err != nil {
+		return nil, err
+	}
+
+	if parent == nil {
+		if err := c.freshProc(); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := parent.fork(c); err != nil {
+			return nil, err
+		}
 	}
 
 	// wrap to make thread-safe and handle container death

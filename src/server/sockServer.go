@@ -30,12 +30,12 @@ type SOCKServer struct {
 
 // NewSOCKServer creates a server based on the passed config."
 func NewSOCKServer() (*SOCKServer, error) {
-	cache, err := sandbox.NewSOCKPool("cache-alone")
+	cache, err := sandbox.NewSOCKPool("sock-cache")
 	if err != nil {
 		return nil, err
 	}
 
-	handler, err := sandbox.NewSOCKPool("handler-alone")
+	handler, err := sandbox.NewSOCKPool("sock-handlers")
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +124,7 @@ func (s *SOCKServer) Unpause(w http.ResponseWriter, rsrc []string, args map[stri
 
 func (s *SOCKServer) Debug(w http.ResponseWriter, rsrc []string, args map[string]interface{}) error {
 	str := fmt.Sprintf(
-		"CACHE SANDBOXES:\n\n%sHANDLER SANDBOXES:\n\n%s",
+		"========\nCACHE SANDBOXES\n========\n%s========\nHANDLER SANDBOXES\n========\n%s",
 		s.cachePool.DebugString(), s.handlerPool.DebugString())
 	fmt.Printf("%s\n", str)
 	w.Write([]byte(str))

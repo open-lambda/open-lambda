@@ -5,6 +5,8 @@
 #include <sched.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 static PyObject *ns_unshare(PyObject *module) {
     int res = unshare(CLONE_NEWUTS|CLONE_NEWPID|CLONE_NEWUTS);
@@ -40,9 +42,9 @@ static PyObject *ns_open_sock_file(PyObject *module, PyObject *arg) {
     return Py_BuildValue("i", sock);
 }
 
-static PyObject *ns_read_fd(PyObject *module, PyObject *arg) {
+static PyObject *fork_to_next_fd(PyObject *module, PyObject *arg) {
     int sock = (int)PyLong_AsLong(arg);
-    printf("ns_read_fd(%d)\n", sock);
+    printf("fork_to_next_fd(%d)\n", sock);
 
     // wait for connection
     struct sockaddr_un remote;
@@ -54,7 +56,7 @@ static PyObject *ns_read_fd(PyObject *module, PyObject *arg) {
     }
 
     // get FD over connection
-    int n, fd;
+    int n, root_fd;
     char cms[CMSG_SPACE(sizeof(int))];
     char buf[1];
 
@@ -74,29 +76,57 @@ static PyObject *ns_read_fd(PyObject *module, PyObject *arg) {
     msg.msg_control = cms;
     msg.msg_controllen = sizeof cms;
 
-    if((n = recvmsg(sock, &msg, 0)) < 0) {
+    if ((n = recvmsg(conn, &msg, 0)) < 0) {
         perror("recvmsg");
 	exit(1);
     }
 
-    if(n == 0){
+    if (n == 0){
 	perror("unexpected EOF");
 	exit(1);
     }
 
     cmsg = CMSG_FIRSTHDR(&msg);
-    memmove(&fd, CMSG_DATA(cmsg), sizeof(int));
+    memmove(&root_fd, CMSG_DATA(cmsg), sizeof(int));
 
-    // close connection
+    int pid = fork();
+    if (pid < 0) {
+	perror("fork");
+	exit(1);
+    }
+
+    if (pid != 0) {
+	// parent
+
+	// our child won't exit until we have a grandchild in the new container
+	waitpid(pid, NULL, 0);
+
+	// signal that the fork is complete
+	if (write(conn, &pid, sizeof pid) != sizeof pid) {
+	    exit(1);
+	}
+    } else {
+	// child
+	close(sock);
+	if (fchdir(root_fd) != 0) {
+	    exit(1);
+	}
+	if (chroot(".") != 0) {
+	    exit(1);
+	}
+        close(root_fd);
+    }
+
+    // close connection (parent + child)
     close(conn);
 
-    return Py_BuildValue("i", fd);
+    return Py_BuildValue("i", pid);
 }
 
 static PyMethodDef NsMethods[] = {
     {"unshare", (PyCFunction)ns_unshare, METH_NOARGS, "unshare"},
     {"open_sock_file", (PyCFunction)ns_open_sock_file, METH_O, "open_sock_file"},
-    {"read_fd", (PyCFunction)ns_read_fd, METH_O, "read_fd"},
+    {"fork_to_next_fd", (PyCFunction)fork_to_next_fd, METH_O, "fork_to_next_fd"},
     {NULL, NULL, 0, NULL}
 };
 

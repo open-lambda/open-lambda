@@ -345,6 +345,6 @@ func (c *DockerContainer) DebugString() string {
 	return fmt.Sprintf("SANDBOX %s (DOCKER)\n", c.ID())
 }
 
-func (c *DockerContainer) fork(dst Sandbox, imports []string, isLeaf bool) (err error) {
+func (c *DockerContainer) fork(dst Sandbox) (err error) {
 	panic("DockerContainer does not implement cross-container forks")
 }

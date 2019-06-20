@@ -49,5 +49,5 @@ type Sandbox interface {
 	DebugString() string
 
 	// Optional interface for forking across sandboxes
-	fork(dst Sandbox, imports []string, isLeaf bool) error
+	fork(dst Sandbox) error
 }
