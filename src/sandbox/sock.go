@@ -10,7 +10,6 @@ code, initializing containers, etc.
 package sandbox
 
 import (
-	"bytes"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -35,7 +34,6 @@ type SOCKContainer struct {
 	scratchDir       string
 	hostInitCmd      *exec.Cmd
 	guestInitPid     string
-	unshareFlags     string
 	initPipe         *os.File
 }
 
@@ -51,6 +49,9 @@ func (c *SOCKContainer) ID() string {
 }
 
 func (c *SOCKContainer) Channel() (tr *http.Transport, err error) {
+	// note, for debugging, you can directly contact the sock file like this:
+	// curl -XPOST --unix-socket ./ol.sock http:/test -d '{"some": "data"}'
+
 	sockPath := filepath.Join(c.scratchDir, "ol.sock")
 	if len(sockPath) > 108 {
 		return nil, fmt.Errorf("socket path length cannot exceed 108 characters (try moving cluster closer to the root directory")
@@ -62,7 +63,39 @@ func (c *SOCKContainer) Channel() (tr *http.Transport, err error) {
 	return &http.Transport{Dial: dial}, nil
 }
 
-func (c *SOCKContainer) start(startCmd []string, cgPool *CgroupPool) (err error) {
+func (c *SOCKContainer) startSock2(bootPy []string) (err error) {
+	// get FDs to cgroups
+	cgFiles := make([]*os.File, len(cgroupList))
+	for i, name := range cgroupList {
+		path := c.cg.Path(name, "cgroup.procs")
+		fd, err := syscall.Open(path, syscall.O_WRONLY, 0600)
+		if err != nil {
+			return err
+		}
+		cgFiles[i] = os.NewFile(uintptr(fd), path)
+		defer cgFiles[i].Close()
+	}
+
+	sbBootPath := filepath.Join("host", "bootstrap.py")
+	bootPath := filepath.Join(c.containerRootDir, sbBootPath)
+	code := []byte(strings.Join(bootPy, "\n"))
+	if err := ioutil.WriteFile(bootPath, code, 0600); err != nil {
+		return err
+	}
+
+	cmd := exec.Command(
+		"chroot", c.containerRootDir, "python3", "sock2.py", sbBootPath, strconv.Itoa(len(cgFiles)),
+	)
+	cmd.ExtraFiles = cgFiles
+
+	// TODO: route this to a file
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	return cmd.Start()
+}
+
+func (c *SOCKContainer) populateRoot() (err error) {
 	defer func(start time.Time) {
 		if config.Conf.Timing {
 			c.printf("create container took %v\n", time.Since(start))
@@ -118,80 +151,6 @@ func (c *SOCKContainer) start(startCmd []string, cgPool *CgroupPool) (err error)
 	sbTmpDir := filepath.Join(c.containerRootDir, "tmp")
 	if err := syscall.Mount(tmpDir, sbTmpDir, "", BIND, ""); err != nil {
 		return fmt.Errorf("failed to bind tmp dir: %v", err.Error())
-	}
-
-	initPipe := filepath.Join(c.scratchDir, "init_pipe") // communicate with init process
-	if err := syscall.Mkfifo(initPipe, 0777); err != nil {
-		return err
-	}
-
-	c.initPipe, err = os.OpenFile(initPipe, os.O_RDWR, 0777)
-	if err != nil {
-		return fmt.Errorf("Cannot open init pipe: %v\n", err)
-	}
-
-	serverPipe := filepath.Join(c.scratchDir, "server_pipe") // communicate with lambda server
-	if err := syscall.Mkfifo(serverPipe, 0777); err != nil {
-		return err
-	}
-
-	// START INIT PROC (sets up namespaces)
-	initArgs := []string{c.unshareFlags, c.containerRootDir}
-	initArgs = append(initArgs, startCmd...)
-
-	c.hostInitCmd = exec.Command(
-		SOCK_HOST_INIT,
-		initArgs...,
-	)
-
-	c.hostInitCmd.Env = []string{fmt.Sprintf("ol.config=%s", config.SandboxConfJson())}
-	c.hostInitCmd.Stderr = os.Stdout // for debugging
-
-	start := time.Now()
-	if err := c.hostInitCmd.Start(); err != nil {
-		return err
-	}
-
-	// wait up to 5s for server sock_init to spawn
-	ready := make(chan string, 1)
-	defer close(ready)
-	go func() {
-		// message will be either 5 byte \0 padded pid (<65536), or "ready"
-		pid := make([]byte, 6)
-		n, err := c.initPipe.Read(pid[:5])
-
-		if err != nil {
-			c.printf("Cannot read from stdout of sock: %v\n", err)
-		} else if n != 5 {
-			c.printf("Expect to read 5 bytes, only %d read\n", n)
-		} else {
-			ready <- string(pid[:bytes.IndexByte(pid, 0)])
-		}
-	}()
-
-	timeout := time.NewTimer(5 * time.Second)
-	defer timeout.Stop()
-
-	select {
-	case c.guestInitPid = <-ready:
-		if config.Conf.Timing {
-			c.printf("wait for sock_init took %v\n", time.Since(start))
-		}
-	case <-timeout.C:
-		// clean up go routine
-		if n, err := c.initPipe.Write([]byte("timeo")); err != nil {
-			return err
-		} else if n != 5 {
-			return fmt.Errorf("Cannot write `timeo` to pipe\n")
-		}
-		return fmt.Errorf("sock_init failed to spawn after 5s")
-	}
-
-	// JOIN A CGROUP
-	c.cg = cgPool.GetCg()
-	c.printf("add init PID %s to CG", c.guestInitPid)
-	if err := c.cg.AddPid(c.guestInitPid); err != nil {
-		return err
 	}
 
 	return nil

@@ -7,8 +7,8 @@ RUN pip3 install --upgrade pip
 RUN pip3 install virtualenv requests tornado==4.5.3
 
 COPY spin /
-COPY ol-init /
 COPY ns.so /
+COPY sock2.py /
 COPY server.py /
 
 CMD ["/spin"]

@@ -262,7 +262,7 @@ func (linst *LambdaInstance) RunStart() (tr *http.Transport, err error) {
 			return nil, err
 		}
 
-		sandbox, err := mgr.sbPool.Create(lfunc.codeDir, lfunc.workingDir, lfunc.imports)
+		sandbox, err := mgr.sbPool.Create(nil, true, lfunc.codeDir, lfunc.workingDir, lfunc.imports)
 		if err != nil {
 			return nil, err
 		}

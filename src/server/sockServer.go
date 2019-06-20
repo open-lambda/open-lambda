@@ -30,12 +30,12 @@ type SOCKServer struct {
 
 // NewSOCKServer creates a server based on the passed config."
 func NewSOCKServer() (*SOCKServer, error) {
-	cache, err := sandbox.NewSOCKPool(filepath.Join(config.Conf.Worker_dir, "cache-alone"), true)
+	cache, err := sandbox.NewSOCKPool("cache-alone")
 	if err != nil {
 		return nil, err
 	}
 
-	handler, err := sandbox.NewSOCKPool(filepath.Join(config.Conf.Worker_dir, "handler-alone"), false)
+	handler, err := sandbox.NewSOCKPool("handler-alone")
 	if err != nil {
 		return nil, err
 	}
@@ -59,10 +59,14 @@ func (s *SOCKServer) GetSandbox(id string) sandbox.Sandbox {
 func (s *SOCKServer) Create(w http.ResponseWriter, rsrc []string, args map[string]interface{}) error {
 	// leaves are only in handler pool
 	var pool *sandbox.SOCKPool
-	if leaf, ok := args["leaf"]; !ok || leaf.(bool) {
+
+	var leaf bool
+	if b, ok := args["leaf"]; !ok || b.(bool) {
 		pool = s.handlerPool
+		leaf = true
 	} else {
 		pool = s.cachePool
+		leaf = false
 	}
 
 	// create args
@@ -78,7 +82,7 @@ func (s *SOCKServer) Create(w http.ResponseWriter, rsrc []string, args map[strin
 	}
 
 	// spin it up
-	c, err := pool.CreateFromParent(codeDir, scratchPrefix, imports, parent)
+	c, err := pool.Create(parent, leaf, codeDir, scratchPrefix, imports)
 	if err != nil {
 		return err
 	}
