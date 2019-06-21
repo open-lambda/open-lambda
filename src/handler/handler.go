@@ -7,7 +7,6 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -59,16 +58,6 @@ type LambdaInstance struct {
 
 func NewLambdaMgr() (mgr *LambdaMgr, err error) {
 	var t time.Time
-
-	// start with a fresh worker directory
-	log.Printf("Cleanup old dirs")
-	if err := os.RemoveAll(config.Conf.Worker_dir); err != nil {
-		return nil, err
-	}
-
-	if err := os.MkdirAll(config.Conf.Worker_dir, 0700); err != nil {
-		return nil, err
-	}
 
 	// init code puller, pip manager, handler cache, and init cache
 	log.Printf("Create CodePuller")
@@ -262,7 +251,7 @@ func (linst *LambdaInstance) RunStart() (tr *http.Transport, err error) {
 			return nil, err
 		}
 
-		sandbox, err := mgr.sbPool.Create(lfunc.codeDir, lfunc.workingDir, lfunc.imports)
+		sandbox, err := mgr.sbPool.Create(nil, true, lfunc.codeDir, lfunc.workingDir, lfunc.imports)
 		if err != nil {
 			return nil, err
 		}

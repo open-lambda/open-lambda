@@ -44,7 +44,7 @@ sendfd(int s, int fd) {
         return -1;
     }
 
-	return 0;
+    return 0;
 }
 
 int sendAll(int sockfd, const void *buf, int len, int flags) {
@@ -59,115 +59,54 @@ int sendAll(int sockfd, const void *buf, int len, int flags) {
 	return 0;
 }
 
-char*
-sendFds(char *sockPath, char *pid, char *rootdir, int rootdirLen, char *pkgs, int pkgsLen) {
-    char *path;
-    int k;
-
-    const int NUM_NS = 4;
-    int nsfds[NUM_NS];
-    const char *ns[NUM_NS];
-    ns[0] = "ipc";
-    ns[1] = "uts";
-    ns[2] = "pid";
-    ns[3] = "mnt";
-
-    // Get fds for all namespaces.
-
-    for(k = 0; k < NUM_NS; k++) {
-        path = (char*)malloc(10+strlen(pid)+strlen(ns[k]));
-        sprintf(path, "/proc/%s/ns/%s", pid, ns[k]);
-
-        nsfds[k] = open(path, O_RDONLY);
-        if (nsfds[k] == -1) {
-            sprintf(errmsg, "open %s failed: %s", path, strerror(errno));
-            return errmsg;
-        }
-    }
-
+int
+sendRootFD(char *sockPath, char *rootdir) {
     int chrootFD = open(rootdir, O_RDONLY);
     if (chrootFD == -1) {
-        sprintf(errmsg, "open %s failed: %s", rootdir, strerror(errno));
-        return errmsg;
+        return -1;
     }
 
     // Connect to server via socket.
-
     int s, len, ret;
     struct sockaddr_un remote;
 
     if ((s = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
-        sprintf(errmsg, "socket: %s", strerror(errno));
-        return errmsg;
+        return -1;
     }
 
     remote.sun_family = AF_UNIX;
     strcpy(remote.sun_path, sockPath);
     len = strlen(remote.sun_path) + sizeof(remote.sun_family);
     if (connect(s, (struct sockaddr *)&remote, len) == -1) {
-        sprintf(errmsg, "connect to %s failed with %s", sockPath, strerror(errno));
-        return errmsg;
+        return -1;
     }
 
-    // Send fds to server.
-    for(k = 0; k < NUM_NS; k++) {
-        if (sendfd(s, nsfds[k]) == -1) {
-            sprintf(errmsg, "sendfd: %s", strerror(errno));
-            return errmsg;
-        }
-    }
-
+    printf("send chrootFD=%d\n", chrootFD);
     if (sendfd(s, chrootFD) == -1) {
-        sprintf(errmsg, "sendfd: %s", strerror(errno));
-        return errmsg;
+        return -1;
     }
 
-    // Send package string to server.
-    int conv_int = htonl(pkgsLen);
-    if(send(s, &conv_int, sizeof(int), 0) == -1) {
-        sprintf(errmsg, "send pkgs: %s", strerror(errno));
-        return errmsg;
-    }
-    if(sendAll(s, pkgs, pkgsLen, 0) == -1) {
-        sprintf(errmsg, "send pkgs: %s", strerror(errno));
-        return errmsg;
-    }
-
-    // Receive spawned PID from server.
-    char *buf = malloc(10);
-
-    if((len = recv(s, buf, 10, 0)) == -1) {
-        sprintf(errmsg, "recv: %s", strerror(errno));
-        return errmsg;
-    }
-
-    if(close(s) == -1) {
-        sprintf(errmsg, "close: %s", strerror(errno));
-        return errmsg;
-    }
-
-    // Close fds for all namespaces.
-    for(k = 0; k < NUM_NS; k++) {
-        if(close(nsfds[k]) == -1) {
-            sprintf(errmsg, "close: %s", strerror(errno));
-            return errmsg;
-        }
+    int status;
+    if (read(s, &status, sizeof status) != sizeof status) {
+        return -1;
     }
 
     if(close(chrootFD) == -1) {
-        sprintf(errmsg, "close: %s", strerror(errno));
-        return errmsg;
+        return -1;
     }
 
-    return buf;
+    if(close(s) == -1) {
+        return -1;
+    }
+
+    return status;
 }
+
 */
 import "C"
 
 import (
 	"fmt"
-	"strings"
-	"time"
 	"unsafe"
 
 	"github.com/open-lambda/open-lambda/ol/benchmarker"
@@ -182,7 +121,7 @@ import (
  *
  * Returns the PID of the spawned process upon success.
  */
-func (c *SOCKContainer) forkRequest(targetPid, rootDir string, imports []string, handler bool) (string, error) {
+func (c *SOCKContainer) forkRequest(rootDir string) error {
 	b := benchmarker.GetBenchmarker()
 	var t *benchmarker.Timer
 	if b != nil {
@@ -193,47 +132,12 @@ func (c *SOCKContainer) forkRequest(targetPid, rootDir string, imports []string,
 		t.Start()
 	}
 
-	sockPath := fmt.Sprintf("%s/fs.sock", c.HostDir())
-
-	var signal string
-	if handler {
-		signal = "serve"
-	} else {
-		signal = "cache"
-	}
-
-	signalStr := strings.Join(append(imports, signal), " ")
-
-	cSock := C.CString(sockPath)
-	cPid := C.CString(targetPid)
+	cSock := C.CString(fmt.Sprintf("%s/ol.sock", c.HostDir()))
 	cRoot := C.CString(rootDir)
-	cSignal := C.CString(signalStr)
 
 	defer C.free(unsafe.Pointer(cSock))
-	defer C.free(unsafe.Pointer(cPid))
 	defer C.free(unsafe.Pointer(cRoot))
-	defer C.free(unsafe.Pointer(cSignal))
 
-	var retErr error
-	for k := 0; k < 5; k++ {
-		// TODO: if sendFds hangs, we never recover
-		c.printf("sendFds to %s", sockPath)
-		ret, err := C.sendFds(cSock, cPid, cRoot, C.int(len(rootDir)+1), cSignal, C.int(len(signalStr)+1))
-		if err == nil {
-			pid := C.GoString(ret)
-			C.free(unsafe.Pointer(ret))
-			if err != nil || pid == "" {
-				err = fmt.Errorf("sendFds failed :: %s", err)
-			} else {
-				return pid, nil
-			}
-		} else {
-			gRet := C.GoString(ret)
-			c.printf("forkRequest: sendFds error: %v", gRet)
-			retErr = err
-		}
-		time.Sleep(50 * time.Microsecond)
-	}
-
-	return "", retErr
+	_, err := C.sendRootFD(cSock, cRoot)
+	return err
 }

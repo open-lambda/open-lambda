@@ -78,13 +78,15 @@ func NewImportCacheContainerFactory(handlerFactory, cacheFactory *SOCKPool) (*Im
 	return ic, nil
 }
 
-func (ic *ImportCacheContainerFactory) Create(handlerDir, workingDir string, imports []string) (Sandbox, error) {
-	parent, err := ic.FindOrMakeParent(imports)
-	if err != nil {
-		return nil, err
+func (ic *ImportCacheContainerFactory) Create(parent Sandbox, isLeaf bool, codeDir, scratchPrefix string, imports []string) (sb Sandbox, err error) {
+	if parent != nil {
+		parent, err = ic.FindOrMakeParent(imports)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	child, err := ic.handlerFactory.CreateFromParent(handlerDir, workingDir, imports, parent)
+	child, err := ic.handlerFactory.Create(parent, true, codeDir, scratchPrefix, imports)
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +181,7 @@ func (ic *ImportCacheContainerFactory) newCacheEntry(baseFS *ForkServer, toCache
 	}
 
 	// get container for new entry
-	sandbox, err := ic.cacheFactory.CreateFromParent("", ic.cacheDir, []string{}, nil)
+	sandbox, err := ic.cacheFactory.Create(nil, false, "", ic.cacheDir, []string{})
 	if err != nil {
 		return nil, err
 	}
@@ -196,7 +198,7 @@ func (ic *ImportCacheContainerFactory) newCacheEntry(baseFS *ForkServer, toCache
 	baseFS.Children += 1
 
 	// signal interpreter to forkenter into sandbox's namespace
-	err = baseFS.sandbox.fork(sandbox, toCache, false)
+	err = baseFS.sandbox.fork(sandbox)
 	if err != nil {
 		fs.Kill()
 		return nil, err
@@ -206,7 +208,7 @@ func (ic *ImportCacheContainerFactory) newCacheEntry(baseFS *ForkServer, toCache
 }
 
 func (ic *ImportCacheContainerFactory) initCacheRoot() (err error) {
-	rootSB, err := ic.cacheFactory.CreateFromParent("", ic.cacheDir, []string{}, nil)
+	rootSB, err := ic.cacheFactory.Create(nil, false, "", ic.cacheDir, []string{})
 	if err != nil {
 		return fmt.Errorf("failed to create root cache entry :: %v", err)
 	}

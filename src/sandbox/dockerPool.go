@@ -59,7 +59,13 @@ func NewDockerPool(pidMode string, caps []string, cache bool) (*DockerPool, erro
 }
 
 // Create creates a docker sandbox from the handler and sandbox directory.
-func (pool *DockerPool) Create(handlerDir, scratchPrefix string, imports []string) (Sandbox, error) {
+func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchPrefix string, imports []string) (sb Sandbox, err error) {
+	if parent != nil {
+		panic("Create parent not supported for DockerPool")
+	} else if !isLeaf {
+		panic("Non-leaves not supported for DockerPool")
+	}
+
 	id := fmt.Sprintf("%d", atomic.AddInt64(pool.idxPtr, 1))
 	hostDir := filepath.Join(scratchPrefix, id)
 	if err := os.MkdirAll(hostDir, 0777); err != nil {
@@ -71,8 +77,8 @@ func (pool *DockerPool) Create(handlerDir, scratchPrefix string, imports []strin
 		fmt.Sprintf("%s:%s:ro", pool.pkgsDir, "/packages"),
 	}
 
-	if handlerDir != "" {
-		volumes = append(volumes, fmt.Sprintf("%s:%s:ro", handlerDir, "/handler"))
+	if codeDir != "" {
+		volumes = append(volumes, fmt.Sprintf("%s:%s:ro", codeDir, "/handler"))
 	}
 
 	// pipe for synchronization before socket is ready

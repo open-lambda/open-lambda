@@ -109,8 +109,8 @@ func (sb *safeSandbox) MemUsageKB() (kb int, err error) {
 	return sb.Sandbox.MemUsageKB()
 }
 
-func (sb *safeSandbox) fork(dst Sandbox, imports []string, isLeaf bool) (err error) {
-	sb.printf("fork(dst, %v, %v)", imports, isLeaf)
+func (sb *safeSandbox) fork(dst Sandbox) (err error) {
+	sb.printf("fork(%v)", dst)
 	sb.Mutex.Lock()
 	defer sb.Mutex.Unlock()
 	if sb.dead {
@@ -120,7 +120,7 @@ func (sb *safeSandbox) fork(dst Sandbox, imports []string, isLeaf bool) (err err
 		sb.destroyOnErr(err)
 	}()
 
-	return sb.Sandbox.fork(dst, imports, isLeaf)
+	return sb.Sandbox.fork(dst)
 }
 
 func (sb *safeSandbox) DebugString() string {

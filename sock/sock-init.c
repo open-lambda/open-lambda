@@ -125,7 +125,9 @@ int main(int argc, char *argv[]) {
 
     if ((pid = fork()) == -1) {
 	errExit("fork failed");
-    } else if (pid != 0) { // parent
+    } else if (pid != 0) {
+	// parent
+
 	close(pipefd[0]);
 	if (write(pipefd[1], (void *) &pid, sizeof(pid)) < 0) {
 	    errExit("write");
@@ -141,6 +143,8 @@ int main(int argc, char *argv[]) {
 		errExit("waitpid");
 	}
     }
+
+    // child
 
     if ((unshare_flags & CLONE_NEWNS) && propagation) {
 	res = mount("none", "/", NULL, propagation, NULL);

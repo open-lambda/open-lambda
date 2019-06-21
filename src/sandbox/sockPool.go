@@ -28,35 +28,18 @@ var nextId int64 = 0
 
 // SOCKPool is a ContainerFactory that creats docker containeres.
 type SOCKPool struct {
-	name         string
-	cgPool       *CgroupPool
-	rootDir      string
-	unshareFlags string
-	initArgs     []string
+	name    string
+	cgPool  *CgroupPool
+	rootDir string
 
 	sync.Mutex
 	sandboxes []Sandbox
 }
 
 // NewSOCKPool creates a SOCKPool.
-func NewSOCKPool(rootDir string, isImportCache bool) (cf *SOCKPool, err error) {
-	var unshareFlags string
-	var initArgs []string
-	var name string
-
-	if isImportCache {
-		// we cannot move processes forked in the import cache
-		// across PID namespaces
-		unshareFlags = "-iu"
-		initArgs = []string{"--cache"}
-		name = "sock-cache"
-	} else {
-		unshareFlags = "-ipu"
-		initArgs = []string{}
-		name = "sock-handlers"
-	}
-
+func NewSOCKPool(name string) (cf *SOCKPool, err error) {
 	cgPool := NewCgroupPool(name)
+	rootDir := filepath.Join(config.Conf.Worker_dir, name)
 
 	if err := os.MkdirAll(rootDir, 0777); err != nil {
 		return nil, fmt.Errorf("failed to make root container dir :: %v", err)
@@ -71,41 +54,33 @@ func NewSOCKPool(rootDir string, isImportCache bool) (cf *SOCKPool, err error) {
 	}
 
 	pool := &SOCKPool{
-		name:         name,
-		cgPool:       cgPool,
-		rootDir:      rootDir,
-		initArgs:     initArgs,
-		unshareFlags: unshareFlags,
+		name:    name,
+		cgPool:  cgPool,
+		rootDir: rootDir,
 	}
 
 	return pool, nil
 }
 
-func (pool *SOCKPool) Create(codeDir, scratchPrefix string, imports []string) (Sandbox, error) {
-	return pool.CreateFromParent(codeDir, scratchPrefix, imports, nil)
-}
-
-func (pool *SOCKPool) CreateFromParent(codeDir, scratchPrefix string, imports []string, parent Sandbox) (sb Sandbox, err error) {
+func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchPrefix string, imports []string) (sb Sandbox, err error) {
 	if config.Conf.Timing {
 		defer func(start time.Time) {
 			log.Printf("create sock took %v\n", time.Since(start))
 		}(time.Now())
 	}
 
-	log.Printf("%v.CreateFromParent(%v, %v, %v, %v)", pool.name, codeDir, scratchPrefix, imports, parent)
+	log.Printf("<%v>.Create(%v, %v, %v, %v)", pool.name, codeDir, scratchPrefix, imports, parent)
 
 	id := fmt.Sprintf("%d", atomic.AddInt64(&nextId, 1))
 	containerRootDir := filepath.Join(pool.rootDir, id)
 	scratchDir := filepath.Join(scratchPrefix, id)
-
-	startCmd := append([]string{SOCK_GUEST_INIT}, pool.initArgs...)
 
 	var c *SOCKContainer = &SOCKContainer{
 		id:               id,
 		containerRootDir: containerRootDir,
 		codeDir:          codeDir,
 		scratchDir:       scratchDir,
-		unshareFlags:     pool.unshareFlags,
+		cg:               pool.cgPool.GetCg(),
 	}
 
 	defer func() {
@@ -114,24 +89,37 @@ func (pool *SOCKPool) CreateFromParent(codeDir, scratchPrefix string, imports []
 		}
 	}()
 
-	// general setup (all SOCK sandboxes do this)
-	if err := c.start(startCmd, pool.cgPool); err != nil {
-		return nil, fmt.Errorf("failed to start: %v", err)
+	// root file system
+	if err := c.populateRoot(); err != nil {
+		return nil, fmt.Errorf("failed to create root FS: %v", err)
 	}
 
-	// specific setup (may actually start running user-supplied code)
-	if parent != nil {
-		if err := parent.fork(c, imports, true); err != nil {
+	// write the Python code that the new process will run when it starts
+	var pyCode []string
+	if isLeaf {
+		pyCode = []string{
+			"sys.path.extend(['/packages', '/handler'])",
+			"web_server('/host/ol.sock')",
+		}
+	} else {
+		pyCode = []string{
+			"sys.path.extend(['/packages'])",
+			"fork_server('/host/ol.sock')",
+		}
+	}
+	if err := c.writeBootstrapCode(pyCode); err != nil {
+		return nil, err
+	}
+
+	// create new process in container (fresh, or forked from parent)
+	if parent == nil {
+		if err := c.freshProc(); err != nil {
 			return nil, err
 		}
 	} else {
-		if err := c.runServer(); err != nil {
+		if err := parent.fork(c); err != nil {
 			return nil, err
 		}
-	}
-
-	if err := waitForServerPipeReady(c.HostDir()); err != nil {
-		return nil, err
 	}
 
 	// wrap to make thread-safe and handle container death

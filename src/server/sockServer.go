@@ -7,12 +7,10 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 
 	"github.com/open-lambda/open-lambda/ol/config"
 	"github.com/open-lambda/open-lambda/ol/sandbox"
@@ -30,12 +28,12 @@ type SOCKServer struct {
 
 // NewSOCKServer creates a server based on the passed config."
 func NewSOCKServer() (*SOCKServer, error) {
-	cache, err := sandbox.NewSOCKPool(filepath.Join(config.Conf.Worker_dir, "cache-alone"), true)
+	cache, err := sandbox.NewSOCKPool("sock-cache")
 	if err != nil {
 		return nil, err
 	}
 
-	handler, err := sandbox.NewSOCKPool(filepath.Join(config.Conf.Worker_dir, "handler-alone"), false)
+	handler, err := sandbox.NewSOCKPool("sock-handlers")
 	if err != nil {
 		return nil, err
 	}
@@ -59,10 +57,14 @@ func (s *SOCKServer) GetSandbox(id string) sandbox.Sandbox {
 func (s *SOCKServer) Create(w http.ResponseWriter, rsrc []string, args map[string]interface{}) error {
 	// leaves are only in handler pool
 	var pool *sandbox.SOCKPool
-	if leaf, ok := args["leaf"]; !ok || leaf.(bool) {
+
+	var leaf bool
+	if b, ok := args["leaf"]; !ok || b.(bool) {
 		pool = s.handlerPool
+		leaf = true
 	} else {
 		pool = s.cachePool
+		leaf = false
 	}
 
 	// create args
@@ -78,7 +80,7 @@ func (s *SOCKServer) Create(w http.ResponseWriter, rsrc []string, args map[strin
 	}
 
 	// spin it up
-	c, err := pool.CreateFromParent(codeDir, scratchPrefix, imports, parent)
+	c, err := pool.Create(parent, leaf, codeDir, scratchPrefix, imports)
 	if err != nil {
 		return err
 	}
@@ -120,7 +122,7 @@ func (s *SOCKServer) Unpause(w http.ResponseWriter, rsrc []string, args map[stri
 
 func (s *SOCKServer) Debug(w http.ResponseWriter, rsrc []string, args map[string]interface{}) error {
 	str := fmt.Sprintf(
-		"CACHE SANDBOXES:\n\n%sHANDLER SANDBOXES:\n\n%s",
+		"========\nCACHE SANDBOXES\n========\n%s========\nHANDLER SANDBOXES\n========\n%s",
 		s.cachePool.DebugString(), s.handlerPool.DebugString())
 	fmt.Printf("%s\n", str)
 	w.Write([]byte(str))
@@ -194,12 +196,7 @@ func (s *SOCKServer) cleanup() {
 	s.handlerPool.Cleanup()
 }
 
-func SockMain() {
-	// start with a fresh env
-	if err := os.RemoveAll(config.Conf.Worker_dir); err != nil {
-		panic(err)
-	}
-
+func SockMain() *SOCKServer {
 	log.Printf("Start SOCK Server")
 	server, err := NewSOCKServer()
 	if err != nil {
@@ -207,21 +204,8 @@ func SockMain() {
 		log.Fatal(err)
 	}
 
-	port := fmt.Sprintf(":%s", config.Conf.Worker_port)
 	http.HandleFunc(PID_PATH, server.GetPid)
 	http.HandleFunc("/", server.Handle)
 
-	// clean up if signal hits us
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	signal.Notify(c, os.Interrupt, syscall.SIGINT)
-	go func(s *SOCKServer) {
-		<-c
-		log.Printf("received kill signal, cleaning up")
-		s.cleanup()
-		log.Printf("exiting")
-		os.Exit(1)
-	}(server)
-
-	log.Fatal(http.ListenAndServe(port, nil))
+	return server
 }
