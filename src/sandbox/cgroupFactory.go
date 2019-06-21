@@ -273,6 +273,12 @@ func (cg *Cgroup) Init() {
 	if err != nil {
 		panic(fmt.Errorf("Error setting pids.max: %s", err))
 	}
+
+	path = cg.Path("memory", "memory.limit_in_bytes")
+	err = ioutil.WriteFile(path, []byte(fmt.Sprintf("%dM", config.Conf.Sock_cgroups.Max_mem_mb)), os.ModeAppend)
+	if err != nil {
+		panic(fmt.Errorf("Error setting pids.max: %s", err))
+	}
 }
 
 func (cg *Cgroup) Release() {

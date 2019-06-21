@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import os, sys, json, time, requests, copy, traceback, tempfile
+import os, sys, json, time, requests, copy, traceback, tempfile, threading
 from collections import OrderedDict
 from subprocess import Popen, check_output
 from multiprocessing import Pool
@@ -11,6 +11,22 @@ OLDIR = 'test-cluster'
 results = OrderedDict({"runs": []})
 curr_conf = None
 
+
+def get_mem_stat_mb(stat):
+    with open('/proc/meminfo') as f:
+        for l in f:
+            if l.startswith(stat+":"):
+                parts = l.strip().split()
+                assert(parts[-1] == 'kB')
+                return int(parts[1]) / 1024
+    raise Exception('could not get stat')
+
+def ol_oom_killer():
+    while True:
+        if get_mem_stat_mb('MemAvailable') < 100:
+            print("out of memory, trying to kill OL")
+            os.system(['pkill', 'ol'])
+        time.sleep(1)
 
 def test(fn):
     def wrapper(*args, **kwargs):
@@ -174,6 +190,16 @@ def fork_bomb():
     assert(1 <= actual <= limit)
 
 
+@test
+def max_mem_alloc():
+    limit = curr_conf["sock_cgroups"]["max_mem_mb"]
+    r = requests.post("http://localhost:5000/run/max_mem_alloc", data=json.dumps(None))
+    r.raise_for_status()
+    # the function returns the MB that was able to be allocated
+    actual = int(r.text)
+    assert(limit-16 <= actual <= limit)
+
+
 def call_each_once(lambda_count, alloc_mb=0):
     with tempfile.TemporaryDirectory() as reg_dir:
         # create dummy lambdas
@@ -268,6 +294,7 @@ def tests():
 
         # test resource limits
         fork_bomb()
+        max_mem_alloc()
 
     # test heavy load
     with TestConf(sandbox="sock", handler_cache_mb=256, import_cache_mb=256, registry=test_reg):
@@ -282,7 +309,11 @@ def tests():
 
 def main():
     t0 = time.time()
-    
+
+    # so our test script doesn't hang if we have a memory leak
+    timerThread = threading.Thread(target=ol_oom_killer, daemon=True)
+    timerThread.start()
+
     # general setup
     if os.path.exists(OLDIR):
         try:

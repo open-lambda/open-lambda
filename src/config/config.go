@@ -75,7 +75,8 @@ type Config struct {
 }
 
 type SockCgroupConfig struct {
-	Max_procs int `json:"max_procs"`
+	Max_procs  int `json:"max_procs"`
+	Max_mem_mb int `json:"max_mem_mb"`
 }
 
 // Defaults verifies the fields of Config are correct, and initializes some
@@ -114,7 +115,8 @@ func LoadDefaults(olPath string) error {
 		Handler_cache_mb:  handler_cache_mb,
 		Import_cache_mb:   import_cache_mb,
 		Sock_cgroups: SockCgroupConfig{
-			Max_procs: 10,
+			Max_procs:  10,
+			Max_mem_mb: 50,
 		},
 	}
 
