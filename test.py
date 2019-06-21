@@ -23,9 +23,9 @@ def get_mem_stat_mb(stat):
 
 def ol_oom_killer():
     while True:
-        if get_mem_stat_mb('MemAvailable') < 100:
+        if get_mem_stat_mb('MemAvailable') < 128:
             print("out of memory, trying to kill OL")
-            os.system(['pkill', 'ol'])
+            os.system('pkill ol')
         time.sleep(1)
 
 def test(fn):
