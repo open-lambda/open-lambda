@@ -185,6 +185,9 @@ func (hms *HandlerManagerSet) updateAvgHandlerMemUsage(updateInterval int) {
 	}
 }
 
+// Seperate goroutine for scheduling requests of creating sandboxes. Periodically check memory usage
+// against hard limit, resume a request when less.
+
 func (hms *HandlerManagerSet) scheduleSbCreatingReqs() {
 	for {
 		hms.sbCreatingLock.Lock()
