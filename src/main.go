@@ -162,20 +162,31 @@ func worker(ctx *cli.Context) error {
 			return err
 		}
 
-		pidPath := filepath.Join(olPath, "worker.pid")
-		if err := ioutil.WriteFile(pidPath, []byte(fmt.Sprintf("%d", proc.Pid)), 0644); err != nil {
-			return err
-		}
+		died := make(chan error)
+		go func() {
+			_, err := proc.Wait()
+			died <- err
+		}()
 
 		fmt.Printf("Starting worker: pid=%d, port=%s, log=%s\n", proc.Pid, config.Conf.Worker_port, logPath)
 
 		var ping_err error
 
 		for i := 0; i < 300; i++ {
+			// check if it has died
+			select {
+			case err := <-died:
+				if err != nil {
+					return err
+				}
+				return fmt.Errorf("worker process %d does not a appear to be running, check worker.out", proc.Pid)
+			default:
+			}
+
 			// is the worker still alive?
 			err := proc.Signal(syscall.Signal(0))
 			if err != nil {
-				return fmt.Errorf("worker process %d does not a appear to be running :: %s", proc.Pid, err)
+
 			}
 
 			// is it reachable?
@@ -205,13 +216,8 @@ func worker(ctx *cli.Context) error {
 
 		return fmt.Errorf("worker still not reachable after 30 seconds :: %s", ping_err)
 	} else {
-		switch config.Conf.Server_mode {
-		case "lambda":
-			server.LambdaMain()
-		case "sock":
-			server.SockMain()
-		default:
-			return fmt.Errorf("unknown Server_mode %s", config.Conf.Server_mode)
+		if err := server.Main(); err != nil {
+			return err
 		}
 	}
 
@@ -225,7 +231,12 @@ func kill(ctx *cli.Context) error {
 		return err
 	}
 
-	data, err := ioutil.ReadFile(filepath.Join(olPath, "worker.pid"))
+	// locate worker.pid, use it to get worker's PID
+	configPath := filepath.Join(olPath, "config.json")
+	if err := config.LoadFile(configPath); err != nil {
+		return err
+	}
+	data, err := ioutil.ReadFile(filepath.Join(config.Conf.Worker_dir, "worker.pid"))
 	if err != nil {
 		return err
 	}
@@ -234,6 +245,7 @@ func kill(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+
 	fmt.Printf("Kill worker process with PID %d\n", pid)
 	p, err := os.FindProcess(pid)
 	if err != nil {

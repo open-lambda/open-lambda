@@ -4,6 +4,9 @@ import tornado.web
 import tornado.httpserver
 import tornado.netutil
 
+# Note: SOCK doesn't use this anymore (it uses sock2.py instead), but
+# this is still here because we haven't updated docker.go yet.
+
 HOST_DIR = '/host'
 PKGS_DIR = '/packages'
 HANDLER_DIR = '/handler'

@@ -69,7 +69,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchPrefix
 		}(time.Now())
 	}
 
-	log.Printf("%v.Create(%v, %v, %v, %v)", pool.name, codeDir, scratchPrefix, imports, parent)
+	log.Printf("<%v>.Create(%v, %v, %v, %v)", pool.name, codeDir, scratchPrefix, imports, parent)
 
 	id := fmt.Sprintf("%d", atomic.AddInt64(&nextId, 1))
 	containerRootDir := filepath.Join(pool.rootDir, id)
@@ -94,15 +94,16 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchPrefix
 		return nil, fmt.Errorf("failed to create root FS: %v", err)
 	}
 
-	// create process (new, or forked from parent)
+	// write the Python code that the new process will run when it starts
 	var pyCode []string
 	if isLeaf {
 		pyCode = []string{
-			"sys.path.append('/handler')",
+			"sys.path.extend(['/packages', '/handler'])",
 			"web_server('/host/ol.sock')",
 		}
 	} else {
 		pyCode = []string{
+			"sys.path.extend(['/packages'])",
 			"fork_server('/host/ol.sock')",
 		}
 	}
@@ -110,6 +111,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchPrefix
 		return nil, err
 	}
 
+	// create new process in container (fresh, or forked from parent)
 	if parent == nil {
 		if err := c.freshProc(); err != nil {
 			return nil, err

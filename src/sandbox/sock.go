@@ -305,10 +305,10 @@ func (c *SOCKContainer) fork(dst Sandbox) (err error) {
 		}
 
 		moved := 0
-		
-		for _, pid := range(currPids) {
+
+		for _, pid := range currPids {
 			isOrig := false
-			for _, origPid := range(origPids) {
+			for _, origPid := range origPids {
 				if pid == origPid {
 					isOrig = true
 					break

@@ -7,12 +7,10 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 
 	"github.com/open-lambda/open-lambda/ol/config"
 	"github.com/open-lambda/open-lambda/ol/sandbox"
@@ -198,12 +196,7 @@ func (s *SOCKServer) cleanup() {
 	s.handlerPool.Cleanup()
 }
 
-func SockMain() {
-	// start with a fresh env
-	if err := os.RemoveAll(config.Conf.Worker_dir); err != nil {
-		panic(err)
-	}
-
+func SockMain() *SOCKServer {
 	log.Printf("Start SOCK Server")
 	server, err := NewSOCKServer()
 	if err != nil {
@@ -211,21 +204,8 @@ func SockMain() {
 		log.Fatal(err)
 	}
 
-	port := fmt.Sprintf(":%s", config.Conf.Worker_port)
 	http.HandleFunc(PID_PATH, server.GetPid)
 	http.HandleFunc("/", server.Handle)
 
-	// clean up if signal hits us
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	signal.Notify(c, os.Interrupt, syscall.SIGINT)
-	go func(s *SOCKServer) {
-		<-c
-		log.Printf("received kill signal, cleaning up")
-		s.cleanup()
-		log.Printf("exiting")
-		os.Exit(1)
-	}(server)
-
-	log.Fatal(http.ListenAndServe(port, nil))
+	return server
 }
