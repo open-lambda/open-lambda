@@ -10,7 +10,7 @@ func SandboxPoolFromConfig() (cf SandboxPool, err error) {
 	if config.Conf.Sandbox == "docker" {
 		return NewDockerPool("", nil, false)
 	} else if config.Conf.Sandbox == "sock" {
-		handlerSandboxes, err := NewSOCKPool("sock-handlers")
+		handlerSandboxes, err := NewSOCKPool("sock-handlers", config.Conf.Handler_cache_mb)
 		if err != nil {
 			return nil, err
 		}
@@ -18,7 +18,7 @@ func SandboxPoolFromConfig() (cf SandboxPool, err error) {
 		if config.Conf.Import_cache_mb == 0 {
 			return handlerSandboxes, nil
 		} else {
-			cacheSandboxes, err := NewSOCKPool("sock-cache")
+			cacheSandboxes, err := NewSOCKPool("sock-cache", config.Conf.Import_cache_mb)
 			if err != nil {
 				return nil, err
 			}
