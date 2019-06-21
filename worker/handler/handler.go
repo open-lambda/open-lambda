@@ -361,16 +361,14 @@ func (h *Handler) RunStart() (ch *sb.Channel, err error) {
 	// create sandbox if needed
 	if h.sandbox == nil {
 		// if estimated mem usage exceeds the hard limit, the handler would queue itself
-        hms.sbCreatingLock.Lock()
-        for hms.sbHardLimit != 0 && (getMemUsage() + (hms.numSbCreating + 1) * hms.avgHandlerMemUsage > hms.sbHardLimit) {
-            hms.sbCreatingLock.Unlock()
+		if hms.sbHardLimit != 0 {
 			if h.sbCreatingChan == nil {
 				h.sbCreatingChan = make(chan bool, 1)
 			}
 			hms.sbCreatingQueue <- h
 			<-h.sbCreatingChan // waiting for wake-up signal
-            hms.sbCreatingLock.Lock()
 		}
+		hms.sbCreatingLock.Lock()
 		hms.numSbCreating += 1
 		hms.sbCreatingLock.Unlock()
 
