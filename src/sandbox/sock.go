@@ -178,9 +178,6 @@ func (c *SOCKContainer) Destroy() {
 	if err := c.destroy(); err != nil {
 		panic(fmt.Sprintf("failed to destroy SOCK sandbox: %v", err))
 	}
-
-	// release memory used for this container
-	c.pool.adjustAvailableMemMB(config.Conf.Sock_cgroups.Max_mem_mb)
 }
 
 // TODO: make destroy recursive, so that children processes need to
@@ -229,6 +226,9 @@ func (c *SOCKContainer) destroy() error {
 	// if err := os.RemoveAll(c.scratchDir); err != nil {
 	//     c.printf("remove host dir %s failed :: %v\n", c.scratchDir, err)
 	//}
+
+	// release memory used for this container
+	c.pool.mem.adjustAvailableMB(config.Conf.Sock_cgroups.Max_mem_mb)
 
 	return nil
 }

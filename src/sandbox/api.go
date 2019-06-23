@@ -5,7 +5,7 @@ import (
 )
 
 type SandboxPool interface {
-	// Create a new sandbox
+	// Create a new, unpaused sandbox
 	//
 	// parent: a sandbox to fork from (may be nil, and some SandboxPool's don't support not nil)
 	// isLeaf: true iff this is not being created as a sandbox we can fork later
@@ -51,3 +51,16 @@ type Sandbox interface {
 	// Optional interface for forking across sandboxes
 	fork(dst Sandbox) error
 }
+
+// reference to function that will be called by sandbox pool upon
+// key events
+type SandboxEventFunc func(SandboxEventType, Sandbox)
+
+type SandboxEventType int
+
+const (
+	evCreate  SandboxEventType = iota
+	evDestroy                  = iota
+	evPause                    = iota
+	evUnpause                  = iota
+)

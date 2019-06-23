@@ -1,9 +1,10 @@
 package sandbox
 
-// this layer can wrap any sandbox, and provides several safety features:
+// this layer can wrap any sandbox, and provides several (mostly) safety features:
 // 1. it prevents concurrent calls to Sandbox functions that modify the Sandbox
-// 2. it automatically destroys unhealthy sandboxes
+// 2. it automatically destroys unhealthy sandboxes (it is considered unhealthy after returnning any error)
 // 3. calls on a destroyed sandbox just return a DEAD_SANDBOX error (no harm is done)
+// 4. it traces all calls
 
 import (
 	"fmt"
@@ -26,19 +27,43 @@ func (e SockError) Error() string {
 type safeSandbox struct {
 	Sandbox
 	sync.Mutex
-	dead bool
+	dead          bool
+	eventHandlers []SandboxEventFunc
 }
 
+func newSafeSandbox(innerSB Sandbox, eventHandlers []SandboxEventFunc) *safeSandbox {
+	sb := &safeSandbox{
+		Sandbox:       innerSB,
+		eventHandlers: eventHandlers,
+	}
+
+	sb.event(evCreate)
+
+	return sb
+}
+
+// like regular printf, with suffix indicating which sandbox produced the message
 func (sb *safeSandbox) printf(format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
 	log.Printf("%s [SB %s]", strings.TrimRight(msg, "\n"), sb.Sandbox.ID())
 }
 
+// propogate event to anybody who signed up to listen (e.g., an evictor)
+func (sb *safeSandbox) event(evType SandboxEventType) {
+	for _, handler := range sb.eventHandlers {
+		handler(evType, sb)
+	}
+}
+
+// assumes lock is already held
 func (sb *safeSandbox) destroyOnErr(origErr error) {
 	if origErr != nil {
 		sb.printf("Destroy() due to %v", origErr)
 		sb.Sandbox.Destroy()
 		sb.dead = true
+
+		// let anybody interested know this died
+		sb.event(evDestroy)
 	}
 }
 
@@ -50,6 +75,9 @@ func (sb *safeSandbox) Destroy() {
 	if !sb.dead {
 		sb.Sandbox.Destroy()
 		sb.dead = true
+
+		// let anybody interested know this died
+		sb.event(evDestroy)
 	}
 }
 
@@ -62,6 +90,10 @@ func (sb *safeSandbox) Pause() (err error) {
 	}
 	defer func() {
 		sb.destroyOnErr(err)
+		if err == nil {
+			// let anybody interested we paused
+			sb.event(evPause)
+		}
 	}()
 
 	return sb.Sandbox.Pause()
@@ -76,6 +108,10 @@ func (sb *safeSandbox) Unpause() (err error) {
 	}
 	defer func() {
 		sb.destroyOnErr(err)
+		if err == nil {
+			// let anybody interested we paused
+			sb.event(evUnpause)
+		}
 	}()
 
 	return sb.Sandbox.Unpause()

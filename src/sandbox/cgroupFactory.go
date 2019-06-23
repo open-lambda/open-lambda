@@ -34,7 +34,7 @@ type CgroupPool struct {
 	nextId   int
 }
 
-func NewCgroupPool(name string) *CgroupPool {
+func NewCgroupPool(name string) (*CgroupPool, error) {
 	pool := &CgroupPool{
 		Name:     name,
 		ready:    make(chan *Cgroup, CGROUP_RESERVE),
@@ -43,8 +43,17 @@ func NewCgroupPool(name string) *CgroupPool {
 		nextId:   0,
 	}
 
+	// create cgroup categories
+	for _, resource := range cgroupList {
+		path := pool.Path(resource)
+		pool.printf("create %s", path)
+		if err := syscall.Mkdir(path, 0700); err != nil {
+			return nil, fmt.Errorf("Rmdir %s: %s", path, err)
+		}
+	}
+
 	go pool.cgTask()
-	return pool
+	return pool, nil
 }
 
 // add ID to each log message so we know which logs correspond to
@@ -57,15 +66,6 @@ func (pool *CgroupPool) printf(format string, args ...interface{}) {
 func (pool *CgroupPool) cgTask() {
 	// we'll be sent this as part of the quit request
 	var done chan bool
-
-	// create cgroup categories
-	for _, resource := range cgroupList {
-		path := pool.Path(resource)
-		pool.printf("create %s", path)
-		if err := syscall.Mkdir(path, 0700); err != nil {
-			panic(fmt.Errorf("Rmdir %s: %s", path, err))
-		}
-	}
 
 	// loop until we get the quit message
 	pool.printf("start creating/serving CGs")
@@ -111,15 +111,6 @@ Empty:
 		}
 	}
 
-	// delete cgroup categories
-	for _, resource := range cgroupList {
-		path := pool.Path(resource)
-		pool.printf("remove %s", path)
-		if err := syscall.Rmdir(path); err != nil {
-			panic(fmt.Errorf("Rmdir %s: %s", path, err))
-		}
-	}
-
 	done <- true
 }
 
@@ -128,6 +119,15 @@ func (pool *CgroupPool) Destroy() {
 	ch := make(chan bool)
 	pool.quit <- ch
 	<-ch
+
+	// delete cgroup categories
+	for _, resource := range cgroupList {
+		path := pool.Path(resource)
+		pool.printf("remove %s", path)
+		if err := syscall.Rmdir(path); err != nil {
+			panic(fmt.Errorf("Rmdir %s: %s", path, err))
+		}
+	}
 }
 
 func (pool *CgroupPool) GetCg() *Cgroup {

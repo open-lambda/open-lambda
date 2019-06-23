@@ -1,7 +1,6 @@
 package sandbox
 
 import (
-	"container/list"
 	"fmt"
 	"log"
 	"os"
@@ -29,35 +28,23 @@ var nextId int64 = 0
 
 // SOCKPool is a ContainerFactory that creats docker containeres.
 type SOCKPool struct {
-	name    string
-	cgPool  *CgroupPool
-	rootDir string
-
-	// a task listens on this, with requests to decrement memory
-	// (which may block) or increment it
-	memRequests chan *memReq
-
-	// decrement requests read from memRequests that need to wait
-	// for memory sit here until it's available
-	memRequestsWaiting *list.List
+	name          string
+	rootDir       string
+	cgPool        *CgroupPool
+	mem           *MemPool
+	eventHandlers []SandboxEventFunc
 
 	sync.Mutex
 	sandboxes []Sandbox
 }
 
-type memReq struct {
-	// how much we're requesting
-	mb int
-
-	// any response means the memory is allocated; the particular
-	// number indicates the total remaining memory available in
-	// the pool
-	resp chan int
-}
-
 // NewSOCKPool creates a SOCKPool.
-func NewSOCKPool(name string, pool_size_mb int) (cf *SOCKPool, err error) {
-	cgPool := NewCgroupPool(name)
+func NewSOCKPool(name string, mem *MemPool) (cf *SOCKPool, err error) {
+	cgPool, err := NewCgroupPool(name)
+	if err != nil {
+		return nil, err
+	}
+
 	rootDir := filepath.Join(config.Conf.Worker_dir, name)
 
 	if err := os.MkdirAll(rootDir, 0777); err != nil {
@@ -73,65 +60,14 @@ func NewSOCKPool(name string, pool_size_mb int) (cf *SOCKPool, err error) {
 	}
 
 	pool := &SOCKPool{
-		name:               name,
-		cgPool:             cgPool,
-		rootDir:            rootDir,
-		memRequests:        make(chan *memReq, 32),
-		memRequestsWaiting: list.New(),
+		name:          name,
+		mem:           mem,
+		cgPool:        cgPool,
+		rootDir:       rootDir,
+		eventHandlers: []SandboxEventFunc{},
 	}
-
-	go pool.memTask(pool_size_mb)
 
 	return pool, nil
-}
-
-// this task is responsible for tracking available memory in the
-// system, adding to the count when memory is released, and blocking
-// requesters until enough is free
-func (pool *SOCKPool) memTask(pool_size_mb int) {
-	available_mb := pool_size_mb
-
-	for {
-		req, ok := <-pool.memRequests
-		if !ok {
-			return
-		}
-
-		if req.mb >= 0 {
-			available_mb += req.mb
-			req.resp <- available_mb
-		} else {
-			pool.memRequestsWaiting.PushBack(req)
-		}
-
-		if e := pool.memRequestsWaiting.Front(); e != nil {
-			req = e.Value.(*memReq)
-			if available_mb+req.mb >= 0 {
-				pool.memRequestsWaiting.Remove(e)
-				available_mb += req.mb
-				req.resp <- available_mb
-			}
-		}
-	}
-}
-
-// this adjusts the available memory in the pool up/down, and returns
-// the remaining available after the adjustment.
-//
-// Available memory is kept >=0, so a negative mb may block for some
-// time.
-//
-// Sending a mb of 0 is a reasonable use case, especially for an
-// evictor (it doesn't change anything, but provides a way to monitor
-// available memory).
-func (pool *SOCKPool) adjustAvailableMemMB(mb int) (available_mb int) {
-	req := &memReq{
-		mb:   mb,
-		resp: make(chan int),
-	}
-
-	pool.memRequests <- req
-	return <-req.resp
 }
 
 func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchPrefix string, imports []string) (sb Sandbox, err error) {
@@ -144,7 +80,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchPrefix
 	log.Printf("<%v>.Create(%v, %v, %v, %v)", pool.name, codeDir, scratchPrefix, imports, parent)
 
 	// block until we have enough to cover the cgroup mem limits
-	pool.adjustAvailableMemMB(-config.Conf.Sock_cgroups.Max_mem_mb)
+	pool.mem.adjustAvailableMB(-config.Conf.Sock_cgroups.Max_mem_mb)
 
 	id := fmt.Sprintf("%d", atomic.AddInt64(&nextId, 1))
 	containerRootDir := filepath.Join(pool.rootDir, id)
@@ -199,7 +135,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchPrefix
 	}
 
 	// wrap to make thread-safe and handle container death
-	safeSB := &safeSandbox{Sandbox: c}
+	safeSB := newSafeSandbox(c, pool.eventHandlers)
 
 	// TODO: have some way to clean up this structure as sandboxes are released
 	pool.Mutex.Lock()
@@ -207,6 +143,16 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchPrefix
 	pool.Mutex.Unlock()
 
 	return safeSB, nil
+}
+
+// handler(...) will be called everytime a sandbox-related event occurs,
+// such as Create, Destroy, etc.
+//
+// the events are sent after the actions complete
+//
+// TODO: eventually make this part of SandboxPool API, and support in Docker?
+func (pool *SOCKPool) AddListener(handler SandboxEventFunc) {
+	pool.eventHandlers = append(pool.eventHandlers, handler)
 }
 
 func (pool *SOCKPool) Cleanup() {
@@ -219,7 +165,6 @@ func (pool *SOCKPool) Cleanup() {
 	pool.cgPool.Destroy()
 	syscall.Unmount(pool.rootDir, syscall.MNT_DETACH)
 	os.RemoveAll(pool.rootDir)
-	close(pool.memRequests)
 }
 
 func (pool *SOCKPool) DebugString() string {
