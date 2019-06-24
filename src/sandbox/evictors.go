@@ -7,9 +7,11 @@ import (
 	"github.com/open-lambda/open-lambda/ol/config"
 )
 
-// we would like to have enough memory free at any time to spin up the
-// following number of sandboxes, should the need arise
-const FREE_SANDBOXES_GOAL = 8
+// we would like 20% of the pool to be free for new containers.  the
+// evictor can only run if there's enough memory for two containers.
+// if there are only 2, our goal is to have free mem for on container.
+// 20% only applies to containers in excess of 2.
+const FREE_SANDBOXES_PERCENT_GOAL = 20
 
 // the maximum number of evictions we'll do concurrently
 const CONCURRENT_EVICTIONS = 8
@@ -146,16 +148,21 @@ func (evictor *SOCKEvictor) evictFront(queue *list.List) {
 }
 
 func (evictor *SOCKEvictor) doEvictions() {
-	// how many sandboxes could we spin up, given available mem?
 	memLimitMB := config.Conf.Sock_cgroups.Max_mem_mb
+
+	// how many sandboxes could we spin up, given available mem?
 	freeSandboxes := evictor.mem.getAvailableMB() / memLimitMB
+
+	// how many sandboxes would we like to be able to spin up,
+	// without waiting for more memory?
+	freeGoal := 1 + ((evictor.mem.totalMB/memLimitMB)-2)*FREE_SANDBOXES_PERCENT_GOAL/100
 
 	// how many shoud we try to evict?
 	//
 	// TODO: consider counting in-flight evictions.  This will be
 	// a bit tricky, as the evictions may be of sandboxes in paused
 	// states with reduced memory limits
-	evictCount := FREE_SANDBOXES_GOAL - freeSandboxes
+	evictCount := freeGoal - freeSandboxes
 
 	evictCap := CONCURRENT_EVICTIONS - evictor.evicting.Len()
 	if evictCap < evictCount {

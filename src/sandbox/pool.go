@@ -15,6 +15,7 @@ func SandboxPoolFromConfig() (cf SandboxPool, err error) {
 		if err != nil {
 			return nil, err
 		}
+		NewSOCKEvictor(handlerSandboxes)
 
 		if config.Conf.Import_cache_mb == 0 {
 			return handlerSandboxes, nil
@@ -25,6 +26,7 @@ func SandboxPoolFromConfig() (cf SandboxPool, err error) {
 		if err != nil {
 			return nil, err
 		}
+		NewSOCKEvictor(cacheSandboxes)
 
 		return NewImportCacheContainerFactory(handlerSandboxes, cacheSandboxes)
 	}

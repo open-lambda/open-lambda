@@ -22,6 +22,10 @@ def main():
     os.mkdir(cg1)
     os.mkdir(cg2)
 
+    for cg in (cg1, cg2):
+        with open(cg+"/memory.move_charge_at_immigrate", "w") as f:
+            f.write("1")
+
     join_cg(cg1)
     time.sleep(1)
     print('after join cg1: ', usage(cg1), usage(cg2))
@@ -35,6 +39,8 @@ def main():
     pid = os.fork()
     assert(pid >= 0)
 
+    time.sleep(1)
+    
     if pid != 0:
         print('after fork: ', usage(cg1), usage(cg2))
 

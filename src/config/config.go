@@ -153,16 +153,19 @@ func check() error {
 			return fmt.Errorf("sock_base_path cannot be relative")
 		}
 
-		if Conf.Sock_cgroups.Max_mem_mb > Conf.Handler_cache_mb {
-			return fmt.Errorf("handler_cache_mb must be at least %d",
-				Conf.Sock_cgroups.Max_mem_mb)
+		// evictor will ALWAYS try to kill if there's not
+		// enough free memory to spin up another container.
+		// So we need at least double a memory's needs,
+		// otherwise anything running will immediateld be
+		// evicted.
+		min_mem := 2 * Conf.Sock_cgroups.Max_mem_mb
+
+		if min_mem > Conf.Handler_cache_mb {
+			return fmt.Errorf("handler_cache_mb must be at least %d", min_mem)
 		}
 
-		if Conf.Import_cache_mb > 0 {
-			if Conf.Sock_cgroups.Max_mem_mb > Conf.Import_cache_mb {
-				return fmt.Errorf("import_cache_mb (if used) must be at least %d",
-					Conf.Sock_cgroups.Max_mem_mb)
-			}
+		if Conf.Import_cache_mb > 0 && min_mem > Conf.Import_cache_mb {
+			return fmt.Errorf("import_cache_mb (if used) must be at least %d", min_mem)
 		}
 	} else {
 		if Conf.Pkgs_dir == "" {

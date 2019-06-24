@@ -39,7 +39,6 @@ func NewSOCKServer() (*SOCKServer, error) {
 	if err != nil {
 		return nil, err
 	}
-	sandbox.NewSOCKEvictor(handler)
 
 	server := &SOCKServer{
 		cachePool:   cache,
