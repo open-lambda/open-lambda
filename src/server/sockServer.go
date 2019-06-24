@@ -28,12 +28,14 @@ type SOCKServer struct {
 
 // NewSOCKServer creates a server based on the passed config."
 func NewSOCKServer() (*SOCKServer, error) {
-	cache, err := sandbox.NewSOCKPool("sock-cache")
+	cacheMem := sandbox.NewMemPool(config.Conf.Import_cache_mb)
+	cache, err := sandbox.NewSOCKPool("sock-cache", cacheMem)
 	if err != nil {
 		return nil, err
 	}
 
-	handler, err := sandbox.NewSOCKPool("sock-handlers")
+	handlerMem := sandbox.NewMemPool(config.Conf.Handler_cache_mb)
+	handler, err := sandbox.NewSOCKPool("sock-handlers", handlerMem)
 	if err != nil {
 		return nil, err
 	}

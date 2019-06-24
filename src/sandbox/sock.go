@@ -27,6 +27,7 @@ import (
 )
 
 type SOCKContainer struct {
+	pool             *SOCKPool
 	cg               *Cgroup
 	id               string
 	containerRootDir string
@@ -179,6 +180,8 @@ func (c *SOCKContainer) Destroy() {
 	}
 }
 
+// TODO: make destroy recursive, so that children processes need to
+// die too.  This is the only way to prevent cgroup leaks.
 func (c *SOCKContainer) destroy() error {
 	if config.Conf.Timing {
 		defer func(start time.Time) {
@@ -223,6 +226,9 @@ func (c *SOCKContainer) destroy() error {
 	// if err := os.RemoveAll(c.scratchDir); err != nil {
 	//     c.printf("remove host dir %s failed :: %v\n", c.scratchDir, err)
 	//}
+
+	// release memory used for this container
+	c.pool.mem.adjustAvailableMB(config.Conf.Sock_cgroups.Max_mem_mb)
 
 	return nil
 }

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import os, sys, json, time, requests, copy, traceback, tempfile, threading
+import os, sys, json, time, requests, copy, traceback, tempfile, threading, subprocess
 from collections import OrderedDict
 from subprocess import Popen, check_output
 from multiprocessing import Pool
@@ -122,10 +122,16 @@ def TestConf(**keywords):
 
 def run(cmd):
     print("RUN", " ".join(cmd))
-    p = Popen(cmd, stdout=sys.stdout, stderr=sys.stderr)
-    rc = p.wait()
-    if rc:
-        raise Exception("command failed: " + " ".join(cmd) + ", ")
+    try:
+        out = check_output(cmd, stderr=subprocess.STDOUT)
+        fail = False
+    except subprocess.CalledProcessError as e:
+        out = e.output
+        fail = True
+
+    print(out)
+    if fail:
+        raise Exception("command (%s) failed: %s"  % (" ".join(cmd), out))
 
 
 @test
@@ -279,17 +285,17 @@ def tests():
         ping_test()
 
         # do smoke tests under various configs
-        with TestConf(handler_cache_mb=0, import_cache_mb=0):
+        with TestConf(handler_cache_mb=100, import_cache_mb=0):
             smoke_tests()
-        with TestConf(handler_cache_mb=256, import_cache_mb=0):
+        with TestConf(handler_cache_mb=250, import_cache_mb=0):
             smoke_tests()
-        with TestConf(handler_cache_mb=0, import_cache_mb=256):
+        with TestConf(handler_cache_mb=100, import_cache_mb=250):
             smoke_tests()
-        with TestConf(handler_cache_mb=256, import_cache_mb=256):
+        with TestConf(handler_cache_mb=250, import_cache_mb=250):
             smoke_tests()
-        with TestConf(sandbox="docker", handler_cache_mb=0, import_cache_mb=0):
+        with TestConf(sandbox="docker", handler_cache_mb=100, import_cache_mb=0):
             smoke_tests()
-        with TestConf(sandbox="docker", handler_cache_mb=256, import_cache_mb=0):
+        with TestConf(sandbox="docker", handler_cache_mb=250, import_cache_mb=0):
             smoke_tests()
 
         # test resource limits
@@ -297,12 +303,14 @@ def tests():
         max_mem_alloc()
 
     # test heavy load
-    with TestConf(sandbox="sock", handler_cache_mb=256, import_cache_mb=256, registry=test_reg):
+    with TestConf(sandbox="sock", handler_cache_mb=250, import_cache_mb=250, registry=test_reg):
         stress_one_lambda(procs=1, seconds=15)
         stress_one_lambda(procs=2, seconds=15)
-        stress_one_lambda(procs=8, seconds=15)
+        # TODO: reduce memory once we make handler layer more robust
+        with TestConf(handler_cache_mb=500, import_cache_mb=100):
+            stress_one_lambda(procs=8, seconds=15)
 
-    with TestConf(sandbox="sock", handler_cache_mb=256, import_cache_mb=256):
+    with TestConf(sandbox="sock", handler_cache_mb=250, import_cache_mb=250):
         call_each_once(lambda_count=100, alloc_mb=1)
         call_each_once(lambda_count=1000, alloc_mb=10)
 
