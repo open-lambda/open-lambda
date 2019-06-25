@@ -77,7 +77,10 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchPrefix
 		}(time.Now())
 	}
 
-	log.Printf("<%v>.Create(%v, %v, %v, %v)", pool.name, codeDir, scratchPrefix, imports, parent)
+	log.Printf("<%v>.Create(%v, %v, %v, %v)...", pool.name, codeDir, scratchPrefix, imports, parent)
+	defer func() {
+		log.Printf("...returns %v, %v", sb, err)
+	}()
 
 	// block until we have enough to cover the cgroup mem limits
 	pool.mem.adjustAvailableMB(-config.Conf.Sock_cgroups.Max_mem_mb)
@@ -102,6 +105,9 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchPrefix
 	}()
 
 	// root file system
+	if isLeaf && c.codeDir == "" {
+		return nil, fmt.Errorf("leaf sandboxes must have codeDir set")
+	}
 	if err := c.populateRoot(); err != nil {
 		return nil, fmt.Errorf("failed to create root FS: %v", err)
 	}

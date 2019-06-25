@@ -1,15 +1,12 @@
 package server
 
 import (
-	"bytes"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/open-lambda/open-lambda/ol/benchmarker"
 	"github.com/open-lambda/open-lambda/ol/config"
@@ -28,17 +25,6 @@ type LambdaServer struct {
 	lambda_mgr *handler.LambdaMgr
 }
 
-// httpErr is a wrapper for an http error and the return code of the request.
-type httpErr struct {
-	msg  string
-	code int
-}
-
-// newHttpErr creates an httpErr.
-func newHttpErr(msg string, code int) *httpErr {
-	return &httpErr{msg: msg, code: code}
-}
-
 // NewLambdaServer creates a server based on the passed config."
 func NewLambdaServer() (*LambdaServer, error) {
 	lambda_mgr, err := handler.NewLambdaMgr()
@@ -51,173 +37,6 @@ func NewLambdaServer() (*LambdaServer, error) {
 	}
 
 	return server, nil
-}
-
-// ForwardToSandbox forwards a run lambda request to a sandbox.
-func (s *LambdaServer) ForwardToSandbox(linst *handler.LambdaInstance, r *http.Request, input []byte) ([]byte, *http.Response, error) {
-	channel, err := linst.RunStart()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	defer linst.RunFinish()
-
-	if config.Conf.Timing {
-		defer func(start time.Time) {
-			log.Printf("forward request took %v\n", time.Since(start))
-		}(time.Now())
-	}
-
-	// forward request to sandbox.  r and w are the server
-	// request and response respectively.  r2 and w2 are the
-	// sandbox request and response respectively.
-
-	// TODO(tyler): some sort of smarter backoff.  Or, a better
-	// way to detect a started sandbox.
-	max_tries := 10
-	errors := []error{}
-	for tries := 1; ; tries++ {
-		b := benchmarker.GetBenchmarker()
-		var t *benchmarker.Timer
-		if b != nil {
-			t = b.CreateTimer("lambda request", "us")
-		}
-
-		url := "http://container" + r.URL.String()
-		r2, err := http.NewRequest(r.Method, url, bytes.NewReader(input))
-		if err != nil {
-			return nil, nil, err
-		}
-
-		r2.Close = true
-		r2.Header.Set("Content-Type", r.Header.Get("Content-Type"))
-		client := &http.Client{Transport: channel}
-		if t != nil {
-			t.Start()
-		}
-		w2, err := client.Do(r2)
-		if err != nil {
-			if t != nil {
-				t.Error("Request Failed")
-			}
-			errors = append(errors, err)
-			if tries == max_tries {
-				log.Printf("Forwarding request to container failed after %v tries\n", max_tries)
-				for i, item := range errors {
-					log.Printf("Attempt %v: %v\n", i, item.Error())
-				}
-				return nil, nil, err
-			}
-			time.Sleep(time.Duration(tries*100) * time.Millisecond)
-			continue
-		} else {
-			if t != nil {
-				t.End()
-			}
-		}
-
-		defer w2.Body.Close()
-		wbody, err := ioutil.ReadAll(w2.Body)
-		if err != nil {
-			return nil, nil, err
-		}
-		return wbody, w2, nil
-	}
-}
-
-// RunLambdaErr handles the run lambda request and return an http error if any.
-func (s *LambdaServer) RunLambdaErr(w http.ResponseWriter, r *http.Request) *httpErr {
-	// components represent run[0]/<name_of_sandbox>[1]/<extra_things>...
-	// ergo we want [1] for name of sandbox
-	urlParts := getUrlComponents(r)
-	if len(urlParts) < 2 {
-		return newHttpErr("Name of image to run required", http.StatusBadRequest)
-	}
-	img := urlParts[1]
-	i := strings.Index(img, "?")
-	if i >= 0 {
-		img = img[:i-1]
-	}
-
-	// read request
-	rbody := []byte{}
-	if r.Body != nil {
-		defer r.Body.Close()
-		var err error
-		rbody, err = ioutil.ReadAll(r.Body)
-		if err != nil {
-			return newHttpErr(err.Error(), http.StatusInternalServerError)
-		}
-	}
-
-	// forward to sandbox
-	var linst *handler.LambdaInstance
-	if rv, err := s.lambda_mgr.Get(img); err != nil {
-		return newHttpErr(err.Error(), http.StatusInternalServerError)
-	} else {
-		linst = rv
-	}
-
-	wbody, w2, err := s.ForwardToSandbox(linst, r, rbody)
-	if err != nil {
-		return newHttpErr(err.Error(), http.StatusInternalServerError)
-	}
-
-	w.WriteHeader(w2.StatusCode)
-
-	if _, err := w.Write(wbody); err != nil {
-		return newHttpErr(
-			err.Error(),
-			http.StatusInternalServerError)
-	}
-
-	return nil
-}
-
-// RunLambda expects POST requests like this:
-//
-// curl -X POST localhost:8080/run/<lambda-name> -d '{}'
-func (s *LambdaServer) RunLambda(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Receive request to %s\n", r.URL.Path)
-
-	// write response headers
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods",
-		"GET, PUT, POST, DELETE, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers",
-		"Content-Type, Content-Range, Content-Disposition, Content-Description, X-Requested-With")
-
-	if r.Method == "OPTIONS" {
-		w.WriteHeader(http.StatusOK)
-	} else {
-		if err := s.RunLambdaErr(w, r); err != nil {
-			log.Printf("could not handle request: %s\n", err.msg)
-			http.Error(w, err.msg, err.code)
-		}
-	}
-
-}
-
-// Status writes "ready" to the response.
-func (s *LambdaServer) Status(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Receive request to %s\n", r.URL.Path)
-
-	wbody := []byte("ready\n")
-	if _, err := w.Write(wbody); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-	}
-
-	s.lambda_mgr.Dump()
-}
-
-// GetPid returns process ID, useful for making sure we're talking to the expected server
-func (s *LambdaServer) GetPid(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Receive request to %s\n", r.URL.Path)
-
-	wbody := []byte(strconv.Itoa(os.Getpid()) + "\n")
-	if _, err := w.Write(wbody); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-	}
 }
 
 // getUrlComponents parses request URL into its "/" delimated components
@@ -236,6 +55,55 @@ func getUrlComponents(r *http.Request) []string {
 
 	components := strings.Split(path, "/")
 	return components
+}
+
+// RunLambda expects POST requests like this:
+//
+// curl -X POST localhost:8080/run/<lambda-name> -d '{}'
+func (s *LambdaServer) RunLambda(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Receive request to %s\n", r.URL.Path)
+
+	// write response headers
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods",
+		"GET, PUT, POST, DELETE, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers",
+		"Content-Type, Content-Range, Content-Disposition, Content-Description, X-Requested-With")
+
+	if r.Method == "OPTIONS" {
+		// TODO: why not let the lambda decide?
+		w.WriteHeader(http.StatusOK)
+	} else {
+		// components represent run[0]/<name_of_sandbox>[1]/<extra_things>...
+		// ergo we want [1] for name of sandbox
+		urlParts := getUrlComponents(r)
+		if len(urlParts) < 2 {
+			w.WriteHeader(http.StatusInternalServerError);
+			w.Write([]byte("expected invocation format: /run/<lambda-name>"))
+		} else {
+			img := urlParts[1]
+			s.lambda_mgr.Get(img).Invoke(w, r)
+		}
+	}
+}
+
+// Status writes "ready" to the response.
+func (s *LambdaServer) Status(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Receive request to %s\n", r.URL.Path)
+
+	if _, err := w.Write([]byte("ready\n")); err != nil {
+		log.Printf("error in Status: %v", err)
+	}
+}
+
+// GetPid returns process ID, useful for making sure we're talking to the expected server
+func (s *LambdaServer) GetPid(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Receive request to %s\n", r.URL.Path)
+
+	wbody := []byte(strconv.Itoa(os.Getpid()) + "\n")
+	if _, err := w.Write(wbody); err != nil {
+		log.Printf("error in GetPid: %v", err)
+	}
 }
 
 func (s *LambdaServer) cleanup() {

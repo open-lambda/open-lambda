@@ -24,7 +24,6 @@ import (
 
 	docker "github.com/fsouza/go-dockerclient"
 	"github.com/open-lambda/open-lambda/ol/benchmarker"
-	"github.com/open-lambda/open-lambda/ol/handler/state"
 )
 
 // DockerContainer is a sandbox inside a docker container.
@@ -36,6 +35,27 @@ type DockerContainer struct {
 	client    *docker.Client
 	installed map[string]bool
 	cache     bool
+}
+
+type HandlerState int
+
+const (
+	Unitialized HandlerState = iota
+	Running
+	Paused
+)
+
+func (h HandlerState) String() string {
+	switch h {
+	case Unitialized:
+		return "unitialized"
+	case Running:
+		return "running"
+	case Paused:
+		return "paused"
+	default:
+		panic("Unknown state!")
+	}
 }
 
 // NewDockerContainer creates a DockerContainer.
@@ -101,16 +121,16 @@ func (c *DockerContainer) InspectUpdate() error {
 }
 
 // State returns the state of the Docker sandbox.
-func (c *DockerContainer) State() (hstate state.HandlerState, err error) {
+func (c *DockerContainer) State() (hstate HandlerState, err error) {
 	if err := c.InspectUpdate(); err != nil {
 		return hstate, err
 	}
 
 	if c.container.State.Running {
 		if c.container.State.Paused {
-			hstate = state.Paused
+			hstate = Paused
 		} else {
-			hstate = state.Running
+			hstate = Running
 		}
 	} else {
 		return hstate, fmt.Errorf("unexpected state")
@@ -169,7 +189,7 @@ func (c *DockerContainer) Pause() error {
 	st, err := c.State()
 	if err != nil {
 		return err
-	} else if st == state.Paused {
+	} else if st == Paused {
 		return nil
 	}
 
@@ -197,7 +217,7 @@ func (c *DockerContainer) Unpause() error {
 	st, err := c.State()
 	if err != nil {
 		return err
-	} else if st == state.Running {
+	} else if st == Running {
 		return nil
 	}
 
