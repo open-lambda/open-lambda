@@ -4,7 +4,6 @@ package handler
 
 import (
 	"container/list"
-	"io"
 	"log"
 	"net/http"
 	"net/http/httputil"
