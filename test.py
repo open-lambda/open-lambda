@@ -50,7 +50,7 @@ def test(fn):
         total_t0 = time.time()
         try:           
             # setup worker
-            mounts0 = mount_count()
+            mounts0 = mounts()
             run(['./ol', 'worker', '-p='+OLDIR, '--detach'])
 
             # run test/benchmark
@@ -61,10 +61,10 @@ def test(fn):
 
             # cleanup worker
             run(['./ol', 'kill', '-p='+OLDIR])
-            mounts1 = mount_count()
+            mounts1 = mounts()
 
-            if mounts0 != mounts1:
-                raise Exception("mounts are leaking (%d before, %d after)" % (mounts0, mounts1))
+            if len(mounts0) != len(mounts1):
+                raise Exception("mounts are leaking (%d before, %d after), leaked: %s" % (len(mounts0), len(mounts1), str(mounts1 - mounts0)))
 
             result["pass"] = True
         except Exception:
@@ -95,11 +95,11 @@ def put_conf(conf):
     curr_conf = conf
 
 
-def mount_count():
+def mounts():
     output = check_output(["mount"])
     output = str(output, "utf-8")
     output = output.split("\n")
-    return len(output)
+    return set(output)
 
         
 @contextmanager
