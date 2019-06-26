@@ -58,6 +58,7 @@ func (pool *MemPool) memTask() {
 			pool.memRequestsWaiting.PushBack(req)
 		}
 
+		// POLICY: which requests should we serve first?
 		if e := pool.memRequestsWaiting.Front(); e != nil {
 			req = e.Value.(*memReq)
 			if availableMB+req.mb >= 0 {

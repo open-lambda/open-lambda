@@ -3,6 +3,7 @@
 package handler
 
 import (
+	"bytes"
 	"container/list"
 	"fmt"
 	"log"
@@ -11,12 +12,15 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/open-lambda/open-lambda/ol/config"
 	"github.com/open-lambda/open-lambda/ol/pip-manager"
+	"github.com/open-lambda/open-lambda/ol/stats"
 
 	sb "github.com/open-lambda/open-lambda/ol/sandbox"
 )
@@ -71,9 +75,14 @@ type LambdaInstance struct {
 
 // represents an HTTP request to be handled by a lambda instance
 type Invocation struct {
-	w    http.ResponseWriter
-	r    *http.Request
-	done chan bool // func to server
+	w http.ResponseWriter
+	r *http.Request
+
+	// signal to client that response has been written to w
+	done chan bool
+
+	// how many milliseconds did ServeHTTP take?  (doesn't count queue time or Sandbox init)
+	execMs int
 }
 
 func NewLambdaMgr() (mgr *LambdaMgr, err error) {
@@ -124,7 +133,7 @@ func (mgr *LambdaMgr) Get(name string) (f *LambdaFunc) {
 	f = mgr.lfuncMap[name]
 
 	if f == nil {
-		mgr.lfuncMap[name] = &LambdaFunc{
+		f = &LambdaFunc{
 			lmgr:      mgr,
 			name:      name,
 			imports:   []string{},
@@ -135,10 +144,9 @@ func (mgr *LambdaMgr) Get(name string) (f *LambdaFunc) {
 			instances: list.New(),
 		}
 
-		f = mgr.lfuncMap[name]
+		go f.Task()
+		mgr.lfuncMap[name] = f
 	}
-
-	go f.Task()
 
 	return f
 }
@@ -171,47 +179,6 @@ func (f *LambdaFunc) printf(format string, args ...interface{}) {
 	log.Printf("%s [FUNC %s]", strings.TrimRight(msg, "\n"), f.name)
 }
 
-// move all instances off the list the LambdaFunc can see, then
-// return.  in the background, kill all those instances, then (after
-// they're dead) remove the old code dir they were using
-func (f *LambdaFunc) asyncCodeCleanup() {
-	if f.codeDir == "" {
-		return
-	}
-
-	toDelete := f.codeDir
-	toKill := f.instances
-	f.instances = list.New()
-
-	// background cleanup
-	go func() {
-		f.printf("cleanup instances using %s", toDelete)
-		doneChans := make([]chan bool, 0, toKill.Len())
-
-		// send all instances a kill signal
-		el := toKill.Front()
-		for el != nil {
-			done := make(chan bool)
-			el.Value.(*LambdaInstance).killChan <- done
-			doneChans = append(doneChans, done)
-			el = el.Next()
-		}
-		f.printf("send kill signal to %d instances using %s", toKill.Len(), toDelete)
-
-		// wait for them all to die
-		for _, killed := range doneChans {
-			<-killed
-			f.printf("instance using %s has died", toDelete)
-		}
-
-		// nobody is using the old code dir now, so delete it
-		f.printf("remove old code dir, %s", toDelete)
-		if err := os.RemoveAll(toDelete); err != nil {
-			f.printf("Async code cleanup could not delete %s, even after all instances using it killed: %v", err)
-		}
-	}()
-}
-
 func (f *LambdaFunc) checkCodeCache() (err error) {
 	// check if there is newer code, download it if necessary
 	now := time.Now()
@@ -226,9 +193,6 @@ func (f *LambdaFunc) checkCodeCache() (err error) {
 			// no changes since last time we pulled the code
 			return nil
 		}
-
-		// delete previous code dir, killing any instances using it
-		f.asyncCodeCleanup()
 
 		imports, installs, err := parsePkgFile(codeDir)
 		if err != nil {
@@ -268,13 +232,50 @@ func (f *LambdaFunc) checkCodeCache() (err error) {
 // respond to the client with a backoff message
 // (http.StatusTooManyRequests)
 func (f *LambdaFunc) Task() {
+	f.printf("debug: LambdaFunc.Task() runs on goroutine %d", getGID())
+
+	// we want to perform various cleanup actions, such as killing
+	// instances and deleting old code.  We want to do these
+	// asyncronously, but in order.  Thus, we use a chan to get
+	// FIFO behavior and a single cleanup task to get async.
+	//
+	// two types can be sent to this chan:
+	//
+	// 1. string: this is a path to be deleted
+	//
+	// 2. chan: this is a signal chan that corresponds to
+	// previously initiated cleanup work.  We block until we
+	// receive the complete signal, before proceeding to
+	// subsequent cleanup tasks in the FIFO.
+	cleanupChan := make(chan interface{}, 32)
+	go func() {
+		for msg := range cleanupChan {
+			switch op := msg.(type) {
+			case string:
+				if err := os.RemoveAll(op); err != nil {
+					f.printf("Async code cleanup could not delete %s, even after all instances using it killed: %v", op, err)
+				}
+			case chan bool:
+				<-op
+			}
+		}
+	}()
+
+	// stats for autoscaling
 	outstandingReqs := 0
+	execMs := stats.NewRollingAvg(10)
+	var lastScaling *time.Time = nil
+	timeout := time.NewTimer(0)
 
 	for {
 		select {
+		case <-timeout.C:
 		case req := <-f.funcChan:
 			// client has sent us a new request
 
+			// check for new code, and cleanup old code
+			// (and instances that use it) if necessary
+			oldCodeDir := f.codeDir
 			if err := f.checkCodeCache(); err != nil {
 				f.printf("Error checking for new lambda code: %v", err)
 				if f.codeDir == "" {
@@ -284,6 +285,21 @@ func (f *LambdaFunc) Task() {
 					req.done <- true
 					continue
 				}
+			}
+
+			if oldCodeDir != "" && oldCodeDir != f.codeDir {
+				el := f.instances.Front()
+				for el != nil {
+					waitChan := el.Value.(*LambdaInstance).AsyncKill()
+					cleanupChan <- waitChan
+					el = el.Next()
+				}
+				f.instances = list.New()
+
+				// cleanupChan is a FIFO, so this will
+				// happen after the cleanup task waits
+				// for all instance kills to finish
+				cleanupChan <- oldCodeDir
 			}
 
 			select {
@@ -298,14 +314,66 @@ func (f *LambdaFunc) Task() {
 		case req := <-f.doneChan:
 			// instance has notified us that a request has finished
 
+			execMs.Add(req.execMs)
 			outstandingReqs -= 1
 			req.done <- true
 		}
 
-		// TODO: upside or downsize, based on request to
-		// instance ratio
-		if f.instances.Len() < 1 {
+		// POLICY: how many instances (i.e., virtual sandboxes) should we allocate?
+
+		// AUTOSCALING STEP 1: decide how many instances we want
+
+		// let's aim to have 1 sandbox per second of outstanding work
+		inProgressWorkMs := outstandingReqs * execMs.Avg
+		desiredInstances := inProgressWorkMs / 1000
+
+		// if we have, say, one job that will take 100
+		// seconds, spinning up 100 instances won't do any
+		// good, so cap by number of outstanding reqs
+		if outstandingReqs < desiredInstances {
+			desiredInstances = outstandingReqs
+		}
+
+		// always try to have one instance
+		if desiredInstances < 1 {
+			desiredInstances = 1
+		}
+
+		// AUTOSCALING STEP 2: tweak how many instances we have, to get closer to our goal
+
+		// make at most one scaling adjustment per second
+		adjustFreq := time.Second
+		now := time.Now()
+		if lastScaling != nil {
+			elapsed := now.Sub(*lastScaling)
+			if elapsed < adjustFreq {
+				if desiredInstances != f.instances.Len() {
+					timeout = time.NewTimer(adjustFreq - elapsed)
+				}
+				continue
+			}
+		}
+
+		// kill or start at most one instance to get closer to
+		// desired number
+		if f.instances.Len() < desiredInstances {
+			f.printf("increase instances to %d", f.instances.Len()+1)
 			f.newInstance()
+			lastScaling = &now
+		} else if f.instances.Len() > desiredInstances {
+			f.printf("reduce instances to %d", f.instances.Len()-1)
+			waitChan := f.instances.Back().Value.(*LambdaInstance).AsyncKill()
+			f.instances.Remove(f.instances.Back())
+			cleanupChan <- waitChan
+			lastScaling = &now
+		}
+
+		if f.instances.Len() != desiredInstances {
+			// we can only adjust quickly, so we want to
+			// run through this loop again as soon as
+			// possible, even if there are no requests to
+			// service.
+			timeout = time.NewTimer(adjustFreq)
 		}
 	}
 }
@@ -320,7 +388,7 @@ func (f *LambdaFunc) newInstance() {
 		codeDir:  f.codeDir,
 		imports:  f.imports,
 		installs: f.installs,
-		killChan: make(chan chan bool),
+		killChan: make(chan chan bool, 1),
 	}
 
 	f.instances.PushBack(linst)
@@ -346,7 +414,6 @@ func (linst *LambdaInstance) Task() {
 	var proxy *httputil.ReverseProxy = nil // whenever we create a Sandbox, we init this too
 	var err error
 
-outer:
 	for {
 		// wait for a request (blocking) before making the
 		// Sandbox ready, or kill if we receive that signal
@@ -407,15 +474,11 @@ outer:
 
 		// serve until we incoming queue is empty
 		for req != nil {
-			// server request via proxy
-			proxy.ServeHTTP(req.w, req.r) // TODO: check for 500, and restart if we see it
+			// ask Sandbox to respond, via HTTP proxy
+			t0 := time.Now()
+			proxy.ServeHTTP(req.w, req.r)
+			req.execMs = int(time.Now().Sub(t0) / 1000000)
 			f.doneChan <- req
-			if err != nil {
-				f.printf("discard sandbox %s due to HTTP error: %s", sb.ID(), err.Error())
-				sb.Destroy()
-				sb = nil
-				continue outer
-			}
 
 			// check whether we should shutdown (non-blocking)
 			select {
@@ -441,8 +504,20 @@ outer:
 	}
 }
 
-func (linst *LambdaInstance) Kill() {
+// signal the instance to die, return chan that can be used to block
+// until it's done
+func (linst *LambdaInstance) AsyncKill() chan bool {
 	done := make(chan bool)
 	linst.killChan <- done
-	<-done
+	return done
+}
+
+// https://blog.sgmansfield.com/2015/12/goroutine-ids/
+func getGID() uint64 {
+	b := make([]byte, 64)
+	b = b[:runtime.Stack(b, false)]
+	b = bytes.TrimPrefix(b, []byte("goroutine "))
+	b = b[:bytes.IndexByte(b, ' ')]
+	n, _ := strconv.ParseUint(string(b), 10, 64)
+	return n
 }

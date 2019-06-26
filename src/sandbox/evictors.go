@@ -147,6 +147,7 @@ func (evictor *SOCKEvictor) evictFront(queue *list.List) {
 	evictor.move(sb, evictor.evicting)
 }
 
+// POLICY: how should we select a victim?
 func (evictor *SOCKEvictor) doEvictions() {
 	memLimitMB := config.Conf.Sock_cgroups.Max_mem_mb
 

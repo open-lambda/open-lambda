@@ -33,6 +33,9 @@ def test(fn):
         if len(args):
             raise Exception("positional args not supported for tests")
 
+        print('='*40)
+        print(fn.__name__)
+        print('='*40)
         result = OrderedDict()
         result["test"] = fn.__name__
         result["params"] = kwargs
