@@ -4,9 +4,10 @@ package handler
 
 import (
 	"container/list"
-	"errors"
 	"log"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"path/filepath"
 	"sync"
 	"time"
@@ -17,43 +18,55 @@ import (
 	sb "github.com/open-lambda/open-lambda/ol/sandbox"
 )
 
-// Organizes all lambda functions (the code) and lambda instances (that serve events)
+// provides thread-safe access to map of lambda functions, and stores
+// references to various helpers:
+// 1. codePuller, for pulling lambda code
+// 2. pipMgr, for doing pip installs on the host
+// 3. sbPool, for allocating Sandbox instances
 type LambdaMgr struct {
-	mutex      sync.Mutex
-	lfuncMap   map[string]*LambdaFunc
 	codePuller *CodePuller
 	pipMgr     pip.InstallManager
 	sbPool     sb.SandboxPool
-	lru        *LambdaInstanceLRU
-	workerDir  string
-	maxRunners int
+
+	mapMutex sync.Mutex
+	lfuncMap map[string]*LambdaFunc
 }
 
 // Represents a single lambda function (the code)
 type LambdaFunc struct {
-	name         string
-	mutex        sync.Mutex
-	lmgr         *LambdaMgr
-	instances    *list.List
-	listEl       map[*LambdaInstance]*list.Element
-	workingDir   string
-	maxInstances int
-	lastPull     *time.Time
-	code         []byte
-	codeDir      string
-	imports      []string
-	installs     []string
+	lmgr *LambdaMgr
+	name string
+
+	// lambda code
+	lastPull *time.Time
+	codeDir  string
+	imports  []string
+	installs []string
+
+	// lambda execution
+	funcChan  chan *Invocation // server to func
+	instChan  chan *Invocation // func to instances
+	doneChan  chan *Invocation // instances to func
+	instances *list.List
 }
 
-// Wraps a sandbox that runs a process that can handle lambda events
+// This is essentially a virtual sandbox.  It is backed by a real
+// Sandbox (when it is allowed to allocate one).  It pauses/unpauses
+// based on usage, and starts fresh instances when they die.
 type LambdaInstance struct {
-	name    string
-	id      string
-	mutex   sync.Mutex
-	lfunc   *LambdaFunc
-	sandbox sb.Sandbox
-	runners int
-	usage   int
+	lfunc *LambdaFunc
+
+	// copied from LambdaFunc, at the time of creation
+	codeDir  string
+	imports  []string
+	installs []string
+}
+
+// represents an HTTP request to be handled by a lambda instance
+type Invocation struct {
+	w    http.ResponseWriter
+	r    *http.Request
+	done chan bool // func to server
 }
 
 func NewLambdaMgr() (mgr *LambdaMgr, err error) {
@@ -91,224 +104,254 @@ func NewLambdaMgr() (mgr *LambdaMgr, err error) {
 		codePuller: cp,
 		pipMgr:     pm,
 		sbPool:     sbp,
-		workerDir:  config.Conf.Worker_dir,
-		maxRunners: config.Conf.Max_runners,
 	}
-
-	mgr.lru = NewLambdaInstanceLRU(mgr, config.Conf.Handler_cache_mb)
 
 	return mgr, nil
 }
 
 // Returns an existing instance (if there is one), or creates a new one
-func (mgr *LambdaMgr) Get(name string) (linst *LambdaInstance, err error) {
-	mgr.mutex.Lock()
+func (mgr *LambdaMgr) Get(name string) (f *LambdaFunc) {
+	mgr.mapMutex.Lock()
+	defer mgr.mapMutex.Unlock()
 
-	lfunc := mgr.lfuncMap[name]
+	f = mgr.lfuncMap[name]
 
-	if lfunc == nil {
-		workingDir := filepath.Join(mgr.workerDir, "handlers", name)
+	if f == nil {
 		mgr.lfuncMap[name] = &LambdaFunc{
-			name:       name,
-			lmgr:       mgr,
-			instances:  list.New(),
-			listEl:     make(map[*LambdaInstance]*list.Element),
-			workingDir: workingDir,
-			imports:    []string{},
-			installs:   []string{},
+			lmgr:      mgr,
+			name:      name,
+			imports:   []string{},
+			installs:  []string{},
+			funcChan:  make(chan *Invocation, 32),
+			instChan:  make(chan *Invocation, 32),
+			doneChan:  make(chan *Invocation, 32),
+			instances: list.New(),
 		}
 
-		lfunc = mgr.lfuncMap[name]
+		f = mgr.lfuncMap[name]
 	}
 
-	// find or create instance
-	lfunc.mutex.Lock()
-	if lfunc.instances.Front() == nil {
-		linst = &LambdaInstance{
-			name:    name,
-			lfunc:   lfunc,
-			runners: 1,
-		}
-	} else {
-		listEl := lfunc.instances.Front()
-		linst = listEl.Value.(*LambdaInstance)
+	go f.Task()
 
-		// remove from lru if necessary
-		linst.mutex.Lock()
-		if linst.runners == 0 {
-			mgr.lru.Remove(linst)
-		}
+	return f
+}
 
-		linst.runners += 1
+func (mgr *LambdaMgr) Cleanup() {
+	mgr.mapMutex.Lock() // we don't unlock, because nobody else should use this anyway
+	mgr.sbPool.Cleanup()
+}
 
-		if mgr.maxRunners != 0 && linst.runners == mgr.maxRunners {
-			lfunc.instances.Remove(listEl)
-			delete(lfunc.listEl, linst)
-		}
-		linst.mutex.Unlock()
+func (f *LambdaFunc) Invoke(w http.ResponseWriter, r *http.Request) {
+	done := make(chan bool)
+	req := &Invocation{w: w, r: r, done: done}
+
+	// send invocation to lambda func task, if room in queue
+	select {
+	case f.funcChan <- req:
+		// block until it's done
+		<-done
+	default:
+		// queue cannot accept more, so reply with backoff
+		req.w.WriteHeader(http.StatusTooManyRequests)
+		req.w.Write([]byte("lambda function queue is full"))
 	}
-	// not perfect, but removal from the LRU needs to be atomic
-	// with respect to the LRU and the LambdaMgr
-	mgr.mutex.Unlock()
+}
 
-	// get code if needed
+func (f *LambdaFunc) checkCodeCache() (err error) {
+	// check if there is newer code, download it if necessary
 	now := time.Now()
 	cache_ns := int64(config.Conf.Registry_cache_ms) * 1000000
-	if lfunc.lastPull == nil || int64(now.Sub(*lfunc.lastPull)) > cache_ns {
-		codeDir, err := mgr.codePuller.Pull(lfunc.name)
+	if f.lastPull == nil || int64(now.Sub(*f.lastPull)) > cache_ns {
+		codeDir, err := f.lmgr.codePuller.Pull(f.name)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		imports, installs, err := parsePkgFile(codeDir)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		lfunc.lastPull = &now
-		lfunc.codeDir = codeDir
-		lfunc.imports = imports
-		lfunc.installs = installs
-	}
-	lfunc.mutex.Unlock()
-
-	return linst, nil
-}
-
-// Dump prints the name and state of the instances currently in the LambdaMgr.
-func (mgr *LambdaMgr) Dump() {
-	mgr.mutex.Lock()
-	defer mgr.mutex.Unlock()
-
-	log.Printf("LAMBDA INSTANCES:\n")
-	for name, lfunc := range mgr.lfuncMap {
-		lfunc.mutex.Lock()
-		log.Printf(" %v: %d", name, lfunc.maxInstances)
-		for e := lfunc.instances.Front(); e != nil; e = e.Next() {
-			linst := e.Value.(*LambdaInstance)
-			log.Printf(" > %v\n", linst.id)
-		}
-		lfunc.mutex.Unlock()
-	}
-}
-
-func (mgr *LambdaMgr) Cleanup() {
-	mgr.mutex.Lock() // we don't unlock, because nobody else should use this anyway
-	mgr.sbPool.Cleanup()
-}
-
-// must be called with instance lock
-func (lfunc *LambdaFunc) AddInstance(linst *LambdaInstance) {
-	mgr := lfunc.lmgr
-
-	// if we finish first
-	// no deadlock can occur here despite taking the locks in the
-	// opposite order because hm -> h in Get has no reference
-	// in the instance list
-	if mgr.maxRunners != 0 && linst.runners == mgr.maxRunners-1 {
-		lfunc.mutex.Lock()
-		lfunc.listEl[linst] = lfunc.instances.PushFront(linst)
-		lfunc.maxInstances = max(lfunc.maxInstances, lfunc.instances.Len())
-		lfunc.mutex.Unlock()
-	}
-}
-
-func (lfunc *LambdaFunc) TryRemoveInstance(linst *LambdaInstance) error {
-	lfunc.mutex.Lock()
-	defer lfunc.mutex.Unlock()
-	linst.mutex.Lock()
-	defer linst.mutex.Unlock()
-
-	// someone has come in and has started running
-	if linst.runners > 0 {
-		return errors.New("concurrent runner entered system")
+		f.lastPull = &now
+		f.codeDir = codeDir
+		f.imports = imports
+		f.installs = installs
 	}
 
-	// remove reference to instance in LambdaMgr
-	// this ensures h is the last reference to the Instance
-	if listEl := lfunc.listEl[linst]; listEl != nil {
-		lfunc.instances.Remove(listEl)
-		delete(lfunc.listEl, linst)
+	// TODO: shouldn't we do this inside the Sandbox?
+	if err := f.lmgr.pipMgr.Install(f.installs); err != nil {
+		return err
 	}
 
 	return nil
 }
 
-// RunStart runs the lambda handled by this Instance. It checks if the code has
-// been pulled, sandbox been created, and sandbox been started. The channel of
-// the sandbox of this lambda is returned.
-func (linst *LambdaInstance) RunStart() (tr *http.Transport, err error) {
-	linst.mutex.Lock()
-	defer linst.mutex.Unlock()
+// this Task receives lambda requests, fetches new lambda code as
+// needed, and dispatches to a set of lambda instances.  Task also
+// monitors outstanding requests, and scales the number of instances
+// up or down as needed.
+//
+// communication for a given request is as follows:
+//
+// server -> Task -> instance -> Task -> server
+//
+// each of the 4 handoffs above is over a chan.  In order, those chans are:
+// 1. LambdaFunc.funcChan
+// 2. LambdaFunc.instChan
+// 3. LambdaFunc.doneChan
+// 4. Invocation.done
+//
+// If either LambdaFunc.funcChan or LambdaFunc.instChan is full, we
+// respond to the client with a backoff message
+// (http.StatusTooManyRequests)
+func (f *LambdaFunc) Task() {
+	outstandingReqs := 0
 
-	lfunc := linst.lfunc
-	mgr := linst.lfunc.lmgr
+	for {
+		select {
+		case req := <-f.funcChan:
+			// incoming request
 
-	// create sandbox if needed
-	if linst.sandbox == nil {
-		err = mgr.pipMgr.Install(lfunc.installs)
-		if err != nil {
-			return nil, err
+			// TODO: if checkCodeCache pulls new code, restart all the instances
+			if err := f.checkCodeCache(); err == nil {
+				select {
+				case f.instChan <- req:
+					outstandingReqs += 1
+				default:
+					// queue cannot accept more, so reply with backoff
+					req.w.WriteHeader(http.StatusTooManyRequests)
+					req.w.Write([]byte("lambda instance queue is full"))
+					req.done <- true
+				}
+			} else {
+				log.Printf("Error checking for new lambda code: %v", err)
+				req.w.WriteHeader(http.StatusInternalServerError)
+				req.w.Write([]byte(err.Error() + "\n"))
+				req.done <- true
+			}
+		case req := <-f.doneChan:
+			// notification that request we sent out has completed
+
+			outstandingReqs -= 1
+			req.done <- true
 		}
 
-		sandbox, err := mgr.sbPool.Create(nil, true, lfunc.codeDir, lfunc.workingDir, lfunc.imports)
-		if err != nil {
-			return nil, err
-		}
-
-		linst.sandbox = sandbox
-		linst.id = linst.sandbox.ID()
-
-		// we are up so we can add ourselves for reuse
-		if mgr.maxRunners == 0 || linst.runners < mgr.maxRunners {
-			lfunc.mutex.Lock()
-			lfunc.listEl[linst] = lfunc.instances.PushFront(linst)
-			lfunc.maxInstances = max(lfunc.maxInstances, lfunc.instances.Len())
-			lfunc.mutex.Unlock()
-		}
-
-	} else {
-		// unpause if necessary
-		if err := linst.sandbox.Unpause(); err != nil {
-			return nil, err
+		// TODO: upside or downsize, based on request to
+		// instance ratio
+		if f.instances.Len() < 1 {
+			f.newInstance()
 		}
 	}
-
-	return linst.sandbox.Channel()
 }
 
-// RunFinish notifies that a request to run the lambda has completed. If no
-// request is being run in its sandbox, sandbox will be paused and the instance
-// be added to the InstanceLRU.
-func (linst *LambdaInstance) RunFinish() {
-	linst.mutex.Lock()
-
-	lfunc := linst.lfunc
-	mgr := linst.lfunc.lmgr
-
-	linst.runners -= 1
-
-	// are we the last?
-	if linst.runners == 0 {
-		if err := linst.sandbox.Pause(); err != nil {
-			// TODO(tyler): better way to handle this?  If
-			// we can't pause, the instance gets to keep
-			// running for free...
-			log.Printf("Could not pause %v: %v!  Error: %v\n", linst.name, linst.id, err)
-		}
-
-		lfunc.AddInstance(linst)
-		mgr.lru.Add(linst)
-	} else {
-		lfunc.AddInstance(linst)
+func (f *LambdaFunc) newInstance() {
+	if f.codeDir == "" {
+		panic("cannot start instance until code has been fetched")
 	}
 
-	linst.mutex.Unlock()
+	linst := &LambdaInstance{
+		lfunc:    f,
+		codeDir:  f.codeDir,
+		imports:  f.imports,
+		installs: f.installs,
+	}
+
+	f.instances.PushBack(linst)
+
+	go linst.Task()
 }
 
-func max(i1, i2 int) int {
-	if i1 < i2 {
-		return i2
+// this Task manages a single Sandbox (at any given time), and
+// forwards requests from the function queue to that Sandbox.
+// when there are no requests, the Sandbox is paused.
+//
+// These errors are handled as follows by Task:
+//
+// 1. Sandbox.Pause/Unpause: discard Sandbox, create new one to handle request
+// 2. Sandbox.Create/Channel: discard Sandbox, propagate HTTP 500 to client
+// 3. Error inside Sandbox: simply propagate whatever occured to client (TODO: restart Sandbox)
+func (linst *LambdaInstance) Task() {
+	f := linst.lfunc
+	scratchPrefix := filepath.Join(config.Conf.Worker_dir, "handlers", f.name)
+
+	var sb sb.Sandbox = nil
+	//var client *http.Client = nil // whenever we create a Sandbox, we init this too
+	var proxy *httputil.ReverseProxy = nil // whenever we create a Sandbox, we init this too
+	var err error
+
+outer:
+	for {
+		// wait for a request (blocking) before making the Sandbox ready
+		req := <-f.instChan
+
+		// if we have a sandbox, try unpausing it to see if it is still alive
+		if sb != nil {
+			// Unpause will often fail, because evictors
+			// are likely to prefer to evict paused
+			// sandboxes rather than inactive sandboxes.
+			// Thus, if this fails, we'll try to handle it
+			// by just creating a new sandbox.
+			if err := sb.Unpause(); err != nil {
+				log.Printf("discard sandbox %s due to Unpause error: %s", sb.ID())
+				sb = nil
+			}
+		}
+
+		// if we don't already have a Sandbox, create one, and HTTP proxy over the channel
+		if sb == nil {
+			sb, err = f.lmgr.sbPool.Create(nil, true, linst.codeDir, scratchPrefix, linst.imports)
+			if err != nil {
+				req.w.WriteHeader(http.StatusInternalServerError)
+				req.w.Write([]byte("could not create Sandbox: " + err.Error() + "\n"))
+				f.doneChan <- req
+				continue // wait for another request before retrying
+			}
+
+			var tr *http.Transport
+			tr, err = sb.Channel()
+			if err != nil {
+				req.w.WriteHeader(http.StatusInternalServerError)
+				req.w.Write([]byte("could not connect to Sandbox: " + err.Error() + "\n"))
+				f.doneChan <- req
+				log.Printf("discard sandbox %s due to Channel error: %s", sb.ID(), err.Error())
+				sb = nil
+				continue // wait for another request before retrying
+			}
+
+			u, err := url.Parse("http://container")
+			if err != nil {
+				panic(err)
+			}
+			proxy = httputil.NewSingleHostReverseProxy(u)
+			proxy.Transport = tr
+		}
+
+		// serve requests for as long as we can without blocking on the incoming queue
+		for req != nil {
+			//serve request
+
+			// TODO: somehow check result, and kill error on 500 (others?)
+			proxy.ServeHTTP(req.w, req.r)
+
+			f.doneChan <- req
+			if err != nil {
+				log.Printf("discard sandbox %s due to HTTP error: %s", sb.ID(), err.Error())
+				sb.Destroy()
+				sb = nil
+				continue outer
+			}
+
+			// grab another (non-blocking)
+			select {
+			case req = <-f.instChan:
+			default:
+				req = nil
+			}
+		}
+
+		if err := sb.Pause(); err != nil {
+			log.Printf("discard sandbox %s due to Pause error: %s", sb.ID())
+			sb = nil
+		}
 	}
-	return i1
 }
