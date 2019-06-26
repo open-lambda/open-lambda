@@ -78,7 +78,7 @@ func (s *LambdaServer) RunLambda(w http.ResponseWriter, r *http.Request) {
 		// ergo we want [1] for name of sandbox
 		urlParts := getUrlComponents(r)
 		if len(urlParts) < 2 {
-			w.WriteHeader(http.StatusInternalServerError);
+			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("expected invocation format: /run/<lambda-name>"))
 		} else {
 			img := urlParts[1]

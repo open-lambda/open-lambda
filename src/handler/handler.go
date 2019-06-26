@@ -29,44 +29,44 @@ type LambdaMgr struct {
 	pipMgr     pip.InstallManager
 	sbPool     sb.SandboxPool
 
-	mapMutex      sync.Mutex
-	lfuncMap   map[string]*LambdaFunc
+	mapMutex sync.Mutex
+	lfuncMap map[string]*LambdaFunc
 }
 
 // Represents a single lambda function (the code)
 type LambdaFunc struct {
-	lmgr         *LambdaMgr
-	name         string
+	lmgr *LambdaMgr
+	name string
 
 	// lambda code
-	lastPull     *time.Time
-	codeDir      string
-	imports      []string
-	installs     []string
+	lastPull *time.Time
+	codeDir  string
+	imports  []string
+	installs []string
 
 	// lambda execution
-	funcChan chan *Invocation // server to func
-	instChan chan *Invocation // func to instances
-	doneChan chan *Invocation // instances to func
-	instances    *list.List
+	funcChan  chan *Invocation // server to func
+	instChan  chan *Invocation // func to instances
+	doneChan  chan *Invocation // instances to func
+	instances *list.List
 }
 
 // This is essentially a virtual sandbox.  It is backed by a real
 // Sandbox (when it is allowed to allocate one).  It pauses/unpauses
 // based on usage, and starts fresh instances when they die.
 type LambdaInstance struct {
-	lfunc   *LambdaFunc
+	lfunc *LambdaFunc
 
 	// copied from LambdaFunc, at the time of creation
-	codeDir      string
-	imports      []string
-	installs     []string
+	codeDir  string
+	imports  []string
+	installs []string
 }
 
 // represents an HTTP request to be handled by a lambda instance
 type Invocation struct {
-	w http.ResponseWriter
-	r *http.Request
+	w    http.ResponseWriter
+	r    *http.Request
 	done chan bool // func to server
 }
 
@@ -119,14 +119,14 @@ func (mgr *LambdaMgr) Get(name string) (f *LambdaFunc) {
 
 	if f == nil {
 		mgr.lfuncMap[name] = &LambdaFunc{
-			lmgr:       mgr,
-			name:       name,
-			imports:    []string{},
-			installs:   []string{},
-			funcChan: make(chan *Invocation, 32),
-			instChan: make(chan *Invocation, 32),
-			doneChan: make(chan *Invocation, 32),
-			instances:  list.New(),
+			lmgr:      mgr,
+			name:      name,
+			imports:   []string{},
+			installs:  []string{},
+			funcChan:  make(chan *Invocation, 32),
+			instChan:  make(chan *Invocation, 32),
+			doneChan:  make(chan *Invocation, 32),
+			instances: list.New(),
 		}
 
 		f = mgr.lfuncMap[name]
@@ -150,7 +150,7 @@ func (f *LambdaFunc) Invoke(w http.ResponseWriter, r *http.Request) {
 	select {
 	case f.funcChan <- req:
 		// block until it's done
-		<- done
+		<-done
 	default:
 		// queue cannot accept more, so reply with backoff
 		req.w.WriteHeader(http.StatusTooManyRequests)
@@ -187,7 +187,24 @@ func (f *LambdaFunc) checkCodeCache() (err error) {
 	return nil
 }
 
-// TODO: description of queues
+// this Task receives lambda requests, fetches new lambda code as
+// needed, and dispatches to a set of lambda instances.  Task also
+// monitors outstanding requests, and scales the number of instances
+// up or down as needed.
+//
+// communication for a given request is as follows:
+//
+// server -> Task -> instance -> Task -> server
+//
+// each of the 4 handoffs above is over a chan.  In order, those chans are:
+// 1. LambdaFunc.funcChan
+// 2. LambdaFunc.instChan
+// 3. LambdaFunc.doneChan
+// 4. Invocation.done
+//
+// If either LambdaFunc.funcChan or LambdaFunc.instChan is full, we
+// respond to the client with a backoff message
+// (http.StatusTooManyRequests)
 func (f *LambdaFunc) Task() {
 	outstandingReqs := 0
 
@@ -234,9 +251,9 @@ func (f *LambdaFunc) newInstance() {
 	}
 
 	linst := &LambdaInstance{
-		lfunc: f,
-		codeDir: f.codeDir,
-		imports: f.imports,
+		lfunc:    f,
+		codeDir:  f.codeDir,
+		imports:  f.imports,
 		installs: f.installs,
 	}
 
@@ -245,32 +262,15 @@ func (f *LambdaFunc) newInstance() {
 	go linst.Task()
 }
 
-func forwardHTTPRequest(client *http.Client, w http.ResponseWriter, r *http.Request) error {
-	r.RequestURI = ""
-	resp, err := client.Do(r)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Error forwarding request to Sandbox" + err.Error() + "\n"))
-		return err
-	}
-	defer resp.Body.Close()
-
-	// copy headers, status, and body from resp to the ResponseWriter (w)
-	for key, vals := range(resp.Header) {
-		w.Header()[key] = vals
-	}
-	w.WriteHeader(resp.StatusCode)
-	if _, err := io.Copy(w, resp.Body); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// this task manages a single Sandbox (at any given time), and
+// this Task manages a single Sandbox (at any given time), and
 // forwards requests from the function queue to that Sandbox.
+// when there are no requests, the Sandbox is paused.
 //
-// TODO: error handling
+// These errors are handled as follows by Task:
+//
+// 1. Sandbox.Pause/Unpause: discard Sandbox, create new one to handle request
+// 2. Sandbox.Create/Channel: discard Sandbox, propagate HTTP 500 to client
+// 3. Error inside Sandbox: simply propagate whatever occured to client (TODO: restart Sandbox)
 func (linst *LambdaInstance) Task() {
 	f := linst.lfunc
 	scratchPrefix := filepath.Join(config.Conf.Worker_dir, "handlers", f.name)
@@ -278,11 +278,11 @@ func (linst *LambdaInstance) Task() {
 	var sb sb.Sandbox = nil
 	//var client *http.Client = nil // whenever we create a Sandbox, we init this too
 	var proxy *httputil.ReverseProxy = nil // whenever we create a Sandbox, we init this too
-	var err error	
+	var err error
 
-	outer:
+outer:
 	for {
-		// blocking (because there's no container)
+		// wait for a request (blocking) before making the Sandbox ready
 		req := <-f.instChan
 
 		// if we have a sandbox, try unpausing it to see if it is still alive
@@ -351,7 +351,7 @@ func (linst *LambdaInstance) Task() {
 		}
 
 		if err := sb.Pause(); err != nil {
-			log.Printf("discard sandbox %s due to Pause error: %s", sb.ID(), )
+			log.Printf("discard sandbox %s due to Pause error: %s", sb.ID())
 			sb = nil
 		}
 	}
