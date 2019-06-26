@@ -4,11 +4,14 @@ package handler
 
 import (
 	"container/list"
+	"fmt"
 	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -56,10 +59,14 @@ type LambdaFunc struct {
 type LambdaInstance struct {
 	lfunc *LambdaFunc
 
-	// copied from LambdaFunc, at the time of creation
+	// snapshot of LambdaFunc, at the time the LambdaInstance is created
 	codeDir  string
 	imports  []string
 	installs []string
+
+	// send chan to the kill chan to destroy the instance, then
+	// wait for msg on sent chan to block until it is done
+	killChan chan chan bool
 }
 
 // represents an HTTP request to be handled by a lambda instance
@@ -157,6 +164,54 @@ func (f *LambdaFunc) Invoke(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// add function name to each log message so we know which logs
+// correspond to which LambdaFuncs
+func (f *LambdaFunc) printf(format string, args ...interface{}) {
+	msg := fmt.Sprintf(format, args...)
+	log.Printf("%s [FUNC %s]", strings.TrimRight(msg, "\n"), f.name)
+}
+
+// move all instances off the list the LambdaFunc can see, then
+// return.  in the background, kill all those instances, then (after
+// they're dead) remove the old code dir they were using
+func (f *LambdaFunc) asyncCodeCleanup() {
+	if f.codeDir == "" {
+		return
+	}
+
+	toDelete := f.codeDir
+	toKill := f.instances
+	f.instances = list.New()
+
+	// background cleanup
+	go func() {
+		f.printf("cleanup instances using %s", toDelete)
+		doneChans := make([]chan bool, 0, toKill.Len())
+
+		// send all instances a kill signal
+		el := toKill.Front()
+		for el != nil {
+			done := make(chan bool)
+			el.Value.(*LambdaInstance).killChan <- done
+			doneChans = append(doneChans, done)
+			el = el.Next()
+		}
+		f.printf("send kill signal to %d instances using %s", toKill.Len(), toDelete)
+
+		// wait for them all to die
+		for _, killed := range doneChans {
+			<-killed
+			f.printf("instance using %s has died", toDelete)
+		}
+
+		// nobody is using the old code dir now, so delete it
+		f.printf("remove old code dir, %s", toDelete)
+		if err := os.RemoveAll(toDelete); err != nil {
+			f.printf("Async code cleanup could not delete %s, even after all instances using it killed: %v", err)
+		}
+	}()
+}
+
 func (f *LambdaFunc) checkCodeCache() (err error) {
 	// check if there is newer code, download it if necessary
 	now := time.Now()
@@ -167,6 +222,14 @@ func (f *LambdaFunc) checkCodeCache() (err error) {
 			return err
 		}
 
+		if codeDir == f.codeDir {
+			// no changes since last time we pulled the code
+			return nil
+		}
+
+		// delete previous code dir, killing any instances using it
+		f.asyncCodeCleanup()
+
 		imports, installs, err := parsePkgFile(codeDir)
 		if err != nil {
 			return err
@@ -176,11 +239,11 @@ func (f *LambdaFunc) checkCodeCache() (err error) {
 		f.codeDir = codeDir
 		f.imports = imports
 		f.installs = installs
-	}
 
-	// TODO: shouldn't we do this inside the Sandbox?
-	if err := f.lmgr.pipMgr.Install(f.installs); err != nil {
-		return err
+		// TODO: shouldn't we do this inside the Sandbox?
+		if err := f.lmgr.pipMgr.Install(f.installs); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -210,27 +273,30 @@ func (f *LambdaFunc) Task() {
 	for {
 		select {
 		case req := <-f.funcChan:
-			// incoming request
+			// client has sent us a new request
 
-			// TODO: if checkCodeCache pulls new code, restart all the instances
-			if err := f.checkCodeCache(); err == nil {
-				select {
-				case f.instChan <- req:
-					outstandingReqs += 1
-				default:
-					// queue cannot accept more, so reply with backoff
-					req.w.WriteHeader(http.StatusTooManyRequests)
-					req.w.Write([]byte("lambda instance queue is full"))
+			if err := f.checkCodeCache(); err != nil {
+				f.printf("Error checking for new lambda code: %v", err)
+				if f.codeDir == "" {
+					// we don't have older code we can run instead
+					req.w.WriteHeader(http.StatusInternalServerError)
+					req.w.Write([]byte(err.Error() + "\n"))
 					req.done <- true
+					continue
 				}
-			} else {
-				log.Printf("Error checking for new lambda code: %v", err)
-				req.w.WriteHeader(http.StatusInternalServerError)
-				req.w.Write([]byte(err.Error() + "\n"))
+			}
+
+			select {
+			case f.instChan <- req:
+				outstandingReqs += 1
+			default:
+				// queue cannot accept more, so reply with backoff
+				req.w.WriteHeader(http.StatusTooManyRequests)
+				req.w.Write([]byte("lambda instance queue is full"))
 				req.done <- true
 			}
 		case req := <-f.doneChan:
-			// notification that request we sent out has completed
+			// instance has notified us that a request has finished
 
 			outstandingReqs -= 1
 			req.done <- true
@@ -254,6 +320,7 @@ func (f *LambdaFunc) newInstance() {
 		codeDir:  f.codeDir,
 		imports:  f.imports,
 		installs: f.installs,
+		killChan: make(chan chan bool),
 	}
 
 	f.instances.PushBack(linst)
@@ -281,8 +348,18 @@ func (linst *LambdaInstance) Task() {
 
 outer:
 	for {
-		// wait for a request (blocking) before making the Sandbox ready
-		req := <-f.instChan
+		// wait for a request (blocking) before making the
+		// Sandbox ready, or kill if we receive that signal
+		var req *Invocation
+		select {
+		case req = <-f.instChan:
+		case killed := <-linst.killChan:
+			if sb != nil {
+				sb.Destroy()
+			}
+			killed <- true
+			return
+		}
 
 		// if we have a sandbox, try unpausing it to see if it is still alive
 		if sb != nil {
@@ -292,7 +369,7 @@ outer:
 			// Thus, if this fails, we'll try to handle it
 			// by just creating a new sandbox.
 			if err := sb.Unpause(); err != nil {
-				log.Printf("discard sandbox %s due to Unpause error: %s", sb.ID())
+				f.printf("discard sandbox %s due to Unpause error: %s", sb.ID())
 				sb = nil
 			}
 		}
@@ -313,7 +390,7 @@ outer:
 				req.w.WriteHeader(http.StatusInternalServerError)
 				req.w.Write([]byte("could not connect to Sandbox: " + err.Error() + "\n"))
 				f.doneChan <- req
-				log.Printf("discard sandbox %s due to Channel error: %s", sb.ID(), err.Error())
+				f.printf("discard sandbox %s due to Channel error: %s", sb.ID(), err.Error())
 				sb = nil
 				continue // wait for another request before retrying
 			}
@@ -326,22 +403,30 @@ outer:
 			proxy.Transport = tr
 		}
 
-		// serve requests for as long as we can without blocking on the incoming queue
+		// below here, we're guaranteed (1) sb != nil, (2) proxy != nil, (3) sb is unpaused
+
+		// serve until we incoming queue is empty
 		for req != nil {
-			//serve request
-
-			// TODO: somehow check result, and kill error on 500 (others?)
-			proxy.ServeHTTP(req.w, req.r)
-
+			// server request via proxy
+			proxy.ServeHTTP(req.w, req.r) // TODO: check for 500, and restart if we see it
 			f.doneChan <- req
 			if err != nil {
-				log.Printf("discard sandbox %s due to HTTP error: %s", sb.ID(), err.Error())
+				f.printf("discard sandbox %s due to HTTP error: %s", sb.ID(), err.Error())
 				sb.Destroy()
 				sb = nil
 				continue outer
 			}
 
-			// grab another (non-blocking)
+			// check whether we should shutdown (non-blocking)
+			select {
+			case killed := <-linst.killChan:
+				sb.Destroy()
+				killed <- true
+				return
+			default:
+			}
+
+			// grab another request (non-blocking)
 			select {
 			case req = <-f.instChan:
 			default:
@@ -350,8 +435,14 @@ outer:
 		}
 
 		if err := sb.Pause(); err != nil {
-			log.Printf("discard sandbox %s due to Pause error: %s", sb.ID())
+			f.printf("discard sandbox %s due to Pause error: %s", sb.ID())
 			sb = nil
 		}
 	}
+}
+
+func (linst *LambdaInstance) Kill() {
+	done := make(chan bool)
+	linst.killChan <- done
+	<-done
 }

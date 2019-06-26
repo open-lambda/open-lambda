@@ -269,6 +269,36 @@ def sock_churn(baseline, procs, seconds, fork):
     return {"sandboxes_per_sec": reqs/seconds}
 
 
+@test
+def update_code():
+    reg_dir = curr_conf['registry']
+    cache_seconds = curr_conf['registry_cache_ms'] / 1000
+    latencies = []
+
+    for i in range(3):
+        # update function code
+        with open(os.path.join(reg_dir, "version.py"), "w") as f:
+            f.write("def handler(event):\n")
+            f.write("    return %d\n" % i)
+
+        # how long does it take for us to start seeing the latest code?
+        t0 = time.time()
+        while True:
+            r = requests.post("http://localhost:5000/run/version", data='null')
+            r.raise_for_status()
+            num = int(r.text)
+            assert(num >= i-1)
+            t1 = time.time()
+
+            # make sure the time to grab new code is about the time
+            # specified for the registry cache (within ~1 second)
+            assert(t1 - t0 <= cache_seconds + 1)
+            if num == i:
+                if i > 0:
+                    assert(t1 - t0 >= cache_seconds - 1)
+                break
+
+
 def tests():
     startup_pkgs = ["parso", "jedi", "urllib3", "idna", "chardet", "certifi", "requests", "simplejson"]
     test_reg = os.path.abspath("test-registry")
@@ -301,6 +331,11 @@ def tests():
         # test resource limits
         fork_bomb()
         max_mem_alloc()
+
+    # make sure code updates get pulled within the cache time
+    with tempfile.TemporaryDirectory() as reg_dir:
+        with TestConf(sandbox="sock", registry=reg_dir, registry_cache_ms=3000):
+            update_code()
 
     # test heavy load
     with TestConf(sandbox="sock", handler_cache_mb=250, import_cache_mb=250, registry=test_reg):
