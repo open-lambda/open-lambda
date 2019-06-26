@@ -1,11 +1,25 @@
-import os, sys, json, argparse, importlib, traceback, time
+import os, sys, json, argparse, importlib, traceback, time, fcntl, array, socket, struct
 import tornado.ioloop
 import tornado.web
 import tornado.httpserver
 import tornado.netutil
 import ns
 
-def web_server(sock_path):
+file_sock_path = "/host/ol.sock"
+file_sock = None
+
+# copied from https://docs.python.org/3/library/socket.html#socket.socket.recvmsg
+def recv_fds(sock, msglen, maxfds):
+    fds = array.array("i")   # Array of ints
+    msg, ancdata, flags, addr = sock.recvmsg(msglen, socket.CMSG_LEN(maxfds * fds.itemsize))
+    for cmsg_level, cmsg_type, cmsg_data in ancdata:
+        if (cmsg_level == socket.SOL_SOCKET and cmsg_type == socket.SCM_RIGHTS):
+            # Append data, ignoring any truncated integers at the end.
+            fds.fromstring(cmsg_data[:len(cmsg_data) - (len(cmsg_data) % fds.itemsize)])
+    return msg, list(fds)
+
+
+def web_server():
     print("serve from Tornado")
 
     class SockFileHandler(tornado.web.RequestHandler):
@@ -33,36 +47,74 @@ def web_server(sock_path):
         (".*", SockFileHandler),
     ])
     server = tornado.httpserver.HTTPServer(tornado_app)
-    socket = tornado.netutil.bind_unix_socket(sock_path)
-    server.add_socket(socket)
+    server.add_socket(file_sock)
     tornado.ioloop.IOLoop.instance().start()
     server.start()
 
 
-def fork_server(sock_path):
-    sock = ns.open_sock_file(sock_path)
-    print("Got sock file fd: %d" % sock)
-    assert sock >= 0
+def fork_server():
+    global file_sock
+
+    file_sock.setblocking(True)
+    print("Start fork server on fd: %d" % file_sock.fileno())
 
     while True:
-        # the parent will have already waited for the child to exit
-        # before this even returns
-        pid = ns.fork_to_next_fd(sock)
+        client, info = file_sock.accept()
+        _, fds = recv_fds(client, 4, 4)
+        assert(len(fds) == 1)
+        root_fd = fds[0]
 
-        if pid == 0:
+        pid = os.fork()
+
+        if pid:
+            # parent
+            os.close(root_fd)
+
+            # the child opens the new ol.sock, forks the grandchild
+            # (which will actually do the serving), then exits.  Thus,
+            # by waiting for the child, we can be sure ol.sock exists
+            # before we respond to the client that sent us the fork
+            # request with the root FD.  This means the client doesn't
+            # need to poll for ol.sock existence, because it is
+            # guaranteed to exist.
+            os.waitpid(pid, 0)
+            client.sendall(struct.pack("I", pid))
+            client.close()
+
+        else:
+            # child
+            file_sock.close()
+            file_sock = None
+
+            # chroot
+            os.fchdir(root_fd)
+            os.chroot(".")
+            os.close(root_fd)
+
             # child
             start_container()
-
-            # start_container should never return, unless there's a bug in the user's code
-            os._exit(1)
+            os._exit(1) # only reachable if program unnexpectedly returns
 
 
-# 1. this assumes chroot has taken us to the location where the container should start.
-# 2. it launches the container code by running whatever is in the bootstrap file (from argv)
+# 1. this assumes chroot has taken us to the location where the
+#    container should start.
+# 2. it launches the container code by running whatever is in the
+#    bootstrap file (from argv)
 def start_container():
+    global file_sock
+
+    # TODO: if we can get rid of this, we can get rid of the ns module
+    print("unshare")
     rv = ns.unshare()
     assert rv == 0
 
+    # we open a new .sock file in the child, before starting the grand
+    # child, which will actually use it.  This is so that the parent
+    # can know that once the child exits, it is safe to start sending
+    # messages to the sock file.
+    file_sock = tornado.netutil.bind_unix_socket(file_sock_path)
+
+    print("fork")
     pid = os.fork()
     assert(pid >= 0)
 
@@ -79,7 +131,8 @@ def start_container():
         exec(f.read())
 
 
-# caller is expected to do chroot
+# caller is expected to do chroot, because we want to use the
+# python.exe inside the container
 def main():
     global bootstrap_path
 
@@ -95,7 +148,10 @@ def main():
     if len(sys.argv) > 2:
         cgroup_fds = int(sys.argv[2])
 
-    # join cgroups passed to us
+    # join cgroups passed to us.  The fact that chroot is called
+    # before we start means we also need to pass FDs to the cgroups we
+    # want to join, because chroot happens before we run, so we can no
+    # longer reach them by paths.
     pid = str(os.getpid())
     for i in range(cgroup_fds):
         # golang guarantees extras start at 3: https://golang.org/pkg/os/exec/#Cmd

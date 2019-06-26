@@ -117,12 +117,12 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchPrefix
 	if isLeaf {
 		pyCode = []string{
 			"sys.path.extend(['/packages', '/handler'])",
-			"web_server('/host/ol.sock')",
+			"web_server()",
 		}
 	} else {
 		pyCode = []string{
 			"sys.path.extend(['/packages'])",
-			"fork_server('/host/ol.sock')",
+			"fork_server()",
 		}
 	}
 	if err := c.writeBootstrapCode(pyCode); err != nil {
