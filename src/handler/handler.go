@@ -270,6 +270,9 @@ func (f *LambdaFunc) Task() {
 	for {
 		select {
 		case <-timeout.C:
+			if f.codeDir == "" {
+				continue
+			}
 		case req := <-f.funcChan:
 			// client has sent us a new request
 
