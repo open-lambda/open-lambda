@@ -43,14 +43,15 @@ def test(fn):
         result["seconds"] = None
         result["total_seconds"] = None
         result["stats"] = None
+        result["ol-stats"] = None
         result["conf"] = curr_conf
-        result["exception"] = None
+        result["errors"] = []
         result["worker_tail"] = None
 
         total_t0 = time.time()
-        try:           
+        mounts0 = mounts()
+        try:
             # setup worker
-            mounts0 = mounts()
             run(['./ol', 'worker', '-p='+OLDIR, '--detach'])
 
             # run test/benchmark
@@ -59,18 +60,33 @@ def test(fn):
             test_t1 = time.time()
             result["seconds"] = test_t1 - test_t0
 
-            # cleanup worker
-            run(['./ol', 'kill', '-p='+OLDIR])
-            mounts1 = mounts()
-
-            if len(mounts0) != len(mounts1):
-                raise Exception("mounts are leaking (%d before, %d after), leaked: %s" % (len(mounts0), len(mounts1), str(mounts1 - mounts0)))
-
             result["pass"] = True
         except Exception:
             rv = None
             result["pass"] = False
-            result["exception"] = traceback.format_exc().split("\n")
+            result["errors"].append(traceback.format_exc().split("\n"))
+
+        # get internal stats from OL
+        try:
+            r = requests.get("http://localhost:5000/stats")
+            r.raise_for_status()
+            result["ol-stats"] = OrderedDict(sorted(list(r.json().items())))
+        except Exception:
+            result["pass"] = False
+            result["errors"].append(traceback.format_exc().split("\n"))
+
+        # cleanup worker
+        try:
+            run(['./ol', 'kill', '-p='+OLDIR])
+        except Exception:
+            result["pass"] = False
+            result["errors"].append(traceback.format_exc().split("\n"))
+        mounts1 = mounts()
+        if len(mounts0) != len(mounts1):
+            result["pass"] = False
+            errors.append(["mounts are leaking (%d before, %d after), leaked: %s"
+                           % (len(mounts0), len(mounts1), str(mounts1 - mounts0))])
+
         total_t1 = time.time()
         result["total_seconds"] = total_t1-total_t0
         result["stats"] = rv
@@ -189,6 +205,20 @@ def call_each_once_exec(lambda_count, alloc_mb):
     return {"reqs_per_sec": lambda_count/seconds}
 
 
+def call_each_once(lambda_count, alloc_mb=0):
+    with tempfile.TemporaryDirectory() as reg_dir:
+        # create dummy lambdas
+        for i in range(lambda_count):
+            with open(os.path.join(reg_dir, "L%d.py"%i), "w") as f:
+                f.write("def handler(event):\n")
+                f.write("    global s\n")
+                f.write("    s = '*' * %d * 1024**2\n" % alloc_mb)
+                f.write("    return %d\n" % i)
+
+        with TestConf(registry=reg_dir):
+            call_each_once_exec(lambda_count=lambda_count, alloc_mb=alloc_mb)
+
+
 @test
 def fork_bomb():
     limit = curr_conf["sock_cgroups"]["max_procs"]
@@ -209,33 +239,6 @@ def max_mem_alloc():
     assert(limit-16 <= actual <= limit)
 
 
-def call_each_once(lambda_count, alloc_mb=0):
-    with tempfile.TemporaryDirectory() as reg_dir:
-        # create dummy lambdas
-        for i in range(lambda_count):
-            with open(os.path.join(reg_dir, "L%d.py"%i), "w") as f:
-                f.write("def handler(event):\n")
-                f.write("    global s\n")
-                f.write("    s = '*' * %d * 1024**2\n" % alloc_mb)
-                f.write("    return %d\n" % i)
-
-        with TestConf(registry=reg_dir):
-            call_each_once_exec(lambda_count=lambda_count, alloc_mb=alloc_mb)
-
-
-def sock_churn_task(args):
-    echo_path, parent, t0, seconds = args
-    i = 0
-    while time.time() < t0 + seconds:
-        r = requests.post("http://localhost:5000/create", data=json.dumps({"code": echo_path, "leaf": True, "parent": parent}))
-        r.raise_for_status()
-        sandbox_id = r.text.strip()
-        r = requests.post("http://localhost:5000/destroy/"+sandbox_id, data="{}")
-        r.raise_for_status()
-        i += 1
-    return i
-
-
 @test
 def ping_test():
     pings = 1000
@@ -245,6 +248,20 @@ def ping_test():
         r.raise_for_status()
     seconds = time.time() - t0
     return {"pings_per_sec": pings/seconds}
+
+
+def sock_churn_task(args):
+    echo_path, parent, t0, seconds = args
+    i = 0
+    while time.time() < t0 + seconds:
+        args = {"code": echo_path, "leaf": True, "parent": parent}
+        r = requests.post("http://localhost:5000/create", data=json.dumps(args))
+        r.raise_for_status()
+        sandbox_id = r.text.strip()
+        r = requests.post("http://localhost:5000/destroy/"+sandbox_id, data="{}")
+        r.raise_for_status()
+        i += 1
+    return i
 
 
 @test
@@ -257,7 +274,7 @@ def sock_churn(baseline, procs, seconds, fork):
     if fork:
         r = requests.post("http://localhost:5000/create", data=json.dumps({"code": "", "leaf": False}))
         r.raise_for_status()
-        parent = r.text
+        parent = r.text.strip()
     else:
         parent = None
 
@@ -309,9 +326,9 @@ def tests():
     # test SOCK directly (without lambdas)
     with TestConf(server_mode="sock"):
         sock_churn(baseline=0, procs=1, seconds=15, fork=True)
-        # TODO: debug and re-enable the following.  Do they fail in AWS due to limited mem?  They pass locally.
+        sock_churn(baseline=0, procs=15, seconds=15, fork=True)
+        # TODO: make these work (we don't have enough mem now)
         #sock_churn(baseline=32, procs=1, seconds=15, fork=True)
-        #sock_churn(baseline=0, procs=15, seconds=15, fork=True)
         #sock_churn(baseline=32, procs=15, seconds=15, fork=True)
 
     with TestConf(registry=test_reg, startup_pkgs=startup_pkgs):

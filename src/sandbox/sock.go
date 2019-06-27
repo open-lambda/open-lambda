@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/open-lambda/open-lambda/ol/config"
+	"github.com/open-lambda/open-lambda/ol/stats"
 )
 
 type SOCKContainer struct {
@@ -293,10 +294,12 @@ func (c *SOCKContainer) fork(dst Sandbox) (err error) {
 	}
 
 	rootDir := dstSock.containerRootDir
+	t := stats.T0("forkRequest")
 	err = c.forkRequest(rootDir)
 	if err != nil {
 		return err
 	}
+	t.T1()
 
 	// move new PIDs to new cgroup.
 	//
@@ -304,6 +307,7 @@ func (c *SOCKContainer) fork(dst Sandbox) (err error) {
 	// spawned (TODO: better way to do this?  This lets a forking
 	// process potentially kill our cache entry, which isn't
 	// great).
+	t = stats.T0("move-to-cg-after-fork")
 	for {
 		currPids, err := c.cg.GetPIDs()
 		if err != nil {
@@ -332,6 +336,7 @@ func (c *SOCKContainer) fork(dst Sandbox) (err error) {
 			break
 		}
 	}
+	t.T1()
 
 	return nil
 }

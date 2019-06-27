@@ -13,6 +13,7 @@ import (
 
 	"github.com/open-lambda/open-lambda/ol/config"
 	"github.com/open-lambda/open-lambda/ol/sandbox/dockerutil"
+	"github.com/open-lambda/open-lambda/ol/stats"
 )
 
 // DockerPool is a ContainerFactory that creats docker containers.
@@ -60,6 +61,9 @@ func NewDockerPool(pidMode string, caps []string, cache bool) (*DockerPool, erro
 
 // Create creates a docker sandbox from the handler and sandbox directory.
 func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchPrefix string, imports []string) (sb Sandbox, err error) {
+	t := stats.T0("Create()")
+	defer t.T1()
+
 	if parent != nil {
 		panic("Create parent not supported for DockerPool")
 	} else if !isLeaf {

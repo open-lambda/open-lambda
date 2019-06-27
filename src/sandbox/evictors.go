@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/open-lambda/open-lambda/ol/config"
+	"github.com/open-lambda/open-lambda/ol/stats"
 )
 
 // we would like 20% of the pool to be free for new containers.  the
@@ -143,7 +144,11 @@ func (evictor *SOCKEvictor) evictFront(queue *list.List) {
 
 	// destroy async (we'll know when it's done, because
 	// we'll see a evDestroy event later on our chan)
-	go sb.Destroy()
+	go func() {
+		t := stats.T0("evict")
+		sb.Destroy()
+		t.T1()
+	}()
 	evictor.move(sb, evictor.evicting)
 }
 

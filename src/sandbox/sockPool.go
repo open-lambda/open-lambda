@@ -9,9 +9,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"syscall"
-	"time"
 
 	"github.com/open-lambda/open-lambda/ol/config"
+	"github.com/open-lambda/open-lambda/ol/stats"
 )
 
 // the first program is executed on the host, which sets up the
@@ -71,23 +71,26 @@ func NewSOCKPool(name string, mem *MemPool) (cf *SOCKPool, err error) {
 }
 
 func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchPrefix string, imports []string) (sb Sandbox, err error) {
-	if config.Conf.Timing {
-		defer func(start time.Time) {
-			log.Printf("create sock took %v\n", time.Since(start))
-		}(time.Now())
-	}
-
 	log.Printf("<%v>.Create(%v, %v, %v, %v)...", pool.name, codeDir, scratchPrefix, imports, parent)
 	defer func() {
 		log.Printf("...returns %v, %v", sb, err)
 	}()
 
+	t := stats.T0("Create()")
+	defer t.T1()
+
 	// block until we have enough to cover the cgroup mem limits
+	t = stats.T0("acquire-mem")
 	pool.mem.adjustAvailableMB(-config.Conf.Sock_cgroups.Max_mem_mb)
+	t.T1()
 
 	id := fmt.Sprintf("%d", atomic.AddInt64(&nextId, 1))
 	containerRootDir := filepath.Join(pool.rootDir, id)
 	scratchDir := filepath.Join(scratchPrefix, id)
+
+	t = stats.T0("acquire-cgroup")
+	cg := pool.cgPool.GetCg()
+	t.T1()
 
 	var c *SOCKContainer = &SOCKContainer{
 		pool:             pool,
@@ -95,7 +98,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchPrefix
 		containerRootDir: containerRootDir,
 		codeDir:          codeDir,
 		scratchDir:       scratchDir,
-		cg:               pool.cgPool.GetCg(),
+		cg:               cg,
 	}
 
 	defer func() {
@@ -108,9 +111,12 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchPrefix
 	if isLeaf && c.codeDir == "" {
 		return nil, fmt.Errorf("leaf sandboxes must have codeDir set")
 	}
+
+	t = stats.T0("make-root-fs")
 	if err := c.populateRoot(); err != nil {
 		return nil, fmt.Errorf("failed to create root FS: %v", err)
 	}
+	t.T1()
 
 	// write the Python code that the new process will run when it starts
 	var pyCode []string
@@ -130,15 +136,21 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchPrefix
 	}
 
 	// create new process in container (fresh, or forked from parent)
+	t = stats.T0("make-proc")
 	if parent == nil {
+		t2 := stats.T0("fresh-proc")
 		if err := c.freshProc(); err != nil {
 			return nil, err
 		}
+		t2.T1()
 	} else {
+		t2 := stats.T0("fork-proc")
 		if err := parent.fork(c); err != nil {
 			return nil, err
 		}
+		t2.T1()
 	}
+	t.T1()
 
 	// wrap to make thread-safe and handle container death
 	safeSB := newSafeSandbox(c, pool.eventHandlers)

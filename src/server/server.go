@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -8,10 +9,48 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"syscall"
 
 	"github.com/open-lambda/open-lambda/ol/config"
+	"github.com/open-lambda/open-lambda/ol/stats"
 )
+
+const (
+	RUN_PATH    = "/run/"
+	PID_PATH    = "/pid"
+	STATUS_PATH = "/status"
+	STATS_PATH  = "/stats"
+)
+
+// GetPid returns process ID, useful for making sure we're talking to the expected server
+func GetPid(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Receive request to %s\n", r.URL.Path)
+
+	wbody := []byte(strconv.Itoa(os.Getpid()) + "\n")
+	if _, err := w.Write(wbody); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+}
+
+// Status writes "ready" to the response.
+func Status(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Receive request to %s\n", r.URL.Path)
+
+	if _, err := w.Write([]byte("ready\n")); err != nil {
+		log.Printf("error in Status: %v", err)
+	}
+}
+
+func Stats(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Receive request to %s\n", r.URL.Path)
+	statsMap := stats.Snapshot()
+	if b, err := json.Marshal(statsMap); err != nil {
+		panic(err)
+	} else {
+		w.Write(b)
+	}
+}
 
 func Main() error {
 	var s interface {
@@ -37,6 +76,11 @@ func Main() error {
 	if err := ioutil.WriteFile(pidPath, []byte(fmt.Sprintf("%d", os.Getpid())), 0644); err != nil {
 		return err
 	}
+
+	// things shared by all servers
+	http.HandleFunc(PID_PATH, GetPid)
+	http.HandleFunc(STATUS_PATH, Status)
+	http.HandleFunc(STATS_PATH, Stats)
 
 	switch config.Conf.Server_mode {
 	case "lambda":

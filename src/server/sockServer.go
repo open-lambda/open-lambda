@@ -6,9 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -79,6 +77,9 @@ func (s *SOCKServer) Create(w http.ResponseWriter, rsrc []string, args map[strin
 	var parent sandbox.Sandbox = nil
 	if p, ok := args["parent"]; ok {
 		parent = s.GetSandbox(p.(string))
+		if parent == nil {
+			return fmt.Errorf("no sandbox found with ID '%s'", p)
+		}
 	}
 
 	// spin it up
@@ -129,16 +130,6 @@ func (s *SOCKServer) Debug(w http.ResponseWriter, rsrc []string, args map[string
 	fmt.Printf("%s\n", str)
 	w.Write([]byte(str))
 	return nil
-}
-
-// GetPid returns process ID, useful for making sure we're talking to the expected server
-func (s *SOCKServer) GetPid(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Receive request to %s\n", r.URL.Path)
-
-	wbody := []byte(strconv.Itoa(os.Getpid()) + "\n")
-	if _, err := w.Write(wbody); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-	}
 }
 
 func (s *SOCKServer) HandleInternal(w http.ResponseWriter, r *http.Request) error {
@@ -206,7 +197,6 @@ func SockMain() *SOCKServer {
 		log.Fatal(err)
 	}
 
-	http.HandleFunc(PID_PATH, server.GetPid)
 	http.HandleFunc("/", server.Handle)
 
 	return server

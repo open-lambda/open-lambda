@@ -12,6 +12,8 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+
+	"github.com/open-lambda/open-lambda/ol/stats"
 )
 
 type SockError string
@@ -69,6 +71,8 @@ func (sb *safeSandbox) destroyOnErr(origErr error) {
 
 func (sb *safeSandbox) Destroy() {
 	sb.printf("Destroy()")
+	t := stats.T0("Destroy()")
+	defer t.T1()
 	sb.Mutex.Lock()
 	defer sb.Mutex.Unlock()
 
@@ -83,6 +87,8 @@ func (sb *safeSandbox) Destroy() {
 
 func (sb *safeSandbox) Pause() (err error) {
 	sb.printf("Pause()")
+	t := stats.T0("Pause()")
+	defer t.T1()
 	sb.Mutex.Lock()
 	defer sb.Mutex.Unlock()
 	if sb.dead {
@@ -101,6 +107,8 @@ func (sb *safeSandbox) Pause() (err error) {
 
 func (sb *safeSandbox) Unpause() (err error) {
 	sb.printf("Unpause()")
+	t := stats.T0("Pause()")
+	defer t.T1()
 	sb.Mutex.Lock()
 	defer sb.Mutex.Unlock()
 	if sb.dead {
@@ -119,6 +127,8 @@ func (sb *safeSandbox) Unpause() (err error) {
 
 func (sb *safeSandbox) Channel() (tr *http.Transport, err error) {
 	sb.printf("Channel()")
+	t := stats.T0("Channel()")
+	defer t.T1()
 	sb.Mutex.Lock()
 	defer sb.Mutex.Unlock()
 	if sb.dead {
@@ -147,6 +157,8 @@ func (sb *safeSandbox) MemUsageKB() (kb int, err error) {
 
 func (sb *safeSandbox) fork(dst Sandbox) (err error) {
 	sb.printf("fork(%v)", dst)
+	t := stats.T0("fork()")
+	defer t.T1()
 	sb.Mutex.Lock()
 	defer sb.Mutex.Unlock()
 	if sb.dead {
