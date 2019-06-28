@@ -24,7 +24,6 @@ import (
 	"time"
 
 	docker "github.com/fsouza/go-dockerclient"
-	"github.com/open-lambda/open-lambda/ol/benchmarker"
 )
 
 // DockerContainer is a sandbox inside a docker container.
@@ -155,23 +154,9 @@ func (c *DockerContainer) Channel() (*http.Transport, error) {
 
 // Start starts the container.
 func (c *DockerContainer) start() error {
-	b := benchmarker.GetBenchmarker()
-	var t *benchmarker.Timer
-	if b != nil {
-		t = b.CreateTimer("Start docker container", "ms")
-		t.Start()
-	}
-
 	if err := c.client.StartContainer(c.container.ID, nil); err != nil {
 		log.Printf("failed to start container with err %v\n", err)
-		if t != nil {
-			t.Error("Failed to start docker container")
-		}
 		return c.dockerError(err)
-	}
-
-	if t != nil {
-		t.End()
 	}
 
 	container, err := c.client.InspectContainer(c.container.ID)
@@ -194,22 +179,11 @@ func (c *DockerContainer) Pause() error {
 		return nil
 	}
 
-	b := benchmarker.GetBenchmarker()
-	var t *benchmarker.Timer
-	if b != nil {
-		t = b.CreateTimer("Pause docker container", "ms")
-		t.Start()
-	}
 	if err := c.client.PauseContainer(c.container.ID); err != nil {
 		log.Printf("failed to pause container with error %v\n", err)
-		if t != nil {
-			t.Error("Failed to pause docker container")
-		}
 		return c.dockerError(err)
 	}
-	if t != nil {
-		t.End()
-	}
+
 	return nil
 }
 
@@ -222,23 +196,9 @@ func (c *DockerContainer) Unpause() error {
 		return nil
 	}
 
-	b := benchmarker.GetBenchmarker()
-	var t *benchmarker.Timer
-	if b != nil {
-		t = b.CreateTimer("Unpause docker container", "ms")
-		t.Start()
-	}
-
 	if err := c.client.UnpauseContainer(c.container.ID); err != nil {
 		log.Printf("failed to unpause container %s with err %v\n", c.container.Name, err)
-		if t != nil {
-			t.Error("Failed to unpause docker container")
-		}
 		return c.dockerError(err)
-	}
-
-	if t != nil {
-		t.End()
 	}
 
 	return nil

@@ -39,7 +39,7 @@ func newSafeSandbox(innerSB Sandbox, eventHandlers []SandboxEventFunc) *safeSand
 		eventHandlers: eventHandlers,
 	}
 
-	sb.event(evCreate)
+	sb.event(EvCreate)
 
 	return sb
 }
@@ -65,7 +65,7 @@ func (sb *safeSandbox) destroyOnErr(origErr error) {
 		sb.dead = true
 
 		// let anybody interested know this died
-		sb.event(evDestroy)
+		sb.event(EvDestroy)
 	}
 }
 
@@ -81,7 +81,7 @@ func (sb *safeSandbox) Destroy() {
 		sb.dead = true
 
 		// let anybody interested know this died
-		sb.event(evDestroy)
+		sb.event(EvDestroy)
 	}
 }
 
@@ -98,7 +98,7 @@ func (sb *safeSandbox) Pause() (err error) {
 		sb.destroyOnErr(err)
 		if err == nil {
 			// let anybody interested we paused
-			sb.event(evPause)
+			sb.event(EvPause)
 		}
 	}()
 
@@ -118,7 +118,7 @@ func (sb *safeSandbox) Unpause() (err error) {
 		sb.destroyOnErr(err)
 		if err == nil {
 			// let anybody interested we paused
-			sb.event(evUnpause)
+			sb.event(EvUnpause)
 		}
 	}()
 

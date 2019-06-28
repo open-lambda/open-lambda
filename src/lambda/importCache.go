@@ -1,26 +1,28 @@
-package sandbox
+package lambda
 
 import (
-	"github.com/open-lambda/open-lambda/ol/config"
 	"log"
 	"path/filepath"
+
+	"github.com/open-lambda/open-lambda/ol/config"
+	"github.com/open-lambda/open-lambda/ol/sandbox"
 )
 
 type ImportCache struct {
 	name     string
-	pool     SandboxPool
+	pool     sandbox.SandboxPool
 	requests chan *ParentReq
-	events   chan SandboxEvent
+	events   chan sandbox.SandboxEvent
 	killChan chan chan bool
 }
 
 type ParentReq struct {
 	imports []string
-	parent  chan Sandbox
+	parent  chan sandbox.Sandbox
 }
 
 func NewImportCache(name string, sizeMb int) (*ImportCache, error) {
-	pool, err := SandboxPoolFromConfig(name, sizeMb)
+	pool, err := sandbox.SandboxPoolFromConfig(name, sizeMb)
 	if err != nil {
 		return nil, err
 	}
@@ -29,7 +31,7 @@ func NewImportCache(name string, sizeMb int) (*ImportCache, error) {
 		name:     name,
 		pool:     pool,
 		requests: make(chan *ParentReq, 32),
-		events:   make(chan SandboxEvent, 32),
+		events:   make(chan sandbox.SandboxEvent, 32),
 		killChan: make(chan chan bool),
 	}
 
@@ -38,8 +40,8 @@ func NewImportCache(name string, sizeMb int) (*ImportCache, error) {
 	return cache, nil
 }
 
-func (cache *ImportCache) GetParent(imports []string) Sandbox {
-	parent := make(chan Sandbox)
+func (cache *ImportCache) GetParent(imports []string) sandbox.Sandbox {
+	parent := make(chan sandbox.Sandbox)
 	cache.requests <- &ParentReq{imports, parent}
 	return <-parent
 }
@@ -51,13 +53,13 @@ func (cache *ImportCache) Cleanup() {
 	cache.pool.Cleanup()
 }
 
-func (cache *ImportCache) Event(evType SandboxEventType, sb Sandbox) {
-	if evType == evDestroy {
-		cache.events <- SandboxEvent{evType, sb}
+func (cache *ImportCache) Event(evType sandbox.SandboxEventType, sb sandbox.Sandbox) {
+	if evType == sandbox.EvDestroy {
+		cache.events <- sandbox.SandboxEvent{evType, sb}
 	}
 }
 
-func (cache *ImportCache) create(parent Sandbox, imports []string) Sandbox {
+func (cache *ImportCache) create(parent sandbox.Sandbox, imports []string) sandbox.Sandbox {
 	scratchPrefix := filepath.Join(config.Conf.Worker_dir, cache.name+"-scratch")
 	sb, err := cache.pool.Create(parent, false, "", scratchPrefix, imports)
 	if err != nil {
@@ -67,8 +69,8 @@ func (cache *ImportCache) create(parent Sandbox, imports []string) Sandbox {
 	return sb
 }
 
-func (cache *ImportCache) Run(pool SandboxPool) {
-	forkServers := make(map[string]Sandbox)
+func (cache *ImportCache) Run(pool sandbox.SandboxPool) {
+	forkServers := make(map[string]sandbox.Sandbox)
 	root := cache.create(nil, []string{})
 	if root == nil {
 		panic("could not even create a root Zygote")
@@ -83,9 +85,9 @@ func (cache *ImportCache) Run(pool SandboxPool) {
 			// TODO: create (and use) more Zygotes
 			req.parent <- root
 		case event := <-cache.events:
-			switch event.evType {
-			case evDestroy:
-				delete(forkServers, event.sb.ID())
+			switch event.EvType {
+			case sandbox.EvDestroy:
+				delete(forkServers, event.SB.ID())
 			}
 		case done := <-cache.killChan:
 			for _, sb := range forkServers {

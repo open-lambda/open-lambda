@@ -110,19 +110,19 @@ func (evictor *SOCKEvictor) updateState() {
 	// update state based on incoming messages
 	for event != nil {
 		// add list to appropriate queue
-		sb := event.sb
+		sb := event.SB
 
-		switch event.evType {
-		case evCreate:
+		switch event.EvType {
+		case EvCreate:
 			evictor.move(sb, evictor.running)
-		case evUnpause:
+		case EvUnpause:
 			evictor.move(sb, evictor.running)
-		case evPause:
+		case EvPause:
 			evictor.move(sb, evictor.paused)
-		case evDestroy:
+		case EvDestroy:
 			evictor.move(sb, nil)
 		default:
-			log.Printf("Unknown event: %v", event.evType)
+			log.Printf("Unknown event: %v", event.EvType)
 		}
 
 		event = evictor.nextEvent(false)

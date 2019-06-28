@@ -9,8 +9,8 @@ type debugger chan interface{}
 
 func newDebugger(sbPool SandboxPool) debugger {
 	var d debugger = make(chan interface{}, 64)
-	sbPool.AddListener(func(evType SandboxEventType, sb Sandbox) {
-		d <- SandboxEvent{evType, sb}
+	sbPool.AddListener(func(EvType SandboxEventType, sb Sandbox) {
+		d <- SandboxEvent{EvType, sb}
 	})
 	go d.Run()
 	return d
@@ -27,11 +27,11 @@ func (d debugger) Run() {
 
 		switch msg := raw.(type) {
 		case SandboxEvent:
-			switch msg.evType {
-			case evCreate:
-				sandboxes[msg.sb.ID()] = msg.sb
-			case evDestroy:
-				delete(sandboxes, msg.sb.ID())
+			switch msg.EvType {
+			case EvCreate:
+				sandboxes[msg.SB.ID()] = msg.SB
+			case EvDestroy:
+				delete(sandboxes, msg.SB.ID())
 			}
 		case chan string:
 			var sb strings.Builder

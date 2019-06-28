@@ -63,13 +63,13 @@ type SandboxEventFunc func(SandboxEventType, Sandbox)
 type SandboxEventType int
 
 const (
-	evCreate  SandboxEventType = iota
-	evDestroy                  = iota
-	evPause                    = iota
-	evUnpause                  = iota
+	EvCreate  SandboxEventType = iota
+	EvDestroy                  = iota
+	EvPause                    = iota
+	EvUnpause                  = iota
 )
 
 type SandboxEvent struct {
-	evType SandboxEventType
-	sb     Sandbox
+	EvType SandboxEventType
+	SB     Sandbox
 }

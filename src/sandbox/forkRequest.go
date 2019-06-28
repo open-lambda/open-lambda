@@ -108,8 +108,6 @@ import "C"
 import (
 	"fmt"
 	"unsafe"
-
-	"github.com/open-lambda/open-lambda/ol/benchmarker"
 )
 
 /*
@@ -122,16 +120,6 @@ import (
  * Returns the PID of the spawned process upon success.
  */
 func (c *SOCKContainer) forkRequest(rootDir string) error {
-	b := benchmarker.GetBenchmarker()
-	var t *benchmarker.Timer
-	if b != nil {
-		t = b.CreateTimer("send fds", "us")
-	}
-
-	if t != nil {
-		t.Start()
-	}
-
 	cSock := C.CString(fmt.Sprintf("%s/ol.sock", c.HostDir()))
 	cRoot := C.CString(rootDir)
 

@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/open-lambda/open-lambda/ol/benchmarker"
 	"github.com/open-lambda/open-lambda/ol/config"
 	"github.com/open-lambda/open-lambda/ol/lambda"
 )
@@ -89,11 +88,6 @@ func LambdaMain() *LambdaServer {
 	if err != nil {
 		log.Printf("Could not create server")
 		log.Fatal(err)
-	}
-
-	log.Printf("Create Benchmark")
-	if config.Conf.Benchmark_file != "" {
-		benchmarker.CreateBenchmarkerSingleton(config.Conf.Benchmark_file)
 	}
 
 	log.Printf("Setups Handlers")

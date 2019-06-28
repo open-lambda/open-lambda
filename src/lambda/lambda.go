@@ -28,7 +28,7 @@ type LambdaMgr struct {
 	*HandlerPuller
 	*ModulePuller
 	sbPool      sandbox.SandboxPool
-	importCache *sandbox.ImportCache
+	importCache *ImportCache
 
 	// thread-safe map from a lambda's name to its LambdaFunc
 	mapMutex sync.Mutex
@@ -106,10 +106,10 @@ func NewLambdaMgr() (mgr *LambdaMgr, err error) {
 	}
 
 	importCacheMb := config.Conf.Import_cache_mb
-	var importCache *sandbox.ImportCache = nil
+	var importCache *ImportCache = nil
 	if importCacheMb > 0 {
 		log.Printf("Create ImportCache")
-		importCache, err = sandbox.NewImportCache("sock-cache", importCacheMb)
+		importCache, err = NewImportCache("sock-cache", importCacheMb)
 		if err != nil {
 			return nil, err
 		}
