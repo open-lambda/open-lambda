@@ -6,29 +6,17 @@ import (
 	"github.com/open-lambda/open-lambda/ol/config"
 )
 
-func SandboxPoolFromConfig() (cf SandboxPool, err error) {
+func SandboxPoolFromConfig(name string, sizeMb int) (cf SandboxPool, err error) {
 	if config.Conf.Sandbox == "docker" {
 		return NewDockerPool("", nil, false)
 	} else if config.Conf.Sandbox == "sock" {
-		handlerMem := NewMemPool(config.Conf.Handler_cache_mb)
-		handlerSandboxes, err := NewSOCKPool("sock-handlers", handlerMem)
+		mem := NewMemPool(sizeMb)
+		pool, err := NewSOCKPool(name, mem)
 		if err != nil {
 			return nil, err
 		}
-		NewSOCKEvictor(handlerSandboxes)
-
-		if config.Conf.Import_cache_mb == 0 {
-			return handlerSandboxes, nil
-		}
-
-		cacheMem := NewMemPool(config.Conf.Import_cache_mb)
-		cacheSandboxes, err := NewSOCKPool("sock-cache", cacheMem)
-		if err != nil {
-			return nil, err
-		}
-		NewSOCKEvictor(cacheSandboxes)
-
-		return NewImportCacheContainerFactory(handlerSandboxes, cacheSandboxes)
+		NewSOCKEvictor(pool)
+		return pool, nil
 	}
 
 	return nil, fmt.Errorf("invalid sandbox type: '%s'", config.Conf.Sandbox)

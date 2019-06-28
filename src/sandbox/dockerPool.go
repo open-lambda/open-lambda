@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
-	"sync"
 	"sync/atomic"
 	"syscall"
 
@@ -26,9 +24,8 @@ type DockerPool struct {
 	idxPtr         *int64
 	cache          bool
 	docker_runtime string
-
-	sync.Mutex
-	sandboxes []Sandbox
+	eventHandlers  []SandboxEventFunc
+	debugger
 }
 
 // NewDockerPool creates a DockerPool.
@@ -54,7 +51,10 @@ func NewDockerPool(pidMode string, caps []string, cache bool) (*DockerPool, erro
 		idxPtr:         idxPtr,
 		cache:          cache,
 		docker_runtime: config.Conf.Docker_runtime,
+		eventHandlers:  []SandboxEventFunc{},
 	}
+
+	pool.debugger = newDebugger(pool)
 
 	return pool, nil
 }
@@ -115,31 +115,16 @@ func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchPref
 		return nil, err
 	}
 
-	// TODO: have some way to clean up this structure as sandboxes are released
-	pool.Mutex.Lock()
-	pool.sandboxes = append(pool.sandboxes, c)
-	pool.Mutex.Unlock()
-
-	return c, nil
+	// wrap to make thread-safe and handle container death
+	return newSafeSandbox(c, pool.eventHandlers), nil
 }
 
-func (pool *DockerPool) Cleanup() {
-	pool.Mutex.Lock()
-	for _, sandbox := range pool.sandboxes {
-		sandbox.Destroy()
-	}
-	pool.Mutex.Unlock()
-}
+func (pool *DockerPool) Cleanup() {}
 
 func (pool *DockerPool) DebugString() string {
-	pool.Mutex.Lock()
-	defer pool.Mutex.Unlock()
+	return pool.debugger.Dump()
+}
 
-	var sb strings.Builder
-
-	for _, sandbox := range pool.sandboxes {
-		sb.WriteString(fmt.Sprintf("----\n%s\n----\n", sandbox.DebugString()))
-	}
-
-	return sb.String()
+func (pool *DockerPool) AddListener(handler SandboxEventFunc) {
+	pool.eventHandlers = append(pool.eventHandlers, handler)
 }

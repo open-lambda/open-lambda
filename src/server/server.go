@@ -52,14 +52,14 @@ func Stats(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func Main() error {
+func Main() (err error) {
 	var s interface {
 		cleanup()
 	}
 
 	pidPath := filepath.Join(config.Conf.Worker_dir, "worker.pid")
 	if _, err := os.Stat(pidPath); err == nil {
-		return fmt.Errorf("previous working may be running, %s already exists", pidPath)
+		return fmt.Errorf("previous worker may be running, %s already exists", pidPath)
 	} else if !os.IsNotExist(err) {
 		// we were hoping to get the not-exist error, but got something else unexpected
 		return err
@@ -76,6 +76,12 @@ func Main() error {
 	if err := ioutil.WriteFile(pidPath, []byte(fmt.Sprintf("%d", os.Getpid())), 0644); err != nil {
 		return err
 	}
+
+	defer func() {
+		if err != nil {
+			os.Remove(pidPath)
+		}
+	}()
 
 	// things shared by all servers
 	http.HandleFunc(PID_PATH, GetPid)

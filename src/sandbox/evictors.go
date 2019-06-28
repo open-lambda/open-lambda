@@ -22,7 +22,7 @@ type SOCKEvictor struct {
 	mem *MemPool
 
 	// how we're notified of containers starting, pausing, etc
-	events chan EvictorEvent
+	events chan SandboxEvent
 
 	// state queues (each Sandbox is on at most one of these)
 	running  *list.List
@@ -33,11 +33,6 @@ type SOCKEvictor struct {
 	stateMap map[string]*ListLocation
 }
 
-type EvictorEvent struct {
-	evType SandboxEventType
-	sb     Sandbox
-}
-
 type ListLocation struct {
 	*list.List
 	*list.Element
@@ -46,7 +41,7 @@ type ListLocation struct {
 func NewSOCKEvictor(sbPool *SOCKPool) *SOCKEvictor {
 	e := &SOCKEvictor{
 		mem:      sbPool.mem,
-		events:   make(chan EvictorEvent, 64),
+		events:   make(chan SandboxEvent, 64),
 		running:  list.New(),
 		paused:   list.New(),
 		evicting: list.New(),
@@ -60,7 +55,7 @@ func NewSOCKEvictor(sbPool *SOCKPool) *SOCKEvictor {
 }
 
 func (evictor *SOCKEvictor) Event(evType SandboxEventType, sb Sandbox) {
-	evictor.events <- EvictorEvent{evType, sb}
+	evictor.events <- SandboxEvent{evType, sb}
 }
 
 // move Sandbox to a given queue, removing from previous (if necessary).
@@ -91,7 +86,7 @@ func (evictor *SOCKEvictor) move(sb Sandbox, target *list.List) {
 	}
 }
 
-func (evictor *SOCKEvictor) nextEvent(block bool) *EvictorEvent {
+func (evictor *SOCKEvictor) nextEvent(block bool) *SandboxEvent {
 	if block {
 		event := <-evictor.events
 		return &event

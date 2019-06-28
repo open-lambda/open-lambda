@@ -5,8 +5,7 @@ from subprocess import Popen, check_output
 from multiprocessing import Pool
 from contextlib import contextmanager        
                 
-
-OLDIR = '/tmp/test-cluster'
+OLDIR = 'test-dir'
 
 results = OrderedDict({"runs": []})
 curr_conf = None
@@ -84,8 +83,8 @@ def test(fn):
         mounts1 = mounts()
         if len(mounts0) != len(mounts1):
             result["pass"] = False
-            errors.append(["mounts are leaking (%d before, %d after), leaked: %s"
-                           % (len(mounts0), len(mounts1), str(mounts1 - mounts0))])
+            result["errors"].append(["mounts are leaking (%d before, %d after), leaked: %s"
+                                     % (len(mounts0), len(mounts1), str(mounts1 - mounts0))])
 
         total_t1 = time.time()
         result["total_seconds"] = total_t1-total_t0
@@ -323,14 +322,6 @@ def tests():
     startup_pkgs = ["parso", "jedi", "urllib3", "idna", "chardet", "certifi", "requests", "simplejson"]
     test_reg = os.path.abspath("test-registry")
 
-    # test SOCK directly (without lambdas)
-    with TestConf(server_mode="sock"):
-        sock_churn(baseline=0, procs=1, seconds=15, fork=True)
-        sock_churn(baseline=0, procs=15, seconds=15, fork=True)
-        # TODO: make these work (we don't have enough mem now)
-        #sock_churn(baseline=32, procs=1, seconds=15, fork=True)
-        #sock_churn(baseline=32, procs=15, seconds=15, fork=True)
-
     with TestConf(registry=test_reg, startup_pkgs=startup_pkgs):
         ping_test()
 
@@ -351,6 +342,14 @@ def tests():
         # test resource limits
         fork_bomb()
         max_mem_alloc()
+
+    # test SOCK directly (without lambdas)
+    with TestConf(server_mode="sock"):
+        sock_churn(baseline=0, procs=1, seconds=15, fork=True)
+        sock_churn(baseline=0, procs=15, seconds=15, fork=True)
+        # TODO: make these work (we don't have enough mem now)
+        #sock_churn(baseline=32, procs=1, seconds=15, fork=True)
+        #sock_churn(baseline=32, procs=15, seconds=15, fork=True)
 
     # make sure code updates get pulled within the cache time
     with tempfile.TemporaryDirectory() as reg_dir:

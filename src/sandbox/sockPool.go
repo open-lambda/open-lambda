@@ -5,8 +5,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
-	"sync"
 	"sync/atomic"
 	"syscall"
 
@@ -33,9 +31,7 @@ type SOCKPool struct {
 	cgPool        *CgroupPool
 	mem           *MemPool
 	eventHandlers []SandboxEventFunc
-
-	sync.Mutex
-	sandboxes []Sandbox
+	debugger
 }
 
 // NewSOCKPool creates a SOCKPool.
@@ -66,6 +62,8 @@ func NewSOCKPool(name string, mem *MemPool) (cf *SOCKPool, err error) {
 		rootDir:       rootDir,
 		eventHandlers: []SandboxEventFunc{},
 	}
+
+	pool.debugger = newDebugger(pool)
 
 	return pool, nil
 }
@@ -136,16 +134,23 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchPrefix
 	}
 
 	// create new process in container (fresh, or forked from parent)
-	t = stats.T0("make-proc")
+	err = nil
+	if parent != nil {
+		t2 := stats.T0("fork-proc")
+		if err = parent.fork(c); err != nil {
+			if err == DEAD_SANDBOX {
+				log.Printf("parent SB %s died, create child with nil parent", parent.ID())
+				parent = nil
+			} else {
+				return nil, err
+			}
+		}
+		t2.T1()
+	}
+
 	if parent == nil {
 		t2 := stats.T0("fresh-proc")
 		if err := c.freshProc(); err != nil {
-			return nil, err
-		}
-		t2.T1()
-	} else {
-		t2 := stats.T0("fork-proc")
-		if err := parent.fork(c); err != nil {
 			return nil, err
 		}
 		t2.T1()
@@ -153,14 +158,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchPrefix
 	t.T1()
 
 	// wrap to make thread-safe and handle container death
-	safeSB := newSafeSandbox(c, pool.eventHandlers)
-
-	// TODO: have some way to clean up this structure as sandboxes are released
-	pool.Mutex.Lock()
-	pool.sandboxes = append(pool.sandboxes, safeSB)
-	pool.Mutex.Unlock()
-
-	return safeSB, nil
+	return newSafeSandbox(c, pool.eventHandlers), nil
 }
 
 // handler(...) will be called everytime a sandbox-related event occurs,
@@ -174,11 +172,11 @@ func (pool *SOCKPool) AddListener(handler SandboxEventFunc) {
 }
 
 func (pool *SOCKPool) Cleanup() {
-	pool.Mutex.Lock()
-	for _, sandbox := range pool.sandboxes {
-		sandbox.Destroy()
-	}
-	pool.Mutex.Unlock()
+	// user is required to kill all containers before they call
+	// this.  If they did, the memory pool should be full.
+	log.Printf("SOCKPool.Cleanup: make sure all memory is free")
+	pool.mem.adjustAvailableMB(-pool.mem.totalMB)
+	log.Printf("SOCKPool.Cleanup: memory pool emptied")
 
 	pool.cgPool.Destroy()
 	syscall.Unmount(pool.rootDir, syscall.MNT_DETACH)
@@ -186,14 +184,21 @@ func (pool *SOCKPool) Cleanup() {
 }
 
 func (pool *SOCKPool) DebugString() string {
-	pool.Mutex.Lock()
-	defer pool.Mutex.Unlock()
+	return pool.debugger.Dump()
+}
 
-	var sb strings.Builder
-
-	for _, sandbox := range pool.sandboxes {
-		sb.WriteString(fmt.Sprintf("%s--------\n", sandbox.DebugString()))
+func setSubtract(a []string, b []string) []string {
+	rv := make([]string, len(a))
+	for _, v1 := range a {
+		inB := false
+		for _, v2 := range b {
+			if v2 == v1 {
+				inB = true
+			}
+		}
+		if !inB {
+			rv = append(rv, v1)
+		}
 	}
-
-	return sb.String()
+	return rv
 }

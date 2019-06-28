@@ -185,6 +185,10 @@ func (s *SOCKServer) Handle(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *SOCKServer) cleanup() {
+	s.sandboxes.Range(func(key, val interface{}) bool {
+		val.(sandbox.Sandbox).Destroy()
+		return true
+	})
 	s.cachePool.Cleanup()
 	s.handlerPool.Cleanup()
 }

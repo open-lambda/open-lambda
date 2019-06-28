@@ -17,18 +17,20 @@ import (
 	"time"
 
 	"github.com/open-lambda/open-lambda/ol/config"
+	"github.com/open-lambda/open-lambda/ol/sandbox"
 	"github.com/open-lambda/open-lambda/ol/stats"
-
-	sb "github.com/open-lambda/open-lambda/ol/sandbox"
 )
 
 // provides thread-safe getting of lambda functions and collects all
 // lambda subsystems (resource pullers and sandbox pools) in one place
 type LambdaMgr struct {
+	// subsystems (these are thread safe)
 	*HandlerPuller
 	*ModulePuller
-	sbPool sb.SandboxPool
+	sbPool      sandbox.SandboxPool
+	importCache *sandbox.ImportCache
 
+	// thread-safe map from a lambda's name to its LambdaFunc
 	mapMutex sync.Mutex
 	lfuncMap map[string]*LambdaFunc
 }
@@ -49,6 +51,10 @@ type LambdaFunc struct {
 	instChan  chan *Invocation // func to instances
 	doneChan  chan *Invocation // instances to func
 	instances *list.List
+
+	// send chan to the kill chan to destroy the instance, then
+	// wait for msg on sent chan to block until it is done
+	killChan chan chan bool
 }
 
 // This is essentially a virtual sandbox.  It is backed by a real
@@ -94,9 +100,19 @@ func NewLambdaMgr() (mgr *LambdaMgr, err error) {
 	}
 
 	log.Printf("Create SandboxPool")
-	sbp, err := sb.SandboxPoolFromConfig()
+	sbp, err := sandbox.SandboxPoolFromConfig("sock-handlers", config.Conf.Handler_cache_mb)
 	if err != nil {
 		return nil, err
+	}
+
+	importCacheMb := config.Conf.Import_cache_mb
+	var importCache *sandbox.ImportCache = nil
+	if importCacheMb > 0 {
+		log.Printf("Create ImportCache")
+		importCache, err = sandbox.NewImportCache("sock-cache", importCacheMb)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &LambdaMgr{
@@ -104,6 +120,7 @@ func NewLambdaMgr() (mgr *LambdaMgr, err error) {
 		HandlerPuller: hp,
 		ModulePuller:  mp,
 		sbPool:        sbp,
+		importCache:   importCache,
 	}, nil
 }
 
@@ -124,6 +141,7 @@ func (mgr *LambdaMgr) Get(name string) (f *LambdaFunc) {
 			instChan:  make(chan *Invocation, 32),
 			doneChan:  make(chan *Invocation, 32),
 			instances: list.New(),
+			killChan:  make(chan chan bool, 1),
 		}
 
 		go f.Task()
@@ -134,7 +152,22 @@ func (mgr *LambdaMgr) Get(name string) (f *LambdaFunc) {
 }
 
 func (mgr *LambdaMgr) Cleanup() {
-	mgr.sbPool.Cleanup()
+	// HandlerPuller requires no cleanup
+
+	// ModulePuller requires no cleanup
+
+	// cleanup SandboxPool
+	mgr.mapMutex.Lock() // don't unlock, because this shouldn't be used anymore
+	for _, f := range mgr.lfuncMap {
+		fmt.Printf("Kill function: %s", f.name)
+		f.Kill()
+	}
+	mgr.sbPool.Cleanup() // assumes all Sandboxes are gone
+
+	// cleanup ImportCache
+	if mgr.importCache != nil {
+		mgr.importCache.Cleanup()
+	}
 }
 
 func (f *LambdaFunc) Invoke(w http.ResponseWriter, r *http.Request) {
@@ -229,8 +262,15 @@ func (f *LambdaFunc) Task() {
 	// receive the complete signal, before proceeding to
 	// subsequent cleanup tasks in the FIFO.
 	cleanupChan := make(chan interface{}, 32)
+	cleanupTaskDone := make(chan bool)
 	go func() {
-		for msg := range cleanupChan {
+		for {
+			msg, ok := <-cleanupChan
+			if !ok {
+				cleanupTaskDone <- true
+				return
+			}
+
 			switch op := msg.(type) {
 			case string:
 				if err := os.RemoveAll(op); err != nil {
@@ -304,6 +344,23 @@ func (f *LambdaFunc) Task() {
 
 			// msg: function -> client
 			req.done <- true
+
+		case done := <-f.killChan:
+			// signal all instances to die, then wait for
+			// cleanup task to finish and exit
+			el := f.instances.Front()
+			for el != nil {
+				waitChan := el.Value.(*LambdaInstance).AsyncKill()
+				cleanupChan <- waitChan
+				el = el.Next()
+			}
+			if f.codeDir != "" {
+				cleanupChan <- f.codeDir
+			}
+			close(cleanupChan)
+			<-cleanupTaskDone
+			done <- true
+			return
 		}
 
 		// POLICY: how many instances (i.e., virtual sandboxes) should we allocate?
@@ -383,6 +440,12 @@ func (f *LambdaFunc) newInstance() {
 	go linst.Task()
 }
 
+func (f *LambdaFunc) Kill() {
+	done := make(chan bool)
+	f.killChan <- done
+	<-done
+}
+
 // this Task manages a single Sandbox (at any given time), and
 // forwards requests from the function queue to that Sandbox.
 // when there are no requests, the Sandbox is paused.
@@ -396,7 +459,7 @@ func (linst *LambdaInstance) Task() {
 	f := linst.lfunc
 	scratchPrefix := filepath.Join(config.Conf.Worker_dir, "handlers", f.name)
 
-	var sb sb.Sandbox = nil
+	var sb sandbox.Sandbox = nil
 	//var client *http.Client = nil // whenever we create a Sandbox, we init this too
 	var proxy *httputil.ReverseProxy = nil // whenever we create a Sandbox, we init this too
 	var err error
@@ -428,9 +491,15 @@ func (linst *LambdaInstance) Task() {
 			}
 		}
 
-		// if we don't already have a Sandbox, create one, and HTTP proxy over the channel
+		// if we don't already have a Sandbox, create one, and
+		// HTTP proxy over the channel
 		if sb == nil {
-			sb, err = f.lmgr.sbPool.Create(nil, true, linst.codeDir, scratchPrefix, linst.imports)
+			var parent sandbox.Sandbox
+			if f.lmgr.importCache != nil {
+				parent = f.lmgr.importCache.GetParent(linst.imports)
+			}
+
+			sb, err = f.lmgr.sbPool.Create(parent, true, linst.codeDir, scratchPrefix, linst.imports)
 			if err != nil {
 				req.w.WriteHeader(http.StatusInternalServerError)
 				req.w.Write([]byte("could not create Sandbox: " + err.Error() + "\n"))

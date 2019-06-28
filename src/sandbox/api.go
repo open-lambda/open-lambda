@@ -14,8 +14,12 @@ type SandboxPool interface {
 	// imports: Python modules that will be used (this is a hint)
 	Create(parent Sandbox, isLeaf bool, codeDir, scratchPrefix string, imports []string) (sb Sandbox, err error)
 
-	// Destroy all containers in this pool
+	// All containers must be deleted before this is called, or it
+	// will hang
 	Cleanup()
+
+	// handler will be called whenever a Sandbox is created, deleted, etc
+	AddListener(handler SandboxEventFunc)
 
 	DebugString() string
 }
@@ -48,12 +52,12 @@ type Sandbox interface {
 	// Represent state as a multi-line string
 	DebugString() string
 
-	// Optional interface for forking across sandboxes
+	// Optional interface for forking across sandboxes.  Sandbox may
 	fork(dst Sandbox) error
 }
 
-// reference to function that will be called by sandbox pool upon
-// key events
+// reference to function that will be called by sandbox pool upon key
+// events
 type SandboxEventFunc func(SandboxEventType, Sandbox)
 
 type SandboxEventType int
@@ -64,3 +68,8 @@ const (
 	evPause                    = iota
 	evUnpause                  = iota
 )
+
+type SandboxEvent struct {
+	evType SandboxEventType
+	sb     Sandbox
+}
