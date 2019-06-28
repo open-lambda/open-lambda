@@ -6,7 +6,7 @@ from multiprocessing import Pool
 from contextlib import contextmanager        
                 
 
-OLDIR = 'test-cluster'
+OLDIR = '/tmp/test-cluster'
 
 results = OrderedDict({"runs": []})
 curr_conf = None

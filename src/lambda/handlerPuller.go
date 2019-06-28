@@ -1,4 +1,4 @@
-package handler
+package lambda
 
 import (
 	"bufio"
@@ -26,7 +26,7 @@ const SEPARATOR = ":"
 // TODO: garbage collect old directories not used by any handler
 // anymore
 
-type CodePuller struct {
+type HandlerPuller struct {
 	codeCacheDir string   // where to download/copy code
 	prefix       string   // combine with name to get file path or URL
 	nextId       int64    // used to generate directory names for lambda code dirs
@@ -38,7 +38,7 @@ type CacheEntry struct {
 	path    string // where code is extracted to a dir
 }
 
-func NewCodePuller(codeCacheDir, pullPrefix string) (cp *CodePuller, err error) {
+func NewHandlerPuller(codeCacheDir, pullPrefix string) (cp *HandlerPuller, err error) {
 	if err := os.RemoveAll(codeCacheDir); err != nil {
 		return nil, fmt.Errorf("fail to create directory at %s :: %s: ", codeCacheDir, err)
 	}
@@ -47,14 +47,14 @@ func NewCodePuller(codeCacheDir, pullPrefix string) (cp *CodePuller, err error) 
 		return nil, fmt.Errorf("fail to create directory at %s :: %s ", codeCacheDir, err)
 	}
 
-	return &CodePuller{codeCacheDir: codeCacheDir, prefix: pullPrefix, nextId: 0}, nil
+	return &HandlerPuller{codeCacheDir: codeCacheDir, prefix: pullPrefix, nextId: 0}, nil
 }
 
-func (cp *CodePuller) isRemote() bool {
+func (cp *HandlerPuller) isRemote() bool {
 	return strings.HasPrefix(cp.prefix, "http://") || strings.HasPrefix(cp.prefix, "https://")
 }
 
-func (cp *CodePuller) Pull(name string) (targetDir string, err error) {
+func (cp *HandlerPuller) Pull(name string) (targetDir string, err error) {
 	matched, err := regexp.MatchString(`^[A-Za-z0-9\.\[\_]+$`, name)
 	if err != nil {
 		return "", err
@@ -100,13 +100,13 @@ func (cp *CodePuller) Pull(name string) (targetDir string, err error) {
 	}
 }
 
-func (cp *CodePuller) newCodeDir(lambdaName string) (targetDir string) {
+func (cp *HandlerPuller) newCodeDir(lambdaName string) (targetDir string) {
 	targetDir = fmt.Sprintf("%d-%s", atomic.AddInt64(&cp.nextId, 1), lambdaName)
 	targetDir = filepath.Join(cp.codeCacheDir, targetDir)
 	return targetDir
 }
 
-func (cp *CodePuller) pullLocalFile(src, lambdaName string) (targetDir string, err error) {
+func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (targetDir string, err error) {
 	stat, err := os.Stat(src)
 	if err != nil {
 		return "", err
@@ -165,7 +165,7 @@ func (cp *CodePuller) pullLocalFile(src, lambdaName string) (targetDir string, e
 	return targetDir, nil
 }
 
-func (cp *CodePuller) pullRemoteFile(src, lambdaName string) (targetDir string, err error) {
+func (cp *HandlerPuller) pullRemoteFile(src, lambdaName string) (targetDir string, err error) {
 	// grab latest lambda code if it's changed (pass
 	// If-Modified-Since so this can be determined on server side
 	client := &http.Client{}
@@ -225,7 +225,7 @@ func (cp *CodePuller) pullRemoteFile(src, lambdaName string) (targetDir string, 
 	return targetDir, err
 }
 
-func (cp *CodePuller) getCache(name string) *CacheEntry {
+func (cp *HandlerPuller) getCache(name string) *CacheEntry {
 	entry, found := cp.dirCache.Load(name)
 	if !found {
 		return nil
@@ -233,7 +233,7 @@ func (cp *CodePuller) getCache(name string) *CacheEntry {
 	return entry.(*CacheEntry)
 }
 
-func (cp *CodePuller) putCache(name, version, path string) {
+func (cp *HandlerPuller) putCache(name, version, path string) {
 	cp.dirCache.Store(name, &CacheEntry{version, path})
 }
 

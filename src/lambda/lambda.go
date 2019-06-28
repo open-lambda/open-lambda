@@ -1,6 +1,4 @@
-// handler package implements a library for handling run lambda requests from
-// the worker server.
-package handler
+package lambda
 
 import (
 	"bytes"
@@ -19,21 +17,17 @@ import (
 	"time"
 
 	"github.com/open-lambda/open-lambda/ol/config"
-	"github.com/open-lambda/open-lambda/ol/pip-manager"
 	"github.com/open-lambda/open-lambda/ol/stats"
 
 	sb "github.com/open-lambda/open-lambda/ol/sandbox"
 )
 
-// provides thread-safe access to map of lambda functions, and stores
-// references to various helpers:
-// 1. codePuller, for pulling lambda code
-// 2. pipMgr, for doing pip installs on the host
-// 3. sbPool, for allocating Sandbox instances
+// provides thread-safe getting of lambda functions and collects all
+// lambda subsystems (resource pullers and sandbox pools) in one place
 type LambdaMgr struct {
-	codePuller *CodePuller
-	pipMgr     pip.InstallManager
-	sbPool     sb.SandboxPool
+	*HandlerPuller
+	*ModulePuller
+	sbPool sb.SandboxPool
 
 	mapMutex sync.Mutex
 	lfuncMap map[string]*LambdaFunc
@@ -81,48 +75,36 @@ type Invocation struct {
 	// signal to client that response has been written to w
 	done chan bool
 
-	// how many milliseconds did ServeHTTP take?  (doesn't count queue time or Sandbox init)
+	// how many milliseconds did ServeHTTP take?  (doesn't count
+	// queue time or Sandbox init)
 	execMs int
 }
 
 func NewLambdaMgr() (mgr *LambdaMgr, err error) {
-	var t time.Time
-
-	// init code puller, pip manager, handler cache, and init cache
-	log.Printf("Create CodePuller")
-	t = time.Now()
-	cp, err := NewCodePuller(filepath.Join(config.Conf.Worker_dir, "lambda_code"), config.Conf.Registry)
+	log.Printf("Create HandlerPuller")
+	hp, err := NewHandlerPuller(filepath.Join(config.Conf.Worker_dir, "lambda_code"), config.Conf.Registry)
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("Initialized CodePuller (took %v)", time.Since(t))
 
-	log.Printf("Create InstallManager")
-	t = time.Now()
-	pm, err := pip.InitInstallManager()
+	log.Printf("Create ModulePuller")
+	mp, err := NewModulePuller()
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("Create InstallManager (took %v)", time.Since(t))
 
-	log.Printf("Create ContainerFactory")
-	t = time.Now()
+	log.Printf("Create SandboxPool")
 	sbp, err := sb.SandboxPoolFromConfig()
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("Initialized handler container factory (took %v)", time.Since(t))
 
-	t = time.Now()
-
-	mgr = &LambdaMgr{
-		lfuncMap:   make(map[string]*LambdaFunc),
-		codePuller: cp,
-		pipMgr:     pm,
-		sbPool:     sbp,
-	}
-
-	return mgr, nil
+	return &LambdaMgr{
+		lfuncMap:      make(map[string]*LambdaFunc),
+		HandlerPuller: hp,
+		ModulePuller:  mp,
+		sbPool:        sbp,
+	}, nil
 }
 
 // Returns an existing instance (if there is one), or creates a new one
@@ -152,7 +134,6 @@ func (mgr *LambdaMgr) Get(name string) (f *LambdaFunc) {
 }
 
 func (mgr *LambdaMgr) Cleanup() {
-	mgr.mapMutex.Lock() // we don't unlock, because nobody else should use this anyway
 	mgr.sbPool.Cleanup()
 }
 
@@ -184,7 +165,7 @@ func (f *LambdaFunc) checkCodeCache() (err error) {
 	now := time.Now()
 	cache_ns := int64(config.Conf.Registry_cache_ms) * 1000000
 	if f.lastPull == nil || int64(now.Sub(*f.lastPull)) > cache_ns {
-		codeDir, err := f.lmgr.codePuller.Pull(f.name)
+		codeDir, err := f.lmgr.HandlerPuller.Pull(f.name)
 		if err != nil {
 			return err
 		}
@@ -205,7 +186,7 @@ func (f *LambdaFunc) checkCodeCache() (err error) {
 		f.installs = installs
 
 		// TODO: shouldn't we do this inside the Sandbox?
-		if err := f.lmgr.pipMgr.Install(f.installs); err != nil {
+		if err := f.lmgr.ModulePuller.Install(f.installs); err != nil {
 			return err
 		}
 	}
@@ -218,9 +199,10 @@ func (f *LambdaFunc) checkCodeCache() (err error) {
 // monitors outstanding requests, and scales the number of instances
 // up or down as needed.
 //
-// communication for a given request is as follows:
+// communication for a given request is as follows (each of the four
+// transfers are commented within the function):
 //
-// server -> Task -> instance -> Task -> server
+// client -> function -> instance -> function -> client
 //
 // each of the 4 handoffs above is over a chan.  In order, those chans are:
 // 1. LambdaFunc.funcChan
@@ -229,8 +211,7 @@ func (f *LambdaFunc) checkCodeCache() (err error) {
 // 4. Invocation.done
 //
 // If either LambdaFunc.funcChan or LambdaFunc.instChan is full, we
-// respond to the client with a backoff message
-// (http.StatusTooManyRequests)
+// respond to the client with a backoff message: StatusTooManyRequests
 func (f *LambdaFunc) Task() {
 	f.printf("debug: LambdaFunc.Task() runs on goroutine %d", getGID())
 
@@ -274,7 +255,7 @@ func (f *LambdaFunc) Task() {
 				continue
 			}
 		case req := <-f.funcChan:
-			// client has sent us a new request
+			// msg: client -> function
 
 			// check for new code, and cleanup old code
 			// (and instances that use it) if necessary
@@ -307,6 +288,7 @@ func (f *LambdaFunc) Task() {
 
 			select {
 			case f.instChan <- req:
+				// msg: function -> instance
 				outstandingReqs += 1
 			default:
 				// queue cannot accept more, so reply with backoff
@@ -315,10 +297,12 @@ func (f *LambdaFunc) Task() {
 				req.done <- true
 			}
 		case req := <-f.doneChan:
-			// instance has notified us that a request has finished
+			// msg: instance -> function
 
 			execMs.Add(req.execMs)
 			outstandingReqs -= 1
+
+			// msg: function -> client
 			req.done <- true
 		}
 

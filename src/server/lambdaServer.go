@@ -8,18 +8,18 @@ import (
 
 	"github.com/open-lambda/open-lambda/ol/benchmarker"
 	"github.com/open-lambda/open-lambda/ol/config"
-	"github.com/open-lambda/open-lambda/ol/handler"
+	"github.com/open-lambda/open-lambda/ol/lambda"
 )
 
 // LambdaServer is a worker server that listens to run lambda requests and forward
 // these requests to its sandboxes.
 type LambdaServer struct {
-	lambda_mgr *handler.LambdaMgr
+	lambda_mgr *lambda.LambdaMgr
 }
 
 // NewLambdaServer creates a server based on the passed config."
 func NewLambdaServer() (*LambdaServer, error) {
-	lambda_mgr, err := handler.NewLambdaMgr()
+	lambda_mgr, err := lambda.NewLambdaMgr()
 	if err != nil {
 		return nil, err
 	}

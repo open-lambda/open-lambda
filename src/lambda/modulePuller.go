@@ -1,4 +1,4 @@
-package pip
+package lambda
 
 import (
 	"fmt"
@@ -9,28 +9,24 @@ import (
 )
 
 /*
- * InstallManager is the interface for installing pip packages locally.
+ * ModulePuller is the interface for installing pip packages locally.
  * The manager installs to the worker host from an optional pip mirror.
  *
  * TODO: implement eviction, support multiple versions
  */
 
-type InstallManager interface {
-	Install(pkgs []string) error
-}
-
 type PackageState struct {
 	mutex *sync.RWMutex
 }
 
-type Installer struct {
+type ModulePuller struct {
 	cmd       string
 	args      []string
 	mutex     *sync.Mutex
 	pkgStates map[string]*PackageState
 }
 
-func InitInstallManager() (*Installer, error) {
+func NewModulePuller() (*ModulePuller, error) {
 	cmd := "pip"
 	args := []string{"install", "--no-deps"}
 	if config.Conf.Pip_index != "" {
@@ -39,7 +35,7 @@ func InitInstallManager() (*Installer, error) {
 
 	args = append(args, "-t", config.Conf.Pkgs_dir)
 
-	installer := &Installer{
+	installer := &ModulePuller{
 		cmd:       cmd,
 		args:      args,
 		mutex:     &sync.Mutex{},
@@ -53,7 +49,7 @@ func InitInstallManager() (*Installer, error) {
 	return installer, nil
 }
 
-func (i *Installer) Install(pkgs []string) error {
+func (i *ModulePuller) Install(pkgs []string) error {
 	for _, pkg := range pkgs {
 		i.mutex.Lock()
 		pkgState, ok := i.pkgStates[pkg]
