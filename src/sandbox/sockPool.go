@@ -78,17 +78,17 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchPrefix
 	defer t.T1()
 
 	// block until we have enough to cover the cgroup mem limits
-	t = stats.T0("acquire-mem")
+	t2 := t.T0("acquire-mem")
 	pool.mem.adjustAvailableMB(-config.Conf.Sock_cgroups.Max_mem_mb)
-	t.T1()
+	t2.T1()
 
 	id := fmt.Sprintf("%d", atomic.AddInt64(&nextId, 1))
 	containerRootDir := filepath.Join(pool.rootDir, id)
 	scratchDir := filepath.Join(scratchPrefix, id)
 
-	t = stats.T0("acquire-cgroup")
+	t2 = t.T0("acquire-cgroup")
 	cg := pool.cgPool.GetCg()
-	t.T1()
+	t2.T1()
 
 	var c *SOCKContainer = &SOCKContainer{
 		pool:             pool,
@@ -110,11 +110,11 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchPrefix
 		return nil, fmt.Errorf("leaf sandboxes must have codeDir set")
 	}
 
-	t = stats.T0("make-root-fs")
+	t2 = t.T0("make-root-fs")
 	if err := c.populateRoot(); err != nil {
 		return nil, fmt.Errorf("failed to create root FS: %v", err)
 	}
-	t.T1()
+	t2.T1()
 
 	// write the Python code that the new process will run when it starts
 	var pyCode []string
@@ -136,7 +136,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchPrefix
 	// create new process in container (fresh, or forked from parent)
 	err = nil
 	if parent != nil {
-		t2 := stats.T0("fork-proc")
+		t2 := t.T0("fork-proc")
 		if err = parent.fork(c); err != nil {
 			if err == DEAD_SANDBOX {
 				log.Printf("parent SB %s died, create child with nil parent", parent.ID())
@@ -149,13 +149,12 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchPrefix
 	}
 
 	if parent == nil {
-		t2 := stats.T0("fresh-proc")
+		t2 := t.T0("fresh-proc")
 		if err := c.freshProc(); err != nil {
 			return nil, err
 		}
 		t2.T1()
 	}
-	t.T1()
 
 	// wrap to make thread-safe and handle container death
 	return newSafeSandbox(c, pool.eventHandlers), nil

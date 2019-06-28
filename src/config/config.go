@@ -33,9 +33,6 @@ type Config struct {
 	// directory to install packages to, that sandboxes will read from
 	Pkgs_dir string
 
-	// max number of concurrent runners per sandbox
-	Max_runners int `json:"max_runners"`
-
 	// cache options
 	Handler_cache_mb int `json:"handler_cache_mb"`
 	Import_cache_mb  int `json:"import_cache_mb"`
@@ -57,12 +54,6 @@ type Config struct {
 
 	// pass through to sandbox envirenment variable
 	Sandbox_config interface{} `json:"sandbox_config"`
-
-	// write benchmark times to separate log file
-	Benchmark_file string `json:"benchmark_log"`
-
-	// should timing info be logged?
-	Timing bool `json:"timing"`
 
 	// list of packages to install on startup
 	Startup_pkgs []string `json:"startup_pkgs"`
@@ -109,7 +100,7 @@ func LoadDefaults(olPath string) error {
 		Registry:          registryDir,
 		Sandbox:           "sock",
 		Pkgs_dir:          packagesDir,
-		Sandbox_config:    map[string]interface{}{"processes": 10},
+		Sandbox_config:    map[string]interface{}{},
 		SOCK_base_path:    baseImgDir,
 		Registry_cache_ms: 5000, // 5 seconds
 		Handler_cache_mb:  handler_cache_mb,

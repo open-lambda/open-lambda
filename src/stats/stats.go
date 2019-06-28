@@ -66,9 +66,7 @@ func statsTask() {
 		case *snapshotMsg:
 			for k, cnt := range counts {
 				msg.stats[k+".cnt"] = cnt
-				sum := sums[k]
-				msg.stats[k+".sum"] = sum
-				msg.stats[k+".avg"] = sum / cnt
+				msg.stats[k+".avg"] = sums[k] / cnt
 			}
 			msg.done <- true
 		default:
@@ -96,6 +94,7 @@ type Latency struct {
 	t0   time.Time
 }
 
+// record start time
 func T0(name string) Latency {
 	return Latency{
 		name: name,
@@ -103,10 +102,23 @@ func T0(name string) Latency {
 	}
 }
 
+// measure latency to end time, and record it
 func (l Latency) T1() {
 	ms := int64(time.Now().Sub(l.t0)) / 1000000
 	if ms < 0 {
 		panic("negative latency")
 	}
-	Record(l.name+".ms", ms)
+	Record(l.name+":ms", ms)
+
+	// make sure we didn't double record
+	var zero time.Time
+	if l.t0 == zero {
+		panic("double counted stat for " + l.name)
+	}
+	l.t0 = zero
+}
+
+// start measuring a sub latency
+func (l Latency) T0(name string) Latency {
+	return T0(l.name + "/" + name)
 }

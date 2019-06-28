@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"path"
 	"strconv"
 	"strings"
 	"syscall"
@@ -36,7 +37,7 @@ type CgroupPool struct {
 
 func NewCgroupPool(name string) (*CgroupPool, error) {
 	pool := &CgroupPool{
-		Name:     name,
+		Name:     path.Base(config.Conf.Worker_dir) + "-" + name,
 		ready:    make(chan *Cgroup, CGROUP_RESERVE),
 		recycled: make(chan *Cgroup, CGROUP_RESERVE),
 		quit:     make(chan chan bool),
@@ -48,7 +49,7 @@ func NewCgroupPool(name string) (*CgroupPool, error) {
 		path := pool.Path(resource)
 		pool.printf("create %s", path)
 		if err := syscall.Mkdir(path, 0700); err != nil {
-			return nil, fmt.Errorf("Rmdir %s: %s", path, err)
+			return nil, fmt.Errorf("Mkdir %s: %s", path, err)
 		}
 	}
 

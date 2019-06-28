@@ -44,8 +44,8 @@ func Status(w http.ResponseWriter, r *http.Request) {
 
 func Stats(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Receive request to %s\n", r.URL.Path)
-	statsMap := stats.Snapshot()
-	if b, err := json.Marshal(statsMap); err != nil {
+	snapshot := stats.Snapshot()
+	if b, err := json.MarshalIndent(snapshot, "", "\t"); err != nil {
 		panic(err)
 	} else {
 		w.Write(b)
@@ -105,8 +105,19 @@ func Main() (err error) {
 		<-c
 		log.Printf("received kill signal, cleaning up")
 		s.cleanup()
+
+		statsPath := filepath.Join(config.Conf.Worker_dir, "stats.json")
+		snapshot := stats.Snapshot()
+		log.Printf("save stats to %s", statsPath)
+		if s, err := json.MarshalIndent(snapshot, "", "\t"); err != nil {
+			log.Printf("error: %s", err)
+		} else if err := ioutil.WriteFile(statsPath, s, 0644); err != nil {
+			log.Printf("error: %s", err)
+		}
+
 		log.Printf("remove worker.pid")
 		os.Remove(pidPath)
+
 		log.Printf("exiting")
 		os.Exit(1)
 	}()

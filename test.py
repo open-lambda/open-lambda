@@ -65,15 +65,6 @@ def test(fn):
             result["pass"] = False
             result["errors"].append(traceback.format_exc().split("\n"))
 
-        # get internal stats from OL
-        try:
-            r = requests.get("http://localhost:5000/stats")
-            r.raise_for_status()
-            result["ol-stats"] = OrderedDict(sorted(list(r.json().items())))
-        except Exception:
-            result["pass"] = False
-            result["errors"].append(traceback.format_exc().split("\n"))
-
         # cleanup worker
         try:
             run(['./ol', 'kill', '-p='+OLDIR])
@@ -85,6 +76,12 @@ def test(fn):
             result["pass"] = False
             result["errors"].append(["mounts are leaking (%d before, %d after), leaked: %s"
                                      % (len(mounts0), len(mounts1), str(mounts1 - mounts0))])
+
+        # get internal stats from OL
+        if os.path.exists(OLDIR+"/worker/stats.json"):
+            with open(OLDIR+"/worker/stats.json") as f:
+                olstats = json.load(f)
+                result["ol-stats"] = OrderedDict(sorted(list(olstats.items())))
 
         total_t1 = time.time()
         result["total_seconds"] = total_t1-total_t0

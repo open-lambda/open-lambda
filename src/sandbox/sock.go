@@ -21,7 +21,6 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/open-lambda/open-lambda/ol/config"
 	"github.com/open-lambda/open-lambda/ol/stats"
@@ -34,7 +33,6 @@ type SOCKContainer struct {
 	containerRootDir string
 	codeDir          string
 	scratchDir       string
-	hostInitCmd      *exec.Cmd
 	guestInitPid     string
 	initPipe         *os.File
 }
@@ -106,12 +104,6 @@ func (c *SOCKContainer) freshProc() (err error) {
 }
 
 func (c *SOCKContainer) populateRoot() (err error) {
-	defer func(start time.Time) {
-		if config.Conf.Timing {
-			c.printf("create container took %v\n", time.Since(start))
-		}
-	}(time.Now())
-
 	// FILE SYSTEM STEP 1: mount base
 	if err := os.Mkdir(c.containerRootDir, 0777); err != nil {
 		return err
@@ -184,13 +176,8 @@ func (c *SOCKContainer) Destroy() {
 // TODO: make destroy recursive, so that children processes need to
 // die too.  This is the only way to prevent cgroup leaks.
 func (c *SOCKContainer) destroy() error {
-	if config.Conf.Timing {
-		defer func(start time.Time) {
-			c.printf("remove took %v\n", time.Since(start))
-		}(time.Now())
-	}
-
 	// kill all procs INSIDE the cgroup
+	t := stats.T0("Destroy()/kill-procs")
 	if c.cg != nil {
 		c.printf("kill all procs in CG\n")
 		if err := c.cg.KillAllProcs(); err != nil {
@@ -199,34 +186,26 @@ func (c *SOCKContainer) destroy() error {
 
 		c.cg.Release()
 	}
-
-	// kill the host init process OUTSIDE the cgroup
-	if c.hostInitCmd != nil {
-		if err := c.hostInitCmd.Process.Kill(); err != nil {
-			return err
-		}
-
-		c.printf("wait for host init process (PID %d) to die\n", c.hostInitCmd.Process.Pid)
-		_, err := c.hostInitCmd.Process.Wait()
-		if err != nil {
-			c.printf("failed to wait on hostInitCmd pid=%d :: %v", c.hostInitCmd.Process.Pid, err)
-		}
-	}
+	t.T1()
 
 	c.printf("unmount and remove dirs\n")
-
+	t = stats.T0("Destroy()/detach-root")
 	if err := syscall.Unmount(c.containerRootDir, syscall.MNT_DETACH); err != nil {
 		c.printf("unmount root dir %s failed :: %v\n", c.containerRootDir, err)
 	}
+	t.T1()
 
+	t = stats.T0("Destroy()/remove-root")
 	if err := os.RemoveAll(c.containerRootDir); err != nil {
 		c.printf("remove root dir %s failed :: %v\n", c.containerRootDir, err)
 	}
+	t.T1()
 
-	// TODO: find balance between cleaning up, and preserving this for debug
-	// if err := os.RemoveAll(c.scratchDir); err != nil {
-	//     c.printf("remove host dir %s failed :: %v\n", c.scratchDir, err)
-	//}
+	t = stats.T0("Destroy()/remove-scratch")
+	if err := os.RemoveAll(c.scratchDir); err != nil {
+		c.printf("remove host dir %s failed :: %v\n", c.scratchDir, err)
+	}
+	t.T1()
 
 	// release memory used for this container
 	c.pool.mem.adjustAvailableMB(config.Conf.Sock_cgroups.Max_mem_mb)

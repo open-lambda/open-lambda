@@ -107,7 +107,7 @@ func (sb *safeSandbox) Pause() (err error) {
 
 func (sb *safeSandbox) Unpause() (err error) {
 	sb.printf("Unpause()")
-	t := stats.T0("Pause()")
+	t := stats.T0("Unpause()")
 	defer t.T1()
 	sb.Mutex.Lock()
 	defer sb.Mutex.Unlock()
