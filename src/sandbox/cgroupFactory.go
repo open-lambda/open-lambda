@@ -187,11 +187,48 @@ func (cg *Cgroup) setFreezeState(state string) error {
 }
 
 func (cg *Cgroup) Pause() error {
-	return cg.setFreezeState("FROZEN")
+	// if the cgroup cannot be frozen, return error
+	if err := cg.setFreezeState("FROZEN"); err != nil {
+		return err
+	}
+
+	usagePath := cg.Path("memory", "memory.usage_in_bytes")
+	usageRaw, err := ioutil.ReadFile(usagePath)
+	if err != nil {
+		return err
+	}
+	usage, err := strconv.ParseInt(strings.TrimSpace(string(usageRaw)), 10, 64)
+	// if the mem usage cannot be read, return error
+	if  err != nil {
+		return err
+	}
+	// as memory limit will be rounded down to the nearest multiple of 4096 (page size)
+	newLimit := usage + 4096  
+
+	limitPath := cg.Path("memory", "memory.limit_in_bytes")
+	err = ioutil.WriteFile(limitPath, []byte(fmt.Sprintf("%d", newLimit)), os.ModeAppend)
+	// if mem limit cannot be set, return error
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (cg *Cgroup) Unpause() error {
-	return cg.setFreezeState("THAWED")
+	limitPath := cg.Path("memory", "memory.limit_in_bytes")
+	err := ioutil.WriteFile(limitPath, []byte(fmt.Sprintf("%dM", config.Conf.Sock_cgroups.Max_mem_mb)), os.ModeAppend)
+	// if mem limit cannot be set, return error
+	if err != nil {
+		return err
+	}
+
+	// if the cgroup cannot be thawed, return error
+	if err := cg.setFreezeState("THAWED"); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (cg *Cgroup) GetPIDs() ([]string, error) {
