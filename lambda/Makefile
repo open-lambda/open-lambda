@@ -1,10 +1,10 @@
 .PHONY: all
 
-all: ns.so spin
+all: ol.so spin
 
-ns.so: nsmodule/nsmodule.c nsmodule/setup.py 
-	cd nsmodule && python3 setup.py build_ext --inplace
-	mv nsmodule/ns.*.so ./ns.so
+ol.so: setup.py ol.c
+	python3 setup.py build_ext --inplace
+	mv ol.*.so ./ol.so
 
 spin: spin.c
 	gcc -O2 -o spin spin.c
@@ -12,4 +12,4 @@ spin: spin.c
 .PHONY: clean
 
 clean:
-	rm -rf nsmodule/build ol-init spin fdclient ns.*.so
+	rm -rf spin ol.so

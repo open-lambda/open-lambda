@@ -3,7 +3,7 @@ import tornado.ioloop
 import tornado.web
 import tornado.httpserver
 import tornado.netutil
-import ns
+import ol
 
 file_sock_path = "/host/ol.sock"
 file_sock = None
@@ -105,7 +105,7 @@ def start_container():
 
     # TODO: if we can get rid of this, we can get rid of the ns module
     print("unshare")
-    rv = ns.unshare()
+    rv = ol.unshare()
     assert rv == 0
 
     # we open a new .sock file in the child, before starting the grand
