@@ -11,6 +11,16 @@ results = OrderedDict({"runs": []})
 curr_conf = None
 
 
+def post(path, data):
+    return requests.post('http://localhost:5000/'+path, json.dumps(data))
+
+
+def test_in_filter(name):
+    if len(sys.argv) < 2:
+        return True
+    return name in sys.argv[1:]
+
+
 def get_mem_stat_mb(stat):
     with open('/proc/meminfo') as f:
         for l in f:
@@ -32,11 +42,19 @@ def test(fn):
         if len(args):
             raise Exception("positional args not supported for tests")
 
+        name = fn.__name__
+
+        if not test_in_filter(name):
+            return None
+
         print('='*40)
-        print(fn.__name__)
+        if len(kwargs):
+            print(name, kwargs)
+        else:
+            print(name)
         print('='*40)
         result = OrderedDict()
-        result["test"] = fn.__name__
+        result["test"] = name
         result["params"] = kwargs
         result["pass"] = None
         result["seconds"] = None
@@ -151,17 +169,18 @@ def run(cmd):
 
 @test
 def smoke_tests():
-    msg = '"hello world"'
-    r = requests.post("http://localhost:5000/run/echo", data=msg)
+    msg = 'hello world'
+    r = post("run/echo", msg)
     if r.status_code != 200:
         raise Exception("STATUS %d: %s" % (r.status_code, r.text))
-    assert r.text == msg
+    if r.json() != msg:
+        raise Exception("found %s but expected %s" % (r.json(), msg))
 
     for i in range(3):
         name = "install"
         if i != 0:
             name += str(i+1)
-        r = requests.post("http://localhost:5000/run/"+name, data="{}")
+        r = post("run/"+name, {})
         if r.status_code != 200:
             raise Exception("STATUS %d: %s" % (r.status_code, r.text))
         assert r.json() == "imported"    
@@ -171,7 +190,7 @@ def stress_one_lambda_task(args):
     t0, seconds = args
     i = 0
     while time.time() < t0 + seconds:
-        r = requests.post("http://localhost:5000/run/echo", data=str(i))
+        r = post("run/echo", i)
         r.raise_for_status()
         assert r.text == str(i)
         i += 1
@@ -193,7 +212,7 @@ def call_each_once_exec(lambda_count, alloc_mb):
     # TODO: do in parallel
     t0 = time.time()
     for i in range(lambda_count):
-        r = requests.post("http://localhost:5000/run/L%d"%i, data=json.dumps({"alloc_mb": alloc_mb}))
+        r = post("run/L%d"%i, {"alloc_mb": alloc_mb})
         r.raise_for_status()
         assert r.text == str(i)
     seconds = time.time() - t0
@@ -218,7 +237,7 @@ def call_each_once(lambda_count, alloc_mb=0):
 @test
 def fork_bomb():
     limit = curr_conf["sock_cgroups"]["max_procs"]
-    r = requests.post("http://localhost:5000/run/fbomb", data=json.dumps({"times": limit*2}))
+    r = post("run/fbomb", {"times": limit*2})
     r.raise_for_status()
     # the function returns the number of children that we were able to fork
     actual = int(r.text)
@@ -228,7 +247,7 @@ def fork_bomb():
 @test
 def max_mem_alloc():
     limit = curr_conf["sock_cgroups"]["max_mem_mb"]
-    r = requests.post("http://localhost:5000/run/max_mem_alloc", data=json.dumps(None))
+    r = post("run/max_mem_alloc", None)
     r.raise_for_status()
     # the function returns the MB that was able to be allocated
     actual = int(r.text)
@@ -251,10 +270,10 @@ def sock_churn_task(args):
     i = 0
     while time.time() < t0 + seconds:
         args = {"code": echo_path, "leaf": True, "parent": parent}
-        r = requests.post("http://localhost:5000/create", data=json.dumps(args))
+        r = post("create", args)
         r.raise_for_status()
         sandbox_id = r.text.strip()
-        r = requests.post("http://localhost:5000/destroy/"+sandbox_id, data="{}")
+        r = post("destroy/"+sandbox_id, {})
         r.raise_for_status()
         i += 1
     return i
@@ -268,14 +287,14 @@ def sock_churn(baseline, procs, seconds, fork):
     echo_path = os.path.abspath("test-registry/echo")
 
     if fork:
-        r = requests.post("http://localhost:5000/create", data=json.dumps({"code": "", "leaf": False}))
+        r = post("create", {"code": "", "leaf": False})
         r.raise_for_status()
         parent = r.text.strip()
     else:
         parent = None
 
     for i in range(baseline):
-        r = requests.post("http://localhost:5000/create", data=json.dumps({"code": echo_path, "leaf": True, "parent": parent}))
+        r = post("create", {"code": echo_path, "leaf": True, "parent": parent})
         r.raise_for_status()
 
     t0 = time.time()
@@ -300,7 +319,7 @@ def update_code():
         # how long does it take for us to start seeing the latest code?
         t0 = time.time()
         while True:
-            r = requests.post("http://localhost:5000/run/version", data='null')
+            r = post("run/version", None)
             r.raise_for_status()
             num = int(r.text)
             assert(num >= i-1)
