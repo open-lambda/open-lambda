@@ -199,11 +199,11 @@ func (cg *Cgroup) Pause() error {
 	}
 	usage, err := strconv.ParseInt(strings.TrimSpace(string(usageRaw)), 10, 64)
 	// if the mem usage cannot be read, return error
-	if  err != nil {
+	if err != nil {
 		return err
 	}
 	// as memory limit will be rounded down to the nearest multiple of 4096 (page size)
-	newLimit := usage + 4096  
+	newLimit := usage + 4096
 
 	limitPath := cg.Path("memory", "memory.limit_in_bytes")
 	err = ioutil.WriteFile(limitPath, []byte(fmt.Sprintf("%d", newLimit)), os.ModeAppend)
