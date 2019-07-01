@@ -9,10 +9,7 @@ LAMBDA_FILES = $(shell find lambda)
 .PHONY: test-all
 .PHONY: clean
 
-all: ol sock/sock-init imgs/lambda
-
-sock/sock-init: sock/sock-init.c
-	${MAKE} -C sock
+all: ol imgs/lambda
 
 imgs/lambda: $(LAMBDA_FILES)
 	${MAKE} -C lambda

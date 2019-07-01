@@ -114,6 +114,72 @@ func status(ctx *cli.Context) error {
 	return nil
 }
 
+// modify the config.json file based on settings from cmdline: -o opt1=val1,opt2=val2,...
+//
+// apply changes in optsStr to config from confPath, saving result to overridePath
+func overrideOpts(confPath, overridePath, optsStr string) error {
+	b, err := ioutil.ReadFile(confPath)
+	if err != nil {
+		return err
+	}
+	conf := make(map[string]interface{})
+	if err := json.Unmarshal(b, &conf); err != nil {
+		return err
+	}
+
+	opts := strings.Split(optsStr, ",")
+	for _, opt := range opts {
+		parts := strings.Split(opt, "=")
+		if len(parts) != 2 {
+			return fmt.Errorf("Could not parse option: '%s'", opt)
+		}
+		keys := strings.Split(parts[0], ".")
+		val := parts[1]
+
+		c := conf
+		for i := 0; i < len(keys)-1; i++ {
+			sub, ok := c[keys[i]]
+			if !ok {
+				return fmt.Errorf("key '%s' not found", keys[i])
+			}
+			switch v := sub.(type) {
+			case map[string]interface{}:
+				c = v
+			default:
+				return fmt.Errorf("%s refers to a %T, not a map", keys[i], c[keys[i]])
+			}
+
+		}
+
+		key := keys[len(keys)-1]
+		prev, ok := c[key]
+		if !ok {
+			return fmt.Errorf("invalid option: '%s'", key)
+		}
+		switch prev.(type) {
+		case string:
+			c[key] = val
+		case float64:
+			c[key], err = strconv.Atoi(val)
+			if err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("config values of type %T must be edited manually in the config file ", prev)
+		}
+	}
+
+	// save back config
+	s, err := json.MarshalIndent(conf, "", "\t")
+	if err != nil {
+		return err
+	}
+	if err := ioutil.WriteFile(overridePath, s, 0644); err != nil {
+		return err
+	}
+	return nil
+}
+
 // workers corresponds to the "workers" command of the admin tool.
 //
 // The JSON config in the cluster template directory will be populated for each
@@ -125,6 +191,7 @@ func worker(ctx *cli.Context) error {
 		return err
 	}
 
+	// if `./ol new` not previously run, do that init now
 	if _, err := os.Stat(olPath); os.IsNotExist(err) {
 		fmt.Printf("no OL directory found at %s\n", olPath)
 		if err := initOLDir(olPath); err != nil {
@@ -134,7 +201,18 @@ func worker(ctx *cli.Context) error {
 		fmt.Printf("using existing OL directory at %s\n", olPath)
 	}
 
+	// aoeu
 	confPath := filepath.Join(olPath, "config.json")
+	overrides := ctx.String("options")
+	if overrides != "" {
+		overridesPath := confPath + ".overrides"
+		err = overrideOpts(confPath, overridesPath, overrides)
+		if err != nil {
+			return err
+		}
+		confPath = overridesPath
+	}
+
 	if err := config.LoadFile(confPath); err != nil {
 		return err
 	}
@@ -268,30 +346,6 @@ func kill(ctx *cli.Context) error {
 	return fmt.Errorf("worker didn't stop after 30s")
 }
 
-// setconf sets a configuration option in the cluster's template
-func setconf(ctx *cli.Context) error {
-	olPath, err := getOlPath(ctx)
-	if err != nil {
-		return err
-	}
-
-	configPath := filepath.Join(olPath, "config.json")
-
-	if len(ctx.Args()) != 1 {
-		log.Fatal("Usage: admin setconf <json_options>")
-	}
-
-	if err := config.LoadFile(configPath); err != nil {
-		return err
-	} else if err := json.Unmarshal([]byte(ctx.Args()[0]), config.Conf); err != nil {
-		return fmt.Errorf("failed to set config options :: %v", err)
-	} else if err := config.Save(configPath); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // main runs the admin tool
 func main() {
 	if c, err := docker.NewClientFromEnv(); err != nil {
@@ -332,19 +386,16 @@ OPTIONS:
 			Action:      newOL,
 		},
 		cli.Command{
-			Name:      "setconf",
-			Usage:     "Set a configuration option in the cluster's template.",
-			UsageText: "ol setconf [--path=NAME] options (options is JSON string)",
-			Flags:     []cli.Flag{pathFlag},
-			Action:    setconf,
-		},
-		cli.Command{
 			Name:        "worker",
 			Usage:       "Start one OL server",
 			UsageText:   "ol worker [--path=NAME] [--detach]",
 			Description: "Start a lambda server.",
 			Flags: []cli.Flag{
 				pathFlag,
+				cli.StringFlag{
+					Name:  "options, o",
+					Usage: "Override options with: -o opt1=val1,opt2=val2/opt3.subopt31=val3",
+				},
 				cli.BoolFlag{
 					Name:  "detach, d",
 					Usage: "Run worker in background",
