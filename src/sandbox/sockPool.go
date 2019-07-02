@@ -37,7 +37,6 @@ type SOCKPool struct {
 // NewSOCKPool creates a SOCKPool.
 func NewSOCKPool(name string, mem *MemPool) (cf *SOCKPool, err error) {
 	cgPool, err := NewCgroupPool(name)
-	cgPool.memPool = mem
 	if err != nil {
 		return nil, err
 	}
