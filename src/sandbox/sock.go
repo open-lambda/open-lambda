@@ -165,18 +165,18 @@ func (c *SOCKContainer) Pause() (err error) {
 	}
 
 	// PAUSE STEP 2: decrease mem limit of cgroup
-	oldLimit, err := c.cg.getMemLimit()
+	oldLimit, err := c.cg.getMemLimitB()
 	if err != nil {
 		return err
 	}
 
-	usage, err := c.cg.getMemUsage()
+	usage, err := c.cg.getMemUsageB()
 	if err != nil {
 		return err
 	}
 	newLimit := usage + 4096
 
-	if err := c.cg.setMemLimit(newLimit); err != nil {
+	if err := c.cg.setMemLimitB(newLimit); err != nil {
 		return err
 	}
 
@@ -187,7 +187,7 @@ func (c *SOCKContainer) Pause() (err error) {
 }
 
 func (c *SOCKContainer) Unpause() (err error) {
-	oldLimit, err := c.cg.getMemLimit()
+	oldLimit, err := c.cg.getMemLimitB()
 	if err != nil {
 		return err
 	}
@@ -197,7 +197,7 @@ func (c *SOCKContainer) Unpause() (err error) {
 	c.pool.mem.adjustAvailableMB(int((oldLimit - newLimit) / 1024 / 1024))
 
 	// UNPAUSE STEP 2: increase mem limit of cgroup
-	if err := c.cg.setMemLimit(newLimit); err != nil {
+	if err := c.cg.setMemLimitB(newLimit); err != nil {
 		return err
 	}
 
