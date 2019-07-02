@@ -158,13 +158,65 @@ func (c *SOCKContainer) populateRoot() (err error) {
 	return nil
 }
 
+
 func (c *SOCKContainer) Pause() (err error) {
-	c.cg.Pause()
+    // PAUSE STEP 1: pause the cgroup
+    if err := c.cg.Pause(); err != nil {
+    	return err
+    }
+
+    // PAUSE STEP 2: decrease mem limit of cgroup
+    oldLimit, err := c.cg.getMemLimit()
+    if err != nil {
+        return err
+    }
+
+    usage, err := c.cg.getMemUsage()
+    if err != nil {
+        return err
+    }
+    newLimit := usage + 4096
+
+    if err := c.cg.setMemLimit(newLimit); err != nil {
+        return err
+    }
+    
+    // PAUSE STEP 3: increase available mem in mem pool
+    c.pool.mem.adjustAvailableMB(int((oldLimit - newLimit) / 1024 / 1024))
+
+	c.printf("available mem after pause: %d", c.pool.mem.adjustAvailableMB(0))
+    memLimit, err := c.cg.getMemLimit()
+	c.printf("mem limit read from file after pause: %d", memLimit)
+
 	return nil
 }
 
 func (c *SOCKContainer) Unpause() (err error) {
-	return c.cg.Unpause()
+    oldLimit, err := c.cg.getMemLimit()
+    if err != nil {
+        return err
+    }
+
+    newLimit := int64(config.Conf.Sock_cgroups.Max_mem_mb * 1024 * 1024)
+    // UNPAUSE STEP 1: decrease available mem in mem pool
+    c.pool.mem.adjustAvailableMB(int((oldLimit - newLimit) / 1024 / 1024))
+
+    // UNPAUSE STEP 2: increase mem limit of cgroup
+    if err := c.cg.setMemLimit(newLimit); err != nil {
+        return err
+    }
+    
+
+    // UNPAUSE STEP 3: unpause the cgroup
+    if err := c.cg.Unpause(); err != nil {
+    	return err
+    }
+
+	c.printf("available mem after pause: %d", c.pool.mem.adjustAvailableMB(0))
+    memLimit, err := c.cg.getMemLimit()
+	c.printf("mem limit read from file after pause: %d", memLimit)
+
+	return nil
 }
 
 func (c *SOCKContainer) Destroy() {

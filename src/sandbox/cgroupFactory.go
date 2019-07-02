@@ -29,7 +29,6 @@ var cgroupList []string = []string{
 
 	type CgroupPool struct {
 		Name     string
-		memPool  *MemPool
 		ready    chan *Cgroup
 		recycled chan *Cgroup
 		quit     chan chan bool
@@ -187,93 +186,141 @@ var cgroupList []string = []string{
 		}
 	}
 
-	func (cg *Cgroup) changeMemLimit(pause bool) error {
-		limitPath := cg.Path("memory", "memory.limit_in_bytes")
-		oldLimitRaw, err := ioutil.ReadFile(limitPath)
-		if err != nil {
-			return err
-		}
-		oldLimit, err := strconv.ParseInt(strings.TrimSpace(string(oldLimitRaw)), 10, 64)
-		if err != nil {
-			return err
-		}
-		oldLimitMB := int(oldLimit / 1024 / 1024)
-
-		newLimitMB := 0
-		if pause {
-			usagePath := cg.Path("memory", "memory.usage_in_bytes")
-			usageRaw, err := ioutil.ReadFile(usagePath)
-			if err != nil {
-				return err
-			}
-			usage, err := strconv.ParseInt(strings.TrimSpace(string(usageRaw)), 10, 64)
-			// if the mem usage cannot be read, return error
-			if err != nil {
-				return err
-			}
-			// as memory limit will be rounded down to the nearest multiple of 4096 (page size)
-			newLimitMB = int((usage + 4096) / 1024 / 1024)
-		} else {
-			newLimitMB = config.Conf.Sock_cgroups.Max_mem_mb
-		}
-
-		// if mem limit cannot be set, return error
-		if err := ioutil.WriteFile(limitPath, []byte(fmt.Sprintf("%dM", newLimitMB)), os.ModeAppend); err != nil {
-			return err
-		}
-
-		// adjust available mem in mem pool, contradictory to the change in limit itself
-		cg.pool.memPool.adjustAvailableMB(oldLimitMB - newLimitMB) 
-
-		return nil
+    // get mem usage in bytes
+	func (cg *Cgroup) getMemUsage() (int64, error) {
+        usagePath := cg.Path("memory", "memory.usage_in_bytes")
+        usageRaw, err := ioutil.ReadFile(usagePath)
+        if err != nil {
+            return -1, err
+        }
+        usage, err := strconv.ParseInt(strings.TrimSpace(string(usageRaw)), 10, 64)
+        // if the mem usage cannot be read, return error
+        if err != nil {
+            return -1, err
+        }
+		// usageMB := int(usage / 1024 / 1024)
+		return usage, nil
 	}
 
-	func (cg *Cgroup) readMemLimit() int {
+    // set mem limit in bytes
+	func (cg *Cgroup) getMemLimit() (int64, error) {
 		limitPath := cg.Path("memory", "memory.limit_in_bytes")
 		limitRaw, err := ioutil.ReadFile(limitPath)
 		if err != nil {
-			return -1
+			return -1, err
 		}
 		limit, err := strconv.ParseInt(strings.TrimSpace(string(limitRaw)), 10, 64)
 		if err != nil {
-			return -1
+			return -1, err
 		}
-		limitMB := int(limit / 1024 / 1024)
-		return limitMB
+		// limitMB := int(limit / 1024 / 1024)
+		return limit, nil
 	}
 
+    // get mem limit in bytes
+	func (cg *Cgroup) setMemLimit(newLimit int64) error {
+		limitPath := cg.Path("memory", "memory.limit_in_bytes")
+		// if mem limit cannot be set, return error
+		if err := ioutil.WriteFile(limitPath, []byte(fmt.Sprintf("%d", newLimit)), os.ModeAppend); err != nil {
+			return err
+		}
+
+		timeout := 5 * time.Second
+
+		start := time.Now()
+		for {
+            memLimit, err := cg.getMemLimit()
+			if err != nil {
+				return fmt.Errorf("failed to get mem limit :: %v", err)
+			}
+
+			if memLimit == newLimit {
+				return nil
+			}
+
+			if time.Since(start) > timeout {
+				return fmt.Errorf("cgroup stuck on setting mem limit after %v", timeout)
+			}
+
+			time.Sleep(1 * time.Millisecond)
+		}
+    }
+
+	// func (cg *Cgroup) changeMemLimit(pause bool) error {
+	// 	limitPath := cg.Path("memory", "memory.limit_in_bytes")
+	// 	oldLimitRaw, err := ioutil.ReadFile(limitPath)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	oldLimit, err := strconv.ParseInt(strings.TrimSpace(string(oldLimitRaw)), 10, 64)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	oldLimitMB := int(oldLimit / 1024 / 1024)
+
+	// 	newLimitMB := 0
+	// 	if pause {
+	// 		usagePath := cg.Path("memory", "memory.usage_in_bytes")
+	// 		usageRaw, err := ioutil.ReadFile(usagePath)
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	// 		usage, err := strconv.ParseInt(strings.TrimSpace(string(usageRaw)), 10, 64)
+	// 		// if the mem usage cannot be read, return error
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	// 		// as memory limit will be rounded down to the nearest multiple of 4096 (page size)
+	// 		newLimitMB = int((usage + 4096) / 1024 / 1024)
+	// 	} else {
+	// 		newLimitMB = config.Conf.Sock_cgroups.Max_mem_mb
+	// 	}
+
+	// 	// if mem limit cannot be set, return error
+	// 	if err := ioutil.WriteFile(limitPath, []byte(fmt.Sprintf("%dM", newLimitMB)), os.ModeAppend); err != nil {
+	// 		return err
+	// 	}
+
+	// 	// adjust available mem in mem pool, contradictory to the change in limit itself
+	// 	cg.pool.memPool.adjustAvailableMB(oldLimitMB - newLimitMB) 
+
+	// 	return nil
+	// }
+
 	func (cg *Cgroup) Pause() error {
-		// if the cgroup cannot be frozen, return error
-		if err := cg.setFreezeState("FROZEN"); err != nil {
-			return err
-		}
+        return cg.setFreezeState("FROZEN")
+		// // if the cgroup cannot be frozen, return error
+		// if err := cg.setFreezeState("FROZEN"); err != nil {
+		// 	return err
+		// }
 
-		// if the mem limit cannot be changed, return error
-		if err := cg.changeMemLimit(true); err != nil {
-			return err
-		}
+		// // if the mem limit cannot be changed, return error
+		// if err := cg.changeMemLimit(true); err != nil {
+		// 	return err
+		// }
 
-		cg.pool.printf("available mem after pause: %d", cg.pool.memPool.adjustAvailableMB(0))
-		cg.pool.printf("mem limit read from file after pause: %d", cg.readMemLimit())
+		// cg.pool.printf("available mem after pause: %d", cg.pool.memPool.adjustAvailableMB(0))
+		// cg.pool.printf("mem limit read from file after pause: %d", cg.readMemLimit())
 
-		return nil
+		// return nil
 	}
 
 
 	func (cg *Cgroup) Unpause() error {
-		// if the mem limit cannot be changed, return error
-		if err := cg.changeMemLimit(false); err != nil {
-			return err
-		}
-		// if the cgroup cannot be thawed, return error
-		if err := cg.setFreezeState("THAWED"); err != nil {
-			return err
-		}
+        return cg.setFreezeState("THAWED")
+		// // if the mem limit cannot be changed, return error
+		// if err := cg.changeMemLimit(false); err != nil {
+		// 	return err
+		// }
+		// // if the cgroup cannot be thawed, return error
+		// if err := cg.setFreezeState("THAWED"); err != nil {
+		// 	return err
+		// }
 
-		cg.pool.printf("available mem after unpause: %d", cg.pool.memPool.adjustAvailableMB(0))
-		cg.pool.printf("mem limit read from file after unpause: %d", cg.readMemLimit())
+		// cg.pool.printf("available mem after unpause: %d", cg.pool.memPool.adjustAvailableMB(0))
+		// cg.pool.printf("mem limit read from file after unpause: %d", cg.readMemLimit())
 
-		return nil
+		// return nil
 	}
 
 	func (cg *Cgroup) GetPIDs() ([]string, error) {
