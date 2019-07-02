@@ -1,7 +1,7 @@
 package sandbox
 
 import (
-	"net/http"
+	"net/http/httputil"
 )
 
 type SandboxPool interface {
@@ -44,7 +44,7 @@ type Sandbox interface {
 	Unpause() error
 
 	// Communication channel to forward requests.
-	Channel() (*http.Transport, error)
+	HttpProxy() (*httputil.ReverseProxy, error)
 
 	// How much memory does the cgroup report for this container?
 	MemUsageKB() (int, error)

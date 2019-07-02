@@ -15,6 +15,8 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -48,7 +50,7 @@ func (c *SOCKContainer) ID() string {
 	return c.id
 }
 
-func (c *SOCKContainer) Channel() (tr *http.Transport, err error) {
+func (c *SOCKContainer) HttpProxy() (p *httputil.ReverseProxy, err error) {
 	// note, for debugging, you can directly contact the sock file like this:
 	// curl -XPOST --unix-socket ./ol.sock http:/test -d '{"some": "data"}'
 
@@ -60,7 +62,16 @@ func (c *SOCKContainer) Channel() (tr *http.Transport, err error) {
 	dial := func(proto, addr string) (net.Conn, error) {
 		return net.Dial("unix", sockPath)
 	}
-	return &http.Transport{Dial: dial}, nil
+
+	tr := &http.Transport{Dial: dial}
+	u, err := url.Parse("http://sock-container")
+	if err != nil {
+		panic(err)
+	}
+
+	proxy := httputil.NewSingleHostReverseProxy(u)
+	proxy.Transport = tr
+	return proxy, nil
 }
 
 func (c *SOCKContainer) writeBootstrapCode(bootPy []string) (err error) {
@@ -146,6 +157,7 @@ func (c *SOCKContainer) populateRoot() (err error) {
 		return fmt.Errorf("failed to bind scratch dir: %v", err.Error())
 	}
 
+	// TODO: cheaper to handle with symlink in lambda image?
 	sbTmpDir := filepath.Join(c.containerRootDir, "tmp")
 	if err := syscall.Mount(tmpDir, sbTmpDir, "", BIND, ""); err != nil {
 		return fmt.Errorf("failed to bind tmp dir: %v", err.Error())

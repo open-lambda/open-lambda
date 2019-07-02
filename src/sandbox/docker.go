@@ -17,6 +17,8 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -140,7 +142,7 @@ func (c *DockerContainer) State() (hstate HandlerState, err error) {
 }
 
 // Channel returns a file socket channel for direct communication with the sandbox.
-func (c *DockerContainer) Channel() (*http.Transport, error) {
+func (c *DockerContainer) HttpProxy() (p *httputil.ReverseProxy, err error) {
 	sockPath := filepath.Join(c.hostDir, "ol.sock")
 	if len(sockPath) > 108 {
 		return nil, fmt.Errorf("socket path length cannot exceed 108 characters (try moving cluster closer to the root directory")
@@ -149,7 +151,16 @@ func (c *DockerContainer) Channel() (*http.Transport, error) {
 	dial := func(proto, addr string) (net.Conn, error) {
 		return net.Dial("unix", sockPath)
 	}
-	return &http.Transport{Dial: dial}, nil
+
+	tr := &http.Transport{Dial: dial}
+	u, err := url.Parse("http://sock-container")
+	if err != nil {
+		panic(err)
+	}
+
+	proxy := httputil.NewSingleHostReverseProxy(u)
+	proxy.Transport = tr
+	return proxy, nil
 }
 
 // Start starts the container.

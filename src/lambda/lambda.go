@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/http"
 	"net/http/httputil"
-	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -29,10 +28,10 @@ var nextScratchId int64 = 1000
 // lambda subsystems (resource pullers and sandbox pools) in one place
 type LambdaMgr struct {
 	// subsystems (these are thread safe)
+	sbPool sandbox.SandboxPool
 	*HandlerPuller
 	*ModulePuller
-	sbPool      sandbox.SandboxPool
-	importCache *ImportCache
+	*ImportCache
 
 	// thread-safe map from a lambda's name to its LambdaFunc
 	mapMutex sync.Mutex
@@ -90,42 +89,44 @@ type Invocation struct {
 	execMs int
 }
 
-func NewLambdaMgr() (mgr *LambdaMgr, err error) {
-	log.Printf("Create HandlerPuller")
-	hp, err := NewHandlerPuller(filepath.Join(config.Conf.Worker_dir, "lambda_code"), config.Conf.Registry)
+func NewLambdaMgr() (res *LambdaMgr, err error) {
+	mgr := &LambdaMgr{
+		lfuncMap: make(map[string]*LambdaFunc),
+	}
+	defer func() {
+		if err != nil {
+			mgr.Cleanup()
+		}
+	}()
+
+	log.Printf("Create SandboxPool")
+	mgr.sbPool, err = sandbox.SandboxPoolFromConfig("sock-handlers", config.Conf.Handler_cache_mb)
 	if err != nil {
 		return nil, err
 	}
 
 	log.Printf("Create ModulePuller")
-	mp, err := NewModulePuller()
+	mgr.ModulePuller, err = NewModulePuller(mgr.sbPool)
 	if err != nil {
 		return nil, err
 	}
 
-	log.Printf("Create SandboxPool")
-	sbp, err := sandbox.SandboxPoolFromConfig("sock-handlers", config.Conf.Handler_cache_mb)
+	log.Printf("Create HandlerPuller")
+	mgr.HandlerPuller, err = NewHandlerPuller(filepath.Join(config.Conf.Worker_dir, "lambda_code"), config.Conf.Registry)
 	if err != nil {
 		return nil, err
 	}
 
 	importCacheMb := config.Conf.Import_cache_mb
-	var importCache *ImportCache = nil
 	if importCacheMb > 0 {
 		log.Printf("Create ImportCache")
-		importCache, err = NewImportCache("sock-cache", importCacheMb)
+		mgr.ImportCache, err = NewImportCache("sock-cache", importCacheMb)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	return &LambdaMgr{
-		lfuncMap:      make(map[string]*LambdaFunc),
-		HandlerPuller: hp,
-		ModulePuller:  mp,
-		sbPool:        sbp,
-		importCache:   importCache,
-	}, nil
+	return mgr, nil
 }
 
 // Returns an existing instance (if there is one), or creates a new one
@@ -160,6 +161,11 @@ func (mgr *LambdaMgr) Cleanup() {
 
 	// ModulePuller requires no cleanup
 
+	// cleanup ImportCache
+	if mgr.ImportCache != nil {
+		mgr.ImportCache.Cleanup()
+	}
+
 	// cleanup SandboxPool
 	mgr.mapMutex.Lock() // don't unlock, because this shouldn't be used anymore
 	for _, f := range mgr.lfuncMap {
@@ -167,11 +173,6 @@ func (mgr *LambdaMgr) Cleanup() {
 		f.Kill()
 	}
 	mgr.sbPool.Cleanup() // assumes all Sandboxes are gone
-
-	// cleanup ImportCache
-	if mgr.importCache != nil {
-		mgr.importCache.Cleanup()
-	}
 }
 
 func (f *LambdaFunc) Invoke(w http.ResponseWriter, r *http.Request) {
@@ -243,8 +244,7 @@ func (f *LambdaFunc) checkCodeCache() (err error) {
 			f.printf("Installs: %v", f.installs)
 			f.printf("Imports: %v", f.imports)
 
-			// TODO: shouldn't we do this inside the Sandbox?
-			if err := f.lmgr.ModulePuller.InstallAll(f.installs); err != nil {
+			if err := f.lmgr.ModulePuller.InstallMany(f.installs); err != nil {
 				return err
 			}
 		}
@@ -520,8 +520,8 @@ func (linst *LambdaInstance) Task() {
 		// HTTP proxy over the channel
 		if sb == nil {
 			var parent sandbox.Sandbox
-			if f.lmgr.importCache != nil {
-				parent = f.lmgr.importCache.GetParent(linst.imports)
+			if f.lmgr.ImportCache != nil {
+				parent = f.lmgr.ImportCache.GetParent(linst.imports)
 			}
 
 			// TODO: delete scratchDir when Sandbox is destroyed
@@ -534,8 +534,7 @@ func (linst *LambdaInstance) Task() {
 				continue // wait for another request before retrying
 			}
 
-			var tr *http.Transport
-			tr, err = sb.Channel()
+			proxy, err = sb.HttpProxy()
 			if err != nil {
 				req.w.WriteHeader(http.StatusInternalServerError)
 				req.w.Write([]byte("could not connect to Sandbox: " + err.Error() + "\n"))
@@ -544,13 +543,6 @@ func (linst *LambdaInstance) Task() {
 				sb = nil
 				continue // wait for another request before retrying
 			}
-
-			u, err := url.Parse("http://container")
-			if err != nil {
-				panic(err)
-			}
-			proxy = httputil.NewSingleHostReverseProxy(u)
-			proxy.Transport = tr
 		}
 
 		// below here, we're guaranteed (1) sb != nil, (2) proxy != nil, (3) sb is unpaused

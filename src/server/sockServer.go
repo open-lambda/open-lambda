@@ -28,28 +28,6 @@ type SOCKServer struct {
 	sandboxes   sync.Map
 }
 
-// NewSOCKServer creates a server based on the passed config."
-func NewSOCKServer() (*SOCKServer, error) {
-	cacheMem := sandbox.NewMemPool(config.Conf.Import_cache_mb)
-	cache, err := sandbox.NewSOCKPool("sock-cache", cacheMem)
-	if err != nil {
-		return nil, err
-	}
-
-	handlerMem := sandbox.NewMemPool(config.Conf.Handler_cache_mb)
-	handler, err := sandbox.NewSOCKPool("sock-handlers", handlerMem)
-	if err != nil {
-		return nil, err
-	}
-
-	server := &SOCKServer{
-		cachePool:   cache,
-		handlerPool: handler,
-	}
-
-	return server, nil
-}
-
 func (s *SOCKServer) GetSandbox(id string) sandbox.Sandbox {
 	val, ok := s.sandboxes.Load(id)
 	if !ok {
@@ -200,15 +178,28 @@ func (s *SOCKServer) cleanup() {
 	s.handlerPool.Cleanup()
 }
 
-func SockMain() *SOCKServer {
+// NewSOCKServer creates a server based on the passed config."
+func NewSOCKServer() (*SOCKServer, error) {
 	log.Printf("Start SOCK Server")
-	server, err := NewSOCKServer()
+
+	cacheMem := sandbox.NewMemPool(config.Conf.Import_cache_mb)
+	cache, err := sandbox.NewSOCKPool("sock-cache", cacheMem)
 	if err != nil {
-		log.Printf("Could not create server")
-		log.Fatal(err)
+		return nil, err
+	}
+
+	handlerMem := sandbox.NewMemPool(config.Conf.Handler_cache_mb)
+	handler, err := sandbox.NewSOCKPool("sock-handlers", handlerMem)
+	if err != nil {
+		return nil, err
+	}
+
+	server := &SOCKServer{
+		cachePool:   cache,
+		handlerPool: handler,
 	}
 
 	http.HandleFunc("/", server.Handle)
 
-	return server
+	return server, nil
 }

@@ -9,7 +9,7 @@ package sandbox
 import (
 	"fmt"
 	"log"
-	"net/http"
+	"net/http/httputil"
 	"strings"
 	"sync"
 
@@ -125,7 +125,7 @@ func (sb *safeSandbox) Unpause() (err error) {
 	return sb.Sandbox.Unpause()
 }
 
-func (sb *safeSandbox) Channel() (tr *http.Transport, err error) {
+func (sb *safeSandbox) HttpProxy() (p *httputil.ReverseProxy, err error) {
 	sb.printf("Channel()")
 	t := stats.T0("Channel()")
 	defer t.T1()
@@ -138,7 +138,7 @@ func (sb *safeSandbox) Channel() (tr *http.Transport, err error) {
 		sb.destroyOnErr(err)
 	}()
 
-	return sb.Sandbox.Channel()
+	return sb.Sandbox.HttpProxy()
 }
 
 func (sb *safeSandbox) MemUsageKB() (kb int, err error) {
