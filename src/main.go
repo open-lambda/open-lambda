@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -64,6 +65,21 @@ func initOLDir(olPath string) (err error) {
 	// need this because Docker containers don't have a dns server in /etc/resolv.conf
 	dnsPath := filepath.Join(config.Conf.SOCK_base_path, "etc", "resolv.conf")
 	if err := ioutil.WriteFile(dnsPath, []byte("nameserver 8.8.8.8\n"), 0644); err != nil {
+		return err
+	}
+
+	path := filepath.Join(config.Conf.SOCK_base_path, "dev", "null")
+	if err := exec.Command("mknod", "-m", "0644", path, "c", "1", "3").Run(); err != nil {
+		return err
+	}
+
+	path = filepath.Join(config.Conf.SOCK_base_path, "dev", "random")
+	if err := exec.Command("mknod", "-m", "0644", path, "c", "1", "8").Run(); err != nil {
+		return err
+	}
+
+	path = filepath.Join(config.Conf.SOCK_base_path, "dev", "urandom")
+	if err := exec.Command("mknod", "-m", "0644", path, "c", "1", "9").Run(); err != nil {
 		return err
 	}
 
