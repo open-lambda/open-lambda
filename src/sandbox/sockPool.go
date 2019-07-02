@@ -64,7 +64,6 @@ func NewSOCKPool(name string, mem *MemPool) (cf *SOCKPool, err error) {
 		eventHandlers: []SandboxEventFunc{},
 	}
 
-
 	pool.debugger = newDebugger(pool)
 
 	return pool, nil
