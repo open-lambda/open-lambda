@@ -201,7 +201,7 @@ func (cg *Cgroup) getMemUsage() (int64, error) {
 	return usage, nil
 }
 
-// set mem limit in bytes
+// get mem limit in bytes
 func (cg *Cgroup) getMemLimit() (int64, error) {
 	limitPath := cg.Path("memory", "memory.limit_in_bytes")
 	limitRaw, err := ioutil.ReadFile(limitPath)
@@ -215,33 +215,10 @@ func (cg *Cgroup) getMemLimit() (int64, error) {
 	return limit, nil
 }
 
-// get mem limit in bytes
+// set mem limit in bytes
 func (cg *Cgroup) setMemLimit(newLimit int64) error {
 	limitPath := cg.Path("memory", "memory.limit_in_bytes")
-	// if mem limit cannot be set, return error
-	if err := ioutil.WriteFile(limitPath, []byte(fmt.Sprintf("%d", newLimit)), os.ModeAppend); err != nil {
-		return err
-	}
-
-	timeout := 5 * time.Second
-
-	start := time.Now()
-	for {
-		memLimit, err := cg.getMemLimit()
-		if err != nil {
-			return fmt.Errorf("failed to get mem limit :: %v", err)
-		}
-
-		if memLimit == newLimit {
-			return nil
-		}
-
-		if time.Since(start) > timeout {
-			return fmt.Errorf("cgroup stuck on setting mem limit after %v", timeout)
-		}
-
-		time.Sleep(1 * time.Millisecond)
-	}
+	return ioutil.WriteFile(limitPath, []byte(fmt.Sprintf("%d", newLimit)), os.ModeAppend)
 }
 
 func (cg *Cgroup) Pause() error {
