@@ -183,10 +183,6 @@ func (c *SOCKContainer) Pause() (err error) {
 	// PAUSE STEP 3: increase available mem in mem pool
 	c.pool.mem.adjustAvailableMB(int((oldLimit - newLimit) / 1024 / 1024))
 
-	c.printf("available mem after pause: %d", c.pool.mem.adjustAvailableMB(0))
-	memLimit, err := c.cg.getMemLimit()
-	c.printf("mem limit read from file after pause: %d", memLimit)
-
 	return nil
 }
 
@@ -209,10 +205,6 @@ func (c *SOCKContainer) Unpause() (err error) {
 	if err := c.cg.Unpause(); err != nil {
 		return err
 	}
-
-	c.printf("available mem after pause: %d", c.pool.mem.adjustAvailableMB(0))
-	memLimit, err := c.cg.getMemLimit()
-	c.printf("mem limit read from file after pause: %d", memLimit)
 
 	return nil
 }
