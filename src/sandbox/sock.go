@@ -136,10 +136,6 @@ func (c *SOCKContainer) populateRoot() (err error) {
 	}
 
 	// FILE SYSTEM STEP 3: scratch dir (tmp and communication)
-	if err := os.MkdirAll(c.scratchDir, 0777); err != nil {
-		return err
-	}
-
 	tmpDir := filepath.Join(c.scratchDir, "tmp")
 	if err := os.Mkdir(tmpDir, 0777); err != nil {
 		return err
@@ -198,12 +194,6 @@ func (c *SOCKContainer) destroy() error {
 	t = stats.T0("Destroy()/remove-root")
 	if err := os.RemoveAll(c.containerRootDir); err != nil {
 		c.printf("remove root dir %s failed :: %v\n", c.containerRootDir, err)
-	}
-	t.T1()
-
-	t = stats.T0("Destroy()/remove-scratch")
-	if err := os.RemoveAll(c.scratchDir); err != nil {
-		c.printf("remove host dir %s failed :: %v\n", c.scratchDir, err)
 	}
 	t.T1()
 

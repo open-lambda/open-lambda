@@ -1,8 +1,11 @@
 package lambda
 
 import (
-	"fmt"
+	"log"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/open-lambda/open-lambda/ol/config"
@@ -15,64 +18,62 @@ import (
  * TODO: implement eviction, support multiple versions
  */
 
-type PackageState struct {
-	mutex *sync.RWMutex
-}
-
 type ModulePuller struct {
-	cmd       string
-	args      []string
-	mutex     *sync.Mutex
-	pkgStates map[string]*PackageState
+	mutex   sync.Mutex
+	pkgInit map[string]*sync.Once
+	pkgErr  map[string]error
 }
 
 func NewModulePuller() (*ModulePuller, error) {
-	cmd := "pip"
-	args := []string{"install", "--no-deps"}
-	if config.Conf.Pip_index != "" {
-		args = append(args, "-i", config.Conf.Pip_index)
-	}
-
-	args = append(args, "-t", config.Conf.Pkgs_dir)
-
 	installer := &ModulePuller{
-		cmd:       cmd,
-		args:      args,
-		mutex:     &sync.Mutex{},
-		pkgStates: make(map[string]*PackageState),
+		pkgInit: make(map[string]*sync.Once),
+		pkgErr:  make(map[string]error),
 	}
 
-	if err := installer.Install(config.Conf.Startup_pkgs); err != nil {
+	if err := installer.InstallAll(config.Conf.Startup_pkgs); err != nil {
 		return nil, err
 	}
 
 	return installer, nil
 }
 
-func (i *ModulePuller) Install(pkgs []string) error {
+func (mp *ModulePuller) Install(pkg string) (err error) {
+	mp.mutex.Lock()
+	once := mp.pkgInit[pkg]
+	if once == nil {
+		once = &sync.Once{}
+		mp.pkgInit[pkg] = once
+	}
+	mp.mutex.Unlock()
+
+	once.Do(func() {
+		targetDir := filepath.Join(config.Conf.Pkgs_dir, pkg)
+		if _, err := os.Stat(targetDir); err == nil {
+			// assume dir exististence means it is installed already
+			return
+		}
+
+		cmd := []string{"pip3", "install", "--no-deps", pkg, "-t", config.Conf.Pkgs_dir}
+		if config.Conf.Pip_index != "" {
+			cmd = append(cmd, "-i", config.Conf.Pip_index)
+		}
+
+		err := exec.Command(cmd[0], cmd[1:]...).Run()
+		log.Printf("ModulePuller: %s [err=%v]", strings.Join(cmd, " "), err)
+		mp.mutex.Lock()
+		mp.pkgErr[pkg] = err
+		mp.mutex.Unlock()
+	})
+
+	mp.mutex.Lock()
+	defer mp.mutex.Unlock()
+	return mp.pkgErr[pkg]
+}
+
+func (mp *ModulePuller) InstallAll(pkgs []string) error {
 	for _, pkg := range pkgs {
-		i.mutex.Lock()
-		pkgState, ok := i.pkgStates[pkg]
-		if !ok {
-			rwMutex := &sync.RWMutex{}
-			rwMutex.Lock()
-			defer rwMutex.Unlock()
-			i.pkgStates[pkg] = &PackageState{rwMutex}
-			i.mutex.Unlock()
-			cmd := exec.Command(i.cmd, append(i.args, pkg)...)
-			if err := cmd.Run(); err != nil {
-				i.mutex.Lock()
-				delete(i.pkgStates, pkg)
-				i.mutex.Unlock()
-				return fmt.Errorf("failed to install package '%s' :: %v :: %v", pkg, err, cmd)
-			}
-		} else {
-			// The ordering here will have to change when we implement package
-			// eviction - the package could be evicted after dropping the global
-			// lock. We will also have to release reader locks on eviction of
-			// handlers/cache entries.
-			i.mutex.Unlock()
-			pkgState.mutex.RLock()
+		if err := mp.Install(pkg); err != nil {
+			return err
 		}
 	}
 

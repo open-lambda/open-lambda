@@ -68,8 +68,8 @@ func NewSOCKPool(name string, mem *MemPool) (cf *SOCKPool, err error) {
 	return pool, nil
 }
 
-func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchPrefix string, imports []string) (sb Sandbox, err error) {
-	log.Printf("<%v>.Create(%v, %v, %v, %v)...", pool.name, codeDir, scratchPrefix, imports, parent)
+func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, imports []string) (sb Sandbox, err error) {
+	log.Printf("<%v>.Create(%v, %v, %v, %v)...", pool.name, codeDir, scratchDir, imports, parent)
 	defer func() {
 		log.Printf("...returns %v, %v", sb, err)
 	}()
@@ -84,7 +84,6 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchPrefix
 
 	id := fmt.Sprintf("%d", atomic.AddInt64(&nextId, 1))
 	containerRootDir := filepath.Join(pool.rootDir, id)
-	scratchDir := filepath.Join(scratchPrefix, id)
 
 	t2 = t.T0("acquire-cgroup")
 	cg := pool.cgPool.GetCg()

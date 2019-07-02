@@ -6,15 +6,19 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/open-lambda/open-lambda/ol/config"
 	"github.com/open-lambda/open-lambda/ol/sandbox"
 )
 
 type Handler func(http.ResponseWriter, []string, map[string]interface{}) error
+
+var nextScratchId int64 = 1000
 
 // SOCKServer is a worker server that listens to run lambda requests and forward
 // these requests to its sandboxes.
@@ -70,8 +74,6 @@ func (s *SOCKServer) Create(w http.ResponseWriter, rsrc []string, args map[strin
 	// create args
 	codeDir := args["code"].(string)
 
-	scratchPrefix := filepath.Join(config.Conf.Worker_dir, "scratch")
-
 	imports := []string{}
 
 	var parent sandbox.Sandbox = nil
@@ -83,7 +85,12 @@ func (s *SOCKServer) Create(w http.ResponseWriter, rsrc []string, args map[strin
 	}
 
 	// spin it up
-	c, err := pool.Create(parent, leaf, codeDir, scratchPrefix, imports)
+	scratchId := fmt.Sprintf("dir-%d", atomic.AddInt64(&nextScratchId, 1))
+	scratchDir := filepath.Join(config.Conf.Worker_dir, "scratch", scratchId)
+	if err := os.MkdirAll(scratchDir, 0777); err != nil {
+		panic(err)
+	}
+	c, err := pool.Create(parent, leaf, codeDir, scratchDir, imports)
 	if err != nil {
 		return err
 	}

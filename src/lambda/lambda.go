@@ -1,6 +1,7 @@
 package lambda
 
 import (
+	"bufio"
 	"bytes"
 	"container/list"
 	"fmt"
@@ -14,12 +15,15 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/open-lambda/open-lambda/ol/config"
 	"github.com/open-lambda/open-lambda/ol/sandbox"
 	"github.com/open-lambda/open-lambda/ol/stats"
 )
+
+var nextScratchId int64 = 1000
 
 // provides thread-safe getting of lambda functions and collects all
 // lambda subsystems (resource pullers and sandbox pools) in one place
@@ -193,34 +197,56 @@ func (f *LambdaFunc) printf(format string, args ...interface{}) {
 	log.Printf("%s [FUNC %s]", strings.TrimRight(msg, "\n"), f.name)
 }
 
+func (f *LambdaFunc) parseReqs() (err error) {
+	f.installs = make([]string, 0)
+	f.imports = make([]string, 0)
+
+	path := filepath.Join(f.codeDir, "lambda_func.py")
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	scnr := bufio.NewScanner(file)
+	for scnr.Scan() {
+		line := strings.ReplaceAll(scnr.Text(), " ", "")
+		parts := strings.Split(line, ":")
+		if parts[0] == "#ol-install" {
+			f.installs = append(f.installs, strings.Split(parts[1], ",")...)
+		} else if parts[0] == "#ol-import" {
+			f.imports = append(f.imports, strings.Split(parts[1], ",")...)
+		}
+	}
+
+	return nil
+}
+
 func (f *LambdaFunc) checkCodeCache() (err error) {
 	// check if there is newer code, download it if necessary
 	now := time.Now()
 	cache_ns := int64(config.Conf.Registry_cache_ms) * 1000000
 	if f.lastPull == nil || int64(now.Sub(*f.lastPull)) > cache_ns {
+		f.lastPull = &now
 		codeDir, err := f.lmgr.HandlerPuller.Pull(f.name)
 		if err != nil {
 			return err
 		}
 
-		if codeDir == f.codeDir {
-			// no changes since last time we pulled the code
-			return nil
-		}
+		if codeDir != f.codeDir {
+			f.codeDir = codeDir
 
-		imports, installs, err := parsePkgFile(codeDir)
-		if err != nil {
-			return err
-		}
+			if err := f.parseReqs(); err != nil {
+				return err
+			}
 
-		f.lastPull = &now
-		f.codeDir = codeDir
-		f.imports = imports
-		f.installs = installs
+			f.printf("Installs: %v", f.installs)
+			f.printf("Imports: %v", f.imports)
 
-		// TODO: shouldn't we do this inside the Sandbox?
-		if err := f.lmgr.ModulePuller.Install(f.installs); err != nil {
-			return err
+			// TODO: shouldn't we do this inside the Sandbox?
+			if err := f.lmgr.ModulePuller.InstallAll(f.installs); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -457,7 +483,6 @@ func (f *LambdaFunc) Kill() {
 // 3. Error inside Sandbox: simply propagate whatever occured to client (TODO: restart Sandbox)
 func (linst *LambdaInstance) Task() {
 	f := linst.lfunc
-	scratchPrefix := filepath.Join(config.Conf.Worker_dir, "handlers", f.name)
 
 	var sb sandbox.Sandbox = nil
 	//var client *http.Client = nil // whenever we create a Sandbox, we init this too
@@ -499,7 +524,9 @@ func (linst *LambdaInstance) Task() {
 				parent = f.lmgr.importCache.GetParent(linst.imports)
 			}
 
-			sb, err = f.lmgr.sbPool.Create(parent, true, linst.codeDir, scratchPrefix, linst.imports)
+			// TODO: delete scratchDir when Sandbox is destroyed
+			scratchDir := mkScratchDir("func-" + f.name)
+			sb, err = f.lmgr.sbPool.Create(parent, true, linst.codeDir, scratchDir, linst.imports)
 			if err != nil {
 				req.w.WriteHeader(http.StatusInternalServerError)
 				req.w.Write([]byte("could not create Sandbox: " + err.Error() + "\n"))
@@ -576,4 +603,13 @@ func getGID() uint64 {
 	b = b[:bytes.IndexByte(b, ' ')]
 	n, _ := strconv.ParseUint(string(b), 10, 64)
 	return n
+}
+
+func mkScratchDir(prefix string) string {
+	scratchId := fmt.Sprintf("%s-%d", prefix, atomic.AddInt64(&nextScratchId, 1))
+	scratchDir := filepath.Join(config.Conf.Worker_dir, "scratch", scratchId)
+	if err := os.MkdirAll(scratchDir, 0777); err != nil {
+		panic(err)
+	}
+	return scratchDir
 }

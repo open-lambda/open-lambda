@@ -2,9 +2,7 @@ package lambda
 
 import (
 	"log"
-	"path/filepath"
 
-	"github.com/open-lambda/open-lambda/ol/config"
 	"github.com/open-lambda/open-lambda/ol/sandbox"
 )
 
@@ -60,8 +58,7 @@ func (cache *ImportCache) Event(evType sandbox.SandboxEventType, sb sandbox.Sand
 }
 
 func (cache *ImportCache) create(parent sandbox.Sandbox, imports []string) sandbox.Sandbox {
-	scratchPrefix := filepath.Join(config.Conf.Worker_dir, cache.name+"-scratch")
-	sb, err := cache.pool.Create(parent, false, "", scratchPrefix, imports)
+	sb, err := cache.pool.Create(parent, false, "", mkScratchDir("import-cache"), imports)
 	if err != nil {
 		log.Printf("import cache failed to create from '%v' with imports '%s'", parent, imports)
 		return nil

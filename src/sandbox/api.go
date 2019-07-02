@@ -10,9 +10,9 @@ type SandboxPool interface {
 	// parent: a sandbox to fork from (may be nil, and some SandboxPool's don't support not nil)
 	// isLeaf: true iff this is not being created as a sandbox we can fork later
 	// codeDir: directory where lambda code exists
-	// scratchPrefix: directory in which a scratch dir for the sandbox may be allocated
+	// scratchDir: directory where handler code can write (caller is responsible for creating and deleting)
 	// imports: Python modules that will be used (this is a hint)
-	Create(parent Sandbox, isLeaf bool, codeDir, scratchPrefix string, imports []string) (sb Sandbox, err error)
+	Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, imports []string) (sb Sandbox, err error)
 
 	// All containers must be deleted before this is called, or it
 	// will hang

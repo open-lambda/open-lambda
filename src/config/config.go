@@ -155,10 +155,10 @@ func check() error {
 			return fmt.Errorf("handler_cache_mb must be at least %d", min_mem)
 		}
 
-		if Conf.Import_cache_mb > 0 && min_mem > Conf.Import_cache_mb {
+		if Conf.Import_cache_mb != 0 && min_mem > Conf.Import_cache_mb {
 			return fmt.Errorf("import_cache_mb (if used) must be at least %d", min_mem)
 		}
-	} else {
+	} else if Conf.Sandbox == "docker" {
 		if Conf.Pkgs_dir == "" {
 			return fmt.Errorf("must specify packages directory")
 		}
@@ -166,6 +166,12 @@ func check() error {
 		if !path.IsAbs(Conf.Pkgs_dir) {
 			return fmt.Errorf("Pkgs_dir cannot be relative")
 		}
+
+		if Conf.Import_cache_mb != 0 {
+			return fmt.Errorf("import_cache_mb must be 0 for docker Sandbox")
+		}
+	} else {
+		return fmt.Errorf("Unknown Sandbox type '%s'", Conf.Sandbox)
 	}
 
 	return nil

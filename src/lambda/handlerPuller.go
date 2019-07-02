@@ -1,7 +1,6 @@
 package lambda
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -17,8 +16,6 @@ import (
 )
 
 var notFound404 = errors.New("file does not exist")
-
-const SEPARATOR = ":"
 
 // TODO: for web registries, support an HTTP-based access key
 // (https://en.wikipedia.org/wiki/Basic_access_authentication)
@@ -235,29 +232,4 @@ func (cp *HandlerPuller) getCache(name string) *CacheEntry {
 
 func (cp *HandlerPuller) putCache(name, version, path string) {
 	cp.dirCache.Store(name, &CacheEntry{version, path})
-}
-
-func parsePkgFile(path string) (imports, installs []string, err error) {
-	_, err = os.Stat(path)
-	if os.IsNotExist(err) {
-		return []string{}, []string{}, nil
-	}
-
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer file.Close()
-
-	scnr := bufio.NewScanner(file)
-	for scnr.Scan() {
-		pkgs := strings.Split(scnr.Text(), SEPARATOR)
-		if len(pkgs) != 2 {
-			return nil, nil, fmt.Errorf("malformed packages.txt, missing separator")
-		}
-		imports = append(imports, pkgs[0])
-		installs = append(installs, pkgs[0])
-	}
-
-	return imports, installs, nil
 }

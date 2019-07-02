@@ -2,7 +2,6 @@ package sandbox
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"sync/atomic"
 	"syscall"
@@ -60,7 +59,7 @@ func NewDockerPool(pidMode string, caps []string, cache bool) (*DockerPool, erro
 }
 
 // Create creates a docker sandbox from the handler and sandbox directory.
-func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchPrefix string, imports []string) (sb Sandbox, err error) {
+func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, imports []string) (sb Sandbox, err error) {
 	t := stats.T0("Create()")
 	defer t.T1()
 
@@ -71,13 +70,9 @@ func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchPref
 	}
 
 	id := fmt.Sprintf("%d", atomic.AddInt64(pool.idxPtr, 1))
-	hostDir := filepath.Join(scratchPrefix, id)
-	if err := os.MkdirAll(hostDir, 0777); err != nil {
-		return nil, err
-	}
 
 	volumes := []string{
-		fmt.Sprintf("%s:%s", hostDir, "/host"),
+		fmt.Sprintf("%s:%s", scratchDir, "/host"),
 		fmt.Sprintf("%s:%s:ro", pool.pkgsDir, "/packages"),
 	}
 
@@ -86,7 +81,7 @@ func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchPref
 	}
 
 	// pipe for synchronization before socket is ready
-	pipe := filepath.Join(hostDir, "server_pipe")
+	pipe := filepath.Join(scratchDir, "server_pipe")
 	if err := syscall.Mkfifo(pipe, 0777); err != nil {
 		return nil, err
 	}
@@ -110,7 +105,7 @@ func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchPref
 		return nil, err
 	}
 
-	c, err := NewDockerContainer(id, hostDir, pool.cache, container, pool.client)
+	c, err := NewDockerContainer(id, scratchDir, pool.cache, container, pool.client)
 	if err != nil {
 		return nil, err
 	}
