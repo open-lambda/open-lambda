@@ -17,10 +17,10 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"path/filepath"
-	"strconv"
-	"strings"
 	"time"
 
 	docker "github.com/fsouza/go-dockerclient"
@@ -140,7 +140,7 @@ func (c *DockerContainer) State() (hstate HandlerState, err error) {
 }
 
 // Channel returns a file socket channel for direct communication with the sandbox.
-func (c *DockerContainer) Channel() (*http.Transport, error) {
+func (c *DockerContainer) HttpProxy() (p *httputil.ReverseProxy, err error) {
 	sockPath := filepath.Join(c.hostDir, "ol.sock")
 	if len(sockPath) > 108 {
 		return nil, fmt.Errorf("socket path length cannot exceed 108 characters (try moving cluster closer to the root directory")
@@ -149,7 +149,16 @@ func (c *DockerContainer) Channel() (*http.Transport, error) {
 	dial := func(proto, addr string) (net.Conn, error) {
 		return net.Dial("unix", sockPath)
 	}
-	return &http.Transport{Dial: dial}, nil
+
+	tr := &http.Transport{Dial: dial}
+	u, err := url.Parse("http://sock-container")
+	if err != nil {
+		panic(err)
+	}
+
+	proxy := httputil.NewSingleHostReverseProxy(u)
+	proxy.Transport = tr
+	return proxy, nil
 }
 
 // Start starts the container.
@@ -296,22 +305,6 @@ func (c *DockerContainer) runServer() error {
 	}
 
 	return nil
-}
-
-func (c *DockerContainer) MemUsageKB() (int, error) {
-	usagePath := fmt.Sprintf("/sys/fs/cgroup/memory/docker/%s/memory.usage_in_bytes", c.container.ID)
-	buf, err := ioutil.ReadFile(usagePath)
-	if err != nil {
-		return 0, fmt.Errorf("get usage failed: %v", err)
-	}
-
-	str := strings.TrimSpace(string(buf[:]))
-	usage, err := strconv.Atoi(str)
-	if err != nil {
-		fmt.Errorf("atoi failed: %v", err)
-	}
-
-	return usage / 1024, nil
 }
 
 func (c *DockerContainer) RootDir() string {

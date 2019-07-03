@@ -55,9 +55,6 @@ type Config struct {
 	// pass through to sandbox envirenment variable
 	Sandbox_config interface{} `json:"sandbox_config"`
 
-	// list of packages to install on startup
-	Startup_pkgs []string `json:"startup_pkgs"`
-
 	// which OCI implementation to use for the docker sandbox (e.g., runc or runsc)
 	Docker_runtime string `json:"docker_runtime"`
 

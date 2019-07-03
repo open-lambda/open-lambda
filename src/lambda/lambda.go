@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/http"
 	"net/http/httputil"
-	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -29,10 +28,10 @@ var nextScratchId int64 = 1000
 // lambda subsystems (resource pullers and sandbox pools) in one place
 type LambdaMgr struct {
 	// subsystems (these are thread safe)
+	sbPool sandbox.SandboxPool
 	*HandlerPuller
 	*ModulePuller
-	sbPool      sandbox.SandboxPool
-	importCache *ImportCache
+	*ImportCache
 
 	// thread-safe map from a lambda's name to its LambdaFunc
 	mapMutex sync.Mutex
@@ -47,8 +46,7 @@ type LambdaFunc struct {
 	// lambda code
 	lastPull *time.Time
 	codeDir  string
-	imports  []string
-	installs []string
+	deps     *sandbox.Dependencies
 
 	// lambda execution
 	funcChan  chan *Invocation // server to func
@@ -68,9 +66,8 @@ type LambdaInstance struct {
 	lfunc *LambdaFunc
 
 	// snapshot of LambdaFunc, at the time the LambdaInstance is created
-	codeDir  string
-	imports  []string
-	installs []string
+	codeDir string
+	deps    *sandbox.Dependencies
 
 	// send chan to the kill chan to destroy the instance, then
 	// wait for msg on sent chan to block until it is done
@@ -90,42 +87,44 @@ type Invocation struct {
 	execMs int
 }
 
-func NewLambdaMgr() (mgr *LambdaMgr, err error) {
-	log.Printf("Create HandlerPuller")
-	hp, err := NewHandlerPuller(filepath.Join(config.Conf.Worker_dir, "lambda_code"), config.Conf.Registry)
+func NewLambdaMgr() (res *LambdaMgr, err error) {
+	mgr := &LambdaMgr{
+		lfuncMap: make(map[string]*LambdaFunc),
+	}
+	defer func() {
+		if err != nil {
+			mgr.Cleanup()
+		}
+	}()
+
+	log.Printf("Create SandboxPool")
+	mgr.sbPool, err = sandbox.SandboxPoolFromConfig("sock-handlers", config.Conf.Handler_cache_mb)
 	if err != nil {
 		return nil, err
 	}
 
 	log.Printf("Create ModulePuller")
-	mp, err := NewModulePuller()
+	mgr.ModulePuller, err = NewModulePuller(mgr.sbPool)
 	if err != nil {
 		return nil, err
 	}
 
-	log.Printf("Create SandboxPool")
-	sbp, err := sandbox.SandboxPoolFromConfig("sock-handlers", config.Conf.Handler_cache_mb)
+	log.Printf("Create HandlerPuller")
+	mgr.HandlerPuller, err = NewHandlerPuller(filepath.Join(config.Conf.Worker_dir, "lambda_code"), config.Conf.Registry)
 	if err != nil {
 		return nil, err
 	}
 
 	importCacheMb := config.Conf.Import_cache_mb
-	var importCache *ImportCache = nil
 	if importCacheMb > 0 {
 		log.Printf("Create ImportCache")
-		importCache, err = NewImportCache("sock-cache", importCacheMb)
+		mgr.ImportCache, err = NewImportCache("sock-cache", importCacheMb)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	return &LambdaMgr{
-		lfuncMap:      make(map[string]*LambdaFunc),
-		HandlerPuller: hp,
-		ModulePuller:  mp,
-		sbPool:        sbp,
-		importCache:   importCache,
-	}, nil
+	return mgr, nil
 }
 
 // Returns an existing instance (if there is one), or creates a new one
@@ -139,8 +138,6 @@ func (mgr *LambdaMgr) Get(name string) (f *LambdaFunc) {
 		f = &LambdaFunc{
 			lmgr:      mgr,
 			name:      name,
-			imports:   []string{},
-			installs:  []string{},
 			funcChan:  make(chan *Invocation, 32),
 			instChan:  make(chan *Invocation, 32),
 			doneChan:  make(chan *Invocation, 32),
@@ -160,6 +157,11 @@ func (mgr *LambdaMgr) Cleanup() {
 
 	// ModulePuller requires no cleanup
 
+	// cleanup ImportCache
+	if mgr.ImportCache != nil {
+		mgr.ImportCache.Cleanup()
+	}
+
 	// cleanup SandboxPool
 	mgr.mapMutex.Lock() // don't unlock, because this shouldn't be used anymore
 	for _, f := range mgr.lfuncMap {
@@ -167,11 +169,6 @@ func (mgr *LambdaMgr) Cleanup() {
 		f.Kill()
 	}
 	mgr.sbPool.Cleanup() // assumes all Sandboxes are gone
-
-	// cleanup ImportCache
-	if mgr.importCache != nil {
-		mgr.importCache.Cleanup()
-	}
 }
 
 func (f *LambdaFunc) Invoke(w http.ResponseWriter, r *http.Request) {
@@ -197,14 +194,34 @@ func (f *LambdaFunc) printf(format string, args ...interface{}) {
 	log.Printf("%s [FUNC %s]", strings.TrimRight(msg, "\n"), f.name)
 }
 
-func (f *LambdaFunc) parseReqs() (err error) {
-	f.installs = make([]string, 0)
-	f.imports = make([]string, 0)
+// the function code may contain comments such as the following:
+//
+// # ol-install: parso,jedi,idna,chardet,certifi,requests
+// # ol-import: parso,jedi,idna,chardet,certifi,requests,urllib3
+//
+// The first list should be installed with pip install.  The latter is
+// a hint about what may be imported (useful for import cache).
+//
+// We support exact pkg versions (e.g., pkg==2.0.0), but not < or >.
+// If different lambdas import different versions of the same package,
+// we will install them, for example, to /packages/pkg==1.0.0/pkg and
+// /packages/pkg==2.0.0/pkg.  We'll symlink the version the user wants
+// to /handler/packages/pkg.  For example, two different lambdas might
+// have links as follows:
+//
+// /handler/packages/pkg => /packages/pkg==1.0.0/pkg
+// /handler/packages/pkg => /packages/pkg==2.0.0/pkg
+//
+// Lambdas should have /handler/packages in their path, but not
+// /packages.
+func parseReqs(codeDir string) (deps *sandbox.Dependencies, err error) {
+	installs := make([]string, 0)
+	imports := make([]string, 0)
 
-	path := filepath.Join(f.codeDir, "lambda_func.py")
+	path := filepath.Join(codeDir, "lambda_func.py")
 	file, err := os.Open(path)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer file.Close()
 
@@ -213,13 +230,13 @@ func (f *LambdaFunc) parseReqs() (err error) {
 		line := strings.ReplaceAll(scnr.Text(), " ", "")
 		parts := strings.Split(line, ":")
 		if parts[0] == "#ol-install" {
-			f.installs = append(f.installs, strings.Split(parts[1], ",")...)
+			installs = append(installs, strings.Split(parts[1], ",")...)
 		} else if parts[0] == "#ol-import" {
-			f.imports = append(f.imports, strings.Split(parts[1], ",")...)
+			imports = append(imports, strings.Split(parts[1], ",")...)
 		}
 	}
 
-	return nil
+	return &sandbox.Dependencies{installs, imports}, nil
 }
 
 func (f *LambdaFunc) checkCodeCache() (err error) {
@@ -233,18 +250,33 @@ func (f *LambdaFunc) checkCodeCache() (err error) {
 			return err
 		}
 
-		if codeDir != f.codeDir {
-			f.codeDir = codeDir
+		if codeDir == f.codeDir {
+			return nil
+		}
 
-			if err := f.parseReqs(); err != nil {
-				return err
-			}
+		// we have new code; check if our deps have changed too...
+		f.codeDir = codeDir
 
-			f.printf("Installs: %v", f.installs)
-			f.printf("Imports: %v", f.imports)
+		f.deps, err = parseReqs(f.codeDir)
+		if err != nil {
+			return err
+		}
 
-			// TODO: shouldn't we do this inside the Sandbox?
-			if err := f.lmgr.ModulePuller.InstallAll(f.installs); err != nil {
+		if err := f.lmgr.ModulePuller.InstallMany(f.deps.Installs); err != nil {
+			return err
+		}
+
+		if err := os.Mkdir(filepath.Join(f.codeDir, "packages"), 0700); err != nil {
+			return err
+		}
+
+		for _, pkg := range f.deps.Installs {
+			parts := strings.Split(pkg, "==") // name==X.Y.Z
+			name := parts[0]
+
+			src := filepath.Join(f.codeDir, "packages", name)
+			dst := filepath.Join("/packages", pkg, name)
+			if err := os.Symlink(dst, src); err != nil {
 				return err
 			}
 		}
@@ -456,8 +488,7 @@ func (f *LambdaFunc) newInstance() {
 	linst := &LambdaInstance{
 		lfunc:    f,
 		codeDir:  f.codeDir,
-		imports:  f.imports,
-		installs: f.installs,
+		deps:     f.deps,
 		killChan: make(chan chan bool, 1),
 	}
 
@@ -520,13 +551,13 @@ func (linst *LambdaInstance) Task() {
 		// HTTP proxy over the channel
 		if sb == nil {
 			var parent sandbox.Sandbox
-			if f.lmgr.importCache != nil {
-				parent = f.lmgr.importCache.GetParent(linst.imports)
+			if f.lmgr.ImportCache != nil {
+				parent = f.lmgr.ImportCache.GetParent(linst.deps)
 			}
 
 			// TODO: delete scratchDir when Sandbox is destroyed
 			scratchDir := mkScratchDir("func-" + f.name)
-			sb, err = f.lmgr.sbPool.Create(parent, true, linst.codeDir, scratchDir, linst.imports)
+			sb, err = f.lmgr.sbPool.Create(parent, true, linst.codeDir, scratchDir, linst.deps)
 			if err != nil {
 				req.w.WriteHeader(http.StatusInternalServerError)
 				req.w.Write([]byte("could not create Sandbox: " + err.Error() + "\n"))
@@ -534,8 +565,7 @@ func (linst *LambdaInstance) Task() {
 				continue // wait for another request before retrying
 			}
 
-			var tr *http.Transport
-			tr, err = sb.Channel()
+			proxy, err = sb.HttpProxy()
 			if err != nil {
 				req.w.WriteHeader(http.StatusInternalServerError)
 				req.w.Write([]byte("could not connect to Sandbox: " + err.Error() + "\n"))
@@ -544,13 +574,6 @@ func (linst *LambdaInstance) Task() {
 				sb = nil
 				continue // wait for another request before retrying
 			}
-
-			u, err := url.Parse("http://container")
-			if err != nil {
-				panic(err)
-			}
-			proxy = httputil.NewSingleHostReverseProxy(u)
-			proxy.Transport = tr
 		}
 
 		// below here, we're guaranteed (1) sb != nil, (2) proxy != nil, (3) sb is unpaused

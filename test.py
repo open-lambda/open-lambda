@@ -140,7 +140,11 @@ def TestConf(**keywords):
     for k in keywords:
         if not k in new:
             raise Exception("unknown config param: %s" % k)
-        new[k] = keywords[k]
+        if type(keywords[k]) == dict:
+            for k2 in keywords[k]:
+                new[k][k2] = keywords[k][k2]
+        else:
+            new[k] = keywords[k]
 
     # setup
     print("PUSH conf:", keywords)
@@ -169,10 +173,14 @@ def run(cmd):
 
 @test
 def smoke_tests():
+    # we want to make sure we see the expected number of pip installs,
+    # so we don't want installs lying around from before
+    rc = os.system('rm -rf test-dir/lambda/packages/*')
+    assert(rc == 0)
+
     msg = 'hello world'
     r = post("run/echo", msg)
-    if r.status_code != 200:
-        raise Exception("STATUS %d: %s" % (r.status_code, r.text))
+    r.raise_for_status()
     if r.json() != msg:
         raise Exception("found %s but expected %s" % (r.json(), msg))
 
@@ -183,7 +191,41 @@ def smoke_tests():
         r = post("run/"+name, {})
         if r.status_code != 200:
             raise Exception("STATUS %d: %s" % (r.status_code, r.text))
-        assert r.json() == "imported"    
+        assert r.json() == "imported"
+
+        r = post("stats", None)
+        r.raise_for_status()
+        installs = r.json()['pip-install:ms.cnt']
+        if i < 2:
+            assert(installs == 6)
+        else:
+            assert(installs == 7)
+
+
+@test
+def numpy_test():
+    # try adding the nums in a few different matrixes.  Also make sure
+    # we can have two different numpy versions co-existing.
+    r = post("run/numpy15", [1, 2])
+    if r.status_code != 200:
+        raise Exception("STATUS %d: %s" % (r.status_code, r.text))
+    j = r.json()
+    assert j['result'] == 3
+    assert j['version'].startswith('1.15')
+
+    r = post("run/numpy16", [[1, 2], [3, 4]])
+    if r.status_code != 200:
+        raise Exception("STATUS %d: %s" % (r.status_code, r.text))
+    j = r.json()
+    assert j['result'] == 10
+    assert j['version'].startswith('1.16')
+
+    r = post("run/numpy15", [[[1, 2], [3, 4]], [[1, 2], [3, 4]]])
+    if r.status_code != 200:
+        raise Exception("STATUS %d: %s" % (r.status_code, r.text))
+    j = r.json()
+    assert j['result'] == 20
+    assert j['version'].startswith('1.15')
 
 
 def stress_one_lambda_task(args):
@@ -335,10 +377,9 @@ def update_code():
 
 
 def tests():
-    startup_pkgs = ["parso", "jedi", "urllib3", "idna", "chardet", "certifi", "requests", "simplejson"]
     test_reg = os.path.abspath("test-registry")
 
-    with TestConf(registry=test_reg, startup_pkgs=startup_pkgs):
+    with TestConf(registry=test_reg):
         ping_test()
 
         # do smoke tests under various configs
@@ -358,6 +399,10 @@ def tests():
         # test resource limits
         fork_bomb()
         max_mem_alloc()
+
+        # numpy pip install needs a larger mem cap
+        with TestConf(handler_cache_mb=500, import_cache_mb=0, sock_cgroups={'max_mem_mb':250}):
+            numpy_test()
 
     # test SOCK directly (without lambdas)
     with TestConf(server_mode="sock"):

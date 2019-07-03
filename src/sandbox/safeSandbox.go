@@ -9,22 +9,12 @@ package sandbox
 import (
 	"fmt"
 	"log"
-	"net/http"
+	"net/http/httputil"
 	"strings"
 	"sync"
 
 	"github.com/open-lambda/open-lambda/ol/stats"
 )
-
-type SockError string
-
-const (
-	DEAD_SANDBOX = SockError("Sandbox has died")
-)
-
-func (e SockError) Error() string {
-	return string(e)
-}
 
 type safeSandbox struct {
 	Sandbox
@@ -125,7 +115,7 @@ func (sb *safeSandbox) Unpause() (err error) {
 	return sb.Sandbox.Unpause()
 }
 
-func (sb *safeSandbox) Channel() (tr *http.Transport, err error) {
+func (sb *safeSandbox) HttpProxy() (p *httputil.ReverseProxy, err error) {
 	sb.printf("Channel()")
 	t := stats.T0("Channel()")
 	defer t.T1()
@@ -138,21 +128,7 @@ func (sb *safeSandbox) Channel() (tr *http.Transport, err error) {
 		sb.destroyOnErr(err)
 	}()
 
-	return sb.Sandbox.Channel()
-}
-
-func (sb *safeSandbox) MemUsageKB() (kb int, err error) {
-	sb.printf("MemUsageKB()")
-	sb.Mutex.Lock()
-	defer sb.Mutex.Unlock()
-	if sb.dead {
-		return 0, DEAD_SANDBOX
-	}
-	defer func() {
-		sb.destroyOnErr(err)
-	}()
-
-	return sb.Sandbox.MemUsageKB()
+	return sb.Sandbox.HttpProxy()
 }
 
 func (sb *safeSandbox) fork(dst Sandbox) (err error) {

@@ -5,6 +5,8 @@ import tornado.httpserver
 import tornado.netutil
 import ol
 
+sys.path.extend(['/handler', '/handler/packages'])
+
 file_sock_path = "/host/ol.sock"
 file_sock = None
 

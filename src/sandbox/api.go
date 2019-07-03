@@ -1,7 +1,7 @@
 package sandbox
 
 import (
-	"net/http"
+	"net/http/httputil"
 )
 
 type SandboxPool interface {
@@ -11,8 +11,8 @@ type SandboxPool interface {
 	// isLeaf: true iff this is not being created as a sandbox we can fork later
 	// codeDir: directory where lambda code exists
 	// scratchDir: directory where handler code can write (caller is responsible for creating and deleting)
-	// imports: Python modules that will be used (this is a hint)
-	Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, imports []string) (sb Sandbox, err error)
+	// deps: packages and modules needed by the Sandbox
+	Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, deps *Dependencies) (sb Sandbox, err error)
 
 	// All containers must be deleted before this is called, or it
 	// will hang
@@ -33,27 +33,42 @@ type Sandbox interface {
 	// Return ID of the container.
 	ID() string
 
-	// Frees all resources associated with the container.
-	// Any errors are logged, but not propagated.
+	// Frees Sandbox resources (e.g., cgroups, processes), but
+	// leaves Sandbox structure intact.
+	//
+	// There is no harm in calling any function on the Sandbox
+	// after Destroy.  Functions like ID() will still work, and
+	// those that are able to return errors will be no-ops,
+	// returning DEAD_SANDBOX.
 	Destroy()
 
-	// Pauses the container.
+	// Make processes in the container non-schedulable
 	Pause() error
 
-	// Unpauses the container.
+	// Make processes in the container schedulable
 	Unpause() error
 
 	// Communication channel to forward requests.
-	Channel() (*http.Transport, error)
-
-	// How much memory does the cgroup report for this container?
-	MemUsageKB() (int, error)
+	HttpProxy() (*httputil.ReverseProxy, error)
 
 	// Represent state as a multi-line string
 	DebugString() string
 
-	// Optional interface for forking across sandboxes.  Sandbox may
+	// Optional interface for forking across sandboxes.
 	fork(dst Sandbox) error
+}
+
+type Dependencies struct {
+	Installs []string
+	Imports  []string
+}
+
+type SockError string
+
+const DEAD_SANDBOX = SockError("Sandbox has died")
+
+func (e SockError) Error() string {
+	return string(e)
 }
 
 // reference to function that will be called by sandbox pool upon key

@@ -16,20 +16,6 @@ type LambdaServer struct {
 	lambda_mgr *lambda.LambdaMgr
 }
 
-// NewLambdaServer creates a server based on the passed config."
-func NewLambdaServer() (*LambdaServer, error) {
-	lambda_mgr, err := lambda.NewLambdaMgr()
-	if err != nil {
-		return nil, err
-	}
-
-	server := &LambdaServer{
-		lambda_mgr: lambda_mgr,
-	}
-
-	return server, nil
-}
-
 // getUrlComponents parses request URL into its "/" delimated components
 func getUrlComponents(r *http.Request) []string {
 	path := r.URL.Path
@@ -82,12 +68,17 @@ func (s *LambdaServer) cleanup() {
 	s.lambda_mgr.Cleanup()
 }
 
-func LambdaMain() *LambdaServer {
+// NewLambdaServer creates a server based on the passed config."
+func NewLambdaServer() (*LambdaServer, error) {
 	log.Printf("Start Lambda Server")
-	server, err := NewLambdaServer()
+
+	lambda_mgr, err := lambda.NewLambdaMgr()
 	if err != nil {
-		log.Printf("Could not create server")
-		log.Fatal(err)
+		return nil, err
+	}
+
+	server := &LambdaServer{
+		lambda_mgr: lambda_mgr,
 	}
 
 	log.Printf("Setups Handlers")
@@ -97,5 +88,5 @@ func LambdaMain() *LambdaServer {
 	log.Printf("Execute handler by POSTing to localhost%s%s%s\n", port, RUN_PATH, "<lambda>")
 	log.Printf("Get status by sending request to localhost%s%s\n", port, STATUS_PATH)
 
-	return server
+	return server, nil
 }

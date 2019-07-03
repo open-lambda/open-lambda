@@ -79,6 +79,7 @@ func Main() (err error) {
 
 	defer func() {
 		if err != nil {
+			log.Printf("remove PID file %s", pidPath)
 			os.Remove(pidPath)
 		}
 	}()
@@ -90,11 +91,15 @@ func Main() (err error) {
 
 	switch config.Conf.Server_mode {
 	case "lambda":
-		s = LambdaMain()
+		s, err = NewLambdaServer()
 	case "sock":
-		s = SockMain()
+		s, err = NewSOCKServer()
 	default:
 		return fmt.Errorf("unknown Server_mode %s", config.Conf.Server_mode)
+	}
+
+	if err != nil {
+		return err
 	}
 
 	// clean up if signal hits us
