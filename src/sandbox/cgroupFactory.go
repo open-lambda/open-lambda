@@ -186,6 +186,41 @@ func (cg *Cgroup) setFreezeState(state string) error {
 	}
 }
 
+// get mem usage in bytes
+func (cg *Cgroup) getMemUsageB() (int64, error) {
+	usagePath := cg.Path("memory", "memory.usage_in_bytes")
+	usageRaw, err := ioutil.ReadFile(usagePath)
+	if err != nil {
+		return -1, err
+	}
+	usage, err := strconv.ParseInt(strings.TrimSpace(string(usageRaw)), 10, 64)
+	// if the mem usage cannot be read, return error
+	if err != nil {
+		return -1, err
+	}
+	return usage, nil
+}
+
+// get mem limit in bytes
+func (cg *Cgroup) getMemLimitB() (int64, error) {
+	limitPath := cg.Path("memory", "memory.limit_in_bytes")
+	limitRaw, err := ioutil.ReadFile(limitPath)
+	if err != nil {
+		return -1, err
+	}
+	limit, err := strconv.ParseInt(strings.TrimSpace(string(limitRaw)), 10, 64)
+	if err != nil {
+		return -1, err
+	}
+	return limit, nil
+}
+
+// set mem limit in bytes
+func (cg *Cgroup) setMemLimitB(newLimit int64) error {
+	limitPath := cg.Path("memory", "memory.limit_in_bytes")
+	return ioutil.WriteFile(limitPath, []byte(fmt.Sprintf("%d", newLimit)), os.ModeAppend)
+}
+
 func (cg *Cgroup) Pause() error {
 	return cg.setFreezeState("FROZEN")
 }
