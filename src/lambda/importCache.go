@@ -15,8 +15,8 @@ type ImportCache struct {
 }
 
 type ParentReq struct {
-	imports []string
-	parent  chan sandbox.Sandbox
+	deps   *sandbox.Dependencies
+	parent chan sandbox.Sandbox
 }
 
 func NewImportCache(name string, sizeMb int) (*ImportCache, error) {
@@ -33,15 +33,21 @@ func NewImportCache(name string, sizeMb int) (*ImportCache, error) {
 		killChan: make(chan chan bool),
 	}
 
-	go cache.Run(pool)
+	go cache.run(pool)
 
 	return cache, nil
 }
 
-func (cache *ImportCache) GetParent(imports []string) sandbox.Sandbox {
+func (cache *ImportCache) GetParent(deps *sandbox.Dependencies) sandbox.Sandbox {
 	parent := make(chan sandbox.Sandbox)
-	cache.requests <- &ParentReq{imports, parent}
+	cache.requests <- &ParentReq{deps, parent}
 	return <-parent
+}
+
+func (cache *ImportCache) Event(evType sandbox.SandboxEventType, sb sandbox.Sandbox) {
+	if evType == sandbox.EvDestroy {
+		cache.events <- sandbox.SandboxEvent{evType, sb}
+	}
 }
 
 func (cache *ImportCache) Cleanup() {
@@ -51,24 +57,18 @@ func (cache *ImportCache) Cleanup() {
 	cache.pool.Cleanup()
 }
 
-func (cache *ImportCache) Event(evType sandbox.SandboxEventType, sb sandbox.Sandbox) {
-	if evType == sandbox.EvDestroy {
-		cache.events <- sandbox.SandboxEvent{evType, sb}
-	}
-}
-
-func (cache *ImportCache) create(parent sandbox.Sandbox, imports []string) sandbox.Sandbox {
-	sb, err := cache.pool.Create(parent, false, "", mkScratchDir("import-cache"), imports)
+func (cache *ImportCache) create(parent sandbox.Sandbox, deps *sandbox.Dependencies) sandbox.Sandbox {
+	sb, err := cache.pool.Create(parent, false, "", mkScratchDir("import-cache"), deps)
 	if err != nil {
-		log.Printf("import cache failed to create from '%v' with imports '%s'", parent, imports)
+		log.Printf("import cache failed to create from '%v' with imports '%s'", parent, deps.Imports)
 		return nil
 	}
 	return sb
 }
 
-func (cache *ImportCache) Run(pool sandbox.SandboxPool) {
+func (cache *ImportCache) run(pool sandbox.SandboxPool) {
 	forkServers := make(map[string]sandbox.Sandbox)
-	root := cache.create(nil, []string{})
+	root := cache.create(nil, nil)
 	if root == nil {
 		panic("could not even create a root Zygote")
 	}

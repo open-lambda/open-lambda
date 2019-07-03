@@ -70,8 +70,6 @@ func NewModulePuller(sbPool sandbox.SandboxPool) (*ModulePuller, error) {
 // do the pip install within a new Sandbox, to a directory mapped from
 // the host.  We want the package on the host to share with all, but
 // want to run the install in the Sandbox because we don't trust it.
-//
-// TODO: support multiple module versions
 func (mp *ModulePuller) InstallSandbox(pkg string) (err error) {
 	// the pip-install lambda installs to /host, which is the the
 	// same as scratchDir, which is the same as a sub-directory
@@ -92,7 +90,7 @@ func (mp *ModulePuller) InstallSandbox(pkg string) (err error) {
 	t := stats.T0("pip-install")
 	defer t.T1()
 
-	sb, err := mp.sbPool.Create(nil, true, mp.pipLambda, scratchDir, []string{})
+	sb, err := mp.sbPool.Create(nil, true, mp.pipLambda, scratchDir, nil)
 	if err != nil {
 		return err
 	}

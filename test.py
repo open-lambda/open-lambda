@@ -204,10 +204,28 @@ def smoke_tests():
 
 @test
 def numpy_test():
-    r = post("run/numpy", [[1, 2], [3, 4]])
+    # try adding the nums in a few different matrixes.  Also make sure
+    # we can have two different numpy versions co-existing.
+    r = post("run/numpy15", [1, 2])
     if r.status_code != 200:
         raise Exception("STATUS %d: %s" % (r.status_code, r.text))
-    assert(r.json() == 10)
+    j = r.json()
+    assert j['result'] == 3
+    assert j['version'].startswith('1.15')
+
+    r = post("run/numpy16", [[1, 2], [3, 4]])
+    if r.status_code != 200:
+        raise Exception("STATUS %d: %s" % (r.status_code, r.text))
+    j = r.json()
+    assert j['result'] == 10
+    assert j['version'].startswith('1.16')
+
+    r = post("run/numpy15", [[[1, 2], [3, 4]], [[1, 2], [3, 4]]])
+    if r.status_code != 200:
+        raise Exception("STATUS %d: %s" % (r.status_code, r.text))
+    j = r.json()
+    assert j['result'] == 20
+    assert j['version'].startswith('1.15')
 
 
 def stress_one_lambda_task(args):

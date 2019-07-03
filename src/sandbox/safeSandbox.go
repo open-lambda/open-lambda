@@ -16,16 +16,6 @@ import (
 	"github.com/open-lambda/open-lambda/ol/stats"
 )
 
-type SockError string
-
-const (
-	DEAD_SANDBOX = SockError("Sandbox has died")
-)
-
-func (e SockError) Error() string {
-	return string(e)
-}
-
 type safeSandbox struct {
 	Sandbox
 	sync.Mutex
@@ -139,20 +129,6 @@ func (sb *safeSandbox) HttpProxy() (p *httputil.ReverseProxy, err error) {
 	}()
 
 	return sb.Sandbox.HttpProxy()
-}
-
-func (sb *safeSandbox) MemUsageKB() (kb int, err error) {
-	sb.printf("MemUsageKB()")
-	sb.Mutex.Lock()
-	defer sb.Mutex.Unlock()
-	if sb.dead {
-		return 0, DEAD_SANDBOX
-	}
-	defer func() {
-		sb.destroyOnErr(err)
-	}()
-
-	return sb.Sandbox.MemUsageKB()
 }
 
 func (sb *safeSandbox) fork(dst Sandbox) (err error) {

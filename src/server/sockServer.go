@@ -52,8 +52,6 @@ func (s *SOCKServer) Create(w http.ResponseWriter, rsrc []string, args map[strin
 	// create args
 	codeDir := args["code"].(string)
 
-	imports := []string{}
-
 	var parent sandbox.Sandbox = nil
 	if p, ok := args["parent"]; ok {
 		parent = s.GetSandbox(p.(string))
@@ -68,7 +66,7 @@ func (s *SOCKServer) Create(w http.ResponseWriter, rsrc []string, args map[strin
 	if err := os.MkdirAll(scratchDir, 0777); err != nil {
 		panic(err)
 	}
-	c, err := pool.Create(parent, leaf, codeDir, scratchDir, imports)
+	c, err := pool.Create(parent, leaf, codeDir, scratchDir, nil)
 	if err != nil {
 		return err
 	}

@@ -21,8 +21,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strconv"
-	"strings"
 	"time"
 
 	docker "github.com/fsouza/go-dockerclient"
@@ -307,22 +305,6 @@ func (c *DockerContainer) runServer() error {
 	}
 
 	return nil
-}
-
-func (c *DockerContainer) MemUsageKB() (int, error) {
-	usagePath := fmt.Sprintf("/sys/fs/cgroup/memory/docker/%s/memory.usage_in_bytes", c.container.ID)
-	buf, err := ioutil.ReadFile(usagePath)
-	if err != nil {
-		return 0, fmt.Errorf("get usage failed: %v", err)
-	}
-
-	str := strings.TrimSpace(string(buf[:]))
-	usage, err := strconv.Atoi(str)
-	if err != nil {
-		fmt.Errorf("atoi failed: %v", err)
-	}
-
-	return usage / 1024, nil
 }
 
 func (c *DockerContainer) RootDir() string {

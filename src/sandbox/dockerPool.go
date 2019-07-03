@@ -59,7 +59,7 @@ func NewDockerPool(pidMode string, caps []string, cache bool) (*DockerPool, erro
 }
 
 // Create creates a docker sandbox from the handler and sandbox directory.
-func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, imports []string) (sb Sandbox, err error) {
+func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, deps *Dependencies) (sb Sandbox, err error) {
 	t := stats.T0("Create()")
 	defer t.T1()
 

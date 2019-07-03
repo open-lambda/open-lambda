@@ -68,8 +68,8 @@ func NewSOCKPool(name string, mem *MemPool) (cf *SOCKPool, err error) {
 	return pool, nil
 }
 
-func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, imports []string) (sb Sandbox, err error) {
-	log.Printf("<%v>.Create(%v, %v, %v, %v)...", pool.name, codeDir, scratchDir, imports, parent)
+func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, deps *Dependencies) (sb Sandbox, err error) {
+	log.Printf("<%v>.Create(%v, %v, %v, %v, %v)...", pool.name, parent, isLeaf, codeDir, scratchDir, deps)
 	defer func() {
 		log.Printf("...returns %v, %v", sb, err)
 	}()
@@ -119,12 +119,10 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 	var pyCode []string
 	if isLeaf {
 		pyCode = []string{
-			"sys.path.extend(['/packages', '/handler'])",
 			"web_server()",
 		}
 	} else {
 		pyCode = []string{
-			"sys.path.extend(['/packages'])",
 			"fork_server()",
 		}
 	}
