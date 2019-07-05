@@ -391,13 +391,11 @@ def tests():
         ping_test()
 
         # do smoke tests under various configs
-        with TestConf(handler_cache_mb=250, import_cache_mb=0):
+        with TestConf(handler_cache_mb=500, import_cache_mb=0):
             install_tests()
         with TestConf(handler_cache_mb=250, import_cache_mb=250):
             install_tests()
-        with TestConf(sandbox="docker", handler_cache_mb=100, import_cache_mb=0):
-            install_tests()
-        with TestConf(sandbox="docker", handler_cache_mb=250, import_cache_mb=0):
+        with TestConf(sandbox="docker", handler_cache_mb=500, import_cache_mb=0):
             install_tests()
 
         # test resource limits
@@ -405,7 +403,7 @@ def tests():
         max_mem_alloc()
 
         # numpy pip install needs a larger mem cap
-        with TestConf(handler_cache_mb=500, import_cache_mb=0):
+        with TestConf(handler_cache_mb=250, import_cache_mb=250):
             numpy_test()
 
     # test SOCK directly (without lambdas)
