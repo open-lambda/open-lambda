@@ -72,15 +72,6 @@ func (pool *CgroupPool) NewCgroup() *Cgroup {
 		}
 	}
 
-	// set limits based on config
-	path := cg.Path("pids", "pids.max")
-	err := ioutil.WriteFile(path, []byte(fmt.Sprintf("%d", config.Conf.Sock_cgroups.Max_procs)), os.ModeAppend)
-	if err != nil {
-		panic(fmt.Errorf("Error setting pids.max: %s", err))
-	}
-
-	cg.setMemLimitMB(config.Conf.Sock_cgroups.Max_mem_mb)
-
 	cg.printf("created")
 	return cg
 }
@@ -135,14 +126,22 @@ Loop:
 	for {
 		var cg *Cgroup
 
-		// get a new or recycled cgroup
+		// get a new or recycled cgroup.  Settings may be initialized
+		// in one of three places, the first two of which are here:
+		//
+		// 1. upon fresh creation (things that never change, such as max procs)
+		// 2. after it's been recycled (we need to clean things up that change during use)
+		// 3. some things (e.g., memory limits) need to be done in either case, and may
+		//    depend on the needs of the Sandbox; this happens in pool.GetCg (which is
+		//    fed by this function)
 		select {
 		case cg = <-pool.recycled:
 			// restore cgroup to clean state
-			cg.setMemLimitMB(config.Conf.Sock_cgroups.Max_mem_mb)
+			cg.WriteInt("memory", "memory.failcnt", 0)
 			cg.Unpause()
 		default:
 			cg = pool.NewCgroup()
+			cg.WriteInt("pids", "pids.max", int64(config.Conf.Limits.Procs))
 		}
 
 		// add cgroup to ready queue
@@ -188,8 +187,10 @@ func (pool *CgroupPool) Destroy() {
 	}
 }
 
-func (pool *CgroupPool) GetCg() *Cgroup {
-	return <-pool.ready
+func (pool *CgroupPool) GetCg(memLimitMB int) *Cgroup {
+	cg := <-pool.ready
+	cg.setMemLimitMB(memLimitMB)
+	return cg
 }
 
 func (pool *CgroupPool) Path(resource string) string {
@@ -201,6 +202,36 @@ func (cg *Cgroup) Path(resource, filename string) string {
 		return fmt.Sprintf("%s/%s", cg.pool.Path(resource), cg.Name)
 	}
 	return fmt.Sprintf("%s/%s/%s", cg.pool.Path(resource), cg.Name, filename)
+}
+
+func (cg *Cgroup) TryWriteInt(resource, filename string, val int64) error {
+	return ioutil.WriteFile(cg.Path(resource, filename), []byte(fmt.Sprintf("%d", val)), os.ModeAppend)
+}
+
+func (cg *Cgroup) WriteInt(resource, filename string, val int64) {
+	if err := cg.TryWriteInt(resource, filename, val); err != nil {
+		panic(err)
+	}
+}
+
+func (cg *Cgroup) TryReadInt(resource, filename string) (int64, error) {
+	raw, err := ioutil.ReadFile(cg.Path(resource, filename))
+	if err != nil {
+		return 0, err
+	}
+	val, err := strconv.ParseInt(strings.TrimSpace(string(raw)), 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	return val, nil
+}
+
+func (cg *Cgroup) ReadInt(resource, filename string) int64 {
+	if val, err := cg.TryReadInt(resource, filename); err != nil {
+		panic(err)
+	} else {
+		return val
+	}
 }
 
 func (cg *Cgroup) AddPid(pid string) error {
@@ -245,20 +276,10 @@ func (cg *Cgroup) setFreezeState(state string) error {
 
 // get mem usage in bytes
 func (cg *Cgroup) getMemUsageMB() int {
-	usagePath := cg.Path("memory", "memory.usage_in_bytes")
-	usageRaw, err := ioutil.ReadFile(usagePath)
-	if err != nil {
-		panic(err)
-	}
-	usage, err := strconv.ParseInt(strings.TrimSpace(string(usageRaw)), 10, 64)
-	// if the mem usage cannot be read, return error
-	if err != nil {
-		panic(err)
-	}
-
-	mb := int64(1024 * 1024)
+	usage := cg.ReadInt("memory", "memory.usage_in_bytes")
 
 	// round up to nearest MB
+	mb := int64(1024 * 1024)
 	return int((usage + mb - 1) / mb)
 }
 

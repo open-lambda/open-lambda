@@ -18,6 +18,7 @@ import (
 
 type safeSandbox struct {
 	Sandbox
+
 	sync.Mutex
 	dead          bool
 	eventHandlers []SandboxEventFunc
@@ -48,8 +49,14 @@ func (sb *safeSandbox) event(evType SandboxEventType) {
 }
 
 // assumes lock is already held
-func (sb *safeSandbox) destroyOnErr(origErr error) {
+func (sb *safeSandbox) destroyOnErr(origErr error, allowed []error) {
 	if origErr != nil {
+		for _, err := range allowed {
+			if origErr == err {
+				return
+			}
+		}
+
 		sb.printf("Destroy() due to %v", origErr)
 		sb.Sandbox.Destroy()
 		sb.dead = true
@@ -85,7 +92,7 @@ func (sb *safeSandbox) Pause() (err error) {
 		return DEAD_SANDBOX
 	}
 	defer func() {
-		sb.destroyOnErr(err)
+		sb.destroyOnErr(err, []error{})
 		if err == nil {
 			// let anybody interested we paused
 			sb.event(EvPause)
@@ -105,7 +112,7 @@ func (sb *safeSandbox) Unpause() (err error) {
 		return DEAD_SANDBOX
 	}
 	defer func() {
-		sb.destroyOnErr(err)
+		sb.destroyOnErr(err, []error{})
 		if err == nil {
 			// let anybody interested we paused
 			sb.event(EvUnpause)
@@ -125,7 +132,7 @@ func (sb *safeSandbox) HttpProxy() (p *httputil.ReverseProxy, err error) {
 		return nil, DEAD_SANDBOX
 	}
 	defer func() {
-		sb.destroyOnErr(err)
+		sb.destroyOnErr(err, []error{})
 	}()
 
 	return sb.Sandbox.HttpProxy()
@@ -141,10 +148,25 @@ func (sb *safeSandbox) fork(dst Sandbox) (err error) {
 		return DEAD_SANDBOX
 	}
 	defer func() {
-		sb.destroyOnErr(err)
+		sb.destroyOnErr(err, []error{})
 	}()
 
 	return sb.Sandbox.fork(dst)
+}
+
+func (sb *safeSandbox) Status(key SandboxStatus) (stat string, err error) {
+	sb.printf("Status(%d)", key)
+	t := stats.T0("Status()")
+	defer t.T1()
+	sb.Mutex.Lock()
+	defer sb.Mutex.Unlock()
+	if sb.dead {
+		return "", DEAD_SANDBOX
+	}
+	defer func() {
+		sb.destroyOnErr(err, []error{STATUS_UNSUPPORTED})
+	}()
+	return sb.Sandbox.Status(key)
 }
 
 func (sb *safeSandbox) DebugString() string {

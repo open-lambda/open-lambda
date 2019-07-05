@@ -15,7 +15,7 @@ type ImportCache struct {
 }
 
 type ParentReq struct {
-	deps   *sandbox.Dependencies
+	meta   *sandbox.SandboxMeta
 	parent chan sandbox.Sandbox
 }
 
@@ -39,9 +39,9 @@ func NewImportCache(name string, sizeMb int) (*ImportCache, error) {
 	return cache, nil
 }
 
-func (cache *ImportCache) GetParent(deps *sandbox.Dependencies) sandbox.Sandbox {
+func (cache *ImportCache) GetParent(meta *sandbox.SandboxMeta) sandbox.Sandbox {
 	parent := make(chan sandbox.Sandbox)
-	cache.requests <- &ParentReq{deps, parent}
+	cache.requests <- &ParentReq{meta, parent}
 	return <-parent
 }
 
@@ -58,10 +58,10 @@ func (cache *ImportCache) Cleanup() {
 	cache.pool.Cleanup()
 }
 
-func (cache *ImportCache) create(parent sandbox.Sandbox, deps *sandbox.Dependencies) sandbox.Sandbox {
-	sb, err := cache.pool.Create(parent, false, "", mkScratchDir("import-cache"), deps)
+func (cache *ImportCache) create(parent sandbox.Sandbox, meta *sandbox.SandboxMeta) sandbox.Sandbox {
+	sb, err := cache.pool.Create(parent, false, "", mkScratchDir("import-cache"), meta)
 	if err != nil {
-		log.Printf("import cache failed to create from '%v' with imports '%s'", parent, deps.Imports)
+		log.Printf("import cache failed to create from '%v' with imports '%s'", parent, meta.Imports)
 		return nil
 	}
 	return sb

@@ -175,17 +175,22 @@ def run(cmd):
 
 
 @test
-def smoke_tests():
+def install_tests():
     # we want to make sure we see the expected number of pip installs,
     # so we don't want installs lying around from before
     rc = os.system('rm -rf test-dir/lambda/packages/*')
     assert(rc == 0)
 
+    # try something that doesn't install anything
     msg = 'hello world'
     r = post("run/echo", msg)
     r.raise_for_status()
     if r.json() != msg:
         raise Exception("found %s but expected %s" % (r.json(), msg))
+    r = post("stats", None)
+    r.raise_for_status()
+    installs = r.json().get('pip-install:ms.cnt', 0)
+    assert(installs == 0)
 
     for i in range(3):
         name = "install"
@@ -281,7 +286,7 @@ def call_each_once(lambda_count, alloc_mb=0):
 
 @test
 def fork_bomb():
-    limit = curr_conf["sock_cgroups"]["max_procs"]
+    limit = curr_conf["limits"]["procs"]
     r = post("run/fbomb", {"times": limit*2})
     r.raise_for_status()
     # the function returns the number of children that we were able to fork
@@ -291,7 +296,7 @@ def fork_bomb():
 
 @test
 def max_mem_alloc():
-    limit = curr_conf["sock_cgroups"]["max_mem_mb"]
+    limit = curr_conf["limits"]["mem_mb"]
     r = post("run/max_mem_alloc", None)
     r.raise_for_status()
     # the function returns the MB that was able to be allocated
@@ -386,25 +391,21 @@ def tests():
         ping_test()
 
         # do smoke tests under various configs
-        with TestConf(handler_cache_mb=100, import_cache_mb=0):
-            smoke_tests()
         with TestConf(handler_cache_mb=250, import_cache_mb=0):
-            smoke_tests()
-        with TestConf(handler_cache_mb=100, import_cache_mb=250):
-            smoke_tests()
+            install_tests()
         with TestConf(handler_cache_mb=250, import_cache_mb=250):
-            smoke_tests()
+            install_tests()
         with TestConf(sandbox="docker", handler_cache_mb=100, import_cache_mb=0):
-            smoke_tests()
+            install_tests()
         with TestConf(sandbox="docker", handler_cache_mb=250, import_cache_mb=0):
-            smoke_tests()
+            install_tests()
 
         # test resource limits
         fork_bomb()
         max_mem_alloc()
 
         # numpy pip install needs a larger mem cap
-        with TestConf(handler_cache_mb=500, import_cache_mb=0, sock_cgroups={'max_mem_mb':250}):
+        with TestConf(handler_cache_mb=500, import_cache_mb=0):
             numpy_test()
 
     # test SOCK directly (without lambdas)
@@ -424,9 +425,7 @@ def tests():
     with TestConf(sandbox="sock", handler_cache_mb=250, import_cache_mb=250, registry=test_reg):
         stress_one_lambda(procs=1, seconds=15)
         stress_one_lambda(procs=2, seconds=15)
-        # TODO: reduce memory once we make handler layer more robust
-        with TestConf(handler_cache_mb=500, import_cache_mb=100):
-            stress_one_lambda(procs=8, seconds=15)
+        stress_one_lambda(procs=8, seconds=15)
 
     with TestConf(sandbox="sock", handler_cache_mb=250, import_cache_mb=250):
         call_each_once(lambda_count=100, alloc_mb=1)

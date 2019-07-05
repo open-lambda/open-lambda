@@ -62,6 +62,11 @@ func (pool *MemPool) memTask() {
 			return
 		}
 
+		if pool.totalMB+req.mb < 0 {
+			panic(fmt.Sprintf("received request for %d MB to pool of total size %d MB",
+				-req.mb, pool.totalMB))
+		}
+
 		if req.mb >= 0 {
 			availableMB += req.mb
 			pool.printf("%d of %d MB available", availableMB, pool.totalMB)

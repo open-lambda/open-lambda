@@ -187,7 +187,7 @@ func (c *SOCKContainer) Unpause() (err error) {
 	// block until we have enough mem to upsize limit to the
 	// normal size before unpausing
 	oldLimit := c.cg.getMemLimitMB()
-	newLimit := config.Conf.Sock_cgroups.Max_mem_mb
+	newLimit := config.Conf.Limits.Mem_mb
 	c.pool.mem.adjustAvailableMB(oldLimit - newLimit)
 	c.cg.setMemLimitMB(newLimit)
 
@@ -334,4 +334,13 @@ func (c *SOCKContainer) fork(dst Sandbox) (err error) {
 	t.T1()
 
 	return nil
+}
+
+func (c *SOCKContainer) Status(key SandboxStatus) (string, error) {
+	switch key {
+	case StatusMemFailures:
+		return strconv.FormatBool(c.cg.ReadInt("memory", "memory.failcnt") > 0), nil
+	default:
+		return "", STATUS_UNSUPPORTED
+	}
 }

@@ -14,40 +14,37 @@ var Conf *Config
 
 // Config represents the configuration for a worker server.
 type Config struct {
+	// worker directory, which contains handler code, pid file, logs, etc.
+	Worker_dir string `json:"worker_dir"`
+
+	// port the worker server listens to
+	Worker_port string `json:"worker_port"`
+
+	// sandbox type: "docker" or "sock"
+	// currently ignored as cgroup sandbox is not fully integrated
+	Sandbox string `json:"sandbox"`
+
+	// what kind of server should be launched?  (e.g., lambda or sock)
+	Server_mode string `json:"server_mode"`
+
 	// location where code packages are stored.  Could be URL or local file path.
 	Registry string `json:"registry"`
 
 	// how long should some previously pulled code be used without a check for a newer version?
 	Registry_cache_ms int `json:"registry_cache_ms"`
 
-	// sandbox type: "docker" or "sock"
-	// currently ignored as cgroup sandbox is not fully integrated
-	Sandbox string `json:"sandbox"`
-
-	// name of the cluster
-	Cluster_name string `json:"cluster_name"`
+	// directory to install packages to, that sandboxes will read from
+	Pkgs_dir string
 
 	// pip index address for installing python packages
 	Pip_index string `json:"pip_mirror"`
-
-	// directory to install packages to, that sandboxes will read from
-	Pkgs_dir string
 
 	// cache options
 	Handler_cache_mb int `json:"handler_cache_mb"`
 	Import_cache_mb  int `json:"import_cache_mb"`
 
-	// what kind of server should be launched?  (e.g., lambda or sock)
-	Server_mode string `json:"server_mode"`
-
-	// worker directory, which contains handler code, pid file, logs, etc.
-	Worker_dir string `json:"worker_dir"`
-
 	// base image path for sock containers
 	SOCK_base_path string `json: "sock_base_path"`
-
-	// port the worker server listens to
-	Worker_port string `json:"worker_port"`
 
 	// pass through to sandbox envirenment variable
 	Sandbox_config interface{} `json:"sandbox_config"`
@@ -56,12 +53,20 @@ type Config struct {
 	Docker_runtime string `json:"docker_runtime"`
 
 	// settings to use for cgroups used by SOCK
-	Sock_cgroups SockCgroupConfig `json:"sock_cgroups"`
+	Limits LimitsConfig `json:"limits"`
 }
 
-type SockCgroupConfig struct {
-	Max_procs  int `json:"max_procs"`
-	Max_mem_mb int `json:"max_mem_mb"`
+type LimitsConfig struct {
+	// how many processes can be created within a Sandbox?
+	Procs int `json:"procs"`
+
+	// how much memory can a regular lambda use?  The lambda can
+	// always set a lower limit for itself.
+	Mem_mb int `json:"mem_mb"`
+
+	// how much memory do we use for an admin lambda that is used
+	// for pip installs?
+	Installer_mem_mb int `json:"installer_mem_mb"`
 }
 
 // Defaults verifies the fields of Config are correct, and initializes some
@@ -89,7 +94,6 @@ func LoadDefaults(olPath string) error {
 	Conf = &Config{
 		Worker_dir:        workerDir,
 		Server_mode:       "lambda",
-		Cluster_name:      olPath, // TODO: why?
 		Worker_port:       "5000",
 		Registry:          registryDir,
 		Sandbox:           "sock",
@@ -99,9 +103,10 @@ func LoadDefaults(olPath string) error {
 		Registry_cache_ms: 5000, // 5 seconds
 		Handler_cache_mb:  handler_cache_mb,
 		Import_cache_mb:   import_cache_mb,
-		Sock_cgroups: SockCgroupConfig{
-			Max_procs:  10,
-			Max_mem_mb: 50,
+		Limits: LimitsConfig{
+			Procs:            10,
+			Mem_mb:           50,
+			Installer_mem_mb: 200,
 		},
 	}
 
@@ -141,10 +146,9 @@ func check() error {
 		// evictor will ALWAYS try to kill if there's not
 		// enough free memory to spin up another container.
 		// So we need at least double a memory's needs,
-		// otherwise anything running will immediateld be
+		// otherwise anything running will immediately be
 		// evicted.
-		min_mem := 2 * Conf.Sock_cgroups.Max_mem_mb
-
+		min_mem := Conf.Limits.Installer_mem_mb + Conf.Limits.Mem_mb
 		if min_mem > Conf.Handler_cache_mb {
 			return fmt.Errorf("handler_cache_mb must be at least %d", min_mem)
 		}

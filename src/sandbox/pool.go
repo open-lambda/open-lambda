@@ -21,3 +21,13 @@ func SandboxPoolFromConfig(name string, sizeMb int) (cf SandboxPool, err error) 
 
 	return nil, fmt.Errorf("invalid sandbox type: '%s'", config.Conf.Sandbox)
 }
+
+func fillMetaDefaults(meta *SandboxMeta) *SandboxMeta {
+	if meta == nil {
+		meta = &SandboxMeta{}
+	}
+	if meta.MemLimitMB == 0 {
+		meta.MemLimitMB = config.Conf.Limits.Mem_mb
+	}
+	return meta
+}

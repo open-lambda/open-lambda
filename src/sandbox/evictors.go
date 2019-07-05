@@ -149,7 +149,7 @@ func (evictor *SOCKEvictor) evictFront(queue *list.List) {
 
 // POLICY: how should we select a victim?
 func (evictor *SOCKEvictor) doEvictions() {
-	memLimitMB := config.Conf.Sock_cgroups.Max_mem_mb
+	memLimitMB := config.Conf.Limits.Mem_mb
 
 	// how many sandboxes could we spin up, given available mem?
 	freeSandboxes := evictor.mem.getAvailableMB() / memLimitMB

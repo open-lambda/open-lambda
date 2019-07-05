@@ -358,3 +358,7 @@ func waitForServerPipeReady(hostDir string) error {
 		return fmt.Errorf("instance server failed to initialize after 20s")
 	}
 }
+
+func (c *DockerContainer) Status(key SandboxStatus) (string, error) {
+	return "", STATUS_UNSUPPORTED
+}

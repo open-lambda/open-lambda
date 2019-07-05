@@ -75,8 +75,9 @@ func sbStr(sb Sandbox) string {
 	return fmt.Sprintf("<SB %s>", sb.ID())
 }
 
-func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, deps *Dependencies) (sb Sandbox, err error) {
-	log.Printf("<%v>.Create(%v, %v, %v, %v, %v)...", pool.name, sbStr(parent), isLeaf, codeDir, scratchDir, deps)
+func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, meta *SandboxMeta) (sb Sandbox, err error) {
+	meta = fillMetaDefaults(meta)
+	log.Printf("<%v>.Create(%v, %v, %v, %v, %v)...", pool.name, sbStr(parent), isLeaf, codeDir, scratchDir, meta)
 	defer func() {
 		log.Printf("...returns %v, %v", sbStr(sb), err)
 	}()
@@ -86,16 +87,15 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 
 	// block until we have enough to cover the cgroup mem limits
 	t2 := t.T0("acquire-mem")
-	pool.mem.adjustAvailableMB(-config.Conf.Sock_cgroups.Max_mem_mb)
+	pool.mem.adjustAvailableMB(-meta.MemLimitMB)
+	t2.T1()
+
+	t2 = t.T0("acquire-cgroup")
+	cg := pool.cgPool.GetCg(meta.MemLimitMB)
 	t2.T1()
 
 	id := fmt.Sprintf("%d", atomic.AddInt64(&nextId, 1))
 	containerRootDir := filepath.Join(pool.rootDir, id)
-
-	t2 = t.T0("acquire-cgroup")
-	cg := pool.cgPool.GetCg()
-	t2.T1()
-
 	var c *SOCKContainer = &SOCKContainer{
 		pool:             pool,
 		id:               id,

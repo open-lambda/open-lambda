@@ -46,7 +46,7 @@ type LambdaFunc struct {
 	// lambda code
 	lastPull *time.Time
 	codeDir  string
-	deps     *sandbox.Dependencies
+	meta     *sandbox.SandboxMeta
 
 	// lambda execution
 	funcChan  chan *Invocation // server to func
@@ -67,7 +67,7 @@ type LambdaInstance struct {
 
 	// snapshot of LambdaFunc, at the time the LambdaInstance is created
 	codeDir string
-	deps    *sandbox.Dependencies
+	meta    *sandbox.SandboxMeta
 
 	// send chan to the kill chan to destroy the instance, then
 	// wait for msg on sent chan to block until it is done
@@ -214,7 +214,7 @@ func (f *LambdaFunc) printf(format string, args ...interface{}) {
 //
 // Lambdas should have /handler/packages in their path, but not
 // /packages.
-func parseReqs(codeDir string) (deps *sandbox.Dependencies, err error) {
+func parseMeta(codeDir string) (meta *sandbox.SandboxMeta, err error) {
 	installs := make([]string, 0)
 	imports := make([]string, 0)
 
@@ -236,52 +236,73 @@ func parseReqs(codeDir string) (deps *sandbox.Dependencies, err error) {
 		}
 	}
 
-	return &sandbox.Dependencies{installs, imports}, nil
+	return &sandbox.SandboxMeta{
+		Installs: installs,
+		Imports:  imports,
+	}, nil
 }
 
+// if there is any error:
+// 1. we won't switch to the new code
+// 2. we won't update pull time (so well check for a fix next tim)
 func (f *LambdaFunc) checkCodeCache() (err error) {
 	// check if there is newer code, download it if necessary
 	now := time.Now()
 	cache_ns := int64(config.Conf.Registry_cache_ms) * 1000000
-	if f.lastPull == nil || int64(now.Sub(*f.lastPull)) > cache_ns {
-		f.lastPull = &now
-		codeDir, err := f.lmgr.HandlerPuller.Pull(f.name)
+
+	// should we check for new code?
+	if f.lastPull != nil && int64(now.Sub(*f.lastPull)) < cache_ns {
+		return nil
+	}
+
+	// is there new code?
+	codeDir, err := f.lmgr.HandlerPuller.Pull(f.name)
+	if err != nil {
+		return err
+	}
+
+	if codeDir == f.codeDir {
+		return nil
+	}
+
+	defer func() {
 		if err != nil {
-			return err
-		}
-
-		if codeDir == f.codeDir {
-			return nil
-		}
-
-		// we have new code; check if our deps have changed too...
-		f.codeDir = codeDir
-
-		f.deps, err = parseReqs(f.codeDir)
-		if err != nil {
-			return err
-		}
-
-		if err := f.lmgr.ModulePuller.InstallMany(f.deps.Installs); err != nil {
-			return err
-		}
-
-		if err := os.Mkdir(filepath.Join(f.codeDir, "packages"), 0700); err != nil {
-			return err
-		}
-
-		for _, pkg := range f.deps.Installs {
-			parts := strings.Split(pkg, "==") // name==X.Y.Z
-			name := parts[0]
-
-			src := filepath.Join(f.codeDir, "packages", name)
-			dst := filepath.Join("/packages", pkg, name)
-			if err := os.Symlink(dst, src); err != nil {
-				return err
+			if err := os.RemoveAll(codeDir); err != nil {
+				log.Printf("could not cleanup %s after failed pull", codeDir)
 			}
+		}
+	}()
+
+	// inspect new code for dependencies; if we can install
+	// everything necessary, start using new code
+	meta, err := parseMeta(codeDir)
+	if err != nil {
+		return err
+	}
+
+	path := filepath.Join(codeDir, "packages")
+	if err := os.Mkdir(path, 0700); err != nil {
+		return fmt.Errorf("could not create %s: %v", path, err)
+	}
+
+	for _, pkg := range meta.Installs {
+		if err := f.lmgr.ModulePuller.Install(pkg); err != nil {
+			return err
+		}
+
+		parts := strings.Split(pkg, "==") // name==X.Y.Z
+		name := parts[0]
+
+		src := filepath.Join(codeDir, "packages", name)
+		dst := filepath.Join("/packages", pkg, name)
+		if err := os.Symlink(dst, src); err != nil {
+			return err
 		}
 	}
 
+	f.codeDir = codeDir
+	f.meta = meta
+	f.lastPull = &now
 	return nil
 }
 
@@ -360,13 +381,10 @@ func (f *LambdaFunc) Task() {
 			oldCodeDir := f.codeDir
 			if err := f.checkCodeCache(); err != nil {
 				f.printf("Error checking for new lambda code: %v", err)
-				if f.codeDir == "" {
-					// we don't have older code we can run instead
-					req.w.WriteHeader(http.StatusInternalServerError)
-					req.w.Write([]byte(err.Error() + "\n"))
-					req.done <- true
-					continue
-				}
+				req.w.WriteHeader(http.StatusInternalServerError)
+				req.w.Write([]byte(err.Error() + "\n"))
+				req.done <- true
+				continue
 			}
 
 			if oldCodeDir != "" && oldCodeDir != f.codeDir {
@@ -413,7 +431,7 @@ func (f *LambdaFunc) Task() {
 				el = el.Next()
 			}
 			if f.codeDir != "" {
-				cleanupChan <- f.codeDir
+				//cleanupChan <- f.codeDir
 			}
 			close(cleanupChan)
 			<-cleanupTaskDone
@@ -488,7 +506,7 @@ func (f *LambdaFunc) newInstance() {
 	linst := &LambdaInstance{
 		lfunc:    f,
 		codeDir:  f.codeDir,
-		deps:     f.deps,
+		meta:     f.meta,
 		killChan: make(chan chan bool, 1),
 	}
 
@@ -552,16 +570,16 @@ func (linst *LambdaInstance) Task() {
 		if sb == nil {
 			var parent sandbox.Sandbox
 			if f.lmgr.ImportCache != nil {
-				parent = f.lmgr.ImportCache.GetParent(linst.deps)
+				parent = f.lmgr.ImportCache.GetParent(linst.meta)
 			}
 
 			// TODO: delete scratchDir when Sandbox is destroyed
 			scratchDir := mkScratchDir("func-" + f.name)
-			sb, err = f.lmgr.sbPool.Create(parent, true, linst.codeDir, scratchDir, linst.deps)
+			sb, err = f.lmgr.sbPool.Create(parent, true, linst.codeDir, scratchDir, linst.meta)
 			if err == sandbox.FORK_FAILED {
 				f.printf("retry Create after failed fork")
 				scratchDir := mkScratchDir("func-" + f.name)
-				sb, err = f.lmgr.sbPool.Create(nil, true, linst.codeDir, scratchDir, linst.deps)
+				sb, err = f.lmgr.sbPool.Create(nil, true, linst.codeDir, scratchDir, linst.meta)
 			}
 
 			if err != nil {

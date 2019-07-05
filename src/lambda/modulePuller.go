@@ -8,8 +8,10 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/open-lambda/open-lambda/ol/config"
 	"github.com/open-lambda/open-lambda/ol/sandbox"
@@ -28,9 +30,13 @@ type ModulePuller struct {
 	// directory of lambda code that installs pip packages
 	pipLambda string
 
-	mutex   sync.Mutex
-	pkgInit map[string]*sync.Once
-	pkgErr  map[string]error
+	modules sync.Map
+}
+
+type Module struct {
+	name         string
+	installMutex sync.Mutex
+	installed    uint32
 }
 
 func NewModulePuller(sbPool sandbox.SandboxPool) (*ModulePuller, error) {
@@ -44,7 +50,9 @@ func NewModulePuller(sbPool sandbox.SandboxPool) (*ModulePuller, error) {
 		"import os",
 		"",
 		"def handler(event):",
-		"    return os.system('pip3 install --no-deps %s -t /host' % event)",
+		"    rc = os.system('pip3 install --no-deps %s -t /host' % event)",
+		"    print('pip install returned code %d' % rc)",
+		"    return rc",
 		"",
 	}
 	pipLambda := filepath.Join(config.Conf.Worker_dir, "admin-lambdas", "pip-install")
@@ -60,17 +68,20 @@ func NewModulePuller(sbPool sandbox.SandboxPool) (*ModulePuller, error) {
 	installer := &ModulePuller{
 		sbPool:    sbPool,
 		pipLambda: pipLambda,
-		pkgInit:   make(map[string]*sync.Once),
-		pkgErr:    make(map[string]error),
 	}
 
 	return installer, nil
 }
 
+func (mp *ModulePuller) GetMod(pkg string) *Module {
+	mod, _ := mp.modules.LoadOrStore(pkg, &Module{name: pkg})
+	return mod.(*Module)
+}
+
 // do the pip install within a new Sandbox, to a directory mapped from
 // the host.  We want the package on the host to share with all, but
 // want to run the install in the Sandbox because we don't trust it.
-func (mp *ModulePuller) InstallSandbox(pkg string) (err error) {
+func (mp *ModulePuller) sandboxInstall(pkg string) (err error) {
 	// the pip-install lambda installs to /host, which is the the
 	// same as scratchDir, which is the same as a sub-directory
 	// named after the package in the packages dir
@@ -87,10 +98,19 @@ func (mp *ModulePuller) InstallSandbox(pkg string) (err error) {
 		return err
 	}
 
+	defer func() {
+		if err != nil {
+			os.RemoveAll(scratchDir)
+		}
+	}()
+
 	t := stats.T0("pip-install")
 	defer t.T1()
 
-	sb, err := mp.sbPool.Create(nil, true, mp.pipLambda, scratchDir, nil)
+	meta := &sandbox.SandboxMeta{
+		MemLimitMB: config.Conf.Limits.Installer_mem_mb,
+	}
+	sb, err := mp.sbPool.Create(nil, true, mp.pipLambda, scratchDir, meta)
 	if err != nil {
 		return err
 	}
@@ -117,6 +137,14 @@ func (mp *ModulePuller) InstallSandbox(pkg string) (err error) {
 		return err
 	}
 
+	// did we run out of memory?  Or have other issues?
+	if stat, err := sb.Status(sandbox.StatusMemFailures); err == nil {
+		log.Printf("stat=%v, err=%v", stat, err)
+		if b, err := strconv.ParseBool(stat); err == nil && b {
+			return fmt.Errorf("ran out of memory while installing %s", pkg)
+		}
+	}
+
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("install lambda returned status %d, body '%s'", resp.StatusCode, string(body))
 	}
@@ -132,38 +160,26 @@ func (mp *ModulePuller) InstallSandbox(pkg string) (err error) {
 // does the pip install in a Sandbox, taking care to never install the
 // same Sandbox more than once.
 //
-// if an install fails, the error is recorded, and immediately
-// returned on subsequent attempts (it is never retried)
+// the fast/slow path code is tweaked from the sync.Once code, the
+// difference being that may try the installed more than once, but we
+// will never try more after the first success
 func (mp *ModulePuller) Install(pkg string) (err error) {
-	mp.mutex.Lock()
-	err, ok := mp.pkgErr[pkg]
-	once := mp.pkgInit[pkg]
-	if once == nil {
-		once = &sync.Once{}
-		mp.pkgInit[pkg] = once
-	}
-	mp.mutex.Unlock()
+	m := mp.GetMod(pkg)
 
-	if ok {
-		log.Printf("skip installing %s, already installed during this run of OL", pkg)
-		return err
+	// fast path
+	if atomic.LoadUint32(&m.installed) == 1 {
+		return nil
 	}
 
-	var outerErr error = nil
-	once.Do(func() {
-		outerErr = mp.InstallSandbox(pkg)
-		mp.mutex.Lock()
-		mp.pkgErr[pkg] = outerErr
-		mp.mutex.Unlock()
-	})
-	return outerErr
-}
-
-func (mp *ModulePuller) InstallMany(pkgs []string) (err error) {
-	for _, pkg := range pkgs {
-		if err := mp.Install(pkg); err != nil {
+	// slow path
+	m.installMutex.Lock()
+	defer m.installMutex.Unlock()
+	if m.installed == 0 {
+		if err := mp.sandboxInstall(pkg); err != nil {
 			return err
 		}
+		atomic.StoreUint32(&m.installed, 1)
 	}
+
 	return nil
 }

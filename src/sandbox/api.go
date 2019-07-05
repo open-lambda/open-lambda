@@ -4,13 +4,6 @@ import (
 	"net/http/httputil"
 )
 
-type SockError string
-
-const (
-	DEAD_SANDBOX = SockError("Sandbox has died")
-	FORK_FAILED  = SockError("Fork from parent Sandbox failed")
-)
-
 type SandboxPool interface {
 	// Create a new, unpaused sandbox
 	//
@@ -19,7 +12,7 @@ type SandboxPool interface {
 	// codeDir: directory where lambda code exists
 	// scratchDir: directory where handler code can write (caller is responsible for creating and deleting)
 	// deps: packages and modules needed by the Sandbox
-	Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, deps *Dependencies) (sb Sandbox, err error)
+	Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, meta *SandboxMeta) (sb Sandbox, err error)
 
 	// All containers must be deleted before this is called, or it
 	// will hang
@@ -61,14 +54,26 @@ type Sandbox interface {
 	// Represent state as a multi-line string
 	DebugString() string
 
+	// Lookup a particular stat
+	Status(SandboxStatus) (string, error)
+
 	// Optional interface for forking across sandboxes.
 	fork(dst Sandbox) error
 }
 
-type Dependencies struct {
-	Installs []string
-	Imports  []string
+type SandboxMeta struct {
+	Installs   []string
+	Imports    []string
+	MemLimitMB int
 }
+
+type SockError string
+
+const (
+	DEAD_SANDBOX       = SockError("Sandbox has died")
+	FORK_FAILED        = SockError("Fork from parent Sandbox failed")
+	STATUS_UNSUPPORTED = SockError("Argument to Status(...) unsupported by this Sandbox")
+)
 
 func (e SockError) Error() string {
 	return string(e)
@@ -91,3 +96,9 @@ type SandboxEvent struct {
 	EvType SandboxEventType
 	SB     Sandbox
 }
+
+type SandboxStatus int
+
+const (
+	StatusMemFailures SandboxStatus = iota // boolean
+)

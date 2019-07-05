@@ -38,7 +38,7 @@ func NewDockerPool(pidMode string, caps []string, cache bool) (*DockerPool, erro
 	idxPtr := &sharedIdx
 
 	labels := map[string]string{
-		dockerutil.DOCKER_LABEL_CLUSTER: config.Conf.Cluster_name,
+		dockerutil.DOCKER_LABEL_CLUSTER: config.Conf.Worker_dir,
 	}
 
 	pool := &DockerPool{
@@ -59,7 +59,8 @@ func NewDockerPool(pidMode string, caps []string, cache bool) (*DockerPool, erro
 }
 
 // Create creates a docker sandbox from the handler and sandbox directory.
-func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, deps *Dependencies) (sb Sandbox, err error) {
+func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, meta *SandboxMeta) (sb Sandbox, err error) {
+	meta = fillMetaDefaults(meta)
 	t := stats.T0("Create()")
 	defer t.T1()
 
