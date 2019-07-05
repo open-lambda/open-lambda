@@ -558,6 +558,12 @@ func (linst *LambdaInstance) Task() {
 			// TODO: delete scratchDir when Sandbox is destroyed
 			scratchDir := mkScratchDir("func-" + f.name)
 			sb, err = f.lmgr.sbPool.Create(parent, true, linst.codeDir, scratchDir, linst.deps)
+			if err == sandbox.FORK_FAILED {
+				f.printf("retry Create after failed fork")
+				scratchDir := mkScratchDir("func-" + f.name)
+				sb, err = f.lmgr.sbPool.Create(nil, true, linst.codeDir, scratchDir, linst.deps)
+			}
+
 			if err != nil {
 				req.w.WriteHeader(http.StatusInternalServerError)
 				req.w.Write([]byte("could not create Sandbox: " + err.Error() + "\n"))

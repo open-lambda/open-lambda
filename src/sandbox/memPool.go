@@ -2,9 +2,14 @@ package sandbox
 
 import (
 	"container/list"
+	"fmt"
+	"log"
+	"strings"
 )
 
 type MemPool struct {
+	name string
+
 	// how much memory is being managed (includes free and allocated)
 	totalMB int
 
@@ -27,8 +32,9 @@ type memReq struct {
 	resp chan int
 }
 
-func NewMemPool(totalMB int) *MemPool {
+func NewMemPool(name string, totalMB int) *MemPool {
 	pool := &MemPool{
+		name:               name,
 		totalMB:            totalMB,
 		memRequests:        make(chan *memReq, 32),
 		memRequestsWaiting: list.New(),
@@ -37,6 +43,11 @@ func NewMemPool(totalMB int) *MemPool {
 	go pool.memTask()
 
 	return pool
+}
+
+func (pool *MemPool) printf(format string, args ...interface{}) {
+	msg := fmt.Sprintf(format, args...)
+	log.Printf("%s [MEM POOL %s]", strings.TrimRight(msg, "\n"), pool.name)
 }
 
 // this task is responsible for tracking available memory in the
@@ -53,6 +64,7 @@ func (pool *MemPool) memTask() {
 
 		if req.mb >= 0 {
 			availableMB += req.mb
+			pool.printf("%d of %d MB available", availableMB, pool.totalMB)
 			req.resp <- availableMB
 		} else {
 			pool.memRequestsWaiting.PushBack(req)
@@ -61,9 +73,11 @@ func (pool *MemPool) memTask() {
 		// POLICY: which requests should we serve first?
 		if e := pool.memRequestsWaiting.Front(); e != nil {
 			req = e.Value.(*memReq)
+			// req.mb is negative
 			if availableMB+req.mb >= 0 {
 				pool.memRequestsWaiting.Remove(e)
 				availableMB += req.mb
+				pool.printf("%d of %d MB available", availableMB, pool.totalMB)
 				req.resp <- availableMB
 			}
 		}

@@ -49,9 +49,6 @@ type Config struct {
 	// port the worker server listens to
 	Worker_port string `json:"worker_port"`
 
-	// for unit testing to skip pull path
-	Skip_pull_existing bool `json:"Skip_pull_existing"`
-
 	// pass through to sandbox envirenment variable
 	Sandbox_config interface{} `json:"sandbox_config"`
 

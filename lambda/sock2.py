@@ -22,7 +22,7 @@ def recv_fds(sock, msglen, maxfds):
 
 
 def web_server():
-    print("serve from Tornado")
+    print("Start web server on fd: %d" % file_sock.fileno())
 
     class SockFileHandler(tornado.web.RequestHandler):
         def post(self):
@@ -62,15 +62,15 @@ def fork_server():
 
     while True:
         client, info = file_sock.accept()
-        _, fds = recv_fds(client, 4, 4)
-        assert(len(fds) == 1)
-        root_fd = fds[0]
+        _, fds = recv_fds(client, 8, 2)
+        root_fd, mem_cgroup_fd = fds
 
         pid = os.fork()
 
         if pid:
             # parent
             os.close(root_fd)
+            os.close(mem_cgroup_fd)
 
             # the child opens the new ol.sock, forks the grandchild
             # (which will actually do the serving), then exits.  Thus,
@@ -92,6 +92,10 @@ def fork_server():
             os.fchdir(root_fd)
             os.chroot(".")
             os.close(root_fd)
+
+            # mem cgroup
+            os.write(mem_cgroup_fd, str(os.getpid()).encode('utf-8'))
+            os.close(mem_cgroup_fd)
 
             # child
             start_container()
@@ -115,6 +119,7 @@ def start_container():
     # can know that once the child exits, it is safe to start sending
     # messages to the sock file.
     file_sock = tornado.netutil.bind_unix_socket(file_sock_path)
+    print("file sock", file_sock)
 
     print("fork")
     pid = os.fork()

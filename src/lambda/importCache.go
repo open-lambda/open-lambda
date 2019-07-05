@@ -33,6 +33,7 @@ func NewImportCache(name string, sizeMb int) (*ImportCache, error) {
 		killChan: make(chan chan bool),
 	}
 
+	pool.AddListener(cache.Event)
 	go cache.run(pool)
 
 	return cache, nil
@@ -68,11 +69,7 @@ func (cache *ImportCache) create(parent sandbox.Sandbox, deps *sandbox.Dependenc
 
 func (cache *ImportCache) run(pool sandbox.SandboxPool) {
 	forkServers := make(map[string]sandbox.Sandbox)
-	root := cache.create(nil, nil)
-	if root == nil {
-		panic("could not even create a root Zygote")
-	}
-	forkServers[root.ID()] = root
+	var root sandbox.Sandbox = nil
 
 	for {
 		select {
@@ -80,10 +77,20 @@ func (cache *ImportCache) run(pool sandbox.SandboxPool) {
 			// POLICY: which parent should we return?
 
 			// TODO: create (and use) more Zygotes
+			if root == nil {
+				root = cache.create(nil, nil)
+				if root != nil {
+					forkServers[root.ID()] = root
+				}
+			}
 			req.parent <- root
 		case event := <-cache.events:
 			switch event.EvType {
 			case sandbox.EvDestroy:
+				log.Printf("Sandbox %v in import cache has been destroyed", event.SB.ID())
+				if event.SB.ID() == root.ID() {
+					root = nil
+				}
 				delete(forkServers, event.SB.ID())
 			}
 		case done := <-cache.killChan:

@@ -121,6 +121,11 @@ func (mp *ModulePuller) InstallSandbox(pkg string) (err error) {
 		return fmt.Errorf("install lambda returned status %d, body '%s'", resp.StatusCode, string(body))
 	}
 
+	sbody := string(body)
+	if sbody != "0" {
+		return fmt.Errorf("pip install returned status '%s'", sbody)
+	}
+
 	return nil
 }
 

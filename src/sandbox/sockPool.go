@@ -68,10 +68,17 @@ func NewSOCKPool(name string, mem *MemPool) (cf *SOCKPool, err error) {
 	return pool, nil
 }
 
+func sbStr(sb Sandbox) string {
+	if sb == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("<SB %s>", sb.ID())
+}
+
 func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, deps *Dependencies) (sb Sandbox, err error) {
-	log.Printf("<%v>.Create(%v, %v, %v, %v, %v)...", pool.name, parent, isLeaf, codeDir, scratchDir, deps)
+	log.Printf("<%v>.Create(%v, %v, %v, %v, %v)...", pool.name, sbStr(parent), isLeaf, codeDir, scratchDir, deps)
 	defer func() {
-		log.Printf("...returns %v, %v", sb, err)
+		log.Printf("...returns %v, %v", sbStr(sb), err)
 	}()
 
 	t := stats.T0("Create()")
@@ -131,21 +138,16 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 	}
 
 	// create new process in container (fresh, or forked from parent)
-	err = nil
 	if parent != nil {
 		t2 := t.T0("fork-proc")
-		if err = parent.fork(c); err != nil {
-			if err == DEAD_SANDBOX {
-				log.Printf("parent SB %s died, create child with nil parent", parent.ID())
-				parent = nil
-			} else {
-				return nil, err
+		if err := parent.fork(c); err != nil {
+			if err != nil {
+				log.Printf("parent.fork returned %v", err)
+				return nil, FORK_FAILED
 			}
 		}
 		t2.T1()
-	}
-
-	if parent == nil {
+	} else {
 		t2 := t.T0("fresh-proc")
 		if err := c.freshProc(); err != nil {
 			return nil, err

@@ -10,7 +10,7 @@ func SandboxPoolFromConfig(name string, sizeMb int) (cf SandboxPool, err error) 
 	if config.Conf.Sandbox == "docker" {
 		return NewDockerPool("", nil, false)
 	} else if config.Conf.Sandbox == "sock" {
-		mem := NewMemPool(sizeMb)
+		mem := NewMemPool(name, sizeMb)
 		pool, err := NewSOCKPool(name, mem)
 		if err != nil {
 			return nil, err

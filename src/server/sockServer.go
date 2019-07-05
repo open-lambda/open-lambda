@@ -180,13 +180,13 @@ func (s *SOCKServer) cleanup() {
 func NewSOCKServer() (*SOCKServer, error) {
 	log.Printf("Start SOCK Server")
 
-	cacheMem := sandbox.NewMemPool(config.Conf.Import_cache_mb)
+	cacheMem := sandbox.NewMemPool("sock-cache", config.Conf.Import_cache_mb)
 	cache, err := sandbox.NewSOCKPool("sock-cache", cacheMem)
 	if err != nil {
 		return nil, err
 	}
 
-	handlerMem := sandbox.NewMemPool(config.Conf.Handler_cache_mb)
+	handlerMem := sandbox.NewMemPool("sock-handlers", config.Conf.Handler_cache_mb)
 	handler, err := sandbox.NewSOCKPool("sock-handlers", handlerMem)
 	if err != nil {
 		return nil, err

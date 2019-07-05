@@ -16,97 +16,79 @@ package sandbox
 char errmsg[1024];
 
 int
-sendfd(int s, int fd) {
+sendfds(int s, int *fds, int fdcount) {
 	char buf[1];
 	struct iovec iov;
-	struct msghdr msg;
+	struct msghdr header;
 	struct cmsghdr *cmsg;
 	int n;
-	char cms[CMSG_SPACE(sizeof(int))];
+	char cms[CMSG_SPACE(sizeof(int) * fdcount)];
 
 	buf[0] = 0;
 	iov.iov_base = buf;
 	iov.iov_len = 1;
 
-	memset(&msg, 0, sizeof msg);
-	msg.msg_iov = &iov;
-	msg.msg_iovlen = 1;
-	msg.msg_control = (caddr_t)cms;
-	msg.msg_controllen = CMSG_LEN(sizeof(int));
+	memset(&header, 0, sizeof header);
+	header.msg_iov = &iov;
+	header.msg_iovlen = 1;
+	header.msg_control = (caddr_t)cms;
+	header.msg_controllen = CMSG_LEN(sizeof(int) * fdcount);
 
-	cmsg = CMSG_FIRSTHDR(&msg);
-	cmsg->cmsg_len = CMSG_LEN(sizeof(int));
+	cmsg = CMSG_FIRSTHDR(&header);
+	cmsg->cmsg_len = CMSG_LEN(sizeof(int) * fdcount);
 	cmsg->cmsg_level = SOL_SOCKET;
 	cmsg->cmsg_type = SCM_RIGHTS;
-	memmove(CMSG_DATA(cmsg), &fd, sizeof(int));
+	memmove(CMSG_DATA(cmsg), fds, sizeof(int) * fdcount);
 
-	if((n = sendmsg(s, &msg, 0)) != iov.iov_len) {
-        return -1;
-    }
-
-    return 0;
-}
-
-int sendAll(int sockfd, const void *buf, int len, int flags) {
-	int rc;
-	while (len > 0) {
-		rc = send(sockfd, buf, len, flags);
-		if (rc < 0)
-			return rc;
-		buf += rc;
-		len -= rc;
+	if((n = sendmsg(s, &header, 0)) != iov.iov_len) {
+		return -1;
 	}
+
 	return 0;
 }
 
 int
-sendRootFD(char *sockPath, char *rootdir) {
-    int chrootFD = open(rootdir, O_RDONLY);
-    if (chrootFD == -1) {
-        return -1;
-    }
+sendRootFD(char *sockPath, int chrootFD, int memFD) {
+	// Connect to server via socket.
+	int s, len, ret;
+	struct sockaddr_un remote;
 
-    // Connect to server via socket.
-    int s, len, ret;
-    struct sockaddr_un remote;
+	if ((s = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
+		return -1;
+	}
 
-    if ((s = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
-        return -1;
-    }
+	remote.sun_family = AF_UNIX;
+	strcpy(remote.sun_path, sockPath);
+	len = strlen(remote.sun_path) + sizeof(remote.sun_family);
+	if (connect(s, (struct sockaddr *)&remote, len) == -1) {
+		return -1;
+	}
 
-    remote.sun_family = AF_UNIX;
-    strcpy(remote.sun_path, sockPath);
-    len = strlen(remote.sun_path) + sizeof(remote.sun_family);
-    if (connect(s, (struct sockaddr *)&remote, len) == -1) {
-        return -1;
-    }
+	printf("send chrootFD=%d\n", chrootFD);
+	int fds[2];
+	fds[0] = chrootFD;
+	fds[1] = memFD;
+	if (sendfds(s, fds, 2) == -1) {
+		return -1;
+	}
 
-    printf("send chrootFD=%d\n", chrootFD);
-    if (sendfd(s, chrootFD) == -1) {
-        return -1;
-    }
+	int status;
+	if (read(s, &status, sizeof status) != sizeof status) {
+		return -1;
+	}
 
-    int status;
-    if (read(s, &status, sizeof status) != sizeof status) {
-        return -1;
-    }
+	if(close(s) == -1) {
+		return -1;
+	}
 
-    if(close(chrootFD) == -1) {
-        return -1;
-    }
-
-    if(close(s) == -1) {
-        return -1;
-    }
-
-    return status;
+	return status;
 }
 
 */
 import "C"
 
 import (
-	"fmt"
+	"os"
 	"unsafe"
 )
 
@@ -119,13 +101,10 @@ import (
  *
  * Returns the PID of the spawned process upon success.
  */
-func (c *SOCKContainer) forkRequest(rootDir string) error {
-	cSock := C.CString(fmt.Sprintf("%s/ol.sock", c.HostDir()))
-	cRoot := C.CString(rootDir)
-
+func (c *SOCKContainer) forkRequest(fileSockPath string, rootDir *os.File, memCG *os.File) error {
+	cSock := C.CString(fileSockPath)
 	defer C.free(unsafe.Pointer(cSock))
-	defer C.free(unsafe.Pointer(cRoot))
 
-	_, err := C.sendRootFD(cSock, cRoot)
+	_, err := C.sendRootFD(cSock, C.int(rootDir.Fd()), C.int(memCG.Fd()))
 	return err
 }

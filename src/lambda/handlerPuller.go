@@ -52,11 +52,11 @@ func (cp *HandlerPuller) isRemote() bool {
 }
 
 func (cp *HandlerPuller) Pull(name string) (targetDir string, err error) {
-	matched, err := regexp.MatchString(`^[A-Za-z0-9\.\[\_]+$`, name)
+	matched, err := regexp.MatchString(`^[A-Za-z0-9\.\-\_]+$`, name)
 	if err != nil {
 		return "", err
 	} else if !matched {
-		msg := "lambda names can only contain letters, numbers, period, dash, and underscore; found '%s'"
+		msg := "bad lambda name '%s', can only contain letters, numbers, period, dash, and underscore"
 		return "", fmt.Errorf(msg, name)
 	}
 

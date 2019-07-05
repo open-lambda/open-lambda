@@ -183,6 +183,7 @@ func (evictor *SOCKEvictor) doEvictions() {
 	// TODO: create some parameters to better control eviction in
 	// this state
 	if freeSandboxes <= 0 && evictor.evicting.Len() == 0 {
+		log.Printf("WARNING!  Critically low on memory, so evicting an active Sandbox")
 		if evictor.running.Len() > 0 {
 			evictor.evictFront(evictor.running)
 		}

@@ -23,8 +23,9 @@ var cgroupList []string = []string{
 const CGROUP_RESERVE = 16
 
 type Cgroup struct {
-	Name string
-	pool *CgroupPool
+	Name       string
+	pool       *CgroupPool
+	memLimitMB int
 }
 
 type CgroupPool struct {
@@ -57,6 +58,66 @@ func NewCgroupPool(name string) (*CgroupPool, error) {
 	return pool, nil
 }
 
+func (pool *CgroupPool) NewCgroup() *Cgroup {
+	pool.nextId += 1
+	cg := &Cgroup{
+		Name: fmt.Sprintf("cg-%d", pool.nextId),
+		pool: pool,
+	}
+
+	for _, resource := range cgroupList {
+		path := cg.Path(resource, "")
+		if err := syscall.Mkdir(path, 0700); err != nil {
+			panic(fmt.Errorf("Mkdir %s: %s", path, err))
+		}
+	}
+
+	// set limits based on config
+	path := cg.Path("pids", "pids.max")
+	err := ioutil.WriteFile(path, []byte(fmt.Sprintf("%d", config.Conf.Sock_cgroups.Max_procs)), os.ModeAppend)
+	if err != nil {
+		panic(fmt.Errorf("Error setting pids.max: %s", err))
+	}
+
+	cg.setMemLimitMB(config.Conf.Sock_cgroups.Max_mem_mb)
+
+	cg.printf("created")
+	return cg
+}
+
+func (cg *Cgroup) printf(format string, args ...interface{}) {
+	msg := fmt.Sprintf(format, args...)
+	log.Printf("%s [CGROUP %s: %s]", strings.TrimRight(msg, "\n"), cg.pool.Name, cg.Name)
+}
+
+func (cg *Cgroup) Release() {
+	pids, err := cg.GetPIDs()
+	if err != nil {
+		panic(err)
+	} else if len(pids) != 0 {
+		panic(fmt.Errorf("Cannot release cgroup that contains processes: %v", pids))
+	}
+
+	// if there's room in the recycled channel, add it there.
+	// Otherwise, just delete it.
+	select {
+	case cg.pool.recycled <- cg:
+		cg.printf("release and recycle")
+	default:
+		cg.printf("release and destroy")
+		cg.destroy()
+	}
+}
+
+func (cg *Cgroup) destroy() {
+	for _, resource := range cgroupList {
+		path := cg.Path(resource, "")
+		if err := syscall.Rmdir(path); err != nil {
+			panic(fmt.Errorf("Rmdir %s: %s", path, err))
+		}
+	}
+}
+
 // add ID to each log message so we know which logs correspond to
 // which containers
 func (pool *CgroupPool) printf(format string, args ...interface{}) {
@@ -78,14 +139,10 @@ Loop:
 		select {
 		case cg = <-pool.recycled:
 			// restore cgroup to clean state
+			cg.setMemLimitMB(config.Conf.Sock_cgroups.Max_mem_mb)
 			cg.Unpause()
 		default:
-			pool.nextId += 1
-			cg = &Cgroup{
-				Name: fmt.Sprintf("cg-%d", pool.nextId),
-				pool: pool,
-			}
-			cg.Init()
+			cg = pool.NewCgroup()
 		}
 
 		// add cgroup to ready queue
@@ -187,38 +244,64 @@ func (cg *Cgroup) setFreezeState(state string) error {
 }
 
 // get mem usage in bytes
-func (cg *Cgroup) getMemUsageB() (int64, error) {
+func (cg *Cgroup) getMemUsageMB() int {
 	usagePath := cg.Path("memory", "memory.usage_in_bytes")
 	usageRaw, err := ioutil.ReadFile(usagePath)
 	if err != nil {
-		return -1, err
+		panic(err)
 	}
 	usage, err := strconv.ParseInt(strings.TrimSpace(string(usageRaw)), 10, 64)
 	// if the mem usage cannot be read, return error
 	if err != nil {
-		return -1, err
+		panic(err)
 	}
-	return usage, nil
+
+	mb := int64(1024 * 1024)
+
+	// round up to nearest MB
+	return int((usage + mb - 1) / mb)
 }
 
 // get mem limit in bytes
-func (cg *Cgroup) getMemLimitB() (int64, error) {
-	limitPath := cg.Path("memory", "memory.limit_in_bytes")
-	limitRaw, err := ioutil.ReadFile(limitPath)
-	if err != nil {
-		return -1, err
-	}
-	limit, err := strconv.ParseInt(strings.TrimSpace(string(limitRaw)), 10, 64)
-	if err != nil {
-		return -1, err
-	}
-	return limit, nil
+func (cg *Cgroup) getMemLimitMB() int {
+	return cg.memLimitMB
 }
 
 // set mem limit in bytes
-func (cg *Cgroup) setMemLimitB(newLimit int64) error {
+func (cg *Cgroup) setMemLimitMB(mb int) {
+	if mb == cg.memLimitMB {
+		return
+	}
+
 	limitPath := cg.Path("memory", "memory.limit_in_bytes")
-	return ioutil.WriteFile(limitPath, []byte(fmt.Sprintf("%d", newLimit)), os.ModeAppend)
+	bytes := int64(mb) * 1024 * 1024
+	err := ioutil.WriteFile(limitPath, []byte(fmt.Sprintf("%d", bytes)), os.ModeAppend)
+	if err != nil {
+		panic(err)
+	}
+
+	// cgroup v1 documentation recommends reading back limit after
+	// writing, because it is only a suggestion (e.g., may get
+	// rounded to page size).
+	//
+	// we don't have a great way of dealing with this now, so
+	// we'll just panic if it is not within some tolerance
+	limitRaw, err := ioutil.ReadFile(limitPath)
+	if err != nil {
+		panic(err)
+	}
+	limit, err := strconv.ParseInt(strings.TrimSpace(string(limitRaw)), 10, 64)
+	if err != nil {
+		panic(err)
+	}
+
+	diff := limit - bytes
+	if diff < -1024*1024 || diff > 1024*1024 {
+		panic(fmt.Errorf("tried to set mem limit to %d, but result (%d) was not within 1MB tolerance",
+			bytes, limit))
+	}
+
+	cg.memLimitMB = mb
 }
 
 func (cg *Cgroup) Pause() error {
@@ -293,52 +376,4 @@ Loop:
 	}
 
 	return nil
-}
-
-func (cg *Cgroup) Init() {
-	for _, resource := range cgroupList {
-		path := cg.Path(resource, "")
-		if err := syscall.Mkdir(path, 0700); err != nil {
-			panic(fmt.Errorf("Mkdir %s: %s", path, err))
-		}
-	}
-
-	// set limits based on config
-	path := cg.Path("pids", "pids.max")
-	err := ioutil.WriteFile(path, []byte(fmt.Sprintf("%d", config.Conf.Sock_cgroups.Max_procs)), os.ModeAppend)
-	if err != nil {
-		panic(fmt.Errorf("Error setting pids.max: %s", err))
-	}
-
-	path = cg.Path("memory", "memory.limit_in_bytes")
-	err = ioutil.WriteFile(path, []byte(fmt.Sprintf("%dM", config.Conf.Sock_cgroups.Max_mem_mb)), os.ModeAppend)
-	if err != nil {
-		panic(fmt.Errorf("Error setting pids.max: %s", err))
-	}
-}
-
-func (cg *Cgroup) Release() {
-	pids, err := cg.GetPIDs()
-	if err != nil {
-		panic(err)
-	} else if len(pids) != 0 {
-		panic(fmt.Errorf("Cannot release cgroup that contains processes: %v", pids))
-	}
-
-	// if there's room in the recycled channel, add it there.
-	// Otherwise, just delete it.
-	select {
-	case cg.pool.recycled <- cg:
-	default:
-		cg.destroy()
-	}
-}
-
-func (cg *Cgroup) destroy() {
-	for _, resource := range cgroupList {
-		path := cg.Path(resource, "")
-		if err := syscall.Rmdir(path); err != nil {
-			panic(fmt.Errorf("Rmdir %s: %s", path, err))
-		}
-	}
 }

@@ -96,7 +96,8 @@ func (c *SOCKContainer) freshProc() (err error) {
 	}
 
 	cmd := exec.Command(
-		"chroot", c.containerRootDir, "python3", "sock2.py", "/host/bootstrap.py", strconv.Itoa(len(cgFiles)),
+		"chroot", c.containerRootDir, "python3", "-u",
+		"sock2.py", "/host/bootstrap.py", strconv.Itoa(len(cgFiles)),
 	)
 	cmd.ExtraFiles = cgFiles
 
@@ -166,54 +167,31 @@ func (c *SOCKContainer) populateRoot() (err error) {
 }
 
 func (c *SOCKContainer) Pause() (err error) {
-	// PAUSE STEP 1: pause the cgroup
 	if err := c.cg.Pause(); err != nil {
 		return err
 	}
 
-	// PAUSE STEP 2: decrease mem limit of cgroup
-	oldLimit, err := c.cg.getMemLimitB()
-	if err != nil {
-		return err
+	// drop mem limit to what is used when we're paused, because
+	// we know the Sandbox cannot allocate more when it's not
+	// schedulable.  Then release saved memory back to the pool.
+	oldLimit := c.cg.getMemLimitMB()
+	newLimit := c.cg.getMemUsageMB() + 1
+	if newLimit < oldLimit {
+		c.cg.setMemLimitMB(newLimit)
+		c.pool.mem.adjustAvailableMB(oldLimit - newLimit)
 	}
-
-	usage, err := c.cg.getMemUsageB()
-	if err != nil {
-		return err
-	}
-	newLimit := usage + 4096
-
-	if err := c.cg.setMemLimitB(newLimit); err != nil {
-		return err
-	}
-
-	// PAUSE STEP 3: increase available mem in mem pool
-	c.pool.mem.adjustAvailableMB(int((oldLimit - newLimit) / 1024 / 1024))
-
 	return nil
 }
 
 func (c *SOCKContainer) Unpause() (err error) {
-	oldLimit, err := c.cg.getMemLimitB()
-	if err != nil {
-		return err
-	}
+	// block until we have enough mem to upsize limit to the
+	// normal size before unpausing
+	oldLimit := c.cg.getMemLimitMB()
+	newLimit := config.Conf.Sock_cgroups.Max_mem_mb
+	c.pool.mem.adjustAvailableMB(oldLimit - newLimit)
+	c.cg.setMemLimitMB(newLimit)
 
-	newLimit := int64(config.Conf.Sock_cgroups.Max_mem_mb * 1024 * 1024)
-	// UNPAUSE STEP 1: decrease available mem in mem pool
-	c.pool.mem.adjustAvailableMB(int((oldLimit - newLimit) / 1024 / 1024))
-
-	// UNPAUSE STEP 2: increase mem limit of cgroup
-	if err := c.cg.setMemLimitB(newLimit); err != nil {
-		return err
-	}
-
-	// UNPAUSE STEP 3: unpause the cgroup
-	if err := c.cg.Unpause(); err != nil {
-		return err
-	}
-
-	return nil
+	return c.cg.Unpause()
 }
 
 func (c *SOCKContainer) Destroy() {
@@ -251,13 +229,9 @@ func (c *SOCKContainer) destroy() error {
 	t.T1()
 
 	// release memory used for this container
-	c.pool.mem.adjustAvailableMB(config.Conf.Sock_cgroups.Max_mem_mb)
+	c.pool.mem.adjustAvailableMB(c.cg.getMemLimitMB())
 
 	return nil
-}
-
-func (c *SOCKContainer) HostDir() string {
-	return c.scratchDir
 }
 
 func (c *SOCKContainer) DebugString() string {
@@ -265,7 +239,7 @@ func (c *SOCKContainer) DebugString() string {
 
 	s += fmt.Sprintf("ROOT DIR: %s\n", c.containerRootDir)
 
-	s += fmt.Sprintf("HOST DIR: %s\n", c.HostDir())
+	s += fmt.Sprintf("HOST DIR: %s\n", c.scratchDir)
 
 	if pids, err := c.cg.GetPIDs(); err == nil {
 		s += fmt.Sprintf("CGROUP PIDS: %s\n", strings.Join(pids, ", "))
@@ -288,6 +262,13 @@ func (c *SOCKContainer) DebugString() string {
 
 // fork a new process from the Zygote in c, relocate it to be the server in dst
 func (c *SOCKContainer) fork(dst Sandbox) (err error) {
+	// TODO: find a better way to signal that the parent in
+	// inoperational, and find a remedy
+	spareMB := c.cg.getMemLimitMB() - c.cg.getMemUsageMB()
+	if spareMB < 3 {
+		return fmt.Errorf("only %vMB of spare memory in parent, rejecting fork request (need at least 3MB)", spareMB)
+	}
+
 	dstSock := dst.(*SOCKContainer)
 
 	origPids, err := c.cg.GetPIDs()
@@ -295,9 +276,21 @@ func (c *SOCKContainer) fork(dst Sandbox) (err error) {
 		return err
 	}
 
-	rootDir := dstSock.containerRootDir
+	root, err := os.Open(dstSock.containerRootDir)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+
+	cg := dst.(*SOCKContainer).cg
+	memCG, err := os.OpenFile(cg.Path("memory", "cgroup.procs"), os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	defer memCG.Close()
+
 	t := stats.T0("forkRequest")
-	err = c.forkRequest(rootDir)
+	err = c.forkRequest(fmt.Sprintf("%s/ol.sock", c.scratchDir), root, memCG)
 	if err != nil {
 		return err
 	}

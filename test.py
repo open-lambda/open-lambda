@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import os, sys, json, time, requests, copy, traceback, tempfile, threading, subprocess
 from collections import OrderedDict
-from subprocess import Popen, check_output
+from subprocess import check_output
 from multiprocessing import Pool
 from contextlib import contextmanager        
                 
@@ -166,7 +166,10 @@ def run(cmd):
         out = e.output
         fail = True
 
-    print(out)
+    out = str(out, 'utf-8')
+    if len(out) > 500:
+        out = out[:500] + "..."
+
     if fail:
         raise Exception("command (%s) failed: %s"  % (" ".join(cmd), out))
 

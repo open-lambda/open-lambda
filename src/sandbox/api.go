@@ -4,6 +4,13 @@ import (
 	"net/http/httputil"
 )
 
+type SockError string
+
+const (
+	DEAD_SANDBOX = SockError("Sandbox has died")
+	FORK_FAILED  = SockError("Fork from parent Sandbox failed")
+)
+
 type SandboxPool interface {
 	// Create a new, unpaused sandbox
 	//
@@ -62,10 +69,6 @@ type Dependencies struct {
 	Installs []string
 	Imports  []string
 }
-
-type SockError string
-
-const DEAD_SANDBOX = SockError("Sandbox has died")
 
 func (e SockError) Error() string {
 	return string(e)
