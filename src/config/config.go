@@ -84,9 +84,9 @@ func LoadDefaults(olPath string) error {
 		return err
 	}
 	total_mb := uint64(in.Totalram) * uint64(in.Unit) / 1024 / 1024
-	handler_cache_mb := 0
-	import_cache_mb := 0
-	if total_mb > 512 {
+	handler_cache_mb := 250
+	import_cache_mb := 250
+	if int((total_mb - 512) / 2) > 250 {
 		handler_cache_mb = int((total_mb - 512) / 2)
 		import_cache_mb = int((total_mb - 512) / 2)
 	}
