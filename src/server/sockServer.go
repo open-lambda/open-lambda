@@ -53,7 +53,7 @@ func (s *SOCKServer) Create(w http.ResponseWriter, rsrc []string, args map[strin
 	codeDir := args["code"].(string)
 
 	var parent sandbox.Sandbox = nil
-	if p, ok := args["parent"]; ok {
+	if p, ok := args["parent"]; ok && p != "" {
 		parent = s.GetSandbox(p.(string))
 		if parent == nil {
 			return fmt.Errorf("no sandbox found with ID '%s'", p)

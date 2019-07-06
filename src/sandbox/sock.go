@@ -34,8 +34,8 @@ type SOCKContainer struct {
 	containerRootDir string
 	codeDir          string
 	scratchDir       string
-	initPipe         *os.File
 	cg               *Cgroup
+	children         []Sandbox
 }
 
 // add ID to each log message so we know which logs correspond to
@@ -200,11 +200,19 @@ func (c *SOCKContainer) Destroy() {
 	}
 }
 
-// TODO: make destroy recursive, so that children processes need to
-// die too.  This is the only way to prevent cgroup leaks.
 func (c *SOCKContainer) destroy() error {
+	// Destroy is recursive, so make sure all children are dead
+	// first.  This is for memory accounting purposes (otherwise,
+	// nobody is to blame for the memory allocated by the parent
+	// before the children were forked).
+	t := stats.T0("Destroy()/recursive-kill")
+	for _, child := range c.children {
+		child.Destroy()
+	}
+	t.T1()
+
 	// kill all procs INSIDE the cgroup
-	t := stats.T0("Destroy()/kill-procs")
+	t = stats.T0("Destroy()/kill-procs")
 	if c.cg != nil {
 		c.printf("kill all procs in CG\n")
 		if err := c.cg.KillAllProcs(); err != nil {
@@ -269,7 +277,7 @@ func (c *SOCKContainer) fork(dst Sandbox) (err error) {
 		return fmt.Errorf("only %vMB of spare memory in parent, rejecting fork request (need at least 3MB)", spareMB)
 	}
 
-	dstSock := dst.(*SOCKContainer)
+	dstSock := dst.(*safeSandbox).Sandbox.(*SOCKContainer)
 
 	origPids, err := c.cg.GetPIDs()
 	if err != nil {
@@ -282,7 +290,7 @@ func (c *SOCKContainer) fork(dst Sandbox) (err error) {
 	}
 	defer root.Close()
 
-	cg := dst.(*SOCKContainer).cg
+	cg := dstSock.cg
 	memCG, err := os.OpenFile(cg.Path("memory", "cgroup.procs"), os.O_WRONLY, 0600)
 	if err != nil {
 		return err
@@ -331,6 +339,8 @@ func (c *SOCKContainer) fork(dst Sandbox) (err error) {
 			break
 		}
 	}
+
+	c.children = append(c.children, dst)
 	t.T1()
 
 	return nil

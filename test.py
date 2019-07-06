@@ -15,6 +15,11 @@ def post(path, data):
     return requests.post('http://localhost:5000/'+path, json.dumps(data))
 
 
+def raise_for_status(r):
+    if r.status_code != 200:
+        raise Exception("STATUS %d: %s" % (r.status_code, r.text))
+
+
 def test_in_filter(name):
     if len(sys.argv) < 2:
         return True
@@ -184,11 +189,11 @@ def install_tests():
     # try something that doesn't install anything
     msg = 'hello world'
     r = post("run/echo", msg)
-    r.raise_for_status()
+    raise_for_status(r)
     if r.json() != msg:
         raise Exception("found %s but expected %s" % (r.json(), msg))
     r = post("stats", None)
-    r.raise_for_status()
+    raise_for_status(r)
     installs = r.json().get('pip-install:ms.cnt', 0)
     assert(installs == 0)
 
@@ -197,12 +202,11 @@ def install_tests():
         if i != 0:
             name += str(i+1)
         r = post("run/"+name, {})
-        if r.status_code != 200:
-            raise Exception("STATUS %d: %s" % (r.status_code, r.text))
+        raise_for_status(r)
         assert r.json() == "imported"
 
         r = post("stats", None)
-        r.raise_for_status()
+        raise_for_status(r)
         installs = r.json()['pip-install:ms.cnt']
         if i < 2:
             assert(installs == 6)
@@ -241,7 +245,7 @@ def stress_one_lambda_task(args):
     i = 0
     while time.time() < t0 + seconds:
         r = post("run/echo", i)
-        r.raise_for_status()
+        raise_for_status(r)
         assert r.text == str(i)
         i += 1
     return i
@@ -263,7 +267,7 @@ def call_each_once_exec(lambda_count, alloc_mb):
     t0 = time.time()
     for i in range(lambda_count):
         r = post("run/L%d"%i, {"alloc_mb": alloc_mb})
-        r.raise_for_status()
+        raise_for_status(r)
         assert r.text == str(i)
     seconds = time.time() - t0
 
@@ -288,7 +292,7 @@ def call_each_once(lambda_count, alloc_mb=0):
 def fork_bomb():
     limit = curr_conf["limits"]["procs"]
     r = post("run/fbomb", {"times": limit*2})
-    r.raise_for_status()
+    raise_for_status(r)
     # the function returns the number of children that we were able to fork
     actual = int(r.text)
     assert(1 <= actual <= limit)
@@ -298,7 +302,7 @@ def fork_bomb():
 def max_mem_alloc():
     limit = curr_conf["limits"]["mem_mb"]
     r = post("run/max_mem_alloc", None)
-    r.raise_for_status()
+    raise_for_status(r)
     # the function returns the MB that was able to be allocated
     actual = int(r.text)
     assert(limit-16 <= actual <= limit)
@@ -310,7 +314,7 @@ def ping_test():
     t0 = time.time()
     for i in range(pings):
         r = requests.get("http://localhost:5000/status")
-        r.raise_for_status()
+        raise_for_status(r)
     seconds = time.time() - t0
     return {"pings_per_sec": pings/seconds}
 
@@ -321,10 +325,10 @@ def sock_churn_task(args):
     while time.time() < t0 + seconds:
         args = {"code": echo_path, "leaf": True, "parent": parent}
         r = post("create", args)
-        r.raise_for_status()
+        raise_for_status(r)
         sandbox_id = r.text.strip()
         r = post("destroy/"+sandbox_id, {})
-        r.raise_for_status()
+        raise_for_status(r)
         i += 1
     return i
 
@@ -338,14 +342,14 @@ def sock_churn(baseline, procs, seconds, fork):
 
     if fork:
         r = post("create", {"code": "", "leaf": False})
-        r.raise_for_status()
+        raise_for_status(r)
         parent = r.text.strip()
     else:
-        parent = None
+        parent = ""
 
     for i in range(baseline):
         r = post("create", {"code": echo_path, "leaf": True, "parent": parent})
-        r.raise_for_status()
+        raise_for_status(r)
 
     t0 = time.time()
     with Pool(procs) as p:
@@ -370,7 +374,7 @@ def update_code():
         t0 = time.time()
         while True:
             r = post("run/version", None)
-            r.raise_for_status()
+            raise_for_status(r)
             num = int(r.text)
             assert(num >= i-1)
             t1 = time.time()
@@ -382,6 +386,22 @@ def update_code():
                 if i > 0:
                     assert(t1 - t0 >= cache_seconds - 1)
                 break
+
+
+@test
+def recursive_kill(depth):
+    parent = ""
+    for i in range(depth):
+        r = post("create", {"code": "", "leaf": False, "parent": parent})
+        raise_for_status(r)
+        parent = r.text.strip()
+
+    r = post("destroy/1", None)
+    raise_for_status(r)
+    r = post("stats", None)
+    raise_for_status(r)
+    destroys = r.json()['Destroy():ms.cnt']
+    assert destroys == depth
 
 
 def tests():
@@ -408,11 +428,15 @@ def tests():
 
     # test SOCK directly (without lambdas)
     with TestConf(server_mode="sock"):
+        sock_churn(baseline=0, procs=1, seconds=5, fork=False)
         sock_churn(baseline=0, procs=1, seconds=15, fork=True)
         sock_churn(baseline=0, procs=15, seconds=15, fork=True)
         # TODO: make these work (we don't have enough mem now)
         #sock_churn(baseline=32, procs=1, seconds=15, fork=True)
         #sock_churn(baseline=32, procs=15, seconds=15, fork=True)
+
+        recursive_kill(depth=2)
+        recursive_kill(depth=10)
 
     # make sure code updates get pulled within the cache time
     with tempfile.TemporaryDirectory() as reg_dir:

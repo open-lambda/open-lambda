@@ -103,6 +103,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 		codeDir:          codeDir,
 		scratchDir:       scratchDir,
 		cg:               cg,
+		children:         make([]Sandbox, 0),
 	}
 
 	defer func() {
@@ -137,10 +138,12 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 		return nil, err
 	}
 
+	safe := newSafeSandbox(c, pool.eventHandlers)
+
 	// create new process in container (fresh, or forked from parent)
 	if parent != nil {
 		t2 := t.T0("fork-proc")
-		if err := parent.fork(c); err != nil {
+		if err := parent.fork(safe); err != nil {
 			if err != nil {
 				log.Printf("parent.fork returned %v", err)
 				return nil, FORK_FAILED
@@ -156,7 +159,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 	}
 
 	// wrap to make thread-safe and handle container death
-	return newSafeSandbox(c, pool.eventHandlers), nil
+	return safe, nil
 }
 
 // handler(...) will be called everytime a sandbox-related event occurs,
