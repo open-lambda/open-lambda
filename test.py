@@ -11,7 +11,7 @@ results = OrderedDict({"runs": []})
 curr_conf = None
 
 
-def post(path, data):
+def post(path, data=None):
     return requests.post('http://localhost:5000/'+path, json.dumps(data))
 
 
@@ -410,6 +410,10 @@ def recursive_kill(depth):
     for i in range(depth):
         r = post("create", {"code": "", "leaf": False, "parent": parent})
         raise_for_status(r)
+        if parent:
+            # don't need this parent any more, so pause it to get
+            # memory back (so we can run this test with low memory)
+            post("pause/"+parent)
         parent = r.text.strip()
 
     r = post("destroy/1", None)
@@ -443,7 +447,7 @@ def tests():
             numpy_test()
 
     # test SOCK directly (without lambdas)
-    with TestConf(server_mode="sock"):
+    with TestConf(server_mode="sock", handler_cache_mb=250, import_cache_mb=250):
         sock_churn(baseline=0, procs=1, seconds=5, fork=False)
         sock_churn(baseline=0, procs=1, seconds=15, fork=True)
         sock_churn(baseline=0, procs=15, seconds=15, fork=True)
