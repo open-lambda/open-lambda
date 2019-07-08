@@ -15,7 +15,7 @@ def attempt(mb):
     return status == 0
 
 
-def handler(event):
+def f(event):
     max_attempt = 512
 
     for i in range(max_attempt):

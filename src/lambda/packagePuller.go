@@ -90,7 +90,7 @@ def deps(dirname):
                     rv.add(name)
     return list(rv)
 
-def handler(event):
+def f(event):
     pkg = event["pkg"]
     alreadyInstalled = event["alreadyInstalled"]
     if not alreadyInstalled:
@@ -140,7 +140,7 @@ func NewPackagePuller(sbPool sandbox.SandboxPool) (*PackagePuller, error) {
 	if err := os.MkdirAll(pipLambda, 0700); err != nil {
 		return nil, err
 	}
-	path := filepath.Join(pipLambda, "lambda_func.py")
+	path := filepath.Join(pipLambda, "f.py")
 	code := []byte(installLambda)
 	if err := ioutil.WriteFile(path, code, 0600); err != nil {
 		return nil, err

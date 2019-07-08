@@ -147,7 +147,7 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (targetDir string
 	}
 
 	if strings.HasSuffix(src, ".py") {
-		cmd := exec.Command("cp", src, filepath.Join(targetDir, "lambda_func.py"))
+		cmd := exec.Command("cp", src, filepath.Join(targetDir, "f.py"))
 		if output, err := cmd.CombinedOutput(); err != nil {
 			return "", fmt.Errorf("%s :: %s", err, string(output))
 		}

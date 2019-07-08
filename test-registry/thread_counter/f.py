@@ -11,7 +11,7 @@ def worker():
         counter += 1
         time.sleep(0.001)
 
-def handler(event):
+def f(event):
     global t
     if t == None:
         print 'Init worker thread'
@@ -21,7 +21,7 @@ def handler(event):
     return 'Background thread started'
 
 def main():
-    print handler(None, None)
+    print f(None, None)
 
 if __name__ == '__main__':
     main()

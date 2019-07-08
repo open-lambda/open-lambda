@@ -18,7 +18,7 @@ The worker JSON config file contains two fields related to CodePuller:
 
 **Remote:** If `registry` starts with "http://" or "https://", then
 lambdas may be represented as (1) a standalone .py file (with any
-name) or (2) a .tar.gz (which must contain a lambda_func.py file may
+name) or (2) a .tar.gz (which must contain a f.py file may
 contain other files).  If `registry` is `http://localhost:5000` and
 the worker is trying to pull a lambda named `runme`, then the
 CodePuller will first try to download the code (via a GET HTTP
@@ -29,8 +29,8 @@ pull fails.
 
 **Local:** If `registry` is a path to a directory in the local file
   system, then lambdas may be represented as a (1) a standalone .py
-  file, (2) a .tar.gz containing a lambda_func.py file, or (3) a
-  directory containing a lambda_func.py file.  If `registry` is
+  file, (2) a .tar.gz containing a f.py file, or (3) a
+  directory containing a f.py file.  If `registry` is
   `/var/local/registry` and a lambda named `runme` is being pulled,
   the worker will check for these resources (in this order):
 

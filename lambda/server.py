@@ -28,12 +28,12 @@ parser.add_argument('--cache', action='store_true', default=False, help='Begin a
 
 # run after forking into sandbox
 def init():
-    global initialized, lambda_func
+    global initialized, f
     if initialized:
         return
 
-    # assume submitted .py file is /handler/lambda_func.py
-    import lambda_func
+    # assume submitted .py file is /handler/f.py
+    import f
 
     initialized = True
 
@@ -47,7 +47,7 @@ class SockFileHandler(tornado.web.RequestHandler):
                 self.set_status(400)
                 self.write('bad POST data: "%s"'%str(data))
                 return
-            self.write(json.dumps(lambda_func.handler(event)))
+            self.write(json.dumps(f.f(event)))
         except Exception:
             self.set_status(500) # internal error
             self.write(traceback.format_exc())

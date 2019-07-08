@@ -27,10 +27,10 @@ def web_server():
     class SockFileHandler(tornado.web.RequestHandler):
         def post(self):
             # we don't import this until we get a request; this is a
-            # safeguard in case lambda_func is malicious (we don't
+            # safeguard in case f is malicious (we don't
             # want it to interfere with ongoing setup, such as the
             # move to the new cgroups)
-            import lambda_func
+            import f
 
             try:
                 data = self.request.body
@@ -40,7 +40,7 @@ def web_server():
                     self.set_status(400)
                     self.write('bad POST data: "%s"'%str(data))
                     return
-                self.write(json.dumps(lambda_func.handler(event)))
+                self.write(json.dumps(f.f(event)))
             except Exception:
                 self.set_status(500) # internal error
                 self.write(traceback.format_exc())

@@ -4,5 +4,5 @@ import simplejson
 
 # ol-install: requests,simplejson
 
-def handler(event):
+def f(event):
     return 'imported'

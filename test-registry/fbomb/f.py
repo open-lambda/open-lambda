@@ -21,7 +21,7 @@ def fork_times(n):
         os._exit(rv)
 
 
-def handler(event):
+def f(event):
     return fork_times(event["times"])
 
 

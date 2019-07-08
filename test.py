@@ -295,7 +295,7 @@ def call_each_once(lambda_count, alloc_mb=0):
         # create dummy lambdas
         for i in range(lambda_count):
             with open(os.path.join(reg_dir, "L%d.py"%i), "w") as f:
-                f.write("def handler(event):\n")
+                f.write("def f(event):\n")
                 f.write("    global s\n")
                 f.write("    s = '*' * %d * 1024**2\n" % alloc_mb)
                 f.write("    return %d\n" % i)
@@ -383,7 +383,7 @@ def update_code():
     for i in range(3):
         # update function code
         with open(os.path.join(reg_dir, "version.py"), "w") as f:
-            f.write("def handler(event):\n")
+            f.write("def f(event):\n")
             f.write("    return %d\n" % i)
 
         # how long does it take for us to start seeing the latest code?

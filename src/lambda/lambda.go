@@ -218,7 +218,7 @@ func parseMeta(codeDir string) (meta *sandbox.SandboxMeta, err error) {
 	installs := make([]string, 0)
 	imports := make([]string, 0)
 
-	path := filepath.Join(codeDir, "lambda_func.py")
+	path := filepath.Join(codeDir, "f.py")
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err

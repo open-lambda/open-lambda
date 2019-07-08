@@ -3,5 +3,5 @@ import urllib3
 
 # ol-install: requests
 
-def handler(event):
+def f(event):
     return 'imported'

@@ -52,7 +52,7 @@ In another terminal, make sure the worker is running with `./bin/ol status`.
 Now save the following to `./default/registry/echo.py`:
 
 ```python
-def handler(event):
+def f(event):
     return event
 ```
 
