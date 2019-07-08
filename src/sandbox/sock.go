@@ -36,6 +36,7 @@ type SOCKContainer struct {
 	scratchDir       string
 	cg               *Cgroup
 	children         []Sandbox
+	meta             *SandboxMeta
 }
 
 // add ID to each log message so we know which logs correspond to
@@ -148,7 +149,7 @@ func (c *SOCKContainer) populateRoot() (err error) {
 
 	// FILE SYSTEM STEP 3: scratch dir (tmp and communication)
 	tmpDir := filepath.Join(c.scratchDir, "tmp")
-	if err := os.Mkdir(tmpDir, 0777); err != nil {
+	if err := os.Mkdir(tmpDir, 0777); err != nil && !os.IsExist(err) {
 		return err
 	}
 
@@ -353,4 +354,8 @@ func (c *SOCKContainer) Status(key SandboxStatus) (string, error) {
 	default:
 		return "", STATUS_UNSUPPORTED
 	}
+}
+
+func (c *SOCKContainer) Meta() *SandboxMeta {
+	return c.meta
 }

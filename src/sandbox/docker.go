@@ -34,7 +34,7 @@ type DockerContainer struct {
 	container *docker.Container
 	client    *docker.Client
 	installed map[string]bool
-	cache     bool
+	meta      *SandboxMeta
 }
 
 type HandlerState int
@@ -56,36 +56,6 @@ func (h HandlerState) String() string {
 	default:
 		panic("Unknown state!")
 	}
-}
-
-// NewDockerContainer creates a DockerContainer.
-func NewDockerContainer(host_id, hostDir string, cache bool, container *docker.Container, client *docker.Client) (Sandbox, error) {
-	c := &DockerContainer{
-		host_id:   host_id,
-		hostDir:   hostDir,
-		container: container,
-		client:    client,
-		installed: make(map[string]bool),
-		cache:     cache,
-	}
-
-	if err := c.start(); err != nil {
-		c.Destroy()
-		return nil, err
-	}
-
-	if err := c.runServer(); err != nil {
-		c.Destroy()
-		return nil, err
-	}
-
-	if err := waitForServerPipeReady(c.HostDir()); err != nil {
-		c.Destroy()
-		return nil, err
-	}
-
-	// wrap to make thread-safe and handle container death
-	return &safeSandbox{Sandbox: c}, nil
 }
 
 // dockerError adds details (sandbox log, state, etc.) to an error.
@@ -286,9 +256,6 @@ func (c *DockerContainer) DockerID() string {
 
 func (c *DockerContainer) runServer() error {
 	cmd := []string{"python3", "server.py"}
-	if c.cache {
-		cmd = append(cmd, "--cache")
-	}
 
 	execOpts := docker.CreateExecOptions{
 		AttachStdin:  false,
@@ -361,4 +328,8 @@ func waitForServerPipeReady(hostDir string) error {
 
 func (c *DockerContainer) Status(key SandboxStatus) (string, error) {
 	return "", STATUS_UNSUPPORTED
+}
+
+func (c *DockerContainer) Meta() *SandboxMeta {
+	return c.meta
 }

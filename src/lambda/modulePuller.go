@@ -2,6 +2,7 @@ package lambda
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -9,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -18,13 +18,96 @@ import (
 	"github.com/open-lambda/open-lambda/ol/stats"
 )
 
+// we invoke this lambda to do the pip install in a Sandbox.
+//
+// the install is not recursive (it does not install deps), but it
+// does parse and return a list of deps, based on a rough
+// approximation of the PEP 508 format.  We ignore the "extra" marker
+// and version numbers (assuming the latest).
+const installLambda = `
+#!/usr/bin/env python
+import os, sys, platform, re
+
+def format_full_version(info):
+    version = '{0.major}.{0.minor}.{0.micro}'.format(info)
+    kind = info.releaselevel
+    if kind != 'final':
+        version += kind[0] + str(info.serial)
+    return version
+
+# as specified here: https://www.python.org/dev/peps/pep-0508/#environment-markers
+os_name = os.name
+sys_platform = sys.platform
+platform_machine = platform.machine()
+platform_python_implementation = platform.python_implementation()
+platform_release = platform.release()
+platform_system = platform.system()
+platform_version = platform.version()
+python_version = platform.python_version()[:3]
+python_full_version = platform.python_version()
+implementation_name = sys.implementation.name
+if hasattr(sys, 'implementation'):
+    implementation_version = format_full_version(sys.implementation.version)
+else:
+    implementation_version = "0"
+extra = '' # TODO: support extras
+
+def matches(markers):
+    return eval(markers)
+
+def top(dirname):
+    path = None
+    for name in os.listdir(dirname):
+        if name.endswith('-info'):
+            path = os.path.join(dirname, name, "top_level.txt")
+    if path == None or not os.path.exists(path):
+        return []
+    with open(path) as f:
+        return f.read().strip().split("\n")
+
+
+def deps(dirname):
+    path = None
+    for name in os.listdir(dirname):
+        if name.endswith('-info'):
+            path = os.path.join(dirname, name, "METADATA")
+    if path == None or not os.path.exists(path):
+        return []
+
+    rv = set()
+    with open(path, encoding='utf-8') as f:
+        for line in f:
+            prefix = 'Requires-Dist: '
+            if line.startswith(prefix):
+                line = line[len(prefix):].strip()
+                parts = line.split(';')
+                if len(parts) > 1:
+                    match = matches(parts[1])
+                else:
+                    match = True
+                if match:
+                    name = re.split(' \(', parts[0])[0]
+                    rv.add(name)
+    return list(rv)
+
+def handler(event):
+    pkg = event["pkg"]
+    alreadyInstalled = event["alreadyInstalled"]
+    if not alreadyInstalled:
+        rc = os.system('pip3 install --no-deps %s -t /host' % pkg)
+        print('pip install returned code %d' % rc)
+        assert(rc == 0)
+    name = pkg.split("==")[0]
+    d = deps("/host")
+    t = top("/host")
+    return {"Deps":d, "TopLevel":t}
+`
+
 /*
- * ModulePuller is the interface for installing pip packages locally.
+ * PackagePuller is the interface for installing pip packages locally.
  * The manager installs to the worker host from an optional pip mirror.
- *
- * TODO: implement eviction, support multiple versions
  */
-type ModulePuller struct {
+type PackagePuller struct {
 	sbPool sandbox.SandboxPool
 
 	// directory of lambda code that installs pip packages
@@ -33,39 +116,37 @@ type ModulePuller struct {
 	modules sync.Map
 }
 
-type Module struct {
+type Package struct {
 	name         string
+	meta         PackageMeta
 	installMutex sync.Mutex
 	installed    uint32
 }
 
-func NewModulePuller(sbPool sandbox.SandboxPool) (*ModulePuller, error) {
+// the pip-install admin lambda returns this
+type PackageMeta struct {
+	Deps     []string `json:"Deps"`
+	TopLevel []string `json:"TopLevel"`
+}
+
+func NewPackagePuller(sbPool sandbox.SandboxPool) (*PackagePuller, error) {
 	// create a lambda function for installing pip modules.  We do
 	// each install in a Sandbox for two reasons:
 	//
 	// 1. packages may be malicious
 	// 2. we want to install the right version, matching the Python
 	//    in the Sandbox
-	lines := []string{
-		"import os",
-		"",
-		"def handler(event):",
-		"    rc = os.system('pip3 install --no-deps %s -t /host' % event)",
-		"    print('pip install returned code %d' % rc)",
-		"    return rc",
-		"",
-	}
 	pipLambda := filepath.Join(config.Conf.Worker_dir, "admin-lambdas", "pip-install")
 	if err := os.MkdirAll(pipLambda, 0700); err != nil {
 		return nil, err
 	}
 	path := filepath.Join(pipLambda, "lambda_func.py")
-	code := []byte(strings.Join(lines, "\n"))
+	code := []byte(installLambda)
 	if err := ioutil.WriteFile(path, code, 0600); err != nil {
 		return nil, err
 	}
 
-	installer := &ModulePuller{
+	installer := &PackagePuller{
 		sbPool:    sbPool,
 		pipLambda: pipLambda,
 	}
@@ -73,29 +154,30 @@ func NewModulePuller(sbPool sandbox.SandboxPool) (*ModulePuller, error) {
 	return installer, nil
 }
 
-func (mp *ModulePuller) GetMod(pkg string) *Module {
-	mod, _ := mp.modules.LoadOrStore(pkg, &Module{name: pkg})
-	return mod.(*Module)
+func (mp *PackagePuller) GetPkg(pkg string) *Package {
+	mod, _ := mp.modules.LoadOrStore(pkg, &Package{name: pkg})
+	return mod.(*Package)
 }
 
 // do the pip install within a new Sandbox, to a directory mapped from
 // the host.  We want the package on the host to share with all, but
 // want to run the install in the Sandbox because we don't trust it.
-func (mp *ModulePuller) sandboxInstall(pkg string) (err error) {
+func (mp *PackagePuller) sandboxInstall(p *Package) (err error) {
 	// the pip-install lambda installs to /host, which is the the
 	// same as scratchDir, which is the same as a sub-directory
 	// named after the package in the packages dir
-	scratchDir := filepath.Join(config.Conf.Pkgs_dir, pkg)
+	scratchDir := filepath.Join(config.Conf.Pkgs_dir, p.name)
 
+	alreadyInstalled := false
 	if _, err := os.Stat(scratchDir); err == nil {
 		// assume dir exististence means it is installed already
-		log.Printf("skip installing %s, appears already installed from previous run of OL", pkg)
-		return err
-	}
-
-	log.Printf("run pip install %s from a new Sandbox to %s on host", pkg, scratchDir)
-	if err := os.Mkdir(scratchDir, 0700); err != nil {
-		return err
+		log.Printf("%s appears already installed from previous run of OL", p.name)
+		alreadyInstalled = true
+	} else {
+		log.Printf("run pip install %s from a new Sandbox to %s on host", p.name, scratchDir)
+		if err := os.Mkdir(scratchDir, 0700); err != nil {
+			return err
+		}
 	}
 
 	defer func() {
@@ -122,7 +204,8 @@ func (mp *ModulePuller) sandboxInstall(pkg string) (err error) {
 	}
 
 	// the URL doesn't matter, since it is local anyway
-	reqBody := bytes.NewReader([]byte(fmt.Sprintf("\"%s\"", pkg)))
+	msg := fmt.Sprintf(`{"pkg": "%s", "alreadyInstalled": %v}`, p.name, alreadyInstalled)
+	reqBody := bytes.NewReader([]byte(msg))
 	req, err := http.NewRequest("POST", "http://container/run/pip-install", reqBody)
 	if err != nil {
 		return err
@@ -139,9 +222,8 @@ func (mp *ModulePuller) sandboxInstall(pkg string) (err error) {
 
 	// did we run out of memory?  Or have other issues?
 	if stat, err := sb.Status(sandbox.StatusMemFailures); err == nil {
-		log.Printf("stat=%v, err=%v", stat, err)
 		if b, err := strconv.ParseBool(stat); err == nil && b {
-			return fmt.Errorf("ran out of memory while installing %s", pkg)
+			return fmt.Errorf("ran out of memory while installing %s", p.name)
 		}
 	}
 
@@ -149,9 +231,8 @@ func (mp *ModulePuller) sandboxInstall(pkg string) (err error) {
 		return fmt.Errorf("install lambda returned status %d, body '%s'", resp.StatusCode, string(body))
 	}
 
-	sbody := string(body)
-	if sbody != "0" {
-		return fmt.Errorf("pip install returned status '%s'", sbody)
+	if err := json.Unmarshal(body, &p.meta); err != nil {
+		return err
 	}
 
 	return nil
@@ -163,23 +244,23 @@ func (mp *ModulePuller) sandboxInstall(pkg string) (err error) {
 // the fast/slow path code is tweaked from the sync.Once code, the
 // difference being that may try the installed more than once, but we
 // will never try more after the first success
-func (mp *ModulePuller) Install(pkg string) (err error) {
-	m := mp.GetMod(pkg)
+func (mp *PackagePuller) Install(pkg string) (*Package, error) {
+	p := mp.GetPkg(pkg)
 
 	// fast path
-	if atomic.LoadUint32(&m.installed) == 1 {
-		return nil
+	if atomic.LoadUint32(&p.installed) == 1 {
+		return p, nil
 	}
 
 	// slow path
-	m.installMutex.Lock()
-	defer m.installMutex.Unlock()
-	if m.installed == 0 {
-		if err := mp.sandboxInstall(pkg); err != nil {
-			return err
+	p.installMutex.Lock()
+	defer p.installMutex.Unlock()
+	if p.installed == 0 {
+		if err := mp.sandboxInstall(p); err != nil {
+			return p, err
 		}
-		atomic.StoreUint32(&m.installed, 1)
+		atomic.StoreUint32(&p.installed, 1)
 	}
 
-	return nil
+	return p, nil
 }

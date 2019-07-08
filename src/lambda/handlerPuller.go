@@ -97,6 +97,11 @@ func (cp *HandlerPuller) Pull(name string) (targetDir string, err error) {
 	}
 }
 
+// delete any caching associated with this handler
+func (cp *HandlerPuller) Reset(name string) {
+	cp.dirCache.Delete(name)
+}
+
 func (cp *HandlerPuller) newCodeDir(lambdaName string) (targetDir string) {
 	targetDir = fmt.Sprintf("%d-%s", atomic.AddInt64(&cp.nextId, 1), lambdaName)
 	targetDir = filepath.Join(cp.codeCacheDir, targetDir)

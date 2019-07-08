@@ -104,6 +104,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 		scratchDir:       scratchDir,
 		cg:               cg,
 		children:         make([]Sandbox, 0),
+		meta:             meta,
 	}
 
 	defer func() {
@@ -126,13 +127,16 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 	// write the Python code that the new process will run when it starts
 	var pyCode []string
 	if isLeaf {
-		pyCode = []string{
-			"web_server()",
-		}
+		pyCode = append(pyCode, "web_server()")
 	} else {
-		pyCode = []string{
-			"fork_server()",
+		modDiff := []string{}
+		if parent != nil {
+			modDiff = setSubtract(meta.Imports, parent.Meta().Imports)
 		}
+		for _, mod := range modDiff {
+			pyCode = append(pyCode, fmt.Sprintf("import %s", mod))
+		}
+		pyCode = append(pyCode, "fork_server()")
 	}
 	if err := c.writeBootstrapCode(pyCode); err != nil {
 		return nil, err

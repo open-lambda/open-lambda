@@ -21,14 +21,13 @@ type DockerPool struct {
 	pidMode        string
 	pkgsDir        string
 	idxPtr         *int64
-	cache          bool
 	docker_runtime string
 	eventHandlers  []SandboxEventFunc
 	debugger
 }
 
 // NewDockerPool creates a DockerPool.
-func NewDockerPool(pidMode string, caps []string, cache bool) (*DockerPool, error) {
+func NewDockerPool(pidMode string, caps []string) (*DockerPool, error) {
 	client, err := docker.NewClientFromEnv()
 	if err != nil {
 		return nil, err
@@ -48,7 +47,6 @@ func NewDockerPool(pidMode string, caps []string, cache bool) (*DockerPool, erro
 		pidMode:        pidMode,
 		pkgsDir:        config.Conf.Pkgs_dir,
 		idxPtr:         idxPtr,
-		cache:          cache,
 		docker_runtime: config.Conf.Docker_runtime,
 		eventHandlers:  []SandboxEventFunc{},
 	}
@@ -106,8 +104,27 @@ func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir 
 		return nil, err
 	}
 
-	c, err := NewDockerContainer(id, scratchDir, pool.cache, container, pool.client)
-	if err != nil {
+	c := &DockerContainer{
+		host_id:   id,
+		hostDir:   scratchDir,
+		container: container,
+		client:    pool.client,
+		installed: make(map[string]bool),
+		meta:      meta,
+	}
+
+	if err := c.start(); err != nil {
+		c.Destroy()
+		return nil, err
+	}
+
+	if err := c.runServer(); err != nil {
+		c.Destroy()
+		return nil, err
+	}
+
+	if err := waitForServerPipeReady(c.HostDir()); err != nil {
+		c.Destroy()
 		return nil, err
 	}
 

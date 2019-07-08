@@ -11,7 +11,7 @@ type SandboxPool interface {
 	// isLeaf: true iff this is not being created as a sandbox we can fork later
 	// codeDir: directory where lambda code exists
 	// scratchDir: directory where handler code can write (caller is responsible for creating and deleting)
-	// deps: packages and modules needed by the Sandbox
+	// meta: details about installs, imports, etc.  Will be populated with defaults if not specified
 	Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, meta *SandboxMeta) (sb Sandbox, err error)
 
 	// All containers must be deleted before this is called, or it
@@ -51,14 +51,17 @@ type Sandbox interface {
 	// Communication channel to forward requests.
 	HttpProxy() (*httputil.ReverseProxy, error)
 
-	// Represent state as a multi-line string
-	DebugString() string
-
-	// Lookup a particular stat
-	Status(SandboxStatus) (string, error)
-
 	// Optional interface for forking across sandboxes.
 	fork(dst Sandbox) error
+
+	// Lookup metadata that Sandbox was initialized with (static over time)
+	Meta() *SandboxMeta
+
+	// Lookup a particular stat (changes over time)
+	Status(SandboxStatus) (string, error)
+
+	// Represent state as a multi-line string
+	DebugString() string
 }
 
 type SandboxMeta struct {

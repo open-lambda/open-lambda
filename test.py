@@ -62,11 +62,11 @@ def test(fn):
         result["test"] = name
         result["params"] = kwargs
         result["pass"] = None
+        result["conf"] = curr_conf
         result["seconds"] = None
         result["total_seconds"] = None
         result["stats"] = None
         result["ol-stats"] = None
-        result["conf"] = curr_conf
         result["errors"] = []
         result["worker_tail"] = None
 
@@ -209,9 +209,11 @@ def install_tests():
         raise_for_status(r)
         installs = r.json()['pip-install:ms.cnt']
         if i < 2:
-            assert(installs == 6)
+            # with deps, requests should give us these:
+            # certifi, chardet, idna, requests, urllib3
+            assert(installs == 5)            
         else:
-            assert(installs == 7)
+            assert(installs == 6)
 
 
 @test
@@ -238,6 +240,20 @@ def numpy_test():
     j = r.json()
     assert j['result'] == 20
     assert j['version'].startswith('1.15')
+
+    r = post("run/pandas15", [[1, 2, 3],[1, 2, 3]])
+    if r.status_code != 200:
+        raise Exception("STATUS %d: %s" % (r.status_code, r.text))
+    j = r.json()
+    assert j['result'] == 12
+    assert j['version'].startswith('1.15')
+
+    r = post("run/pandas", [[0, 1, 2], [3, 4, 5]])
+    if r.status_code != 200:
+        raise Exception("STATUS %d: %s" % (r.status_code, r.text))
+    j = r.json()
+    assert j['result'] == 15
+    assert float(".".join(j['version'].split('.')[:2])) >= 1.16
 
 
 def stress_one_lambda_task(args):

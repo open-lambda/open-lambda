@@ -1,8 +1,7 @@
-import jedi
 import requests
+import urllib3
 
-# ol-install: parso,jedi,idna,chardet,certifi,requests
-# ol-import: parso,jedi,idna,chardet,certifi,requests,urllib3
+# ol-install: requests,certifi,chardet,idna,urllib3
 
 def handler(event):
     return 'imported'

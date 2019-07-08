@@ -30,7 +30,7 @@ type LambdaMgr struct {
 	// subsystems (these are thread safe)
 	sbPool sandbox.SandboxPool
 	*HandlerPuller
-	*ModulePuller
+	*PackagePuller
 	*ImportCache
 
 	// thread-safe map from a lambda's name to its LambdaFunc
@@ -103,8 +103,8 @@ func NewLambdaMgr() (res *LambdaMgr, err error) {
 		return nil, err
 	}
 
-	log.Printf("Create ModulePuller")
-	mgr.ModulePuller, err = NewModulePuller(mgr.sbPool)
+	log.Printf("Create PackagePuller")
+	mgr.PackagePuller, err = NewPackagePuller(mgr.sbPool)
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +155,7 @@ func (mgr *LambdaMgr) Get(name string) (f *LambdaFunc) {
 func (mgr *LambdaMgr) Cleanup() {
 	// HandlerPuller requires no cleanup
 
-	// ModulePuller requires no cleanup
+	// PackagePuller requires no cleanup
 
 	// cleanup ImportCache
 	if mgr.ImportCache != nil {
@@ -270,8 +270,19 @@ func (f *LambdaFunc) checkCodeCache() (err error) {
 			if err := os.RemoveAll(codeDir); err != nil {
 				log.Printf("could not cleanup %s after failed pull", codeDir)
 			}
+
+			// we dirty this dir (e.g., by setting up
+			// symlinks to packages, so we want the
+			// HandlerPuller to give us a new one next
+			// time, even if the code hasn't changed
+			f.lmgr.HandlerPuller.Reset(f.name)
 		}
 	}()
+
+	path := filepath.Join(codeDir, "packages")
+	if err := os.Mkdir(path, 0700); err != nil {
+		return fmt.Errorf("could not create %s: %v", path, err)
+	}
 
 	// inspect new code for dependencies; if we can install
 	// everything necessary, start using new code
@@ -280,23 +291,57 @@ func (f *LambdaFunc) checkCodeCache() (err error) {
 		return err
 	}
 
-	path := filepath.Join(codeDir, "packages")
-	if err := os.Mkdir(path, 0700); err != nil {
-		return fmt.Errorf("could not create %s: %v", path, err)
+	installSet := make(map[string]bool)
+	for _, install := range meta.Installs {
+		name := strings.Split(install, "==")[0]
+		installSet[name] = true
 	}
 
-	for _, pkg := range meta.Installs {
-		if err := f.lmgr.ModulePuller.Install(pkg); err != nil {
+	// Installs may grow as we loop, because some installs have
+	// deps, leading to other installs
+	for i := 0; i < len(meta.Installs); i++ {
+		pkg := meta.Installs[i]
+		log.Printf("On %v of %v", pkg, meta.Installs)
+		p, err := f.lmgr.PackagePuller.Install(pkg)
+		if err != nil {
 			return err
 		}
 
-		parts := strings.Split(pkg, "==") // name==X.Y.Z
-		name := parts[0]
+		log.Printf("Package '%s' has deps %v", pkg, p.meta.Deps)
+		log.Printf("Package '%s' has top-level modules %v", pkg, p.meta.TopLevel)
 
-		src := filepath.Join(codeDir, "packages", name)
-		dst := filepath.Join("/packages", pkg, name)
-		if err := os.Symlink(dst, src); err != nil {
-			return err
+		// push any previously unseen deps on the list of ones to install
+		for _, dep := range p.meta.Deps {
+			if !installSet[dep] {
+				meta.Installs = append(meta.Installs, dep)
+				installSet[dep] = true
+			}
+		}
+
+		// add modules that come with the package to the
+		// lambda's path
+		//
+		// the package may contain one or more top-level
+		// modules.  It is common for it to have one-top level
+		// module with the same name as the package (e.g.,
+		// package numpy contains module numpy).  In contrast,
+		// the scikit-learn package has one top-level module,
+		// named sklearn
+		for _, topMod := range p.meta.TopLevel {
+			src := filepath.Join(codeDir, "packages", topMod)
+			dst := filepath.Join("/packages", pkg, topMod)
+
+			if err := os.Symlink(dst, src); err != nil {
+				if !os.IsNotExist(err) {
+					return err
+				}
+
+				src_py := src + ".py"
+				dst_py := dst + ".py"
+				if err := os.Symlink(dst_py, src_py); err != nil {
+					return err
+				}
+			}
 		}
 	}
 
