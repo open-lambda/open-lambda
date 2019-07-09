@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -154,7 +155,15 @@ func NewPackagePuller(sbPool sandbox.SandboxPool) (*PackagePuller, error) {
 	return installer, nil
 }
 
+// From PEP-426: "All comparisons of distribution names MUST
+// be case insensitive, and MUST consider hyphens and
+// underscores to be equivalent."
+func normalizePkg(pkg string) string {
+	return strings.ReplaceAll(strings.ToLower(pkg), "_", "-")
+}
+
 func (mp *PackagePuller) GetPkg(pkg string) *Package {
+	pkg = normalizePkg(pkg)
 	mod, _ := mp.modules.LoadOrStore(pkg, &Package{name: pkg})
 	return mod.(*Package)
 }
@@ -233,6 +242,10 @@ func (mp *PackagePuller) sandboxInstall(p *Package) (err error) {
 
 	if err := json.Unmarshal(body, &p.meta); err != nil {
 		return err
+	}
+
+	for i, pkg := range p.meta.Deps {
+		p.meta.Deps[i] = normalizePkg(pkg)
 	}
 
 	return nil

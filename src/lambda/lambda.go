@@ -248,6 +248,10 @@ func parseMeta(codeDir string) (meta *sandbox.SandboxMeta, err error) {
 		}
 	}
 
+	for i, pkg := range installs {
+		installs[i] = normalizePkg(pkg)
+	}
+
 	return &sandbox.SandboxMeta{
 		Installs: installs,
 		Imports:  imports,
