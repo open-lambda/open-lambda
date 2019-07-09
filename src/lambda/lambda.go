@@ -32,6 +32,7 @@ type LambdaMgr struct {
 	*HandlerPuller
 	*PackagePuller
 	*ImportCache
+	*DepTracer
 
 	// thread-safe map from a lambda's name to its LambdaFunc
 	mapMutex sync.Mutex
@@ -124,6 +125,12 @@ func NewLambdaMgr() (res *LambdaMgr, err error) {
 		}
 	}
 
+	log.Printf("Create DepTracer")
+	mgr.DepTracer, err = NewDepTracer(filepath.Join(config.Conf.Worker_dir, "dep-trace.json"))
+	if err != nil {
+		return nil, err
+	}
+
 	return mgr, nil
 }
 
@@ -169,6 +176,11 @@ func (mgr *LambdaMgr) Cleanup() {
 		f.Kill()
 	}
 	mgr.sbPool.Cleanup() // assumes all Sandboxes are gone
+
+	// cleanup DepTracer
+	if mgr.DepTracer != nil {
+		mgr.DepTracer.Cleanup()
+	}
 }
 
 func (f *LambdaFunc) Invoke(w http.ResponseWriter, r *http.Request) {
@@ -245,7 +257,7 @@ func parseMeta(codeDir string) (meta *sandbox.SandboxMeta, err error) {
 // if there is any error:
 // 1. we won't switch to the new code
 // 2. we won't update pull time (so well check for a fix next tim)
-func (f *LambdaFunc) checkCodeCache() (err error) {
+func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 	// check if there is newer code, download it if necessary
 	now := time.Now()
 	cache_ns := int64(config.Conf.Registry_cache_ms) * 1000000
@@ -291,6 +303,8 @@ func (f *LambdaFunc) checkCodeCache() (err error) {
 		return err
 	}
 
+	f.lmgr.DepTracer.TraceFunction(codeDir, meta.Installs)
+
 	installSet := make(map[string]bool)
 	for _, install := range meta.Installs {
 		name := strings.Split(install, "==")[0]
@@ -302,9 +316,14 @@ func (f *LambdaFunc) checkCodeCache() (err error) {
 	for i := 0; i < len(meta.Installs); i++ {
 		pkg := meta.Installs[i]
 		log.Printf("On %v of %v", pkg, meta.Installs)
-		p, err := f.lmgr.PackagePuller.Install(pkg)
+		p, new, err := f.lmgr.PackagePuller.Install(pkg)
 		if err != nil {
 			return err
+		}
+
+		// first time it was installed successfully
+		if new {
+			f.lmgr.DepTracer.TracePackage(p)
 		}
 
 		log.Printf("Package '%s' has deps %v", pkg, p.meta.Deps)
@@ -424,7 +443,7 @@ func (f *LambdaFunc) Task() {
 			// check for new code, and cleanup old code
 			// (and instances that use it) if necessary
 			oldCodeDir := f.codeDir
-			if err := f.checkCodeCache(); err != nil {
+			if err := f.pullHandlerIfStale(); err != nil {
 				f.printf("Error checking for new lambda code: %v", err)
 				req.w.WriteHeader(http.StatusInternalServerError)
 				req.w.Write([]byte(err.Error() + "\n"))
@@ -446,6 +465,8 @@ func (f *LambdaFunc) Task() {
 				// for all instance kills to finish
 				cleanupChan <- oldCodeDir
 			}
+
+			f.lmgr.DepTracer.TraceInvocation(f.codeDir)
 
 			select {
 			case f.instChan <- req:

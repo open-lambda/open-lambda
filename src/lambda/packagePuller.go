@@ -244,12 +244,12 @@ func (mp *PackagePuller) sandboxInstall(p *Package) (err error) {
 // the fast/slow path code is tweaked from the sync.Once code, the
 // difference being that may try the installed more than once, but we
 // will never try more after the first success
-func (mp *PackagePuller) Install(pkg string) (*Package, error) {
+func (mp *PackagePuller) Install(pkg string) (*Package, bool, error) {
 	p := mp.GetPkg(pkg)
 
 	// fast path
 	if atomic.LoadUint32(&p.installed) == 1 {
-		return p, nil
+		return p, false, nil
 	}
 
 	// slow path
@@ -257,10 +257,12 @@ func (mp *PackagePuller) Install(pkg string) (*Package, error) {
 	defer p.installMutex.Unlock()
 	if p.installed == 0 {
 		if err := mp.sandboxInstall(p); err != nil {
-			return p, err
+			return p, false, err
+		} else {
+			atomic.StoreUint32(&p.installed, 1)
+			return p, true, nil
 		}
-		atomic.StoreUint32(&p.installed, 1)
 	}
 
-	return p, nil
+	return p, false, nil
 }
