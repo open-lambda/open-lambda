@@ -94,12 +94,13 @@ func NewLambdaMgr() (res *LambdaMgr, err error) {
 	}
 	defer func() {
 		if err != nil {
+			log.Printf("Cleanup Lambda Manager due to error: %v", err)
 			mgr.Cleanup()
 		}
 	}()
 
 	log.Printf("Create SandboxPool")
-	mgr.sbPool, err = sandbox.SandboxPoolFromConfig("sock-handlers", config.Conf.Handler_cache_mb)
+	mgr.sbPool, err = sandbox.SandboxPoolFromConfig("handler-sandboxes", config.Conf.Handler_cache_mb)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +120,7 @@ func NewLambdaMgr() (res *LambdaMgr, err error) {
 	importCacheMb := config.Conf.Import_cache_mb
 	if importCacheMb > 0 {
 		log.Printf("Create ImportCache")
-		mgr.ImportCache, err = NewImportCache("sock-cache", importCacheMb)
+		mgr.ImportCache, err = NewImportCache("cache-sandboxes", importCacheMb)
 		if err != nil {
 			return nil, err
 		}

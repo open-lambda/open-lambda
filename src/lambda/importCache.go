@@ -1,14 +1,20 @@
 package lambda
 
 import (
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
 	"log"
+	"strings"
 
+	"github.com/open-lambda/open-lambda/ol/config"
 	"github.com/open-lambda/open-lambda/ol/sandbox"
 )
 
 type ImportCache struct {
 	name     string
 	pool     sandbox.SandboxPool
+	root     *ImportCacheNode
 	requests chan *ParentReq
 	events   chan sandbox.SandboxEvent
 	killChan chan chan bool
@@ -19,23 +25,52 @@ type ParentReq struct {
 	parent chan sandbox.Sandbox
 }
 
-func NewImportCache(name string, sizeMb int) (*ImportCache, error) {
-	pool, err := sandbox.SandboxPoolFromConfig(name, sizeMb)
-	if err != nil {
-		return nil, err
-	}
+type ImportCacheNode struct {
+	Packages         []string           `json:"packages""`
+	Children         []*ImportCacheNode `json:"children"`
+	parent           *ImportCacheNode
+	indirectPackages []string
+	sb               sandbox.Sandbox
+}
 
+func NewImportCache(name string, sizeMb int) (*ImportCache, error) {
 	cache := &ImportCache{
 		name:     name,
-		pool:     pool,
 		requests: make(chan *ParentReq, 32),
 		events:   make(chan sandbox.SandboxEvent, 32),
 		killChan: make(chan chan bool),
 	}
 
-	pool.AddListener(cache.Event)
-	go cache.run(pool)
+	// a static tree of Zygotes may be specified by a file (if so, parse and init it)
+	path := config.Conf.Import_cache_tree_path
+	if path != "" {
+		b, err := ioutil.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("could not open import tree file (%v): %v\n", path, err.Error())
+		}
 
+		cache.root = &ImportCacheNode{}
+		if err := json.Unmarshal(b, cache.root); err != nil {
+			return nil, fmt.Errorf("could parse import tree file (%v): %v\n", path, err.Error())
+		}
+		if len(cache.root.Packages) > 0 {
+			return nil, fmt.Errorf("root node in import cache may not import packages\n")
+		}
+		cache.root.recursiveInit([]string{})
+		log.Printf("Import Cache Tree:")
+		cache.root.Dump(0)
+	}
+
+	// import cache gets its own sandbox pool
+	pool, err := sandbox.SandboxPoolFromConfig(name, sizeMb)
+	if err != nil {
+		return nil, err
+	}
+	pool.AddListener(cache.Event)
+	cache.pool = pool
+
+	// start background task to serve requests for Zygotes
+	go cache.run(pool)
 	return cache, nil
 }
 
@@ -101,4 +136,63 @@ func (cache *ImportCache) run(pool sandbox.SandboxPool) {
 			return
 		}
 	}
+}
+
+// 1. populate parent field of every struct
+// 2. populate indirectPackages to contain the packages of every ancestor
+func (node *ImportCacheNode) recursiveInit(indirectPackages []string) {
+	node.indirectPackages = indirectPackages
+	for _, child := range node.Children {
+		child.parent = node
+		child.recursiveInit(append(indirectPackages, node.Packages...))
+	}
+}
+
+func (node *ImportCacheNode) String() string {
+	s := strings.Join(node.Packages, ",")
+	if s == "" {
+		s = "ROOT"
+	}
+	if len(node.indirectPackages) > 0 {
+		s += " [indirect: " + strings.Join(node.indirectPackages, ",") + "]"
+	}
+	return s
+}
+
+func (node *ImportCacheNode) Dump(indent int) {
+	spaces := strings.Repeat("  ", indent)
+
+	log.Printf("%s - %s", spaces, node.String())
+	for _, child := range node.Children {
+		child.Dump(indent + 1)
+	}
+}
+
+func (node *ImportCacheNode) Lookup(packages []string) *ImportCacheNode {
+	// if this node imports a package that's not wanted by the
+	// lambda, neither this Zygote nor its children will work
+	for _, nodePkg := range node.Packages {
+		found := false
+		for _, p := range packages {
+			if p == nodePkg {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil
+		}
+	}
+
+	// check our descendents; is one of them a Zygote that works?
+	// we prefer a child Zygote over the one for this node,
+	// because they have more packages pre-imported
+	for _, child := range node.Children {
+		result := child.Lookup(packages)
+		if result != nil {
+			return result
+		}
+	}
+
+	return node
 }

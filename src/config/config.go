@@ -40,8 +40,9 @@ type Config struct {
 	Pip_index string `json:"pip_mirror"`
 
 	// cache options
-	Handler_cache_mb int `json:"handler_cache_mb"`
-	Import_cache_mb  int `json:"import_cache_mb"`
+	Handler_cache_mb       int    `json:"handler_cache_mb"`
+	Import_cache_mb        int    `json:"import_cache_mb"`
+	Import_cache_tree_path string `json:"import_cache_tree_path"`
 
 	// base image path for sock containers
 	SOCK_base_path string `json: "sock_base_path"`
