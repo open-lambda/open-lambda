@@ -191,7 +191,9 @@ func (pool *SOCKPool) Cleanup() {
 	pool.printf("memory pool emptied")
 
 	pool.cgPool.Destroy()
-	syscall.Unmount(pool.rootDir, syscall.MNT_DETACH)
+	if err := syscall.Unmount(pool.rootDir, syscall.MNT_DETACH); err != nil {
+		panic(err)
+	}
 	os.RemoveAll(pool.rootDir)
 }
 

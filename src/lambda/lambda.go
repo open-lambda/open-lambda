@@ -173,7 +173,7 @@ func (mgr *LambdaMgr) Cleanup() {
 	// cleanup SandboxPool
 	mgr.mapMutex.Lock() // don't unlock, because this shouldn't be used anymore
 	for _, f := range mgr.lfuncMap {
-		fmt.Printf("Kill function: %s", f.name)
+		log.Printf("Kill function: %s", f.name)
 		f.Kill()
 	}
 	mgr.sbPool.Cleanup() // assumes all Sandboxes are gone

@@ -163,10 +163,11 @@ func (cache *ImportCache) run(pool sandbox.SandboxPool) {
 
 		case done := <-cache.killChan:
 			if cache.root.sb != nil {
+				// should recursively kill them all
 				cache.root.sb.Destroy()
 			}
-			done <- true
 			cache.pool.Cleanup()
+			done <- true
 			return
 		}
 	}
