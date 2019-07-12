@@ -109,12 +109,13 @@ def f(event):
  * The manager installs to the worker host from an optional pip mirror.
  */
 type PackagePuller struct {
-	sbPool sandbox.SandboxPool
+	sbPool    sandbox.SandboxPool
+	depTracer *DepTracer
 
 	// directory of lambda code that installs pip packages
 	pipLambda string
 
-	modules sync.Map
+	packages sync.Map
 }
 
 type Package struct {
@@ -130,8 +131,8 @@ type PackageMeta struct {
 	TopLevel []string `json:"TopLevel"`
 }
 
-func NewPackagePuller(sbPool sandbox.SandboxPool) (*PackagePuller, error) {
-	// create a lambda function for installing pip modules.  We do
+func NewPackagePuller(sbPool sandbox.SandboxPool, depTracer *DepTracer) (*PackagePuller, error) {
+	// create a lambda function for installing pip packages.  We do
 	// each install in a Sandbox for two reasons:
 	//
 	// 1. packages may be malicious
@@ -149,6 +150,7 @@ func NewPackagePuller(sbPool sandbox.SandboxPool) (*PackagePuller, error) {
 
 	installer := &PackagePuller{
 		sbPool:    sbPool,
+		depTracer: depTracer,
 		pipLambda: pipLambda,
 	}
 
@@ -162,16 +164,92 @@ func normalizePkg(pkg string) string {
 	return strings.ReplaceAll(strings.ToLower(pkg), "_", "-")
 }
 
-func (mp *PackagePuller) GetPkg(pkg string) *Package {
+// "pip install" missing packages to Conf.Pkgs_dir, creates
+// <codeDir>/packages, then symlinks every package in installs (and
+// every package recursively required by those) into a the
+// <codeDir>/packages
+func (pp *PackagePuller) InstallRecursive(codeDir string, installs []string) ([]string, error) {
+	// shrink capacity to length so that our appends are not
+	// visible to caller
+	installs = installs[:len(installs):len(installs)]
+
+	path := filepath.Join(codeDir, "packages")
+	if err := os.Mkdir(path, 0700); err != nil {
+		return installs, fmt.Errorf("could not create %s: %v", path, err)
+	}
+
+	installSet := make(map[string]bool)
+	for _, install := range installs {
+		name := strings.Split(install, "==")[0]
+		installSet[name] = true
+	}
+
+	// Installs may grow as we loop, because some installs have
+	// deps, leading to other installs
+	for i := 0; i < len(installs); i++ {
+		pkg := installs[i]
+		log.Printf("On %v of %v", pkg, installs)
+		p, err := pp.GetPkg(pkg)
+		if err != nil {
+			return installs, err
+		}
+
+		log.Printf("Package '%s' has deps %v", pkg, p.meta.Deps)
+		log.Printf("Package '%s' has top-level modules %v", pkg, p.meta.TopLevel)
+
+		// push any previously unseen deps on the list of ones to install
+		for _, dep := range p.meta.Deps {
+			if !installSet[dep] {
+				installs = append(installs, dep)
+				installSet[dep] = true
+			}
+		}
+
+		if err := p.CreateSymlinks(codeDir); err != nil {
+			return installs, err
+		}
+	}
+
+	return installs, nil
+}
+
+// does the pip install in a Sandbox, taking care to never install the
+// same Sandbox more than once.
+//
+// the fast/slow path code is tweaked from the sync.Once code, the
+// difference being that may try the installed more than once, but we
+// will never try more after the first success
+func (pp *PackagePuller) GetPkg(pkg string) (*Package, error) {
+	// get (or create) package
 	pkg = normalizePkg(pkg)
-	mod, _ := mp.modules.LoadOrStore(pkg, &Package{name: pkg})
-	return mod.(*Package)
+	tmp, _ := pp.packages.LoadOrStore(pkg, &Package{name: pkg})
+	p := tmp.(*Package)
+
+	// fast path
+	if atomic.LoadUint32(&p.installed) == 1 {
+		return p, nil
+	}
+
+	// slow path
+	p.installMutex.Lock()
+	defer p.installMutex.Unlock()
+	if p.installed == 0 {
+		if err := pp.sandboxInstall(p); err != nil {
+			return p, err
+		} else {
+			atomic.StoreUint32(&p.installed, 1)
+			pp.depTracer.TracePackage(p)
+			return p, nil
+		}
+	}
+
+	return p, nil
 }
 
 // do the pip install within a new Sandbox, to a directory mapped from
 // the host.  We want the package on the host to share with all, but
 // want to run the install in the Sandbox because we don't trust it.
-func (mp *PackagePuller) sandboxInstall(p *Package) (err error) {
+func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 	// the pip-install lambda installs to /host, which is the the
 	// same as scratchDir, which is the same as a sub-directory
 	// named after the package in the packages dir
@@ -201,7 +279,7 @@ func (mp *PackagePuller) sandboxInstall(p *Package) (err error) {
 	meta := &sandbox.SandboxMeta{
 		MemLimitMB: config.Conf.Limits.Installer_mem_mb,
 	}
-	sb, err := mp.sbPool.Create(nil, true, mp.pipLambda, scratchDir, meta)
+	sb, err := pp.sbPool.Create(nil, true, pp.pipLambda, scratchDir, meta)
 	if err != nil {
 		return err
 	}
@@ -212,9 +290,10 @@ func (mp *PackagePuller) sandboxInstall(p *Package) (err error) {
 		return err
 	}
 
-	// the URL doesn't matter, since it is local anyway
+	// we still need to run a Sandbox to parse the dependencies, even if it is already installed
 	msg := fmt.Sprintf(`{"pkg": "%s", "alreadyInstalled": %v}`, p.name, alreadyInstalled)
 	reqBody := bytes.NewReader([]byte(msg))
+	// the URL doesn't matter, since it is local anyway
 	req, err := http.NewRequest("POST", "http://container/run/pip-install", reqBody)
 	if err != nil {
 		return err
@@ -251,31 +330,41 @@ func (mp *PackagePuller) sandboxInstall(p *Package) (err error) {
 	return nil
 }
 
-// does the pip install in a Sandbox, taking care to never install the
-// same Sandbox more than once.
+// add modules that come with the package to the lambda's path
 //
-// the fast/slow path code is tweaked from the sync.Once code, the
-// difference being that may try the installed more than once, but we
-// will never try more after the first success
-func (mp *PackagePuller) Install(pkg string) (*Package, bool, error) {
-	p := mp.GetPkg(pkg)
+// the package may contain one or more top-level modules.  It is
+// common for it to have one-top level module with the same name as
+// the package (e.g., package numpy contains module numpy).  In
+// contrast, the scikit-learn package has one top-level module, named
+// sklearn
+func (p *Package) CreateSymlinks(codeDir string) error {
+	for _, topMod := range p.meta.TopLevel {
+		src := filepath.Join(codeDir, "packages", topMod)
+		dstSB := filepath.Join("/packages", p.name, topMod)
+		dstHost := filepath.Join(config.Conf.Pkgs_dir, p.name, topMod)
+		dstHostPy := dstHost + ".py"
 
-	// fast path
-	if atomic.LoadUint32(&p.installed) == 1 {
-		return p, false, nil
-	}
+		// do we simlink to directory /packages/pkg, or file /packages/pkg.py?
+		if _, err := os.Stat(dstHost); err != nil {
+			// the dir version doesn't exist, so check the .py version
+			if os.IsNotExist(err) {
+				if _, err := os.Stat(dstHostPy); err != nil {
+					if os.IsNotExist(err) {
+						return fmt.Errorf("could not symlink to either '%s' or '%s'", dstHost, dstHostPy)
+					}
+					return err
+				}
+			} else {
+				return err
+			}
 
-	// slow path
-	p.installMutex.Lock()
-	defer p.installMutex.Unlock()
-	if p.installed == 0 {
-		if err := mp.sandboxInstall(p); err != nil {
-			return p, false, err
-		} else {
-			atomic.StoreUint32(&p.installed, 1)
-			return p, true, nil
+			src += ".py"
+			dstSB += ".py"
+		}
+
+		if err := os.Symlink(dstSB, src); err != nil {
+			return err
 		}
 	}
-
-	return p, false, nil
+	return nil
 }

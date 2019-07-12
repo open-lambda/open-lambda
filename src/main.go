@@ -147,7 +147,7 @@ func overrideOpts(confPath, overridePath, optsStr string) error {
 	for _, opt := range opts {
 		parts := strings.Split(opt, "=")
 		if len(parts) != 2 {
-			return fmt.Errorf("Could not parse option: '%s'", opt)
+			return fmt.Errorf("Could not parse key=val: '%s'", opt)
 		}
 		keys := strings.Split(parts[0], ".")
 		val := parts[1]
@@ -181,7 +181,7 @@ func overrideOpts(confPath, overridePath, optsStr string) error {
 				return err
 			}
 		default:
-			return fmt.Errorf("config values of type %T must be edited manually in the config file ", prev)
+			return fmt.Errorf("config values of type %T (%s) must be edited manually in the config file ", prev, key)
 		}
 	}
 

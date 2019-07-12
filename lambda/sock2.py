@@ -22,7 +22,7 @@ def recv_fds(sock, msglen, maxfds):
 
 
 def web_server():
-    print("Start web server on fd: %d" % file_sock.fileno())
+    print("sock2.py: start web server on fd: %d" % file_sock.fileno())
 
     class SockFileHandler(tornado.web.RequestHandler):
         def post(self):
@@ -58,7 +58,7 @@ def fork_server():
     global file_sock
 
     file_sock.setblocking(True)
-    print("Start fork server on fd: %d" % file_sock.fileno())
+    print("sock2.py: start fork server on fd: %d" % file_sock.fileno())
 
     while True:
         client, info = file_sock.accept()
@@ -110,7 +110,6 @@ def start_container():
     global file_sock
 
     # TODO: if we can get rid of this, we can get rid of the ns module
-    print("unshare")
     rv = ol.unshare()
     assert rv == 0
 
@@ -119,9 +118,7 @@ def start_container():
     # can know that once the child exits, it is safe to start sending
     # messages to the sock file.
     file_sock = tornado.netutil.bind_unix_socket(file_sock_path)
-    print("file sock", file_sock)
 
-    print("fork")
     pid = os.fork()
     assert(pid >= 0)
 
@@ -135,8 +132,12 @@ def start_container():
         # this code can be whatever OL decides, but it will probably do the following:
         # 1. some imports
         # 2. call either web_server or fork_server
-        exec(f.read())
-
+        code = f.read()
+        try:
+            exec(code)
+        except Exception as e:
+            print("Exception: " + traceback.format_exc())
+            print("Problematic Python Code:\n" + code)
 
 # caller is expected to do chroot, because we want to use the
 # python.exe inside the container
@@ -148,7 +149,7 @@ def main():
         print("    cgroup-count: number of FDs (starting at 3) that refer to /sys/fs/cgroup/..../cgroup.procs files")
         sys.exit(1)
 
-    print('started with args: ' + " ".join(sys.argv))
+    print('sock2.py: started new process with args: ' + " ".join(sys.argv))
 
     bootstrap_path = sys.argv[1]
     cgroup_fds = 0

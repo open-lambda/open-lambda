@@ -14,8 +14,8 @@ type SandboxPool interface {
 	// meta: details about installs, imports, etc.  Will be populated with defaults if not specified
 	Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, meta *SandboxMeta) (sb Sandbox, err error)
 
-	// All containers must be deleted before this is called, or it
-	// will hang
+	// blocks until all Sandboxes are deleted, so caller must
+	// either delete them before this call, or from another asyncronously
 	Cleanup()
 
 	// handler will be called whenever a Sandbox is created, deleted, etc
@@ -77,10 +77,6 @@ const (
 	FORK_FAILED        = SockError("Fork from parent Sandbox failed")
 	STATUS_UNSUPPORTED = SockError("Argument to Status(...) unsupported by this Sandbox")
 )
-
-func (e SockError) Error() string {
-	return string(e)
-}
 
 // reference to function that will be called by sandbox pool upon key
 // events
