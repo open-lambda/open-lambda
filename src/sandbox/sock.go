@@ -271,8 +271,6 @@ func (c *SOCKContainer) DebugString() string {
 
 // fork a new process from the Zygote in c, relocate it to be the server in dst
 func (c *SOCKContainer) fork(dst Sandbox) (err error) {
-	// TODO: find a better way to signal that the parent in
-	// inoperational, and find a remedy
 	spareMB := c.cg.getMemLimitMB() - c.cg.getMemUsageMB()
 	if spareMB < 3 {
 		return fmt.Errorf("only %vMB of spare memory in parent, rejecting fork request (need at least 3MB)", spareMB)

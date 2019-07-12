@@ -2,6 +2,7 @@ package sandbox
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/open-lambda/open-lambda/ol/config"
 )
@@ -30,4 +31,13 @@ func fillMetaDefaults(meta *SandboxMeta) *SandboxMeta {
 		meta.MemLimitMB = config.Conf.Limits.Mem_mb
 	}
 	return meta
+}
+
+func (meta *SandboxMeta) String() string {
+	return fmt.Sprintf("<installs=[%s], imports=[%s], mem-limit-mb=%v>",
+		strings.Join(meta.Installs, ","), strings.Join(meta.Imports, ","), meta.MemLimitMB)
+}
+
+func (e SockError) Error() string {
+	return string(e)
 }

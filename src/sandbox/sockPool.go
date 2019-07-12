@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"syscall"
 
@@ -76,10 +77,11 @@ func sbStr(sb Sandbox) string {
 }
 
 func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, meta *SandboxMeta) (sb Sandbox, err error) {
+	id := fmt.Sprintf("%d", atomic.AddInt64(&nextId, 1))
 	meta = fillMetaDefaults(meta)
-	log.Printf("<%v>.Create(%v, %v, %v, %v, %v)...", pool.name, sbStr(parent), isLeaf, codeDir, scratchDir, meta)
+	pool.printf("<%v>.Create(%v, %v, %v, %v, %v)=%s...", pool.name, sbStr(parent), isLeaf, codeDir, scratchDir, meta, id)
 	defer func() {
-		log.Printf("...returns %v, %v", sbStr(sb), err)
+		pool.printf("...returns %v, %v", sbStr(sb), err)
 	}()
 
 	t := stats.T0("Create()")
@@ -94,9 +96,8 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 	cg := pool.cgPool.GetCg(meta.MemLimitMB)
 	t2.T1()
 
-	id := fmt.Sprintf("%d", atomic.AddInt64(&nextId, 1))
 	containerRootDir := filepath.Join(pool.rootDir, id)
-	var c *SOCKContainer = &SOCKContainer{
+	var cSock *SOCKContainer = &SOCKContainer{
 		pool:             pool,
 		id:               id,
 		containerRootDir: containerRootDir,
@@ -106,6 +107,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 		children:         make([]Sandbox, 0),
 		meta:             meta,
 	}
+	var c Sandbox = cSock
 
 	defer func() {
 		if err != nil {
@@ -114,12 +116,12 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 	}()
 
 	// root file system
-	if isLeaf && c.codeDir == "" {
+	if isLeaf && cSock.codeDir == "" {
 		return nil, fmt.Errorf("leaf sandboxes must have codeDir set")
 	}
 
 	t2 = t.T0("make-root-fs")
-	if err := c.populateRoot(); err != nil {
+	if err := cSock.populateRoot(); err != nil {
 		return nil, fmt.Errorf("failed to create root FS: %v", err)
 	}
 	t2.T1()
@@ -129,41 +131,46 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 	if isLeaf {
 		pyCode = append(pyCode, "web_server()")
 	} else {
-		modDiff := []string{}
-		if parent != nil {
-			modDiff = setSubtract(meta.Imports, parent.Meta().Imports)
-		}
-		for _, mod := range modDiff {
+		for _, mod := range meta.Imports {
+			pool.printf("Pre-import module '%s'", mod)
 			pyCode = append(pyCode, fmt.Sprintf("import %s", mod))
 		}
 		pyCode = append(pyCode, "fork_server()")
 	}
-	if err := c.writeBootstrapCode(pyCode); err != nil {
+	if err := cSock.writeBootstrapCode(pyCode); err != nil {
 		return nil, err
 	}
 
-	safe := newSafeSandbox(c, pool.eventHandlers)
+	// wrap to make thread-safe and handle container death.
+	// after this line, two things happen:
+	// 1. listeners (e.g., evictors) become aware of the Sandbox
+	// 2. if this function fails, .Destroy() cleanup will be through the safeSandbox layer
+	c = newSafeSandbox(c, pool.eventHandlers)
 
 	// create new process in container (fresh, or forked from parent)
 	if parent != nil {
 		t2 := t.T0("fork-proc")
-		if err := parent.fork(safe); err != nil {
+		if err := parent.fork(c); err != nil {
 			if err != nil {
-				log.Printf("parent.fork returned %v", err)
+				pool.printf("parent.fork returned %v", err)
 				return nil, FORK_FAILED
 			}
 		}
 		t2.T1()
 	} else {
 		t2 := t.T0("fresh-proc")
-		if err := c.freshProc(); err != nil {
+		if err := cSock.freshProc(); err != nil {
 			return nil, err
 		}
 		t2.T1()
 	}
 
-	// wrap to make thread-safe and handle container death
-	return safe, nil
+	return c, nil
+}
+
+func (pool *SOCKPool) printf(format string, args ...interface{}) {
+	msg := fmt.Sprintf(format, args...)
+	log.Printf("%s [SOCK POOL %s]", strings.TrimRight(msg, "\n"), pool.name)
 }
 
 // handler(...) will be called everytime a sandbox-related event occurs,
@@ -179,9 +186,9 @@ func (pool *SOCKPool) AddListener(handler SandboxEventFunc) {
 func (pool *SOCKPool) Cleanup() {
 	// user is required to kill all containers before they call
 	// this.  If they did, the memory pool should be full.
-	log.Printf("SOCKPool.Cleanup: make sure all memory is free")
+	pool.printf("make sure all memory is free")
 	pool.mem.adjustAvailableMB(-pool.mem.totalMB)
-	log.Printf("SOCKPool.Cleanup: memory pool emptied")
+	pool.printf("memory pool emptied")
 
 	pool.cgPool.Destroy()
 	syscall.Unmount(pool.rootDir, syscall.MNT_DETACH)
@@ -190,20 +197,4 @@ func (pool *SOCKPool) Cleanup() {
 
 func (pool *SOCKPool) DebugString() string {
 	return pool.debugger.Dump()
-}
-
-func setSubtract(a []string, b []string) []string {
-	rv := make([]string, len(a))
-	for _, v1 := range a {
-		inB := false
-		for _, v2 := range b {
-			if v2 == v1 {
-				inB = true
-			}
-		}
-		if !inB {
-			rv = append(rv, v1)
-		}
-	}
-	return rv
 }

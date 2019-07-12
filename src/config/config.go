@@ -39,9 +39,13 @@ type Config struct {
 	// pip index address for installing python packages
 	Pip_index string `json:"pip_mirror"`
 
-	// cache options
+	// CACHE OPTIONS
 	Handler_cache_mb int `json:"handler_cache_mb"`
 	Import_cache_mb  int `json:"import_cache_mb"`
+
+	// can be empty (use root zygote only), a JSON obj (specifying
+	// the tree), or a path (to a file specifying the tree)
+	Import_cache_tree interface{} `json:"import_cache_tree"`
 
 	// base image path for sock containers
 	SOCK_base_path string `json: "sock_base_path"`
@@ -103,6 +107,7 @@ func LoadDefaults(olPath string) error {
 		Registry_cache_ms: 5000, // 5 seconds
 		Handler_cache_mb:  handler_cache_mb,
 		Import_cache_mb:   import_cache_mb,
+		Import_cache_tree: "",
 		Limits: LimitsConfig{
 			Procs:            10,
 			Mem_mb:           50,

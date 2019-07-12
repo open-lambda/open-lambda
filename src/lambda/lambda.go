@@ -22,17 +22,17 @@ import (
 	"github.com/open-lambda/open-lambda/ol/stats"
 )
 
-var nextScratchId int64 = 1000
+var nextDirId int64 = 1000
 
 // provides thread-safe getting of lambda functions and collects all
 // lambda subsystems (resource pullers and sandbox pools) in one place
 type LambdaMgr struct {
 	// subsystems (these are thread safe)
 	sbPool sandbox.SandboxPool
-	*HandlerPuller
-	*PackagePuller
-	*ImportCache
 	*DepTracer
+	*PackagePuller // depends on sbPool and DepTracer
+	*ImportCache   // depends PackagePuller
+	*HandlerPuller // depends on ImportCache (optional)
 
 	// thread-safe map from a lambda's name to its LambdaFunc
 	mapMutex sync.Mutex
@@ -94,24 +94,25 @@ func NewLambdaMgr() (res *LambdaMgr, err error) {
 	}
 	defer func() {
 		if err != nil {
+			log.Printf("Cleanup Lambda Manager due to error: %v", err)
 			mgr.Cleanup()
 		}
 	}()
 
 	log.Printf("Create SandboxPool")
-	mgr.sbPool, err = sandbox.SandboxPoolFromConfig("sock-handlers", config.Conf.Handler_cache_mb)
+	mgr.sbPool, err = sandbox.SandboxPoolFromConfig("handler-sandboxes", config.Conf.Handler_cache_mb)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Printf("Create DepTracer")
+	mgr.DepTracer, err = NewDepTracer(filepath.Join(config.Conf.Worker_dir, "dep-trace.json"))
 	if err != nil {
 		return nil, err
 	}
 
 	log.Printf("Create PackagePuller")
-	mgr.PackagePuller, err = NewPackagePuller(mgr.sbPool)
-	if err != nil {
-		return nil, err
-	}
-
-	log.Printf("Create HandlerPuller")
-	mgr.HandlerPuller, err = NewHandlerPuller(filepath.Join(config.Conf.Worker_dir, "lambda_code"), config.Conf.Registry)
+	mgr.PackagePuller, err = NewPackagePuller(mgr.sbPool, mgr.DepTracer)
 	if err != nil {
 		return nil, err
 	}
@@ -119,14 +120,14 @@ func NewLambdaMgr() (res *LambdaMgr, err error) {
 	importCacheMb := config.Conf.Import_cache_mb
 	if importCacheMb > 0 {
 		log.Printf("Create ImportCache")
-		mgr.ImportCache, err = NewImportCache("sock-cache", importCacheMb)
+		mgr.ImportCache, err = NewImportCache("cache-sandboxes", importCacheMb, mgr.PackagePuller)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	log.Printf("Create DepTracer")
-	mgr.DepTracer, err = NewDepTracer(filepath.Join(config.Conf.Worker_dir, "dep-trace.json"))
+	log.Printf("Create HandlerPuller")
+	mgr.HandlerPuller, err = NewHandlerPuller(filepath.Join(config.Conf.Worker_dir, "lambda_code"), config.Conf.Registry)
 	if err != nil {
 		return nil, err
 	}
@@ -295,11 +296,6 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 		}
 	}()
 
-	path := filepath.Join(codeDir, "packages")
-	if err := os.Mkdir(path, 0700); err != nil {
-		return fmt.Errorf("could not create %s: %v", path, err)
-	}
-
 	// inspect new code for dependencies; if we can install
 	// everything necessary, start using new code
 	meta, err := parseMeta(codeDir)
@@ -308,64 +304,9 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 	}
 
 	f.lmgr.DepTracer.TraceFunction(codeDir, meta.Installs)
-
-	installSet := make(map[string]bool)
-	for _, install := range meta.Installs {
-		name := strings.Split(install, "==")[0]
-		installSet[name] = true
-	}
-
-	// Installs may grow as we loop, because some installs have
-	// deps, leading to other installs
-	for i := 0; i < len(meta.Installs); i++ {
-		pkg := meta.Installs[i]
-		log.Printf("On %v of %v", pkg, meta.Installs)
-		p, new, err := f.lmgr.PackagePuller.Install(pkg)
-		if err != nil {
-			return err
-		}
-
-		// first time it was installed successfully
-		if new {
-			f.lmgr.DepTracer.TracePackage(p)
-		}
-
-		log.Printf("Package '%s' has deps %v", pkg, p.meta.Deps)
-		log.Printf("Package '%s' has top-level modules %v", pkg, p.meta.TopLevel)
-
-		// push any previously unseen deps on the list of ones to install
-		for _, dep := range p.meta.Deps {
-			if !installSet[dep] {
-				meta.Installs = append(meta.Installs, dep)
-				installSet[dep] = true
-			}
-		}
-
-		// add modules that come with the package to the
-		// lambda's path
-		//
-		// the package may contain one or more top-level
-		// modules.  It is common for it to have one-top level
-		// module with the same name as the package (e.g.,
-		// package numpy contains module numpy).  In contrast,
-		// the scikit-learn package has one top-level module,
-		// named sklearn
-		for _, topMod := range p.meta.TopLevel {
-			src := filepath.Join(codeDir, "packages", topMod)
-			dst := filepath.Join("/packages", pkg, topMod)
-
-			if err := os.Symlink(dst, src); err != nil {
-				if !os.IsNotExist(err) {
-					return err
-				}
-
-				src_py := src + ".py"
-				dst_py := dst + ".py"
-				if err := os.Symlink(dst_py, src_py); err != nil {
-					return err
-				}
-			}
-		}
+	meta.Installs, err = f.lmgr.PackagePuller.InstallRecursive(codeDir, meta.Installs)
+	if err != nil {
+		return err
 	}
 
 	f.codeDir = codeDir
@@ -640,15 +581,16 @@ func (linst *LambdaInstance) Task() {
 		if sb == nil {
 			var parent sandbox.Sandbox
 			if f.lmgr.ImportCache != nil {
-				parent = f.lmgr.ImportCache.GetParent(linst.meta)
+				parent = f.lmgr.ImportCache.GetZygote(linst.meta)
 			}
 
 			// TODO: delete scratchDir when Sandbox is destroyed
-			scratchDir := mkScratchDir("func-" + f.name)
+			scratchDir := mkNextDir("scratch", "func-"+f.name)
 			sb, err = f.lmgr.sbPool.Create(parent, true, linst.codeDir, scratchDir, linst.meta)
 			if err == sandbox.FORK_FAILED {
+				// TODO: destroy parent?
 				f.printf("retry Create after failed fork")
-				scratchDir := mkScratchDir("func-" + f.name)
+				scratchDir := mkNextDir("scratch", "func-"+f.name)
 				sb, err = f.lmgr.sbPool.Create(nil, true, linst.codeDir, scratchDir, linst.meta)
 			}
 
@@ -722,11 +664,11 @@ func getGID() uint64 {
 	return n
 }
 
-func mkScratchDir(prefix string) string {
-	scratchId := fmt.Sprintf("%s-%d", prefix, atomic.AddInt64(&nextScratchId, 1))
-	scratchDir := filepath.Join(config.Conf.Worker_dir, "scratch", scratchId)
-	if err := os.MkdirAll(scratchDir, 0777); err != nil {
+func mkNextDir(prefix, name string) string {
+	id := fmt.Sprintf("%s-%d", prefix, atomic.AddInt64(&nextDirId, 1))
+	dir := filepath.Join(config.Conf.Worker_dir, prefix, name+"-"+id)
+	if err := os.MkdirAll(dir, 0777); err != nil {
 		panic(err)
 	}
-	return scratchDir
+	return dir
 }
