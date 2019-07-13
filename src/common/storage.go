@@ -1,11 +1,11 @@
 package common
 
 import (
-	"sync/atomic"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
-	"log"
+	"sync/atomic"
 	"syscall"
 )
 
@@ -18,7 +18,7 @@ var nextDirId int64 = 1000
 
 type DirMaker struct {
 	prefix string
-	mount bool
+	mount  bool
 }
 
 func NewDirMaker(system string, mount bool) (*DirMaker, error) {
@@ -44,7 +44,7 @@ func NewDirMaker(system string, mount bool) (*DirMaker, error) {
 
 	return &DirMaker{
 		prefix: prefix,
-		mount: mount,
+		mount:  mount,
 	}, nil
 }
 

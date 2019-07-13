@@ -13,14 +13,14 @@ import (
 )
 
 type ImportCache struct {
-	codeDirs *common.DirMaker
+	codeDirs    *common.DirMaker
 	scratchDirs *common.DirMaker
-	pkgPuller *PackagePuller
-	pool      sandbox.SandboxPool
-	root      *ImportCacheNode
-	requests  chan *ZygoteReq
-	events    chan sandbox.SandboxEvent
-	killChan  chan chan bool
+	pkgPuller   *PackagePuller
+	sbPool      sandbox.SandboxPool
+	root        *ImportCacheNode
+	requests    chan *ZygoteReq
+	events      chan sandbox.SandboxEvent
+	killChan    chan chan bool
 }
 
 // a node in a tree of Zygotes
@@ -58,12 +58,12 @@ type ZygoteReq struct {
 
 func NewImportCache(codeDirs *common.DirMaker, scratchDirs *common.DirMaker, sizeMb int, pp *PackagePuller) (ic *ImportCache, err error) {
 	cache := &ImportCache{
-		codeDirs: codeDirs,
+		codeDirs:    codeDirs,
 		scratchDirs: scratchDirs,
-		pkgPuller: pp,
-		requests:  make(chan *ZygoteReq, 32),
-		events:    make(chan sandbox.SandboxEvent, 32),
-		killChan:  make(chan chan bool),
+		pkgPuller:   pp,
+		requests:    make(chan *ZygoteReq, 32),
+		events:      make(chan sandbox.SandboxEvent, 32),
+		killChan:    make(chan chan bool),
 	}
 
 	// a static tree of Zygotes may be specified by a file (if so, parse and init it)
@@ -106,15 +106,15 @@ func NewImportCache(codeDirs *common.DirMaker, scratchDirs *common.DirMaker, siz
 	cache.root.Dump(0)
 
 	// import cache gets its own sandbox pool
-	pool, err := sandbox.SandboxPoolFromConfig("import-cache", sizeMb)
+	sbPool, err := sandbox.SandboxPoolFromConfig("import-cache", sizeMb)
 	if err != nil {
 		return nil, err
 	}
-	pool.AddListener(cache.Event)
-	cache.pool = pool
+	sbPool.AddListener(cache.Event)
+	cache.sbPool = sbPool
 
 	// start background task to serve requests for Zygotes
-	go cache.run(pool)
+	go cache.run()
 	return cache, nil
 }
 
@@ -136,7 +136,7 @@ func (cache *ImportCache) GetZygote(meta *sandbox.SandboxMeta) sandbox.Sandbox {
 	return <-parent
 }
 
-func (cache *ImportCache) run(pool sandbox.SandboxPool) {
+func (cache *ImportCache) run() {
 	for {
 		select {
 		case req := <-cache.requests:
@@ -168,7 +168,7 @@ func (cache *ImportCache) run(pool sandbox.SandboxPool) {
 				// should recursively kill them all
 				cache.root.sb.Destroy()
 			}
-			cache.pool.Cleanup()
+			cache.sbPool.Cleanup()
 			done <- true
 			return
 		}
@@ -243,7 +243,7 @@ Retry:
 		Imports:  node.topLevelMods,
 	}
 
-	sb, err = cache.pool.Create(parentSB, false, node.codeDir, scratchDir, meta)
+	sb, err = cache.sbPool.Create(parentSB, false, node.codeDir, scratchDir, meta)
 	if err != nil {
 		// if there was a problem with the parent, we'll restart it and retry once more
 		if err == sandbox.FORK_FAILED && retry {

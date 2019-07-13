@@ -28,7 +28,7 @@ type LambdaMgr struct {
 	*HandlerPuller // depends on ImportCache (optional)
 
 	// storage dirs that we manage
-	codeDirs *common.DirMaker
+	codeDirs    *common.DirMaker
 	scratchDirs *common.DirMaker
 
 	// thread-safe map from a lambda's name to its LambdaFunc
@@ -164,6 +164,14 @@ func (mgr *LambdaMgr) Get(name string) (f *LambdaFunc) {
 	}
 
 	return f
+}
+
+func (mgr *LambdaMgr) Debug() string {
+	s := "Handler Sandbox Pool\n--------\n" + mgr.sbPool.DebugString()
+	if mgr.ImportCache != nil {
+		s += "Import Cache Sandbox Pool\n--------\n" + mgr.ImportCache.sbPool.DebugString()
+	}
+	return s + "\n"
 }
 
 func (mgr *LambdaMgr) Cleanup() {

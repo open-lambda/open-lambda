@@ -20,6 +20,7 @@ const (
 	PID_PATH    = "/pid"
 	STATUS_PATH = "/status"
 	STATS_PATH  = "/stats"
+	DEBUG_PATH  = "/debug"
 )
 
 // GetPid returns process ID, useful for making sure we're talking to the expected server

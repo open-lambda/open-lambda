@@ -187,9 +187,14 @@ func (pool *CgroupPool) Destroy() {
 	}
 }
 
-func (pool *CgroupPool) GetCg(memLimitMB int) *Cgroup {
+func (pool *CgroupPool) GetCg(memLimitMB int, moveMemCharge bool) *Cgroup {
 	cg := <-pool.ready
 	cg.setMemLimitMB(memLimitMB)
+	if moveMemCharge {
+		cg.WriteInt("memory", "memory.move_charge_at_immigrate", 1)
+	} else {
+		cg.WriteInt("memory", "memory.move_charge_at_immigrate", 0)
+	}
 	return cg
 }
 

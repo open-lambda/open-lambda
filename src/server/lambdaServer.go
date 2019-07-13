@@ -13,7 +13,7 @@ import (
 // LambdaServer is a worker server that listens to run lambda requests and forward
 // these requests to its sandboxes.
 type LambdaServer struct {
-	lambda_mgr *lambda.LambdaMgr
+	lambdaMgr *lambda.LambdaMgr
 }
 
 // getUrlComponents parses request URL into its "/" delimated components
@@ -59,31 +59,36 @@ func (s *LambdaServer) RunLambda(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("expected invocation format: /run/<lambda-name>"))
 		} else {
 			img := urlParts[1]
-			s.lambda_mgr.Get(img).Invoke(w, r)
+			s.lambdaMgr.Get(img).Invoke(w, r)
 		}
 	}
 }
 
+func (s *LambdaServer) Debug(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte(s.lambdaMgr.Debug()))
+}
+
 func (s *LambdaServer) cleanup() {
-	s.lambda_mgr.Cleanup()
+	s.lambdaMgr.Cleanup()
 }
 
 // NewLambdaServer creates a server based on the passed config."
 func NewLambdaServer() (*LambdaServer, error) {
 	log.Printf("Start Lambda Server")
 
-	lambda_mgr, err := lambda.NewLambdaMgr()
+	lambdaMgr, err := lambda.NewLambdaMgr()
 	if err != nil {
 		return nil, err
 	}
 
 	server := &LambdaServer{
-		lambda_mgr: lambda_mgr,
+		lambdaMgr: lambdaMgr,
 	}
 
 	log.Printf("Setups Handlers")
 	port := fmt.Sprintf(":%s", common.Conf.Worker_port)
 	http.HandleFunc(RUN_PATH, server.RunLambda)
+	http.HandleFunc(DEBUG_PATH, server.Debug)
 
 	log.Printf("Execute handler by POSTing to localhost%s%s%s\n", port, RUN_PATH, "<lambda>")
 	log.Printf("Get status by sending request to localhost%s%s\n", port, STATUS_PATH)

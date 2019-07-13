@@ -259,7 +259,8 @@ func (c *SOCKContainer) DebugString() string {
 		s += fmt.Sprintf("FREEZE STATE: unknown (%s)\n", err)
 	}
 
-	s += fmt.Sprintf("MEMORY USED: TODO (ask cgroup)\n")
+	s += fmt.Sprintf("MEMORY USED: %d of %d MB\n",
+		c.cg.getMemUsageMB(), c.cg.getMemLimitMB())
 
 	return s
 }

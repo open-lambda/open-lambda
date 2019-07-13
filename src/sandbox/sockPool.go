@@ -37,12 +37,12 @@ func NewSOCKPool(name string, mem *MemPool) (cf *SOCKPool, err error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	pool := &SOCKPool{
 		name:          name,
 		mem:           mem,
 		cgPool:        cgPool,
-		rootDirs:       rootDirs,
+		rootDirs:      rootDirs,
 		eventHandlers: []SandboxEventFunc{},
 	}
 
@@ -75,13 +75,19 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 	t2.T1()
 
 	t2 = t.T0("acquire-cgroup")
-	cg := pool.cgPool.GetCg(meta.MemLimitMB)
+	// when creating a new Sandbox without a parent, we want to
+	// move the cgroup memory charge (otherwise the charge will
+	// exist outside any Sandbox).  But when creating a child, we
+	// don't want to use this cgroup feature, because the child
+	// would take the blame for ALL of the parent's allocations
+	moveMemCharge := parent == nil
+	cg := pool.cgPool.GetCg(meta.MemLimitMB, moveMemCharge)
 	t2.T1()
 
 	var cSock *SOCKContainer = &SOCKContainer{
 		pool:             pool,
 		id:               id,
-		containerRootDir: pool.rootDirs.Make("SB-"+id),
+		containerRootDir: pool.rootDirs.Make("SB-" + id),
 		codeDir:          codeDir,
 		scratchDir:       scratchDir,
 		cg:               cg,

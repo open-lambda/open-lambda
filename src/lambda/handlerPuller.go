@@ -22,9 +22,9 @@ var notFound404 = errors.New("file does not exist")
 // (https://en.wikipedia.org/wiki/Basic_access_authentication)
 
 type HandlerPuller struct {
-	prefix       string   // combine with name to get file path or URL
-	dirCache     sync.Map // key=lambda name, value=version, directory path
-	dirMaker     *common.DirMaker
+	prefix   string   // combine with name to get file path or URL
+	dirCache sync.Map // key=lambda name, value=version, directory path
+	dirMaker *common.DirMaker
 }
 
 type CacheEntry struct {
@@ -34,7 +34,7 @@ type CacheEntry struct {
 
 func NewHandlerPuller(dirMaker *common.DirMaker) (cp *HandlerPuller, err error) {
 	return &HandlerPuller{
-		prefix: common.Conf.Registry,
+		prefix:   common.Conf.Registry,
 		dirMaker: dirMaker,
 	}, nil
 }
