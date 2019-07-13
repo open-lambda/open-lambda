@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/open-lambda/open-lambda/ol/config"
+	"github.com/open-lambda/open-lambda/ol/common"
 	"github.com/open-lambda/open-lambda/ol/lambda"
 )
 
@@ -82,7 +82,7 @@ func NewLambdaServer() (*LambdaServer, error) {
 	}
 
 	log.Printf("Setups Handlers")
-	port := fmt.Sprintf(":%s", config.Conf.Worker_port)
+	port := fmt.Sprintf(":%s", common.Conf.Worker_port)
 	http.HandleFunc(RUN_PATH, server.RunLambda)
 
 	log.Printf("Execute handler by POSTing to localhost%s%s%s\n", port, RUN_PATH, "<lambda>")

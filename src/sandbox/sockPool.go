@@ -3,14 +3,10 @@ package sandbox
 import (
 	"fmt"
 	"log"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync/atomic"
-	"syscall"
 
-	"github.com/open-lambda/open-lambda/ol/config"
-	"github.com/open-lambda/open-lambda/ol/stats"
+	"github.com/open-lambda/open-lambda/ol/common"
 )
 
 // the first program is executed on the host, which sets up the
@@ -18,17 +14,12 @@ import (
 const SOCK_HOST_INIT = "/usr/local/bin/sock-init"
 const SOCK_GUEST_INIT = "/ol-init"
 
-var BIND uintptr = uintptr(syscall.MS_BIND)
-var BIND_RO uintptr = uintptr(syscall.MS_BIND | syscall.MS_RDONLY | syscall.MS_REMOUNT)
-var PRIVATE uintptr = uintptr(syscall.MS_PRIVATE)
-var SHARED uintptr = uintptr(syscall.MS_SHARED)
-
 var nextId int64 = 0
 
 // SOCKPool is a ContainerFactory that creats docker containeres.
 type SOCKPool struct {
 	name          string
-	rootDir       string
+	rootDirs      *common.DirMaker
 	cgPool        *CgroupPool
 	mem           *MemPool
 	eventHandlers []SandboxEventFunc
@@ -42,25 +33,16 @@ func NewSOCKPool(name string, mem *MemPool) (cf *SOCKPool, err error) {
 		return nil, err
 	}
 
-	rootDir := filepath.Join(config.Conf.Worker_dir, name)
-
-	if err := os.MkdirAll(rootDir, 0777); err != nil {
-		return nil, fmt.Errorf("failed to make root container dir :: %v", err)
+	rootDirs, err := common.NewDirMaker("root-"+name, true)
+	if err != nil {
+		return nil, err
 	}
-
-	if err := syscall.Mount(rootDir, rootDir, "", BIND, ""); err != nil {
-		return nil, fmt.Errorf("failed to bind root container dir: %v", err)
-	}
-
-	if err := syscall.Mount("none", rootDir, "", PRIVATE, ""); err != nil {
-		return nil, fmt.Errorf("failed to make root container dir private :: %v", err)
-	}
-
+	
 	pool := &SOCKPool{
 		name:          name,
 		mem:           mem,
 		cgPool:        cgPool,
-		rootDir:       rootDir,
+		rootDirs:       rootDirs,
 		eventHandlers: []SandboxEventFunc{},
 	}
 
@@ -84,7 +66,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 		pool.printf("...returns %v, %v", sbStr(sb), err)
 	}()
 
-	t := stats.T0("Create()")
+	t := common.T0("Create()")
 	defer t.T1()
 
 	// block until we have enough to cover the cgroup mem limits
@@ -96,11 +78,10 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 	cg := pool.cgPool.GetCg(meta.MemLimitMB)
 	t2.T1()
 
-	containerRootDir := filepath.Join(pool.rootDir, id)
 	var cSock *SOCKContainer = &SOCKContainer{
 		pool:             pool,
 		id:               id,
-		containerRootDir: containerRootDir,
+		containerRootDir: pool.rootDirs.Make("SB-"+id),
 		codeDir:          codeDir,
 		scratchDir:       scratchDir,
 		cg:               cg,
@@ -191,10 +172,9 @@ func (pool *SOCKPool) Cleanup() {
 	pool.printf("memory pool emptied")
 
 	pool.cgPool.Destroy()
-	if err := syscall.Unmount(pool.rootDir, syscall.MNT_DETACH); err != nil {
+	if err := pool.rootDirs.Cleanup(); err != nil {
 		panic(err)
 	}
-	os.RemoveAll(pool.rootDir)
 }
 
 func (pool *SOCKPool) DebugString() string {

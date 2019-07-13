@@ -17,7 +17,7 @@ import (
 	docker "github.com/fsouza/go-dockerclient"
 	dutil "github.com/open-lambda/open-lambda/ol/sandbox/dockerutil"
 
-	"github.com/open-lambda/open-lambda/ol/config"
+	"github.com/open-lambda/open-lambda/ol/common"
 	"github.com/open-lambda/open-lambda/ol/server"
 	"github.com/urfave/cli"
 )
@@ -38,53 +38,53 @@ func initOLDir(olPath string) (err error) {
 		return err
 	}
 
-	if err := config.LoadDefaults(olPath); err != nil {
+	if err := common.LoadDefaults(olPath); err != nil {
 		return err
 	}
 
 	confPath := filepath.Join(olPath, "config.json")
-	if err := config.Save(confPath); err != nil {
+	if err := common.SaveConf(confPath); err != nil {
 		return err
 	}
 
-	if err := os.Mkdir(config.Conf.Worker_dir, 0700); err != nil {
+	if err := os.Mkdir(common.Conf.Worker_dir, 0700); err != nil {
 		return err
 	}
 
-	if err := os.Mkdir(config.Conf.Registry, 0700); err != nil {
+	if err := os.Mkdir(common.Conf.Registry, 0700); err != nil {
 		return err
 	}
 
 	// create a base directory to run sock handlers
-	fmt.Printf("Create lambda base at %v (may take several minutes)\n", config.Conf.SOCK_base_path)
-	err = dutil.DumpDockerImage(client, "lambda", config.Conf.SOCK_base_path)
+	fmt.Printf("Create lambda base at %v (may take several minutes)\n", common.Conf.SOCK_base_path)
+	err = dutil.DumpDockerImage(client, "lambda", common.Conf.SOCK_base_path)
 	if err != nil {
 		return err
 	}
 
 	// need this because Docker containers don't have a dns server in /etc/resolv.conf
-	dnsPath := filepath.Join(config.Conf.SOCK_base_path, "etc", "resolv.conf")
+	dnsPath := filepath.Join(common.Conf.SOCK_base_path, "etc", "resolv.conf")
 	if err := ioutil.WriteFile(dnsPath, []byte("nameserver 8.8.8.8\n"), 0644); err != nil {
 		return err
 	}
 
-	path := filepath.Join(config.Conf.SOCK_base_path, "dev", "null")
+	path := filepath.Join(common.Conf.SOCK_base_path, "dev", "null")
 	if err := exec.Command("mknod", "-m", "0644", path, "c", "1", "3").Run(); err != nil {
 		return err
 	}
 
-	path = filepath.Join(config.Conf.SOCK_base_path, "dev", "random")
+	path = filepath.Join(common.Conf.SOCK_base_path, "dev", "random")
 	if err := exec.Command("mknod", "-m", "0644", path, "c", "1", "8").Run(); err != nil {
 		return err
 	}
 
-	path = filepath.Join(config.Conf.SOCK_base_path, "dev", "urandom")
+	path = filepath.Join(common.Conf.SOCK_base_path, "dev", "urandom")
 	if err := exec.Command("mknod", "-m", "0644", path, "c", "1", "9").Run(); err != nil {
 		return err
 	}
 
 	fmt.Printf("Working Directory: %s\n\n", olPath)
-	fmt.Printf("Worker Defaults: \n%s\n\n", config.DumpStr())
+	fmt.Printf("Worker Defaults: \n%s\n\n", common.DumpConfStr())
 	fmt.Printf("You may modify the defaults here: %s\n\n", confPath)
 	fmt.Printf("You may now start a server using the \"ol worker\" command\n")
 
@@ -109,12 +109,12 @@ func status(ctx *cli.Context) error {
 	}
 
 	fmt.Printf("Worker Ping:\n")
-	err = config.LoadFile(filepath.Join(olPath, "config.json"))
+	err = common.LoadConf(filepath.Join(olPath, "config.json"))
 	if err != nil {
 		return err
 	}
 
-	url := fmt.Sprintf("http://localhost:%s/status", config.Conf.Worker_port)
+	url := fmt.Sprintf("http://localhost:%s/status", common.Conf.Worker_port)
 	response, err := http.Get(url)
 	if err != nil {
 		return fmt.Errorf("  Could not send GET to %s\n", url)
@@ -229,7 +229,7 @@ func worker(ctx *cli.Context) error {
 		confPath = overridesPath
 	}
 
-	if err := config.LoadFile(confPath); err != nil {
+	if err := common.LoadConf(confPath); err != nil {
 		return err
 	}
 
@@ -262,7 +262,7 @@ func worker(ctx *cli.Context) error {
 			died <- err
 		}()
 
-		fmt.Printf("Starting worker: pid=%d, port=%s, log=%s\n", proc.Pid, config.Conf.Worker_port, logPath)
+		fmt.Printf("Starting worker: pid=%d, port=%s, log=%s\n", proc.Pid, common.Conf.Worker_port, logPath)
 
 		var ping_err error
 
@@ -284,7 +284,7 @@ func worker(ctx *cli.Context) error {
 			}
 
 			// is it reachable?
-			url := fmt.Sprintf("http://localhost:%s/pid", config.Conf.Worker_port)
+			url := fmt.Sprintf("http://localhost:%s/pid", common.Conf.Worker_port)
 			response, err := http.Get(url)
 			if err != nil {
 				ping_err = err
@@ -327,10 +327,10 @@ func kill(ctx *cli.Context) error {
 
 	// locate worker.pid, use it to get worker's PID
 	configPath := filepath.Join(olPath, "config.json")
-	if err := config.LoadFile(configPath); err != nil {
+	if err := common.LoadConf(configPath); err != nil {
 		return err
 	}
-	data, err := ioutil.ReadFile(filepath.Join(config.Conf.Worker_dir, "worker.pid"))
+	data, err := ioutil.ReadFile(filepath.Join(common.Conf.Worker_dir, "worker.pid"))
 	if err != nil {
 		return err
 	}

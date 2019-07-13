@@ -12,8 +12,7 @@ import (
 	"strconv"
 	"syscall"
 
-	"github.com/open-lambda/open-lambda/ol/config"
-	"github.com/open-lambda/open-lambda/ol/stats"
+	"github.com/open-lambda/open-lambda/ol/common"
 )
 
 const (
@@ -44,7 +43,7 @@ func Status(w http.ResponseWriter, r *http.Request) {
 
 func Stats(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Receive request to %s\n", r.URL.Path)
-	snapshot := stats.Snapshot()
+	snapshot := common.SnapshotStats()
 	if b, err := json.MarshalIndent(snapshot, "", "\t"); err != nil {
 		panic(err)
 	} else {
@@ -57,7 +56,7 @@ func Main() (err error) {
 		cleanup()
 	}
 
-	pidPath := filepath.Join(config.Conf.Worker_dir, "worker.pid")
+	pidPath := filepath.Join(common.Conf.Worker_dir, "worker.pid")
 	if _, err := os.Stat(pidPath); err == nil {
 		return fmt.Errorf("previous worker may be running, %s already exists", pidPath)
 	} else if !os.IsNotExist(err) {
@@ -66,9 +65,9 @@ func Main() (err error) {
 	}
 
 	// start with a fresh env
-	if err := os.RemoveAll(config.Conf.Worker_dir); err != nil {
+	if err := os.RemoveAll(common.Conf.Worker_dir); err != nil {
 		return err
-	} else if err := os.MkdirAll(config.Conf.Worker_dir, 0700); err != nil {
+	} else if err := os.MkdirAll(common.Conf.Worker_dir, 0700); err != nil {
 		return err
 	}
 
@@ -89,13 +88,13 @@ func Main() (err error) {
 	http.HandleFunc(STATUS_PATH, Status)
 	http.HandleFunc(STATS_PATH, Stats)
 
-	switch config.Conf.Server_mode {
+	switch common.Conf.Server_mode {
 	case "lambda":
 		s, err = NewLambdaServer()
 	case "sock":
 		s, err = NewSOCKServer()
 	default:
-		return fmt.Errorf("unknown Server_mode %s", config.Conf.Server_mode)
+		return fmt.Errorf("unknown Server_mode %s", common.Conf.Server_mode)
 	}
 
 	if err != nil {
@@ -111,8 +110,8 @@ func Main() (err error) {
 		log.Printf("received kill signal, cleaning up")
 		s.cleanup()
 
-		statsPath := filepath.Join(config.Conf.Worker_dir, "stats.json")
-		snapshot := stats.Snapshot()
+		statsPath := filepath.Join(common.Conf.Worker_dir, "stats.json")
+		snapshot := common.SnapshotStats()
 		log.Printf("save stats to %s", statsPath)
 		if s, err := json.MarshalIndent(snapshot, "", "\t"); err != nil {
 			log.Printf("error: %s", err)
@@ -127,7 +126,7 @@ func Main() (err error) {
 		os.Exit(1)
 	}()
 
-	port := fmt.Sprintf(":%s", config.Conf.Worker_port)
+	port := fmt.Sprintf(":%s", common.Conf.Worker_port)
 	log.Fatal(http.ListenAndServe(port, nil))
 	panic("ListenAndServe should never return")
 }

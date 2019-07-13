@@ -14,9 +14,8 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/open-lambda/open-lambda/ol/config"
+	"github.com/open-lambda/open-lambda/ol/common"
 	"github.com/open-lambda/open-lambda/ol/sandbox"
-	"github.com/open-lambda/open-lambda/ol/stats"
 )
 
 // we invoke this lambda to do the pip install in a Sandbox.
@@ -138,7 +137,7 @@ func NewPackagePuller(sbPool sandbox.SandboxPool, depTracer *DepTracer) (*Packag
 	// 1. packages may be malicious
 	// 2. we want to install the right version, matching the Python
 	//    in the Sandbox
-	pipLambda := filepath.Join(config.Conf.Worker_dir, "admin-lambdas", "pip-install")
+	pipLambda := filepath.Join(common.Conf.Worker_dir, "admin-lambdas", "pip-install")
 	if err := os.MkdirAll(pipLambda, 0700); err != nil {
 		return nil, err
 	}
@@ -253,7 +252,7 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 	// the pip-install lambda installs to /host, which is the the
 	// same as scratchDir, which is the same as a sub-directory
 	// named after the package in the packages dir
-	scratchDir := filepath.Join(config.Conf.Pkgs_dir, p.name)
+	scratchDir := filepath.Join(common.Conf.Pkgs_dir, p.name)
 
 	alreadyInstalled := false
 	if _, err := os.Stat(scratchDir); err == nil {
@@ -273,11 +272,11 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 		}
 	}()
 
-	t := stats.T0("pip-install")
+	t := common.T0("pip-install")
 	defer t.T1()
 
 	meta := &sandbox.SandboxMeta{
-		MemLimitMB: config.Conf.Limits.Installer_mem_mb,
+		MemLimitMB: common.Conf.Limits.Installer_mem_mb,
 	}
 	sb, err := pp.sbPool.Create(nil, true, pp.pipLambda, scratchDir, meta)
 	if err != nil {
@@ -341,7 +340,7 @@ func (p *Package) CreateSymlinks(codeDir string) error {
 	for _, topMod := range p.meta.TopLevel {
 		src := filepath.Join(codeDir, "packages", topMod)
 		dstSB := filepath.Join("/packages", p.name, topMod)
-		dstHost := filepath.Join(config.Conf.Pkgs_dir, p.name, topMod)
+		dstHost := filepath.Join(common.Conf.Pkgs_dir, p.name, topMod)
 		dstHostPy := dstHost + ".py"
 
 		// do we simlink to directory /packages/pkg, or file /packages/pkg.py?

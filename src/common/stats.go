@@ -1,10 +1,13 @@
-package stats
+package common
 
 import (
+	"bytes"
 	"container/list"
 	"fmt"
 	"sync"
+	"strconv"
 	"time"
+	"runtime"
 )
 
 type RollingAvg struct {
@@ -75,12 +78,12 @@ func statsTask() {
 	}
 }
 
-func Record(name string, x int64) {
+func record(name string, x int64) {
 	initTaskOnce()
 	statsChan <- &recordMsg{name, x}
 }
 
-func Snapshot() map[string]int64 {
+func SnapshotStats() map[string]int64 {
 	initTaskOnce()
 	stats := make(map[string]int64)
 	done := make(chan bool)
@@ -108,7 +111,7 @@ func (l Latency) T1() {
 	if ms < 0 {
 		panic("negative latency")
 	}
-	Record(l.name+":ms", ms)
+	record(l.name+":ms", ms)
 
 	// make sure we didn't double record
 	var zero time.Time
@@ -121,4 +124,17 @@ func (l Latency) T1() {
 // start measuring a sub latency
 func (l Latency) T0(name string) Latency {
 	return T0(l.name + "/" + name)
+}
+
+// https://blog.sgmansfield.com/2015/12/goroutine-ids/
+//
+// this is for debugging only (e.g., if we want to correlate a trace
+// with a core dump
+func GetGoroutineID() uint64 {
+	b := make([]byte, 64)
+	b = b[:runtime.Stack(b, false)]
+	b = bytes.TrimPrefix(b, []byte("goroutine "))
+	b = b[:bytes.IndexByte(b, ' ')]
+	n, _ := strconv.ParseUint(string(b), 10, 64)
+	return n
 }

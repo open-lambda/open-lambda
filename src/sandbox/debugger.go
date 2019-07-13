@@ -5,6 +5,8 @@ import (
 	"strings"
 )
 
+// the debugger just watches Sandboxes as they are created, and is
+// able to provide a snapshot of the pool at any time
 type debugger chan interface{}
 
 func newDebugger(sbPool SandboxPool) debugger {

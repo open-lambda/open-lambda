@@ -1,4 +1,4 @@
-package config
+package common
 
 import (
 	"encoding/json"
@@ -115,12 +115,12 @@ func LoadDefaults(olPath string) error {
 		},
 	}
 
-	return check()
+	return checkConf()
 }
 
 // ParseConfig reads a file and tries to parse it as a JSON string to a Config
 // instance.
-func LoadFile(path string) error {
+func LoadConf(path string) error {
 	config_raw, err := ioutil.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("could not open config (%v): %v\n", path, err.Error())
@@ -131,10 +131,10 @@ func LoadFile(path string) error {
 		return fmt.Errorf("could not parse config (%v): %v\n", path, err.Error())
 	}
 
-	return check()
+	return checkConf()
 }
 
-func check() error {
+func checkConf() error {
 	if !path.IsAbs(Conf.Worker_dir) {
 		return fmt.Errorf("Worker_dir cannot be relative")
 	}
@@ -190,7 +190,7 @@ func SandboxConfJson() string {
 }
 
 // Dump prints the Config as a JSON string.
-func Dump() {
+func DumpConf() {
 	s, err := json.Marshal(Conf)
 	if err != nil {
 		panic(err)
@@ -199,7 +199,7 @@ func Dump() {
 }
 
 // DumpStr returns the Config as an indented JSON string.
-func DumpStr() string {
+func DumpConfStr() string {
 	s, err := json.MarshalIndent(Conf, "", "\t")
 	if err != nil {
 		panic(err)
@@ -208,7 +208,7 @@ func DumpStr() string {
 }
 
 // Save writes the Config as an indented JSON to path with 644 mode.
-func Save(path string) error {
+func SaveConf(path string) error {
 	s, err := json.MarshalIndent(Conf, "", "\t")
 	if err != nil {
 		return err

@@ -4,8 +4,7 @@ import (
 	"container/list"
 	"log"
 
-	"github.com/open-lambda/open-lambda/ol/config"
-	"github.com/open-lambda/open-lambda/ol/stats"
+	"github.com/open-lambda/open-lambda/ol/common"
 )
 
 // we would like 20% of the pool to be free for new containers.  the
@@ -140,7 +139,7 @@ func (evictor *SOCKEvictor) evictFront(queue *list.List) {
 	// destroy async (we'll know when it's done, because
 	// we'll see a evDestroy event later on our chan)
 	go func() {
-		t := stats.T0("evict")
+		t := common.T0("evict")
 		sb.Destroy()
 		t.T1()
 	}()
@@ -149,7 +148,7 @@ func (evictor *SOCKEvictor) evictFront(queue *list.List) {
 
 // POLICY: how should we select a victim?
 func (evictor *SOCKEvictor) doEvictions() {
-	memLimitMB := config.Conf.Limits.Mem_mb
+	memLimitMB := common.Conf.Limits.Mem_mb
 
 	// how many sandboxes could we spin up, given available mem?
 	freeSandboxes := evictor.mem.getAvailableMB() / memLimitMB

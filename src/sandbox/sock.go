@@ -24,8 +24,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/open-lambda/open-lambda/ol/config"
-	"github.com/open-lambda/open-lambda/ol/stats"
+	"github.com/open-lambda/open-lambda/ol/common"
 )
 
 type SOCKContainer struct {
@@ -117,20 +116,16 @@ func (c *SOCKContainer) freshProc() (err error) {
 
 func (c *SOCKContainer) populateRoot() (err error) {
 	// FILE SYSTEM STEP 1: mount base
-	if err := os.Mkdir(c.containerRootDir, 0777); err != nil {
-		return err
-	}
-
-	baseDir := config.Conf.SOCK_base_path
-	if err := syscall.Mount(baseDir, c.containerRootDir, "", BIND, ""); err != nil {
+	baseDir := common.Conf.SOCK_base_path
+	if err := syscall.Mount(baseDir, c.containerRootDir, "", common.BIND, ""); err != nil {
 		return fmt.Errorf("failed to bind root dir: %s -> %s :: %v\n", baseDir, c.containerRootDir, err)
 	}
 
-	if err := syscall.Mount("none", c.containerRootDir, "", BIND_RO, ""); err != nil {
+	if err := syscall.Mount("none", c.containerRootDir, "", common.BIND_RO, ""); err != nil {
 		return fmt.Errorf("failed to bind root dir RO: %s :: %v\n", c.containerRootDir, err)
 	}
 
-	if err := syscall.Mount("none", c.containerRootDir, "", PRIVATE, ""); err != nil {
+	if err := syscall.Mount("none", c.containerRootDir, "", common.PRIVATE, ""); err != nil {
 		return fmt.Errorf("failed to make root dir private :: %v", err)
 	}
 
@@ -138,11 +133,11 @@ func (c *SOCKContainer) populateRoot() (err error) {
 	if c.codeDir != "" {
 		sbCodeDir := filepath.Join(c.containerRootDir, "handler")
 
-		if err := syscall.Mount(c.codeDir, sbCodeDir, "", BIND, ""); err != nil {
+		if err := syscall.Mount(c.codeDir, sbCodeDir, "", common.BIND, ""); err != nil {
 			return fmt.Errorf("failed to bind code dir: %s -> %s :: %v", c.codeDir, sbCodeDir, err.Error())
 		}
 
-		if err := syscall.Mount("none", sbCodeDir, "", BIND_RO, ""); err != nil {
+		if err := syscall.Mount("none", sbCodeDir, "", common.BIND_RO, ""); err != nil {
 			return fmt.Errorf("failed to bind code dir RO: %v", err.Error())
 		}
 	}
@@ -154,13 +149,13 @@ func (c *SOCKContainer) populateRoot() (err error) {
 	}
 
 	sbScratchDir := filepath.Join(c.containerRootDir, "host")
-	if err := syscall.Mount(c.scratchDir, sbScratchDir, "", BIND, ""); err != nil {
+	if err := syscall.Mount(c.scratchDir, sbScratchDir, "", common.BIND, ""); err != nil {
 		return fmt.Errorf("failed to bind scratch dir: %v", err.Error())
 	}
 
 	// TODO: cheaper to handle with symlink in lambda image?
 	sbTmpDir := filepath.Join(c.containerRootDir, "tmp")
-	if err := syscall.Mount(tmpDir, sbTmpDir, "", BIND, ""); err != nil {
+	if err := syscall.Mount(tmpDir, sbTmpDir, "", common.BIND, ""); err != nil {
 		return fmt.Errorf("failed to bind tmp dir: %v", err.Error())
 	}
 
@@ -188,7 +183,7 @@ func (c *SOCKContainer) Unpause() (err error) {
 	// block until we have enough mem to upsize limit to the
 	// normal size before unpausing
 	oldLimit := c.cg.getMemLimitMB()
-	newLimit := config.Conf.Limits.Mem_mb
+	newLimit := common.Conf.Limits.Mem_mb
 	c.pool.mem.adjustAvailableMB(oldLimit - newLimit)
 	c.cg.setMemLimitMB(newLimit)
 
@@ -206,14 +201,14 @@ func (c *SOCKContainer) destroy() error {
 	// first.  This is for memory accounting purposes (otherwise,
 	// nobody is to blame for the memory allocated by the parent
 	// before the children were forked).
-	t := stats.T0("Destroy()/recursive-kill")
+	t := common.T0("Destroy()/recursive-kill")
 	for _, child := range c.children {
 		child.Destroy()
 	}
 	t.T1()
 
 	// kill all procs INSIDE the cgroup
-	t = stats.T0("Destroy()/kill-procs")
+	t = common.T0("Destroy()/kill-procs")
 	if c.cg != nil {
 		c.printf("kill all procs in CG\n")
 		if err := c.cg.KillAllProcs(); err != nil {
@@ -225,13 +220,13 @@ func (c *SOCKContainer) destroy() error {
 	t.T1()
 
 	c.printf("unmount and remove dirs\n")
-	t = stats.T0("Destroy()/detach-root")
+	t = common.T0("Destroy()/detach-root")
 	if err := syscall.Unmount(c.containerRootDir, syscall.MNT_DETACH); err != nil {
 		c.printf("unmount root dir %s failed :: %v\n", c.containerRootDir, err)
 	}
 	t.T1()
 
-	t = stats.T0("Destroy()/remove-root")
+	t = common.T0("Destroy()/remove-root")
 	if err := os.RemoveAll(c.containerRootDir); err != nil {
 		c.printf("remove root dir %s failed :: %v\n", c.containerRootDir, err)
 	}
@@ -296,7 +291,7 @@ func (c *SOCKContainer) fork(dst Sandbox) (err error) {
 	}
 	defer memCG.Close()
 
-	t := stats.T0("forkRequest")
+	t := common.T0("forkRequest")
 	err = c.forkRequest(fmt.Sprintf("%s/ol.sock", c.scratchDir), root, memCG)
 	if err != nil {
 		return err
@@ -309,7 +304,7 @@ func (c *SOCKContainer) fork(dst Sandbox) (err error) {
 	// spawned (TODO: better way to do this?  This lets a forking
 	// process potentially kill our cache entry, which isn't
 	// great).
-	t = stats.T0("move-to-cg-after-fork")
+	t = common.T0("move-to-cg-after-fork")
 	for {
 		currPids, err := c.cg.GetPIDs()
 		if err != nil {

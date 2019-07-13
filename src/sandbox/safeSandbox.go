@@ -13,7 +13,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/open-lambda/open-lambda/ol/stats"
+	"github.com/open-lambda/open-lambda/ol/common"
 )
 
 type safeSandbox struct {
@@ -68,7 +68,7 @@ func (sb *safeSandbox) destroyOnErr(origErr error, allowed []error) {
 
 func (sb *safeSandbox) Destroy() {
 	sb.printf("Destroy()")
-	t := stats.T0("Destroy()")
+	t := common.T0("Destroy()")
 	defer t.T1()
 	sb.Mutex.Lock()
 	defer sb.Mutex.Unlock()
@@ -84,7 +84,7 @@ func (sb *safeSandbox) Destroy() {
 
 func (sb *safeSandbox) Pause() (err error) {
 	sb.printf("Pause()")
-	t := stats.T0("Pause()")
+	t := common.T0("Pause()")
 	defer t.T1()
 	sb.Mutex.Lock()
 	defer sb.Mutex.Unlock()
@@ -104,7 +104,7 @@ func (sb *safeSandbox) Pause() (err error) {
 
 func (sb *safeSandbox) Unpause() (err error) {
 	sb.printf("Unpause()")
-	t := stats.T0("Unpause()")
+	t := common.T0("Unpause()")
 	defer t.T1()
 	sb.Mutex.Lock()
 	defer sb.Mutex.Unlock()
@@ -124,7 +124,7 @@ func (sb *safeSandbox) Unpause() (err error) {
 
 func (sb *safeSandbox) HttpProxy() (p *httputil.ReverseProxy, err error) {
 	sb.printf("Channel()")
-	t := stats.T0("Channel()")
+	t := common.T0("Channel()")
 	defer t.T1()
 	sb.Mutex.Lock()
 	defer sb.Mutex.Unlock()
@@ -140,7 +140,7 @@ func (sb *safeSandbox) HttpProxy() (p *httputil.ReverseProxy, err error) {
 
 func (sb *safeSandbox) fork(dst Sandbox) (err error) {
 	sb.printf("fork(%v)", dst)
-	t := stats.T0("fork()")
+	t := common.T0("fork()")
 	defer t.T1()
 	sb.Mutex.Lock()
 	defer sb.Mutex.Unlock()
@@ -156,7 +156,7 @@ func (sb *safeSandbox) fork(dst Sandbox) (err error) {
 
 func (sb *safeSandbox) Status(key SandboxStatus) (stat string, err error) {
 	sb.printf("Status(%d)", key)
-	t := stats.T0("Status()")
+	t := common.T0("Status()")
 	defer t.T1()
 	sb.Mutex.Lock()
 	defer sb.Mutex.Unlock()

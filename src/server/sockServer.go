@@ -12,7 +12,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/open-lambda/open-lambda/ol/config"
+	"github.com/open-lambda/open-lambda/ol/common"
 	"github.com/open-lambda/open-lambda/ol/sandbox"
 )
 
@@ -62,7 +62,7 @@ func (s *SOCKServer) Create(w http.ResponseWriter, rsrc []string, args map[strin
 
 	// spin it up
 	scratchId := fmt.Sprintf("dir-%d", atomic.AddInt64(&nextScratchId, 1))
-	scratchDir := filepath.Join(config.Conf.Worker_dir, "scratch", scratchId)
+	scratchDir := filepath.Join(common.Conf.Worker_dir, "scratch", scratchId)
 	if err := os.MkdirAll(scratchDir, 0777); err != nil {
 		panic(err)
 	}
@@ -180,13 +180,13 @@ func (s *SOCKServer) cleanup() {
 func NewSOCKServer() (*SOCKServer, error) {
 	log.Printf("Start SOCK Server")
 
-	cacheMem := sandbox.NewMemPool("sock-cache", config.Conf.Import_cache_mb)
+	cacheMem := sandbox.NewMemPool("sock-cache", common.Conf.Import_cache_mb)
 	cache, err := sandbox.NewSOCKPool("sock-cache", cacheMem)
 	if err != nil {
 		return nil, err
 	}
 
-	handlerMem := sandbox.NewMemPool("sock-handlers", config.Conf.Handler_cache_mb)
+	handlerMem := sandbox.NewMemPool("sock-handlers", common.Conf.Handler_cache_mb)
 	handler, err := sandbox.NewSOCKPool("sock-handlers", handlerMem)
 	if err != nil {
 		return nil, err

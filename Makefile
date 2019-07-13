@@ -17,9 +17,7 @@ imgs/lambda: $(LAMBDA_FILES)
 	touch imgs/lambda
 
 ol: $(OL_GO_FILES)
-	env
-	cd $(OL_DIR) && $(GO) build -mod vendor -o ol
-	mv $(OL_DIR)/ol ./ol
+	cd $(OL_DIR) && $(GO) build -mod vendor -o ../ol
 
 test-all:
 	python3 -u test.py

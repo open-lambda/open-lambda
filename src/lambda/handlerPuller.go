@@ -12,7 +12,8 @@ import (
 	"regexp"
 	"strings"
 	"sync"
-	"sync/atomic"
+
+	"github.com/open-lambda/open-lambda/ol/common"
 )
 
 var notFound404 = errors.New("file does not exist")
@@ -20,14 +21,10 @@ var notFound404 = errors.New("file does not exist")
 // TODO: for web registries, support an HTTP-based access key
 // (https://en.wikipedia.org/wiki/Basic_access_authentication)
 
-// TODO: garbage collect old directories not used by any handler
-// anymore
-
 type HandlerPuller struct {
-	codeCacheDir string   // where to download/copy code
 	prefix       string   // combine with name to get file path or URL
-	nextId       int64    // used to generate directory names for lambda code dirs
 	dirCache     sync.Map // key=lambda name, value=version, directory path
+	dirMaker     *common.DirMaker
 }
 
 type CacheEntry struct {
@@ -35,16 +32,11 @@ type CacheEntry struct {
 	path    string // where code is extracted to a dir
 }
 
-func NewHandlerPuller(codeCacheDir, pullPrefix string) (cp *HandlerPuller, err error) {
-	if err := os.RemoveAll(codeCacheDir); err != nil {
-		return nil, fmt.Errorf("fail to create directory at %s :: %s: ", codeCacheDir, err)
-	}
-
-	if err := os.MkdirAll(codeCacheDir, os.ModeDir); err != nil {
-		return nil, fmt.Errorf("fail to create directory at %s :: %s ", codeCacheDir, err)
-	}
-
-	return &HandlerPuller{codeCacheDir: codeCacheDir, prefix: pullPrefix, nextId: 0}, nil
+func NewHandlerPuller(dirMaker *common.DirMaker) (cp *HandlerPuller, err error) {
+	return &HandlerPuller{
+		prefix: common.Conf.Registry,
+		dirMaker: dirMaker,
+	}, nil
 }
 
 func (cp *HandlerPuller) isRemote() bool {
@@ -102,12 +94,6 @@ func (cp *HandlerPuller) Reset(name string) {
 	cp.dirCache.Delete(name)
 }
 
-func (cp *HandlerPuller) newCodeDir(lambdaName string) (targetDir string) {
-	targetDir = fmt.Sprintf("%d-%s", atomic.AddInt64(&cp.nextId, 1), lambdaName)
-	targetDir = filepath.Join(cp.codeCacheDir, targetDir)
-	return targetDir
-}
-
 func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (targetDir string, err error) {
 	stat, err := os.Stat(src)
 	if err != nil {
@@ -117,7 +103,7 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (targetDir string
 	if stat.Mode().IsDir() {
 		// this is really just a debug mode, and is not
 		// expected to be efficient
-		targetDir = cp.newCodeDir(lambdaName)
+		targetDir = cp.dirMaker.Get(lambdaName)
 
 		cmd := exec.Command("cp", "-r", src, targetDir)
 		if output, err := cmd.CombinedOutput(); err != nil {
@@ -141,7 +127,7 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (targetDir string
 	}
 
 	// miss:
-	targetDir = cp.newCodeDir(lambdaName)
+	targetDir = cp.dirMaker.Get(lambdaName)
 	if err := os.Mkdir(targetDir, os.ModeDir); err != nil {
 		return "", err
 	}

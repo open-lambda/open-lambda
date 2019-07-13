@@ -8,12 +8,13 @@ import (
 	"os"
 	"strings"
 
-	"github.com/open-lambda/open-lambda/ol/config"
+	"github.com/open-lambda/open-lambda/ol/common"
 	"github.com/open-lambda/open-lambda/ol/sandbox"
 )
 
 type ImportCache struct {
-	name      string
+	codeDirs *common.DirMaker
+	scratchDirs *common.DirMaker
 	pkgPuller *PackagePuller
 	pool      sandbox.SandboxPool
 	root      *ImportCacheNode
@@ -55,9 +56,10 @@ type ZygoteReq struct {
 	parent chan sandbox.Sandbox
 }
 
-func NewImportCache(name string, sizeMb int, pp *PackagePuller) (ic *ImportCache, err error) {
+func NewImportCache(codeDirs *common.DirMaker, scratchDirs *common.DirMaker, sizeMb int, pp *PackagePuller) (ic *ImportCache, err error) {
 	cache := &ImportCache{
-		name:      name,
+		codeDirs: codeDirs,
+		scratchDirs: scratchDirs,
 		pkgPuller: pp,
 		requests:  make(chan *ZygoteReq, 32),
 		events:    make(chan sandbox.SandboxEvent, 32),
@@ -66,7 +68,7 @@ func NewImportCache(name string, sizeMb int, pp *PackagePuller) (ic *ImportCache
 
 	// a static tree of Zygotes may be specified by a file (if so, parse and init it)
 	cache.root = &ImportCacheNode{}
-	switch treeConf := config.Conf.Import_cache_tree.(type) {
+	switch treeConf := common.Conf.Import_cache_tree.(type) {
 	case string:
 		if treeConf != "" {
 			var b []byte
@@ -104,7 +106,7 @@ func NewImportCache(name string, sizeMb int, pp *PackagePuller) (ic *ImportCache
 	cache.root.Dump(0)
 
 	// import cache gets its own sandbox pool
-	pool, err := sandbox.SandboxPoolFromConfig(name, sizeMb)
+	pool, err := sandbox.SandboxPoolFromConfig("import-cache", sizeMb)
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +205,7 @@ Retry:
 
 	// (3) codeDir (populate codeDir/packages with deps, and record top-level mods)
 	if node.codeDir == "" {
-		codeDir := mkNextDir(cache.name, "code")
+		codeDir := cache.codeDirs.Make("import-cache")
 		defer func() {
 			if err != nil {
 				if err := os.RemoveAll(codeDir); err != nil {
@@ -230,7 +232,7 @@ Retry:
 	}
 
 	// (4) scratchDir
-	scratchDir := mkNextDir(cache.name, "scratch")
+	scratchDir := cache.scratchDirs.Make("import-cache")
 
 	// (5) meta
 	//

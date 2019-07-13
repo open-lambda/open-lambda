@@ -2,7 +2,6 @@ package lambda
 
 import (
 	"bufio"
-	"bytes"
 	"container/list"
 	"fmt"
 	"log"
@@ -10,19 +9,13 @@ import (
 	"net/http/httputil"
 	"os"
 	"path/filepath"
-	"runtime"
-	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
-	"github.com/open-lambda/open-lambda/ol/config"
+	"github.com/open-lambda/open-lambda/ol/common"
 	"github.com/open-lambda/open-lambda/ol/sandbox"
-	"github.com/open-lambda/open-lambda/ol/stats"
 )
-
-var nextDirId int64 = 1000
 
 // provides thread-safe getting of lambda functions and collects all
 // lambda subsystems (resource pullers and sandbox pools) in one place
@@ -33,6 +26,10 @@ type LambdaMgr struct {
 	*PackagePuller // depends on sbPool and DepTracer
 	*ImportCache   // depends PackagePuller
 	*HandlerPuller // depends on ImportCache (optional)
+
+	// storage dirs that we manage
+	codeDirs *common.DirMaker
+	scratchDirs *common.DirMaker
 
 	// thread-safe map from a lambda's name to its LambdaFunc
 	mapMutex sync.Mutex
@@ -99,14 +96,23 @@ func NewLambdaMgr() (res *LambdaMgr, err error) {
 		}
 	}()
 
+	mgr.codeDirs, err = common.NewDirMaker("code", false)
+	if err != nil {
+		return nil, err
+	}
+	mgr.scratchDirs, err = common.NewDirMaker("scratch", false)
+	if err != nil {
+		return nil, err
+	}
+
 	log.Printf("Create SandboxPool")
-	mgr.sbPool, err = sandbox.SandboxPoolFromConfig("handler-sandboxes", config.Conf.Handler_cache_mb)
+	mgr.sbPool, err = sandbox.SandboxPoolFromConfig("handler-sandboxes", common.Conf.Handler_cache_mb)
 	if err != nil {
 		return nil, err
 	}
 
 	log.Printf("Create DepTracer")
-	mgr.DepTracer, err = NewDepTracer(filepath.Join(config.Conf.Worker_dir, "dep-trace.json"))
+	mgr.DepTracer, err = NewDepTracer(filepath.Join(common.Conf.Worker_dir, "dep-trace.json"))
 	if err != nil {
 		return nil, err
 	}
@@ -117,17 +123,17 @@ func NewLambdaMgr() (res *LambdaMgr, err error) {
 		return nil, err
 	}
 
-	importCacheMb := config.Conf.Import_cache_mb
+	importCacheMb := common.Conf.Import_cache_mb
 	if importCacheMb > 0 {
 		log.Printf("Create ImportCache")
-		mgr.ImportCache, err = NewImportCache("cache-sandboxes", importCacheMb, mgr.PackagePuller)
+		mgr.ImportCache, err = NewImportCache(mgr.codeDirs, mgr.scratchDirs, importCacheMb, mgr.PackagePuller)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	log.Printf("Create HandlerPuller")
-	mgr.HandlerPuller, err = NewHandlerPuller(filepath.Join(config.Conf.Worker_dir, "lambda_code"), config.Conf.Registry)
+	mgr.HandlerPuller, err = NewHandlerPuller(mgr.codeDirs)
 	if err != nil {
 		return nil, err
 	}
@@ -265,7 +271,7 @@ func parseMeta(codeDir string) (meta *sandbox.SandboxMeta, err error) {
 func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 	// check if there is newer code, download it if necessary
 	now := time.Now()
-	cache_ns := int64(config.Conf.Registry_cache_ms) * 1000000
+	cache_ns := int64(common.Conf.Registry_cache_ms) * 1000000
 
 	// should we check for new code?
 	if f.lastPull != nil && int64(now.Sub(*f.lastPull)) < cache_ns {
@@ -334,7 +340,7 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 // If either LambdaFunc.funcChan or LambdaFunc.instChan is full, we
 // respond to the client with a backoff message: StatusTooManyRequests
 func (f *LambdaFunc) Task() {
-	f.printf("debug: LambdaFunc.Task() runs on goroutine %d", getGID())
+	f.printf("debug: LambdaFunc.Task() runs on goroutine %d", common.GetGoroutineID())
 
 	// we want to perform various cleanup actions, such as killing
 	// instances and deleting old code.  We want to do these
@@ -372,7 +378,7 @@ func (f *LambdaFunc) Task() {
 
 	// stats for autoscaling
 	outstandingReqs := 0
-	execMs := stats.NewRollingAvg(10)
+	execMs := common.NewRollingAvg(10)
 	var lastScaling *time.Time = nil
 	timeout := time.NewTimer(0)
 
@@ -585,12 +591,12 @@ func (linst *LambdaInstance) Task() {
 			}
 
 			// TODO: delete scratchDir when Sandbox is destroyed
-			scratchDir := mkNextDir("scratch", "func-"+f.name)
+			scratchDir := f.lmgr.scratchDirs.Make(f.name)
 			sb, err = f.lmgr.sbPool.Create(parent, true, linst.codeDir, scratchDir, linst.meta)
 			if err == sandbox.FORK_FAILED {
 				// TODO: destroy parent?
 				f.printf("retry Create after failed fork")
-				scratchDir := mkNextDir("scratch", "func-"+f.name)
+				scratchDir := f.lmgr.scratchDirs.Make(f.name)
 				sb, err = f.lmgr.sbPool.Create(nil, true, linst.codeDir, scratchDir, linst.meta)
 			}
 
@@ -652,23 +658,4 @@ func (linst *LambdaInstance) AsyncKill() chan bool {
 	done := make(chan bool)
 	linst.killChan <- done
 	return done
-}
-
-// https://blog.sgmansfield.com/2015/12/goroutine-ids/
-func getGID() uint64 {
-	b := make([]byte, 64)
-	b = b[:runtime.Stack(b, false)]
-	b = bytes.TrimPrefix(b, []byte("goroutine "))
-	b = b[:bytes.IndexByte(b, ' ')]
-	n, _ := strconv.ParseUint(string(b), 10, 64)
-	return n
-}
-
-func mkNextDir(prefix, name string) string {
-	id := fmt.Sprintf("%s-%d", prefix, atomic.AddInt64(&nextDirId, 1))
-	dir := filepath.Join(config.Conf.Worker_dir, prefix, name+"-"+id)
-	if err := os.MkdirAll(dir, 0777); err != nil {
-		panic(err)
-	}
-	return dir
 }

@@ -8,9 +8,8 @@ import (
 
 	docker "github.com/fsouza/go-dockerclient"
 
-	"github.com/open-lambda/open-lambda/ol/config"
+	"github.com/open-lambda/open-lambda/ol/common"
 	"github.com/open-lambda/open-lambda/ol/sandbox/dockerutil"
-	"github.com/open-lambda/open-lambda/ol/stats"
 )
 
 // DockerPool is a ContainerFactory that creats docker containers.
@@ -37,7 +36,7 @@ func NewDockerPool(pidMode string, caps []string) (*DockerPool, error) {
 	idxPtr := &sharedIdx
 
 	labels := map[string]string{
-		dockerutil.DOCKER_LABEL_CLUSTER: config.Conf.Worker_dir,
+		dockerutil.DOCKER_LABEL_CLUSTER: common.Conf.Worker_dir,
 	}
 
 	pool := &DockerPool{
@@ -45,9 +44,9 @@ func NewDockerPool(pidMode string, caps []string) (*DockerPool, error) {
 		labels:         labels,
 		caps:           caps,
 		pidMode:        pidMode,
-		pkgsDir:        config.Conf.Pkgs_dir,
+		pkgsDir:        common.Conf.Pkgs_dir,
 		idxPtr:         idxPtr,
-		docker_runtime: config.Conf.Docker_runtime,
+		docker_runtime: common.Conf.Docker_runtime,
 		eventHandlers:  []SandboxEventFunc{},
 	}
 
@@ -59,7 +58,7 @@ func NewDockerPool(pidMode string, caps []string) (*DockerPool, error) {
 // Create creates a docker sandbox from the handler and sandbox directory.
 func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, meta *SandboxMeta) (sb Sandbox, err error) {
 	meta = fillMetaDefaults(meta)
-	t := stats.T0("Create()")
+	t := common.T0("Create()")
 	defer t.T1()
 
 	if parent != nil {

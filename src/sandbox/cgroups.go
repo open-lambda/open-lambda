@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/open-lambda/open-lambda/ol/config"
+	"github.com/open-lambda/open-lambda/ol/common"
 )
 
 var cgroupList []string = []string{
@@ -38,7 +38,7 @@ type CgroupPool struct {
 
 func NewCgroupPool(name string) (*CgroupPool, error) {
 	pool := &CgroupPool{
-		Name:     path.Base(config.Conf.Worker_dir) + "-" + name,
+		Name:     path.Base(common.Conf.Worker_dir) + "-" + name,
 		ready:    make(chan *Cgroup, CGROUP_RESERVE),
 		recycled: make(chan *Cgroup, CGROUP_RESERVE),
 		quit:     make(chan chan bool),
@@ -141,7 +141,7 @@ Loop:
 			cg.Unpause()
 		default:
 			cg = pool.NewCgroup()
-			cg.WriteInt("pids", "pids.max", int64(config.Conf.Limits.Procs))
+			cg.WriteInt("pids", "pids.max", int64(common.Conf.Limits.Procs))
 		}
 
 		// add cgroup to ready queue
