@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 	"github.com/open-lambda/open-lambda/ol/sandbox"
@@ -18,9 +19,6 @@ type ImportCache struct {
 	pkgPuller   *PackagePuller
 	sbPool      sandbox.SandboxPool
 	root        *ImportCacheNode
-	requests    chan *ZygoteReq
-	events      chan sandbox.SandboxEvent
-	killChan    chan chan bool
 }
 
 // a node in a tree of Zygotes
@@ -39,12 +37,17 @@ type ImportCacheNode struct {
 	// Packages of all our ancestors
 	indirectPackages []string
 
+	// everything above does not change after init, and so doesn't
+	// require lock protection.  All below is protected by the mutex
+
+	mutex sync.Mutex
+	sb    sandbox.Sandbox
+
 	// Sandbox for this node of the tree (may be nil); codeDir
 	// doesn't contain a lambda, but does contain a packages dir
 	// linking to the packages in Packages and indirectPackages.
 	// Lazily initialized when Sandbox is first needed.
 	codeDir string
-	sb      sandbox.Sandbox
 
 	// inferred from Packages (lazily initialized when Sandbox is
 	// first needed)
@@ -61,9 +64,6 @@ func NewImportCache(codeDirs *common.DirMaker, scratchDirs *common.DirMaker, siz
 		codeDirs:    codeDirs,
 		scratchDirs: scratchDirs,
 		pkgPuller:   pp,
-		requests:    make(chan *ZygoteReq, 32),
-		events:      make(chan sandbox.SandboxEvent, 32),
-		killChan:    make(chan chan bool),
 	}
 
 	// a static tree of Zygotes may be specified by a file (if so, parse and init it)
@@ -110,100 +110,94 @@ func NewImportCache(codeDirs *common.DirMaker, scratchDirs *common.DirMaker, siz
 	if err != nil {
 		return nil, err
 	}
-	sbPool.AddListener(cache.Event)
 	cache.sbPool = sbPool
 
-	// start background task to serve requests for Zygotes
-	go cache.run()
 	return cache, nil
 }
 
-func (cache *ImportCache) Event(evType sandbox.SandboxEventType, sb sandbox.Sandbox) {
-	if evType == sandbox.EvDestroy {
-		cache.events <- sandbox.SandboxEvent{evType, sb}
-	}
-}
-
 func (cache *ImportCache) Cleanup() {
-	done := make(chan bool)
-	cache.killChan <- done
-	<-done
+	cache.root.mutex.Lock()
+	defer cache.root.mutex.Unlock()
+
+	rootSb := cache.root.sb
+	if rootSb != nil {
+		// should recursively kill them all
+		rootSb.Destroy()
+	}
+	cache.sbPool.Cleanup()
 }
 
-func (cache *ImportCache) GetZygote(meta *sandbox.SandboxMeta) sandbox.Sandbox {
-	parent := make(chan sandbox.Sandbox)
-	cache.requests <- &ZygoteReq{meta, parent}
-	return <-parent
-}
-
-func (cache *ImportCache) run() {
-	for {
-		select {
-		case req := <-cache.requests:
-			// POLICY: which parent should we return?
-
-			node := cache.root.Lookup(req.meta.Installs)
-			if node == nil {
-				panic(fmt.Errorf("did not find Zygote; at least expected to find the root"))
-			}
-			log.Printf("Try using Zygote from <%v>", node)
-
-			sb, err := cache.getZygoteFromTree(node)
-			if err != nil {
-				log.Printf("getZygoteFromTree returned error: %v", err)
-				sb = nil
-			}
-
-			req.parent <- sb
-
-		case event := <-cache.events:
-			// TODO: make sure we restart these as needed
-			switch event.EvType {
-			case sandbox.EvDestroy:
-				log.Printf("Sandbox %v in import cache has been destroyed", event.SB.ID())
-			}
-
-		case done := <-cache.killChan:
-			if cache.root.sb != nil {
-				// should recursively kill them all
-				cache.root.sb.Destroy()
-			}
-			cache.sbPool.Cleanup()
-			done <- true
-			return
-		}
+// 1. populate parent field of every struct
+// 2. populate indirectPackages to contain the packages of every ancestor
+func (cache *ImportCache) recursiveInit(node *ImportCacheNode, indirectPackages []string) {
+	node.indirectPackages = indirectPackages
+	for _, child := range node.Children {
+		child.parent = node
+		cache.recursiveInit(child, node.AllPackages())
 	}
 }
 
-// recursively create a chain of sandboxes through the tree, from the
-// root to this node, then return that Sandbox
+// (1) find Zygote and (2) use it to try creating a new Sandbox
+func (cache *ImportCache) Create(childSandboxPool sandbox.SandboxPool, isLeaf bool, codeDir, scratchDir string, meta *sandbox.SandboxMeta) (sandbox.Sandbox, error) {
+	node := cache.root.Lookup(meta.Installs)
+	if node == nil {
+		panic(fmt.Errorf("did not find Zygote; at least expected to find the root"))
+	}
+	log.Printf("Try using Zygote from <%v>", node)
+	return cache.createChildSandboxFromNode(childSandboxPool, node, isLeaf, codeDir, scratchDir, meta)
+}
+
+// use getSandboxOfNode to create a Zygote for the node (creating one
+// if necessary), then use that Zygote to create a new Sandbox.
 //
-// if we want to parallelize the importCache, this is the function
-// where we need to be careful with locking (searching for a Node in
-// .Lookup(...) doesn't touch any data structs that change, so that
-// could be done in parallel).
-func (cache *ImportCache) getZygoteFromTree(node *ImportCacheNode) (sb sandbox.Sandbox, err error) {
-	if node.sb != nil {
-		return node.sb, nil
-	}
+// the new Sandbox may either be for a Zygote, or a leaf Sandbox
+func (cache *ImportCache) createChildSandboxFromNode(
+	childSandboxPool sandbox.SandboxPool, node *ImportCacheNode, isLeaf bool,
+	codeDir, scratchDir string, meta *sandbox.SandboxMeta) (sandbox.Sandbox, error) {
 
-	// we ONLY try if the parent Zygote we try forking from is
-	// dead, and then we only retry at most once
-	retry := true
-Retry:
-
-	// SandboxPool.Create params: (1) parent, (2) isLeaf [false for Zygotes], (3) codeDir, (4) scratchDir, (5) meta
-
-	// (1) parent (recursively build the chain of ancestors to get a parent)
-	var parentSB sandbox.Sandbox = nil
-	if node.parent != nil {
-		parentSB, err = cache.getZygoteFromTree(node.parent)
+	// try twice, restarting parent Sandbox if it fails the first time
+	forceNew := false
+	for i := 0; i < 2; i++ {
+		zygoteSB, isNew, err := cache.getSandboxOfNode(node, forceNew)
 		if err != nil {
 			return nil, err
 		}
+
+		sb, err := childSandboxPool.Create(zygoteSB, isLeaf, codeDir, scratchDir, meta)
+
+		// isNew is guaranteed to be true on 2nd iteration
+		if err != sandbox.FORK_FAILED || isNew {
+			return sb, err
+		}
+
+		forceNew = true
 	}
 
-	// (3) codeDir (populate codeDir/packages with deps, and record top-level mods)
+	panic("'unreachable' code")
+}
+
+// recursively create a chain of sandboxes through the tree, from the
+// root to this node, then return that Sandbox.
+//
+// this is always used to get Zygotes (never leaves)
+func (cache *ImportCache) getSandboxOfNode(node *ImportCacheNode, forceNew bool) (sb sandbox.Sandbox, isNew bool, err error) {
+	node.mutex.Lock()
+	defer node.mutex.Unlock()
+
+	// FAST PATH: we already have a previously created Sandbox we can use
+	if node.sb != nil {
+		if forceNew {
+			node.sb.Destroy()
+			node.sb = nil
+		} else {
+			return node.sb, false, nil
+		}
+	}
+
+	// SLOW PATH: we need to create a new Zygote Sandbox (perhaps
+	// even a chain of them back to the root Zygote)
+
+	// populate codeDir/packages with deps, and record top-level mods)
 	if node.codeDir == "" {
 		codeDir := cache.codeDirs.Make("import-cache")
 		defer func() {
@@ -215,14 +209,14 @@ Retry:
 		}()
 
 		if _, err := cache.pkgPuller.InstallRecursive(codeDir, node.AllPackages()); err != nil {
-			return nil, err
+			return nil, false, err
 		}
 
 		topLevelMods := []string{}
 		for _, name := range node.Packages {
 			pkg, err := cache.pkgPuller.GetPkg(name)
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
 			topLevelMods = append(topLevelMods, pkg.meta.TopLevel...)
 		}
@@ -231,11 +225,6 @@ Retry:
 		node.topLevelMods = topLevelMods
 	}
 
-	// (4) scratchDir
-	scratchDir := cache.scratchDirs.Make("import-cache")
-
-	// (5) meta
-	//
 	// POLICY: what modules should we pre-import?  Top-level of
 	// pre-initialized packages is just one possibility...
 	meta := &sandbox.SandboxMeta{
@@ -243,30 +232,15 @@ Retry:
 		Imports:  node.topLevelMods,
 	}
 
-	sb, err = cache.sbPool.Create(parentSB, false, node.codeDir, scratchDir, meta)
-	if err != nil {
-		// if there was a problem with the parent, we'll restart it and retry once more
-		if err == sandbox.FORK_FAILED && retry {
-			node.parent.sb.Destroy()
-			node.parent.sb = nil
-			retry = false
-			goto Retry
-		}
-
-		return nil, err
+	scratchDir := cache.scratchDirs.Make("import-cache")
+	if node.parent != nil {
+		sb, err = cache.createChildSandboxFromNode(cache.sbPool, node.parent, false, node.codeDir, scratchDir, meta)
+	} else {
+		sb, err = cache.sbPool.Create(nil, false, node.codeDir, scratchDir, meta)
 	}
+
 	node.sb = sb
-	return sb, nil
-}
-
-// 1. populate parent field of every struct
-// 2. populate indirectPackages to contain the packages of every ancestor
-func (cache *ImportCache) recursiveInit(node *ImportCacheNode, indirectPackages []string) {
-	node.indirectPackages = indirectPackages
-	for _, child := range node.Children {
-		child.parent = node
-		cache.recursiveInit(child, node.AllPackages())
-	}
+	return sb, true, nil
 }
 
 // return concatenation of direct (.Packages) and indirect (.indirectPackages)

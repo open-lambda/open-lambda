@@ -593,17 +593,20 @@ func (linst *LambdaInstance) Task() {
 		// if we don't already have a Sandbox, create one, and
 		// HTTP proxy over the channel
 		if sb == nil {
-			var parent sandbox.Sandbox
+			sb = nil
 			if f.lmgr.ImportCache != nil {
-				parent = f.lmgr.ImportCache.GetZygote(linst.meta)
+				scratchDir := f.lmgr.scratchDirs.Make(f.name)
+
+				// we don't specify parent SB, because ImportCache.Create chooses it for us
+				sb, err = f.lmgr.ImportCache.Create(f.lmgr.sbPool, true, linst.codeDir, scratchDir, linst.meta)
+				if err != nil {
+					f.printf("failed to get Sandbox from import cache")
+					sb = nil
+				}
 			}
 
-			// TODO: delete scratchDir when Sandbox is destroyed
-			scratchDir := f.lmgr.scratchDirs.Make(f.name)
-			sb, err = f.lmgr.sbPool.Create(parent, true, linst.codeDir, scratchDir, linst.meta)
-			if err == sandbox.FORK_FAILED {
-				// TODO: destroy parent?
-				f.printf("retry Create after failed fork")
+			// import cache is either disabled or it failed
+			if sb == nil {
 				scratchDir := f.lmgr.scratchDirs.Make(f.name)
 				sb, err = f.lmgr.sbPool.Create(nil, true, linst.codeDir, scratchDir, linst.meta)
 			}
