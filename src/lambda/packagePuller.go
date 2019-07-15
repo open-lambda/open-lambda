@@ -65,7 +65,6 @@ def top(dirname):
     with open(path) as f:
         return f.read().strip().split("\n")
 
-
 def deps(dirname):
     path = None
     for name in os.listdir(dirname):
@@ -94,12 +93,12 @@ def f(event):
     pkg = event["pkg"]
     alreadyInstalled = event["alreadyInstalled"]
     if not alreadyInstalled:
-        rc = os.system('pip3 install --no-deps %s -t /host' % pkg)
+        rc = os.system('pip3 install --no-deps %s -t /host/files' % pkg)
         print('pip install returned code %d' % rc)
         assert(rc == 0)
     name = pkg.split("==")[0]
-    d = deps("/host")
-    t = top("/host")
+    d = deps("/host/files")
+    t = top("/host/files")
     return {"Deps":d, "TopLevel":t}
 `
 
@@ -174,7 +173,7 @@ func (pp *PackagePuller) InstallRecursive(codeDir string, installs []string) ([]
 
 	path := filepath.Join(codeDir, "packages")
 	if err := os.Mkdir(path, 0700); err != nil {
-		return installs, fmt.Errorf("could not create %s: %v", path, err)
+		return nil, fmt.Errorf("could not create %s: %v", path, err)
 	}
 
 	installSet := make(map[string]bool)
@@ -190,7 +189,7 @@ func (pp *PackagePuller) InstallRecursive(codeDir string, installs []string) ([]
 		log.Printf("On %v of %v", pkg, installs)
 		p, err := pp.GetPkg(pkg)
 		if err != nil {
-			return installs, err
+			return nil, err
 		}
 
 		log.Printf("Package '%s' has deps %v", pkg, p.meta.Deps)
@@ -205,7 +204,7 @@ func (pp *PackagePuller) InstallRecursive(codeDir string, installs []string) ([]
 		}
 
 		if err := p.CreateSymlinks(codeDir); err != nil {
-			return installs, err
+			return nil, err
 		}
 	}
 
@@ -307,14 +306,14 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 		return err
 	}
 
-	// did we run out of memory?  Or have other issues?
-	if stat, err := sb.Status(sandbox.StatusMemFailures); err == nil {
-		if b, err := strconv.ParseBool(stat); err == nil && b {
-			return fmt.Errorf("ran out of memory while installing %s", p.name)
-		}
-	}
-
 	if resp.StatusCode != http.StatusOK {
+		// did we run out of memory?
+		if stat, err := sb.Status(sandbox.StatusMemFailures); err == nil {
+			if b, err := strconv.ParseBool(stat); err == nil && b {
+				return fmt.Errorf("ran out of memory while installing %s", p.name)
+			}
+		}
+
 		return fmt.Errorf("install lambda returned status %d, body '%s'", resp.StatusCode, string(body))
 	}
 
@@ -337,33 +336,46 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 // contrast, the scikit-learn package has one top-level module, named
 // sklearn
 func (p *Package) CreateSymlinks(codeDir string) error {
-	for _, topMod := range p.meta.TopLevel {
-		src := filepath.Join(codeDir, "packages", topMod)
-		dstSB := filepath.Join("/packages", p.name, topMod)
-		dstHost := filepath.Join(common.Conf.Pkgs_dir, p.name, topMod)
-		dstHostPy := dstHost + ".py"
+	return symlinkAll(
+		filepath.Join(codeDir, "packages"),                   // dir in which to create links
+		filepath.Join(common.Conf.Pkgs_dir, p.name, "files"), // target in Host
+		filepath.Join("/packages", p.name, "files"),          // target in Sandbox
+	)
+}
 
-		// do we simlink to directory /packages/pkg, or file /packages/pkg.py?
-		if _, err := os.Stat(dstHost); err != nil {
-			// the dir version doesn't exist, so check the .py version
-			if os.IsNotExist(err) {
-				if _, err := os.Stat(dstHostPy); err != nil {
-					if os.IsNotExist(err) {
-						return fmt.Errorf("could not symlink to either '%s' or '%s'", dstHost, dstHostPy)
-					}
-					return err
-				}
-			} else {
+func symlinkAll(srcDir, dstHost, dstSandbox string) error {
+	files, err := ioutil.ReadDir(dstHost)
+	if err != nil {
+		return err
+	}
+
+	for _, fi := range files {
+		// multiple packages might install things here, so we
+		// need to go one level deeper for symlinks so that
+		// they don't colide (e.g., we want a __pycache__ in
+		// our Sandbox with links to the union of files in the
+		// __pycache__ dirs of any package)
+		if fi.Name() == "__pycache__" || fi.Name() == "bin" {
+			if err := os.Mkdir(filepath.Join(srcDir, fi.Name()), 0666); err != nil && !os.IsExist(err) {
 				return err
 			}
-
-			src += ".py"
-			dstSB += ".py"
+			symlinkAll(
+				filepath.Join(srcDir, fi.Name()),
+				filepath.Join(dstHost, fi.Name()),
+				filepath.Join(dstSandbox, fi.Name()),
+			)
+			continue
 		}
 
-		if err := os.Symlink(dstSB, src); err != nil {
+		src := filepath.Join(srcDir, fi.Name())
+
+		// this symlink target path doesn't exist from the
+		// perspective of the host, but it will from within
+		// the Sandbox
+		if err := os.Symlink(filepath.Join(dstSandbox, fi.Name()), src); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }

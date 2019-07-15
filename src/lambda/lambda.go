@@ -317,11 +317,11 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 		return err
 	}
 
-	f.lmgr.DepTracer.TraceFunction(codeDir, meta.Installs)
 	meta.Installs, err = f.lmgr.PackagePuller.InstallRecursive(codeDir, meta.Installs)
 	if err != nil {
 		return err
 	}
+	f.lmgr.DepTracer.TraceFunction(codeDir, meta.Installs)
 
 	f.codeDir = codeDir
 	f.meta = meta
