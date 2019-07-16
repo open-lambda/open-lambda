@@ -239,6 +239,10 @@ func (cache *ImportCache) getSandboxOfNode(node *ImportCacheNode, forceNew bool)
 		sb, err = cache.sbPool.Create(nil, false, node.codeDir, scratchDir, meta)
 	}
 
+	if err != nil {
+		return nil, false, err
+	}
+
 	node.sb = sb
 	return sb, true, nil
 }

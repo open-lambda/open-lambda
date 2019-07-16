@@ -113,17 +113,24 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 	}
 	t2.T1()
 
-	// write the Python code that the new process will run when it starts
+	// add installed packages to the path, and import the modules we'll need
 	var pyCode []string
+
+	for _, pkg := range meta.Installs {
+		pyCode = append(pyCode, "sys.path.append('/packages/"+pkg+"/files')")
+	}
+
+	for _, mod := range meta.Imports {
+		pyCode = append(pyCode, "import "+mod)
+	}
+
+	// handler or Zygote?
 	if isLeaf {
 		pyCode = append(pyCode, "web_server()")
 	} else {
-		for _, mod := range meta.Imports {
-			pool.printf("Pre-import module '%s'", mod)
-			pyCode = append(pyCode, fmt.Sprintf("import %s", mod))
-		}
 		pyCode = append(pyCode, "fork_server()")
 	}
+
 	if err := cSock.writeBootstrapCode(pyCode); err != nil {
 		return nil, err
 	}

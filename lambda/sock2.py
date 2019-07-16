@@ -5,8 +5,6 @@ import tornado.httpserver
 import tornado.netutil
 import ol
 
-sys.path.extend(['/handler', '/handler/packages'])
-
 file_sock_path = "/host/ol.sock"
 file_sock = None
 
@@ -30,6 +28,7 @@ def web_server():
             # safeguard in case f is malicious (we don't
             # want it to interfere with ongoing setup, such as the
             # move to the new cgroups)
+            sys.path.append('/handler')
             import f
 
             try:

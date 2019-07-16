@@ -202,10 +202,6 @@ func (pp *PackagePuller) InstallRecursive(codeDir string, installs []string) ([]
 				installSet[dep] = true
 			}
 		}
-
-		if err := p.CreateSymlinks(codeDir); err != nil {
-			return nil, err
-		}
 	}
 
 	return installs, nil
@@ -323,58 +319,6 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 
 	for i, pkg := range p.meta.Deps {
 		p.meta.Deps[i] = normalizePkg(pkg)
-	}
-
-	return nil
-}
-
-// add modules that come with the package to the lambda's path
-//
-// the package may contain one or more top-level modules.  It is
-// common for it to have one-top level module with the same name as
-// the package (e.g., package numpy contains module numpy).  In
-// contrast, the scikit-learn package has one top-level module, named
-// sklearn
-func (p *Package) CreateSymlinks(codeDir string) error {
-	return symlinkAll(
-		filepath.Join(codeDir, "packages"),                   // dir in which to create links
-		filepath.Join(common.Conf.Pkgs_dir, p.name, "files"), // target in Host
-		filepath.Join("/packages", p.name, "files"),          // target in Sandbox
-	)
-}
-
-func symlinkAll(srcDir, dstHost, dstSandbox string) error {
-	files, err := ioutil.ReadDir(dstHost)
-	if err != nil {
-		return err
-	}
-
-	for _, fi := range files {
-		// multiple packages might install things here, so we
-		// need to go one level deeper for symlinks so that
-		// they don't colide (e.g., we want a __pycache__ in
-		// our Sandbox with links to the union of files in the
-		// __pycache__ dirs of any package)
-		if fi.Name() == "__pycache__" || fi.Name() == "bin" {
-			if err := os.Mkdir(filepath.Join(srcDir, fi.Name()), 0666); err != nil && !os.IsExist(err) {
-				return err
-			}
-			symlinkAll(
-				filepath.Join(srcDir, fi.Name()),
-				filepath.Join(dstHost, fi.Name()),
-				filepath.Join(dstSandbox, fi.Name()),
-			)
-			continue
-		}
-
-		src := filepath.Join(srcDir, fi.Name())
-
-		// this symlink target path doesn't exist from the
-		// perspective of the host, but it will from within
-		// the Sandbox
-		if err := os.Symlink(filepath.Join(dstSandbox, fi.Name()), src); err != nil {
-			return err
-		}
 	}
 
 	return nil
