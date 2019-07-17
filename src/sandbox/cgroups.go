@@ -279,7 +279,7 @@ func (cg *Cgroup) setFreezeState(state string) error {
 	}
 }
 
-// get mem usage in bytes
+// get mem usage in MB
 func (cg *Cgroup) getMemUsageMB() int {
 	usage := cg.ReadInt("memory", "memory.usage_in_bytes")
 
@@ -288,12 +288,12 @@ func (cg *Cgroup) getMemUsageMB() int {
 	return int((usage + mb - 1) / mb)
 }
 
-// get mem limit in bytes
+// get mem limit in MB
 func (cg *Cgroup) getMemLimitMB() int {
 	return cg.memLimitMB
 }
 
-// set mem limit in bytes
+// set mem limit in MB
 func (cg *Cgroup) setMemLimitMB(mb int) {
 	if mb == cg.memLimitMB {
 		return
