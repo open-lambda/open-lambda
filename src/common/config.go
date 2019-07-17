@@ -68,6 +68,9 @@ type LimitsConfig struct {
 	// always set a lower limit for itself.
 	Mem_mb int `json:"mem_mb"`
 
+	// how aggresively will the mem of the Sandbox be swapped?
+	Swappiness int `json:"swappiness"`
+
 	// how much memory do we use for an admin lambda that is used
 	// for pip installs?
 	Installer_mem_mb int `json:"installer_mem_mb"`
@@ -111,6 +114,7 @@ func LoadDefaults(olPath string) error {
 		Limits: LimitsConfig{
 			Procs:            10,
 			Mem_mb:           50,
+			Swappiness:	  0,
 			Installer_mem_mb: 200,
 		},
 	}
