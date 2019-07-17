@@ -44,6 +44,9 @@ func (cp *HandlerPuller) isRemote() bool {
 }
 
 func (cp *HandlerPuller) Pull(name string) (targetDir string, err error) {
+	t := common.T0("pull-lambda")
+	defer t.T1()
+
 	matched, err := regexp.MatchString(`^[A-Za-z0-9\.\-\_]+$`, name)
 	if err != nil {
 		return "", err

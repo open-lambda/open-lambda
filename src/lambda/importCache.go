@@ -51,11 +51,10 @@ type ImportCacheNode struct {
 
 	// inferred from Packages (lazily initialized when Sandbox is
 	// first needed)
-	topLevelMods []string
+	meta *sandbox.SandboxMeta
 }
 
 type ZygoteReq struct {
-	meta   *sandbox.SandboxMeta
 	parent chan sandbox.Sandbox
 }
 
@@ -215,7 +214,8 @@ func (cache *ImportCache) getSandboxOfNode(node *ImportCacheNode, forceNew bool)
 			}
 		}()
 
-		if _, err := cache.pkgPuller.InstallRecursive(codeDir, node.AllPackages()); err != nil {
+		installs, err := cache.pkgPuller.InstallRecursive(node.Packages)
+		if err != nil {
 			return nil, false, err
 		}
 
@@ -229,21 +229,20 @@ func (cache *ImportCache) getSandboxOfNode(node *ImportCacheNode, forceNew bool)
 		}
 
 		node.codeDir = codeDir
-		node.topLevelMods = topLevelMods
-	}
 
-	// POLICY: what modules should we pre-import?  Top-level of
-	// pre-initialized packages is just one possibility...
-	meta := &sandbox.SandboxMeta{
-		Installs: node.AllPackages(),
-		Imports:  node.topLevelMods,
+		// policy: what modules should we pre-import?  Top-level of
+		// pre-initialized packages is just one possibility...
+		node.meta = &sandbox.SandboxMeta{
+			Installs: installs,
+			Imports:  topLevelMods,
+		}
 	}
 
 	scratchDir := cache.scratchDirs.Make("import-cache")
 	if node.parent != nil {
-		sb, err = cache.createChildSandboxFromNode(cache.sbPool, node.parent, false, node.codeDir, scratchDir, meta)
+		sb, err = cache.createChildSandboxFromNode(cache.sbPool, node.parent, false, node.codeDir, scratchDir, node.meta)
 	} else {
-		sb, err = cache.sbPool.Create(nil, false, node.codeDir, scratchDir, meta)
+		sb, err = cache.sbPool.Create(nil, false, node.codeDir, scratchDir, node.meta)
 	}
 
 	if err != nil {

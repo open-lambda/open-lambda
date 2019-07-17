@@ -85,7 +85,7 @@ func (c *SOCKContainer) freshProc() (err error) {
 	// get FDs to cgroups
 	cgFiles := make([]*os.File, len(cgroupList))
 	for i, name := range cgroupList {
-		path := c.cg.Path(name, "cgroup.procs")
+		path := c.cg.Path(name, "tasks")
 		fd, err := syscall.Open(path, syscall.O_WRONLY, 0600)
 		if err != nil {
 			return err
@@ -243,9 +243,6 @@ func (c *SOCKContainer) childExit(child Sandbox) {
 
 // fork a new process from the Zygote in c, relocate it to be the server in dst
 func (c *SOCKContainer) fork(dst Sandbox) (err error) {
-	c.children[dst.ID()] = dst
-	c.cgRefCount += 1
-
 	spareMB := c.cg.getMemLimitMB() - c.cg.getMemUsageMB()
 	if spareMB < 3 {
 		return fmt.Errorf("only %vMB of spare memory in parent, rejecting fork request (need at least 3MB)", spareMB)
@@ -265,7 +262,7 @@ func (c *SOCKContainer) fork(dst Sandbox) (err error) {
 	defer root.Close()
 
 	cg := dstSock.cg
-	memCG, err := os.OpenFile(cg.Path("memory", "cgroup.procs"), os.O_WRONLY, 0600)
+	memCG, err := os.OpenFile(cg.Path("memory", "tasks"), os.O_WRONLY, 0600)
 	if err != nil {
 		return err
 	}
@@ -315,6 +312,8 @@ func (c *SOCKContainer) fork(dst Sandbox) (err error) {
 	}
 	t.T1()
 
+	c.children[dst.ID()] = dst
+	c.cgRefCount += 1
 	return nil
 }
 

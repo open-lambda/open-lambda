@@ -60,6 +60,7 @@ func (t *DepTracer) TracePackage(p *Package) {
 		"type": "package",
 		"name": p.name,
 		"deps": p.meta.Deps,
+		"top":  p.meta.TopLevel,
 	}
 }
 

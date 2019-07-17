@@ -342,7 +342,7 @@ func (cg *Cgroup) Unpause() error {
 func (cg *Cgroup) GetPIDs() ([]string, error) {
 	// we could use any cgroup resource type, as they should all
 	// have the same procs
-	procsPath := cg.Path("freezer", "cgroup.procs")
+	procsPath := cg.Path("freezer", "tasks")
 	pids, err := ioutil.ReadFile(procsPath)
 	if err != nil {
 		return nil, err

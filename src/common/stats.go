@@ -38,7 +38,7 @@ func (r *RollingAvg) Add(num int) {
 
 // process-global stats server
 
-type recordMsg struct {
+type msLatencyMsg struct {
 	name string
 	x    int64
 }
@@ -58,18 +58,18 @@ func initTaskOnce() {
 }
 
 func statsTask() {
-	counts := make(map[string]int64)
-	sums := make(map[string]int64)
+	msCounts := make(map[string]int64)
+	msSums := make(map[string]int64)
 
 	for raw := range statsChan {
 		switch msg := raw.(type) {
-		case *recordMsg:
-			counts[msg.name] += 1
-			sums[msg.name] += msg.x
+		case *msLatencyMsg:
+			msCounts[msg.name] += 1
+			msSums[msg.name] += msg.x
 		case *snapshotMsg:
-			for k, cnt := range counts {
+			for k, cnt := range msCounts {
 				msg.stats[k+".cnt"] = cnt
-				msg.stats[k+".avg"] = sums[k] / cnt
+				msg.stats[k+".ms-avg"] = msSums[k] / cnt
 			}
 			msg.done <- true
 		default:
@@ -80,7 +80,7 @@ func statsTask() {
 
 func record(name string, x int64) {
 	initTaskOnce()
-	statsChan <- &recordMsg{name, x}
+	statsChan <- &msLatencyMsg{name, x}
 }
 
 func SnapshotStats() map[string]int64 {
@@ -93,8 +93,9 @@ func SnapshotStats() map[string]int64 {
 }
 
 type Latency struct {
-	name string
-	t0   time.Time
+	name         string
+	t0           time.Time
+	Milliseconds int64
 }
 
 // record start time
@@ -107,11 +108,11 @@ func T0(name string) Latency {
 
 // measure latency to end time, and record it
 func (l Latency) T1() {
-	ms := int64(time.Now().Sub(l.t0)) / 1000000
-	if ms < 0 {
+	l.Milliseconds = int64(time.Now().Sub(l.t0)) / 1000000
+	if l.Milliseconds < 0 {
 		panic("negative latency")
 	}
-	record(l.name+":ms", ms)
+	record(l.name, l.Milliseconds)
 
 	// make sure we didn't double record
 	var zero time.Time

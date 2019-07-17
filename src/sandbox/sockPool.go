@@ -94,7 +94,6 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 		scratchDir:       scratchDir,
 		cg:               cg,
 		cgRefCount:       1,
-		parent:           parent,
 		children:         make(map[string]Sandbox),
 		meta:             meta,
 	}
@@ -151,11 +150,10 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 	if parent != nil {
 		t2 := t.T0("fork-proc")
 		if err := parent.fork(c); err != nil {
-			if err != nil {
-				pool.printf("parent.fork returned %v", err)
-				return nil, FORK_FAILED
-			}
+			pool.printf("parent.fork returned %v", err)
+			return nil, FORK_FAILED
 		}
+		cSock.parent = parent
 		t2.T1()
 	} else {
 		t2 := t.T0("fresh-proc")

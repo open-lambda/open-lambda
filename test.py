@@ -194,7 +194,7 @@ def install_tests():
         raise Exception("found %s but expected %s" % (r.json(), msg))
     r = post("stats", None)
     raise_for_status(r)
-    installs = r.json().get('pip-install:ms.cnt', 0)
+    installs = r.json().get('pull-package.cnt', 0)
     assert(installs == 0)
 
     for i in range(3):
@@ -207,7 +207,7 @@ def install_tests():
 
         r = post("stats", None)
         raise_for_status(r)
-        installs = r.json()['pip-install:ms.cnt']
+        installs = r.json()['pull-package.cnt']
         if i < 2:
             # with deps, requests should give us these:
             # certifi, chardet, idna, requests, urllib3

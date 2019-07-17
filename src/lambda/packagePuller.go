@@ -162,19 +162,11 @@ func normalizePkg(pkg string) string {
 	return strings.ReplaceAll(strings.ToLower(pkg), "_", "-")
 }
 
-// "pip install" missing packages to Conf.Pkgs_dir, creates
-// <codeDir>/packages, then symlinks every package in installs (and
-// every package recursively required by those) into a the
-// <codeDir>/packages
-func (pp *PackagePuller) InstallRecursive(codeDir string, installs []string) ([]string, error) {
+// "pip install" missing packages to Conf.Pkgs_dir
+func (pp *PackagePuller) InstallRecursive(installs []string) ([]string, error) {
 	// shrink capacity to length so that our appends are not
 	// visible to caller
 	installs = installs[:len(installs):len(installs)]
-
-	path := filepath.Join(codeDir, "packages")
-	if err := os.Mkdir(path, 0700); err != nil {
-		return nil, fmt.Errorf("could not create %s: %v", path, err)
-	}
 
 	installSet := make(map[string]bool)
 	for _, install := range installs {
@@ -244,6 +236,9 @@ func (pp *PackagePuller) GetPkg(pkg string) (*Package, error) {
 // the host.  We want the package on the host to share with all, but
 // want to run the install in the Sandbox because we don't trust it.
 func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
+	t := common.T0("pull-package")
+	defer t.T1()
+
 	// the pip-install lambda installs to /host, which is the the
 	// same as scratchDir, which is the same as a sub-directory
 	// named after the package in the packages dir
@@ -266,9 +261,6 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 			os.RemoveAll(scratchDir)
 		}
 	}()
-
-	t := common.T0("pip-install")
-	defer t.T1()
 
 	meta := &sandbox.SandboxMeta{
 		MemLimitMB: common.Conf.Limits.Installer_mem_mb,

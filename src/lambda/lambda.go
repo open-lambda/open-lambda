@@ -201,6 +201,9 @@ func (mgr *LambdaMgr) Cleanup() {
 }
 
 func (f *LambdaFunc) Invoke(w http.ResponseWriter, r *http.Request) {
+	t := common.T0("LambdaFunc.Invoke")
+	defer t.T1()
+
 	done := make(chan bool)
 	req := &Invocation{w: w, r: r, done: done}
 
@@ -319,7 +322,7 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 		return err
 	}
 
-	meta.Installs, err = f.lmgr.PackagePuller.InstallRecursive(codeDir, meta.Installs)
+	meta.Installs, err = f.lmgr.PackagePuller.InstallRecursive(meta.Installs)
 	if err != nil {
 		return err
 	}
@@ -636,9 +639,10 @@ func (linst *LambdaInstance) Task() {
 		// serve until we incoming queue is empty
 		for req != nil {
 			// ask Sandbox to respond, via HTTP proxy
-			t0 := time.Now()
+			t := common.T0("ServeHTTP")
 			proxy.ServeHTTP(req.w, req.r)
-			req.execMs = int(time.Now().Sub(t0) / 1000000)
+			t.T1()
+			req.execMs = int(t.Milliseconds)
 			f.doneChan <- req
 
 			// check whether we should shutdown (non-blocking)
