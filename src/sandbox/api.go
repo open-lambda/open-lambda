@@ -51,9 +51,6 @@ type Sandbox interface {
 	// Communication channel to forward requests.
 	HttpProxy() (*httputil.ReverseProxy, error)
 
-	// Optional interface for forking across sandboxes.
-	fork(dst Sandbox) error
-
 	// Lookup metadata that Sandbox was initialized with (static over time)
 	Meta() *SandboxMeta
 
@@ -62,6 +59,11 @@ type Sandbox interface {
 
 	// Represent state as a multi-line string
 	DebugString() string
+
+	// Optional interface for creating processes in children, and
+	// being notified when they die
+	fork(dst Sandbox) error
+	childExit(child Sandbox)
 }
 
 type SandboxMeta struct {

@@ -138,8 +138,9 @@ func (sb *safeSandbox) HttpProxy() (p *httputil.ReverseProxy, err error) {
 	return sb.Sandbox.HttpProxy()
 }
 
+// fork (as a private method) doesn't cleanup parent sb if fork fails
 func (sb *safeSandbox) fork(dst Sandbox) (err error) {
-	sb.printf("fork(%v)", dst)
+	sb.printf("fork(SB %v)", dst.ID())
 	t := common.T0("fork()")
 	defer t.T1()
 	sb.Mutex.Lock()
@@ -147,11 +148,18 @@ func (sb *safeSandbox) fork(dst Sandbox) (err error) {
 	if sb.dead {
 		return DEAD_SANDBOX
 	}
-	defer func() {
-		sb.destroyOnErr(err, []error{})
-	}()
 
 	return sb.Sandbox.fork(dst)
+}
+
+func (sb *safeSandbox) childExit(child Sandbox) {
+	sb.printf("childExit(SB %v)", child.ID())
+	t := common.T0("childExit()")
+	defer t.T1()
+	sb.Mutex.Lock()
+	defer sb.Mutex.Unlock()
+
+	sb.Sandbox.childExit(child)
 }
 
 func (sb *safeSandbox) Status(key SandboxStatus) (stat string, err error) {

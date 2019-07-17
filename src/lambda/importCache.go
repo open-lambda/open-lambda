@@ -116,14 +116,7 @@ func NewImportCache(codeDirs *common.DirMaker, scratchDirs *common.DirMaker, siz
 }
 
 func (cache *ImportCache) Cleanup() {
-	cache.root.mutex.Lock()
-	defer cache.root.mutex.Unlock()
-
-	rootSb := cache.root.sb
-	if rootSb != nil {
-		// should recursively kill them all
-		rootSb.Destroy()
-	}
+	cache.recursiveKill(cache.root)
 	cache.sbPool.Cleanup()
 }
 
@@ -135,6 +128,19 @@ func (cache *ImportCache) recursiveInit(node *ImportCacheNode, indirectPackages 
 		child.parent = node
 		cache.recursiveInit(child, node.AllPackages())
 	}
+}
+
+func (cache *ImportCache) recursiveKill(node *ImportCacheNode) {
+	for _, child := range node.Children {
+		cache.recursiveKill(child)
+	}
+
+	node.mutex.Lock()
+	if node.sb != nil {
+		node.sb.Destroy()
+		node.sb = nil
+	}
+	node.mutex.Unlock()
 }
 
 // (1) find Zygote and (2) use it to try creating a new Sandbox
@@ -184,11 +190,12 @@ func (cache *ImportCache) getSandboxOfNode(node *ImportCacheNode, forceNew bool)
 	node.mutex.Lock()
 	defer node.mutex.Unlock()
 
-	// FAST PATH: we already have a previously created Sandbox we can use
+	// FAST PATH: we already have a previously created Sandbox and forceNew is false
 	if node.sb != nil {
 		if forceNew {
-			node.sb.Destroy()
+			old := node.sb
 			node.sb = nil
+			go old.Destroy()
 		} else {
 			return node.sb, false, nil
 		}

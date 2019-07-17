@@ -290,6 +290,10 @@ func (c *DockerContainer) fork(dst Sandbox) (err error) {
 	panic("DockerContainer does not implement cross-container forks")
 }
 
+func (c *DockerContainer) childExit(child Sandbox) {
+	panic("DockerContainers should not have children because fork is unsupported")
+}
+
 func waitForServerPipeReady(hostDir string) error {
 	// upon success, the goroutine will send nil; else, it will send the error
 	ready := make(chan error, 1)

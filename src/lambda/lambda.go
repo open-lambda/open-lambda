@@ -179,11 +179,6 @@ func (mgr *LambdaMgr) Cleanup() {
 
 	// PackagePuller requires no cleanup
 
-	// cleanup ImportCache
-	if mgr.ImportCache != nil {
-		mgr.ImportCache.Cleanup()
-	}
-
 	// cleanup SandboxPool
 	mgr.mapMutex.Lock() // don't unlock, because this shouldn't be used anymore
 	for _, f := range mgr.lfuncMap {
@@ -191,6 +186,13 @@ func (mgr *LambdaMgr) Cleanup() {
 		f.Kill()
 	}
 	mgr.sbPool.Cleanup() // assumes all Sandboxes are gone
+
+	// cleanup ImportCache (do after SandboxPool, because it is
+	// not possible to truly release Zygotes until child handlers
+	// are done
+	if mgr.ImportCache != nil {
+		mgr.ImportCache.Cleanup()
+	}
 
 	// cleanup DepTracer
 	if mgr.DepTracer != nil {

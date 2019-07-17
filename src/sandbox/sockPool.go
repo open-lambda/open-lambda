@@ -2,7 +2,9 @@ package sandbox
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 
@@ -80,7 +82,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 	// exist outside any Sandbox).  But when creating a child, we
 	// don't want to use this cgroup feature, because the child
 	// would take the blame for ALL of the parent's allocations
-	moveMemCharge := parent == nil
+	moveMemCharge := (parent == nil)
 	cg := pool.cgPool.GetCg(meta.MemLimitMB, moveMemCharge)
 	t2.T1()
 
@@ -91,7 +93,9 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 		codeDir:          codeDir,
 		scratchDir:       scratchDir,
 		cg:               cg,
-		children:         make([]Sandbox, 0),
+		cgRefCount:       1,
+		parent:           parent,
+		children:         make(map[string]Sandbox),
 		meta:             meta,
 	}
 	var c Sandbox = cSock
@@ -131,7 +135,9 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 		pyCode = append(pyCode, "fork_server()")
 	}
 
-	if err := cSock.writeBootstrapCode(pyCode); err != nil {
+	path := filepath.Join(scratchDir, "bootstrap.py")
+	code := []byte(strings.Join(pyCode, "\n"))
+	if err := ioutil.WriteFile(path, code, 0600); err != nil {
 		return nil, err
 	}
 

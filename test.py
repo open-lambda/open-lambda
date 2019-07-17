@@ -455,8 +455,6 @@ def tests():
         #sock_churn(baseline=32, procs=1, seconds=15, fork=True)
         #sock_churn(baseline=32, procs=15, seconds=15, fork=True)
 
-        recursive_kill(depth=2)
-        recursive_kill(depth=10)
 
     # make sure code updates get pulled within the cache time
     with tempfile.TemporaryDirectory() as reg_dir:

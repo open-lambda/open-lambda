@@ -30,12 +30,20 @@ import (
 type SOCKContainer struct {
 	pool             *SOCKPool
 	id               string
+	meta             *SandboxMeta
 	containerRootDir string
 	codeDir          string
 	scratchDir       string
 	cg               *Cgroup
-	children         []Sandbox
-	meta             *SandboxMeta
+
+	// 1 for self, plus 1 for each child (we can't release memory
+	// until all descendents are dead, because they share the
+	// pages of this Container, but this is the only container
+	// charged
+	cgRefCount int
+
+	parent   Sandbox
+	children map[string]Sandbox
 }
 
 // add ID to each log message so we know which logs correspond to
@@ -71,15 +79,6 @@ func (c *SOCKContainer) HttpProxy() (p *httputil.ReverseProxy, err error) {
 	proxy := httputil.NewSingleHostReverseProxy(u)
 	proxy.Transport = tr
 	return proxy, nil
-}
-
-func (c *SOCKContainer) writeBootstrapCode(bootPy []string) (err error) {
-	path := filepath.Join(c.containerRootDir, "host", "bootstrap.py")
-	code := []byte(strings.Join(bootPy, "\n"))
-	if err := ioutil.WriteFile(path, code, 0600); err != nil {
-		return err
-	}
-	return nil
 }
 
 func (c *SOCKContainer) freshProc() (err error) {
@@ -191,31 +190,13 @@ func (c *SOCKContainer) Unpause() (err error) {
 }
 
 func (c *SOCKContainer) Destroy() {
-	if err := c.destroy(); err != nil {
-		panic(fmt.Sprintf("failed to destroy SOCK sandbox: %v", err))
-	}
-}
-
-func (c *SOCKContainer) destroy() error {
-	// Destroy is recursive, so make sure all children are dead
-	// first.  This is for memory accounting purposes (otherwise,
-	// nobody is to blame for the memory allocated by the parent
-	// before the children were forked).
-	t := common.T0("Destroy()/recursive-kill")
-	for _, child := range c.children {
-		child.Destroy()
-	}
-	t.T1()
-
 	// kill all procs INSIDE the cgroup
-	t = common.T0("Destroy()/kill-procs")
+	t := common.T0("Destroy()/kill-procs")
 	if c.cg != nil {
 		c.printf("kill all procs in CG\n")
 		if err := c.cg.KillAllProcs(); err != nil {
-			return err
+			panic(err)
 		}
-
-		c.cg.Release()
 	}
 	t.T1()
 
@@ -232,41 +213,39 @@ func (c *SOCKContainer) destroy() error {
 	}
 	t.T1()
 
-	// release memory used for this container
-	c.pool.mem.adjustAvailableMB(c.cg.getMemLimitMB())
-
-	return nil
+	c.decCgRefCount()
 }
 
-func (c *SOCKContainer) DebugString() string {
-	var s string = fmt.Sprintf("SOCK %s\n", c.ID())
+// when the count goes to zero, it means (a) this container and (b)
+// all it's descendents are destroyed. Thus, it's safe to release it's
+// cgroups, and return the memory allocation to the memPool
+func (c *SOCKContainer) decCgRefCount() {
+	c.cgRefCount -= 1
+	c.printf("CG ref count decremented to %d", c.cgRefCount)
+	if c.cgRefCount == 0 {
+		c.cg.Release()
+		c.pool.mem.adjustAvailableMB(c.cg.getMemLimitMB())
 
-	s += fmt.Sprintf("ROOT DIR: %s\n", c.containerRootDir)
-
-	s += fmt.Sprintf("HOST DIR: %s\n", c.scratchDir)
-
-	if pids, err := c.cg.GetPIDs(); err == nil {
-		s += fmt.Sprintf("CGROUP PIDS: %s\n", strings.Join(pids, ", "))
-	} else {
-		s += fmt.Sprintf("CGROUP PIDS: unknown (%s)\n", err)
+		if c.parent != nil {
+			c.parent.childExit(c)
+		}
 	}
 
-	s += fmt.Sprintf("CGROUPS: %s\n", c.cg.Path("<RESOURCE>", ""))
-
-	if state, err := ioutil.ReadFile(c.cg.Path("freezer", "freezer.state")); err == nil {
-		s += fmt.Sprintf("FREEZE STATE: %s", state)
-	} else {
-		s += fmt.Sprintf("FREEZE STATE: unknown (%s)\n", err)
+	if c.cgRefCount < 0 {
+		panic("cgRefCount should not be able to go negative")
 	}
+}
 
-	s += fmt.Sprintf("MEMORY USED: %d of %d MB\n",
-		c.cg.getMemUsageMB(), c.cg.getMemLimitMB())
-
-	return s
+func (c *SOCKContainer) childExit(child Sandbox) {
+	delete(c.children, child.ID())
+	c.decCgRefCount()
 }
 
 // fork a new process from the Zygote in c, relocate it to be the server in dst
 func (c *SOCKContainer) fork(dst Sandbox) (err error) {
+	c.children[dst.ID()] = dst
+	c.cgRefCount += 1
+
 	spareMB := c.cg.getMemLimitMB() - c.cg.getMemUsageMB()
 	if spareMB < 3 {
 		return fmt.Errorf("only %vMB of spare memory in parent, rejecting fork request (need at least 3MB)", spareMB)
@@ -334,8 +313,6 @@ func (c *SOCKContainer) fork(dst Sandbox) (err error) {
 			break
 		}
 	}
-
-	c.children = append(c.children, dst)
 	t.T1()
 
 	return nil
@@ -352,4 +329,31 @@ func (c *SOCKContainer) Status(key SandboxStatus) (string, error) {
 
 func (c *SOCKContainer) Meta() *SandboxMeta {
 	return c.meta
+}
+
+func (c *SOCKContainer) DebugString() string {
+	var s string = fmt.Sprintf("SOCK %s\n", c.ID())
+
+	s += fmt.Sprintf("ROOT DIR: %s\n", c.containerRootDir)
+
+	s += fmt.Sprintf("HOST DIR: %s\n", c.scratchDir)
+
+	if pids, err := c.cg.GetPIDs(); err == nil {
+		s += fmt.Sprintf("CGROUP PIDS: %s\n", strings.Join(pids, ", "))
+	} else {
+		s += fmt.Sprintf("CGROUP PIDS: unknown (%s)\n", err)
+	}
+
+	s += fmt.Sprintf("CGROUPS: %s\n", c.cg.Path("<RESOURCE>", ""))
+
+	if state, err := ioutil.ReadFile(c.cg.Path("freezer", "freezer.state")); err == nil {
+		s += fmt.Sprintf("FREEZE STATE: %s", state)
+	} else {
+		s += fmt.Sprintf("FREEZE STATE: unknown (%s)\n", err)
+	}
+
+	s += fmt.Sprintf("MEMORY USED: %d of %d MB\n",
+		c.cg.getMemUsageMB(), c.cg.getMemLimitMB())
+
+	return s
 }
