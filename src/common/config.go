@@ -114,7 +114,7 @@ func LoadDefaults(olPath string) error {
 		Limits: LimitsConfig{
 			Procs:            10,
 			Mem_mb:           50,
-			Swappiness:	  0,
+			Swappiness:       0,
 			Installer_mem_mb: 200,
 		},
 	}
