@@ -21,7 +21,7 @@ https://github.com/open-lambda/testing/blob/master/dev-build/bootstrap2.sh.
 Thus, you can consider that file testable documentation of the
 dependencies.
 
-You can build the `bin/ol` and other resources with just `make`.  Then make sure it works with some simple tests:
+You can build the `ol` and other resources with just `make`.  Then make sure it works with some simple tests:
 
 ```
 make test-all
@@ -32,7 +32,7 @@ make test-all
 You can create a new OL environment with the following comment:
 
 ```
-./bin/ol new
+./ol new
 ```
 
 This creates a directory named `default` with various OL resources.
@@ -44,10 +44,10 @@ them if you wish, then start an OL worker (if you used `-path` above,
 use it again with the `worker` command):
 
 ```
-./bin/ol worker
+./ol worker
 ```
 
-In another terminal, make sure the worker is running with `./bin/ol status`.
+In another terminal, make sure the worker is running with `./ol status`.
 
 Now save the following to `./default/registry/echo.py`:
 
@@ -67,13 +67,13 @@ run the worker in detached mode (i.e., in the background), just start
 it again with the `-d` flag:
 
 ```
-./bin/ol worker -d
+./ol worker -d
 ```
 
 You can shutdown a detached worker like this:
 
 ```
-./bin/ol kill
+./ol kill
 ```
 
 ## License
