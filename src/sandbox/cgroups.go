@@ -142,6 +142,7 @@ Loop:
 		default:
 			cg = pool.NewCgroup()
 			cg.WriteInt("pids", "pids.max", int64(common.Conf.Limits.Procs))
+			cg.WriteInt("memory", "memory.swappiness", int64(common.Conf.Limits.Swappiness))
 		}
 
 		// add cgroup to ready queue
