@@ -24,6 +24,15 @@ type SOCKEvictor struct {
 	events chan SandboxEvent
 
 	// Sandbox ID => prio.  we ALWAYS evict lower priority before higher priority
+	//
+	// A Sandbox's priority is 2*NUM_CHILDEN, +1 if Unpaused.
+	// Thus, we'll prefer to evict paused (idle) sandboxes with no
+	// children.  Under pressure, we'll evict running sandboxes
+	// (this will surface an error to the end user).  We'll never
+	// invoke from priority 2+ (i.e., those with at least one
+	// child), as there is no benefit to evicting Sandboxes with
+	// live children (we can't reclaim memory until all
+	// descendents exit)
 	priority map[string]int
 
 	// state queues (each Sandbox is on at most one of these)
@@ -132,9 +141,18 @@ func (evictor *SOCKEvictor) updateState() {
 			prio += 1
 		case EvPause:
 			prio -= 1
+		case EvFork:
+			prio += 2
+		case EvChildExit:
+			prio -= 2
 		case EvDestroy:
 		default:
 			log.Printf("Unknown event: %v", event.EvType)
+		}
+
+		log.Printf("Evictor: Sandbox %v priority goes to %d", sb.ID(), prio)
+		if prio < 0 {
+			panic("priority should never go negative")
 		}
 
 		if event.EvType == EvDestroy {
@@ -142,6 +160,7 @@ func (evictor *SOCKEvictor) updateState() {
 			delete(evictor.priority, sb.ID())
 		} else {
 			evictor.priority[sb.ID()] = prio
+			// saturate prio based on number of queues
 			if prio >= len(evictor.prioQueues) {
 				prio = len(evictor.prioQueues) - 1
 			}

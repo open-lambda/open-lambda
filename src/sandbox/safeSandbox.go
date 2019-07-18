@@ -37,13 +37,15 @@ type safeSandbox struct {
 // Sandbox as part of setup.
 func newSafeSandbox(innerSB Sandbox) *safeSandbox {
 	sb := &safeSandbox{
-		Sandbox:       innerSB,
+		Sandbox: innerSB,
 	}
 
 	return sb
 }
 
 func (sb *safeSandbox) startNotifyingListeners(eventHandlers []SandboxEventFunc) {
+	sb.Mutex.Lock()
+	defer sb.Mutex.Unlock()
 	sb.eventHandlers = eventHandlers
 	sb.event(EvCreate)
 }
@@ -80,13 +82,15 @@ func (sb *safeSandbox) Destroy() {
 	sb.Mutex.Lock()
 	defer sb.Mutex.Unlock()
 
-	if !sb.dead {
-		sb.Sandbox.Destroy()
-		sb.dead = true
-
-		// let anybody interested know this died
-		sb.event(EvDestroy)
+	if sb.dead {
+		return
 	}
+
+	sb.Sandbox.Destroy()
+	sb.dead = true
+
+	// let anybody interested know this died
+	sb.event(EvDestroy)
 }
 
 func (sb *safeSandbox) Pause() (err error) {
@@ -165,7 +169,12 @@ func (sb *safeSandbox) fork(dst Sandbox) (err error) {
 		return DEAD_SANDBOX
 	}
 
-	return sb.Sandbox.fork(dst)
+	if err := sb.Sandbox.fork(dst); err != nil {
+		return err
+	}
+
+	sb.event(EvFork)
+	return nil
 }
 
 func (sb *safeSandbox) childExit(child Sandbox) {
@@ -175,7 +184,16 @@ func (sb *safeSandbox) childExit(child Sandbox) {
 	sb.Mutex.Lock()
 	defer sb.Mutex.Unlock()
 
+	// after a Sandbox is Destroyed, we keep sending it childExit
+	// calls (so it can know when the ref count hits zero and we
+	// can return the memory to the pool), but we stop notifying
+	// listeners of this
+
 	sb.Sandbox.childExit(child)
+
+	if !sb.dead {
+		sb.event(EvChildExit)
+	}
 }
 
 func (sb *safeSandbox) Status(key SandboxStatus) (stat string, err error) {

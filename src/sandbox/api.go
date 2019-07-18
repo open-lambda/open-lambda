@@ -63,6 +63,8 @@ type Sandbox interface {
 	// Optional interface for creating processes in children, and
 	// being notified when they die
 	fork(dst Sandbox) error
+
+	// Child calls this on parent to notify of child Destroy
 	childExit(child Sandbox)
 }
 
@@ -84,13 +86,24 @@ const (
 // events
 type SandboxEventFunc func(SandboxEventType, Sandbox)
 
+// Listeners are guaranteed that the first event seen is an EvCreate,
+// and the last is an EvDestroy.  Internally, EvChildExit may occur
+// after Destroy, but listeners don't see it.
+//
+// Listeners only see events after they occur successfully.
+//
+// EvPause and EvUnpause are only seen if they have an effect (e.g.,
+// calling .Pause on an already-paused container will not trigger an
+// event for the listeners).
 type SandboxEventType int
 
 const (
-	EvCreate  SandboxEventType = iota
-	EvDestroy                  = iota
-	EvPause                    = iota
-	EvUnpause                  = iota
+	EvCreate    SandboxEventType = iota
+	EvDestroy                    = iota
+	EvPause                      = iota
+	EvUnpause                    = iota
+	EvFork                       = iota
+	EvChildExit                  = iota
 )
 
 type SandboxEvent struct {
