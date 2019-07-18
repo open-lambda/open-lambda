@@ -128,7 +128,9 @@ func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir 
 	}
 
 	// wrap to make thread-safe and handle container death
-	return newSafeSandbox(c, pool.eventHandlers), nil
+	safe := newSafeSandbox(c)
+	safe.startNotifyingListeners(pool.eventHandlers)
+	return safe, nil
 }
 
 func (pool *DockerPool) Cleanup() {}

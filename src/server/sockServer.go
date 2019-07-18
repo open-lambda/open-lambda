@@ -60,13 +60,23 @@ func (s *SOCKServer) Create(w http.ResponseWriter, rsrc []string, args map[strin
 		}
 	}
 
+	packages := []string{}
+	if pkgs, ok := args["pkgs"]; ok {
+		for _, p := range pkgs.([]interface{}) {
+			packages = append(packages, p.(string))
+		}
+	}
+
 	// spin it up
 	scratchId := fmt.Sprintf("dir-%d", atomic.AddInt64(&nextScratchId, 1))
 	scratchDir := filepath.Join(common.Conf.Worker_dir, "scratch", scratchId)
 	if err := os.MkdirAll(scratchDir, 0777); err != nil {
 		panic(err)
 	}
-	c, err := pool.Create(parent, leaf, codeDir, scratchDir, nil)
+	meta := &sandbox.SandboxMeta{
+		Installs: packages,
+	}
+	c, err := pool.Create(parent, leaf, codeDir, scratchDir, meta)
 	if err != nil {
 		return err
 	}
@@ -185,12 +195,16 @@ func NewSOCKServer() (*SOCKServer, error) {
 	if err != nil {
 		return nil, err
 	}
+	// some of the SOCK tests depend on there not being an evictor
+	// sandbox.NewSOCKEvictor(cache)
 
 	handlerMem := sandbox.NewMemPool("sock-handlers", common.Conf.Handler_cache_mb)
 	handler, err := sandbox.NewSOCKPool("sock-handlers", handlerMem)
 	if err != nil {
 		return nil, err
 	}
+	// some of the SOCK tests depend on there not being an evictor
+	// sandbox.NewSOCKEvictor(handler)
 
 	server := &SOCKServer{
 		cachePool:   cache,

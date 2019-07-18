@@ -23,12 +23,14 @@ type SOCKEvictor struct {
 	// how we're notified of containers starting, pausing, etc
 	events chan SandboxEvent
 
-	// state queues (each Sandbox is on at most one of these)
-	running  *list.List
-	paused   *list.List
-	evicting *list.List
+	// Sandbox ID => prio.  we ALWAYS evict lower priority before higher priority
+	priority map[string]int
 
-	// map Sandbox ID to the List/Element position in a state queue
+	// state queues (each Sandbox is on at most one of these)
+	prioQueues []*list.List
+	evicting   *list.List
+
+	// Sandbox ID => List/Element position in a state queue
 	stateMap map[string]*ListLocation
 }
 
@@ -38,13 +40,21 @@ type ListLocation struct {
 }
 
 func NewSOCKEvictor(sbPool *SOCKPool) *SOCKEvictor {
+	// level 0: no children, paused
+	// level 1: no children, unpaused
+	// level 2: children
+	prioQueues := make([]*list.List, 3, 3)
+	for i := 0; i < len(prioQueues); i++ {
+		prioQueues[i] = list.New()
+	}
+
 	e := &SOCKEvictor{
-		mem:      sbPool.mem,
-		events:   make(chan SandboxEvent, 64),
-		running:  list.New(),
-		paused:   list.New(),
-		evicting: list.New(),
-		stateMap: make(map[string]*ListLocation),
+		mem:        sbPool.mem,
+		events:     make(chan SandboxEvent, 64),
+		priority:   make(map[string]int),
+		prioQueues: prioQueues,
+		evicting:   list.New(),
+		stateMap:   make(map[string]*ListLocation),
 	}
 
 	sbPool.AddListener(e.Event)
@@ -110,18 +120,32 @@ func (evictor *SOCKEvictor) updateState() {
 	for event != nil {
 		// add list to appropriate queue
 		sb := event.SB
+		prio := evictor.priority[sb.ID()]
 
 		switch event.EvType {
 		case EvCreate:
-			evictor.move(sb, evictor.running)
+			if prio != 0 {
+				panic("Sandboxes should be at prio 0 upon EvCreate event")
+			}
+			prio += 1
 		case EvUnpause:
-			evictor.move(sb, evictor.running)
+			prio += 1
 		case EvPause:
-			evictor.move(sb, evictor.paused)
+			prio -= 1
 		case EvDestroy:
-			evictor.move(sb, nil)
 		default:
 			log.Printf("Unknown event: %v", event.EvType)
+		}
+
+		if event.EvType == EvDestroy {
+			evictor.move(sb, nil)
+			delete(evictor.priority, sb.ID())
+		} else {
+			evictor.priority[sb.ID()] = prio
+			if prio >= len(evictor.prioQueues) {
+				prio = len(evictor.prioQueues) - 1
+			}
+			evictor.move(sb, evictor.prioQueues[prio])
 		}
 
 		event = evictor.nextEvent(false)
@@ -170,8 +194,8 @@ func (evictor *SOCKEvictor) doEvictions() {
 	}
 
 	// try evicting the desired number, starting with the paused queue
-	for evictCount > 0 && evictor.paused.Len() > 0 {
-		evictor.evictFront(evictor.paused)
+	for evictCount > 0 && evictor.prioQueues[0].Len() > 0 {
+		evictor.evictFront(evictor.prioQueues[0])
 		evictCount -= 1
 	}
 
@@ -183,10 +207,13 @@ func (evictor *SOCKEvictor) doEvictions() {
 	// this state
 	if freeSandboxes <= 0 && evictor.evicting.Len() == 0 {
 		log.Printf("WARNING!  Critically low on memory, so evicting an active Sandbox")
-		if evictor.running.Len() > 0 {
-			evictor.evictFront(evictor.running)
+		if evictor.prioQueues[1].Len() > 0 {
+			evictor.evictFront(evictor.prioQueues[1])
 		}
 	}
+
+	// we never evict from prioQueues[2], because have descendents
+	// with lower priority that should be evicted first
 }
 
 func (evictor *SOCKEvictor) Run() {

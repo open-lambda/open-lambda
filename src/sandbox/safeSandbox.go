@@ -4,7 +4,8 @@ package sandbox
 // 1. it prevents concurrent calls to Sandbox functions that modify the Sandbox
 // 2. it automatically destroys unhealthy sandboxes (it is considered unhealthy after returnning any error)
 // 3. calls on a destroyed sandbox just return a DEAD_SANDBOX error (no harm is done)
-// 4. it traces all calls
+// 4. suppresses Pause calls to already paused Sandboxes, and similar for Unpause calls.
+// 5. it traces all calls
 
 import (
 	"fmt"
@@ -20,19 +21,31 @@ type safeSandbox struct {
 	Sandbox
 
 	sync.Mutex
+	paused        bool
 	dead          bool
 	eventHandlers []SandboxEventFunc
 }
 
-func newSafeSandbox(innerSB Sandbox, eventHandlers []SandboxEventFunc) *safeSandbox {
+// caller is responsible for calling startNotifyingListeners after
+// init is complete.
+//
+// the rational is that we might need to do some setup (e.g., forking)
+// after a safeSandbox is created, and that setup may fail.  We never
+// want to notify listeners about a Sandbox that isn't ready to go.
+// E.g., would be problematic if an evictor (which is listening) were
+// to try to evict concurrently with us creating processes in the
+// Sandbox as part of setup.
+func newSafeSandbox(innerSB Sandbox) *safeSandbox {
 	sb := &safeSandbox{
 		Sandbox:       innerSB,
-		eventHandlers: eventHandlers,
 	}
 
-	sb.event(EvCreate)
-
 	return sb
+}
+
+func (sb *safeSandbox) startNotifyingListeners(eventHandlers []SandboxEventFunc) {
+	sb.eventHandlers = eventHandlers
+	sb.event(EvCreate)
 }
 
 // like regular printf, with suffix indicating which sandbox produced the message
@@ -49,14 +62,8 @@ func (sb *safeSandbox) event(evType SandboxEventType) {
 }
 
 // assumes lock is already held
-func (sb *safeSandbox) destroyOnErr(origErr error, allowed []error) {
+func (sb *safeSandbox) destroyOnErr(origErr error) {
 	if origErr != nil {
-		for _, err := range allowed {
-			if origErr == err {
-				return
-			}
-		}
-
 		sb.printf("Destroy() due to %v", origErr)
 		sb.Sandbox.Destroy()
 		sb.dead = true
@@ -88,18 +95,21 @@ func (sb *safeSandbox) Pause() (err error) {
 	defer t.T1()
 	sb.Mutex.Lock()
 	defer sb.Mutex.Unlock()
+
 	if sb.dead {
 		return DEAD_SANDBOX
+	} else if sb.paused {
+		return nil
 	}
-	defer func() {
-		sb.destroyOnErr(err, []error{})
-		if err == nil {
-			// let anybody interested we paused
-			sb.event(EvPause)
-		}
-	}()
 
-	return sb.Sandbox.Pause()
+	if err := sb.Sandbox.Pause(); err != nil {
+		sb.destroyOnErr(err)
+		return err
+	}
+
+	sb.event(EvPause)
+	sb.paused = true
+	return nil
 }
 
 func (sb *safeSandbox) Unpause() (err error) {
@@ -108,18 +118,21 @@ func (sb *safeSandbox) Unpause() (err error) {
 	defer t.T1()
 	sb.Mutex.Lock()
 	defer sb.Mutex.Unlock()
+
 	if sb.dead {
 		return DEAD_SANDBOX
+	} else if !sb.paused {
+		return nil
 	}
-	defer func() {
-		sb.destroyOnErr(err, []error{})
-		if err == nil {
-			// let anybody interested we paused
-			sb.event(EvUnpause)
-		}
-	}()
 
-	return sb.Sandbox.Unpause()
+	if err := sb.Sandbox.Unpause(); err != nil {
+		sb.destroyOnErr(err)
+		return err
+	}
+
+	sb.event(EvUnpause)
+	sb.paused = false
+	return nil
 }
 
 func (sb *safeSandbox) HttpProxy() (p *httputil.ReverseProxy, err error) {
@@ -128,14 +141,16 @@ func (sb *safeSandbox) HttpProxy() (p *httputil.ReverseProxy, err error) {
 	defer t.T1()
 	sb.Mutex.Lock()
 	defer sb.Mutex.Unlock()
+
 	if sb.dead {
 		return nil, DEAD_SANDBOX
 	}
-	defer func() {
-		sb.destroyOnErr(err, []error{})
-	}()
 
-	return sb.Sandbox.HttpProxy()
+	p, err = sb.Sandbox.HttpProxy()
+	if err != nil {
+		sb.destroyOnErr(err)
+	}
+	return p, err
 }
 
 // fork (as a private method) doesn't cleanup parent sb if fork fails
@@ -145,6 +160,7 @@ func (sb *safeSandbox) fork(dst Sandbox) (err error) {
 	defer t.T1()
 	sb.Mutex.Lock()
 	defer sb.Mutex.Unlock()
+
 	if sb.dead {
 		return DEAD_SANDBOX
 	}
@@ -168,20 +184,25 @@ func (sb *safeSandbox) Status(key SandboxStatus) (stat string, err error) {
 	defer t.T1()
 	sb.Mutex.Lock()
 	defer sb.Mutex.Unlock()
+
 	if sb.dead {
 		return "", DEAD_SANDBOX
 	}
-	defer func() {
-		sb.destroyOnErr(err, []error{STATUS_UNSUPPORTED})
-	}()
-	return sb.Sandbox.Status(key)
+
+	stat, err = sb.Sandbox.Status(key)
+	if err != nil && err != STATUS_UNSUPPORTED {
+		sb.destroyOnErr(err)
+	}
+	return stat, err
 }
 
 func (sb *safeSandbox) DebugString() string {
 	sb.Mutex.Lock()
 	defer sb.Mutex.Unlock()
+
 	if sb.dead {
 		return fmt.Sprintf("SANDBOX %s: DEAD\n", sb.Sandbox.ID())
 	}
+
 	return sb.Sandbox.DebugString()
 }

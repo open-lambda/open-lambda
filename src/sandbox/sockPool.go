@@ -140,11 +140,8 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 		return nil, err
 	}
 
-	// wrap to make thread-safe and handle container death.
-	// after this line, two things happen:
-	// 1. listeners (e.g., evictors) become aware of the Sandbox
-	// 2. if this function fails, .Destroy() cleanup will be through the safeSandbox layer
-	c = newSafeSandbox(c, pool.eventHandlers)
+	safe := newSafeSandbox(c)
+	c = safe
 
 	// create new process in container (fresh, or forked from parent)
 	if parent != nil {
@@ -163,6 +160,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 		t2.T1()
 	}
 
+	safe.startNotifyingListeners(pool.eventHandlers)
 	return c, nil
 }
 
