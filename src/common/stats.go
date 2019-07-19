@@ -139,3 +139,11 @@ func GetGoroutineID() uint64 {
 	n, _ := strconv.ParseUint(string(b), 10, 64)
 	return n
 }
+
+func Max(x int, y int) int {
+	if x > y {
+		return x
+	} else {
+		return y
+	}
+}

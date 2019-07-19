@@ -40,8 +40,7 @@ type Config struct {
 	Pip_index string `json:"pip_mirror"`
 
 	// CACHE OPTIONS
-	Handler_cache_mb int `json:"handler_cache_mb"`
-	Import_cache_mb  int `json:"import_cache_mb"`
+	Mem_pool_mb int `json:"mem_pool_mb"`
 
 	// can be empty (use root zygote only), a JSON obj (specifying
 	// the tree), or a path (to a file specifying the tree)
@@ -58,6 +57,13 @@ type Config struct {
 
 	// settings to use for cgroups used by SOCK
 	Limits LimitsConfig `json:"limits"`
+
+	// various subsystems that are either enabled or disabled
+	Features FeaturesConfig `json:"features"`
+}
+
+type FeaturesConfig struct {
+	Import_cache bool `json:"import_cache"`
 }
 
 type LimitsConfig struct {
@@ -91,12 +97,6 @@ func LoadDefaults(olPath string) error {
 		return err
 	}
 	total_mb := uint64(in.Totalram) * uint64(in.Unit) / 1024 / 1024
-	handler_cache_mb := 250
-	import_cache_mb := 250
-	if int((total_mb-512)/2) > 250 {
-		handler_cache_mb = int((total_mb - 512) / 2)
-		import_cache_mb = int((total_mb - 512) / 2)
-	}
 
 	Conf = &Config{
 		Worker_dir:        workerDir,
@@ -108,14 +108,16 @@ func LoadDefaults(olPath string) error {
 		Sandbox_config:    map[string]interface{}{},
 		SOCK_base_path:    baseImgDir,
 		Registry_cache_ms: 5000, // 5 seconds
-		Handler_cache_mb:  handler_cache_mb,
-		Import_cache_mb:   import_cache_mb,
+		Mem_pool_mb:       int(total_mb - 512),
 		Import_cache_tree: "",
 		Limits: LimitsConfig{
 			Procs:            10,
 			Mem_mb:           50,
 			Swappiness:       0,
 			Installer_mem_mb: 200,
+		},
+		Features: FeaturesConfig{
+			Import_cache: true,
 		},
 	}
 
@@ -157,13 +159,11 @@ func checkConf() error {
 		// So we need at least double a memory's needs,
 		// otherwise anything running will immediately be
 		// evicted.
-		min_mem := Conf.Limits.Installer_mem_mb + Conf.Limits.Mem_mb
-		if min_mem > Conf.Handler_cache_mb {
-			return fmt.Errorf("handler_cache_mb must be at least %d", min_mem)
-		}
-
-		if Conf.Import_cache_mb != 0 && min_mem > Conf.Import_cache_mb {
-			return fmt.Errorf("import_cache_mb (if used) must be at least %d", min_mem)
+		//
+		// TODO: revise evictor and relax this
+		min_mem := 2 * Max(Conf.Limits.Installer_mem_mb, Conf.Limits.Mem_mb)
+		if min_mem > Conf.Mem_pool_mb {
+			return fmt.Errorf("mem_pool_mb must be at least %d", min_mem)
 		}
 	} else if Conf.Sandbox == "docker" {
 		if Conf.Pkgs_dir == "" {
@@ -174,8 +174,8 @@ func checkConf() error {
 			return fmt.Errorf("Pkgs_dir cannot be relative")
 		}
 
-		if Conf.Import_cache_mb != 0 {
-			return fmt.Errorf("import_cache_mb must be 0 for docker Sandbox")
+		if Conf.Features.Import_cache {
+			return fmt.Errorf("features.import_cache must be disabled for docker Sandbox")
 		}
 	} else {
 		return fmt.Errorf("Unknown Sandbox type '%s'", Conf.Sandbox)

@@ -58,10 +58,11 @@ type ZygoteReq struct {
 	parent chan sandbox.Sandbox
 }
 
-func NewImportCache(codeDirs *common.DirMaker, scratchDirs *common.DirMaker, sizeMb int, pp *PackagePuller) (ic *ImportCache, err error) {
+func NewImportCache(codeDirs *common.DirMaker, scratchDirs *common.DirMaker, sbPool sandbox.SandboxPool, pp *PackagePuller) (ic *ImportCache, err error) {
 	cache := &ImportCache{
 		codeDirs:    codeDirs,
 		scratchDirs: scratchDirs,
+		sbPool:      sbPool,
 		pkgPuller:   pp,
 	}
 
@@ -104,19 +105,11 @@ func NewImportCache(codeDirs *common.DirMaker, scratchDirs *common.DirMaker, siz
 	log.Printf("Import Cache Tree:")
 	cache.root.Dump(0)
 
-	// import cache gets its own sandbox pool
-	sbPool, err := sandbox.SandboxPoolFromConfig("import-cache", sizeMb)
-	if err != nil {
-		return nil, err
-	}
-	cache.sbPool = sbPool
-
 	return cache, nil
 }
 
 func (cache *ImportCache) Cleanup() {
 	cache.recursiveKill(cache.root)
-	cache.sbPool.Cleanup()
 }
 
 // 1. populate parent field of every struct

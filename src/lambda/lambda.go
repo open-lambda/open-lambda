@@ -25,7 +25,7 @@ type LambdaMgr struct {
 	*DepTracer
 	*PackagePuller // depends on sbPool and DepTracer
 	*ImportCache   // depends PackagePuller
-	*HandlerPuller // depends on ImportCache (optional)
+	*HandlerPuller // depends on sbPool and ImportCache[optional]
 
 	// storage dirs that we manage
 	codeDirs    *common.DirMaker
@@ -106,7 +106,7 @@ func NewLambdaMgr() (res *LambdaMgr, err error) {
 	}
 
 	log.Printf("Create SandboxPool")
-	mgr.sbPool, err = sandbox.SandboxPoolFromConfig("handler-sandboxes", common.Conf.Handler_cache_mb)
+	mgr.sbPool, err = sandbox.SandboxPoolFromConfig("sandboxes", common.Conf.Mem_pool_mb)
 	if err != nil {
 		return nil, err
 	}
@@ -123,10 +123,9 @@ func NewLambdaMgr() (res *LambdaMgr, err error) {
 		return nil, err
 	}
 
-	importCacheMb := common.Conf.Import_cache_mb
-	if importCacheMb > 0 {
+	if common.Conf.Features.Import_cache {
 		log.Printf("Create ImportCache")
-		mgr.ImportCache, err = NewImportCache(mgr.codeDirs, mgr.scratchDirs, importCacheMb, mgr.PackagePuller)
+		mgr.ImportCache, err = NewImportCache(mgr.codeDirs, mgr.scratchDirs, mgr.sbPool, mgr.PackagePuller)
 		if err != nil {
 			return nil, err
 		}
@@ -175,24 +174,23 @@ func (mgr *LambdaMgr) Debug() string {
 }
 
 func (mgr *LambdaMgr) Cleanup() {
-	// HandlerPuller requires no cleanup
-
-	// PackagePuller requires no cleanup
-
-	// cleanup SandboxPool
 	mgr.mapMutex.Lock() // don't unlock, because this shouldn't be used anymore
+
+	// HandlerPuller+PackagePuller requires no cleanup
+
+	// 1. cleanup handler Sandboxes
+	// 2. cleanup Zygote Sandboxes (after the handlers, which depend on the Zygotes)
+	// 3. cleanup SandboxPool underlying both of above
 	for _, f := range mgr.lfuncMap {
 		log.Printf("Kill function: %s", f.name)
 		f.Kill()
 	}
-	mgr.sbPool.Cleanup() // assumes all Sandboxes are gone
 
-	// cleanup ImportCache (do after SandboxPool, because it is
-	// not possible to truly release Zygotes until child handlers
-	// are done
 	if mgr.ImportCache != nil {
 		mgr.ImportCache.Cleanup()
 	}
+
+	mgr.sbPool.Cleanup() // assumes all Sandboxes are gone
 
 	// cleanup DepTracer
 	if mgr.DepTracer != nil {
@@ -590,7 +588,7 @@ func (linst *LambdaInstance) Task() {
 			// Thus, if this fails, we'll try to handle it
 			// by just creating a new sandbox.
 			if err := sb.Unpause(); err != nil {
-				f.printf("discard sandbox %s due to Unpause error: %s", sb.ID())
+				f.printf("discard sandbox %s due to Unpause error: %v", sb.ID(), err)
 				sb = nil
 			}
 		}
@@ -628,7 +626,7 @@ func (linst *LambdaInstance) Task() {
 				req.w.WriteHeader(http.StatusInternalServerError)
 				req.w.Write([]byte("could not connect to Sandbox: " + err.Error() + "\n"))
 				f.doneChan <- req
-				f.printf("discard sandbox %s due to Channel error: %s", sb.ID(), err.Error())
+				f.printf("discard sandbox %s due to Channel error: %v", sb.ID(), err)
 				sb = nil
 				continue // wait for another request before retrying
 			}
@@ -663,7 +661,7 @@ func (linst *LambdaInstance) Task() {
 		}
 
 		if err := sb.Pause(); err != nil {
-			f.printf("discard sandbox %s due to Pause error: %s", sb.ID())
+			f.printf("discard sandbox %s due to Pause error: %v", sb.ID(), err)
 			sb = nil
 		}
 	}

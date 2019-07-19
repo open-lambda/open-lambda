@@ -23,9 +23,8 @@ var nextScratchId int64 = 1000
 // SOCKServer is a worker server that listens to run lambda requests and forward
 // these requests to its sandboxes.
 type SOCKServer struct {
-	cachePool   *sandbox.SOCKPool
-	handlerPool *sandbox.SOCKPool
-	sandboxes   sync.Map
+	sbPool    *sandbox.SOCKPool
+	sandboxes sync.Map
 }
 
 func (s *SOCKServer) GetSandbox(id string) sandbox.Sandbox {
@@ -37,15 +36,10 @@ func (s *SOCKServer) GetSandbox(id string) sandbox.Sandbox {
 }
 
 func (s *SOCKServer) Create(w http.ResponseWriter, rsrc []string, args map[string]interface{}) error {
-	// leaves are only in handler pool
-	var pool *sandbox.SOCKPool
-
 	var leaf bool
 	if b, ok := args["leaf"]; !ok || b.(bool) {
-		pool = s.handlerPool
 		leaf = true
 	} else {
-		pool = s.cachePool
 		leaf = false
 	}
 
@@ -76,7 +70,7 @@ func (s *SOCKServer) Create(w http.ResponseWriter, rsrc []string, args map[strin
 	meta := &sandbox.SandboxMeta{
 		Installs: packages,
 	}
-	c, err := pool.Create(parent, leaf, codeDir, scratchDir, meta)
+	c, err := s.sbPool.Create(parent, leaf, codeDir, scratchDir, meta)
 	if err != nil {
 		return err
 	}
@@ -117,9 +111,7 @@ func (s *SOCKServer) Unpause(w http.ResponseWriter, rsrc []string, args map[stri
 }
 
 func (s *SOCKServer) Debug(w http.ResponseWriter, rsrc []string, args map[string]interface{}) error {
-	str := fmt.Sprintf(
-		"========\nCACHE SANDBOXES\n========\n%s========\nHANDLER SANDBOXES\n========\n%s",
-		s.cachePool.DebugString(), s.handlerPool.DebugString())
+	str := s.sbPool.DebugString()
 	fmt.Printf("%s\n", str)
 	w.Write([]byte(str))
 	return nil
@@ -182,33 +174,23 @@ func (s *SOCKServer) cleanup() {
 		val.(sandbox.Sandbox).Destroy()
 		return true
 	})
-	s.cachePool.Cleanup()
-	s.handlerPool.Cleanup()
+	s.sbPool.Cleanup()
 }
 
 // NewSOCKServer creates a server based on the passed config."
 func NewSOCKServer() (*SOCKServer, error) {
 	log.Printf("Start SOCK Server")
 
-	cacheMem := sandbox.NewMemPool("sock-cache", common.Conf.Import_cache_mb)
-	cache, err := sandbox.NewSOCKPool("sock-cache", cacheMem)
+	mem := sandbox.NewMemPool("sandboxes", common.Conf.Mem_pool_mb)
+	sbPool, err := sandbox.NewSOCKPool("sandboxes", mem)
 	if err != nil {
 		return nil, err
 	}
 	// some of the SOCK tests depend on there not being an evictor
-	// sandbox.NewSOCKEvictor(cache)
-
-	handlerMem := sandbox.NewMemPool("sock-handlers", common.Conf.Handler_cache_mb)
-	handler, err := sandbox.NewSOCKPool("sock-handlers", handlerMem)
-	if err != nil {
-		return nil, err
-	}
-	// some of the SOCK tests depend on there not being an evictor
-	// sandbox.NewSOCKEvictor(handler)
+	// sandbox.NewSOCKEvictor(sbPool)
 
 	server := &SOCKServer{
-		cachePool:   cache,
-		handlerPool: handler,
+		sbPool: sbPool,
 	}
 
 	http.HandleFunc("/", server.Handle)
