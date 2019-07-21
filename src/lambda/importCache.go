@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 	"github.com/open-lambda/open-lambda/ol/sandbox"
@@ -40,8 +41,13 @@ type ImportCacheNode struct {
 	// everything above does not change after init, and so doesn't
 	// require lock protection.  All below is protected by the mutex
 
-	mutex sync.Mutex
-	sb    sandbox.Sandbox
+	mutex      sync.Mutex
+	sb         sandbox.Sandbox
+	sbRefCount int // sb will be unpaused iff this is >0
+
+	// create stats
+	createNonleafChild int64
+	createLeafChild    int64
 
 	// Sandbox for this node of the tree (may be nil); codeDir
 	// doesn't contain a lambda, but does contain a packages dir
@@ -109,6 +115,8 @@ func NewImportCache(codeDirs *common.DirMaker, scratchDirs *common.DirMaker, sbP
 }
 
 func (cache *ImportCache) Cleanup() {
+	log.Printf("Import Cache Tree:")
+	cache.root.Dump(0)
 	cache.recursiveKill(cache.root)
 }
 
@@ -145,7 +153,7 @@ func (cache *ImportCache) Create(childSandboxPool sandbox.SandboxPool, isLeaf bo
 	return cache.createChildSandboxFromNode(childSandboxPool, node, isLeaf, codeDir, scratchDir, meta)
 }
 
-// use getSandboxOfNode to create a Zygote for the node (creating one
+// use getSandboxInNode to create a Zygote for the node (creating one
 // if necessary), then use that Zygote to create a new Sandbox.
 //
 // the new Sandbox may either be for a Zygote, or a leaf Sandbox
@@ -156,12 +164,22 @@ func (cache *ImportCache) createChildSandboxFromNode(
 	// try twice, restarting parent Sandbox if it fails the first time
 	forceNew := false
 	for i := 0; i < 2; i++ {
-		zygoteSB, isNew, err := cache.getSandboxOfNode(node, forceNew)
+		zygoteSB, isNew, err := cache.getSandboxInNode(node, forceNew)
 		if err != nil {
 			return nil, err
 		}
 
 		sb, err := childSandboxPool.Create(zygoteSB, isLeaf, codeDir, scratchDir, meta)
+		if err == nil {
+			if isLeaf {
+				atomic.AddInt64(&node.createLeafChild, 1)
+			} else {
+				atomic.AddInt64(&node.createNonleafChild, 1)
+			}
+		}
+
+		// release ref count
+		cache.putSandboxInNode(node)
 
 		// isNew is guaranteed to be true on 2nd iteration
 		if err != sandbox.FORK_FAILED || isNew {
@@ -178,24 +196,59 @@ func (cache *ImportCache) createChildSandboxFromNode(
 // root to this node, then return that Sandbox.
 //
 // this is always used to get Zygotes (never leaves)
-func (cache *ImportCache) getSandboxOfNode(node *ImportCacheNode, forceNew bool) (sb sandbox.Sandbox, isNew bool, err error) {
+//
+// the Sandbox returned is guaranteed to be in Unpaused state.  After
+// use, caller must also call putSandboxInNode to release ref count
+func (cache *ImportCache) getSandboxInNode(node *ImportCacheNode, forceNew bool) (sb sandbox.Sandbox, isNew bool, err error) {
 	node.mutex.Lock()
 	defer node.mutex.Unlock()
 
-	// FAST PATH: we already have a previously created Sandbox and forceNew is false
+	// destroy any old Sandbox first if we're required to do so
+	if forceNew && node.sb != nil {
+		old := node.sb
+		node.sb = nil
+		go old.Destroy()
+	}
+
 	if node.sb != nil {
-		if forceNew {
-			old := node.sb
+		// FAST PATH
+		if node.sbRefCount == 0 {
+			if err := node.sb.Unpause(); err != nil {
+				node.sb = nil
+				return nil, false, err
+			}
+		}
+		node.sbRefCount += 1
+		return node.sb, false, nil
+	} else {
+		// SLOW PATH
+		if err := cache.createSandboxInNode(node); err != nil {
+			return nil, false, err
+		}
+		node.sbRefCount = 1
+		return node.sb, true, nil
+	}
+}
+
+// decrease refs to SB, pausing if nobody else is still using it
+func (cache *ImportCache) putSandboxInNode(node *ImportCacheNode) {
+	node.mutex.Lock()
+	defer node.mutex.Unlock()
+
+	node.sbRefCount -= 1
+
+	if node.sbRefCount == 0 && node.sb != nil {
+		if err := node.sb.Pause(); err != nil {
 			node.sb = nil
-			go old.Destroy()
-		} else {
-			return node.sb, false, nil
 		}
 	}
 
-	// SLOW PATH: we need to create a new Zygote Sandbox (perhaps
-	// even a chain of them back to the root Zygote)
+	if node.sbRefCount < 0 {
+		panic("negative ref count")
+	}
+}
 
+func (cache *ImportCache) createSandboxInNode(node *ImportCacheNode) (err error) {
 	// populate codeDir/packages with deps, and record top-level mods)
 	if node.codeDir == "" {
 		codeDir := cache.codeDirs.Make("import-cache")
@@ -209,14 +262,14 @@ func (cache *ImportCache) getSandboxOfNode(node *ImportCacheNode, forceNew bool)
 
 		installs, err := cache.pkgPuller.InstallRecursive(node.Packages)
 		if err != nil {
-			return nil, false, err
+			return err
 		}
 
 		topLevelMods := []string{}
 		for _, name := range node.Packages {
 			pkg, err := cache.pkgPuller.GetPkg(name)
 			if err != nil {
-				return nil, false, err
+				return err
 			}
 			topLevelMods = append(topLevelMods, pkg.meta.TopLevel...)
 		}
@@ -232,6 +285,7 @@ func (cache *ImportCache) getSandboxOfNode(node *ImportCacheNode, forceNew bool)
 	}
 
 	scratchDir := cache.scratchDirs.Make("import-cache")
+	var sb sandbox.Sandbox
 	if node.parent != nil {
 		sb, err = cache.createChildSandboxFromNode(cache.sbPool, node.parent, false, node.codeDir, scratchDir, node.meta)
 	} else {
@@ -239,11 +293,11 @@ func (cache *ImportCache) getSandboxOfNode(node *ImportCacheNode, forceNew bool)
 	}
 
 	if err != nil {
-		return nil, false, err
+		return err
 	}
 
 	node.sb = sb
-	return sb, true, nil
+	return nil
 }
 
 // return concatenation of direct (.Packages) and indirect (.indirectPackages)
@@ -293,9 +347,10 @@ func (node *ImportCacheNode) String() string {
 }
 
 func (node *ImportCacheNode) Dump(indent int) {
-	spaces := strings.Repeat("  ", indent)
+	childCreates := fmt.Sprintf("%d", atomic.LoadInt64(&node.createLeafChild)+atomic.LoadInt64(&node.createNonleafChild))
+	spaces := strings.Repeat(" ", indent*2+common.Max(0, 4-len(childCreates)))
 
-	log.Printf("%s - %s", spaces, node.String())
+	log.Printf("%s%s - %s", childCreates, spaces, node.String())
 	for _, child := range node.Children {
 		child.Dump(indent + 1)
 	}

@@ -166,11 +166,7 @@ func (mgr *LambdaMgr) Get(name string) (f *LambdaFunc) {
 }
 
 func (mgr *LambdaMgr) Debug() string {
-	s := "Handler Sandbox Pool\n--------\n" + mgr.sbPool.DebugString()
-	if mgr.ImportCache != nil {
-		s += "Import Cache Sandbox Pool\n--------\n" + mgr.ImportCache.sbPool.DebugString()
-	}
-	return s + "\n"
+	return mgr.sbPool.DebugString() + "\n"
 }
 
 func (mgr *LambdaMgr) Cleanup() {

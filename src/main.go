@@ -246,10 +246,11 @@ func worker(ctx *cli.Context) error {
 		attr := os.ProcAttr{
 			Files: []*os.File{nil, f, f},
 		}
-		cmd := []string{
-			os.Args[0],
-			"worker",
-			"-path=" + olPath,
+		cmd := []string{}
+		for _, arg := range os.Args {
+			if arg != "-d" && arg != "--detach" {
+				cmd = append(cmd, arg)
+			}
 		}
 		proc, err := os.StartProcess(os.Args[0], cmd, &attr)
 		if err != nil {

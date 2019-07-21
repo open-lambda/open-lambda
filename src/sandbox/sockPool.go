@@ -71,6 +71,18 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 	t := common.T0("Create()")
 	defer t.T1()
 
+	var cSock *SOCKContainer = &SOCKContainer{
+		pool:             pool,
+		id:               id,
+		containerRootDir: pool.rootDirs.Make("SB-" + id),
+		codeDir:          codeDir,
+		scratchDir:       scratchDir,
+		cgRefCount:       1,
+		children:         make(map[string]Sandbox),
+		meta:             meta,
+	}
+	var c Sandbox = cSock
+
 	// block until we have enough to cover the cgroup mem limits
 	t2 := t.T0("acquire-mem")
 	pool.mem.adjustAvailableMB(-meta.MemLimitMB)
@@ -83,21 +95,9 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 	// don't want to use this cgroup feature, because the child
 	// would take the blame for ALL of the parent's allocations
 	moveMemCharge := (parent == nil)
-	cg := pool.cgPool.GetCg(meta.MemLimitMB, moveMemCharge)
+	cSock.cg = pool.cgPool.GetCg(meta.MemLimitMB, moveMemCharge)
 	t2.T1()
-
-	var cSock *SOCKContainer = &SOCKContainer{
-		pool:             pool,
-		id:               id,
-		containerRootDir: pool.rootDirs.Make("SB-" + id),
-		codeDir:          codeDir,
-		scratchDir:       scratchDir,
-		cg:               cg,
-		cgRefCount:       1,
-		children:         make(map[string]Sandbox),
-		meta:             meta,
-	}
-	var c Sandbox = cSock
+	cSock.printf("use cgroup %s", cSock.cg.Name)
 
 	defer func() {
 		if err != nil {

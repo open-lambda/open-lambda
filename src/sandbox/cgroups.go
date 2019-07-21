@@ -140,9 +140,11 @@ Loop:
 			cg.WriteInt("memory", "memory.failcnt", 0)
 			cg.Unpause()
 		default:
+			t := common.T0("fresh-cgroup")
 			cg = pool.NewCgroup()
 			cg.WriteInt("pids", "pids.max", int64(common.Conf.Limits.Procs))
 			cg.WriteInt("memory", "memory.swappiness", int64(common.Conf.Limits.Swappiness))
+			t.T1()
 		}
 
 		// add cgroup to ready queue
@@ -216,7 +218,7 @@ func (cg *Cgroup) TryWriteInt(resource, filename string, val int64) error {
 
 func (cg *Cgroup) WriteInt(resource, filename string, val int64) {
 	if err := cg.TryWriteInt(resource, filename, val); err != nil {
-		panic(err)
+		panic(fmt.Sprint("Error writing %v to %s of %s: %v", val, filename, resource, err))
 	}
 }
 
@@ -302,10 +304,7 @@ func (cg *Cgroup) setMemLimitMB(mb int) {
 
 	limitPath := cg.Path("memory", "memory.limit_in_bytes")
 	bytes := int64(mb) * 1024 * 1024
-	err := ioutil.WriteFile(limitPath, []byte(fmt.Sprintf("%d", bytes)), os.ModeAppend)
-	if err != nil {
-		panic(err)
-	}
+	cg.WriteInt("memory", "memory.limit_in_bytes", bytes)
 
 	// cgroup v1 documentation recommends reading back limit after
 	// writing, because it is only a suggestion (e.g., may get

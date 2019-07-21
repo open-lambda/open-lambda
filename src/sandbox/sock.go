@@ -98,6 +98,7 @@ func (c *SOCKContainer) freshProc() (err error) {
 		"chroot", c.containerRootDir, "python3", "-u",
 		"sock2.py", "/host/bootstrap.py", strconv.Itoa(len(cgFiles)),
 	)
+	cmd.Env = []string{} // for security, DO NOT expose host env to guest
 	cmd.ExtraFiles = cgFiles
 
 	// TODO: route this to a file
