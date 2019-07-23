@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"path"
 
 	docker "github.com/fsouza/go-dockerclient"
 )
@@ -154,19 +153,6 @@ func DumpDockerImage(client *docker.Client, image string, outdir string) error {
 		return export_err
 	} else if tar_err != nil {
 		return tar_err
-	}
-
-	// create mount points
-	if err := os.Mkdir(path.Join(outdir, "handler"), 0700); err != nil {
-		return err
-	}
-
-	if err := os.Mkdir(path.Join(outdir, "host"), 0700); err != nil {
-		return err
-	}
-
-	if err := os.Mkdir(path.Join(outdir, "packages"), 0700); err != nil {
-		return err
 	}
 
 	return nil

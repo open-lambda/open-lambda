@@ -98,6 +98,7 @@ func LoadDefaults(olPath string) error {
 		return err
 	}
 	total_mb := uint64(in.Totalram) * uint64(in.Unit) / 1024 / 1024
+	mem_pool_mb := Max(int(total_mb-500), 500)
 
 	Conf = &Config{
 		Worker_dir:        workerDir,
@@ -109,12 +110,12 @@ func LoadDefaults(olPath string) error {
 		Sandbox_config:    map[string]interface{}{},
 		SOCK_base_path:    baseImgDir,
 		Registry_cache_ms: 5000, // 5 seconds
-		Mem_pool_mb:       Max(int(total_mb-500), 500),
+		Mem_pool_mb:       mem_pool_mb,
 		Import_cache_tree: "",
 		Limits: LimitsConfig{
 			Procs:            10,
 			Mem_mb:           50,
-			Installer_mem_mb: 250,
+			Installer_mem_mb: Max(500, Min(250, mem_pool_mb/2)),
 			Swappiness:       0,
 		},
 		Features: FeaturesConfig{

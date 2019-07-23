@@ -256,9 +256,19 @@ func parseMeta(codeDir string) (meta *sandbox.SandboxMeta, err error) {
 		line := strings.ReplaceAll(scnr.Text(), " ", "")
 		parts := strings.Split(line, ":")
 		if parts[0] == "#ol-install" {
-			installs = append(installs, strings.Split(parts[1], ",")...)
+			for _, val := range strings.Split(parts[1], ",") {
+				val = strings.TrimSpace(val)
+				if len(val) > 0 {
+					installs = append(installs, val)
+				}
+			}
 		} else if parts[0] == "#ol-import" {
-			imports = append(imports, strings.Split(parts[1], ",")...)
+			for _, val := range strings.Split(parts[1], ",") {
+				val = strings.TrimSpace(val)
+				if len(val) > 0 {
+					imports = append(imports, val)
+				}
+			}
 		}
 	}
 

@@ -243,6 +243,7 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 	// same as scratchDir, which is the same as a sub-directory
 	// named after the package in the packages dir
 	scratchDir := filepath.Join(common.Conf.Pkgs_dir, p.name)
+	log.Printf("do pip install, using scratchDir='%v'", scratchDir)
 
 	alreadyInstalled := false
 	if _, err := os.Stat(scratchDir); err == nil {
