@@ -21,6 +21,7 @@ def recv_fds(sock, msglen, maxfds):
 
 def web_server():
     print("sock2.py: start web server on fd: %d" % file_sock.fileno())
+    sys.path.append('/handler')
 
     class SockFileHandler(tornado.web.RequestHandler):
         def post(self):
@@ -28,7 +29,6 @@ def web_server():
             # safeguard in case f is malicious (we don't
             # want it to interfere with ongoing setup, such as the
             # move to the new cgroups)
-            sys.path.append('/handler')
             import f
 
             try:

@@ -433,7 +433,7 @@ def tests():
         # do smoke tests under various configs
         with TestConf(mem_pool_mb=500, features={"import_cache": False}):
             install_tests()
-        with TestConf(mem_pool_mb=500, features={"import_cache": True}):
+        with TestConf(mem_pool_mb=500):
             install_tests()
         with TestConf(sandbox="docker", mem_pool_mb=500, features={"import_cache": False}):
             install_tests()
@@ -443,11 +443,11 @@ def tests():
         max_mem_alloc()
 
         # numpy pip install needs a larger mem cap
-        with TestConf(mem_pool_mb=500, features={"import_cache": True}):
+        with TestConf(mem_pool_mb=500):
             numpy_test()
 
     # test SOCK directly (without lambdas)
-    with TestConf(server_mode="sock", mem_pool_mb=500, features={"import_cache": True}):
+    with TestConf(server_mode="sock", mem_pool_mb=500):
         sock_churn(baseline=0, procs=1, seconds=5, fork=False)
         sock_churn(baseline=0, procs=1, seconds=15, fork=True)
         sock_churn(baseline=0, procs=15, seconds=15, fork=True)
@@ -462,12 +462,12 @@ def tests():
             update_code()
 
     # test heavy load
-    with TestConf(sandbox="sock", mem_pool_mb=500, features={"import_cache": True}, registry=test_reg):
+    with TestConf(sandbox="sock", mem_pool_mb=500, registry=test_reg):
         stress_one_lambda(procs=1, seconds=15)
         stress_one_lambda(procs=2, seconds=15)
         stress_one_lambda(procs=8, seconds=15)
 
-    with TestConf(sandbox="sock", mem_pool_mb=500, features={"import_cache": True}):
+    with TestConf(sandbox="sock", mem_pool_mb=500, features={"reuse_cgroups": True}):
         call_each_once(lambda_count=100, alloc_mb=1)
         call_each_once(lambda_count=1000, alloc_mb=10)
 

@@ -91,13 +91,17 @@ func (cg *Cgroup) Release() {
 
 	// if there's room in the recycled channel, add it there.
 	// Otherwise, just delete it.
-	select {
-	case cg.pool.recycled <- cg:
-		cg.printf("release and recycle")
-	default:
-		cg.printf("release and destroy")
-		cg.destroy()
+	if common.Conf.Features.Reuse_cgroups {
+		select {
+		case cg.pool.recycled <- cg:
+			cg.printf("release and recycle")
+			return
+		default:
+		}
 	}
+
+	cg.printf("release and destroy")
+	cg.destroy()
 }
 
 func (cg *Cgroup) destroy() {
@@ -218,7 +222,7 @@ func (cg *Cgroup) TryWriteInt(resource, filename string, val int64) error {
 
 func (cg *Cgroup) WriteInt(resource, filename string, val int64) {
 	if err := cg.TryWriteInt(resource, filename, val); err != nil {
-		panic(fmt.Sprint("Error writing %v to %s of %s: %v", val, filename, resource, err))
+		panic(fmt.Sprintf("Error writing %v to %s of %s: %v", val, filename, resource, err))
 	}
 }
 

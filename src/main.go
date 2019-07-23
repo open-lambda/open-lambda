@@ -252,7 +252,11 @@ func worker(ctx *cli.Context) error {
 				cmd = append(cmd, arg)
 			}
 		}
-		proc, err := os.StartProcess(os.Args[0], cmd, &attr)
+		binPath, err := exec.LookPath(os.Args[0])
+		if err != nil {
+			return err
+		}
+		proc, err := os.StartProcess(binPath, cmd, &attr)
 		if err != nil {
 			return err
 		}

@@ -6,6 +6,7 @@ OL_GO_FILES = $(shell find src/ -name '*.go')
 LAMBDA_FILES = $(shell find lambda)
 
 .PHONY: all
+.PHONY: install
 .PHONY: test-all
 .PHONY: clean
 
@@ -18,6 +19,9 @@ imgs/lambda: $(LAMBDA_FILES)
 
 ol: $(OL_GO_FILES)
 	cd $(OL_DIR) && $(GO) build -mod vendor -o ../ol
+
+install: ol
+	cp ol /usr/local/bin
 
 test-all:
 	python3 -u test.py
