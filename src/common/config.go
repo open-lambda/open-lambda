@@ -64,7 +64,7 @@ type Config struct {
 
 type FeaturesConfig struct {
 	Reuse_cgroups bool `json:"reuse_cgroups"`
-	Import_cache bool `json:"import_cache"`
+	Import_cache  bool `json:"import_cache"`
 }
 
 type LimitsConfig struct {
@@ -109,7 +109,7 @@ func LoadDefaults(olPath string) error {
 		Sandbox_config:    map[string]interface{}{},
 		SOCK_base_path:    baseImgDir,
 		Registry_cache_ms: 5000, // 5 seconds
-		Mem_pool_mb:       Max(int(total_mb - 500), 500),
+		Mem_pool_mb:       Max(int(total_mb-500), 500),
 		Import_cache_tree: "",
 		Limits: LimitsConfig{
 			Procs:            10,

@@ -120,7 +120,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 	var pyCode []string
 
 	for _, pkg := range meta.Installs {
-		path := "'/packages/"+pkg+"/files'"
+		path := "'/packages/" + pkg + "/files'"
 		pyCode = append(pyCode, "if not "+path+" in sys.path:")
 		pyCode = append(pyCode, "    sys.path.append("+path+")")
 	}
