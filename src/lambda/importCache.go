@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -262,13 +261,7 @@ func (cache *ImportCache) createSandboxInNode(node *ImportCacheNode) (err error)
 	// populate codeDir/packages with deps, and record top-level mods)
 	if node.codeDir == "" {
 		codeDir := cache.codeDirs.Make("import-cache")
-		defer func() {
-			if err != nil {
-				if err := os.RemoveAll(codeDir); err != nil {
-					log.Printf("could not cleanup %s: %v", codeDir, err)
-				}
-			}
-		}()
+		// TODO: clean this up upon failure
 
 		installs, err := cache.pkgPuller.InstallRecursive(node.Packages)
 		if err != nil {

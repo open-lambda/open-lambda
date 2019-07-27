@@ -96,11 +96,11 @@ func NewLambdaMgr() (res *LambdaMgr, err error) {
 		}
 	}()
 
-	mgr.codeDirs, err = common.NewDirMaker("code", false)
+	mgr.codeDirs, err = common.NewDirMaker("code", common.Conf.Storage.Code.Mode())
 	if err != nil {
 		return nil, err
 	}
-	mgr.scratchDirs, err = common.NewDirMaker("scratch", false)
+	mgr.scratchDirs, err = common.NewDirMaker("scratch", common.Conf.Storage.Scratch.Mode())
 	if err != nil {
 		return nil, err
 	}
@@ -186,11 +186,21 @@ func (mgr *LambdaMgr) Cleanup() {
 		mgr.ImportCache.Cleanup()
 	}
 
-	mgr.sbPool.Cleanup() // assumes all Sandboxes are gone
+	if mgr.sbPool != nil {
+		mgr.sbPool.Cleanup() // assumes all Sandboxes are gone
+	}
 
 	// cleanup DepTracer
 	if mgr.DepTracer != nil {
 		mgr.DepTracer.Cleanup()
+	}
+
+	if mgr.codeDirs != nil {
+		mgr.codeDirs.Cleanup()
+	}
+
+	if mgr.scratchDirs != nil {
+		mgr.scratchDirs.Cleanup()
 	}
 }
 

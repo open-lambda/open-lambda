@@ -9,6 +9,14 @@ import (
 	"syscall"
 )
 
+type StoreMode int
+
+const (
+	STORE_REGULAR StoreMode = iota
+	STORE_PRIVATE
+	STORE_MEMORY
+)
+
 var BIND uintptr = uintptr(syscall.MS_BIND)
 var BIND_RO uintptr = uintptr(syscall.MS_BIND | syscall.MS_RDONLY | syscall.MS_REMOUNT)
 var PRIVATE uintptr = uintptr(syscall.MS_PRIVATE)
@@ -18,10 +26,10 @@ var nextDirId int64 = 1000
 
 type DirMaker struct {
 	prefix string
-	mount  bool
+	mode   StoreMode
 }
 
-func NewDirMaker(system string, mount bool) (*DirMaker, error) {
+func NewDirMaker(system string, mode StoreMode) (*DirMaker, error) {
 	prefix := filepath.Join(Conf.Worker_dir, system)
 	log.Printf("Storage dir at %s", prefix)
 	if err := os.RemoveAll(prefix); err != nil {
@@ -32,7 +40,12 @@ func NewDirMaker(system string, mount bool) (*DirMaker, error) {
 		return nil, err
 	}
 
-	if mount {
+	if mode == STORE_MEMORY {
+		// TODO: configure mem size?
+		if err := syscall.Mount("none", prefix, "tmpfs", 0, "size=64m"); err != nil {
+			return nil, err
+		}
+	} else if mode == STORE_PRIVATE {
 		if err := syscall.Mount(prefix, prefix, "", BIND, ""); err != nil {
 			return nil, fmt.Errorf("failed to bind %s: %v", prefix, err)
 		}
@@ -44,7 +57,7 @@ func NewDirMaker(system string, mount bool) (*DirMaker, error) {
 
 	return &DirMaker{
 		prefix: prefix,
-		mount:  mount,
+		mode:   mode,
 	}, nil
 }
 
@@ -65,7 +78,7 @@ func (dm *DirMaker) Make(suffix string) string {
 }
 
 func (dm *DirMaker) Cleanup() error {
-	if dm.mount {
+	if dm.mode == STORE_PRIVATE || dm.mode == STORE_MEMORY {
 		if err := syscall.Unmount(dm.prefix, syscall.MNT_DETACH); err != nil {
 			panic(err)
 		}

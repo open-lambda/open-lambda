@@ -362,5 +362,8 @@ func (c *SOCKContainer) DebugString() string {
 	s += fmt.Sprintf("MEMORY USED: %d of %d MB\n",
 		c.cg.getMemUsageMB(), c.cg.getMemLimitMB())
 
+	s += fmt.Sprintf("MEMORY FAILURES: %d\n",
+		c.cg.ReadInt("memory", "memory.failcnt"))
+
 	return s
 }

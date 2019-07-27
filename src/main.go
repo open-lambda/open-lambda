@@ -239,7 +239,6 @@ func worker(ctx *cli.Context) error {
 		fmt.Printf("using existing OL directory at %s\n", olPath)
 	}
 
-	// aoeu
 	confPath := filepath.Join(olPath, "config.json")
 	overrides := ctx.String("options")
 	if overrides != "" {

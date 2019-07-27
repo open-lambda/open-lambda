@@ -55,14 +55,10 @@ type Config struct {
 	// which OCI implementation to use for the docker sandbox (e.g., runc or runsc)
 	Docker_runtime string `json:"docker_runtime"`
 
-	// settings to use for cgroups used by SOCK
-	Limits LimitsConfig `json:"limits"`
-
-	// various subsystems that are either enabled or disabled
+	Limits   LimitsConfig   `json:"limits"`
 	Features FeaturesConfig `json:"features"`
-
-	// what should show up in the log?
-	Trace TraceConfig `json:"trace"`
+	Trace    TraceConfig    `json:"trace"`
+	Storage  StorageConfig  `json:"storage"`
 }
 
 type FeaturesConfig struct {
@@ -76,6 +72,28 @@ type TraceConfig struct {
 	Memory  bool `json:"memory"`
 	Evictor bool `json:"evictor"`
 	Package bool `json:"package"`
+}
+
+type StoreString string
+
+func (s StoreString) Mode() StoreMode {
+	switch s {
+	case "":
+		return STORE_REGULAR
+	case "memory":
+		return STORE_MEMORY
+	case "private":
+		return STORE_PRIVATE
+	default:
+		panic(fmt.Errorf("unexpected storage type: '%v'", s))
+	}
+}
+
+type StorageConfig struct {
+	// should be empty, "memory", or "private"
+	Root    StoreString `json:"root"`
+	Scratch StoreString `json:"scratch"`
+	Code    StoreString `json:"code"`
 }
 
 type LimitsConfig struct {
@@ -132,6 +150,11 @@ func LoadDefaults(olPath string) error {
 		Features: FeaturesConfig{
 			Import_cache:        true,
 			Downsize_paused_mem: true,
+		},
+		Storage: StorageConfig{
+			Root:    "private",
+			Scratch: "",
+			Code:    "",
 		},
 	}
 

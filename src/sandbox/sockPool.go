@@ -35,7 +35,7 @@ func NewSOCKPool(name string, mem *MemPool) (cf *SOCKPool, err error) {
 		return nil, err
 	}
 
-	rootDirs, err := common.NewDirMaker("root-"+name, true)
+	rootDirs, err := common.NewDirMaker("root-"+name, common.Conf.Storage.Root.Mode())
 	if err != nil {
 		return nil, err
 	}
