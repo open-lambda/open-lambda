@@ -60,12 +60,22 @@ type Config struct {
 
 	// various subsystems that are either enabled or disabled
 	Features FeaturesConfig `json:"features"`
+
+	// what should show up in the log?
+	Trace TraceConfig `json:"trace"`
 }
 
 type FeaturesConfig struct {
 	Reuse_cgroups       bool `json:"reuse_cgroups"`
 	Import_cache        bool `json:"import_cache"`
 	Downsize_paused_mem bool `json:"downsize_paused_mem"`
+}
+
+type TraceConfig struct {
+	Cgroups bool `json:"cgroups"`
+	Memory  bool `json:"memory"`
+	Evictor bool `json:"evictor"`
+	Package bool `json:"package"`
 }
 
 type LimitsConfig struct {

@@ -2,7 +2,9 @@ package sandbox
 
 import (
 	"container/list"
+	"fmt"
 	"log"
+	"strings"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 )
@@ -118,6 +120,13 @@ func (evictor *SOCKEvictor) nextEvent(block bool) *SandboxEvent {
 	}
 }
 
+func (evictor *SOCKEvictor) printf(format string, args ...interface{}) {
+	if common.Conf.Trace.Evictor {
+		msg := fmt.Sprintf(format, args...)
+		log.Printf("%s [EVICTOR]", strings.TrimRight(msg, "\n"))
+	}
+}
+
 // update state based on messages sent to this task.  this may be
 // stale, but correctness doesn't depend on freshness.
 //
@@ -147,10 +156,10 @@ func (evictor *SOCKEvictor) updateState() {
 			prio -= 2
 		case EvDestroy:
 		default:
-			log.Printf("Unknown event: %v", event.EvType)
+			evictor.printf("Unknown event: %v", event.EvType)
 		}
 
-		log.Printf("Evictor: Sandbox %v priority goes to %d", sb.ID(), prio)
+		evictor.printf("Evictor: Sandbox %v priority goes to %d", sb.ID(), prio)
 		if prio < 0 {
 			panic("priority should never go negative")
 		}
@@ -177,7 +186,7 @@ func (evictor *SOCKEvictor) evictFront(queue *list.List) {
 	front := queue.Front()
 	sb := front.Value.(Sandbox)
 
-	log.Printf("Evict Sandbox %v", sb.ID())
+	evictor.printf("Evict Sandbox %v", sb.ID())
 
 	// destroy async (we'll know when it's done, because
 	// we'll see a evDestroy event later on our chan)
@@ -225,7 +234,7 @@ func (evictor *SOCKEvictor) doEvictions() {
 	// TODO: create some parameters to better control eviction in
 	// this state
 	if freeSandboxes <= 0 && evictor.evicting.Len() == 0 {
-		log.Printf("WARNING!  Critically low on memory, so evicting an active Sandbox")
+		evictor.printf("WARNING!  Critically low on memory, so evicting an active Sandbox")
 		if evictor.prioQueues[1].Len() > 0 {
 			evictor.evictFront(evictor.prioQueues[1])
 		}

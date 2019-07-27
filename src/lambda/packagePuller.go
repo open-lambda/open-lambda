@@ -178,14 +178,18 @@ func (pp *PackagePuller) InstallRecursive(installs []string) ([]string, error) {
 	// deps, leading to other installs
 	for i := 0; i < len(installs); i++ {
 		pkg := installs[i]
-		log.Printf("On %v of %v", pkg, installs)
+		if common.Conf.Trace.Package {
+			log.Printf("On %v of %v", pkg, installs)
+		}
 		p, err := pp.GetPkg(pkg)
 		if err != nil {
 			return nil, err
 		}
 
-		log.Printf("Package '%s' has deps %v", pkg, p.meta.Deps)
-		log.Printf("Package '%s' has top-level modules %v", pkg, p.meta.TopLevel)
+		if common.Conf.Trace.Package {
+			log.Printf("Package '%s' has deps %v", pkg, p.meta.Deps)
+			log.Printf("Package '%s' has top-level modules %v", pkg, p.meta.TopLevel)
+		}
 
 		// push any previously unseen deps on the list of ones to install
 		for _, dep := range p.meta.Deps {

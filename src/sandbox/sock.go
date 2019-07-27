@@ -195,28 +195,9 @@ func (c *SOCKContainer) Unpause() (err error) {
 }
 
 func (c *SOCKContainer) Destroy() {
-	// kill all procs INSIDE the cgroup
-	t := common.T0("Destroy()/kill-procs")
-	if c.cg != nil {
-		c.printf("kill all procs in CG\n")
-		if err := c.cg.KillAllProcs(); err != nil {
-			panic(err)
-		}
+	if err := c.cg.Pause(); err != nil {
+		panic(err)
 	}
-	t.T1()
-
-	c.printf("unmount and remove dirs\n")
-	t = common.T0("Destroy()/detach-root")
-	if err := syscall.Unmount(c.containerRootDir, syscall.MNT_DETACH); err != nil {
-		c.printf("unmount root dir %s failed :: %v\n", c.containerRootDir, err)
-	}
-	t.T1()
-
-	t = common.T0("Destroy()/remove-root")
-	if err := os.RemoveAll(c.containerRootDir); err != nil {
-		c.printf("remove root dir %s failed :: %v\n", c.containerRootDir, err)
-	}
-	t.T1()
 
 	c.decCgRefCount()
 }
@@ -227,17 +208,38 @@ func (c *SOCKContainer) Destroy() {
 func (c *SOCKContainer) decCgRefCount() {
 	c.cgRefCount -= 1
 	c.printf("CG ref count decremented to %d", c.cgRefCount)
+	if c.cgRefCount < 0 {
+		panic("cgRefCount should not be able to go negative")
+	}
+
+	// release all resources when we have no more dependents...
 	if c.cgRefCount == 0 {
+		t := common.T0("Destroy()/kill-procs")
+		if c.cg != nil {
+			pids := c.cg.KillAllProcs()
+			c.printf("killed PIDs %v in CG\n", pids)
+		}
+		t.T1()
+
+		c.printf("unmount and remove dirs\n")
+		t = common.T0("Destroy()/detach-root")
+		if err := syscall.Unmount(c.containerRootDir, syscall.MNT_DETACH); err != nil {
+			c.printf("unmount root dir %s failed :: %v\n", c.containerRootDir, err)
+		}
+		t.T1()
+
+		t = common.T0("Destroy()/remove-root")
+		if err := os.RemoveAll(c.containerRootDir); err != nil {
+			c.printf("remove root dir %s failed :: %v\n", c.containerRootDir, err)
+		}
+		t.T1()
+
 		c.cg.Release()
 		c.pool.mem.adjustAvailableMB(c.cg.getMemLimitMB())
 
 		if c.parent != nil {
 			c.parent.childExit(c)
 		}
-	}
-
-	if c.cgRefCount < 0 {
-		panic("cgRefCount should not be able to go negative")
 	}
 }
 
@@ -304,6 +306,7 @@ func (c *SOCKContainer) fork(dst Sandbox) (err error) {
 				}
 			}
 			if !isOrig {
+				c.printf("move PID %v from CG %v to CG %v\n", pid, c.cg.Name, dstSock.cg.Name)
 				if err = dstSock.cg.AddPid(pid); err != nil {
 					return err
 				}

@@ -77,8 +77,10 @@ func (pool *CgroupPool) NewCgroup() *Cgroup {
 }
 
 func (cg *Cgroup) printf(format string, args ...interface{}) {
-	msg := fmt.Sprintf(format, args...)
-	log.Printf("%s [CGROUP %s: %s]", strings.TrimRight(msg, "\n"), cg.pool.Name, cg.Name)
+	if common.Conf.Trace.Cgroups {
+		msg := fmt.Sprintf(format, args...)
+		log.Printf("%s [CGROUP %s: %s]", strings.TrimRight(msg, "\n"), cg.pool.Name, cg.Name)
+	}
 }
 
 func (cg *Cgroup) Release() {
@@ -359,44 +361,40 @@ func (cg *Cgroup) GetPIDs() ([]string, error) {
 	return strings.Split(pidStr, "\n"), nil
 }
 
-// CG may be in any state before (Paused/Unpaused), will be empty and Unpaused after
-func (cg *Cgroup) KillAllProcs() error {
-	if err := cg.Pause(); err != nil {
-		return err
-	}
-
+// CG most be paused beforehand
+func (cg *Cgroup) KillAllProcs() []string {
 	pids, err := cg.GetPIDs()
 	if err != nil {
-		return err
+		panic(err)
 	}
 
 	for _, pidStr := range pids {
 		pid, err := strconv.Atoi(pidStr)
 		if err != nil {
-			return fmt.Errorf("bad pid string: %s :: %v", pidStr, err)
+			panic(fmt.Errorf("bad pid string: %s :: %v", pidStr, err))
 		}
 
 		proc, err := os.FindProcess(pid)
 		if err != nil {
-			fmt.Errorf("failed to find process with pid: %d :: %v", pid, err)
+			panic(fmt.Errorf("failed to find process with pid: %d :: %v", pid, err))
 		}
 
 		// forced termination (not trappable)
 		err = proc.Signal(syscall.SIGKILL)
 		if err != nil {
-			fmt.Errorf("failed to send kill signal to process with pid: %d :: %v", pid, err)
+			panic(fmt.Errorf("failed to send kill signal to process with pid: %d :: %v", pid, err))
 		}
 	}
 
 	if err := cg.Unpause(); err != nil {
-		return err
+		panic(err)
 	}
 
 Loop:
 	for i := 0; ; i++ {
 		pids, err := cg.GetPIDs()
 		if err != nil {
-			return err
+			panic(err)
 		} else if len(pids) == 0 {
 			break Loop
 		} else if i%1000 == 0 {
@@ -405,5 +403,5 @@ Loop:
 		time.Sleep(1 * time.Millisecond)
 	}
 
-	return nil
+	return pids
 }

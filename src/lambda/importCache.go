@@ -178,8 +178,8 @@ func (cache *ImportCache) createChildSandboxFromNode(
 			}
 		}
 
-		// release ref count
-		cache.putSandboxInNode(node)
+		// dec ref count
+		cache.putSandboxInNode(node, zygoteSB)
 
 		// isNew is guaranteed to be true on 2nd iteration
 		if err != sandbox.FORK_FAILED || isNew {
@@ -231,13 +231,23 @@ func (cache *ImportCache) getSandboxInNode(node *ImportCacheNode, forceNew bool)
 }
 
 // decrease refs to SB, pausing if nobody else is still using it
-func (cache *ImportCache) putSandboxInNode(node *ImportCacheNode) {
+func (cache *ImportCache) putSandboxInNode(node *ImportCacheNode, sb sandbox.Sandbox) {
 	node.mutex.Lock()
 	defer node.mutex.Unlock()
 
+	if node.sb != sb {
+		// the Sandbox must have been replaced (e.g., because
+		// the Zygote fork failed to create another SB) after
+		// we took a reference to it.  This means it is
+		// already being destroyed, and we don't need to worry
+		// about tracking references and pausing when we're
+		// done
+		return
+	}
+
 	node.sbRefCount -= 1
 
-	if node.sbRefCount == 0 && node.sb != nil {
+	if node.sbRefCount == 0 {
 		if err := node.sb.Pause(); err != nil {
 			node.sb = nil
 		}

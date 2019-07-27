@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"strings"
+
+	"github.com/open-lambda/open-lambda/ol/common"
 )
 
 type MemPool struct {
@@ -46,8 +48,10 @@ func NewMemPool(name string, totalMB int) *MemPool {
 }
 
 func (pool *MemPool) printf(format string, args ...interface{}) {
-	msg := fmt.Sprintf(format, args...)
-	log.Printf("%s [MEM POOL %s]", strings.TrimRight(msg, "\n"), pool.name)
+	if common.Conf.Trace.Memory {
+		msg := fmt.Sprintf(format, args...)
+		log.Printf("%s [MEM POOL %s]", strings.TrimRight(msg, "\n"), pool.name)
+	}
 }
 
 // this task is responsible for tracking available memory in the
