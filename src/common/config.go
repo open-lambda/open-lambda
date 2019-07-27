@@ -63,8 +63,9 @@ type Config struct {
 }
 
 type FeaturesConfig struct {
-	Reuse_cgroups bool `json:"reuse_cgroups"`
-	Import_cache  bool `json:"import_cache"`
+	Reuse_cgroups       bool `json:"reuse_cgroups"`
+	Import_cache        bool `json:"import_cache"`
+	Downsize_paused_mem bool `json:"downsize_paused_mem"`
 }
 
 type LimitsConfig struct {
@@ -115,11 +116,12 @@ func LoadDefaults(olPath string) error {
 		Limits: LimitsConfig{
 			Procs:            10,
 			Mem_mb:           50,
-			Installer_mem_mb: Max(500, Min(250, mem_pool_mb/2)),
+			Installer_mem_mb: Max(250, Min(500, mem_pool_mb/2)),
 			Swappiness:       0,
 		},
 		Features: FeaturesConfig{
-			Import_cache: true,
+			Import_cache:        true,
+			Downsize_paused_mem: true,
 		},
 	}
 

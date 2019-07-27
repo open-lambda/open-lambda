@@ -167,25 +167,29 @@ func (c *SOCKContainer) Pause() (err error) {
 		return err
 	}
 
-	// drop mem limit to what is used when we're paused, because
-	// we know the Sandbox cannot allocate more when it's not
-	// schedulable.  Then release saved memory back to the pool.
-	oldLimit := c.cg.getMemLimitMB()
-	newLimit := c.cg.getMemUsageMB() + 1
-	if newLimit < oldLimit {
-		c.cg.setMemLimitMB(newLimit)
-		c.pool.mem.adjustAvailableMB(oldLimit - newLimit)
+	if common.Conf.Features.Downsize_paused_mem {
+		// drop mem limit to what is used when we're paused, because
+		// we know the Sandbox cannot allocate more when it's not
+		// schedulable.  Then release saved memory back to the pool.
+		oldLimit := c.cg.getMemLimitMB()
+		newLimit := c.cg.getMemUsageMB() + 1
+		if newLimit < oldLimit {
+			c.cg.setMemLimitMB(newLimit)
+			c.pool.mem.adjustAvailableMB(oldLimit - newLimit)
+		}
 	}
 	return nil
 }
 
 func (c *SOCKContainer) Unpause() (err error) {
-	// block until we have enough mem to upsize limit to the
-	// normal size before unpausing
-	oldLimit := c.cg.getMemLimitMB()
-	newLimit := common.Conf.Limits.Mem_mb
-	c.pool.mem.adjustAvailableMB(oldLimit - newLimit)
-	c.cg.setMemLimitMB(newLimit)
+	if common.Conf.Features.Downsize_paused_mem {
+		// block until we have enough mem to upsize limit to the
+		// normal size before unpausing
+		oldLimit := c.cg.getMemLimitMB()
+		newLimit := common.Conf.Limits.Mem_mb
+		c.pool.mem.adjustAvailableMB(oldLimit - newLimit)
+		c.cg.setMemLimitMB(newLimit)
+	}
 
 	return c.cg.Unpause()
 }

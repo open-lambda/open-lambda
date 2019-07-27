@@ -194,6 +194,14 @@ func overrideOpts(confPath, overridePath, optsStr string) error {
 			if err != nil {
 				return err
 			}
+		case bool:
+			if strings.ToLower(val) == "true" {
+				c[key] = true
+			} else if strings.ToLower(val) == "false" {
+				c[key] = false
+			} else {
+				return fmt.Errorf("'%s' for %s not a valid boolean value", val, key)
+			}
 		default:
 			return fmt.Errorf("config values of type %T (%s) must be edited manually in the config file ", prev, key)
 		}

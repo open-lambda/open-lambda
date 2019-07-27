@@ -38,7 +38,7 @@ type CgroupPool struct {
 
 func NewCgroupPool(name string) (*CgroupPool, error) {
 	pool := &CgroupPool{
-		Name:     path.Base(common.Conf.Worker_dir) + "-" + name,
+		Name:     path.Base(path.Dir(common.Conf.Worker_dir)) + "-" + name,
 		ready:    make(chan *Cgroup, CGROUP_RESERVE),
 		recycled: make(chan *Cgroup, CGROUP_RESERVE),
 		quit:     make(chan chan bool),
