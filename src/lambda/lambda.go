@@ -86,7 +86,7 @@ type Invocation struct {
 	execMs int
 }
 
-// Timeout broker takes in a request, and sets its close field to true
+// Timeout broker manages automatic timeout for lambda
 type TimeoutBroker struct
 {
 	// Suicide timer- i.e. when this timer expires, it will cause the Lambda Instance
@@ -679,6 +679,8 @@ func (linst *LambdaInstance) Task() {
 			tb.cancel = cf
 
 			proxy.ServeHTTP(req.w, req.r)
+			tb.suicideTimer.Stop() // If request finishes, then shouldn't mark for del.
+
 			t.T1()
 			req.execMs = int(t.Milliseconds)
 			f.doneChan <- req
