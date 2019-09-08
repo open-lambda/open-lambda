@@ -3,6 +3,7 @@ package lambda
 import (
 	"bufio"
 	"container/list"
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -70,10 +71,6 @@ type LambdaInstance struct {
 	// send chan to the kill chan to destroy the instance, then
 	// wait for msg on sent chan to block until it is done
 	killChan chan chan bool
-
-	// Suicide timer- i.e. when this timer expires, it will cause the Lambda Instance
-	// to try to self destruct
-	suicideTimer *time.Timer
 }
 
 // represents an HTTP request to be handled by a lambda instance
@@ -87,6 +84,20 @@ type Invocation struct {
 	// how many milliseconds did ServeHTTP take?  (doesn't count
 	// queue time or Sandbox init)
 	execMs int
+}
+
+// Timeout broker takes in a request, and sets its close field to true
+type TimeoutBroker struct
+{
+	// Suicide timer- i.e. when this timer expires, it will cause the Lambda Instance
+	// to try to self destruct
+	suicideTimer *time.Timer
+
+	// Corresponding instance (to destroy)
+	linst *LambdaInstance
+
+	// Cancel function
+	cancel func()
 }
 
 func NewLambdaMgr() (res *LambdaMgr, err error) {
@@ -558,7 +569,6 @@ func (f *LambdaFunc) newInstance() {
 		killChan: make(chan chan bool, 1),
 	}
 
-	linst.suicideTimer = time.AfterFunc(10000000000, linst.AsyncSelfDestruct)
 
 	f.instances.PushBack(linst)
 
@@ -660,6 +670,14 @@ func (linst *LambdaInstance) Task() {
 		for req != nil {
 			// ask Sandbox to respond, via HTTP proxy
 			t := common.T0("ServeHTTP")
+			var tb TimeoutBroker
+			ct, cf := context.WithTimeout(req.r.Context(), 10000000000)
+			req.r = req.r.Clone(ct)
+
+			tb.suicideTimer = time.AfterFunc(10000000000, tb.CloseInstance)
+			tb.linst = linst
+			tb.cancel = cf
+
 			proxy.ServeHTTP(req.w, req.r)
 			t.T1()
 			req.execMs = int(t.Milliseconds)
@@ -699,7 +717,16 @@ func (linst *LambdaInstance) AsyncKill() chan bool {
 
 // Wrapper to AsyncKill- a function explicitly for causing a lambda function
 // to self destruct
-func (linst *LambdaInstance) AsyncSelfDestruct() {
+func (tb *TimeoutBroker) CloseInstance() {
 	fmt.Printf("WARNING: A lambda instance has timed out, and will now end itself.\n")
-	linst.AsyncKill()
+
+	tb.suicideTimer.Stop()
+
+	// Set the instance to be killed
+	tb.linst.AsyncKill()
+
+	// Cancel the current running request
+	tb.cancel()
+
+	fmt.Printf("INFO: Clean up for lambda instance finished.\n")
 }
