@@ -70,6 +70,10 @@ type LambdaInstance struct {
 	// send chan to the kill chan to destroy the instance, then
 	// wait for msg on sent chan to block until it is done
 	killChan chan chan bool
+
+	// Suicide timer- i.e. when this timer expires, it will cause the Lambda Instance
+	// to try to self destruct
+	suicideTimer *time.Timer
 }
 
 // represents an HTTP request to be handled by a lambda instance
@@ -554,6 +558,8 @@ func (f *LambdaFunc) newInstance() {
 		killChan: make(chan chan bool, 1),
 	}
 
+	linst.suicideTimer = time.AfterFunc(10000000000, linst.AsyncSelfDestruct)
+
 	f.instances.PushBack(linst)
 
 	go linst.Task()
@@ -689,4 +695,11 @@ func (linst *LambdaInstance) AsyncKill() chan bool {
 	done := make(chan bool)
 	linst.killChan <- done
 	return done
+}
+
+// Wrapper to AsyncKill- a function explicitly for causing a lambda function
+// to self destruct
+func (linst *LambdaInstance) AsyncSelfDestruct() {
+	fmt.Printf("WARNING: A lambda instance has timed out, and will now end itself.\n")
+	linst.AsyncKill()
 }
