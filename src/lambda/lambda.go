@@ -671,10 +671,16 @@ func (linst *LambdaInstance) Task() {
 			// ask Sandbox to respond, via HTTP proxy
 			t := common.T0("ServeHTTP")
 			var tb TimeoutBroker
-			ct, cf := context.WithTimeout(req.r.Context(), 10000000000)
+			const NANOSEC_PER_SEC = 1000000000
+			var conf_to_sec time.Duration = time.Duration(common.Conf.Lambda_timeout * NANOSEC_PER_SEC)
+
+			// TODO: check time duration is larger than 0, if not
+			// treat it as infinite duration (i.e. timeout is turned off)
+
+			ct, cf := context.WithTimeout(req.r.Context(), conf_to_sec)
 			req.r = req.r.Clone(ct)
 
-			tb.suicideTimer = time.AfterFunc(10000000000, tb.CloseInstance)
+			tb.suicideTimer = time.AfterFunc(conf_to_sec, tb.CloseInstance)
 			tb.linst = linst
 			tb.cancel = cf
 
@@ -730,5 +736,5 @@ func (tb *TimeoutBroker) CloseInstance() {
 	// Cancel the current running request
 	tb.cancel()
 
-	fmt.Printf("INFO: Clean up for lambda instance finished.\n")
+	fmt.Printf("INFO: Clean up for lambda instance engaged...\n")
 }
