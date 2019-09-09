@@ -8,7 +8,11 @@ RUN pip3 install virtualenv requests tornado==4.5.3
 
 # for SOCK container engine
 COPY sock2.py /
-COPY ol.so /
+
+# Build python module in container to avoid depending on the host
+COPY ol.c /
+COPY setup.py /
+RUN cd / && python3 setup.py build_ext --inplace && mv ol.*.so /ol.so
 
 # for Docker container engine
 COPY server.py /
