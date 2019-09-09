@@ -55,8 +55,9 @@ type Config struct {
 	// which OCI implementation to use for the docker sandbox (e.g., runc or runsc)
 	Docker_runtime string `json:"docker_runtime"`
 
-	// The lambda timeout given in seconds
-	Lambda_timeout int64 `json:"lambda_timeout"`
+	// The max lambda timeout given in milliseconds
+	// If no timeout is given by the lambda, this max timeout is also the default
+	Lambda_Max_timeout int64 `json:"lambda_max_timeout"`
 
 	Limits   LimitsConfig   `json:"limits"`
 	Features FeaturesConfig `json:"features"`
@@ -159,7 +160,7 @@ func LoadDefaults(olPath string) error {
 			Scratch: "",
 			Code:    "",
 		},
-		Lambda_timeout: 60,
+		Lambda_Max_timeout: 60000,
 	}
 
 	return checkConf()

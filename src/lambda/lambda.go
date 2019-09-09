@@ -264,7 +264,7 @@ func (f *LambdaFunc) printf(format string, args ...interface{}) {
 // The first list should be installed with pip install.  The second is
 // a hint about what may be imported (useful for import cache).
 //
-// ol-timeout is used to specify a lambda timeout in seconds. If the timeout
+// ol-timeout is used to specify a lambda timeout in milliseconds. If the timeout
 // specified is longer than the environment's global timeout, then the gloval
 // timeout will be used
 //
@@ -320,14 +320,14 @@ func parseMeta(codeDir string) (meta *sandbox.SandboxMeta, err error) {
 				if err == nil {
 					timeout_time = res
 				} else {
-					fmt.Printf("WARNING: Malformed integer value detected for #ol-timeout\n")
+					fmt.Printf("WARNING: Malformed floating point value detected for #ol-timeout\n")
 					fmt.Printf("#ol-timeout will be ignored for the affected lambda.\n")
 				}
 
 			// case: incorrect amount of parts, just don't do anything, print error
 			} else {
 				fmt.Printf("WARNING: Incorrect format specified for #ol-timeout. It will be ignored as a consequence.\n")
-				fmt.Printf("Expected format #ol-timeout:[timeout time in seconds]\n")
+				fmt.Printf("Expected format #ol-timeout:[timeout time in milliseconds]\n")
 			}
 		}
 	}
@@ -707,10 +707,10 @@ func (linst *LambdaInstance) Task() {
 			// ask Sandbox to respond, via HTTP proxy
 			t := common.T0("ServeHTTP")
 			var tb TimeoutBroker
-			const NANOSEC_PER_SEC = 1000000000
+			const NANOSEC_PER_MS= 1000000
 			var chosen_timeout int64
 
-			default_timeout := common.Conf.Lambda_timeout
+			default_timeout := common.Conf.Lambda_Max_timeout
 			override_timeout := linst.meta.Timeout_Time
 
 			// Resolve timeout:
@@ -727,7 +727,7 @@ func (linst *LambdaInstance) Task() {
 				chosen_timeout = default_timeout
 			}
 
-			var conf_to_sec time.Duration = time.Duration(chosen_timeout * NANOSEC_PER_SEC)
+			var conf_to_sec time.Duration = time.Duration(chosen_timeout * NANOSEC_PER_MS)
 
 			// Set timed out signal to false by default, invalid signal
 			tb.timedout = false
