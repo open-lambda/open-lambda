@@ -10,6 +10,7 @@ import (
 	"net/http/httputil"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -256,9 +257,14 @@ func (f *LambdaFunc) printf(format string, args ...interface{}) {
 //
 // # ol-install: parso,jedi,idna,chardet,certifi,requests
 // # ol-import: parso,jedi,idna,chardet,certifi,requests,urllib3
+// # ol-timeout: 30
 //
-// The first list should be installed with pip install.  The latter is
+// The first list should be installed with pip install.  The second is
 // a hint about what may be imported (useful for import cache).
+//
+// ol-timeout is used to specify a lambda timeout in seconds. If the timeout
+// specified is longer than the environment's global timeout, then the gloval
+// timeout will be used
 //
 // We support exact pkg versions (e.g., pkg==2.0.0), but not < or >.
 // If different lambdas import different versions of the same package,
@@ -275,6 +281,7 @@ func (f *LambdaFunc) printf(format string, args ...interface{}) {
 func parseMeta(codeDir string) (meta *sandbox.SandboxMeta, err error) {
 	installs := make([]string, 0)
 	imports := make([]string, 0)
+	var timeout_time int64 = 0
 
 	path := filepath.Join(codeDir, "f.py")
 	file, err := os.Open(path)
@@ -301,6 +308,23 @@ func parseMeta(codeDir string) (meta *sandbox.SandboxMeta, err error) {
 					imports = append(imports, val)
 				}
 			}
+		} else if parts[0] == "#ol-timeout" {
+			// case: correct amount of parts. Accepts *:* where * is NOT == {:}
+			if len(parts) == 2 {
+				const BASE_TEN = 10
+				const BITS_64 = 64
+				res, err := strconv.ParseInt(parts[1], BASE_TEN, BITS_64)
+				if err == nil {
+					timeout_time = res
+				} else {
+					fmt.Printf("WARNING: Malformed integer value detected for #ol-timeout")
+				}
+
+			// case: incorrect amount of parts, just don't do anything, print error
+			} else {
+				fmt.Printf("WARNING: Incorrect format specified for #ol-timeout. It will be ignored as a consequence.\n")
+				fmt.Printf("Expected format #ol-timeout:[timeout time in seconds]\n")
+			}
 		}
 	}
 
@@ -311,6 +335,7 @@ func parseMeta(codeDir string) (meta *sandbox.SandboxMeta, err error) {
 	return &sandbox.SandboxMeta{
 		Installs: installs,
 		Imports:  imports,
+		Timeout_Time: timeout_time,
 	}, nil
 }
 
@@ -679,23 +704,47 @@ func (linst *LambdaInstance) Task() {
 			t := common.T0("ServeHTTP")
 			var tb TimeoutBroker
 			const NANOSEC_PER_SEC = 1000000000
-			var conf_to_sec time.Duration = time.Duration(common.Conf.Lambda_timeout * NANOSEC_PER_SEC)
+			var chosen_timeout int64
 
-			// TODO: check time duration is larger than 0, if not
-			// treat it as infinite duration (i.e. timeout is turned off)
+			default_timeout := common.Conf.Lambda_timeout
+			override_timeout := linst.meta.Timeout_Time
 
-			ct, cf := context.WithTimeout(req.r.Context(), conf_to_sec)
-			req.r = req.r.Clone(ct)
+			// Resolve timeout:
+			// In general, use the override timeout if it is lower than the default timeout. Otherwise, use the default timeout
+			// An exception is if the default timeout is <=0... then always use the override timeout
+			// Another exception (second precedence) is if the override timeout is <=0... then use the default timeout
+			if default_timeout <= 0 {
+				chosen_timeout = override_timeout
+			} else if override_timeout <= 0 {
+				chosen_timeout = default_timeout
+			} else if override_timeout < default_timeout {
+				chosen_timeout = override_timeout
+			} else {
+				chosen_timeout = default_timeout
+			}
 
-			tb.suicideTimer = time.AfterFunc(conf_to_sec, tb.CloseInstance)
+			var conf_to_sec time.Duration = time.Duration(chosen_timeout * NANOSEC_PER_SEC)
+
+			// Set timed out signal to false by default
 			tb.timedout = false
-			tb.linst = linst
-			tb.cancel = cf
+
+			// case: timeout time is greater than 0, use it and start the timeout timer
+			// if it's not, then just ignore it (i.e. timeout is disabled)
+			if conf_to_sec > 0 {
+				ct, cf := context.WithTimeout(req.r.Context(), conf_to_sec)
+				tb.suicideTimer = time.AfterFunc(conf_to_sec, tb.CloseInstance)
+				tb.linst = linst
+				tb.cancel = cf
+				req.r = req.r.Clone(ct)
+			}
 
 			proxy.ServeHTTP(req.w, req.r)
-			tb.destlock.Lock()
-			tb.suicideTimer.Stop() // If request finishes, then shouldn't mark for del.
-			tb.destlock.Unlock()
+
+			if conf_to_sec > 0 {
+				tb.destlock.Lock()
+				tb.suicideTimer.Stop() // If request finishes, then shouldn't mark for del.
+				tb.destlock.Unlock()
+			}
 
 			if tb.timedout {
 				sb.Destroy() // Garbage collect sandbox state

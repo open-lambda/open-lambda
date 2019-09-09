@@ -72,6 +72,7 @@ type SandboxMeta struct {
 	Installs   []string
 	Imports    []string
 	MemLimitMB int
+	Timeout_Time int64
 }
 
 type SockError string
