@@ -69,9 +69,9 @@ type Sandbox interface {
 }
 
 type SandboxMeta struct {
-	Installs   []string
-	Imports    []string
-	MemLimitMB int
+	Installs     []string
+	Imports      []string
+	MemLimitMB   int
 	Timeout_Time int64
 }
 

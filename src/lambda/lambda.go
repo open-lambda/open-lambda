@@ -88,8 +88,7 @@ type Invocation struct {
 }
 
 // Timeout broker manages automatic timeout for lambda
-type TimeoutBroker struct
-{
+type TimeoutBroker struct {
 	// Suicide timer- i.e. when this timer expires, it will cause the Lambda Instance
 	// to try to self destruct
 	suicideTimer *time.Timer
@@ -102,7 +101,7 @@ type TimeoutBroker struct
 
 	// True if timeout occurred, default set to false,
 	// These mostly act as CVs for synchronization
-	timedout bool
+	timedout     bool
 	timerinvalid bool
 
 	// Destruction synchronizer, around timedout
@@ -324,7 +323,7 @@ func parseMeta(codeDir string) (meta *sandbox.SandboxMeta, err error) {
 					fmt.Printf("#ol-timeout will be ignored for the affected lambda.\n")
 				}
 
-			// case: incorrect amount of parts, just don't do anything, print error
+				// case: incorrect amount of parts, just don't do anything, print error
 			} else {
 				fmt.Printf("WARNING: Incorrect format specified for #ol-timeout. It will be ignored as a consequence.\n")
 				fmt.Printf("Expected format #ol-timeout:[timeout time in milliseconds]\n")
@@ -337,8 +336,8 @@ func parseMeta(codeDir string) (meta *sandbox.SandboxMeta, err error) {
 	}
 
 	return &sandbox.SandboxMeta{
-		Installs: installs,
-		Imports:  imports,
+		Installs:     installs,
+		Imports:      imports,
 		Timeout_Time: timeout_time,
 	}, nil
 }
@@ -605,7 +604,6 @@ func (f *LambdaFunc) newInstance() {
 		killChan: make(chan chan bool, 1),
 	}
 
-
 	f.instances.PushBack(linst)
 
 	go linst.Task()
@@ -707,7 +705,7 @@ func (linst *LambdaInstance) Task() {
 			// ask Sandbox to respond, via HTTP proxy
 			t := common.T0("ServeHTTP")
 			var tb TimeoutBroker
-			const NANOSEC_PER_MS= 1000000
+			const NANOSEC_PER_MS = 1000000
 			var chosen_timeout int64
 
 			default_timeout := common.Conf.Lambda_Max_timeout
@@ -800,7 +798,7 @@ func (tb *TimeoutBroker) CloseInstance() {
 	tb.destlock.Lock()
 	if !tb.timerinvalid {
 		fmt.Printf("WARNING: A lambda instance has timed out, and will now end itself.\n")
-		tb.timerinvalid = true;
+		tb.timerinvalid = true
 		tb.suicideTimer.Stop()
 
 		// Set destruction bool
