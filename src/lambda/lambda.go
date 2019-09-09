@@ -738,7 +738,7 @@ func (linst *LambdaInstance) Task() {
 				tb.suicideTimer = time.AfterFunc(conf_to_sec, tb.CloseInstance)
 				tb.linst = linst
 				tb.cancel = cf
-				req.r = req.r.Clone(ct)
+				req.r = req.r.WithContext(ct)
 			}
 
 			proxy.ServeHTTP(req.w, req.r)
