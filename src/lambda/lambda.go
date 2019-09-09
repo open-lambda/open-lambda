@@ -309,7 +309,8 @@ func parseMeta(codeDir string) (meta *sandbox.SandboxMeta, err error) {
 				}
 			}
 		} else if parts[0] == "#ol-timeout" {
-			// case: correct amount of parts. Accepts *:* where * is NOT == {:}
+			// case: correct amount of parts. Accepts *:* where * is
+			// NOT in {:, space, \n, \r} etc.
 			if len(parts) == 2 {
 				const BASE_TEN = 10
 				const BITS_64 = 64
@@ -317,7 +318,8 @@ func parseMeta(codeDir string) (meta *sandbox.SandboxMeta, err error) {
 				if err == nil {
 					timeout_time = res
 				} else {
-					fmt.Printf("WARNING: Malformed integer value detected for #ol-timeout")
+					fmt.Printf("WARNING: Malformed integer value detected for #ol-timeout\n")
+					fmt.Printf("#ol-timeout will be ignored for the affected lambda.\n")
 				}
 
 			// case: incorrect amount of parts, just don't do anything, print error
