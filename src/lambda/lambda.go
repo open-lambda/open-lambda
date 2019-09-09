@@ -100,8 +100,10 @@ type TimeoutBroker struct
 	// Cancel function
 	cancel func()
 
-	// True if timeout occurred, default set to false
+	// True if timeout occurred, default set to false,
+	// These mostly act as CVs for synchronization
 	timedout bool
+	timerinvalid bool
 
 	// Destruction synchronizer, around timedout
 	// A "just in case" for a close timer call
@@ -727,12 +729,13 @@ func (linst *LambdaInstance) Task() {
 
 			var conf_to_sec time.Duration = time.Duration(chosen_timeout * NANOSEC_PER_SEC)
 
-			// Set timed out signal to false by default
+			// Set timed out signal to false by default, invalid signal
 			tb.timedout = false
+			tb.timerinvalid = false
 
 			// case: timeout time is greater than 0, use it and start the timeout timer
 			// if it's not, then just ignore it (i.e. timeout is disabled)
-			if conf_to_sec > 0 {
+			if IsFiniteTimeout(chosen_timeout) {
 				ct, cf := context.WithTimeout(req.r.Context(), conf_to_sec)
 				tb.suicideTimer = time.AfterFunc(conf_to_sec, tb.CloseInstance)
 				tb.linst = linst
@@ -742,8 +745,9 @@ func (linst *LambdaInstance) Task() {
 
 			proxy.ServeHTTP(req.w, req.r)
 
-			if conf_to_sec > 0 {
+			if IsFiniteTimeout(chosen_timeout) {
 				tb.destlock.Lock()
+				tb.timerinvalid = true
 				tb.suicideTimer.Stop() // If request finishes, then shouldn't mark for del.
 				tb.destlock.Unlock()
 			}
@@ -792,17 +796,25 @@ func (linst *LambdaInstance) AsyncKill() chan bool {
 // Wrapper to AsyncKill- a function explicitly for causing a lambda function
 // to self destruct
 func (tb *TimeoutBroker) CloseInstance() {
-	fmt.Printf("WARNING: A lambda instance has timed out, and will now end itself.\n")
 
 	tb.destlock.Lock()
-	tb.suicideTimer.Stop()
+	if !tb.timerinvalid {
+		fmt.Printf("WARNING: A lambda instance has timed out, and will now end itself.\n")
+		tb.timerinvalid = true;
+		tb.suicideTimer.Stop()
 
-	// Set destruction bool
-	tb.timedout = true
+		// Set destruction bool
+		tb.timedout = true
 
-	// Cancel the current running request
-	tb.cancel()
+		// Cancel the current running request
+		tb.cancel()
+		fmt.Printf("INFO: Clean up for lambda instance engaged...\n")
+	}
 	tb.destlock.Unlock()
 
-	fmt.Printf("INFO: Clean up for lambda instance engaged...\n")
+}
+
+// Predicate Function which checks if the inputted timeout is valid
+func IsFiniteTimeout(to int64) bool {
+	return to > 0
 }
