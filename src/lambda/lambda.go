@@ -98,6 +98,13 @@ type TimeoutBroker struct
 
 	// Cancel function
 	cancel func()
+
+	// True if timeout occurred, default set to false
+	timedout bool
+
+	// Destruction synchronizer, around timedout
+	// A "just in case" for a close timer call
+	destlock sync.Mutex
 }
 
 func NewLambdaMgr() (res *LambdaMgr, err error) {
@@ -681,11 +688,19 @@ func (linst *LambdaInstance) Task() {
 			req.r = req.r.Clone(ct)
 
 			tb.suicideTimer = time.AfterFunc(conf_to_sec, tb.CloseInstance)
+			tb.timedout = false
 			tb.linst = linst
 			tb.cancel = cf
 
 			proxy.ServeHTTP(req.w, req.r)
+			tb.destlock.Lock()
 			tb.suicideTimer.Stop() // If request finishes, then shouldn't mark for del.
+			tb.destlock.Unlock()
+
+			if tb.timedout {
+				sb.Destroy() // Garbage collect sandbox state
+				req.w.Write([]byte("ERROR: Lambda took too long to respond, and has timed out.\n"))
+			}
 
 			t.T1()
 			req.execMs = int(t.Milliseconds)
@@ -728,13 +743,15 @@ func (linst *LambdaInstance) AsyncKill() chan bool {
 func (tb *TimeoutBroker) CloseInstance() {
 	fmt.Printf("WARNING: A lambda instance has timed out, and will now end itself.\n")
 
+	tb.destlock.Lock()
 	tb.suicideTimer.Stop()
 
-	// Set the instance to be killed
-	tb.linst.AsyncKill()
+	// Set destruction bool
+	tb.timedout = true
 
 	// Cancel the current running request
 	tb.cancel()
+	tb.destlock.Unlock()
 
 	fmt.Printf("INFO: Clean up for lambda instance engaged...\n")
 }
