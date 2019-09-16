@@ -1,7 +1,7 @@
 package sandbox
 
 import (
-	"net/http/httputil"
+	"net/http"
 )
 
 type SandboxPool interface {
@@ -48,8 +48,13 @@ type Sandbox interface {
 	// Make processes in the container schedulable
 	Unpause() error
 
-	// Communication channel to forward requests.
-	HttpProxy() (*httputil.ReverseProxy, error)
+	// Send a request to this sandbox, returns nil on success, otherwise an error
+	SendRequest(rw *http.ResponseWriter, req *http.Request) error
+
+	// Round trip a request to this sandbox,
+	// (1st return) response to the request
+	// (2nd return) returns nil on success, otherwise an error
+	RoundTrip(req *http.Request) (*http.Response, error)
 
 	// Lookup metadata that Sandbox was initialized with (static over time)
 	Meta() *SandboxMeta

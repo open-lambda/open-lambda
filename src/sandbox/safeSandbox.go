@@ -10,7 +10,7 @@ package sandbox
 import (
 	"fmt"
 	"log"
-	"net/http/httputil"
+	"net/http"
 	"strings"
 	"sync"
 
@@ -139,7 +139,7 @@ func (sb *safeSandbox) Unpause() (err error) {
 	return nil
 }
 
-func (sb *safeSandbox) HttpProxy() (p *httputil.ReverseProxy, err error) {
+func (sb *safeSandbox) SendRequest(rw * http.ResponseWriter, req * http.Request) error {
 	sb.printf("Channel()")
 	t := common.T0("Channel()")
 	defer t.T1()
@@ -147,14 +147,14 @@ func (sb *safeSandbox) HttpProxy() (p *httputil.ReverseProxy, err error) {
 	defer sb.Mutex.Unlock()
 
 	if sb.dead {
-		return nil, DEAD_SANDBOX
+		return DEAD_SANDBOX
 	}
 
-	p, err = sb.Sandbox.HttpProxy()
+	err := sb.Sandbox.SendRequest(rw, req)
 	if err != nil {
 		sb.destroyOnErr(err)
 	}
-	return p, err
+	return err
 }
 
 // fork (as a private method) doesn't cleanup parent sb if fork fails

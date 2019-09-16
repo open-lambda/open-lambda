@@ -57,7 +57,35 @@ func (c *SOCKContainer) ID() string {
 	return c.id
 }
 
-func (c *SOCKContainer) HttpProxy() (p *httputil.ReverseProxy, err error) {
+func (c *SOCKContainer) SendRequest(rw * http.ResponseWriter, req *http.Request) error {
+	// note, for debugging, you can directly contact the sock file like this:
+	// curl -XPOST --unix-socket ./ol.sock http:/test -d '{"some": "data"}'
+
+	sockPath := filepath.Join(c.scratchDir, "ol.sock")
+	if len(sockPath) > 108 {
+		return fmt.Errorf("socket path length cannot exceed 108 characters (try moving cluster closer to the root directory")
+	}
+
+	dial := func(proto, addr string) (net.Conn, error) {
+		return net.Dial("unix", sockPath)
+	}
+
+	tr := &http.Transport{Dial: dial}
+	u, err := url.Parse("http://sock-container")
+	if err != nil {
+		panic(err)
+	}
+
+	proxy := httputil.NewSingleHostReverseProxy(u)
+	proxy.Transport = tr
+
+	// Handle using ServeHttp, inside
+	proxy.ServeHTTP(*rw, req)
+
+	return nil
+}
+
+func (c *SOCKContainer) RoundTrip(req *http.Request) (*http.Response, error) {
 	// note, for debugging, you can directly contact the sock file like this:
 	// curl -XPOST --unix-socket ./ol.sock http:/test -d '{"some": "data"}'
 
@@ -78,7 +106,8 @@ func (c *SOCKContainer) HttpProxy() (p *httputil.ReverseProxy, err error) {
 
 	proxy := httputil.NewSingleHostReverseProxy(u)
 	proxy.Transport = tr
-	return proxy, nil
+
+	return proxy.Transport.RoundTrip(req)
 }
 
 func (c *SOCKContainer) freshProc() (err error) {

@@ -109,8 +109,34 @@ func (c *DockerContainer) State() (hstate HandlerState, err error) {
 	return hstate, nil
 }
 
-// Channel returns a file socket channel for direct communication with the sandbox.
-func (c *DockerContainer) HttpProxy() (p *httputil.ReverseProxy, err error) {
+// process a request, given a response to write back
+func (c *DockerContainer) SendRequest(rw *http.ResponseWriter, req *http.Request) error {
+	sockPath := filepath.Join(c.hostDir, "ol.sock")
+	if len(sockPath) > 108 {
+		return fmt.Errorf("socket path length cannot exceed 108 characters (try moving cluster closer to the root directory")
+	}
+
+	dial := func(proto, addr string) (net.Conn, error) {
+		return net.Dial("unix", sockPath)
+	}
+
+	tr := &http.Transport{Dial: dial}
+	u, err := url.Parse("http://sock-container")
+	if err != nil {
+		panic(err)
+	}
+
+	proxy := httputil.NewSingleHostReverseProxy(u)
+	proxy.Transport = tr
+
+	// Handle request using HttpServe
+	proxy.ServeHTTP(*rw, req)
+
+	return nil
+}
+
+// process a request, given a response to write back
+func (c *DockerContainer) RoundTrip(req *http.Request) (*http.Response, error) {
 	sockPath := filepath.Join(c.hostDir, "ol.sock")
 	if len(sockPath) > 108 {
 		return nil, fmt.Errorf("socket path length cannot exceed 108 characters (try moving cluster closer to the root directory")
@@ -128,7 +154,9 @@ func (c *DockerContainer) HttpProxy() (p *httputil.ReverseProxy, err error) {
 
 	proxy := httputil.NewSingleHostReverseProxy(u)
 	proxy.Transport = tr
-	return proxy, nil
+
+	// Handle request using HttpServe
+	return proxy.Transport.RoundTrip(req)
 }
 
 // Start starts the container.

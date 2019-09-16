@@ -276,11 +276,6 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 	}
 	defer sb.Destroy()
 
-	proxy, err := sb.HttpProxy()
-	if err != nil {
-		return err
-	}
-
 	// we still need to run a Sandbox to parse the dependencies, even if it is already installed
 	msg := fmt.Sprintf(`{"pkg": "%s", "alreadyInstalled": %v}`, p.name, alreadyInstalled)
 	reqBody := bytes.NewReader([]byte(msg))
@@ -289,7 +284,7 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 	if err != nil {
 		return err
 	}
-	resp, err := proxy.Transport.RoundTrip(req)
+	resp, err := sb.RoundTrip(req)
 	if err != nil {
 		return err
 	}

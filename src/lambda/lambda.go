@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/http/httputil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -629,7 +628,6 @@ func (linst *LambdaInstance) Task() {
 
 	var sb sandbox.Sandbox = nil
 	//var client *http.Client = nil // whenever we create a Sandbox, we init this too
-	var proxy *httputil.ReverseProxy = nil // whenever we create a Sandbox, we init this too
 	var err error
 
 	for {
@@ -687,7 +685,6 @@ func (linst *LambdaInstance) Task() {
 				continue // wait for another request before retrying
 			}
 
-			proxy, err = sb.HttpProxy()
 			if err != nil {
 				req.w.WriteHeader(http.StatusInternalServerError)
 				req.w.Write([]byte("could not connect to Sandbox: " + err.Error() + "\n"))
@@ -698,7 +695,7 @@ func (linst *LambdaInstance) Task() {
 			}
 		}
 
-		// below here, we're guaranteed (1) sb != nil, (2) proxy != nil, (3) sb is unpaused
+		// below here, we're guaranteed (1) sb != nil, (2) sb is unpaused
 
 		// serve until we incoming queue is empty
 		for req != nil {
@@ -741,7 +738,7 @@ func (linst *LambdaInstance) Task() {
 				req.r = req.r.WithContext(ct)
 			}
 
-			proxy.ServeHTTP(req.w, req.r)
+			sb.SendRequest(&req.w, req.r)
 
 			if IsFiniteTimeout(chosen_timeout) {
 				tb.destlock.Lock()
