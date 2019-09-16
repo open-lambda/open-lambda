@@ -23,7 +23,7 @@ ol: $(OL_GO_FILES)
 install: ol
 	cp ol /usr/local/bin
 
-test-all:
+test-all: all
 	python3 -u test.py
 
 clean:
