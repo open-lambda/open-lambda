@@ -294,39 +294,40 @@ func parseMeta(codeDir string) (meta *sandbox.SandboxMeta, err error) {
 	for scnr.Scan() {
 		line := strings.ReplaceAll(scnr.Text(), " ", "")
 		parts := strings.Split(line, ":")
-		if parts[0] == "#ol-install" {
-			for _, val := range strings.Split(parts[1], ",") {
-				val = strings.TrimSpace(val)
-				if len(val) > 0 {
-					installs = append(installs, val)
+
+		// Check to make sure that we don't go out of bounds.
+		// If not enough arguments specified, then just ignore the OpenLambda Directive...
+		if len(parts) == 2 {
+			if parts[0] == "#ol-install" {
+				for _, val := range strings.Split(parts[1], ",") {
+					val = strings.TrimSpace(val)
+					if len(val) > 0 {
+						installs = append(installs, val)
+					}
 				}
-			}
-		} else if parts[0] == "#ol-import" {
-			for _, val := range strings.Split(parts[1], ",") {
-				val = strings.TrimSpace(val)
-				if len(val) > 0 {
-					imports = append(imports, val)
+			} else if parts[0] == "#ol-import" {
+				for _, val := range strings.Split(parts[1], ",") {
+					val = strings.TrimSpace(val)
+					if len(val) > 0 {
+						imports = append(imports, val)
+					}
 				}
-			}
-		} else if parts[0] == "#ol-timeout" {
-			// case: correct amount of parts. Accepts *:* where * is
-			// NOT in {:, space, \n, \r} etc.
-			if len(parts) == 2 {
+			} else if parts[0] == "#ol-timeout" {
+
 				const BASE_TEN = 10
 				const BITS_64 = 64
-				res, err := strconv.ParseInt(parts[1], BASE_TEN, BITS_64)
-				if err == nil {
-					timeout_time = res
-				} else {
-					fmt.Printf("WARNING: Malformed floating point value detected for #ol-timeout\n")
-					fmt.Printf("#ol-timeout will be ignored for the affected lambda.\n")
-				}
+					res, err := strconv.ParseInt(parts[1], BASE_TEN, BITS_64)
+					if err == nil {
+						timeout_time = res
+					} else {
+						fmt.Printf("WARNING: Malformed floating point value detected for #ol-timeout\n")
+						fmt.Printf("#ol-timeout will be ignored for the affected lambda.\n")
+					}
 
-				// case: incorrect amount of parts, just don't do anything, print error
-			} else {
-				fmt.Printf("WARNING: Incorrect format specified for #ol-timeout. It will be ignored as a consequence.\n")
-				fmt.Printf("Expected format #ol-timeout:[timeout time in milliseconds]\n")
 			}
+		} else {
+			fmt.Printf("WARNING: Incorrect format specified for metadata in %s. It will be ignored as a consequence.\n", codeDir)
+			fmt.Printf("Expected format #ol-timeout:[timeout time in milliseconds]\n")
 		}
 	}
 
