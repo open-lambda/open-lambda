@@ -705,7 +705,7 @@ func (linst *LambdaInstance) Task() {
 			const NANOSEC_PER_MS = 1000000
 			var chosen_timeout int64
 
-			default_timeout := common.Conf.Lambda_Max_timeout
+			default_timeout := common.Conf.Limits.Max_timeout_ms
 			override_timeout := linst.meta.Timeout_Time
 
 			// Resolve timeout:

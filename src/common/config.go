@@ -55,10 +55,6 @@ type Config struct {
 	// which OCI implementation to use for the docker sandbox (e.g., runc or runsc)
 	Docker_runtime string `json:"docker_runtime"`
 
-	// The max lambda timeout given in milliseconds
-	// If no timeout is given by the lambda, this max timeout is also the default
-	Lambda_Max_timeout int64 `json:"lambda_max_timeout"`
-
 	Limits   LimitsConfig   `json:"limits"`
 	Features FeaturesConfig `json:"features"`
 	Trace    TraceConfig    `json:"trace"`
@@ -114,6 +110,10 @@ type LimitsConfig struct {
 	// how much memory do we use for an admin lambda that is used
 	// for pip installs?
 	Installer_mem_mb int `json:"installer_mem_mb"`
+
+	// The max lambda timeout given in milliseconds
+	// If no timeout is given by the lambda, this max timeout is also the default
+	Max_timeout_ms int64 `json:"max_timeout_ms"`
 }
 
 // Defaults verifies the fields of Config are correct, and initializes some
@@ -150,6 +150,7 @@ func LoadDefaults(olPath string) error {
 			Mem_mb:           50,
 			Installer_mem_mb: Max(250, Min(500, mem_pool_mb/2)),
 			Swappiness:       0,
+			Max_timeout_ms: 60000,
 		},
 		Features: FeaturesConfig{
 			Import_cache:        true,
@@ -160,7 +161,6 @@ func LoadDefaults(olPath string) error {
 			Scratch: "",
 			Code:    "",
 		},
-		Lambda_Max_timeout: 60000,
 	}
 
 	return checkConf()
