@@ -99,15 +99,15 @@ type Latency struct {
 }
 
 // record start time
-func T0(name string) Latency {
-	return Latency{
+func T0(name string) *Latency {
+	return &Latency{
 		name: name,
 		t0:   time.Now(),
 	}
 }
 
 // measure latency to end time, and record it
-func (l Latency) T1() {
+func (l *Latency) T1() {
 	l.Milliseconds = int64(time.Now().Sub(l.t0)) / 1000000
 	if l.Milliseconds < 0 {
 		panic("negative latency")
@@ -123,7 +123,7 @@ func (l Latency) T1() {
 }
 
 // start measuring a sub latency
-func (l Latency) T0(name string) Latency {
+func (l *Latency) T0(name string) *Latency {
 	return T0(l.name + "/" + name)
 }
 
