@@ -4,6 +4,9 @@ import tornado.web
 import tornado.httpserver
 import tornado.netutil
 
+# Note: SOCK doesn't use this anymore (it uses sock2.py instead), but
+# this is still here because we haven't updated docker.go yet.
+
 HOST_DIR = '/host'
 PKGS_DIR = '/packages'
 HANDLER_DIR = '/handler'
@@ -15,6 +18,7 @@ FS_PATH = os.path.join(HOST_DIR, 'fs.sock')
 SOCK_PATH = os.path.join(HOST_DIR, 'ol.sock')
 STDOUT_PATH = os.path.join(HOST_DIR, 'stdout')
 STDERR_PATH = os.path.join(HOST_DIR, 'stderr')
+SERVER_PIPE_PATH = os.path.join(HOST_DIR, 'server_pipe')
 
 PROCESSES_DEFAULT = 10
 initialized = False
@@ -24,12 +28,12 @@ parser.add_argument('--cache', action='store_true', default=False, help='Begin a
 
 # run after forking into sandbox
 def init():
-    global initialized, lambda_func
+    global initialized, f
     if initialized:
         return
 
-    # assume submitted .py file is /handler/lambda_func.py
-    import lambda_func
+    # assume submitted .py file is /handler/f.py
+    import f
 
     initialized = True
 
@@ -43,7 +47,7 @@ class SockFileHandler(tornado.web.RequestHandler):
                 self.set_status(400)
                 self.write('bad POST data: "%s"'%str(data))
                 return
-            self.write(json.dumps(lambda_func.handler(event)))
+            self.write(json.dumps(f.f(event)))
         except Exception:
             self.set_status(500) # internal error
             self.write(traceback.format_exc())
@@ -61,7 +65,7 @@ def lambda_server():
     server.add_socket(socket)
     # notify worker server that we are ready through stdout
     # flush is necessary, and don't put it after tornado start; won't work
-    with open('/host/server_pipe', 'w') as pipe:
+    with open(SERVER_PIPE_PATH, 'w') as pipe:
         pipe.write('ready')
     tornado.ioloop.IOLoop.instance().start()
     server.start(PROCESSES_DEFAULT)

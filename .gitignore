@@ -52,4 +52,7 @@
 /lambda/ns.so
 /lambda/fdclient
 /sock/sock-init
-/testing/test-cluster
+/test-dir
+/test.json
+
+ol

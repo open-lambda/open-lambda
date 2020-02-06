@@ -1,8 +1,0 @@
-parso:parso
-jedi:jedi
-urllib3:urllib3
-idna:idna
-chardet:chardet
-certifi:certifi
-requests:requests
-simplejson:simplejson
