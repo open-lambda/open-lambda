@@ -1,5 +1,8 @@
+
 # Install oh-my-bash
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/install.sh)"
+
+sudo apt update
 
 # Install dependencies
 sudo apt -y install linux-modules-extra-$(uname -r)
