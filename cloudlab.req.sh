@@ -6,7 +6,6 @@ sudo apt update
 
 # Install dependencies
 sudo apt -y install linux-modules-extra-$(uname -r)
-sudo apt -y install linux-image-extra-virtual
 sudo apt -y install curl
 sudo apt -y install git
 sudo apt -y install docker.io
@@ -29,3 +28,13 @@ ln -s /usr/local/go/bin/go /usr/bin/go
 
 # disable auto updates
 sudo apt-get -y remove unattended-upgrades
+
+# Additional Dependencies
+# This one sometimes will take a long time with message:
+# """
+# Will not try to make an initrd.
+# : Unable to find an initial ram disk that I know how to handle.
+# """
+echo "The following step usually takes some time on Cloudlab. You can install the following one by hand."
+echo "sudo apt -y install linux-image-extra-virtual"
+# sudo apt -y install linux-image-extra-virtual
