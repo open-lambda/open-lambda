@@ -2,6 +2,11 @@
 # Install oh-my-bash
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/install.sh)"
 
+# Install to support add-repo ppa:deadsnakes/ppa and install python3.6 for development
+sudo apt-get install python-software-properties
+sudo apt-get install software-properties-common
+sudo add-apt-repository ppa:deadsnakes/ppa
+sudo apt-get update
 sudo apt update
 
 # Install dependencies
@@ -15,11 +20,18 @@ sudo apt -y install python-pip
 sudo apt -y install python3-pip
 service docker restart
 
+
 # python (2+3)
 pip install netifaces
 pip install rethinkdb
 pip install tornado
 pip3 install boto3
+
+# Install dev dependencies 
+sudo apt -y install python3.6
+sudo apt -y install python3.7
+python3.6 -m pip install pandas requests jupyter
+python3.7 -m pip install pandas requests jupyter
 
 # go 1.12.5
 wget -q -O /tmp/go1.12.5.linux-amd64.tar.gz https://dl.google.com/go/go1.12.5.linux-amd64.tar.gz
