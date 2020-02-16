@@ -7,6 +7,8 @@ sudo apt-get update -y
 sudo apt-get install python-software-properties -y
 sudo apt-get install software-properties-common -y
 sudo add-apt-repository ppa:deadsnakes/ppa -y
+sudo apt-get update -y
+
 
 # Install dependencies
 sudo apt -y install linux-modules-extra-$(uname -r)
