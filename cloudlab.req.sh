@@ -3,11 +3,10 @@
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/install.sh)"
 
 # Install to support add-repo ppa:deadsnakes/ppa and install python3.6 for development
+sudo apt-get update -y
 sudo apt-get install python-software-properties -y
 sudo apt-get install software-properties-common -y
 sudo add-apt-repository ppa:deadsnakes/ppa -y
-sudo apt-get update
-sudo apt update
 
 # Install dependencies
 sudo apt -y install linux-modules-extra-$(uname -r)
