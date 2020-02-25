@@ -588,7 +588,6 @@ func kill(ctx *cli.Context) error {
 
 func diagnose(ctx *cli.Context) error {
 	pid, err := getOlWorkerProc(ctx)
-	olPath, _ := getOlPath(ctx)
 
 	if err != nil && pid == -1 {
 		fmt.Printf("Diagnose error: %s\n", err)
