@@ -321,26 +321,28 @@ func worker(ctx *cli.Context) error {
 		if err := initOLDir(olPath); err != nil {
 			return err
 		}
-	} else {
-		lockPath := filepath.Join(olPath, "lock")
-		if _, err := os.Stat(lockPath); ! os.IsNotExist(err) {
-			// Check if it is created by another running proc. 
-			// If not, then we have a dangling lock file.
-			pid, err := getOlWorkerProc(ctx)
-			if pid > 0 {
-				return fmt.Errorf("lock file %v exists: %v is creating by another process %d", olPath, lockPath, pid)
-			}
-			if err != nil && pid == -2 {
-				// Multiple process running.
-				return fmt.Errorf("lock file %v exists: %v is creating by another process", olPath, lockPath)
-			}
-			if err != nil {
-				return fmt.Errorf("Dangling lock file %v exists: %v is supposed to be creating by another process, but that process is not found", olPath, lockPath)
-			}
-			
-		}
-		fmt.Printf("using existing OL directory at %s\n", olPath)
 	}
+
+	// if `lock` file exist, a `ol new` is running.
+	lockPath := filepath.Join(olPath, "lock")
+	if _, err := os.Stat(lockPath); ! os.IsNotExist(err) {
+		// Check if it is created by another running proc. 
+		// If not, then we have a dangling lock file.
+		pid, err := getOlWorkerProc(ctx)
+		if pid > 0 {
+			return fmt.Errorf("lock file %v exists: %v is creating by another process %d", olPath, lockPath, pid)
+		}
+		if err != nil && pid == -2 {
+			// Multiple process running.
+			return fmt.Errorf("lock file %v exists: %v is creating by another process", olPath, lockPath)
+		}
+		if err != nil {
+			return fmt.Errorf("Dangling lock file %v exists: %v is supposed to be creating by another process, but that process is not found", olPath, lockPath)
+		}
+		
+	}
+	fmt.Printf("using existing OL directory at %s\n", olPath)
+
 
 	confPath := filepath.Join(olPath, "config.json")
 	overrides := ctx.String("options")
