@@ -33,6 +33,65 @@ func getOlPath(ctx *cli.Context) (string, error) {
 	return filepath.Abs(olPath)
 }
 
+func getOlWorkerProc(ctx *cli.Context) (int, error) {
+	// Check all running ol procs, substracting "this" one.
+	// Return:
+	//	pid: 
+	// 		Return the process id if one proc is working.
+	//		Return 0 if no proc is working.
+	//		Return < 0 as error code.
+	//	err: 
+	//		Error message of all kind.
+
+	// Assumption:
+	//	1. At most one ol worker is running in the system.
+	//  2. This process is the only other ol admin process that could be running. 
+	// TODO: Assumption 2 is too strong as there could be many `ol status` running.
+	
+	// Get the running pid whose program name is `ol` (at least one - this one)
+	out, err := exec.Command("ps", "-C", "ol", "-o", "pid=").Output()
+	if err != nil {
+		return -1, err
+	}
+	if len(out) == 0 {
+		err := fmt.Errorf("No output from commanad: ps -C ol -i pid=")
+		return -1, err
+	}
+
+	procStr := strings.Split(strings.TrimSpace(strings.Trim(string(out), "\n")) , "\n")
+
+	// Maps the pid strings to int, except for `this` process
+	this := os.Getpid()
+	procs := make([]int, 0, len(procStr))
+	for _, v := range procStr {
+		if len(v) == 0 {
+			continue
+		}
+		pid, err := strconv.Atoi(v)
+		if err != nil {
+			return -1, err
+		}
+		if pid != this{
+			procs = append(procs, pid)
+		}
+	}
+
+	// Assert there are at most one proc running then return if we have one.
+	// TODO: Multiple `ol status` could run in parallel. 
+	// 		 Should distinguish these worker from the ol worker process.
+	if len(procs) > 1 {
+		return -2, fmt.Errorf("More than one ol process is running: %s", procs)
+	}
+
+	// No ol worker. Return successfully with pid = 0 (no worker).
+	if len(procs) == 0 {
+		return 0, nil
+	}
+
+	// Return the ol worker pid.
+	return procs[0], nil	
+}
+
 func initOLDir(olPath string) (err error) {
 	fmt.Printf("Init OL dir at %v\n", olPath)
 	if err := os.Mkdir(olPath, 0700); err != nil {
@@ -346,6 +405,17 @@ func worker(ctx *cli.Context) error {
 
 // kill corresponds to the "kill" command of the admin tool.
 func kill(ctx *cli.Context) error {
+	// Check if there is running worker in the system. 
+	// If no, return directly.
+	pid, err := getOlWorkerProc(ctx)
+	if err != nil {
+		return err
+	}
+	if pid > 0 {
+		fmt.Printf("No worker running.")
+		return nil
+	}
+
 	olPath, err := getOlPath(ctx)
 	if err != nil {
 		return err
@@ -353,15 +423,18 @@ func kill(ctx *cli.Context) error {
 
 	// locate worker.pid, use it to get worker's PID
 	configPath := filepath.Join(olPath, "config.json")
+
 	if err := common.LoadConf(configPath); err != nil {
+		// If config.json cannot be found, try to see if there are any running process.
 		return err
 	}
+
 	data, err := ioutil.ReadFile(filepath.Join(common.Conf.Worker_dir, "worker.pid"))
 	if err != nil {
 		return err
 	}
 	pidstr := string(data)
-	pid, err := strconv.Atoi(pidstr)
+	pid, err = strconv.Atoi(pidstr)
 	if err != nil {
 		return err
 	}
@@ -377,6 +450,14 @@ func kill(ctx *cli.Context) error {
 		fmt.Printf("Failed to kill process with PID %d.  May require manual cleanup.\n", pid)
 	}
 
+	// Kill the worker asynchronously.
+	async := ctx.Bool("async")
+	if (async){
+		p.Signal(syscall.Signal(0))
+		fmt.Printf("Sent kill signal to the worker: %s", pid)
+		return nil
+	}
+
 	for i := 0; i < 300; i++ {
 		err := p.Signal(syscall.Signal(0))
 		if err != nil {
@@ -386,6 +467,22 @@ func kill(ctx *cli.Context) error {
 	}
 
 	return fmt.Errorf("worker didn't stop after 30s")
+}
+
+func diagnose(ctx *cli.Context) error {
+	pid, err := getOlWorkerProc(ctx)
+	if err != nil && pid == -1{
+		fmt.Printf("Diagnose error: %s\n", err)
+		return err
+	}
+
+	if pid == 0{
+		fmt.Printf("No ol worker proc running.\n")
+		return nil
+	}
+	
+	fmt.Printf("Worker proc running: %v\n", pid)
+	return nil
 }
 
 // main runs the admin tool
@@ -436,7 +533,7 @@ OPTIONS:
 				pathFlag,
 				cli.StringFlag{
 					Name:  "options, o",
-					Usage: "Override options with: -o opt1=val1,opt2=val2/opt3.subopt31=val3",
+					Usage: "Override options in config.json: -o opt1=val1,opt2=val2,opt3.subopt31=val3. See config.json for more detail.",
 				},
 				cli.BoolFlag{
 					Name:  "detach, d",
@@ -454,10 +551,24 @@ OPTIONS:
 			Action:      status,
 		},
 		cli.Command{
+			Name:        "diagnose",
+			Usage:       "diagnose worker status",
+			UsageText:   "ol diagnose [--path=NAME]",
+			Description: "Diagnose the current stataus of the worker, possibly specified by the path.",
+			Flags:       []cli.Flag{pathFlag},
+			Action:      diagnose,
+		},
+		cli.Command{
 			Name:      "kill",
 			Usage:     "Kill containers and processes in a cluster",
-			UsageText: "ol kill [--path=NAME]",
-			Flags:     []cli.Flag{pathFlag},
+			UsageText: "ol kill [--path=NAME] [--async]",
+			Flags: []cli.Flag{
+				pathFlag,
+				cli.BoolFlag{
+					Name:  "async, a",
+					Usage: "Send SIGNAL0 to kill the worker. Use `ol status` to check the kill progress.",
+				},
+			},
 			Action:    kill,
 		},
 	}
