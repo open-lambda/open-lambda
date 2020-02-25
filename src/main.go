@@ -93,11 +93,38 @@ func getOlWorkerProc(ctx *cli.Context) (int, error) {
 }
 
 func initOLDir(olPath string) (err error) {
+	// Add a temporary lock for the init ol dir
 	fmt.Printf("Init OL dir at %v\n", olPath)
 	if err := os.Mkdir(olPath, 0700); err != nil {
 		return err
 	}
 
+	// Add a lock file and delete it once initOLDir is done.
+	lockPath := filepath.Join(olPath, "lock")
+	if _, err := os.Stat(lockPath); ! os.IsNotExist(err) {
+		return fmt.Errorf("%v is creating by another process (lock file %v exists)", olPath, lockPath)
+	}
+
+	f, err := os.Create(lockPath)
+	if err != nil {
+		return err
+	}
+	
+	defer func() {
+		if _, err := os.Stat(lockPath); os.IsNotExist(err) {
+			// Lock file already removed, possibly manually
+			return
+		}
+		err = f.Close()
+		if err != nil {
+			return 
+		}
+		err := os.Remove(lockPath)
+		if err != nil {
+			return
+		}
+	}()
+    
 	if err := common.LoadDefaults(olPath); err != nil {
 		return err
 	}
@@ -295,6 +322,23 @@ func worker(ctx *cli.Context) error {
 			return err
 		}
 	} else {
+		lockPath := filepath.Join(olPath, "lock")
+		if _, err := os.Stat(lockPath); ! os.IsNotExist(err) {
+			// Check if it is created by another running proc. 
+			// If not, then we have a dangling lock file.
+			pid, err := getOlWorkerProc(ctx)
+			if pid > 0 {
+				return fmt.Errorf("lock file %v exists: %v is creating by another process %d", olPath, lockPath, pid)
+			}
+			if err != nil && pid == -2 {
+				// Multiple process running.
+				return fmt.Errorf("lock file %v exists: %v is creating by another process", olPath, lockPath)
+			}
+			if err != nil {
+				return fmt.Errorf("Dangling lock file %v exists: %v is supposed to be creating by another process, but that process is not found", olPath, lockPath)
+			}
+			
+		}
 		fmt.Printf("using existing OL directory at %s\n", olPath)
 	}
 
@@ -405,12 +449,14 @@ func worker(ctx *cli.Context) error {
 
 // kill corresponds to the "kill" command of the admin tool.
 func kill(ctx *cli.Context) error {
+	
 	// Check if there is running worker in the system. 
-	// If no, return directly.
 	pid, err := getOlWorkerProc(ctx)
 	if err != nil {
+		
 		return err
 	}
+
 	if pid > 0 {
 		fmt.Printf("No worker running.")
 		return nil
@@ -480,7 +526,7 @@ func diagnose(ctx *cli.Context) error {
 		fmt.Printf("No ol worker proc running.\n")
 		return nil
 	}
-	
+
 	fmt.Printf("Worker proc running: %v\n", pid)
 	return nil
 }
