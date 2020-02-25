@@ -36,18 +36,18 @@ func getOlPath(ctx *cli.Context) (string, error) {
 func getOlWorkerProc(ctx *cli.Context) (int, error) {
 	// Check all running ol procs, substracting "this" one.
 	// Return:
-	//	pid: 
+	//	pid:
 	// 		Return the process id if one proc is working.
 	//		Return 0 if no proc is working.
 	//		Return < 0 as error code.
-	//	err: 
+	//	err:
 	//		Error message of all kind.
 
 	// Assumption:
 	//	1. At most one ol worker is running in the system.
-	//  2. This process is the only other ol admin process that could be running. 
+	//  2. This process is the only other ol admin process that could be running.
 	// TODO: Assumption 2 is too strong as there could be many `ol status` running.
-	
+
 	// Get the running pid whose program name is `ol` (at least one - this one)
 	out, err := exec.Command("ps", "-C", "ol", "-o", "pid=").Output()
 	if err != nil {
@@ -58,7 +58,7 @@ func getOlWorkerProc(ctx *cli.Context) (int, error) {
 		return -1, err
 	}
 
-	procStr := strings.Split(strings.TrimSpace(strings.Trim(string(out), "\n")) , "\n")
+	procStr := strings.Split(strings.TrimSpace(strings.Trim(string(out), "\n")), "\n")
 
 	// Maps the pid strings to int, except for `this` process
 	this := os.Getpid()
@@ -69,15 +69,16 @@ func getOlWorkerProc(ctx *cli.Context) (int, error) {
 		}
 		pid, err := strconv.Atoi(v)
 		if err != nil {
+			fmt.Printf("[DEBUG] %s", err)
 			return -1, err
 		}
-		if pid != this{
+		if pid != this {
 			procs = append(procs, pid)
 		}
 	}
 
 	// Assert there are at most one proc running then return if we have one.
-	// TODO: Multiple `ol status` could run in parallel. 
+	// TODO: Multiple `ol status` could run in parallel.
 	// 		 Should distinguish these worker from the ol worker process.
 	if len(procs) > 1 {
 		return -2, fmt.Errorf("More than one ol process is running: %s", procs)
@@ -89,7 +90,56 @@ func getOlWorkerProc(ctx *cli.Context) (int, error) {
 	}
 
 	// Return the ol worker pid.
-	return procs[0], nil	
+	return procs[0], nil
+}
+
+func getOlNumSB(olPath string) int {
+	// Return the sandbox in the worker/scratch to estimate the progress of kill
+	// Error with no such dir returns -1
+	scratch := filepath.Join(olPath, "worker", "scratch")
+	files, err := ioutil.ReadDir(scratch)
+	if err != nil {
+		return -1
+	}
+	return len(files)
+}
+
+func getKillTarget(olPath string) (int, error) {
+	// create killPath if not exist.
+	// return the number of SB needs to be killed initially.
+
+	// if killPath exist, return the value
+	killPath := filepath.Join(common.Conf.Worker_dir, "worker.kill")
+
+	if _, err := os.Stat(killPath); err == nil {
+
+		s, err := ioutil.ReadFile(killPath)
+		if err != nil {
+			return -1, err
+		}
+
+		numSB, err := strconv.Atoi(string(s))
+		if err != nil {
+			return -1, err
+		}
+		return numSB, err
+	}
+
+	// killPath not exist, create log file and store the number of sandboxes to kill
+	_, err := os.Create(killPath)
+	if err != nil {
+		return -1, err
+	}
+
+	numSB := getOlNumSB(olPath)
+	if numSB < 0 {
+		// No such directory exist or no numSB.
+		return 0, nil
+	}
+	if err := ioutil.WriteFile(killPath, []byte(strconv.Itoa(numSB)), 0644); err != nil {
+		return -1, err
+	}
+	return numSB, nil
 }
 
 func initOLDir(olPath string) (err error) {
@@ -101,7 +151,7 @@ func initOLDir(olPath string) (err error) {
 
 	// Add a lock file and delete it once initOLDir is done.
 	lockPath := filepath.Join(olPath, "lock")
-	if _, err := os.Stat(lockPath); ! os.IsNotExist(err) {
+	if _, err := os.Stat(lockPath); !os.IsNotExist(err) {
 		return fmt.Errorf("%v is creating by another process (lock file %v exists)", olPath, lockPath)
 	}
 
@@ -109,7 +159,7 @@ func initOLDir(olPath string) (err error) {
 	if err != nil {
 		return err
 	}
-	
+
 	defer func() {
 		if _, err := os.Stat(lockPath); os.IsNotExist(err) {
 			// Lock file already removed, possibly manually
@@ -117,14 +167,14 @@ func initOLDir(olPath string) (err error) {
 		}
 		err = f.Close()
 		if err != nil {
-			return 
+			return
 		}
 		err := os.Remove(lockPath)
 		if err != nil {
 			return
 		}
 	}()
-    
+
 	if err := common.LoadDefaults(olPath); err != nil {
 		return err
 	}
@@ -325,8 +375,8 @@ func worker(ctx *cli.Context) error {
 
 	// if `lock` file exist, a `ol new` is running.
 	lockPath := filepath.Join(olPath, "lock")
-	if _, err := os.Stat(lockPath); ! os.IsNotExist(err) {
-		// Check if it is created by another running proc. 
+	if _, err := os.Stat(lockPath); !os.IsNotExist(err) {
+		// Check if it is created by another running proc.
 		// If not, then we have a dangling lock file.
 		pid, err := getOlWorkerProc(ctx)
 		if pid > 0 {
@@ -339,10 +389,9 @@ func worker(ctx *cli.Context) error {
 		if err != nil {
 			return fmt.Errorf("Dangling lock file %v exists: %v is supposed to be creating by another process, but that process is not found", olPath, lockPath)
 		}
-		
+
 	}
 	fmt.Printf("using existing OL directory at %s\n", olPath)
-
 
 	confPath := filepath.Join(olPath, "config.json")
 	overrides := ctx.String("options")
@@ -451,16 +500,15 @@ func worker(ctx *cli.Context) error {
 
 // kill corresponds to the "kill" command of the admin tool.
 func kill(ctx *cli.Context) error {
-	
-	// Check if there is running worker in the system. 
+
+	// Check if there is running worker in the system.
 	pid, err := getOlWorkerProc(ctx)
 	if err != nil {
-		
 		return err
 	}
 
-	if pid > 0 {
-		fmt.Printf("No worker running.")
+	if pid == 0 {
+		fmt.Printf("No worker running.\n")
 		return nil
 	}
 
@@ -498,11 +546,23 @@ func kill(ctx *cli.Context) error {
 		fmt.Printf("Failed to kill process with PID %d.  May require manual cleanup.\n", pid)
 	}
 
+	// write kill log with the number of sb in scratch if not exist
+	totalSB, err := getKillTarget(olPath)
+	if err != nil {
+		fmt.Printf("Get kill log error: %s. Proceed without showing kill progress.", err)
+	}
+
 	// Kill the worker asynchronously.
 	async := ctx.Bool("async")
-	if (async){
+	if async {
 		p.Signal(syscall.Signal(0))
-		fmt.Printf("Sent kill signal to the worker: %s", pid)
+		fmt.Printf("Send kill signal to the worker: %v\n", pid)
+		numSB, err := getKillTarget(olPath)
+		if err != nil {
+			return err
+		}
+		remainSB := totalSB - numSB
+		fmt.Printf("Progress: %v/%v\n", remainSB, totalSB)
 		return nil
 	}
 
@@ -512,6 +572,15 @@ func kill(ctx *cli.Context) error {
 			return nil // good, process must have stopped
 		}
 		time.Sleep(100 * time.Millisecond)
+		numSB, err := getKillTarget(olPath)
+		if numSB < 0 {
+			fmt.Printf("[DEBUG] numSB=%v with error=%s\n", numSB, err)
+		}
+
+		if err == nil {
+			remainSB := totalSB - numSB
+			fmt.Printf("Progress: %v/%v\n", remainSB, totalSB)
+		}
 	}
 
 	return fmt.Errorf("worker didn't stop after 30s")
@@ -519,12 +588,14 @@ func kill(ctx *cli.Context) error {
 
 func diagnose(ctx *cli.Context) error {
 	pid, err := getOlWorkerProc(ctx)
-	if err != nil && pid == -1{
+	olPath, _ := getOlPath(ctx)
+
+	if err != nil && pid == -1 {
 		fmt.Printf("Diagnose error: %s\n", err)
 		return err
 	}
 
-	if pid == 0{
+	if pid == 0 {
 		fmt.Printf("No ol worker proc running.\n")
 		return nil
 	}
@@ -617,7 +688,7 @@ OPTIONS:
 					Usage: "Send SIGNAL0 to kill the worker. Use `ol status` to check the kill progress.",
 				},
 			},
-			Action:    kill,
+			Action: kill,
 		},
 	}
 	err := app.Run(os.Args)
