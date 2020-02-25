@@ -47,6 +47,7 @@
 /imgs
 /util/cluster
 /bin
+/pkg
 /lambda/ol-init
 /lambda/spin
 /lambda/ns.so
@@ -54,5 +55,8 @@
 /sock/sock-init
 /test-dir
 /test.json
-
 ol
+default-ol
+
+# IDE setting
+.vscode
