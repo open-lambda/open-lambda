@@ -394,7 +394,7 @@ func worker(ctx *cli.Context) error {
 
 	pidPath := filepath.Join(common.Conf.Worker_dir, "worker.pid")
 	if _, err := os.Stat(pidPath); err == nil {
-		pid, err := getOlWorkerProc(ctx)
+		pid, _ := getOlWorkerProc(ctx)
 		if pid > 0 {
 			return fmt.Errorf("previous worker is running: %v", pid)
 		}
