@@ -269,8 +269,8 @@ func status(ctx *cli.Context) error {
 	}
 
 	if totalNum, err := getKillTarget(olPath, false); err != nil {
-		if currNum := getOlNumSB(olPath); currNum != -1 {
-			fmt.Printf("%v/%v\n", currNum, totalNum)
+		if currNum := getOlNumSB(olPath); currNum > 0 {
+			fmt.Printf("Worker kill progress: %v/%v\n", currNum, totalNum)
 			return nil
 		}
 	}
