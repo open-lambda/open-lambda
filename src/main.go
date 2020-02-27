@@ -594,23 +594,6 @@ func kill(ctx *cli.Context) error {
 	return fmt.Errorf("worker didn't stop after 30s")
 }
 
-// Simple diagnose tool. We shall expand this in the future.
-func diagnose(ctx *cli.Context) error {
-	pid, err := getOlWorkerProc(ctx)
-
-	if err != nil && pid == -1 {
-		fmt.Printf("Diagnose error: %s\n", err)
-		return err
-	}
-
-	if pid == 0 {
-		fmt.Printf("No ol worker proc running.\n")
-		return nil
-	}
-
-	fmt.Printf("Worker proc running: %v\n", pid)
-	return nil
-}
 
 // main runs the admin tool
 func main() {
@@ -680,14 +663,6 @@ OPTIONS:
 			Description: "If no cluster name is specified, number of containers of each cluster is printed; otherwise the connection information for all containers in the given cluster will be displayed.",
 			Flags:       []cli.Flag{pathFlag},
 			Action:      status,
-		},
-		cli.Command{
-			Name:        "diagnose",
-			Usage:       "diagnose worker status",
-			UsageText:   "ol diagnose [--path=NAME]",
-			Description: "Diagnose the current stataus of the worker, possibly specified by the path.",
-			Flags:       []cli.Flag{pathFlag},
-			Action:      diagnose,
 		},
 		cli.Command{
 			Name:      "kill",
