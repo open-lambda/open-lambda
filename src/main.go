@@ -393,7 +393,15 @@ func worker(ctx *cli.Context) error {
 	}
 	fmt.Printf("using existing OL directory at %s\n", olPath)
 
-	confPath := filepath.Join(olPath, "config.json")
+	confPath, err := filepath.Abs(ctx.String("file"))
+	if err != nil {
+		return fmt.Errorf("load config file with error: %s", err)
+	}
+	if confPath == "" {
+		confPath = filepath.Join(olPath, "config.json")
+	}
+	fmt.Printf("using config file at %s\n", confPath)
+
 	overrides := ctx.String("options")
 	if overrides != "" {
 		overridesPath := confPath + ".overrides"
@@ -586,6 +594,7 @@ func kill(ctx *cli.Context) error {
 	return fmt.Errorf("worker didn't stop after 30s")
 }
 
+// Simple diagnose tool. We shall expand this in the future.
 func diagnose(ctx *cli.Context) error {
 	pid, err := getOlWorkerProc(ctx)
 
@@ -656,6 +665,10 @@ OPTIONS:
 				cli.BoolFlag{
 					Name:  "detach, d",
 					Usage: "Run worker in background",
+				},
+				cli.StringFlag{
+					Name:  "file, f",
+					Usage: "Run worker with override config.json file",
 				},
 			},
 			Action: worker,

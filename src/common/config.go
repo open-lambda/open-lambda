@@ -218,6 +218,12 @@ func checkConf() error {
 		return fmt.Errorf("Unknown Sandbox type '%s'", Conf.Sandbox)
 	}
 
+	// check proc number limit. if proc num == 1, then any fork will fail.
+	// TODO: (Discussion) what is the proc num we shall set as a hard lower bound?
+	if Conf.Limits.Procs < 10 {
+		return fmt.Errorf("config.json: setting limits.procs too low (limits.procs = %v) that os.fork() will guaranteed to fail.", Conf.Limits.Procs)
+	}
+
 	return nil
 }
 
