@@ -104,7 +104,7 @@ func getOlNumSB(olPath string) int {
 	return len(files)
 }
 
-func getKillTarget(olPath string) (int, error) {
+func getKillTarget(olPath string, createIfNotExist bool) (int, error) {
 	// create killPath if not exist.
 	// return the number of SB needs to be killed initially.
 
@@ -123,6 +123,10 @@ func getKillTarget(olPath string) (int, error) {
 			return -1, err
 		}
 		return numSB, err
+	}
+
+	if !createIfNotExist {
+		return -1, fmt.Errorf("worker.kill does not exist")
 	}
 
 	// killPath not exist, create log file and store the number of sandboxes to kill
@@ -262,6 +266,13 @@ func status(ctx *cli.Context) error {
 	err = common.LoadConf(filepath.Join(olPath, "config.json"))
 	if err != nil {
 		return err
+	}
+
+	if totalNum, err := getKillTarget(olPath, false); err != nil {
+		if currNum := getOlNumSB(olPath); currNum != -1 {
+			fmt.Printf("%v/%v\n", currNum, totalNum)
+			return nil
+		}
 	}
 
 	url := fmt.Sprintf("http://localhost:%s/status", common.Conf.Worker_port)
@@ -565,7 +576,7 @@ func kill(ctx *cli.Context) error {
 	}
 
 	// write kill log with the number of sb in scratch if not exist
-	totalSB, err := getKillTarget(olPath)
+	totalSB, err := getKillTarget(olPath, true)
 	if err != nil {
 		fmt.Printf("Get kill log error: %s. Proceed without showing kill progress.", err)
 	}
@@ -578,7 +589,7 @@ func kill(ctx *cli.Context) error {
 		time.Sleep(100 * time.Millisecond)
 
 		if i%10 == 0 {
-			numSB, err := getKillTarget(olPath)
+			numSB, err := getKillTarget(olPath, false)
 			if err == nil {
 				remainSB := totalSB - numSB
 				fmt.Printf("Progress: %v/%v\n", remainSB, totalSB)
