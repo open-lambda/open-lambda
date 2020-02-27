@@ -123,9 +123,7 @@ func getKillTarget(olPath string, createIfNotExist bool) (int, error) {
 			return -1, err
 		}
 		return numSB, err
-	}
-
-	if !createIfNotExist {
+	} else {
 		return -1, fmt.Errorf("worker.kill does not exist")
 	}
 
@@ -268,7 +266,7 @@ func status(ctx *cli.Context) error {
 		return err
 	}
 
-	if totalNum, err := getKillTarget(olPath, false); err != nil {
+	if totalNum, err := getKillTarget(olPath, false); err == nil {
 		if currNum := getOlNumSB(olPath); currNum > 0 {
 			fmt.Printf("Worker kill progress: %v/%v\n", currNum, totalNum)
 			return nil
