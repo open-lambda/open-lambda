@@ -67,7 +67,8 @@ func getOlWorkerProc(ctx *cli.Context) (int, error) {
 		if len(v) == 0 {
 			continue
 		}
-		pid, err := strconv.Atoi(v)
+
+		pid, err := strconv.Atoi(strings.Trim(v, " "))
 		if err != nil {
 			return -1, err
 		}
@@ -392,21 +393,13 @@ func worker(ctx *cli.Context) error {
 	}
 	fmt.Printf("using existing OL directory at %s\n", olPath)
 
-	pidPath := filepath.Join(common.Conf.Worker_dir, "worker.pid")
-	if _, err := os.Stat(pidPath); err == nil {
-		pid, _ := getOlWorkerProc(ctx)
-		if pid > 0 {
-			return fmt.Errorf("previous worker is running: %v", pid)
-		}
-		return fmt.Errorf("previous worker may be running, %s already exists", pidPath)
-	}
-
-	confPath, err := filepath.Abs(ctx.String("file"))
-	if err != nil {
-		return fmt.Errorf("load config file with error: %s", err)
-	}
+	confPath := ctx.String("file")
 	if confPath == "" {
 		confPath = filepath.Join(olPath, "config.json")
+	}
+	confPath, err = filepath.Abs(confPath)
+	if err != nil {
+		return fmt.Errorf("load config file with error: %s", err)
 	}
 	fmt.Printf("using config file at %s\n", confPath)
 
@@ -422,6 +415,15 @@ func worker(ctx *cli.Context) error {
 
 	if err := common.LoadConf(confPath); err != nil {
 		return err
+	}
+
+	pidPath := filepath.Join(common.Conf.Worker_dir, "worker.pid")
+	if _, err := os.Stat(pidPath); err == nil {
+		pid, _ := getOlWorkerProc(ctx)
+		if pid > 0 {
+			return fmt.Errorf("previous worker is running: %v", pid)
+		}
+		return fmt.Errorf("previous worker may be running (%s already exists)", pidPath)
 	}
 
 	// should we run as a background process?
@@ -568,36 +570,24 @@ func kill(ctx *cli.Context) error {
 		fmt.Printf("Get kill log error: %s. Proceed without showing kill progress.", err)
 	}
 
-	// Kill the worker asynchronously.
-	async := ctx.Bool("async")
-	if async {
-		p.Signal(syscall.Signal(0))
-		fmt.Printf("Send kill signal to the worker: %v\n", pid)
-		numSB, err := getKillTarget(olPath)
-		if err != nil {
-			return err
-		}
-		remainSB := totalSB - numSB
-		fmt.Printf("Progress: %v/%v\n", remainSB, totalSB)
-		return nil
-	}
-
-	for i := 0; i < 300; i++ {
+	for i := 0; ; i++ {
 		err := p.Signal(syscall.Signal(0))
 		if err != nil {
 			return nil // good, process must have stopped
 		}
 		time.Sleep(100 * time.Millisecond)
-		numSB, err := getKillTarget(olPath)
-		if err == nil {
-			remainSB := totalSB - numSB
-			fmt.Printf("Progress: %v/%v\n", remainSB, totalSB)
+
+		if i%10 == 0 {
+			numSB, err := getKillTarget(olPath)
+			if err == nil {
+				remainSB := totalSB - numSB
+				fmt.Printf("Progress: %v/%v\n", remainSB, totalSB)
+			}
 		}
 	}
 
 	return fmt.Errorf("worker didn't stop after 30s")
 }
-
 
 // main runs the admin tool
 func main() {
@@ -641,7 +631,7 @@ OPTIONS:
 		cli.Command{
 			Name:        "worker",
 			Usage:       "Start one OL server",
-			UsageText:   "ol worker [--path=NAME] [--detach]",
+			UsageText:   "ol worker [--path=NAME] [--detach] [--file=CONFIGPATH]",
 			Description: "Start a lambda server.",
 			Flags: []cli.Flag{
 				pathFlag,
@@ -674,10 +664,6 @@ OPTIONS:
 			UsageText: "ol kill [--path=NAME] [--async]",
 			Flags: []cli.Flag{
 				pathFlag,
-				cli.BoolFlag{
-					Name:  "async, a",
-					Usage: "Send SIGNAL0 to kill the worker. Use `ol status` to check the kill progress.",
-				},
 			},
 			Action: kill,
 		},
