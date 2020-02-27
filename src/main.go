@@ -69,7 +69,6 @@ func getOlWorkerProc(ctx *cli.Context) (int, error) {
 		}
 		pid, err := strconv.Atoi(v)
 		if err != nil {
-			fmt.Printf("[DEBUG] %s", err)
 			return -1, err
 		}
 		if pid != this {
@@ -393,6 +392,15 @@ func worker(ctx *cli.Context) error {
 	}
 	fmt.Printf("using existing OL directory at %s\n", olPath)
 
+	pidPath := filepath.Join(common.Conf.Worker_dir, "worker.pid")
+	if _, err := os.Stat(pidPath); err == nil {
+		pid, err := getOlWorkerProc(ctx)
+		if pid > 0 {
+			return fmt.Errorf("previous worker is running: %v", pid)
+		}
+		return fmt.Errorf("previous worker may be running, %s already exists", pidPath)
+	}
+
 	confPath, err := filepath.Abs(ctx.String("file"))
 	if err != nil {
 		return fmt.Errorf("load config file with error: %s", err)
@@ -581,10 +589,6 @@ func kill(ctx *cli.Context) error {
 		}
 		time.Sleep(100 * time.Millisecond)
 		numSB, err := getKillTarget(olPath)
-		if numSB < 0 {
-			fmt.Printf("[DEBUG] numSB=%v with error=%s\n", numSB, err)
-		}
-
 		if err == nil {
 			remainSB := totalSB - numSB
 			fmt.Printf("Progress: %v/%v\n", remainSB, totalSB)
