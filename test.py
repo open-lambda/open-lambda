@@ -241,19 +241,20 @@ def numpy_test():
     assert j['result'] == 20
     assert j['version'].startswith('1.15')
 
-    r = post("run/pandas15", [[1, 2, 3],[1, 2, 3]])
-    if r.status_code != 200:
-        raise Exception("STATUS %d: %s" % (r.status_code, r.text))
-    j = r.json()
-    assert j['result'] == 12
-    assert j['version'].startswith('1.15')
-
     r = post("run/pandas", [[0, 1, 2], [3, 4, 5]])
     if r.status_code != 200:
         raise Exception("STATUS %d: %s" % (r.status_code, r.text))
     j = r.json()
+    print(j)
     assert j['result'] == 15
-    assert float(".".join(j['version'].split('.')[:2])) >= 1.16
+    assert float(".".join(j['version'].split('.')[:2])) >= 1.19
+
+    r = post("run/pandas18", [[1, 2, 3],[1, 2, 3]])
+    if r.status_code != 200:
+        raise Exception("STATUS %d: %s" % (r.status_code, r.text))
+    j = r.json()
+    assert j['result'] == 12
+    assert j['version'].startswith('1.18')
 
 
 def stress_one_lambda_task(args):

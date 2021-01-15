@@ -1,4 +1,4 @@
-# ol-install: numpy==1.15,pandas
+# ol-install: numpy==1.18,pandas
 import numpy
 import pandas
 
