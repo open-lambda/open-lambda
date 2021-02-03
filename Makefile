@@ -14,7 +14,7 @@ all: ol imgs/lambda
 
 imgs/lambda: $(LAMBDA_FILES)
 	${MAKE} -C lambda
-	docker build -t lambda lambda
+	sudo docker build -t lambda lambda
 	touch imgs/lambda
 
 ol: $(OL_GO_FILES)
@@ -24,7 +24,7 @@ install: ol
 	cp ol /usr/local/bin
 
 test-all:
-	python3 -u test.py
+	sudo python3 -u test.py
 
 clean:
 	rm -f ol
