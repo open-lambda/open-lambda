@@ -4,8 +4,8 @@ import os, sys, json, time, requests, copy, traceback, tempfile, threading, subp
 from collections import OrderedDict
 from subprocess import check_output
 from multiprocessing import Pool
-from contextlib import contextmanager        
-                
+from contextlib import contextmanager
+
 OLDIR = 'test-dir'
 
 results = OrderedDict({"runs": []})

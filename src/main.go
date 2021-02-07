@@ -178,7 +178,6 @@ func overrideOpts(confPath, overridePath, optsStr string) error {
 			default:
 				return fmt.Errorf("%s refers to a %T, not a map", keys[i], c[keys[i]])
 			}
-
 		}
 
 		key := keys[len(keys)-1]
@@ -257,6 +256,7 @@ func worker(ctx *cli.Context) error {
 	// should we run as a background process?
 	detach := ctx.Bool("detach")
 
+	// If detach is specified, we start another ol-process with the worker argument
 	if detach {
 		// stdout+stderr both go to log
 		logPath := filepath.Join(olPath, "worker.out")
@@ -273,6 +273,8 @@ func worker(ctx *cli.Context) error {
 				cmd = append(cmd, arg)
 			}
 		}
+
+		// Get the path of this binary
 		binPath, err := exec.LookPath(os.Args[0])
 		if err != nil {
 			return err

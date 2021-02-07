@@ -47,7 +47,7 @@ type Config struct {
 	Import_cache_tree interface{} `json:"import_cache_tree"`
 
 	// base image path for sock containers
-	SOCK_base_path string `json: "sock_base_path"`
+	SOCK_base_path string `json:"sock_base_path"`
 
 	// pass through to sandbox envirenment variable
 	Sandbox_config interface{} `json:"sandbox_config"`
@@ -104,7 +104,7 @@ type LimitsConfig struct {
 	// always set a lower limit for itself.
 	Mem_mb int `json:"mem_mb"`
 
-	// how aggresively will the mem of the Sandbox be swapped?
+	// how aggressively will the mem of the Sandbox be swapped?
 	Swappiness int `json:"swappiness"`
 
 	// how much memory do we use for an admin lambda that is used
