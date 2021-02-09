@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import argparse
 import os, sys, json, time, requests, copy, traceback, tempfile, threading, subprocess
 from collections import OrderedDict
 from subprocess import check_output
@@ -7,11 +8,12 @@ from multiprocessing import Pool
 from contextlib import contextmanager
 
 OLDIR = 'test-dir'
+TEST_FILTER = []
 
 results = OrderedDict({"runs": []})
 curr_conf = None
 
-
+''' Issues a post request to the OL worker '''
 def post(path, data=None):
     return requests.post('http://localhost:5000/'+path, json.dumps(data))
 
@@ -20,12 +22,11 @@ def raise_for_status(r):
     if r.status_code != 200:
         raise Exception("STATUS %d: %s" % (r.status_code, r.text))
 
-
 def test_in_filter(name):
-    if len(sys.argv) < 2:
+    if TEST_FILTER.len() == 0:
         return True
-    return name in sys.argv[1:]
 
+    return name in TEST_FILTER
 
 def get_mem_stat_mb(stat):
     with open('/proc/meminfo') as f:
@@ -137,7 +138,7 @@ def mounts():
     output = output.split("\n")
     return set(output)
 
-        
+''' Loads a config and overwrites certain fields with what is set in **keywords '''
 @contextmanager
 def TestConf(**keywords):
     with open(os.path.join(OLDIR, "config.json")) as f:
@@ -429,53 +430,72 @@ def recursive_kill(depth):
     assert destroys == depth
 
 
-def tests():
+def run_tests(configs):
     test_reg = os.path.abspath("test-registry")
 
-    with TestConf(registry=test_reg):
-        ping_test()
+    if "lambda" in configs:
+        print("Testing regular lambdas")
 
-        # do smoke tests under various configs
-        with TestConf(features={"import_cache": False}):
-            install_tests()
-        with TestConf(mem_pool_mb=500):
-            install_tests()
-        with TestConf(sandbox="docker", features={"import_cache": False}):
-            install_tests()
+        with TestConf(registry=test_reg):
+            ping_test()
 
-        # test resource limits
-        fork_bomb()
-        max_mem_alloc()
+            # do smoke tests under various configs
+            with TestConf(features={"import_cache": False}):
+                install_tests()
+            with TestConf(mem_pool_mb=500):
+                install_tests()
+            with TestConf(sandbox="docker", features={"import_cache": False}):
+                install_tests()
 
-        # numpy pip install needs a larger mem cap
-        with TestConf(mem_pool_mb=500):
-            numpy_test()
+            # test resource limits
+            fork_bomb()
+            max_mem_alloc()
 
-    # test SOCK directly (without lambdas)
-    with TestConf(server_mode="sock", mem_pool_mb=500):
-        sock_churn(baseline=0, procs=1, seconds=5, fork=False)
-        sock_churn(baseline=0, procs=1, seconds=10, fork=True)
-        sock_churn(baseline=0, procs=15, seconds=10, fork=True)
-        sock_churn(baseline=32, procs=1, seconds=10, fork=True)
-        sock_churn(baseline=32, procs=15, seconds=10, fork=True)
+            # numpy pip install needs a larger mem cap
+            with TestConf(mem_pool_mb=500):
+                numpy_test()
 
-    # make sure code updates get pulled within the cache time
-    with tempfile.TemporaryDirectory() as reg_dir:
-        with TestConf(registry=reg_dir, registry_cache_ms=3000):
-            update_code()
+        # make sure code updates get pulled within the cache time
+        with tempfile.TemporaryDirectory() as reg_dir:
+            with TestConf(registry=reg_dir, registry_cache_ms=3000):
+                update_code()
 
-    # test heavy load
-    with TestConf(registry=test_reg):
-        stress_one_lambda(procs=1, seconds=15)
-        stress_one_lambda(procs=2, seconds=15)
-        stress_one_lambda(procs=8, seconds=15)
+        # test heavy load
+        with TestConf(registry=test_reg):
+            stress_one_lambda(procs=1, seconds=15)
+            stress_one_lambda(procs=2, seconds=15)
+            stress_one_lambda(procs=8, seconds=15)
 
-    with TestConf(features={"reuse_cgroups": True}):
-        call_each_once(lambda_count=100, alloc_mb=1)
-        call_each_once(lambda_count=1000, alloc_mb=10)
+        with TestConf(features={"reuse_cgroups": True}):
+            call_each_once(lambda_count=100, alloc_mb=1)
+            call_each_once(lambda_count=1000, alloc_mb=10)
 
+    if "sock" in configs:
+        print("Testing SOCK directly (without lambdas)")
+
+        with TestConf(server_mode="sock", mem_pool_mb=500):
+            sock_churn(baseline=0, procs=1, seconds=5, fork=False)
+            sock_churn(baseline=0, procs=1, seconds=10, fork=True)
+            sock_churn(baseline=0, procs=15, seconds=10, fork=True)
+            sock_churn(baseline=32, procs=1, seconds=10, fork=True)
+            sock_churn(baseline=32, procs=15, seconds=10, fork=True)
+
+    if "wasm" in configs:
+        print("Testing WASM")
 
 def main():
+    global TEST_FILTER
+
+    parser = argparse.ArgumentParser(description='Run tests for OpenLambda')
+    parser.add_argument('--reuse_config', action="store_true")
+    parser.add_argument('--configs', type=str, default="lambda,sock,wasm")
+    parser.add_argument('--test_filter', type=str, default="")
+
+    args = parser.parse_args()
+
+    TEST_FILTER = args.test_filter.split(",")
+    configs = args.configs.split(",")
+
     t0 = time.time()
 
     # so our test script doesn't hang if we have a memory leak
@@ -483,17 +503,18 @@ def main():
     timerThread.start()
 
     # general setup
-    if os.path.exists(OLDIR):
-        try:
-            run(['./ol', 'kill', '-p='+OLDIR])
-        except:
-            print('could not kill cluster')
-        run(['rm', '-rf', OLDIR])
-    run(['./ol', 'new', '-p='+OLDIR])
+    if not args.reuse_config:
+        if os.path.exists(OLDIR):
+            try:
+                run(['./ol', 'kill', '-p='+OLDIR])
+            except:
+                print('could not kill cluster')
+            run(['rm', '-rf', OLDIR])
+        run(['./ol', 'new', '-p='+OLDIR])
 
     # run tests with various configs
     with TestConf(limits={"installer_mem_mb": 250}):
-        tests()
+        run_tests(configs)
 
     # save test results
     passed = len([t for t in results["runs"] if t["pass"]])

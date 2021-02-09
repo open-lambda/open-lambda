@@ -10,6 +10,7 @@ import (
 	"syscall"
 )
 
+// Configuration is stored globally here
 var Conf *Config
 
 // Config represents the configuration for a worker server.

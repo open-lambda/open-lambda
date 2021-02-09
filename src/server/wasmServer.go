@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strings"
 	"fmt"
+	"io/ioutil"
+	"encoding/json"
 )
 
 type WasmServer struct {
@@ -13,13 +15,33 @@ type WasmServer struct {
 func (s *WasmServer) HandleInternal(w http.ResponseWriter, r *http.Request) error {
 	log.Printf("%s %s", r.Method, r.URL.Path)
 
+	defer r.Body.Close()
+
+	if r.Method != "POST" {
+		return fmt.Errorf("Only POST allowed (found %s)", r.Method)
+	}
+
+	rbody, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return err
+	}
+
+	var args map[string]interface{}
+
+	if len(rbody) > 0 {
+		if err := json.Unmarshal(rbody, &args); err != nil {
+			return err
+		}
+	}
+
+	log.Printf("Parsed Args: %v", args)
+
 	rsrc := strings.Split(r.URL.Path, "/")
 	if len(rsrc) < 2 {
 		return fmt.Errorf("no path arguments provided in URL")
 	}
 
 	return fmt.Errorf("unknown op %s", rsrc[1])
-
 }
 
 func (s *WasmServer) Handle(w http.ResponseWriter, r *http.Request) {
