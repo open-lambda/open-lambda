@@ -9,8 +9,9 @@ LAMBDA_FILES = $(shell find lambda)
 .PHONY: install
 .PHONY: test-all
 .PHONY: clean
+.PHONY: dependencies
 
-all: ol imgs/lambda
+all: dependencies ol imgs/lambda
 
 imgs/lambda: $(LAMBDA_FILES)
 	${MAKE} -C lambda
@@ -18,7 +19,7 @@ imgs/lambda: $(LAMBDA_FILES)
 	touch imgs/lambda
 
 ol: $(OL_GO_FILES)
-	cd $(OL_DIR) && $(GO) build -mod vendor -o ../ol
+	cd $(OL_DIR) && $(GO) build -o ../ol
 
 install: ol
 	cp ol /usr/local/bin

@@ -12,8 +12,8 @@ import (
 )
 
 type WasmServer struct {
-	engine *WasmEngine
-	store *WasmStore
+	engine *wasmer.Engine
+	store *wasmer.Store
 }
 
 func (s *WasmServer) HandleInternal(w http.ResponseWriter, r *http.Request) error {
@@ -62,7 +62,7 @@ func (s *WasmServer) cleanup() {
 func NewWasmServer() (*WasmServer, error) {
 	log.Printf("Starting WASM Server")
 
-	wasmBytes, _ := ioutil.ReadFile("pyodide.asm.wasm")
+	//wasmBytes, _ := ioutil.ReadFile("pyodide.asm.wasm")
 
 	engine := wasmer.NewEngine()
 	store := wasmer.NewStore(engine)
