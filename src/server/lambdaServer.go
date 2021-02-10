@@ -41,7 +41,7 @@ func (s *LambdaServer) RunLambda(w http.ResponseWriter, r *http.Request) {
 	t := common.T0("web-request")
 	defer t.T1()
 
-	log.Printf("Receive request to %s\n", r.URL.Path)
+	log.Printf("Received request to %s\n", r.URL.Path)
 
 	// write response headers
 	w.Header().Set("Access-Control-Allow-Origin", "*")

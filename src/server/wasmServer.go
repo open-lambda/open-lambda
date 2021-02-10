@@ -7,9 +7,13 @@ import (
 	"fmt"
 	"io/ioutil"
 	"encoding/json"
+
+	wasmer "github.com/wasmerio/wasmer-go/wasmer"
 )
 
 type WasmServer struct {
+	engine *WasmEngine
+	store *WasmStore
 }
 
 func (s *WasmServer) HandleInternal(w http.ResponseWriter, r *http.Request) error {
@@ -58,7 +62,14 @@ func (s *WasmServer) cleanup() {
 func NewWasmServer() (*WasmServer, error) {
 	log.Printf("Starting WASM Server")
 
-	server := &WasmServer{}
+	wasmBytes, _ := ioutil.ReadFile("pyodide.asm.wasm")
+
+	engine := wasmer.NewEngine()
+	store := wasmer.NewStore(engine)
+
+	server := &WasmServer{ engine, store }
+
+	log.Printf("Loaded and compiled wasm code")
 
 	http.HandleFunc("/", server.Handle)
 

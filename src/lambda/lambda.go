@@ -105,33 +105,33 @@ func NewLambdaMgr() (res *LambdaMgr, err error) {
 		return nil, err
 	}
 
-	log.Printf("Create SandboxPool")
+	log.Printf("Creating SandboxPool")
 	mgr.sbPool, err = sandbox.SandboxPoolFromConfig("sandboxes", common.Conf.Mem_pool_mb)
 	if err != nil {
 		return nil, err
 	}
 
-	log.Printf("Create DepTracer")
+	log.Printf("Creating DepTracer")
 	mgr.DepTracer, err = NewDepTracer(filepath.Join(common.Conf.Worker_dir, "dep-trace.json"))
 	if err != nil {
 		return nil, err
 	}
 
-	log.Printf("Create PackagePuller")
+	log.Printf("Creating PackagePuller")
 	mgr.PackagePuller, err = NewPackagePuller(mgr.sbPool, mgr.DepTracer)
 	if err != nil {
 		return nil, err
 	}
 
 	if common.Conf.Features.Import_cache {
-		log.Printf("Create ImportCache")
+		log.Printf("Creating ImportCache")
 		mgr.ImportCache, err = NewImportCache(mgr.codeDirs, mgr.scratchDirs, mgr.sbPool, mgr.PackagePuller)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	log.Printf("Create HandlerPuller")
+	log.Printf("Creating HandlerPuller")
 	mgr.HandlerPuller, err = NewHandlerPuller(mgr.codeDirs)
 	if err != nil {
 		return nil, err

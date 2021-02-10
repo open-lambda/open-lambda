@@ -7,7 +7,8 @@ from subprocess import check_output
 from multiprocessing import Pool
 from contextlib import contextmanager
 
-OLDIR = 'test-dir'
+# These will be set by argparse in main()
+OLDIR = ''
 TEST_FILTER = []
 
 results = OrderedDict({"runs": []})
@@ -23,7 +24,7 @@ def raise_for_status(r):
         raise Exception("STATUS %d: %s" % (r.status_code, r.text))
 
 def test_in_filter(name):
-    if TEST_FILTER.len() == 0:
+    if len(TEST_FILTER) == 0:
         return True
 
     return name in TEST_FILTER
@@ -52,6 +53,7 @@ def test(fn):
         name = fn.__name__
 
         if not test_in_filter(name):
+            print("Skipping test '%s'" % name)
             return None
 
         print('='*40)
@@ -430,10 +432,10 @@ def recursive_kill(depth):
     assert destroys == depth
 
 
-def run_tests(configs):
+def run_tests(server_modes):
     test_reg = os.path.abspath("test-registry")
 
-    if "lambda" in configs:
+    if "lambda" in server_modes:
         print("Testing regular lambdas")
 
         with TestConf(registry=test_reg):
@@ -470,7 +472,7 @@ def run_tests(configs):
             call_each_once(lambda_count=100, alloc_mb=1)
             call_each_once(lambda_count=1000, alloc_mb=10)
 
-    if "sock" in configs:
+    if "sock" in server_modes:
         print("Testing SOCK directly (without lambdas)")
 
         with TestConf(server_mode="sock", mem_pool_mb=500):
@@ -480,21 +482,34 @@ def run_tests(configs):
             sock_churn(baseline=32, procs=1, seconds=10, fork=True)
             sock_churn(baseline=32, procs=15, seconds=10, fork=True)
 
-    if "wasm" in configs:
+    if "wasm" in server_modes:
         print("Testing WASM")
 
+        with TestConf(server_mode="wasm", registry=test_reg):
+            ping_test()
+            numpy_test()
+
 def main():
+    global OLDIR
     global TEST_FILTER
 
     parser = argparse.ArgumentParser(description='Run tests for OpenLambda')
     parser.add_argument('--reuse_config', action="store_true")
-    parser.add_argument('--configs', type=str, default="lambda,sock,wasm")
+    parser.add_argument('--server_modes', type=str, default="lambda,sock,wasm")
     parser.add_argument('--test_filter', type=str, default="")
+    parser.add_argument('--ol_dir', type=str, default="test-dir")
 
     args = parser.parse_args()
 
-    TEST_FILTER = args.test_filter.split(",")
-    configs = args.configs.split(",")
+    TEST_FILTER = [name for name in args.test_filter.split(",") if name != '']
+    OLDIR = args.ol_dir
+
+    print("Test filter is '%s' and OL directory is '%s'" % (TEST_FILTER, OLDIR))
+
+    server_modes = [name for name in args.server_modes.split(",") if name != '']
+
+    if len(server_modes) == 0:
+        raise RuntimeError("No server modes specified")
 
     t0 = time.time()
 
@@ -514,7 +529,7 @@ def main():
 
     # run tests with various configs
     with TestConf(limits={"installer_mem_mb": 250}):
-        run_tests(configs)
+        run_tests(server_modes)
 
     # save test results
     passed = len([t for t in results["runs"] if t["pass"]])

@@ -55,4 +55,7 @@
 /test-dir
 /test.json
 
+# Created by go mod vendor
+src/vendor
+
 ol

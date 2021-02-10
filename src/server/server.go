@@ -25,7 +25,7 @@ const (
 
 // GetPid returns process ID, useful for making sure we're talking to the expected server
 func GetPid(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Receive request to %s\n", r.URL.Path)
+	log.Printf("Received request to %s\n", r.URL.Path)
 
 	wbody := []byte(strconv.Itoa(os.Getpid()) + "\n")
 	if _, err := w.Write(wbody); err != nil {
@@ -35,7 +35,7 @@ func GetPid(w http.ResponseWriter, r *http.Request) {
 
 // Status writes "ready" to the response.
 func Status(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Receive request to %s\n", r.URL.Path)
+	log.Printf("Received request to %s\n", r.URL.Path)
 
 	if _, err := w.Write([]byte("ready\n")); err != nil {
 		log.Printf("error in Status: %v", err)
@@ -43,7 +43,7 @@ func Status(w http.ResponseWriter, r *http.Request) {
 }
 
 func Stats(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Receive request to %s\n", r.URL.Path)
+	log.Printf("Received request to %s\n", r.URL.Path)
 	snapshot := common.SnapshotStats()
 	if b, err := json.MarshalIndent(snapshot, "", "\t"); err != nil {
 		panic(err)
@@ -59,7 +59,7 @@ func Main() (err error) {
 
 	pidPath := filepath.Join(common.Conf.Worker_dir, "worker.pid")
 	if _, err := os.Stat(pidPath); err == nil {
-		return fmt.Errorf("previous worker may be running, %s already exists", pidPath)
+		return fmt.Errorf("Previous worker may be running, %s already exists", pidPath)
 	} else if !os.IsNotExist(err) {
 		// we were hoping to get the not-exist error, but got something else unexpected
 		return err
@@ -72,7 +72,7 @@ func Main() (err error) {
 		return err
 	}
 
-	log.Printf("save PID %d to file %s", os.Getpid(), pidPath)
+	log.Printf("Saved PID %d to file %s", os.Getpid(), pidPath)
 	if err := ioutil.WriteFile(pidPath, []byte(fmt.Sprintf("%d", os.Getpid())), 0644); err != nil {
 		return err
 	}
