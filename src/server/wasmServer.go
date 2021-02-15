@@ -33,7 +33,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	invokeIiFunc := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			result := make([]wasmer.Value, 0)
 			return result, nil
@@ -42,7 +42,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	invokeIiiFunc := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			result := make([]wasmer.Value, 0)
 			return result, nil
@@ -51,7 +51,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	invokeIiiiFunc := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32, wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			result := make([]wasmer.Value, 0)
 			return result, nil
@@ -60,7 +60,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	invokeIiiiiFunc := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32, wasmer.I32, wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			result := make([]wasmer.Value, 0)
 			return result, nil
@@ -69,7 +69,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	invokeViFunc := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes()),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			result := make([]wasmer.Value, 0)
 			return result, nil
@@ -78,7 +78,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	invokeViiFunc := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32, wasmer.I32), wasmer.NewValueTypes()),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			result := make([]wasmer.Value, 0)
 			return result, nil
@@ -87,7 +87,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	invokeViiiiFunc := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32, wasmer.I32, wasmer.I32, wasmer.I32), wasmer.NewValueTypes()),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			result := make([]wasmer.Value, 0)
 			return result, nil
@@ -105,7 +105,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	setTempRet0 := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32), wasmer.NewValueTypes()),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			result := make([]wasmer.Value, 0)
 			return result, nil
@@ -114,7 +114,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	abortFunc := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32), wasmer.NewValueTypes()),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			log.Fatal("Got abort")
 
@@ -125,7 +125,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	assertFailFunc := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32, wasmer.I32, wasmer.I32), wasmer.NewValueTypes()),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			log.Fatal("Assert failed")
 
@@ -136,7 +136,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	buildEnvironmentFunc := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32), wasmer.NewValueTypes()),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			result := make([]wasmer.Value, 0)
 			return result, nil
@@ -271,6 +271,14 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 	)
 
 	killFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	strftimeFunc := wasmer.NewFunction(
 		server.store,
 		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
@@ -601,6 +609,21 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 	importObject := wasmer.NewImportObject()
 
 	importObject.Register(
+		"asm2wasm",
+		map[string]wasmer.IntoExtern{
+			"f64-rem": strftimeFunc,
+		},
+	)
+
+	importObject.Register(
+		"global",
+		map[string]wasmer.IntoExtern{
+			"NaN": strftimeFunc,
+			"Infinity": strftimeFunc,
+		},
+	)
+
+	importObject.Register(
 		"env",
 		map[string]wasmer.IntoExtern{
 			"abort": abortFunc,
@@ -713,6 +736,8 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 			"___wait": lockFunc,
 			"___wasi_fd_write": lockFunc,
 			"__exit": lockFunc,
+			"__memory_base": lockFunc,
+			"__table_base": lockFunc,
 			"_abort": lockFunc,
 			"_alarm": lockFunc,
 			"_chroot": lockFunc,
@@ -836,6 +861,64 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 			"_posix_spawnattr_setpgroup": killFunc,
 			"_posix_spawnattr_setschedparam": killFunc,
 			"_posix_spawnattr_setschedpolicy": killFunc,
+			"_posix_spawnp": killFunc,
+			"_pthread_attr_destroy": killFunc,
+			"_pthread_attr_init": killFunc,
+			"_pthread_attr_setstacksize": killFunc,
+			"_pthread_cleanup_pop": killFunc,
+			"_pthread_cleanup_push": killFunc,
+			"_pthread_cond_destroy": killFunc,
+			"_pthread_cond_init": killFunc,
+			"_pthread_cond_signal": killFunc,
+			"_pthread_cond_timedwait": killFunc,
+			"_pthread_cond_wait": killFunc,
+			"_pthread_condattr_init": killFunc,
+			"_pthread_condattr_setclock": killFunc,
+			"_pthread_create": killFunc,
+			"_pthread_detach": killFunc,
+			"_pthread_equal": killFunc,
+			"_pthread_exit": killFunc,
+			"_pthread_join": killFunc,
+			"_pthread_mutexattr_destroy": killFunc,
+			"_pthread_mutexattr_init": killFunc,
+			"_pthread_mutexattr_settype": killFunc,
+			"_pthread_setcancelstate": killFunc,
+			"_pthread_sigmask": killFunc,
+			"_putenv": killFunc,
+			"_pyimport_init": killFunc,
+			"_pyproxy_init": killFunc,
+			"_pyproxy_new": killFunc,
+			"_pyproxy_use": killFunc,
+			"_raise": killFunc,
+			"_runpython_finalize_js": killFunc,
+			"_runpython_init_js": killFunc,
+			"_sched_yield": killFunc,
+			"_setenv": killFunc,
+			"_setgroups": killFunc,
+			"_setitimer": killFunc,
+			"_setpwent": killFunc,
+			"_sigemptyset": killFunc,
+			"_sigfillset": killFunc,
+			"_siginterrupt": killFunc,
+			"_sigismember": killFunc,
+			"_signal": killFunc,
+			"_sigpending": killFunc,
+			"_strftime": strftimeFunc,
+			"_strftime_l": strftimeFunc,
+			"_sysconf": strftimeFunc,
+			"_system": strftimeFunc,
+			"_time": strftimeFunc,
+			"_times": strftimeFunc,
+			"_unsetenv": strftimeFunc,
+			"_usleep": strftimeFunc,
+			"_utimes": strftimeFunc,
+			"_wait": strftimeFunc,
+			"_wait3": strftimeFunc,
+			"_wait4": strftimeFunc,
+			"_waitid": strftimeFunc,
+			"_waitpid": strftimeFunc,
+
+			"abortOnCannotGrowMemory": strftimeFunc,
 
 			"___libc_current_sigrtmin": libcCurrentSigrtminFunc,
 			"___libc_current_sigrtmax": libcCurrentSigrtmaxFunc,
@@ -854,6 +937,14 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 			"___cxa_increment_exception_refcount": cxaIncrementExceptionRefcountFunc,
 			"getTempRet0": getTempRet0,
 			"setTempRet0": setTempRet0,
+			"DYNAMICTOP_PTR": setTempRet0,
+			"gb": setTempRet0,
+			"fb": setTempRet0,
+			"STACKTOP": setTempRet0,
+			"STACK_MAX": setTempRet0,
+			"memory": setTempRet0,
+			"table": setTempRet0,
+			"tempDoublePtr": setTempRet0,
 			"invoke_ii": invokeIiFunc,
 			"invoke_iii": invokeIiiFunc,
 			"invoke_iiii": invokeIiiiFunc,
