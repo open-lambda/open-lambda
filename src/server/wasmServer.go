@@ -369,6 +369,205 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 		},
 	)
 
+	getItimerFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	getNameInfoFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32, wasmer.I32, wasmer.I32, wasmer.I32, wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	getProtoByNameFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	getPwentFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	getPwnamFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	gmTimeRFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	hiwireArrayFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	hiwireCallFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	hiwireCallMemberFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	hiwireGetMemberIntFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	hiwireIncrefFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes( wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	hiwireInt16ArrayFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	hiwireBytesFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	hiwireEqualFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	hiwireObjectFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	hiwirePushArrayFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes()),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	hiwirePushObjectPairFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32, wasmer.I32), wasmer.NewValueTypes()),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	hiwireSetupFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes()),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	hiwireNewFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	hiwireGetBoolFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	hiwireGetDtypeFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	hiwireDeleteMemberObjFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes()),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	hiwireDirFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	hiwireDoubleFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.F64), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	getTimeOfDayFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
 	clockGetResFunc := wasmer.NewFunction(
 		server.store,
 		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
@@ -996,61 +1195,61 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 			"_getenv": getEnvFunc,
 			"_gethostbyaddr": getHostByAddrFunc,
 			"_gethostbyname": gaiStrerrorFunc,
-			"_getitimer": lockFunc,
-			"_getloadavg": lockFunc,
-			"_getnameinfo": lockFunc,
-			"_getprotobyname": lockFunc,
-			"_getpwent": lockFunc,
-			"_getpwnam": lockFunc,
-			"_getpwuid": lockFunc,
-			"_gettimeofday": lockFunc,
-			"_gmtime": lockFunc,
-			"_gmtime_r": lockFunc,
-			"_hiwire_array": lockFunc,
-			"_hiwire_bytes": lockFunc,
-			"_hiwire_call": lockFunc,
-			"_hiwire_call_member": lockFunc,
-			"_hiwire_copy_to_ptr": lockFunc,
+			"_getitimer": getItimerFunc,
+			"_getloadavg": getItimerFunc,
+			"_getnameinfo": getNameInfoFunc,
+			"_getprotobyname": getProtoByNameFunc,
+			"_getpwent": getPwentFunc,
+			"_getpwnam": getPwnamFunc,
+			"_getpwuid": getPwnamFunc,
+			"_gettimeofday": getTimeOfDayFunc,
+			"_gmtime": getPwnamFunc,
+			"_gmtime_r": gmTimeRFunc,
+			"_hiwire_array": hiwireArrayFunc,
+			"_hiwire_bytes": hiwireBytesFunc,
+			"_hiwire_call": hiwireCallFunc,
+			"_hiwire_call_member": hiwireCallMemberFunc,
+			"_hiwire_copy_to_ptr": hiwireCallFunc,
 			"_hiwire_decref": lockFunc,
-			"_hiwire_delete_member_obj": lockFunc,
-			"_hiwire_delete_member_string": lockFunc,
-			"_hiwire_dir": lockFunc,
-			"_hiwire_double": lockFunc,
-			"_hiwire_equal": lockFunc,
-			"_hiwire_float32array": lockFunc,
-			"_hiwire_float64array": lockFunc,
-			"_hiwire_get_bool": lockFunc,
-			"_hiwire_get_byteLength": lockFunc,
-			"_hiwire_get_byteOffset": lockFunc,
-			"_hiwire_get_dtype": lockFunc,
-			"_hiwire_get_global": lockFunc,
-			"_hiwire_get_iterator": lockFunc,
-			"_hiwire_get_length": lockFunc,
-			"_hiwire_get_member_int": lockFunc,
-			"_hiwire_get_member_obj": lockFunc,
-			"_hiwire_get_member_string": lockFunc,
-			"_hiwire_greater_than": lockFunc,
-			"_hiwire_greater_than_equal": lockFunc,
-			"_hiwire_incref": lockFunc,
-			"_hiwire_int": lockFunc,
-			"_hiwire_int16array": lockFunc,
-			"_hiwire_int32array": lockFunc,
-			"_hiwire_int8array": lockFunc,
-			"_hiwire_is_function": lockFunc,
-			"_hiwire_is_on_wasm_heap": lockFunc,
-			"_hiwire_is_typedarray": lockFunc,
-			"_hiwire_less_than": lockFunc,
-			"_hiwire_less_than_equal": lockFunc,
-			"_hiwire_new": lockFunc,
-			"_hiwire_next": lockFunc,
-			"_hiwire_nonzero": lockFunc,
-			"_hiwire_not_equal": lockFunc,
-			"_hiwire_object": lockFunc,
-			"_hiwire_push_array": lockFunc,
-			"_hiwire_push_object_pair": lockFunc,
-			"_hiwire_set_member_obj": lockFunc,
-			"_hiwire_set_member_string": lockFunc,
-			"_hiwire_setup": lockFunc,
+			"_hiwire_delete_member_obj": hiwireDeleteMemberObjFunc,
+			"_hiwire_delete_member_string": hiwireDeleteMemberObjFunc,
+			"_hiwire_dir": hiwireDirFunc,
+			"_hiwire_double": hiwireDoubleFunc,
+			"_hiwire_equal": hiwireEqualFunc,
+			"_hiwire_float32array": hiwireEqualFunc,
+			"_hiwire_float64array": hiwireEqualFunc,
+			"_hiwire_get_bool": hiwireGetBoolFunc,
+			"_hiwire_get_byteLength": hiwireGetBoolFunc,
+			"_hiwire_get_byteOffset": hiwireGetBoolFunc,
+			"_hiwire_get_dtype": hiwireGetDtypeFunc,
+			"_hiwire_get_global": hiwireGetDtypeFunc,
+			"_hiwire_get_iterator": hiwireGetDtypeFunc,
+			"_hiwire_get_length": hiwireGetDtypeFunc,
+			"_hiwire_get_member_int": hiwireGetMemberIntFunc,
+			"_hiwire_get_member_obj": hiwireGetMemberIntFunc,
+			"_hiwire_get_member_string": hiwireGetMemberIntFunc,
+			"_hiwire_greater_than": hiwireGetMemberIntFunc,
+			"_hiwire_greater_than_equal": hiwireGetMemberIntFunc,
+			"_hiwire_incref": hiwireIncrefFunc,
+			"_hiwire_int": hiwireIncrefFunc,
+			"_hiwire_int16array": hiwireInt16ArrayFunc,
+			"_hiwire_int32array": hiwireInt16ArrayFunc,
+			"_hiwire_int8array": hiwireInt16ArrayFunc,
+			"_hiwire_is_function": hiwireIncrefFunc,
+			"_hiwire_is_on_wasm_heap": hiwireIncrefFunc,
+			"_hiwire_is_typedarray": hiwireIncrefFunc,
+			"_hiwire_less_than": hiwireEqualFunc,
+			"_hiwire_less_than_equal": hiwireEqualFunc,
+			"_hiwire_new": hiwireNewFunc,
+			"_hiwire_next": hiwireGetBoolFunc,
+			"_hiwire_nonzero": hiwireGetBoolFunc,
+			"_hiwire_not_equal": hiwireEqualFunc,
+			"_hiwire_object": hiwireObjectFunc,
+			"_hiwire_push_array": hiwirePushArrayFunc,
+			"_hiwire_push_object_pair": hiwirePushObjectPairFunc,
+			"_hiwire_set_member_obj": hiwirePushObjectPairFunc,
+			"_hiwire_set_member_string": hiwirePushObjectPairFunc,
+			"_hiwire_setup": hiwireSetupFunc,
 			"_hiwire_string_ascii": lockFunc,
 			"_hiwire_string_ucs1": lockFunc,
 			"_hiwire_string_ucs2": lockFunc,
