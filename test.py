@@ -518,13 +518,22 @@ def main():
     timerThread.start()
 
     # general setup
-    if not args.reuse_config:
-        if os.path.exists(OLDIR):
-            try:
-                run(['./ol', 'kill', '-p='+OLDIR])
-            except:
-                print('could not kill cluster')
-            run(['rm', '-rf', OLDIR])
+    if not args.reuse_config and os.path.exists(OLDIR):
+        run(['rm', '-rf', OLDIR])
+
+    try:
+        run(['./ol', 'kill', '-p='+OLDIR])
+        print("stopped existing worker")
+    except Exception as e:
+        print('could not kill existing worker: %s' % str(e))
+
+    if args.reuse_config and os.path.exists(OLDIR):
+        # Make sure the pid file is gone even if the previous worker crashed
+        try:
+            run(['rm', '-rf', '%s/worker' % OLDIR])
+        except:
+            pass
+    else:
         run(['./ol', 'new', '-p='+OLDIR])
 
     # run tests with various configs

@@ -573,7 +573,7 @@ func (f *LambdaFunc) Kill() {
 //
 // 1. Sandbox.Pause/Unpause: discard Sandbox, create new one to handle request
 // 2. Sandbox.Create/Channel: discard Sandbox, propagate HTTP 500 to client
-// 3. Error inside Sandbox: simply propagate whatever occured to client (TODO: restart Sandbox)
+// 3. Error inside Sandbox: simply propagate whatever occurred to the client (TODO: restart Sandbox)
 func (linst *LambdaInstance) Task() {
 	f := linst.lfunc
 
