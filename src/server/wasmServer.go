@@ -112,6 +112,17 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 		},
 	)
 
+	_abortFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes()),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			log.Fatal("Got abort")
+
+			result := make([]wasmer.Value, 0)
+			return result, nil
+		},
+	)
+
 	abortFunc := wasmer.NewFunction(
 		server.store,
 		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32), wasmer.NewValueTypes()),
@@ -145,7 +156,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	getTimeFunc := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			result := make([]wasmer.Value, 0)
 			return result, nil
@@ -154,7 +165,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	cxaAllocateExceptionFunc := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			result := make([]wasmer.Value, 0)
 			return result, nil
@@ -163,7 +174,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	cxaBeginCatchFunc := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			result := make([]wasmer.Value, 0)
 			return result, nil
@@ -172,7 +183,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	cxaRethrowPrimaryExceptionFunc := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32), wasmer.NewValueTypes()),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			result := make([]wasmer.Value, 0)
 			return result, nil
@@ -190,7 +201,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	cxaPureVirtualFunc := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes()),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			result := make([]wasmer.Value, 0)
 			return result, nil
@@ -199,7 +210,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	cxaThrowFunc := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32, wasmer.I32), wasmer.NewValueTypes()),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			result := make([]wasmer.Value, 0)
 			return result, nil
@@ -216,7 +227,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	cxaIncrementExceptionRefcountFunc := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32), wasmer.NewValueTypes()),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -224,7 +235,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	cxaDecrementExceptionRefcountFunc := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32), wasmer.NewValueTypes()),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -232,7 +243,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	jsToPythonFunc := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -254,9 +265,226 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 		},
 	)
 
+	waitFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32, wasmer.I32, wasmer.I32), wasmer.NewValueTypes()),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	waitFdFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32, wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
 	lockFunc := wasmer.NewFunction(
 		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32), wasmer.NewValueTypes()),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	clockFunc := wasmer.NewFunction(
+		server.store,
 		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	endpwentFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes()),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	execvFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	execveFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	forkFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	fpathconfFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	gaiStrerrorFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	getEnvFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	getAddrInfoFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32, wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	getHostByAddrFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	clockGetResFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	chrootFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	confstrFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	dlcloseFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	dlerrorFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	dlopenFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	dlsymFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	emscriptenAsmConstFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	emscriptenExitWithLiveRuntimeFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes()),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	emscriptenGetHeapSizeFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	emscriptenLongjmpFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes()),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	emscriptenMemcpyBigFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	emscriptenResizeHeapFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+
+	alarmFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	clockGetTimeFunc := wasmer.NewFunction(
+		server.store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -288,7 +516,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	mapFileFunc := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -296,7 +524,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	setErrnoFunc := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32), wasmer.NewValueTypes()),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -304,7 +532,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall10Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -312,7 +540,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall12Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -320,7 +548,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall14Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -328,7 +556,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall15Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -336,7 +564,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall20Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -344,7 +572,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall102Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -352,7 +580,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall114Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -360,7 +588,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall118Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -368,7 +596,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall121Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -376,7 +604,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall122Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -384,7 +612,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall125Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -392,7 +620,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall132Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -400,7 +628,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall133Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -408,7 +636,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall140Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -416,7 +644,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall142Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -424,7 +652,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall144Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -432,7 +660,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall145Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -440,7 +668,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall147Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -448,7 +676,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall148Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -456,7 +684,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall150Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -464,7 +692,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall151Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -472,7 +700,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall152Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -480,7 +708,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall153Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -488,7 +716,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall163Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -496,7 +724,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall168Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -504,7 +732,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall180Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -512,7 +740,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall181Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -520,7 +748,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall183Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -528,7 +756,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall191Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -536,7 +764,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall192Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -544,7 +772,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall193Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -552,7 +780,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall194Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -560,7 +788,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall195Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -568,7 +796,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall196Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -576,7 +804,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall197Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -584,7 +812,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall198Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -592,7 +820,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall199Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -600,7 +828,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 
 	syscall200Func := wasmer.NewFunction(
 		server.store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -733,41 +961,41 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 			"___map_file": mapFileFunc,
 			"___lock": lockFunc,
 			"___unlock": lockFunc,
-			"___wait": lockFunc,
-			"___wasi_fd_write": lockFunc,
+			"___wait": waitFunc,
+			"___wasi_fd_write": waitFdFunc,
 			"__exit": lockFunc,
 			"__memory_base": lockFunc,
 			"__table_base": lockFunc,
-			"_abort": lockFunc,
-			"_alarm": lockFunc,
-			"_chroot": lockFunc,
-			"_clock": lockFunc,
-			"_clock_getres": lockFunc,
-			"_clock_gettime": lockFunc,
-			"_clock_settime": lockFunc,
-			"_confstr": lockFunc,
-			"_dlclose": lockFunc,
-			"_dlerror": lockFunc,
-			"_dlopen": lockFunc,
-			"_dlsym": lockFunc,
-			"_emscripten_asm_const_i": lockFunc,
-			"_emscripten_exit_with_live_runtime": lockFunc,
-			"_emscripten_get_heap_size": lockFunc,
-			"_emscripten_longjmp": lockFunc,
-			"_emscripten_memcpy_big": lockFunc,
-			"_emscripten_resize_heap": lockFunc,
-			"_endpwent": lockFunc,
-			"_execv": lockFunc,
-			"_execve": lockFunc,
+			"_abort": _abortFunc,
+			"_alarm": alarmFunc,
+			"_chroot": chrootFunc,
+			"_clock": clockFunc,
+			"_clock_getres": clockGetResFunc,
+			"_clock_gettime": clockGetTimeFunc,
+			"_clock_settime": clockGetResFunc,
+			"_confstr": confstrFunc,
+			"_dlclose": dlcloseFunc,
+			"_dlerror": dlerrorFunc,
+			"_dlopen": dlopenFunc,
+			"_dlsym": dlsymFunc,
+			"_emscripten_asm_const_i": emscriptenAsmConstFunc,
+			"_emscripten_exit_with_live_runtime": emscriptenExitWithLiveRuntimeFunc,
+			"_emscripten_get_heap_size": emscriptenGetHeapSizeFunc,
+			"_emscripten_longjmp": emscriptenLongjmpFunc,
+			"_emscripten_memcpy_big": emscriptenMemcpyBigFunc,
+			"_emscripten_resize_heap": emscriptenResizeHeapFunc,
+			"_endpwent": endpwentFunc,
+			"_execv": execvFunc,
+			"_execve": execveFunc,
 			"_exit": lockFunc,
-			"_fexecve": lockFunc,
-			"_fork": lockFunc,
-			"_fpathconf": lockFunc,
-			"_gai_strerror": lockFunc,
-			"_getaddrinfo": lockFunc,
-			"_getenv": lockFunc,
-			"_gethostbyaddr": lockFunc,
-			"_gethostbyname": lockFunc,
+			"_fexecve": execveFunc,
+			"_fork": forkFunc,
+			"_fpathconf": fpathconfFunc,
+			"_gai_strerror": gaiStrerrorFunc,
+			"_getaddrinfo": getAddrInfoFunc,
+			"_getenv": getEnvFunc,
+			"_gethostbyaddr": getHostByAddrFunc,
+			"_gethostbyname": gaiStrerrorFunc,
 			"_getitimer": lockFunc,
 			"_getloadavg": lockFunc,
 			"_getnameinfo": lockFunc,
@@ -917,9 +1145,7 @@ func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args [
 			"_wait4": strftimeFunc,
 			"_waitid": strftimeFunc,
 			"_waitpid": strftimeFunc,
-
 			"abortOnCannotGrowMemory": strftimeFunc,
-
 			"___libc_current_sigrtmin": libcCurrentSigrtminFunc,
 			"___libc_current_sigrtmax": libcCurrentSigrtmaxFunc,
 			"___js2python": jsToPythonFunc,
