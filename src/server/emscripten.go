@@ -456,6 +456,14 @@ func makeEmscriptenBindings(store *wasmer.Store) (*wasmer.ImportObject) {
 		},
 	)
 
+	pthreadExitFunc := wasmer.NewFunction(
+		store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32), wasmer.NewValueTypes()),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
 	hiwireObjectFunc := wasmer.NewFunction(
 		store,
 		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
@@ -735,6 +743,214 @@ func makeEmscriptenBindings(store *wasmer.Store) (*wasmer.ImportObject) {
 		},
 	)
 
+	pthreadCondInitFunc := wasmer.NewFunction(
+		store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	pthreadCondTimedWaitFunc := wasmer.NewFunction(
+		store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	pthreadCondWaitFunc := wasmer.NewFunction(
+		store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	pthreadCreateFunc := wasmer.NewFunction(
+		store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32, wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	pthreadDetachFunc := wasmer.NewFunction(
+		store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	pthreadEqualFunc := wasmer.NewFunction(
+		store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	pthreadMutexAttrDestroyFunc := wasmer.NewFunction(
+		store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	pthreadMutexAttrInitFunc := wasmer.NewFunction(
+		store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	pthreadSigmaskFunc := wasmer.NewFunction(
+		store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	putenvFunc := wasmer.NewFunction(
+		store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	pyimportInitFunc := wasmer.NewFunction(
+		store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	pyproxyNewFunc := wasmer.NewFunction(
+		store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	runpythonFinalizeJsFunc := wasmer.NewFunction(
+		store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	setEnvFunc := wasmer.NewFunction(
+		store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	siginterruptFunc := wasmer.NewFunction(
+		store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	sigPendingFunc := wasmer.NewFunction(
+		store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	strftimeFunc := wasmer.NewFunction(
+		store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32, wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	strftimeLFunc := wasmer.NewFunction(
+		store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32, wasmer.I32, wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	setGroupsFunc := wasmer.NewFunction(
+		store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	sysconfFunc := wasmer.NewFunction(
+		store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	usleepFunc := wasmer.NewFunction(
+		store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	wait3Func := wasmer.NewFunction(
+		store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	wait4Func := wasmer.NewFunction(
+		store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32, wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	waitIdFunc := wasmer.NewFunction(
+		store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32, wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+	
+	utimesFunc := wasmer.NewFunction(
+		store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	setPwentFunc := wasmer.NewFunction(
+		store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes()),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
 	posixSpawnFileActionsAddCloseFunc := wasmer.NewFunction(
 		store,
 		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
@@ -827,14 +1043,6 @@ func makeEmscriptenBindings(store *wasmer.Store) (*wasmer.ImportObject) {
 	killFunc := wasmer.NewFunction(
 		store,
 		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.I32, wasmer.I32), wasmer.NewValueTypes(wasmer.I32)),
-		func(args []wasmer.Value) ([]wasmer.Value, error) {
-			panic("Not implemented yet")
-		},
-	)
-
-	strftimeFunc := wasmer.NewFunction(
-		store,
-		wasmer.NewFunctionType(wasmer.NewValueTypes(), wasmer.NewValueTypes(wasmer.I32)),
 		func(args []wasmer.Value) ([]wasmer.Value, error) {
 			panic("Not implemented yet")
 		},
@@ -1160,20 +1368,68 @@ func makeEmscriptenBindings(store *wasmer.Store) (*wasmer.ImportObject) {
 		},
 	)
 
+	f64remFunc := wasmer.NewFunction(
+		store,
+		wasmer.NewFunctionType(wasmer.NewValueTypes(wasmer.F64, wasmer.F64), wasmer.NewValueTypes(wasmer.F64)),
+		func(args []wasmer.Value) ([]wasmer.Value, error) {
+			panic("Not implemented yet")
+		},
+	)
+
+	memoryBase := wasmer.NewGlobal(
+		store,
+		wasmer.NewGlobalType(wasmer.NewValueType(wasmer.I32), wasmer.IMMUTABLE),
+		wasmer.NewI32(0),
+	)
+
+	tableBase := wasmer.NewGlobal(
+		store,
+		wasmer.NewGlobalType(wasmer.NewValueType(wasmer.I32), wasmer.IMMUTABLE),
+		wasmer.NewI32(0),
+	)
+	
+	tempDoublePtr := wasmer.NewGlobal(
+		store,
+		wasmer.NewGlobalType(wasmer.NewValueType(wasmer.I32), wasmer.IMMUTABLE),
+		wasmer.NewI32(0),
+	)
+
+	dynamicTopPtr := wasmer.NewGlobal(
+		store,
+		wasmer.NewGlobalType(wasmer.NewValueType(wasmer.I32), wasmer.IMMUTABLE),
+		wasmer.NewI32(0),
+	)
+
+	notANumber := wasmer.NewGlobal(
+		store,
+		wasmer.NewGlobalType(wasmer.NewValueType(wasmer.F64), wasmer.IMMUTABLE),
+		wasmer.NewF64(0.0),
+	)
+
+	memlimits, _ := wasmer.NewLimits(160, 512)
+
+	memory := wasmer.NewMemory(
+		store, wasmer.NewMemoryType(memlimits),
+	)
+
+/*FIXME	table := wasmer.NewTable(
+		store, wasmer.NewMemoryType(memlimits),
+	)*/
+
 	importObject := wasmer.NewImportObject()
 
 	importObject.Register(
 		"asm2wasm",
 		map[string]wasmer.IntoExtern{
-			"f64-rem": strftimeFunc,
+			"f64-rem": f64remFunc,
 		},
 	)
 
 	importObject.Register(
 		"global",
 		map[string]wasmer.IntoExtern{
-			"NaN": strftimeFunc,
-			"Infinity": strftimeFunc,
+			"NaN": notANumber,
+			"Infinity": notANumber,
 		},
 	)
 
@@ -1290,8 +1546,8 @@ func makeEmscriptenBindings(store *wasmer.Store) (*wasmer.ImportObject) {
 			"___wait": waitFunc,
 			"___wasi_fd_write": waitFdFunc,
 			"__exit": lockFunc,
-			"__memory_base": lockFunc,
-			"__table_base": lockFunc,
+			"__memory_base": memoryBase,
+			"__table_base": tableBase,
 			"_abort": _abortFunc,
 			"_alarm": alarmFunc,
 			"_chroot": chrootFunc,
@@ -1422,56 +1678,56 @@ func makeEmscriptenBindings(store *wasmer.Store) (*wasmer.ImportObject) {
 			"_pthread_cleanup_pop": pthreadCleanupPopFunc,
 			"_pthread_cleanup_push": pthreadCleanupPushFunc,
 			"_pthread_cond_destroy": pthreadAttrDestroyFunc,
-			"_pthread_cond_init": pthreadAttrDestroyFunc,
+			"_pthread_cond_init": pthreadCondInitFunc,
 			"_pthread_cond_signal": pthreadAttrDestroyFunc,
-			"_pthread_cond_timedwait": pthreadAttrDestroyFunc,
-			"_pthread_cond_wait": pthreadAttrDestroyFunc,
+			"_pthread_cond_timedwait": pthreadCondTimedWaitFunc,
+			"_pthread_cond_wait": pthreadCondWaitFunc,
 			"_pthread_condattr_init": pthreadAttrDestroyFunc,
-			"_pthread_condattr_setclock": pthreadAttrDestroyFunc,
-			"_pthread_create": pthreadAttrDestroyFunc,
-			"_pthread_detach": pthreadAttrDestroyFunc,
-			"_pthread_equal": pthreadAttrDestroyFunc,
-			"_pthread_exit": pthreadAttrDestroyFunc,
-			"_pthread_join": pthreadAttrDestroyFunc,
-			"_pthread_mutexattr_destroy": killFunc,
-			"_pthread_mutexattr_init": killFunc,
-			"_pthread_mutexattr_settype": killFunc,
-			"_pthread_setcancelstate": killFunc,
-			"_pthread_sigmask": killFunc,
-			"_putenv": killFunc,
-			"_pyimport_init": killFunc,
-			"_pyproxy_init": killFunc,
-			"_pyproxy_new": killFunc,
-			"_pyproxy_use": killFunc,
-			"_raise": killFunc,
-			"_runpython_finalize_js": killFunc,
-			"_runpython_init_js": killFunc,
-			"_sched_yield": killFunc,
-			"_setenv": killFunc,
-			"_setgroups": killFunc,
-			"_setitimer": killFunc,
-			"_setpwent": killFunc,
-			"_sigemptyset": killFunc,
-			"_sigfillset": killFunc,
-			"_siginterrupt": killFunc,
-			"_sigismember": killFunc,
-			"_signal": killFunc,
-			"_sigpending": killFunc,
+			"_pthread_condattr_setclock": pthreadCondWaitFunc,
+			"_pthread_create": pthreadCreateFunc,
+			"_pthread_detach": pthreadDetachFunc,
+			"_pthread_equal": pthreadEqualFunc,
+			"_pthread_exit": pthreadExitFunc,
+			"_pthread_join": pthreadEqualFunc,
+			"_pthread_mutexattr_destroy": pthreadMutexAttrDestroyFunc,
+			"_pthread_mutexattr_init": pthreadMutexAttrInitFunc,
+			"_pthread_mutexattr_settype": pthreadEqualFunc,
+			"_pthread_setcancelstate": pthreadEqualFunc,
+			"_pthread_sigmask": pthreadSigmaskFunc,
+			"_putenv": putenvFunc,
+			"_pyimport_init": pyimportInitFunc,
+			"_pyproxy_init": pyimportInitFunc,
+			"_pyproxy_new": pyproxyNewFunc,
+			"_pyproxy_use": pyproxyNewFunc,
+			"_raise": pyproxyNewFunc,
+			"_runpython_finalize_js": runpythonFinalizeJsFunc,
+			"_runpython_init_js": runpythonFinalizeJsFunc,
+			"_sched_yield": runpythonFinalizeJsFunc,
+			"_setenv": setEnvFunc,
+			"_setgroups": setGroupsFunc,
+			"_setitimer": setEnvFunc,
+			"_setpwent": setPwentFunc,
+			"_sigemptyset": pyproxyNewFunc,
+			"_sigfillset": pyproxyNewFunc,
+			"_siginterrupt": siginterruptFunc,
+			"_sigismember": siginterruptFunc,
+			"_signal": siginterruptFunc,
+			"_sigpending": sigPendingFunc,
 			"_strftime": strftimeFunc,
-			"_strftime_l": strftimeFunc,
-			"_sysconf": strftimeFunc,
-			"_system": strftimeFunc,
-			"_time": strftimeFunc,
-			"_times": strftimeFunc,
-			"_unsetenv": strftimeFunc,
-			"_usleep": strftimeFunc,
-			"_utimes": strftimeFunc,
-			"_wait": strftimeFunc,
-			"_wait3": strftimeFunc,
-			"_wait4": strftimeFunc,
-			"_waitid": strftimeFunc,
-			"_waitpid": strftimeFunc,
-			"abortOnCannotGrowMemory": strftimeFunc,
+			"_strftime_l": strftimeLFunc,
+			"_sysconf": sysconfFunc,
+			"_system": sysconfFunc,
+			"_time": sysconfFunc,
+			"_times": sysconfFunc,
+			"_unsetenv": sysconfFunc,
+			"_usleep": usleepFunc,
+			"_utimes": utimesFunc,
+			"_wait": usleepFunc,
+			"_wait3": wait3Func,
+			"_wait4": wait4Func,
+			"_waitid": waitIdFunc,
+			"_waitpid": wait3Func,
+			"abortOnCannotGrowMemory": usleepFunc,
 			"___libc_current_sigrtmin": libcCurrentSigrtminFunc,
 			"___libc_current_sigrtmax": libcCurrentSigrtmaxFunc,
 			"___js2python": jsToPythonFunc,
@@ -1489,14 +1745,14 @@ func makeEmscriptenBindings(store *wasmer.Store) (*wasmer.ImportObject) {
 			"___cxa_increment_exception_refcount": cxaIncrementExceptionRefcountFunc,
 			"getTempRet0": getTempRet0,
 			"setTempRet0": setTempRet0,
-			"DYNAMICTOP_PTR": setTempRet0,
-			"gb": setTempRet0,
-			"fb": setTempRet0,
-			"STACKTOP": setTempRet0,
-			"STACK_MAX": setTempRet0,
-			"memory": setTempRet0,
+			"DYNAMICTOP_PTR": dynamicTopPtr,
+			"gb": dynamicTopPtr,
+			"fb": dynamicTopPtr,
+			"STACKTOP": dynamicTopPtr,
+			"STACK_MAX": dynamicTopPtr,
+			"memory": memory,
 			"table": setTempRet0,
-			"tempDoublePtr": setTempRet0,
+			"tempDoublePtr": tempDoublePtr,
 			"invoke_ii": invokeIiFunc,
 			"invoke_iii": invokeIiiFunc,
 			"invoke_iiii": invokeIiiiFunc,

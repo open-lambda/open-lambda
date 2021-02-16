@@ -10,8 +10,12 @@ LAMBDA_FILES = $(shell find lambda)
 .PHONY: test-all
 .PHONY: clean
 .PHONY: dependencies
+.PHONY: wasm
 
 all: dependencies ol imgs/lambda
+
+wasm:
+	cd wasm-programs && cargo build --release
 
 imgs/lambda: $(LAMBDA_FILES)
 	${MAKE} -C lambda

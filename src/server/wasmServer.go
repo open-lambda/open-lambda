@@ -18,6 +18,52 @@ type WasmServer struct {
 }
 
 func (server *WasmServer) RunLambda(w http.ResponseWriter, rsrc []string, args []byte) error {
+	if len(rsrc) == 2 && rsrc[0] == "py" {
+		return server.RunPyodide(w, rsrc[1], args)
+	} else if len(rsrc) == 1 {
+		return server.RunNative(w, rsrc[0], args)
+	} else {
+		log.Fatal(fmt.Sprintf("Got unexpected program name: %s", rsrc))
+		return nil
+	}
+}
+
+func (server *WasmServer) RunNative(w http.ResponseWriter, progName string, args []byte) error {
+	wasmBytes, err := ioutil.ReadFile(fmt.Sprintf("test-registry.wasm/%s.wasm", progName))
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// TODO cache the module
+	module, err := wasmer.NewModule(server.store, wasmBytes)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	importObject := wasmer.NewImportObject()
+	instance, err := wasmer.NewInstance(module, importObject)
+
+	if err == nil {
+		log.Printf("Loaded and compiled wasm code")
+	} else {
+		log.Fatal(err)
+		return err
+	}
+
+	wasmFunc, _ := instance.Exports.GetFunction("f")
+
+	if err != nil {
+		return err
+	}
+
+	wasmFunc()
+
+	return nil
+}
+
+func (server *WasmServer) RunPyodide(w http.ResponseWriter, rsrc string, args []byte) error {
 	wasmBytes, err := ioutil.ReadFile("test-registry.wasm/pyodide.asm.wasm")
 
 	if err != nil {
