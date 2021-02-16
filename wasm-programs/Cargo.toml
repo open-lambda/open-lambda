@@ -1,15 +1,5 @@
-[package]
-name = "open-lambda-wasm"
-version = "0.1.0"
-authors = ["Kai Mast <kaimast@cs.wisc.edu>"]
-edition = "2018"
-
-[dependencies]
-serde_json = "1"
-
-[lib]
-path = "lib/lib.rs"
-
-[[bin]]
-name="numpy15"
-path="numpy15/main.rs"
+[workspace]
+members = [
+    "lib",
+    "numpy15"
+]

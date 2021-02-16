@@ -1,4 +1,5 @@
 PWD = $(shell pwd)
+WASM_TARGET = wasm32-unknown-unknown
 
 GO = go
 OL_DIR = $(abspath ./src)
@@ -15,7 +16,8 @@ LAMBDA_FILES = $(shell find lambda)
 all: dependencies ol imgs/lambda
 
 wasm:
-	cd wasm-programs && cargo build --release
+	cd wasm-programs && cargo build --release --target $(WASM_TARGET)
+	cp wasm-programs/target/$(WASM_TARGET)/release/*.wasm test-registry.wasm/
 
 imgs/lambda: $(LAMBDA_FILES)
 	${MAKE} -C lambda
