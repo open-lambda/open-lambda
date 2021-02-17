@@ -1,5 +1,5 @@
 [workspace]
 members = [
     "lib",
-    "numpy15"
+    "numpy"
 ]

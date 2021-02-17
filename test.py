@@ -221,6 +221,28 @@ def install_tests():
 
 
 @test
+def wasm_numpy_test():
+    r = post("run/numpy", [1, 2])
+    if r.status_code != 200:
+        raise Exception("STATUS %d: %s" % (r.status_code, r.text))
+    j = r.json()
+    assert j['result'] == 3
+
+    r = post("run/numpy", [[1, 2], [3, 4]])
+    if r.status_code != 200:
+        raise Exception("STATUS %d: %s" % (r.status_code, r.text))
+    j = r.json()
+    assert j['result'] == 10
+
+    r = post("run/numpy", [[[1, 2], [3, 4]], [[1, 2], [3, 4]]])
+    if r.status_code != 200:
+        raise Exception("STATUS %d: %s" % (r.status_code, r.text))
+    j = r.json()
+    assert j['result'] == 20
+
+
+
+@test
 def numpy_test():
     # try adding the nums in a few different matrixes.  Also make sure
     # we can have two different numpy versions co-existing.
@@ -487,7 +509,7 @@ def run_tests(server_modes):
 
         with TestConf(server_mode="wasm", registry=test_reg):
             ping_test()
-            numpy_test()
+            wasm_numpy_test()
 
 def main():
     global OLDIR

@@ -59,6 +59,8 @@
 src/vendor
 
 ol
+ol-wasm
 
 test-registry.wasm/*.wasm
 wasm-programs/target/
+wasm-worker/target/

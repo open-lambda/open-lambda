@@ -1,0 +1,13 @@
+[package]
+name = "wasm-worker"
+version = "0.1.0"
+authors = ["Kai Mast <kaimast@cs.wisc.edu>"]
+edition = "2018"
+
+[dependencies]
+tokio = { version="1", features=["net", "rt-multi-thread", "macros"] }
+hyper = { version="0.14", features=["server", "http1", "runtime"] }
+wasmer = { version="1", use-default-features="false", features=["compiler"] }
+wasmer-compiler-llvm = { version="1" }
+wasmer-engine-native = { version="1" }
+pretty_env_logger = { version="0.4" }
