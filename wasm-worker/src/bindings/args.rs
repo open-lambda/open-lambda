@@ -51,8 +51,8 @@ fn ol_set_result(env: &ArgData, buf_ptr: WasmPtr<u8, Array>, buf_len: u32) {
     *result = Some(vec);
 }
 
-pub fn get_imports(store: &Store, args: Vec<u8>) -> Exports {
-    let arg_data = ArgData{ args: Arc::new(args), result: Arc::new(Mutex::new(None)), memory: Default::default() };
+pub fn get_imports(store: &Store, args: Vec<u8>, result: Arc<Mutex<Option<Vec<u8>>>>) -> Exports {
+    let arg_data = ArgData{ args: Arc::new(args), result, memory: Default::default() };
 
     let mut ns = Exports::new();
     ns.insert("ol_set_result", Function::new_native_with_env(&store, arg_data.clone(), ol_set_result));

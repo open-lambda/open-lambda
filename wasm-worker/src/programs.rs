@@ -46,8 +46,9 @@ impl ProgramManager {
         Self{ store, programs }
     }
 
-    pub async fn get_program(&self, name: &str) -> Arc<Program> {
-        let e = self.programs.entry(String::from(name)).or_insert(ProgramHandle::empty());
+    pub async fn get_program(&self, name: String) -> Arc<Program> {
+        let path = format!("./test-registry.wasm/{}.wasm", name);
+        let e = self.programs.entry(name).or_insert(ProgramHandle::empty());
 
         let mut state = e.value().state.lock().await;
 
@@ -69,9 +70,7 @@ impl ProgramManager {
         drop(state);
 
         // Load and compile
-        let path = format!("test-registry.wasm/{}", name);
-
-        match Module::from_file(&*self.store, path) {
+        match Module::from_file(&*self.store, &path) {
             Ok(m) => {
                 let p = Arc::new(Program{
                     module: Arc::new(m),
@@ -82,9 +81,11 @@ impl ProgramManager {
                 *state = ProgramState::Loaded(p.clone());
                 e.value().condition.notify_all(state);
 
+                log::info!("Loaded new program `{}`", path);
+
                 p
             },
-            Err(e) => panic!("Failed to compile wasm: {:?}", e)
+            Err(e) => panic!("Failed to compile wasm `{}`: {:?}", path, e)
         }
     }
 }

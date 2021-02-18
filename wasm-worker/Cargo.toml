@@ -6,7 +6,8 @@ edition = "2018"
 
 [dependencies]
 tokio = { version="1", features=["net", "rt-multi-thread", "macros"] }
-hyper = { version="0.14", features=["server", "http1", "runtime"] }
+hyper = { version="0.14", features=["server", "http1", "runtime", "stream"] }
+futures-util = { version="0.3" }
 wasmer = { version="1", default-features=false, features=["compiler"] }
 wasmer-compiler-llvm = { version="1" }
 wasmer-engine-native = { version="1" }

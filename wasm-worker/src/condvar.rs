@@ -23,6 +23,7 @@ impl Condvar {
         mutex.lock().await
     }
 
+    #[allow(dead_code)]
     pub fn notify_one<'a, T>(&self, lock: MutexGuard<'a, T>) {
         let count = self.wait_count.load(atomic::Ordering::SeqCst);
 

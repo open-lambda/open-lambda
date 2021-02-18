@@ -2,6 +2,8 @@
 
 import argparse
 import os, sys, json, time, requests, copy, traceback, tempfile, threading, subprocess
+
+from time import sleep
 from collections import OrderedDict
 from subprocess import Popen
 from multiprocessing import Pool
@@ -79,6 +81,7 @@ def test(fn):
         try:
             # setup worker
             worker = Popen(['./ol-wasm'])
+            sleep(0.1)
 
             # run test/benchmark
             test_t0 = time.time()

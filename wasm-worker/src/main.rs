@@ -1,7 +1,9 @@
 #![feature(async_closure) ]
 
 use hyper::service::{make_service_fn, service_fn};
-use hyper::{Body, Method, Response, Result, Server, StatusCode};
+use hyper::{Body, Method, Request, Response, Result, Server, StatusCode};
+
+use futures_util::stream::StreamExt;
 
 mod programs;
 use programs::ProgramManager;
@@ -26,17 +28,37 @@ async fn main() {
     unsafe{ PROGRAM_MGR = Some(programs) };
 
     let make_service = make_service_fn(async move |_| {
-        Ok::<_, hyper::Error>(service_fn(async move |req| {
-            let path = req.uri().path().split("/").filter(|x| x.len() > 0).collect::<Vec<&str>>();
-            let args = vec![]; //FIXME
+        Ok::<_, hyper::Error>(service_fn(async move |req: Request<Body>| {
+            log::trace!("Got new request: {:?}", req);
+
+            let mut path = req.uri().path().split("/").filter(|x| x.len() > 0)
+                .map(|x| String::from(x)).collect::<Vec<String>>();
+
+            let mut args = Vec::new();
+            let method = req.method().clone();
+
+            let mut body = req.into_body();
+
+            while let Some(chunk) = body.next().await {
+                match chunk {
+                    Ok(c) => {
+                        let mut chunk = c.to_vec();
+                        args.append(&mut chunk);
+                    }
+                    Err(e) => {
+                        panic!("Got error: {:?}", e);
+                    }
+                }
+            }
+
             let program_mgr = unsafe{ PROGRAM_MGR.as_ref().unwrap().clone() };
 
-            if req.method() == &Method::POST && path.len() == 2 && path[0] == "run" {
-                execute_function(path[1], args, program_mgr).await
-            } else if req.method() == &Method::GET && path.len() == 1 && path[0] == "status" {
+            if method == &Method::POST && path.len() == 2 && path[0] == "run" {
+                execute_function(path.pop().unwrap(), args, program_mgr).await
+            } else if  method == &Method::GET && path.len() == 1 && path[0] == "status" {
                 get_status().await
             } else {
-                panic!("Got unexpected request: {:?}", req);
+                panic!("Got unexpected request to {:?} (Method: {:?})", path, method);
             }
         }))
     });
@@ -50,21 +72,30 @@ async fn main() {
     }
 }
 
-async fn execute_function(name: &str, args: Vec<u8>, program_mgr: Arc<ProgramManager>) -> Result<Response<Body>> {
-    let response = Response::builder()
-        .status(StatusCode::OK)
-        .body(Body::empty())
-        .unwrap();
-
+async fn execute_function(name: String, args: Vec<u8>, program_mgr: Arc<ProgramManager>) -> Result<Response<Body>> {
     let program = program_mgr.get_program(name).await;
+    let result = Arc::new(std::sync::Mutex::new(None));
 
     let mut import_object = ImportObject::new();
-    import_object.register("open_lambda", get_imports(&*program.store, args));
+    import_object.register("open_lambda", get_imports(&*program.store, args, result.clone()));
 
     let instance = Instance::new(&program.module, &import_object).unwrap();
 
     let lambda = instance.exports.get_function("f").expect("No function `f` defined");
     lambda.call(&[]).expect("Lambda function failed");
+
+    let result = result.lock().unwrap().take();
+
+    let body = if let Some(result) = result {
+        result.into()
+    } else {
+        Body::empty()
+    };
+
+    let response = Response::builder()
+        .status(StatusCode::OK)
+        .body(body)
+        .unwrap();
 
     Ok(response)
 }
