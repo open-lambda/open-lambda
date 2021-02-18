@@ -61,15 +61,14 @@ fn f() {
         return;
     };
 
-    let tensor = if let Ok((shape, vec)) = parse_array(args) {
-        let din = ndarray::IxDyn(&shape);
-        let mut array = ndarray::ArrayD::default(din);
-
-        array.as_slice_mut().unwrap().clone_from_slice(&vec[..]);
-        array
+    let (shape, vec) = if let Ok((shape, vec)) = parse_array(args) {
+        (shape, vec)
     } else {
         return;
     };
+
+    let din = ndarray::IxDyn(&shape);
+    let tensor = ndarray::ArrayView::from_shape(din, &vec[..]).unwrap();
 
     let result = Number::from_f64(tensor.sum()).unwrap();
     let result = Value::Number(result);
