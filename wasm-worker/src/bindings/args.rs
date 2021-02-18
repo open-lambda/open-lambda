@@ -12,11 +12,11 @@ struct ArgData {
     result: Arc<Mutex<Option<Vec<u8>>>>,
 }
 
-fn ol_get_args_len(env: &ArgData) -> u32 {
+fn get_args_len(env: &ArgData) -> u32 {
     env.args.len() as u32
 }
 
-fn ol_get_args(env: &ArgData, buf_ptr: WasmPtr<u8, Array>, buf_len: u32) -> u32 {
+fn get_args(env: &ArgData, buf_ptr: WasmPtr<u8, Array>, buf_len: u32) -> u32 {
     if env.args.len() > (buf_len as usize) {
         panic!("buffer too small");
     }
@@ -31,7 +31,9 @@ fn ol_get_args(env: &ArgData, buf_ptr: WasmPtr<u8, Array>, buf_len: u32) -> u32 
     env.args.len() as u32
 }
 
-fn ol_set_result(env: &ArgData, buf_ptr: WasmPtr<u8, Array>, buf_len: u32) {
+fn set_result(env: &ArgData, buf_ptr: WasmPtr<u8, Array>, buf_len: u32) {
+    log::debug!("Got result of size {}", buf_len);
+
     let mut result = env.result.lock().unwrap();
 
     if result.is_some() {
@@ -44,7 +46,7 @@ fn ol_set_result(env: &ArgData, buf_ptr: WasmPtr<u8, Array>, buf_len: u32) {
         let buf_ptr = memory.view::<u8>().as_ptr().add( buf_ptr.offset() as usize ) as *mut u8;
         std::slice::from_raw_parts(buf_ptr, buf_len as usize)
     };
-    
+
     let mut vec = Vec::new();
     vec.extend_from_slice(buf_slice);
 
@@ -55,9 +57,9 @@ pub fn get_imports(store: &Store, args: Vec<u8>, result: Arc<Mutex<Option<Vec<u8
     let arg_data = ArgData{ args: Arc::new(args), result, memory: Default::default() };
 
     let mut ns = Exports::new();
-    ns.insert("ol_set_result", Function::new_native_with_env(&store, arg_data.clone(), ol_set_result));
-    ns.insert("ol_get_args_len", Function::new_native_with_env(&store, arg_data.clone(), ol_get_args_len));
-    ns.insert("ol_get_args", Function::new_native_with_env(&store, arg_data.clone(), ol_get_args));
+    ns.insert("ol_set_result", Function::new_native_with_env(&store, arg_data.clone(), set_result));
+    ns.insert("ol_get_args_len", Function::new_native_with_env(&store, arg_data.clone(), get_args_len));
+    ns.insert("ol_get_args", Function::new_native_with_env(&store, arg_data.clone(), get_args));
 
     ns
 }

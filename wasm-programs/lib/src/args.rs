@@ -1,6 +1,6 @@
 pub use serde_json as json;
 
-#[link(wasm_import_module="open_lambda")]
+#[link(wasm_import_module="ol_args")]
 extern "C" {
     fn ol_get_args_len() -> u32;
     fn ol_get_args(buf_ptr: *mut u8, buf_len: u32) -> u32;
@@ -26,9 +26,11 @@ pub fn get_args() -> Option<json::Value> {
     Some(jvalue)
 }
 
-pub fn set_result(value: json::Value) {
-    let val_str = value.as_str().unwrap();
+pub fn set_result(value: &json::Value) -> Result<(), json::Error> {
+    let val_str = serde_json::to_string(value)?;
     let val_len = val_str.len();
 
     unsafe{ ol_set_result(val_str.as_bytes().as_ptr(), val_len as u32) };
+
+    Ok(())
 }

@@ -21,8 +21,8 @@ wasm-worker:
 	cp wasm-worker/target/release/wasm-worker ./ol-wasm
 
 wasm-programs:
-	cd wasm-programs && cargo build --release --target $(wasm_target)
-	cp wasm-programs/target/$(wasm_target)/release/*.wasm test-registry.wasm/
+	cd wasm-programs && cargo build --release --target $(WASM_TARGET)
+	cp wasm-programs/target/$(WASM_TARGET)/release/*.wasm test-registry.wasm/
 
 imgs/lambda: $(LAMBDA_FILES)
 	${MAKE} -C lambda
