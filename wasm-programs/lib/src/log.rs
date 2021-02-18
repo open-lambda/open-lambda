@@ -17,7 +17,7 @@ macro_rules! info {
 macro_rules! debug {
     ($($args:tt)*) => {
         let s = std::format!("{}", std::format_args!($($args)*) );
-        unsafe{ opend_lambda::ol_log_debug(s.as_str().as_ptr(), s.len() as u32); }
+        unsafe{ open_lambda::ol_log_debug(s.as_str().as_ptr(), s.len() as u32); }
     }
 }
 
