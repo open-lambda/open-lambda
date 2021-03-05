@@ -27,15 +27,15 @@ type SOCKServer struct {
 	sandboxes sync.Map
 }
 
-func (s *SOCKServer) GetSandbox(id string) sandbox.Sandbox {
-	val, ok := s.sandboxes.Load(id)
+func (server *SOCKServer) GetSandbox(id string) sandbox.Sandbox {
+	val, ok := server.sandboxes.Load(id)
 	if !ok {
 		return nil
 	}
 	return val.(sandbox.Sandbox)
 }
 
-func (s *SOCKServer) Create(w http.ResponseWriter, rsrc []string, args map[string]interface{}) error {
+func (server *SOCKServer) Create(w http.ResponseWriter, rsrc []string, args map[string]interface{}) error {
 	var leaf bool
 	if b, ok := args["leaf"]; !ok || b.(bool) {
 		leaf = true
@@ -48,7 +48,7 @@ func (s *SOCKServer) Create(w http.ResponseWriter, rsrc []string, args map[strin
 
 	var parent sandbox.Sandbox = nil
 	if p, ok := args["parent"]; ok && p != "" {
-		parent = s.GetSandbox(p.(string))
+		parent = server.GetSandbox(p.(string))
 		if parent == nil {
 			return fmt.Errorf("no sandbox found with ID '%s'", p)
 		}
@@ -67,14 +67,17 @@ func (s *SOCKServer) Create(w http.ResponseWriter, rsrc []string, args map[strin
 	if err := os.MkdirAll(scratchDir, 0777); err != nil {
 		panic(err)
 	}
+
 	meta := &sandbox.SandboxMeta{
 		Installs: packages,
 	}
-	c, err := s.sbPool.Create(parent, leaf, codeDir, scratchDir, meta)
+
+	c, err := server.sbPool.Create(parent, leaf, codeDir, scratchDir, meta)
 	if err != nil {
 		return err
 	}
-	s.sandboxes.Store(c.ID(), c)
+
+	server.sandboxes.Store(c.ID(), c)
 	log.Printf("Save ID '%s' to map\n", c.ID())
 
 	w.Write([]byte(fmt.Sprintf("%v\n", c.ID())))

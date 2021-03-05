@@ -1,10 +1,8 @@
 /*
-
 Provides the mechanism for managing a given SOCK container-based lambda.
 
 Must be paired with a SOCKContainerManager which handles pulling handler
 code, initializing containers, etc.
-
 */
 
 package sandbox
@@ -37,9 +35,9 @@ type SOCKContainer struct {
 	cg               *Cgroup
 
 	// 1 for self, plus 1 for each child (we can't release memory
-	// until all descendents are dead, because they share the
+	// until all descendants are dead, because they share the
 	// pages of this Container, but this is the only container
-	// charged
+	// charged)
 	cgRefCount int
 
 	parent   Sandbox

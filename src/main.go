@@ -58,7 +58,7 @@ func initOLDir(olPath string) (err error) {
 
 	// create a base directory to run sock handlers
 	base := common.Conf.SOCK_base_path
-	fmt.Printf("Create lambda base at %v (may take several minutes)\n", base)
+	fmt.Printf("Creating lambda base at %v (may take several minutes)\n", base)
 	err = dutil.DumpDockerImage(client, "lambda", base)
 	if err != nil {
 		return err

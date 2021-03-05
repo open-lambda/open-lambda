@@ -14,7 +14,7 @@ LAMBDA_FILES = $(shell find lambda)
 .PHONY: wasm-programs
 .PHONY: wasm-worker
 
-all: dependencies ol imgs/lambda
+all: dependencies ol imgs/lambda wasm-worker wasm-programs
 
 wasm-worker:
 	cd wasm-worker && cargo build --release
