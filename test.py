@@ -433,13 +433,13 @@ def recursive_kill(depth):
     assert destroys == depth
 
 
-def run_tests(server_modes):
+def run_tests(sandboxes):
     test_reg = os.path.abspath("test-registry")
 
-    for server_mode in server_modes:
-        print("Testing backend '%s'" % server_mode)
+    for sandbox in sandboxes:
+        print("Testing backend '%s'" % sandbox)
 
-        with TestConf(server_mode=server_mode):
+        with TestConf(sandbox=sandbox):
             with TestConf(registry=test_reg):
                 ping_test()
 
@@ -474,7 +474,7 @@ def run_tests(server_modes):
                 call_each_once(lambda_count=100, alloc_mb=1)
                 call_each_once(lambda_count=1000, alloc_mb=10)
 
-    if "sock" in server_modes:
+    if "sock" in sandboxes:
         print("Testing SOCK directly (without lambdas)")
 
         with TestConf(server_mode="sock", mem_pool_mb=500):
@@ -490,7 +490,7 @@ def main():
 
     parser = argparse.ArgumentParser(description='Run tests for OpenLambda')
     parser.add_argument('--reuse_config', action="store_true")
-    parser.add_argument('--server_modes', type=str, default="lambda,sock")
+    parser.add_argument('--sandboxes', type=str, default="lambda,sock")
     parser.add_argument('--test_filter', type=str, default="")
     parser.add_argument('--ol_dir', type=str, default="test-dir")
 
@@ -501,9 +501,9 @@ def main():
 
     print("Test filter is '%s' and OL directory is '%s'" % (TEST_FILTER, OLDIR))
 
-    server_modes = [name for name in args.server_modes.split(",") if name != '']
+    sandboxes = [name for name in args.sandboxes.split(",") if name != '']
 
-    if len(server_modes) == 0:
+    if len(sandboxes) == 0:
         raise RuntimeError("No server modes specified")
 
     t0 = time.time()
@@ -535,7 +535,7 @@ def main():
 
     # run tests with various configs
     with TestConf(limits={"installer_mem_mb": 250}):
-        run_tests(server_modes)
+        run_tests(sandboxes)
 
     # save test results
     passed = len([t for t in results["runs"] if t["pass"]])
