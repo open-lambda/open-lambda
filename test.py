@@ -220,27 +220,6 @@ def install_tests():
             assert(installs == 6)
 
 
-@test
-def wasm_numpy_test():
-    r = post("run/numpy", [1, 2])
-    if r.status_code != 200:
-        raise Exception("STATUS %d: %s" % (r.status_code, r.text))
-    j = r.json()
-    assert j['result'] == 3
-
-    r = post("run/numpy", [[1, 2], [3, 4]])
-    if r.status_code != 200:
-        raise Exception("STATUS %d: %s" % (r.status_code, r.text))
-    j = r.json()
-    assert j['result'] == 10
-
-    r = post("run/numpy", [[[1, 2], [3, 4]], [[1, 2], [3, 4]]])
-    if r.status_code != 200:
-        raise Exception("STATUS %d: %s" % (r.status_code, r.text))
-    j = r.json()
-    assert j['result'] == 20
-
-
 
 @test
 def numpy_test():
@@ -504,20 +483,13 @@ def run_tests(server_modes):
             sock_churn(baseline=32, procs=1, seconds=10, fork=True)
             sock_churn(baseline=32, procs=15, seconds=10, fork=True)
 
-    if "wasm" in server_modes:
-        print("Testing WASM")
-
-        with TestConf(server_mode="wasm", registry=test_reg):
-            ping_test()
-            wasm_numpy_test()
-
 def main():
     global OLDIR
     global TEST_FILTER
 
     parser = argparse.ArgumentParser(description='Run tests for OpenLambda')
     parser.add_argument('--reuse_config', action="store_true")
-    parser.add_argument('--server_modes', type=str, default="lambda,sock,wasm")
+    parser.add_argument('--server_modes', type=str, default="lambda,sock")
     parser.add_argument('--test_filter', type=str, default="")
     parser.add_argument('--ol_dir', type=str, default="test-dir")
 
