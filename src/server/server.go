@@ -94,8 +94,6 @@ func Main() (err error) {
 		s, err = NewLambdaServer()
 	case "sock":
 		s, err = NewSOCKServer()
-	case "wasm":
-		s, err = NewWasmServer()
 	default:
 		return fmt.Errorf("unknown Server_mode %s", common.Conf.Server_mode)
 	}

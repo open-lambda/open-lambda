@@ -436,42 +436,43 @@ def recursive_kill(depth):
 def run_tests(server_modes):
     test_reg = os.path.abspath("test-registry")
 
-    if "lambda" in server_modes:
-        print("Testing regular lambdas")
+    for server_mode in server_modes:
+        print("Testing backend '%s'" % server_mode)
 
-        with TestConf(registry=test_reg):
-            ping_test()
+        with TestConf(server_mode=server_mode):
+            with TestConf(registry=test_reg):
+                ping_test()
 
-            # do smoke tests under various configs
-            with TestConf(features={"import_cache": False}):
-                install_tests()
-            with TestConf(mem_pool_mb=500):
-                install_tests()
-            with TestConf(sandbox="docker", features={"import_cache": False}):
-                install_tests()
+                # do smoke tests under various configs
+                with TestConf(features={"import_cache": False}):
+                    install_tests()
+                with TestConf(mem_pool_mb=500):
+                    install_tests()
+                with TestConf(sandbox="docker", features={"import_cache": False}):
+                    install_tests()
 
-            # test resource limits
-            fork_bomb()
-            max_mem_alloc()
+                # test resource limits
+                fork_bomb()
+                max_mem_alloc()
 
-            # numpy pip install needs a larger mem cap
-            with TestConf(mem_pool_mb=500):
-                numpy_test()
+                # numpy pip install needs a larger mem cap
+                with TestConf(mem_pool_mb=500):
+                    numpy_test()
 
-        # make sure code updates get pulled within the cache time
-        with tempfile.TemporaryDirectory() as reg_dir:
-            with TestConf(registry=reg_dir, registry_cache_ms=3000):
-                update_code()
+            # make sure code updates get pulled within the cache time
+            with tempfile.TemporaryDirectory() as reg_dir:
+                with TestConf(registry=reg_dir, registry_cache_ms=3000):
+                    update_code()
 
-        # test heavy load
-        with TestConf(registry=test_reg):
-            stress_one_lambda(procs=1, seconds=15)
-            stress_one_lambda(procs=2, seconds=15)
-            stress_one_lambda(procs=8, seconds=15)
+            # test heavy load
+            with TestConf(registry=test_reg):
+                stress_one_lambda(procs=1, seconds=15)
+                stress_one_lambda(procs=2, seconds=15)
+                stress_one_lambda(procs=8, seconds=15)
 
-        with TestConf(features={"reuse_cgroups": True}):
-            call_each_once(lambda_count=100, alloc_mb=1)
-            call_each_once(lambda_count=1000, alloc_mb=10)
+            with TestConf(features={"reuse_cgroups": True}):
+                call_each_once(lambda_count=100, alloc_mb=1)
+                call_each_once(lambda_count=1000, alloc_mb=10)
 
     if "sock" in server_modes:
         print("Testing SOCK directly (without lambdas)")
