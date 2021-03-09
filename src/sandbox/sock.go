@@ -46,20 +46,20 @@ type SOCKContainer struct {
 
 // add ID to each log message so we know which logs correspond to
 // which containers
-func (c *SOCKContainer) printf(format string, args ...interface{}) {
+func (container *SOCKContainer) printf(format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
-	log.Printf("%s [SOCK %s]", strings.TrimRight(msg, "\n"), c.id)
+	log.Printf("%s [SOCK %s]", strings.TrimRight(msg, "\n"), container.id)
 }
 
-func (c *SOCKContainer) ID() string {
-	return c.id
+func (container *SOCKContainer) ID() string {
+	return container.id
 }
 
-func (c *SOCKContainer) HttpProxy() (p *httputil.ReverseProxy, err error) {
+func (container *SOCKContainer) HttpProxy() (p *httputil.ReverseProxy, err error) {
 	// note, for debugging, you can directly contact the sock file like this:
 	// curl -XPOST --unix-socket ./ol.sock http:/test -d '{"some": "data"}'
 
-	sockPath := filepath.Join(c.scratchDir, "ol.sock")
+	sockPath := filepath.Join(container.scratchDir, "ol.sock")
 	if len(sockPath) > 108 {
 		return nil, fmt.Errorf("socket path length cannot exceed 108 characters (try moving cluster closer to the root directory")
 	}
@@ -79,11 +79,11 @@ func (c *SOCKContainer) HttpProxy() (p *httputil.ReverseProxy, err error) {
 	return proxy, nil
 }
 
-func (c *SOCKContainer) freshProc() (err error) {
+func (container *SOCKContainer) freshProc() (err error) {
 	// get FDs to cgroups
 	cgFiles := make([]*os.File, len(cgroupList))
 	for i, name := range cgroupList {
-		path := c.cg.Path(name, "tasks")
+		path := container.cg.Path(name, "tasks")
 		fd, err := syscall.Open(path, syscall.O_WRONLY, 0600)
 		if err != nil {
 			return err
@@ -93,7 +93,7 @@ func (c *SOCKContainer) freshProc() (err error) {
 	}
 
 	cmd := exec.Command(
-		"chroot", c.containerRootDir, "python3", "-u",
+		"chroot", container.containerRootDir, "python3", "-u",
 		"/runtimes/python/server.py", "/host/bootstrap.py", strconv.Itoa(len(cgFiles)),
 	)
 	cmd.Env = []string{} // for security, DO NOT expose host env to guest
@@ -112,27 +112,27 @@ func (c *SOCKContainer) freshProc() (err error) {
 	return cmd.Wait()
 }
 
-func (c *SOCKContainer) populateRoot() (err error) {
+func (container *SOCKContainer) populateRoot() (err error) {
 	// FILE SYSTEM STEP 1: mount base
 	baseDir := common.Conf.SOCK_base_path
-	if err := syscall.Mount(baseDir, c.containerRootDir, "", common.BIND, ""); err != nil {
-		return fmt.Errorf("failed to bind root dir: %s -> %s :: %v\n", baseDir, c.containerRootDir, err)
+	if err := syscall.Mount(baseDir, container.containerRootDir, "", common.BIND, ""); err != nil {
+		return fmt.Errorf("failed to bind root dir: %s -> %s :: %v\n", baseDir, container.containerRootDir, err)
 	}
 
-	if err := syscall.Mount("none", c.containerRootDir, "", common.BIND_RO, ""); err != nil {
-		return fmt.Errorf("failed to bind root dir RO: %s :: %v\n", c.containerRootDir, err)
+	if err := syscall.Mount("none", container.containerRootDir, "", common.BIND_RO, ""); err != nil {
+		return fmt.Errorf("failed to bind root dir RO: %s :: %v\n", container.containerRootDir, err)
 	}
 
-	if err := syscall.Mount("none", c.containerRootDir, "", common.PRIVATE, ""); err != nil {
+	if err := syscall.Mount("none", container.containerRootDir, "", common.PRIVATE, ""); err != nil {
 		return fmt.Errorf("failed to make root dir private :: %v", err)
 	}
 
 	// FILE SYSTEM STEP 2: code dir
-	if c.codeDir != "" {
-		sbCodeDir := filepath.Join(c.containerRootDir, "handler")
+	if container.codeDir != "" {
+		sbCodeDir := filepath.Join(container.containerRootDir, "handler")
 
-		if err := syscall.Mount(c.codeDir, sbCodeDir, "", common.BIND, ""); err != nil {
-			return fmt.Errorf("failed to bind code dir: %s -> %s :: %v", c.codeDir, sbCodeDir, err.Error())
+		if err := syscall.Mount(container.codeDir, sbCodeDir, "", common.BIND, ""); err != nil {
+			return fmt.Errorf("failed to bind code dir: %s -> %s :: %v", container.codeDir, sbCodeDir, err.Error())
 		}
 
 		if err := syscall.Mount("none", sbCodeDir, "", common.BIND_RO, ""); err != nil {
@@ -141,18 +141,18 @@ func (c *SOCKContainer) populateRoot() (err error) {
 	}
 
 	// FILE SYSTEM STEP 3: scratch dir (tmp and communication)
-	tmpDir := filepath.Join(c.scratchDir, "tmp")
+	tmpDir := filepath.Join(container.scratchDir, "tmp")
 	if err := os.Mkdir(tmpDir, 0777); err != nil && !os.IsExist(err) {
 		return err
 	}
 
-	sbScratchDir := filepath.Join(c.containerRootDir, "host")
-	if err := syscall.Mount(c.scratchDir, sbScratchDir, "", common.BIND, ""); err != nil {
+	sbScratchDir := filepath.Join(container.containerRootDir, "host")
+	if err := syscall.Mount(container.scratchDir, sbScratchDir, "", common.BIND, ""); err != nil {
 		return fmt.Errorf("failed to bind scratch dir: %v", err.Error())
 	}
 
 	// TODO: cheaper to handle with symlink in lambda image?
-	sbTmpDir := filepath.Join(c.containerRootDir, "tmp")
+	sbTmpDir := filepath.Join(container.containerRootDir, "tmp")
 	if err := syscall.Mount(tmpDir, sbTmpDir, "", common.BIND, ""); err != nil {
 		return fmt.Errorf("failed to bind tmp dir: %v", err.Error())
 	}
@@ -160,8 +160,8 @@ func (c *SOCKContainer) populateRoot() (err error) {
 	return nil
 }
 
-func (c *SOCKContainer) Pause() (err error) {
-	if err := c.cg.Pause(); err != nil {
+func (container *SOCKContainer) Pause() (err error) {
+	if err := container.cg.Pause(); err != nil {
 		return err
 	}
 
@@ -169,81 +169,81 @@ func (c *SOCKContainer) Pause() (err error) {
 		// drop mem limit to what is used when we're paused, because
 		// we know the Sandbox cannot allocate more when it's not
 		// schedulable.  Then release saved memory back to the pool.
-		oldLimit := c.cg.getMemLimitMB()
-		newLimit := c.cg.getMemUsageMB() + 1
+		oldLimit := container.cg.getMemLimitMB()
+		newLimit := container.cg.getMemUsageMB() + 1
 		if newLimit < oldLimit {
-			c.cg.setMemLimitMB(newLimit)
-			c.pool.mem.adjustAvailableMB(oldLimit - newLimit)
+			container.cg.setMemLimitMB(newLimit)
+			container.pool.mem.adjustAvailableMB(oldLimit - newLimit)
 		}
 	}
 	return nil
 }
 
-func (c *SOCKContainer) Unpause() (err error) {
+func (container *SOCKContainer) Unpause() (err error) {
 	if common.Conf.Features.Downsize_paused_mem {
 		// block until we have enough mem to upsize limit to the
 		// normal size before unpausing
-		oldLimit := c.cg.getMemLimitMB()
+		oldLimit := container.cg.getMemLimitMB()
 		newLimit := common.Conf.Limits.Mem_mb
-		c.pool.mem.adjustAvailableMB(oldLimit - newLimit)
-		c.cg.setMemLimitMB(newLimit)
+		container.pool.mem.adjustAvailableMB(oldLimit - newLimit)
+		container.cg.setMemLimitMB(newLimit)
 	}
 
-	return c.cg.Unpause()
+	return container.cg.Unpause()
 }
 
-func (c *SOCKContainer) Destroy() {
-	if err := c.cg.Pause(); err != nil {
+func (container *SOCKContainer) Destroy() {
+	if err := container.cg.Pause(); err != nil {
 		panic(err)
 	}
 
-	c.decCgRefCount()
+	container.decCgRefCount()
 }
 
 // when the count goes to zero, it means (a) this container and (b)
 // all it's descendents are destroyed. Thus, it's safe to release it's
 // cgroups, and return the memory allocation to the memPool
-func (c *SOCKContainer) decCgRefCount() {
-	c.cgRefCount -= 1
-	c.printf("CG ref count decremented to %d", c.cgRefCount)
-	if c.cgRefCount < 0 {
+func (container *SOCKContainer) decCgRefCount() {
+	container.cgRefCount -= 1
+	container.printf("CG ref count decremented to %d", container.cgRefCount)
+	if container.cgRefCount < 0 {
 		panic("cgRefCount should not be able to go negative")
 	}
 
 	// release all resources when we have no more dependents...
-	if c.cgRefCount == 0 {
+	if container.cgRefCount == 0 {
 		t := common.T0("Destroy()/kill-procs")
-		if c.cg != nil {
-			pids := c.cg.KillAllProcs()
-			c.printf("killed PIDs %v in CG\n", pids)
+		if container.cg != nil {
+			pids := container.cg.KillAllProcs()
+			container.printf("killed PIDs %v in CG\n", pids)
 		}
 		t.T1()
 
-		c.printf("unmount and remove dirs\n")
+		container.printf("unmount and remove dirs\n")
 		t = common.T0("Destroy()/detach-root")
-		if err := syscall.Unmount(c.containerRootDir, syscall.MNT_DETACH); err != nil {
-			c.printf("unmount root dir %s failed :: %v\n", c.containerRootDir, err)
+		if err := syscall.Unmount(container.containerRootDir, syscall.MNT_DETACH); err != nil {
+			container.printf("unmount root dir %s failed :: %v\n", container.containerRootDir, err)
 		}
 		t.T1()
 
 		t = common.T0("Destroy()/remove-root")
-		if err := os.RemoveAll(c.containerRootDir); err != nil {
-			c.printf("remove root dir %s failed :: %v\n", c.containerRootDir, err)
+		if err := os.RemoveAll(container.containerRootDir); err != nil {
+			container.printf("remove root dir %s failed :: %v\n", container.containerRootDir, err)
 		}
 		t.T1()
 
-		c.cg.Release()
-		c.pool.mem.adjustAvailableMB(c.cg.getMemLimitMB())
+		container.cg.Release()
+		container.pool.mem.adjustAvailableMB(container.cg.getMemLimitMB())
 
-		if c.parent != nil {
-			c.parent.childExit(c)
+		if container.parent != nil {
+			container.parent.childExit(container)
 		}
 	}
 }
 
-func (c *SOCKContainer) childExit(child Sandbox) {
-	delete(c.children, child.ID())
-	c.decCgRefCount()
+func (container *SOCKContainer) childExit(child Sandbox) {
+	delete(container.children, child.ID())
+	container.decCgRefCount()
 }
 
 // fork a new process from the Zygote in c, relocate it to be the server in dst

@@ -490,7 +490,7 @@ def main():
 
     parser = argparse.ArgumentParser(description='Run tests for OpenLambda')
     parser.add_argument('--reuse_config', action="store_true")
-    parser.add_argument('--sandboxes', type=str, default="lambda,sock")
+    parser.add_argument('--sandboxes', type=str, default="docker,sock")
     parser.add_argument('--test_filter', type=str, default="")
     parser.add_argument('--ol_dir', type=str, default="test-dir")
 
