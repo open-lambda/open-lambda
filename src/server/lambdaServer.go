@@ -59,28 +59,11 @@ func (s *LambdaServer) RunLambda(w http.ResponseWriter, r *http.Request) {
 		urlParts := getUrlComponents(r)
 		if len(urlParts) == 2 {
 			img := urlParts[1]
-            rt_type := lambda.RT_PYTHON
-			s.lambdaMgr.Get(img, rt_type).Invoke(w, r)
-		} else if len(urlParts) == 3 {
-			rt_name := urlParts[1]
-			img := urlParts[2]
-			var rt_type lambda.RuntimeType
-
-			if rt_name == "py" {
-				rt_type = lambda.RT_PYTHON
-			} else if rt_name == "bin" {
-				rt_type = lambda.RT_BINARY
-			} else {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte("unknown runtime"))
-				return
-			}
-
-			s.lambdaMgr.Get(img, rt_type).Invoke(w, r)
-        } else {
+			s.lambdaMgr.Get(img).Invoke(w, r)
+		} else {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("expected invocation format: /run/<lambda-name>"))
-        }
+		}
 	}
 }
 

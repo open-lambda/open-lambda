@@ -41,7 +41,7 @@ type LambdaFunc struct {
 	lmgr *LambdaMgr
 	name string
 
-    rt_type RuntimeType
+	rt_type RuntimeType
 
 	// lambda code
 	lastPull *time.Time
@@ -143,7 +143,7 @@ func NewLambdaMgr() (res *LambdaMgr, err error) {
 }
 
 // Returns an existing instance (if there is one), or creates a new one
-func (mgr *LambdaMgr) Get(name string, rt_type RuntimeType) (f *LambdaFunc) {
+func (mgr *LambdaMgr) Get(name string) (f *LambdaFunc) {
 	mgr.mapMutex.Lock()
 	defer mgr.mapMutex.Unlock()
 
@@ -152,7 +152,6 @@ func (mgr *LambdaMgr) Get(name string, rt_type RuntimeType) (f *LambdaFunc) {
 	if f == nil {
 		f = &LambdaFunc{
 			lmgr:      mgr,
-            rt_type: rt_type,
 			name:      name,
 			funcChan:  make(chan *Invocation, 32),
 			instChan:  make(chan *Invocation, 32),
@@ -297,7 +296,7 @@ func parseMeta(codeDir string) (meta *sandbox.SandboxMeta, err error) {
 
 // if there is any error:
 // 1. we won't switch to the new code
-// 2. we won't update pull time (so well check for a fix next tim)
+// 2. we won't update pull time (so well check for a fix next time)
 func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 	// check if there is newer code, download it if necessary
 	now := time.Now()
@@ -309,7 +308,7 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 	}
 
 	// is there new code?
-	codeDir, err := f.lmgr.HandlerPuller.Pull(f.name, f.rt_type)
+	rt_type, codeDir, err := f.lmgr.HandlerPuller.Pull(f.name)
 	if err != nil {
 		return err
 	}
@@ -318,35 +317,41 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 		return nil
 	}
 
+	f.rt_type = rt_type
+
 	defer func() {
 		if err != nil {
 			if err := os.RemoveAll(codeDir); err != nil {
 				log.Printf("could not cleanup %s after failed pull", codeDir)
 			}
 
-			// we dirty this dir (e.g., by setting up
-			// symlinks to packages, so we want the
-			// HandlerPuller to give us a new one next
-			// time, even if the code hasn't changed
-			f.lmgr.HandlerPuller.Reset(f.name)
+			if rt_type == RT_PYTHON {
+				// we dirty this dir (e.g., by setting up
+				// symlinks to packages, so we want the
+				// HandlerPuller to give us a new one next
+				// time, even if the code hasn't changed
+				f.lmgr.HandlerPuller.Reset(f.name)
+			}
 		}
 	}()
 
-	// inspect new code for dependencies; if we can install
-	// everything necessary, start using new code
-	meta, err := parseMeta(codeDir)
-	if err != nil {
-		return err
-	}
+	if rt_type == RT_PYTHON {
+		// inspect new code for dependencies; if we can install
+		// everything necessary, start using new code
+		meta, err := parseMeta(codeDir)
+		if err != nil {
+			return err
+		}
 
-	meta.Installs, err = f.lmgr.PackagePuller.InstallRecursive(meta.Installs)
-	if err != nil {
-		return err
+		meta.Installs, err = f.lmgr.PackagePuller.InstallRecursive(meta.Installs)
+		if err != nil {
+			return err
+		}
+		f.lmgr.DepTracer.TraceFunction(codeDir, meta.Installs)
+		f.meta = meta
 	}
-	f.lmgr.DepTracer.TraceFunction(codeDir, meta.Installs)
 
 	f.codeDir = codeDir
-	f.meta = meta
 	f.lastPull = &now
 	return nil
 }
