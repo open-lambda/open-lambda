@@ -270,7 +270,7 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 	meta := &sandbox.SandboxMeta{
 		MemLimitMB: common.Conf.Limits.Installer_mem_mb,
 	}
-	sb, err := pp.sbPool.Create(nil, true, pp.pipLambda, scratchDir, meta)
+	sb, err := pp.sbPool.Create(nil, true, pp.pipLambda, scratchDir, meta, common.RT_PYTHON)
 	if err != nil {
 		return err
 	}

@@ -41,7 +41,7 @@ type LambdaFunc struct {
 	lmgr *LambdaMgr
 	name string
 
-	rt_type RuntimeType
+	rt_type common.RuntimeType
 
 	// lambda code
 	lastPull *time.Time
@@ -325,7 +325,7 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 				log.Printf("could not cleanup %s after failed pull", codeDir)
 			}
 
-			if rt_type == RT_PYTHON {
+			if rt_type == common.RT_PYTHON {
 				// we dirty this dir (e.g., by setting up
 				// symlinks to packages, so we want the
 				// HandlerPuller to give us a new one next
@@ -335,7 +335,7 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 		}
 	}()
 
-	if rt_type == RT_PYTHON {
+	if rt_type == common.RT_PYTHON {
 		// inspect new code for dependencies; if we can install
 		// everything necessary, start using new code
 		meta, err := parseMeta(codeDir)
@@ -625,7 +625,7 @@ func (linst *LambdaInstance) Task() {
 				scratchDir := f.lmgr.scratchDirs.Make(f.name)
 
 				// we don't specify parent SB, because ImportCache.Create chooses it for us
-				sb, err = f.lmgr.ImportCache.Create(f.lmgr.sbPool, true, linst.codeDir, scratchDir, linst.meta)
+				sb, err = f.lmgr.ImportCache.Create(f.lmgr.sbPool, true, linst.codeDir, scratchDir, linst.meta, f.rt_type)
 				if err != nil {
 					f.printf("failed to get Sandbox from import cache")
 					sb = nil
@@ -635,7 +635,7 @@ func (linst *LambdaInstance) Task() {
 			// import cache is either disabled or it failed
 			if sb == nil {
 				scratchDir := f.lmgr.scratchDirs.Make(f.name)
-				sb, err = f.lmgr.sbPool.Create(nil, true, linst.codeDir, scratchDir, linst.meta)
+				sb, err = f.lmgr.sbPool.Create(nil, true, linst.codeDir, scratchDir, linst.meta, f.rt_type)
 			}
 
 			if err != nil {

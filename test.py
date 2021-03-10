@@ -219,7 +219,11 @@ def install_tests():
         else:
             assert(installs == 6)
 
-
+@test
+def hello_rust():
+    r = post("run/hello-rust", [])
+    if r.status_code != 200:
+        raise Exception("STATUS %d: %s" % (r.status_code, r.text))
 
 @test
 def numpy_test():
@@ -442,6 +446,9 @@ def run_tests(sandboxes):
         with TestConf(sandbox=sandbox):
             with TestConf(registry=test_reg):
                 ping_test()
+
+                # test very basic rust program
+                hello_rust()
 
                 # do smoke tests under various configs
                 with TestConf(features={"import_cache": False}):

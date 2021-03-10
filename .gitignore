@@ -61,6 +61,8 @@ src/vendor
 ol
 ol-wasm
 
+*.bin
+
 test-registry.wasm/*.wasm
 wasm-programs/target/
 wasm-worker/target/

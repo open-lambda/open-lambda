@@ -16,13 +16,6 @@ import (
 	"github.com/open-lambda/open-lambda/ol/common"
 )
 
-type RuntimeType int
-
-const (
-    RT_PYTHON RuntimeType = iota
-    RT_BINARY = iota
-)
-
 var notFound404 = errors.New("file does not exist")
 
 // TODO: for web registries, support an HTTP-based access key
@@ -50,7 +43,7 @@ func (cp *HandlerPuller) isRemote() bool {
 	return strings.HasPrefix(cp.prefix, "http://") || strings.HasPrefix(cp.prefix, "https://")
 }
 
-func (cp *HandlerPuller) Pull(name string) (rt_type RuntimeType, targetDir string, err error) {
+func (cp *HandlerPuller) Pull(name string) (rt_type common.RuntimeType, targetDir string, err error) {
 	t := common.T0("pull-lambda")
 	defer t.T1()
 
@@ -67,6 +60,7 @@ func (cp *HandlerPuller) Pull(name string) (rt_type RuntimeType, targetDir strin
 		urls := []string{
 			cp.prefix + "/" + name + ".tar.gz",
 			cp.prefix + "/" + name + ".py",
+			cp.prefix + "/" + name + ".bin",
 		}
 
 		for i := 0; i < len(urls); i++ {
@@ -85,6 +79,7 @@ func (cp *HandlerPuller) Pull(name string) (rt_type RuntimeType, targetDir strin
 		paths := []string{
 			filepath.Join(cp.prefix, name) + ".tar.gz",
 			filepath.Join(cp.prefix, name) + ".py",
+			filepath.Join(cp.prefix, name) + ".bin",
 			filepath.Join(cp.prefix, name),
 		}
 
@@ -104,7 +99,7 @@ func (cp *HandlerPuller) Reset(name string) {
 	cp.dirCache.Delete(name)
 }
 
-func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type RuntimeType, targetDir string, err error) {
+func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type common.RuntimeType, targetDir string, err error) {
 	stat, err := os.Stat(src)
 	if err != nil {
 		return rt_type, "", err
@@ -122,9 +117,9 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type RuntimeT
 
 		// Figure out runtime type
 		if _, err := os.Stat(src+"/f.py"); !os.IsNotExist(err) {
-			rt_type = RT_PYTHON
+			rt_type = common.RT_PYTHON
 		} else if _, err := os.Stat(src+"/f.bin"); !os.IsNotExist(err) {
-			rt_type = RT_BINARY
+			rt_type = common.RT_BINARY
 		} else {
 			return rt_type, "", fmt.Errorf("Unknown runtime type")
 		}
@@ -154,14 +149,14 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type RuntimeT
 
 	if strings.HasSuffix(src, ".py") {
 		cmd := exec.Command("cp", src, filepath.Join(targetDir, "f.py"))
-		rt_type = RT_PYTHON
+		rt_type = common.RT_PYTHON
 		
 		if output, err := cmd.CombinedOutput(); err != nil {
 			return rt_type, "", fmt.Errorf("%s :: %s", err, string(output))
 		}
 	} else if strings.HasSuffix(src, ".bin") {
 		cmd := exec.Command("cp", src, filepath.Join(targetDir, "f.bin"))
-		rt_type = RT_PYTHON
+		rt_type = common.RT_PYTHON
 		
 		if output, err := cmd.CombinedOutput(); err != nil {
 			return rt_type, "", fmt.Errorf("%s :: %s", err, string(output))
@@ -174,9 +169,9 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type RuntimeT
 
 		// Figure out runtime type
 		if _, err := os.Stat(targetDir+"f.py"); !os.IsNotExist(err) {
-			rt_type = RT_PYTHON
+			rt_type = common.RT_PYTHON
 		} else if _, err := os.Stat(targetDir+"/f.bin"); !os.IsNotExist(err) {
-			rt_type = RT_BINARY
+			rt_type = common.RT_BINARY
 		} else {
 			return rt_type, "", fmt.Errorf("Found unknown runtime type or no code at all")
 		}
@@ -191,7 +186,7 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type RuntimeT
 	return rt_type, targetDir, nil
 }
 
-func (cp *HandlerPuller) pullRemoteFile(src, lambdaName string) (rt_type RuntimeType, targetDir string, err error) {
+func (cp *HandlerPuller) pullRemoteFile(src, lambdaName string) (rt_type common.RuntimeType, targetDir string, err error) {
 	// grab latest lambda code if it's changed (pass
 	// If-Modified-Since so this can be determined on server side
 	client := &http.Client{}

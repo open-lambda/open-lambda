@@ -13,6 +13,7 @@ LAMBDA_FILES = $(shell find lambda)
 .PHONY: dependencies
 .PHONY: wasm-programs
 .PHONY: wasm-worker
+.PHONY: test-dir
 
 all: dependencies ol imgs/lambda wasm-worker wasm-programs
 
@@ -28,6 +29,9 @@ imgs/lambda: $(LAMBDA_FILES)
 	${MAKE} -C lambda
 	sudo docker build -t lambda lambda
 	touch imgs/lambda
+
+test-dir:
+	cp lambda/runtimes/rust/target/release/open-lambda-runtime ./test-registry/hello-rust.bin
 
 ol: $(OL_GO_FILES)
 	cd $(OL_DIR) && $(GO) build -o ../ol

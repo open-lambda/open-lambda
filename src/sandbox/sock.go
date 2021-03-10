@@ -33,6 +33,7 @@ type SOCKContainer struct {
 	codeDir          string
 	scratchDir       string
 	cg               *Cgroup
+	rt_type          common.RuntimeType
 
 	// 1 for self, plus 1 for each child (we can't release memory
 	// until all descendants are dead, because they share the
@@ -53,6 +54,10 @@ func (container *SOCKContainer) printf(format string, args ...interface{}) {
 
 func (container *SOCKContainer) ID() string {
 	return container.id
+}
+
+func (c *SOCKContainer) GetRuntimeType() common.RuntimeType {
+	return c.rt_type
 }
 
 func (container *SOCKContainer) HttpProxy() (p *httputil.ReverseProxy, err error) {

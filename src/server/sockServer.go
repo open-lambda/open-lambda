@@ -68,11 +68,27 @@ func (server *SOCKServer) Create(w http.ResponseWriter, rsrc []string, args map[
 		panic(err)
 	}
 
+	rt_type := common.RT_PYTHON
+
+	if rt_name, ok := args["runtime"]; ok {
+		if rt_name == "python" {
+			rt_type = common.RT_PYTHON
+		} else if rt_name == "binary" {
+			rt_type = common.RT_BINARY
+		} else {
+			return fmt.Errorf("No such runtime `%s`", rt_name)
+		}
+	}
+
+	if parent != nil && parent.GetRuntimeType() != rt_type {
+		return fmt.Errorf("Parent and child have different runtimes")
+	}
+
 	meta := &sandbox.SandboxMeta{
 		Installs: packages,
 	}
 
-	c, err := server.sbPool.Create(parent, leaf, codeDir, scratchDir, meta)
+	c, err := server.sbPool.Create(parent, leaf, codeDir, scratchDir, meta, rt_type)
 	if err != nil {
 		return err
 	}

@@ -24,6 +24,7 @@ import (
 	"time"
 
 	docker "github.com/fsouza/go-dockerclient"
+	"github.com/open-lambda/open-lambda/ol/common"
 )
 
 // DockerContainer is a sandbox inside a docker container.
@@ -35,6 +36,7 @@ type DockerContainer struct {
 	client    *docker.Client
 	installed map[string]bool
 	meta      *SandboxMeta
+	rt_type   common.RuntimeType
 }
 
 type HandlerState int
@@ -248,6 +250,10 @@ func (c *DockerContainer) NSPid() string {
 
 func (c *DockerContainer) ID() string {
 	return c.host_id
+}
+
+func (c *DockerContainer) GetRuntimeType() common.RuntimeType {
+	return c.rt_type
 }
 
 func (c *DockerContainer) DockerID() string {
