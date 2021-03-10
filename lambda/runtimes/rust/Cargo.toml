@@ -1,0 +1,7 @@
+[package]
+name = "open-lambda-runtime"
+version = "0.1.0"
+authors = ["Kai Mast <kaimast@cs.wisc.edu>"]
+edition = "2018"
+
+[dependencies]

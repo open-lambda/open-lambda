@@ -16,6 +16,13 @@ import (
 	"github.com/open-lambda/open-lambda/ol/common"
 )
 
+type RuntimeType int
+
+const (
+    RT_PYTHON RuntimeType = iota
+    RT_BINARY = iota
+)
+
 var notFound404 = errors.New("file does not exist")
 
 // TODO: for web registries, support an HTTP-based access key
@@ -43,7 +50,7 @@ func (cp *HandlerPuller) isRemote() bool {
 	return strings.HasPrefix(cp.prefix, "http://") || strings.HasPrefix(cp.prefix, "https://")
 }
 
-func (cp *HandlerPuller) Pull(name string) (targetDir string, err error) {
+func (cp *HandlerPuller) Pull(name string, rt_type RuntimeType) (targetDir string, err error) {
 	t := common.T0("pull-lambda")
 	defer t.T1()
 

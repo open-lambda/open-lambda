@@ -5,6 +5,8 @@ import tornado.httpserver
 import tornado.netutil
 import ol
 
+from subprocess import call
+
 file_sock_path = "/host/ol.sock"
 file_sock = None
 
@@ -18,9 +20,8 @@ def recv_fds(sock, msglen, maxfds):
             fds.fromstring(cmsg_data[:len(cmsg_data) - (len(cmsg_data) % fds.itemsize)])
     return msg, list(fds)
 
-
 def web_server():
-    print("sock2.py: start web server on fd: %d" % file_sock.fileno())
+    print("server.py: start web server on fd: %d" % file_sock.fileno())
     sys.path.append('/handler')
 
     class SockFileHandler(tornado.web.RequestHandler):
@@ -57,7 +58,7 @@ def fork_server():
     global file_sock
 
     file_sock.setblocking(True)
-    print("sock2.py: start fork server on fd: %d" % file_sock.fileno())
+    print("server.py: start fork server on fd: %d" % file_sock.fileno())
 
     while True:
         client, info = file_sock.accept()
@@ -144,11 +145,11 @@ def main():
     global bootstrap_path
 
     if len(sys.argv) < 2:
-        print("Expected execution: chroot <path_to_root_fs> python3 sock2.py <path_to_bootstrap.py> [cgroup-count]")
+        print("Expected execution: chroot <path_to_root_fs> python3 server.py <path_to_bootstrap.py> [cgroup-count]")
         print("    cgroup-count: number of FDs (starting at 3) that refer to /sys/fs/cgroup/..../cgroup.procs files")
         sys.exit(1)
 
-    print('sock2.py: started new process with args: ' + " ".join(sys.argv))
+    print('server.py: started new process with args: ' + " ".join(sys.argv))
 
     bootstrap_path = sys.argv[1]
     cgroup_fds = 0
@@ -165,7 +166,7 @@ def main():
         fd = 3 + i
         f = os.fdopen(fd, "w")
         f.write(pid)
-        print('sock2.py: joined cgroup, close FD %d' % fd)
+        print('server.py: joined cgroup, close FD %d' % fd)
         f.close()
 
     start_container()

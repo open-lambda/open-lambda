@@ -41,6 +41,8 @@ type LambdaFunc struct {
 	lmgr *LambdaMgr
 	name string
 
+    rt_type RuntimeType
+
 	// lambda code
 	lastPull *time.Time
 	codeDir  string
@@ -141,7 +143,7 @@ func NewLambdaMgr() (res *LambdaMgr, err error) {
 }
 
 // Returns an existing instance (if there is one), or creates a new one
-func (mgr *LambdaMgr) Get(name string) (f *LambdaFunc) {
+func (mgr *LambdaMgr) Get(name string, rt_type RuntimeType) (f *LambdaFunc) {
 	mgr.mapMutex.Lock()
 	defer mgr.mapMutex.Unlock()
 
@@ -150,6 +152,7 @@ func (mgr *LambdaMgr) Get(name string) (f *LambdaFunc) {
 	if f == nil {
 		f = &LambdaFunc{
 			lmgr:      mgr,
+            rt_type: rt_type,
 			name:      name,
 			funcChan:  make(chan *Invocation, 32),
 			instChan:  make(chan *Invocation, 32),
@@ -306,7 +309,7 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 	}
 
 	// is there new code?
-	codeDir, err := f.lmgr.HandlerPuller.Pull(f.name)
+	codeDir, err := f.lmgr.HandlerPuller.Pull(f.name, f.rt_type)
 	if err != nil {
 		return err
 	}

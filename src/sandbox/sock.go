@@ -201,7 +201,7 @@ func (container *SOCKContainer) Destroy() {
 }
 
 // when the count goes to zero, it means (a) this container and (b)
-// all it's descendents are destroyed. Thus, it's safe to release it's
+// all it's descendants are destroyed. Thus, it's safe to release it's
 // cgroups, and return the memory allocation to the memPool
 func (container *SOCKContainer) decCgRefCount() {
 	container.cgRefCount -= 1
@@ -247,15 +247,15 @@ func (container *SOCKContainer) childExit(child Sandbox) {
 }
 
 // fork a new process from the Zygote in c, relocate it to be the server in dst
-func (c *SOCKContainer) fork(dst Sandbox) (err error) {
-	spareMB := c.cg.getMemLimitMB() - c.cg.getMemUsageMB()
+func (container *SOCKContainer) fork(dst Sandbox) (err error) {
+	spareMB := container.cg.getMemLimitMB() - container.cg.getMemUsageMB()
 	if spareMB < 3 {
 		return fmt.Errorf("only %vMB of spare memory in parent, rejecting fork request (need at least 3MB)", spareMB)
 	}
 
 	dstSock := dst.(*safeSandbox).Sandbox.(*SOCKContainer)
 
-	origPids, err := c.cg.GetPIDs()
+	origPids, err := container.cg.GetPIDs()
 	if err != nil {
 		return err
 	}
@@ -274,7 +274,7 @@ func (c *SOCKContainer) fork(dst Sandbox) (err error) {
 	defer memCG.Close()
 
 	t := common.T0("forkRequest")
-	err = c.forkRequest(fmt.Sprintf("%s/ol.sock", c.scratchDir), root, memCG)
+	err = container.forkRequest(fmt.Sprintf("%s/ol.sock", container.scratchDir), root, memCG)
 	if err != nil {
 		return err
 	}
@@ -288,7 +288,7 @@ func (c *SOCKContainer) fork(dst Sandbox) (err error) {
 	// great).
 	t = common.T0("move-to-cg-after-fork")
 	for {
-		currPids, err := c.cg.GetPIDs()
+		currPids, err := container.cg.GetPIDs()
 		if err != nil {
 			return err
 		}
@@ -304,7 +304,7 @@ func (c *SOCKContainer) fork(dst Sandbox) (err error) {
 				}
 			}
 			if !isOrig {
-				c.printf("move PID %v from CG %v to CG %v\n", pid, c.cg.Name, dstSock.cg.Name)
+				container.printf("move PID %v from CG %v to CG %v\n", pid, container.cg.Name, dstSock.cg.Name)
 				if err = dstSock.cg.AddPid(pid); err != nil {
 					return err
 				}
@@ -318,50 +318,50 @@ func (c *SOCKContainer) fork(dst Sandbox) (err error) {
 	}
 	t.T1()
 
-	c.children[dst.ID()] = dst
-	c.cgRefCount += 1
+	container.children[dst.ID()] = dst
+	container.cgRefCount += 1
 	return nil
 }
 
-func (c *SOCKContainer) Status(key SandboxStatus) (string, error) {
+func (container *SOCKContainer) Status(key SandboxStatus) (string, error) {
 	switch key {
 	case StatusMemFailures:
-		return strconv.FormatBool(c.cg.ReadInt("memory", "memory.failcnt") > 0), nil
+		return strconv.FormatBool(container.cg.ReadInt("memory", "memory.failcnt") > 0), nil
 	default:
 		return "", STATUS_UNSUPPORTED
 	}
 }
 
-func (c *SOCKContainer) Meta() *SandboxMeta {
-	return c.meta
+func (container *SOCKContainer) Meta() *SandboxMeta {
+	return container.meta
 }
 
-func (c *SOCKContainer) DebugString() string {
-	var s string = fmt.Sprintf("SOCK %s\n", c.ID())
+func (container *SOCKContainer) DebugString() string {
+	var s string = fmt.Sprintf("SOCK %s\n", container.ID())
 
-	s += fmt.Sprintf("ROOT DIR: %s\n", c.containerRootDir)
+	s += fmt.Sprintf("ROOT DIR: %s\n", container.containerRootDir)
 
-	s += fmt.Sprintf("HOST DIR: %s\n", c.scratchDir)
+	s += fmt.Sprintf("HOST DIR: %s\n", container.scratchDir)
 
-	if pids, err := c.cg.GetPIDs(); err == nil {
+	if pids, err := container.cg.GetPIDs(); err == nil {
 		s += fmt.Sprintf("CGROUP PIDS: %s\n", strings.Join(pids, ", "))
 	} else {
 		s += fmt.Sprintf("CGROUP PIDS: unknown (%s)\n", err)
 	}
 
-	s += fmt.Sprintf("CGROUPS: %s\n", c.cg.Path("<RESOURCE>", ""))
+	s += fmt.Sprintf("CGROUPS: %s\n", container.cg.Path("<RESOURCE>", ""))
 
-	if state, err := ioutil.ReadFile(c.cg.Path("freezer", "freezer.state")); err == nil {
+	if state, err := ioutil.ReadFile(container.cg.Path("freezer", "freezer.state")); err == nil {
 		s += fmt.Sprintf("FREEZE STATE: %s", state)
 	} else {
 		s += fmt.Sprintf("FREEZE STATE: unknown (%s)\n", err)
 	}
 
 	s += fmt.Sprintf("MEMORY USED: %d of %d MB\n",
-		c.cg.getMemUsageMB(), c.cg.getMemLimitMB())
+		container.cg.getMemUsageMB(), container.cg.getMemLimitMB())
 
 	s += fmt.Sprintf("MEMORY FAILURES: %d\n",
-		c.cg.ReadInt("memory", "memory.failcnt"))
+		container.cg.ReadInt("memory", "memory.failcnt"))
 
 	return s
 }

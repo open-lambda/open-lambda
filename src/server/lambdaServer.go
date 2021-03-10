@@ -57,13 +57,30 @@ func (s *LambdaServer) RunLambda(w http.ResponseWriter, r *http.Request) {
 		// components represent run[0]/<name_of_sandbox>[1]/<extra_things>...
 		// ergo we want [1] for name of sandbox
 		urlParts := getUrlComponents(r)
-		if len(urlParts) < 2 {
+		if len(urlParts) == 2 {
+			img := urlParts[1]
+            rt_type := lambda.RT_PYTHON
+			s.lambdaMgr.Get(img, rt_type).Invoke(w, r)
+		} else if len(urlParts) == 3 {
+			rt_name := urlParts[1]
+			img := urlParts[2]
+			var rt_type lambda.RuntimeType
+
+			if rt_name == "py" {
+				rt_type = lambda.RT_PYTHON
+			} else if rt_name == "bin" {
+				rt_type = lambda.RT_BINARY
+			} else {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("unknown runtime"))
+				return
+			}
+
+			s.lambdaMgr.Get(img, rt_type).Invoke(w, r)
+        } else {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("expected invocation format: /run/<lambda-name>"))
-		} else {
-			img := urlParts[1]
-			s.lambdaMgr.Get(img).Invoke(w, r)
-		}
+        }
 	}
 }
 

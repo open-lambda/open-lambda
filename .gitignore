@@ -64,3 +64,5 @@ ol-wasm
 test-registry.wasm/*.wasm
 wasm-programs/target/
 wasm-worker/target/
+
+lambda/runtimes/rust/target
