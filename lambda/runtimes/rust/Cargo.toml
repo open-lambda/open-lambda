@@ -5,3 +5,9 @@ authors = ["Kai Mast <kaimast@cs.wisc.edu>"]
 edition = "2018"
 
 [dependencies]
+tokio = { version="1", features=["net", "rt-multi-thread", "macros"] }
+hyper = { version="0.14", features=["server", "http1", "runtime", "stream"] }
+futures-util = { version="0.3" }
+pretty_env_logger = { version="0.4" }
+log = "0.4"
+dashmap = "4"

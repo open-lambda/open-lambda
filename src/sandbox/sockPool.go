@@ -80,6 +80,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 		cgRefCount:       1,
 		children:         make(map[string]Sandbox),
 		meta:             meta,
+		rt_type:          rt_type,
 	}
 	var c Sandbox = cSock
 
@@ -148,7 +149,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 		return nil, fmt.Errorf("Unsupported runtime")
 	}
 	
-		safe := newSafeSandbox(c)
+	safe := newSafeSandbox(c)
 	c = safe
 
 	// create new process in container (fresh, or forked from parent)

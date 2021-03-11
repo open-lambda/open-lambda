@@ -13,6 +13,9 @@ COPY runtimes/python /runtimes/python
 # Build python module in container to avoid depending on the host
 RUN cd /runtimes/python && python3 setup.py build_ext --inplace && mv ol.*.so ol.so
 
+RUN mkdir /runtimes/rust
+COPY runtimes/rust/target/release/open-lambda-runtime /runtimes/rust/
+
 # for Docker container engine
 COPY server.py /
 COPY spin /

@@ -250,6 +250,13 @@ def numpy_test():
     assert j['result'] == 20
     assert j['version'].startswith('1.15')
 
+    # use rust binary
+    r = post("run/numpy-rust", [1, 2])
+    if r.status_code != 200:
+        raise Exception("STATUS %d: %s" % (r.status_code, r.text))
+    j = r.json()
+    assert j['result'] == 3
+
     r = post("run/pandas", [[0, 1, 2], [3, 4, 5]])
     if r.status_code != 200:
         raise Exception("STATUS %d: %s" % (r.status_code, r.text))

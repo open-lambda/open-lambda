@@ -156,7 +156,7 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type common.R
 		}
 	} else if strings.HasSuffix(src, ".bin") {
 		cmd := exec.Command("cp", src, filepath.Join(targetDir, "f.bin"))
-		rt_type = common.RT_PYTHON
+		rt_type = common.RT_BINARY
 		
 		if output, err := cmd.CombinedOutput(); err != nil {
 			return rt_type, "", fmt.Errorf("%s :: %s", err, string(output))
