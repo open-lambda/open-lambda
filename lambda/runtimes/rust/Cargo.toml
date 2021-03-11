@@ -8,6 +8,7 @@ edition = "2018"
 tokio = { version="1", features=["net", "rt-multi-thread", "macros"] }
 hyper = { version="0.14", features=["server", "http1", "runtime", "stream"] }
 futures-util = { version="0.3" }
+tokio-stream = { version="0.1", features=["net"] }
 pretty_env_logger = { version="0.4" }
 log = "0.4"
 dashmap = "4"

@@ -7,11 +7,12 @@ use futures_util::stream::StreamExt;
 
 use std::process::Command;
 
+use tokio::net::UnixListener;
+use tokio_stream::wrappers::UnixListenerStream;
+
 #[tokio::main]
 async fn main() {
     pretty_env_logger::init();
-
-    let addr = "127.0.0.1:5000".parse().unwrap();
 
     let make_service = make_service_fn(async move |_| {
         Ok::<_, hyper::Error>(service_fn(async move |req: Request<Body>| {
@@ -42,9 +43,13 @@ async fn main() {
         }))
     });
 
-    let server = Server::bind(&addr).serve(make_service);
+    let socket_path = "/host/ol.sock";
+    let unix_listener = UnixListener::bind(socket_path).expect("Failed to bind UNIX socket");
+    let stream = UnixListenerStream::new(unix_listener);
+    let acceptor = hyper::server::accept::from_stream(stream);
+    let server = Server::builder(acceptor).serve(make_service);
 
-    log::info!("Listening on http://{}", addr);
+    log::info!("Listening on unix://{}", socket_path);
 
     if let Err(e) = server.await {
         log::error!("server error: {}", e);
