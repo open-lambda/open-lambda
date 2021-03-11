@@ -69,6 +69,8 @@ func (container *SOCKContainer) HttpProxy() (p *httputil.ReverseProxy, err error
 		return nil, fmt.Errorf("socket path length cannot exceed 108 characters (try moving cluster closer to the root directory")
 	}
 
+	log.Printf("Connecting to container at '%s'", sockPath)
+
 	dial := func(proto, addr string) (net.Conn, error) {
 		return net.Dial("unix", sockPath)
 	}
@@ -107,7 +109,7 @@ func (container *SOCKContainer) freshProc() (err error) {
 	} else if container.rt_type == common.RT_BINARY {
 		cmd = exec.Command(
 			"chroot", container.containerRootDir,
-			"/runtimes/rust/server",
+			"/runtimes/rust/server", strconv.Itoa(len(cgFiles)),
 		)
 	} else {
 		return fmt.Errorf("Unsupported runtime")

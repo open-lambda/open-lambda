@@ -634,6 +634,8 @@ func (linst *LambdaInstance) Task() {
 				}
 			}
 
+			log.Printf("Creating new sandbox")
+
 			// import cache is either disabled or it failed
 			if sb == nil {
 				scratchDir := f.lmgr.scratchDirs.Make(f.name)
@@ -646,6 +648,8 @@ func (linst *LambdaInstance) Task() {
 				f.doneChan <- req
 				continue // wait for another request before retrying
 			}
+
+			log.Printf("Connecting to sandbox")
 
 			proxy, err = sb.HttpProxy()
 			if err != nil {
@@ -662,6 +666,8 @@ func (linst *LambdaInstance) Task() {
 
 		// serve until we incoming queue is empty
 		for req != nil {
+			log.Printf("Forwarding request to sandbox")
+
 			// ask Sandbox to respond, via HTTP proxy
 			t := common.T0("ServeHTTP")
 			proxy.ServeHTTP(req.w, req.r)
