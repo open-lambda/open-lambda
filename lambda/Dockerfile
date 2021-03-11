@@ -14,7 +14,7 @@ COPY runtimes/python /runtimes/python
 RUN cd /runtimes/python && python3 setup.py build_ext --inplace && mv ol.*.so ol.so
 
 RUN mkdir /runtimes/rust
-COPY runtimes/rust/target/release/open-lambda-runtime /runtimes/rust/
+COPY runtimes/rust/target/release/open-lambda-runtime /runtimes/rust/server
 
 # for Docker container engine
 COPY server.py /

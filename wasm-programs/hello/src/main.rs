@@ -8,5 +8,5 @@ fn main() {
 
 #[no_mangle]
 fn f() {
-    info("Hello world");
+    info!("Hello world");
 }

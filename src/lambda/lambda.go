@@ -349,6 +349,8 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 		}
 		f.lmgr.DepTracer.TraceFunction(codeDir, meta.Installs)
 		f.meta = meta
+	} else if rt_type == common.RT_BINARY {
+		log.Printf("got binary function")
 	}
 
 	f.codeDir = codeDir
@@ -621,7 +623,7 @@ func (linst *LambdaInstance) Task() {
 		// HTTP proxy over the channel
 		if sb == nil {
 			sb = nil
-			if f.lmgr.ImportCache != nil {
+			if f.lmgr.ImportCache != nil && f.rt_type == common.RT_PYTHON {
 				scratchDir := f.lmgr.scratchDirs.Make(f.name)
 
 				// we don't specify parent SB, because ImportCache.Create chooses it for us

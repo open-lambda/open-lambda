@@ -221,7 +221,7 @@ def install_tests():
 
 @test
 def hello_rust():
-    r = post("run/hello-rust", [])
+    r = post("run/rust-hello", [])
     if r.status_code != 200:
         raise Exception("STATUS %d: %s" % (r.status_code, r.text))
 
