@@ -97,10 +97,22 @@ func (container *SOCKContainer) freshProc() (err error) {
 		defer cgFiles[i].Close()
 	}
 
-	cmd := exec.Command(
-		"chroot", container.containerRootDir, "python3", "-u",
-		"/runtimes/python/server.py", "/host/bootstrap.py", strconv.Itoa(len(cgFiles)),
-	)
+	var cmd *exec.Cmd
+
+	if container.rt_type == common.RT_PYTHON {
+		cmd = exec.Command(
+			"chroot", container.containerRootDir, "python3", "-u",
+			"/runtimes/python/server.py", "/host/bootstrap.py", strconv.Itoa(len(cgFiles)),
+		)
+	} else if container.rt_type == common.RT_BINARY {
+		cmd = exec.Command(
+			"chroot", container.containerRootDir,
+			"/runtimes/rust/server",
+		)
+	} else {
+		return fmt.Errorf("Unsupported runtime")
+	}
+
 	cmd.Env = []string{} // for security, DO NOT expose host env to guest
 	cmd.ExtraFiles = cgFiles
 

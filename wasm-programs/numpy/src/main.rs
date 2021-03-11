@@ -1,6 +1,12 @@
 use open_lambda::json::{json, Number, Value};
 use open_lambda::{debug, error};
 
+#[ cfg(not(target="wasm32")) ]
+fn main() {
+    f()
+}
+
+#[no_mangle]
 fn parse_array(mut jvalue: Value) -> Result<(Vec<usize>, Vec<f64>), ()> {
     if let Some(jvec) = jvalue.as_array_mut() {
         if jvec.len() == 0 {

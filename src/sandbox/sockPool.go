@@ -116,33 +116,39 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 	}
 	t2.T1()
 
-	// add installed packages to the path, and import the modules we'll need
-	var pyCode []string
+	if rt_type == common.RT_PYTHON {
+		// add installed packages to the path, and import the modules we'll need
+		var pyCode []string
 
-	for _, pkg := range meta.Installs {
-		path := "'/packages/" + pkg + "/files'"
-		pyCode = append(pyCode, "if not "+path+" in sys.path:")
-		pyCode = append(pyCode, "    sys.path.append("+path+")")
-	}
+		for _, pkg := range meta.Installs {
+			path := "'/packages/" + pkg + "/files'"
+			pyCode = append(pyCode, "if not "+path+" in sys.path:")
+			pyCode = append(pyCode, "    sys.path.append("+path+")")
+		}
 
-	for _, mod := range meta.Imports {
-		pyCode = append(pyCode, "import "+mod)
-	}
+		for _, mod := range meta.Imports {
+			pyCode = append(pyCode, "import "+mod)
+		}
 
-	// handler or Zygote?
-	if isLeaf {
-		pyCode = append(pyCode, "web_server()")
+		// handler or Zygote?
+		if isLeaf {
+			pyCode = append(pyCode, "web_server()")
+		} else {
+			pyCode = append(pyCode, "fork_server()")
+		}
+
+		path := filepath.Join(scratchDir, "bootstrap.py")
+		code := []byte(strings.Join(pyCode, "\n"))
+		if err := ioutil.WriteFile(path, code, 0600); err != nil {
+			return nil, err
+		}
+	} else if rt_type == common.RT_BINARY {
+		// nothing to do?
 	} else {
-		pyCode = append(pyCode, "fork_server()")
+		return nil, fmt.Errorf("Unsupported runtime")
 	}
-
-	path := filepath.Join(scratchDir, "bootstrap.py")
-	code := []byte(strings.Join(pyCode, "\n"))
-	if err := ioutil.WriteFile(path, code, 0600); err != nil {
-		return nil, err
-	}
-
-	safe := newSafeSandbox(c)
+	
+		safe := newSafeSandbox(c)
 	c = safe
 
 	// create new process in container (fresh, or forked from parent)

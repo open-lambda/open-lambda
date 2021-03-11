@@ -57,9 +57,9 @@ pub fn get_imports(store: &Store, args: Vec<u8>, result: Arc<Mutex<Option<Vec<u8
     let arg_data = ArgData{ args: Arc::new(args), result, memory: Default::default() };
 
     let mut ns = Exports::new();
-    ns.insert("ol_set_result", Function::new_native_with_env(&store, arg_data.clone(), set_result));
-    ns.insert("ol_get_args_len", Function::new_native_with_env(&store, arg_data.clone(), get_args_len));
-    ns.insert("ol_get_args", Function::new_native_with_env(&store, arg_data.clone(), get_args));
+    ns.insert("set_result", Function::new_native_with_env(&store, arg_data.clone(), set_result));
+    ns.insert("get_args_len", Function::new_native_with_env(&store, arg_data.clone(), get_args_len));
+    ns.insert("get_args", Function::new_native_with_env(&store, arg_data.clone(), get_args));
 
     ns
 }
