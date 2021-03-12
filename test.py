@@ -251,7 +251,7 @@ def numpy_test():
     assert j['version'].startswith('1.15')
 
     # use rust binary
-    r = post("run/numpy-rust", [1, 2])
+    r = post("run/rust-numpy", [1, 2])
     if r.status_code != 200:
         raise Exception("STATUS %d: %s" % (r.status_code, r.text))
     j = r.json()

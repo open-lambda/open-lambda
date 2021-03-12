@@ -5,7 +5,7 @@ authors = ["Kai Mast <kaimast@cs.wisc.edu>"]
 edition = "2018"
 
 [dependencies]
-tokio = { version="1", features=["net", "rt-multi-thread", "macros"] }
+tokio = { version="1", features=["net", "rt-multi-thread"] }
 hyper = { version="0.14", features=["server", "http1", "runtime", "stream"] }
 futures-util = { version="0.3" }
 tokio-stream = { version="0.1", features=["net"] }
@@ -13,3 +13,6 @@ simple-logging = "2"
 log = "0.4"
 dashmap = "4"
 nix = "0.20"
+
+[profile.release]
+debug = true

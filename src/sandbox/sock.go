@@ -109,7 +109,7 @@ func (container *SOCKContainer) freshProc() (err error) {
 	} else if container.rt_type == common.RT_BINARY {
 		cmd = exec.Command(
 			"chroot", container.containerRootDir,
-			"/runtimes/rust/server", strconv.Itoa(len(cgFiles)),
+			"env", "RUST_BACKTRACE=full", "/runtimes/rust/server", strconv.Itoa(len(cgFiles)),
 		)
 	} else {
 		return fmt.Errorf("Unsupported runtime")
