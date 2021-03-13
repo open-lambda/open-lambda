@@ -68,7 +68,7 @@ fn main() {
     for i in 0..cgroup_count {
         let fd = 3 + i;
         let mut f = unsafe{ File::from_raw_fd(fd) };
-    
+
         f.write(format!("{}", pid).as_bytes()).unwrap();
         log::info!("Joined cgroup, closing FD{}'", fd);
     }

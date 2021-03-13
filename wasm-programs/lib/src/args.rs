@@ -45,8 +45,16 @@ pub fn get_args() -> Option<json::Value> {
 }
 
 #[ cfg(not(target_arch="wasm32")) ]
-pub fn set_result(_value: &json::Value) -> Result<(), json::Error> {
-    todo!();
+pub fn set_result(value: &json::Value) -> Result<(), json::Error> {
+    use std::fs::File;
+    use std::io::Write;
+
+    let jstr = json::to_string(value)?;
+
+    let mut file = File::create("/tmp/output").unwrap();
+    file.write_all(jstr.as_bytes()).unwrap();
+
+    Ok(())
 }
 
 #[ cfg(target_arch="wasm32") ]
