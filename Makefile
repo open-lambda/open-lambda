@@ -21,14 +21,14 @@ wasm-worker:
 	cd wasm-worker && cargo build --release
 	cp wasm-worker/target/release/wasm-worker ./ol-wasm
 
-wasm-programs:
-	cd wasm-programs && cargo build --release
+wasm-programs: imgs/lambda
+	cd wasm-programs && cross build --release
 	cd wasm-programs && cargo build --release --target $(WASM_TARGET)
 	bash ./wasm-programs/install.sh ${WASM_TARGET}
 
 imgs/lambda: $(LAMBDA_FILES)
 	${MAKE} -C lambda
-	sudo docker build -t lambda lambda
+	docker build -t lambda lambda
 	touch imgs/lambda
 
 test-dir:

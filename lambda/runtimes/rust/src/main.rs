@@ -99,17 +99,45 @@ fn main() {
 }
 
 async fn execute_function(_args: Vec<u8>) -> Result<Response<Body>> {
+    use std::io::Read;
+    
     log::info!("Executing function");
 
+    let body;
+    let status_code;
+
     if let Err(e) = Command::new("/handler/f.bin").output() {
-        log::error!("Failed to run function: {:?}", e);
+        let e_str = format!("Failed to run function: {:?}", e);
+        log::error!("{}", e_str);
+
+        body = e_str.into();
+        status_code = StatusCode::INTERNAL_SERVER_ERROR;
+    } else {
+        match File::open("/tmp/output") {
+            Ok(mut f) => {
+                let mut jstr = String::new();
+                f.read_to_string(&mut jstr).unwrap();
+
+                body = jstr.into();
+                status_code = StatusCode::OK;
+            }
+            Err(e) => {
+                if e.kind() !=  std::io::ErrorKind::NotFound {
+                    let e_str = format!("Got unexpected error: {:?}", e);
+                    log::error!("{}", e_str);
+
+                    body = e_str.into();
+                    status_code = StatusCode::INTERNAL_SERVER_ERROR;
+                } else {
+                    body = Body::empty();
+                    status_code = StatusCode::OK;
+                }
+            }
+        }
     }
 
-    //FIXME
-    let body = Body::empty();
-
     let response = Response::builder()
-        .status(StatusCode::OK)
+        .status(status_code)
         .body(body)
         .unwrap();
 
