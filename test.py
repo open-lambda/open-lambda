@@ -229,26 +229,26 @@ def hello_rust():
 def numpy_test():
     # try adding the nums in a few different matrixes.  Also make sure
     # we can have two different numpy versions co-existing.
-    r = post("run/numpy15", [1, 2])
+    r = post("run/numpy19", [1, 2])
     if r.status_code != 200:
         raise Exception("STATUS %d: %s" % (r.status_code, r.text))
     j = r.json()
     assert j['result'] == 3
-    assert j['version'].startswith('1.15')
+    assert j['version'].startswith('1.19')
 
-    r = post("run/numpy16", [[1, 2], [3, 4]])
+    r = post("run/numpy20", [[1, 2], [3, 4]])
     if r.status_code != 200:
         raise Exception("STATUS %d: %s" % (r.status_code, r.text))
     j = r.json()
     assert j['result'] == 10
-    assert j['version'].startswith('1.16')
+    assert j['version'].startswith('1.20')
 
-    r = post("run/numpy15", [[[1, 2], [3, 4]], [[1, 2], [3, 4]]])
+    r = post("run/numpy19", [[[1, 2], [3, 4]], [[1, 2], [3, 4]]])
     if r.status_code != 200:
         raise Exception("STATUS %d: %s" % (r.status_code, r.text))
     j = r.json()
     assert j['result'] == 20
-    assert j['version'].startswith('1.15')
+    assert j['version'].startswith('1.19')
 
     # use rust binary
     r = post("run/rust-numpy", [1, 2])
