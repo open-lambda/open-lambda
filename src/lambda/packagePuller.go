@@ -93,7 +93,7 @@ def f(event):
     pkg = event["pkg"]
     alreadyInstalled = event["alreadyInstalled"]
     if not alreadyInstalled:
-        rc = os.system('pip3 install --no-deps %s -t /host/files' % pkg)
+        rc = os.system('pip3 install --no-deps %s --cache-dir /tmp/.cache -t /host/files' % pkg)
         print('pip install returned code %d' % rc)
         assert(rc == 0)
     name = pkg.split("==")[0]

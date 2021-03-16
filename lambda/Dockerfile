@@ -2,9 +2,8 @@ FROM ubuntu:focal
 
 RUN apt-get update
 RUN apt-get -y install wget apt-transport-https curl
-RUN apt-get -y install python3 python3-dev python3-pip build-essential
-RUN pip3 install --upgrade pip
-RUN pip3 install virtualenv requests tornado==4.5.3
+RUN apt-get -y install python3 python3-dev build-essential g++ python-is-python3
+RUN apt-get -y install python3-virtualenv python3-tornado python3-pip python3-requests
 
 RUN mkdir /runtimes
 
@@ -25,6 +24,7 @@ RUN mv /tmp/py-runtime/server.py /runtimes/python/server.py
 RUN rm -rf /tmp/py-runtime
 
 # for the Docker container engine
+# TODO get rid of this old server.py
 COPY server.py /
 COPY spin /
 

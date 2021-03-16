@@ -1,25 +1,21 @@
 # OpenLambda
 
-OpenLambda is an Apache-licensed serverless computing project, written
-in Go and based on Linux containers.  The primary goal of OpenLambda
-is to enable exploration of new approaches to serverless computing.  Our
-research agenda is described in more detail in a [HotCloud '16
-paper](https://www.usenix.org/system/files/conference/hotcloud16/hotcloud16_hendrickson.pdf).
+OpenLambda is an Apache-licensed serverless computing project, written in Go and based on Linux containers. 
+The primary goal of OpenLambda is to enable exploration of new approaches to serverless computing.
+Our research agenda is described in more detail in a [HotCloud '16 paper](https://www.usenix.org/system/files/conference/hotcloud16/hotcloud16_hendrickson.pdf).
 
 ## Getting Started
 
-OpenLambda relies heavily on operations that require root
-privilege. To simplify this, we suggest that you run all commands as
-the root user.  OpenLambda is only actively tested on Ubuntu 16.04 LTS.
+OpenLambda relies heavily on operations that require root privilege.
+To simplify this, we suggest that you run all commands as the root user.
+OpenLambda is only actively tested on Ubuntu 20.04 LTS and Docker 20.10.
 
 ### Build and Test
-
 OL is changing rapidly.  We recommend syncing to a commit that passed our nightly tests: https://s3.us-east-2.amazonaws.com/open-lambda-public/tests.html.
 
 Our tests run on a VM built with this init script:
 https://github.com/open-lambda/testing/blob/master/dev-build/bootstrap2.sh.
-Thus, you can consider that file testable documentation of the
-dependencies.
+Thus, you can consider that file testable documentation of the dependencies.
 
 You can build the `ol` and other resources with just `make`.  Then make sure it works with some simple tests:
 
