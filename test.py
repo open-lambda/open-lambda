@@ -18,7 +18,6 @@ curr_conf = None
 def post(path, data=None):
     return requests.post('http://localhost:5000/'+path, json.dumps(data))
 
-
 def raise_for_status(r):
     if r.status_code != 200:
         raise Exception("STATUS %d: %s" % (r.status_code, r.text))
@@ -254,7 +253,11 @@ def numpy_test():
     r = post("run/rust-numpy", [1, 2])
     if r.status_code != 200:
         raise Exception("STATUS %d: %s" % (r.status_code, r.text))
-    j = r.json()
+    try:
+        j = r.json()
+    except:
+        raise Exception("Failed to decode json for request %s" % r.text)
+
     assert j['result'] == 3
 
     r = post("run/pandas", [[0, 1, 2], [3, 4, 5]])

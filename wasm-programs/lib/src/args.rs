@@ -51,8 +51,13 @@ pub fn set_result(value: &json::Value) -> Result<(), json::Error> {
 
     let jstr = json::to_string(value)?;
 
-    let mut file = File::create("/tmp/output").unwrap();
+    let path = "/tmp/output";
+
+    let mut file = File::create(path).unwrap();
     file.write_all(jstr.as_bytes()).unwrap();
+
+    file.sync_all().expect("Writing to disk failed");
+    log::debug!("Created output file at {}", path);
 
     Ok(())
 }

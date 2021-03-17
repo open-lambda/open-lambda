@@ -19,6 +19,20 @@ use nix::sched::{CloneFlags, unshare};
 
 use std::os::unix::net::UnixListener as StdUnixListener;
 
+// Taken from: https://github.com/hyperium/hyper/blob/master/examples/single_threaded.rs
+#[derive(Clone, Copy, Debug)]
+struct LocalExec;
+
+impl<F> hyper::rt::Executor<F> for LocalExec
+where
+    F: std::future::Future + 'static, // not requiring `Send`
+{
+    fn execute(&self, fut: F) {
+        // This will spawn into the currently running `LocalSet`.
+        tokio::task::spawn_local(fut);
+    }
+}
+
 fn main() {
     let make_service = make_service_fn(async move |_| {
         Ok::<_, hyper::Error>(service_fn(async move |req: Request<Body>| {
@@ -49,7 +63,7 @@ fn main() {
         }))
     });
 
-    simple_logging::log_to_file("/host/ol-rust-runtime.log", log::LevelFilter::Trace).unwrap();
+    simple_logging::log_to_file("/host/ol-runtime.log", log::LevelFilter::Debug).unwrap();
 
     let socket_path = "/host/ol.sock";
     let listener = StdUnixListener::bind(socket_path).expect("Failed to bind UNIX socket");
@@ -70,7 +84,7 @@ fn main() {
         let mut f = unsafe{ File::from_raw_fd(fd) };
 
         f.write(format!("{}", pid).as_bytes()).unwrap();
-        log::info!("Joined cgroup, closing FD{}'", fd);
+        log::debug!("Joined cgroup, closing FD{}'", fd);
     }
 
     unshare(CloneFlags::CLONE_NEWUTS | CloneFlags::CLONE_NEWPID | CloneFlags::CLONE_NEWIPC).unwrap();
@@ -80,15 +94,26 @@ fn main() {
     }
 
     log::info!("Starting server loop...");
-    let tokio = tokio::runtime::Builder::new_multi_thread()
+    /* FIXME
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_io().build().expect("Failed to start tokio");
+    */
+    let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(1)
         .enable_io().build().expect("Failed to start tokio");
 
-    tokio.block_on(async move {
+    /* FIXME
+    let local = tokio::task::LocalSet::new();
+    local.block_on(&runtime, async move {
+    */ 
+
+    runtime.block_on(async move {
         let listener = UnixListener::from_std(listener).unwrap();
         let stream = UnixListenerStream::new(listener);
         let acceptor = hyper::server::accept::from_stream(stream);
+
         let server = Server::builder(acceptor).serve(make_service);
+        // let server = Server::builder(acceptor).executor(LocalExec).serve(make_service);
 
         log::info!("Listening on unix:{}", socket_path);
 
@@ -98,27 +123,38 @@ fn main() {
     });
 }
 
-async fn execute_function(_args: Vec<u8>) -> Result<Response<Body>> {
+async fn execute_function(args: Vec<u8>) -> Result<Response<Body>> {
     use std::io::Read;
-    
-    log::info!("Executing function");
+
+    let arg_str = String::from_utf8(args).unwrap();
+    log::info!("Executing function with arg `{}`", arg_str);
 
     let body;
     let status_code;
 
-    if let Err(e) = Command::new("/handler/f.bin").output() {
-        let e_str = format!("Failed to run function: {:?}", e);
-        log::error!("{}", e_str);
+    let output = Command::new("/handler/f.bin").arg(arg_str)
+            .env("RUST_LOG", "debug")
+            .output().expect("Failed to execute function");
 
-        body = e_str.into();
+    if !output.status.success() {
+        let e_str = format!("Function failed with exitcode: {}",
+                            output.status.code().expect("failed to get the return code; was the lambda killed by a signal?"));
+
+
         status_code = StatusCode::INTERNAL_SERVER_ERROR;
+        log::error!("{}", e_str);
+        body = e_str.into();
     } else {
+        log::info!("Function returned successfully");
+
         match File::open("/tmp/output") {
             Ok(mut f) => {
                 let mut jstr = String::new();
                 f.read_to_string(&mut jstr).unwrap();
 
-                body = jstr.into();
+                log::info!("Got response: {}", jstr);
+
+                body = Body::from(jstr);
                 status_code = StatusCode::OK;
             }
             Err(e) => {
@@ -126,14 +162,43 @@ async fn execute_function(_args: Vec<u8>) -> Result<Response<Body>> {
                     let e_str = format!("Got unexpected error: {:?}", e);
                     log::error!("{}", e_str);
 
-                    body = e_str.into();
+                    body = Body::from(e_str);
                     status_code = StatusCode::INTERNAL_SERVER_ERROR;
                 } else {
+                    log::info!("Function did not give a response");
+
                     body = Body::empty();
                     status_code = StatusCode::OK;
                 }
             }
         }
+    }
+
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let stderr = String::from_utf8(output.stderr).unwrap();
+
+    if stdout == "" {
+        log::debug!("Program has no stdout output");
+    } else {
+        let mut log_line = String::from("Process stdout:\n");
+
+        for line in stdout.split('\n') {
+            log_line += format!("    {}\n", line).as_str();
+        }
+
+        log::info!("{}", log_line);
+    }
+
+    if stderr == "" {
+        log::debug!("Program has no stderr output");
+    } else {
+        let mut log_line = String::from("Process stderr:\n");
+
+        for line in stderr.split('\n') {
+            log_line += format!("    {}\n", line).as_str();
+        }
+
+        log::info!("{}", log_line);
     }
 
     let response = Response::builder()
@@ -143,4 +208,3 @@ async fn execute_function(_args: Vec<u8>) -> Result<Response<Body>> {
 
     Ok(response)
 }
-

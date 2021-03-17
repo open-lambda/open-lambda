@@ -350,7 +350,7 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 		f.lmgr.DepTracer.TraceFunction(codeDir, meta.Installs)
 		f.meta = meta
 	} else if rt_type == common.RT_BINARY {
-		log.Printf("got binary function")
+		log.Printf("Got binary function")
 	}
 
 	f.codeDir = codeDir
@@ -674,6 +674,16 @@ func (linst *LambdaInstance) Task() {
 			t.T1()
 			req.execMs = int(t.Milliseconds)
 			f.doneChan <- req
+
+            rt_log := sb.GetRuntimeLog()
+
+            if rt_log != "" {
+                log.Printf("Runtime output is:")
+
+                for _, line := range strings.Split(rt_log, "\n") {
+                    log.Printf("   %s", line)
+                }
+            }
 
 			// check whether we should shutdown (non-blocking)
 			select {

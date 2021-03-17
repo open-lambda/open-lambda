@@ -1,8 +1,5 @@
 /*
 Provides the mechanism for managing a given SOCK container-based lambda.
-
-Must be paired with a SOCKContainerManager which handles pulling handler
-code, initializing containers, etc.
 */
 
 package sandbox
@@ -353,6 +350,16 @@ func (container *SOCKContainer) Status(key SandboxStatus) (string, error) {
 
 func (container *SOCKContainer) Meta() *SandboxMeta {
 	return container.meta
+}
+
+func (container *SOCKContainer) GetRuntimeLog() string {
+    data, err := ioutil.ReadFile(filepath.Join(container.scratchDir, "ol-runtime.log"))
+
+    if err == nil {
+        return string(data)
+    } else {
+        return ""
+    }
 }
 
 func (container *SOCKContainer) DebugString() string {

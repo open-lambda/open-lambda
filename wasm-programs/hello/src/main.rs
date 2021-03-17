@@ -1,12 +1,12 @@
 use open_lambda::info;
 
-#[ cfg(not(target="wasm32")) ]
 fn main() {
+    #[ cfg(not(target_arch="wasm32")) ]
     f()
 }
 
-
 #[no_mangle]
 fn f() {
+    open_lambda::init();
     info!("Hello world");
 }

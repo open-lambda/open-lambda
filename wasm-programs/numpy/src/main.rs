@@ -1,8 +1,8 @@
 use open_lambda::json::{json, Number, Value};
-use open_lambda::{debug, error};
+use open_lambda::{debug, error, fatal};
 
-#[ cfg(not(target="wasm32")) ]
 fn main() {
+    #[ cfg(not(target_arch="wasm32")) ]
     f()
 }
 
@@ -60,17 +60,20 @@ fn parse_array(mut jvalue: Value) -> Result<(Vec<usize>, Vec<f64>), ()> {
 
 #[no_mangle]
 fn f() {
+    open_lambda::init();
+
     let args = if let Some(a) = open_lambda::get_args() {
         a
     } else {
-        error!("No argument given");
-        return;
+        fatal!("No argument given");
     };
+
+    debug!("Argument is `{}`", args);
 
     let (shape, vec) = if let Ok((shape, vec)) = parse_array(args) {
         (shape, vec)
     } else {
-        return;
+        fatal!("Failed to parse argument; is it a valid tensor?");
     };
 
     let din = ndarray::IxDyn(&shape);

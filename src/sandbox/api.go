@@ -58,6 +58,9 @@ type Sandbox interface {
 	// Lookup a particular stat (changes over time)
 	Status(SandboxStatus) (string, error)
 
+    // Get output of the runtime; if any
+    GetRuntimeLog() string
+
 	// Represent state as a multi-line string
 	DebugString() string
 

@@ -243,6 +243,10 @@ func (c *DockerContainer) Logs() (string, error) {
 	return ret, nil
 }
 
+func (c *DockerContainer) GetRuntimeLog() string {
+    return "" //TODO
+}
+
 // NSPid returns the pid of the first process of the docker container.
 func (c *DockerContainer) NSPid() string {
 	return c.nspid

@@ -5,6 +5,7 @@ pub mod internal {
         pub fn log_info(msg_ptr: *const u8, msg_len: u32);
         pub fn log_debug(msg_ptr: *const u8, msg_len: u32);
         pub fn log_error(msg_ptr: *const u8, msg_len: u32);
+        pub fn log_fatal(msg_ptr: *const u8, msg_len: u32);
     }
 }
 
@@ -37,3 +38,22 @@ macro_rules! error {
 
 #[ cfg(not(target_arch="wasm32")) ]
 pub use log::{info, debug, error};
+
+#[ cfg(target="wasm32") ]
+#[macro_export]
+macro_rules! fatal {
+    ($($args:tt)*) => {
+        let s = std::format_args!($($args)*);
+        unsafe{ wasm_bindings::log_fatal(s.as_ptr(), s.len() as u32) };
+
+        panic!("Got fatal error; see log.");
+    }
+}
+
+#[ cfg(not(target="wasm32")) ]
+#[macro_export]
+macro_rules! fatal {
+    ($($args:tt)*) => {
+       panic!($($args)*);
+    }
+}
