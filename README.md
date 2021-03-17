@@ -11,11 +11,20 @@ To simplify this, we suggest that you run all commands as the root user.
 OpenLambda is only actively tested on Ubuntu 20.04 LTS and Docker 20.10.
 
 ### Build and Test
-OL is changing rapidly.  We recommend syncing to a commit that passed our nightly tests: https://s3.us-east-2.amazonaws.com/open-lambda-public/tests.html.
+Make sure you have all basic dependencies installed:
+```
+apt install docker.io llvm-11-dev build-essential python3
+```
 
-Our tests run on a VM built with this init script:
-https://github.com/open-lambda/testing/blob/master/dev-build/bootstrap2.sh.
-Thus, you can consider that file testable documentation of the dependencies.
+Further, you need to have a recent nightly version of rust installed. The easiest way to do this is.
+```
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain=nightly
+```
+
+Finally, add your user to the docker group to enable cross-compilation of native binaries to open-lambda's environment. Do not forget to restart your shell/session afterwards!
+```
+gpasswd -a $username docker
+```
 
 You can build the `ol` and other resources with just `make`.  Then make sure it works with some simple tests:
 
