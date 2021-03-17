@@ -3,19 +3,20 @@ from subprocess import check_output, Popen
 import subprocess
 import requests
 import os
+import json
 
 OLDIR="./bench-dir"
-TEST_FILTER=[]
+BENCH_FILTER=[]
 
 ''' Issues a post request to the OL worker '''
 def post(path, data=None):
     return requests.post('http://localhost:5000/'+path, json.dumps(data))
 
-def test_in_filter(name):
-    if len(TEST_FILTER) == 0:
+def bench_in_filter(name):
+    if len(BENCH_FILTER) == 0:
         return True
 
-    return name in TEST_FILTER
+    return name in BENCH_FILTER
 
 def run(cmd):
     print("RUN", " ".join(cmd))
@@ -35,17 +36,20 @@ def run(cmd):
 
 class ContainerWorker():
     def __init__(self):
+        self._running = False
+
         try:
             run(['./ol', 'worker', '-p='+OLDIR, '--detach'])
         except Exception as e:
             raise RuntimeError("failed to start worker: %s" % str(e))
-        self.running = True
+
+        self._running = True
 
     def __del__(self):
         self.stop()
 
     def is_running(self):
-        return self.running
+        return self._running
 
     def name(self):
         return "container"
@@ -54,8 +58,8 @@ class ContainerWorker():
         post("run/rust-%s"%fn_name, data=args)
 
     def stop(self):
-        if self.running:
-            self.running = False
+        if self.is_running():
+            self._running = False
         else:
             return # Already stopped
 
@@ -66,13 +70,13 @@ class ContainerWorker():
 
 class WasmWorker():
     def __init__(self):
-        self.process = Popen(["./ol-wasm"])
+        self._process = Popen(["./ol-wasm"])
 
     def __del__(self):
         self.stop()
 
     def is_running(self):
-        return self.process != None
+        return self._process != None
 
     def name(self):
         return "wasm"
@@ -84,8 +88,8 @@ class WasmWorker():
         if self.is_running():
             return
 
-        self.process.kill()
-        self.process = None
+        self._process.kill()
+        self._process = None
 
 '''
 Sets up the working director for open lambda,
@@ -112,3 +116,7 @@ def prepare_open_lambda(reuse_config=False):
                 run(['rm', '-rf', '%s/worker' % OLDIR])
             except:
                 pass
+        else:
+            # There was never a config in the first place, create one
+            run(['./ol', 'new', '-p='+OLDIR])
+
