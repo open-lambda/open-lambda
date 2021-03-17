@@ -68,3 +68,5 @@ wasm-programs/target/
 wasm-worker/target/
 
 lambda/runtimes/rust/target
+
+bench-results.csv
