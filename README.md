@@ -13,12 +13,14 @@ OpenLambda is only actively tested on Ubuntu 20.04 LTS and Docker 20.10.
 ### Build and Test
 Make sure you have all basic dependencies installed:
 ```
-apt install docker.io llvm-11-dev build-essential python3
+apt install docker.io llvm-11-dev libclang-common-11-dev build-essential python3
 ```
 
-Further, you need to have a recent nightly version of rust installed. The easiest way to do this is.
+Further, you need to have a recent nightly version of Rust, the wasm32 toolchain, and the `cross` tool installed. The easiest way to do this is.
 ```
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain=nightly
+rustup target add wasm32-unknown-unknown
+cargo install cross
 ```
 
 Finally, add your user to the docker group to enable cross-compilation of native binaries to open-lambda's environment. Do not forget to restart your shell/session afterwards!

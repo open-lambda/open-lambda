@@ -25,11 +25,14 @@ def benchmark(fn):
             worker = Worker()
             fargs = [worker]+list(args)
 
+            print("Running benchmark `%s`" % name)
             start = time()
             fn(*fargs)
             end = time()
 
             elapsed = (end - start) * 1000.0
+            print("Done. (Elapsed time %fms)", elapsed)
+
             OUTFILE.write("%s, %s, %f\n" % (name, worker.name(), elapsed))
 
             worker.stop()

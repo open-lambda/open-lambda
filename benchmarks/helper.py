@@ -39,6 +39,7 @@ class ContainerWorker():
         self._running = False
 
         try:
+            print("Starting container worker")
             run(['./ol', 'worker', '-p='+OLDIR, '--detach'])
         except Exception as e:
             raise RuntimeError("failed to start worker: %s" % str(e))
@@ -64,13 +65,16 @@ class ContainerWorker():
             return # Already stopped
 
         try:
+            print("Stopping container worker")
             run(['./ol', 'kill', '-p='+OLDIR])
         except Exception as e:
             raise RuntimeError("failed to start worker: %s" % str(e))
 
 class WasmWorker():
     def __init__(self):
+        print("Starting WebAssembly worker")
         self._process = Popen(["./ol-wasm"])
+        sleep(0.5)
 
     def __del__(self):
         self.stop()
@@ -85,9 +89,10 @@ class WasmWorker():
         post("run/%s"%fn_name, data=args)
 
     def stop(self):
-        if self.is_running():
+        if not self.is_running():
             return
 
+        print("Stopping WebAssembly worker")
         self._process.kill()
         self._process = None
 
