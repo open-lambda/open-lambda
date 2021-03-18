@@ -1,0 +1,9 @@
+[package]
+name = "hashing"
+version = "0.1.0"
+authors = ["Kai Mast <kaimast@cs.wisc.edu>"]
+edition = "2018"
+
+[dependencies]
+open-lambda = { path="../lib" }
+sha2 = "0.9"

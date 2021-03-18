@@ -1,6 +1,7 @@
 from subprocess import check_output, Popen
 from time import sleep
 
+import copy
 import subprocess
 import requests
 import os
@@ -8,6 +9,7 @@ import json
 
 OLDIR="./bench-dir"
 BENCH_FILTER=[]
+REG_DIR=os.path.abspath("test-registry")
 
 ''' Issues a post request to the OL worker '''
 def post(path, data=None):
@@ -18,6 +20,35 @@ def bench_in_filter(name):
         return True
 
     return name in BENCH_FILTER
+
+def put_conf(conf):
+    global curr_conf
+    with open(os.path.join(OLDIR, "config.json"), "w") as f:
+        json.dump(conf, f, indent=2)
+    curr_conf = conf
+
+''' Loads a config and overwrites certain fields with what is set in **keywords '''
+class BenchConf:
+    def __init__(self, **keywords):
+        with open(os.path.join(OLDIR, "config.json")) as f:
+            orig = json.load(f)
+        new = copy.deepcopy(orig)
+        for k in keywords:
+            if not k in new:
+                raise Exception("unknown config param: %s" % k)
+            if type(keywords[k]) == dict:
+                for k2 in keywords[k]:
+                    new[k][k2] = keywords[k][k2]
+            else:
+                new[k] = keywords[k]
+
+        # setup
+        put_conf(new)
+        self.orig = orig
+
+    def __del__(self):
+        # cleanup
+        put_conf(self.orig)
 
 def run(cmd):
     print("RUN", " ".join(cmd))
@@ -38,6 +69,7 @@ def run(cmd):
 class ContainerWorker():
     def __init__(self):
         self._running = False
+        self._config = BenchConf(registry=REG_DIR, sandbox="sock")
 
         try:
             print("Starting container worker")
@@ -57,7 +89,10 @@ class ContainerWorker():
         return "container"
 
     def run(self, fn_name, args=None):
-        post("run/rust-%s"%fn_name, data=args)
+        result = post("run/rust-%s"%fn_name, data=args)
+
+        if result.status_code != 200:
+            raise RuntimeError("Benchmark was not successful: %s" % result.text)
 
     def stop(self):
         if self.is_running():
@@ -74,7 +109,9 @@ class ContainerWorker():
 class WasmWorker():
     def __init__(self):
         print("Starting WebAssembly worker")
+        self._config = BenchConf(registry=REG_DIR)
         self._process = Popen(["./ol-wasm"])
+
         sleep(0.5)
 
     def __del__(self):
@@ -87,7 +124,10 @@ class WasmWorker():
         return "wasm"
 
     def run(self, fn_name, args=None):
-        post("run/%s"%fn_name, data=args)
+        result = post("run/%s"%fn_name, data=args)
+
+        if result.status_code != 200:
+            raise RuntimeError("Benchmark was not successful. %s" % result.text)
 
     def stop(self):
         if not self.is_running():

@@ -3,5 +3,6 @@ members = [
     "lib",
     "hello",
     "numpy",
+    "hashing",
 ]
 

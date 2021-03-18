@@ -51,6 +51,19 @@ def benchmark(fn):
 def hello(worker):
     worker.run('hello', [])
 
+@benchmark
+def hash100(worker):
+    worker.run('hashing', {"num_hashes": 100, "input_len": 1024})
+
+@benchmark
+def hash10000(worker):
+    worker.run('hashing', {"num_hashes": 10*1000, "input_len": 1024})
+
+@benchmark
+def hash100000(worker):
+    worker.run('hashing', {"num_hashes": 100*1000, "input_len": 1024})
+
+
 def main():
     global BENCH_FILTER
     global OUTFILE
@@ -74,6 +87,9 @@ def main():
     prepare_open_lambda(reuse_config=args.reuse_config)
 
     hello()
+    hash100()
+    hash10000()
+    hash100000()
 
 if __name__ == '__main__':
     main()

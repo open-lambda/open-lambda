@@ -396,6 +396,11 @@ def sock_churn(baseline, procs, seconds, fork):
 
     return {"sandboxes_per_sec": reqs/seconds}
 
+@test
+def rust_hashing():
+    r = post("run/rust-hashing", {"num_hashes": 100, "input_len": 1024})
+    if r.status_code != 200:
+        raise Exception("STATUS %d: %s" % (r.status_code, r.text))
 
 @test
 def update_code():
@@ -459,6 +464,9 @@ def run_tests(sandboxes):
 
                 # test very basic rust program
                 hello_rust()
+
+                # run some more computation in rust
+                rust_hashing()
 
                 # do smoke tests under various configs
                 with TestConf(features={"import_cache": False}):
