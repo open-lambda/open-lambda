@@ -70,3 +70,4 @@ wasm-worker/target/
 lambda/runtimes/rust/target
 
 bench-results.csv
+bench-results.pdf

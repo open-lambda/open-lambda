@@ -1,4 +1,5 @@
 from subprocess import check_output, Popen
+from time import sleep
 
 import subprocess
 import requests

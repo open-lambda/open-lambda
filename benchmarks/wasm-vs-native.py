@@ -1,12 +1,14 @@
 #! /bin/env python3
 
+import sys
 import argparse
 
 from time import time
 from helper import *
 
 OUTFILE=None
-NUM_RUNS=3
+NUM_WARMUPS=None
+NUM_RUNS=None
 
 def benchmark(fn):
     def wrapper(*args, **kwargs):
@@ -25,15 +27,21 @@ def benchmark(fn):
             worker = Worker()
             fargs = [worker]+list(args)
 
-            print("Running benchmark `%s`" % name)
-            start = time()
-            fn(*fargs)
-            end = time()
+            for _ in range(NUM_WARMUPS):
+                sys.stdout.write("Running benchmark `%s` with backend `%s` (warmup) ..." % (name, worker.name()))
+                fn(*fargs)
+                print("Done.")
 
-            elapsed = (end - start) * 1000.0
-            print("Done. (Elapsed time %fms)", elapsed)
+            for _ in range(NUM_RUNS):
+                sys.stdout.write("Running benchmark `%s` with backend `%s`..." % (name, worker.name()))
+                start = time()
+                fn(*fargs)
+                end = time()
 
-            OUTFILE.write("%s, %s, %f\n" % (name, worker.name(), elapsed))
+                elapsed = (end - start) * 1000.0
+                print("Done. (Elapsed time %fms)" % elapsed)
+
+                OUTFILE.write("%s, %s, %f\n" % (name, worker.name(), elapsed))
 
             worker.stop()
 
@@ -47,14 +55,17 @@ def main():
     global BENCH_FILTER
     global OUTFILE
     global NUM_RUNS
+    global NUM_WARMUPS
 
     parser = argparse.ArgumentParser(description='Run benchmarks between native containers and WebAssembly')
     parser.add_argument('--bench_filter', type=str, default="")
-    parser.add_argument('--num_runs', type=int, default=3)
+    parser.add_argument('--num_warmups', type=int, default=5)
+    parser.add_argument('--num_runs', type=int, default=100)
     parser.add_argument('--reuse_config', action='store_true')
 
     args = parser.parse_args()
     BENCH_FILTER = [name for name in args.bench_filter.split(",") if name != '']
+    NUM_WARMUPS=args.num_warmups
     NUM_RUNS=args.num_runs
 
     OUTFILE = open("./bench-results.csv", 'w')
