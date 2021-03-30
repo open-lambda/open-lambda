@@ -11,6 +11,46 @@ OLDIR="./bench-dir"
 BENCH_FILTER=[]
 REG_DIR=os.path.abspath("test-registry")
 
+class Datastore:
+    def __init__(self):
+        print("Starting lambda store")
+        self._running = False
+        self._coord = Popen(["lambda-store-coordinator", "--enable_wasm=false"])
+        sleep(0.1)
+        self._nodes = [Popen(["lambda-store-node"])]
+        self._running = True
+
+    def __del__(self):
+        self.stop()
+
+    def is_running(self):
+        return self._running
+
+    def stop(self):
+        if self.is_running():
+            self._running = False
+        else:
+            return # Already stopped
+
+        print("Stopping lambda store")
+
+        try:
+            self._coord.terminate()
+            self._coord.wait()
+            self._coord = None
+        except Exception as e:
+            raise RuntimeError("Failed to stop lambda store coordinator: %s" % str(e))
+
+        try:
+            for node in self._nodes:
+                node.terminate()
+                node.wait()
+
+            self._nodes = []
+        except Exception as e:
+            raise RuntimeError("Failed to stop lambda store node: %s" % str(e))
+
+
 ''' Issues a post request to the OL worker '''
 def post(path, data=None):
     return requests.post('http://localhost:5000/'+path, json.dumps(data))
@@ -71,6 +111,8 @@ class ContainerWorker():
         self._running = False
         self._config = BenchConf(registry=REG_DIR, sandbox="sock")
 
+        self._datastore = Datastore()
+
         try:
             print("Starting container worker")
             run(['./ol', 'worker', '-p='+OLDIR, '--detach'])
@@ -106,10 +148,13 @@ class ContainerWorker():
         except Exception as e:
             raise RuntimeError("failed to start worker: %s" % str(e))
 
+        self._datastore.stop()
+
 class WasmWorker():
     def __init__(self):
         print("Starting WebAssembly worker")
         self._config = BenchConf(registry=REG_DIR)
+        self._datastore = Datastore()
         self._process = Popen(["./ol-wasm"])
 
         sleep(0.5)
@@ -134,8 +179,10 @@ class WasmWorker():
             return
 
         print("Stopping WebAssembly worker")
-        self._process.kill()
+        self._process.terminate()
         self._process = None
+
+        self._datastore.stop()
 
 '''
 Sets up the working director for open lambda,
