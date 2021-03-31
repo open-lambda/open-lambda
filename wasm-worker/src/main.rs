@@ -78,6 +78,7 @@ async fn execute_function(name: String, args: Vec<u8>, program_mgr: Arc<ProgramM
     let mut import_object = ImportObject::new();
     import_object.register("ol_args", crate::bindings::args::get_imports(&*program.store, args, result.clone()));
     import_object.register("ol_log", crate::bindings::log::get_imports(&*program.store));
+    import_object.register("ol_storage", bindings::storage::get_imports(&*program.store));
 
     let instance = Instance::new(&program.module, &import_object).unwrap();
 

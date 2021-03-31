@@ -4,5 +4,6 @@ members = [
     "hello",
     "numpy",
     "hashing",
+    "get_put",
 ]
 
