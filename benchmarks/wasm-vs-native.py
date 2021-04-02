@@ -9,6 +9,8 @@ from helper import *
 OUTFILE=None
 NUM_WARMUPS=None
 NUM_RUNS=None
+WORKER_TYPES=[]
+BENCH_FILTER=[]
 
 def benchmark(fn):
     def wrapper(*args, **kwargs):
@@ -19,13 +21,15 @@ def benchmark(fn):
 
         name = fn.__name__
 
-        if not bench_in_filter(name):
+        if not bench_in_filter(name, BENCH_FILTER):
             print("Skipping test '%s'" % name)
             return None
 
-        for Worker in [ContainerWorker, WasmWorker]:
+        for Worker in WORKER_TYPES:
             worker = Worker()
             fargs = [worker]+list(args)
+
+            print("Worker started")
 
             for _ in range(NUM_WARMUPS):
                 sys.stdout.write("Running benchmark `%s` with backend `%s` (warmup) ..." % (name, worker.name()))
@@ -63,23 +67,36 @@ def hash10000(worker):
 def hash100000(worker):
     worker.run('hashing', {"num_hashes": 100*1000, "input_len": 1024})
 
+@benchmark
+def get_put(worker):
+    worker.run('get_put', {})
 
 def main():
     global BENCH_FILTER
     global OUTFILE
     global NUM_RUNS
     global NUM_WARMUPS
+    global WORKER_TYPES
 
     parser = argparse.ArgumentParser(description='Run benchmarks between native containers and WebAssembly')
     parser.add_argument('--bench_filter', type=str, default="")
     parser.add_argument('--num_warmups', type=int, default=5)
     parser.add_argument('--num_runs', type=int, default=100)
     parser.add_argument('--reuse_config', action='store_true')
+    parser.add_argument('--worker_types', type=str, default="container,wasm")
 
     args = parser.parse_args()
     BENCH_FILTER = [name for name in args.bench_filter.split(",") if name != '']
     NUM_WARMUPS=args.num_warmups
     NUM_RUNS=args.num_runs
+    WORKER_TYPES=[]
+
+    worker_names = [name for name in args.worker_types.split(",") if name != '']
+
+    if 'container' in worker_names:
+        WORKER_TYPES.append(ContainerWorker)
+    if 'wasm' in worker_names:
+        WORKER_TYPES.append(WasmWorker)
 
     OUTFILE = open("./bench-results.csv", 'w')
     OUTFILE.write("bench_name, worker_type, elapsed\n")
@@ -90,6 +107,7 @@ def main():
     hash100()
     hash10000()
     hash100000()
+    get_put()
 
 if __name__ == '__main__':
     main()

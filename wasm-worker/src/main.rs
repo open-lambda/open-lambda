@@ -14,6 +14,8 @@ mod bindings;
 
 use std::sync::Arc;
 
+use async_wormhole::stack::Stack;
+
 use wasmer::{Instance, ImportObject};
 
 static mut PROGRAM_MGR: Option<Arc<ProgramManager>> = None;
@@ -75,15 +77,17 @@ async fn execute_function(name: String, args: Vec<u8>, program_mgr: Arc<ProgramM
     let program = program_mgr.get_program(name).await;
     let result = Arc::new(std::sync::Mutex::new(None));
 
-    let mut import_object = ImportObject::new();
-    import_object.register("ol_args", crate::bindings::args::get_imports(&*program.store, args, result.clone()));
-    import_object.register("ol_log", crate::bindings::log::get_imports(&*program.store));
-    import_object.register("ol_storage", bindings::storage::get_imports(&*program.store));
+    let instance = {
+        let mut import_object = ImportObject::new();
+        import_object.register("ol_args", crate::bindings::args::get_imports(&*program.store, args, result.clone()));
+        import_object.register("ol_log", crate::bindings::log::get_imports(&*program.store));
+        import_object.register("ol_storage", bindings::storage::get_imports(&*program.store));
 
-    let instance = Instance::new(&program.module, &import_object).unwrap();
+        Instance::new(&program.module, &import_object).unwrap()
+    };
 
-    let lambda = instance.exports.get_function("f").expect("No function `f` defined");
-    lambda.call(&[]).expect("Lambda function failed");
+    let stack = async_wormhole::stack::EightMbStack::new().unwrap();
+    instance.call_with_stack("f", stack).await.expect("Lambda function failed");
 
     let result = result.lock().unwrap().take();
 

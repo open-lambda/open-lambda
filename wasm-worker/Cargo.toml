@@ -16,4 +16,5 @@ log = "0.4"
 dashmap = "4"
 bincode = "1"
 open-lambda-protocol = { git="ssh://git@github.com/kaimast/lambda-store.git" }
-lambda-store-client = { git="ssh://git@github.com/kaimast/lambda-store.git" }
+lambda-store-client = { git="ssh://git@github.com/kaimast/lambda-store.git", default-features=false, features=[] }
+async-wormhole = "0.3"

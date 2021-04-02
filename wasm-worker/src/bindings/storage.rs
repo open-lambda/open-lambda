@@ -18,18 +18,23 @@ struct StorageEnv {
 
 fn get_collection_schema(env: &StorageEnv, name_ptr: WasmPtr<u8, Array>, name_len: u32, len_out: WasmPtr<u64>) -> i64 {
     let mut db_lock = env.database.lock().unwrap();
+    let lock_inner = db_lock.take();
 
-    let database = if let Some(inner) = db_lock.take() {
-        inner
-    } else {
-        // Connect to lambda store
-        lambda_store_client::create_client("localhost")
-    };
+    let yielder = env.yielder.get_ref().unwrap().get();
+
+    let database = yielder.async_suspend(async move {
+        if let Some(inner) = lock_inner {
+            inner
+        } else {
+            // Connect to lambda store
+            lambda_store_client::create_client("localhost").await
+        }
+    });
 
     let memory = env.memory.get_ref().unwrap();
     let col_name = name_ptr.get_utf8_string(memory, name_len).unwrap();
 
-    let col = database.get_collection(col_name).unwrap();
+    let col = database.get_collection(col_name).expect("No such collection");
 
     let (key_type, fields) = col.get_schema().clone_inner();
     let info = CollectionInfo{ identifier: col.get_identifier(), key_type, fields };
@@ -71,7 +76,7 @@ fn execute_operation(env: &StorageEnv, op_data: WasmPtr<u8, Array>, op_data_len:
 
     let op: Operation = bincode::deserialize(in_slice).unwrap();
     let col_id = op.get_collection().unwrap();
-    let col = database.get_collection_by_id(col_id).unwrap();
+    let col = database.get_collection_by_id(col_id).expect("No such collection");
 
     let result = yielder.async_suspend(async move {
         col.execute_operation(op, None).await

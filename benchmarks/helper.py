@@ -6,9 +6,9 @@ import subprocess
 import requests
 import os
 import json
+import lambdastore
 
 OLDIR="./bench-dir"
-BENCH_FILTER=[]
 REG_DIR=os.path.abspath("test-registry")
 
 class Datastore:
@@ -16,9 +16,18 @@ class Datastore:
         print("Starting lambda store")
         self._running = False
         self._coord = Popen(["lambda-store-coordinator", "--enable_wasm=false"])
-        sleep(0.1)
+        sleep(0.2)
         self._nodes = [Popen(["lambda-store-node"])]
         self._running = True
+        sleep(0.2)
+
+        #FIXME remove this
+        print("Creating default collection")
+        ls = lambdastore.create_client('localhost')
+        ls.create_collection('default', str, {'value': int})
+        ls.close()
+
+        print("Datastore set up")
 
     def __del__(self):
         self.stop()
@@ -55,11 +64,11 @@ class Datastore:
 def post(path, data=None):
     return requests.post('http://localhost:5000/'+path, json.dumps(data))
 
-def bench_in_filter(name):
-    if len(BENCH_FILTER) == 0:
+def bench_in_filter(name, bench_filter):
+    if len(bench_filter) == 0:
         return True
 
-    return name in BENCH_FILTER
+    return name in bench_filter
 
 def put_conf(conf):
     global curr_conf

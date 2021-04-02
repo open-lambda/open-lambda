@@ -6,11 +6,10 @@ OL_DIR = $(abspath ./src)
 OL_GO_FILES = $(shell find src/ -name '*.go')
 LAMBDA_FILES = $(shell find lambda)
 
-.PHONY: all
 .PHONY: install
 .PHONY: test-all
 .PHONY: clean
-.PHONY: dependencies
+.PHONY: update-dependencies
 .PHONY: wasm-programs
 .PHONY: wasm-worker
 .PHONY: test-dir
@@ -25,6 +24,10 @@ wasm-programs: imgs/lambda
 	cd wasm-programs && cross build --release
 	cd wasm-programs && cargo build --release --target $(WASM_TARGET)
 	bash ./wasm-programs/install.sh ${WASM_TARGET}
+
+update-dependencies:
+	cd wasm-worker && cargo update
+	cd wasm-programs && cargo update
 
 imgs/lambda: $(LAMBDA_FILES)
 	${MAKE} -C lambda

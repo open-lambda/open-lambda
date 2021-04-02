@@ -37,6 +37,8 @@
 
 *~
 *.swp
+*.swo
+*.swn
 
 .vagrant
 .sock
@@ -62,6 +64,8 @@ ol
 ol-wasm
 
 *.bin
+
+bench-dir
 
 test-registry.wasm/*.wasm
 wasm-programs/target/

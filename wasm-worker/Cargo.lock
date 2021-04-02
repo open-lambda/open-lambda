@@ -562,13 +562,14 @@ checksum = "dd25036021b0de88a0aff6b850051563c6516d0bf53f8638938edbb9de732736"
 [[package]]
 name = "lambda-store-client"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git#a5b5c73d9b8e8958078fb6f698d4d260944496db"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git#0f93642779e9929a917553b3577c49973a13fbbc"
 dependencies = [
  "bincode",
  "dashmap",
  "futures",
  "lambda-store-utils",
  "log",
+ "open-lambda-protocol",
  "schema",
  "serde_json",
  "tokio",
@@ -578,7 +579,7 @@ dependencies = [
 [[package]]
 name = "lambda-store-utils"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git#a5b5c73d9b8e8958078fb6f698d4d260944496db"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git#0f93642779e9929a917553b3577c49973a13fbbc"
 dependencies = [
  "async-trait",
  "bincode",
@@ -784,7 +785,7 @@ checksum = "af8b08b04175473088b46763e51ee54da5f9a164bc162f615b91bc179dbf15a3"
 [[package]]
 name = "open-lambda-protocol"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git#a5b5c73d9b8e8958078fb6f698d4d260944496db"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git#0f93642779e9929a917553b3577c49973a13fbbc"
 dependencies = [
  "schema",
  "serde",
@@ -916,9 +917,9 @@ checksum = "bc881b2c22681370c6a780e47af9840ef841837bc98118431d4e1868bd0c1086"
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.24"
+version = "1.0.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e0704ee1a7e00d7bb417d0770ea303c1bccbabf0ef1667dae92b5967f5f8a71"
+checksum = "a152013215dca273577e18d2bf00fa862b89b24169fb78c4c95aeb07992c9cec"
 dependencies = [
  "unicode-xid",
 ]
@@ -1080,7 +1081,7 @@ checksum = "71d301d4193d031abdd79ff7e3dd721168a9572ef3fe51a1517aba235bd8f86e"
 [[package]]
 name = "schema"
 version = "0.1.0"
-source = "git+ssh://github.com/kaimast/schema.git#af92b095b03a0185ae28384bcae7c117a3f22aad"
+source = "git+ssh://github.com/kaimast/schema.git#2b93591821c26f255beb83c86840ebbfc952b826"
 dependencies = [
  "bincode",
  "log",
@@ -1242,9 +1243,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "1.0.67"
+version = "1.0.68"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6498a9efc342871f91cc2d0d694c674368b4ceb40f62b65a7a08c3792935e702"
+checksum = "3ce15dd3ed8aa2f8eeac4716d6ef5ab58b6b9256db41d7e1a0224c2788e8fd87"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1441,6 +1442,7 @@ checksum = "fd6fbd9a79829dd1ad0cc20627bf1ed606756a7f77edff7b66b7064f9cb327c6"
 name = "wasm-worker"
 version = "0.1.0"
 dependencies = [
+ "async-wormhole",
  "bincode",
  "dashmap",
  "futures-util",
