@@ -1,5 +1,8 @@
 use wasmer::{Store, Module};
+#[cfg(not(feature="cranelift"))]
 use wasmer_compiler_llvm::LLVM;
+#[cfg(feature="cranelift")]
+use wasmer_compiler_cranelift::Cranelift;
 use wasmer_engine_native::Native as NativeEngine;
 
 use std::sync::Arc;
@@ -38,7 +41,11 @@ pub struct ProgramManager {
 
 impl ProgramManager {
     pub fn new() -> Self {
+        #[cfg(feature="cranelift")]
+        let compiler = Cranelift::default();
+        #[cfg(not(feature="cranelift"))]
         let compiler = LLVM::default();
+
         let engine = Box::new( NativeEngine::new(compiler).engine() );
         let store = Arc::new(Store::new(&*engine));
         let programs = DashMap::new();

@@ -21,7 +21,6 @@ fn f() {
         }
     }
 
-    /*
     for i in 0..num_entries {
         if let Err(e) = col.put(format!("key{}", i), entry!{"value" => 5000}) {
             open_lambda::fatal!("{}", e);
@@ -35,5 +34,5 @@ fn f() {
             Ok(res) => assert_eq!(res, expected),
             Err(e) => { open_lambda::fatal!("{}", e); }
         }
-    }*/
+    }
 }

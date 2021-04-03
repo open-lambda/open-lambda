@@ -78,11 +78,15 @@ fn execute_operation(env: &StorageEnv, op_data: WasmPtr<u8, Array>, op_data_len:
     let col_id = op.get_collection().unwrap();
     let col = database.get_collection_by_id(col_id).expect("No such collection");
 
+    log::debug!("Executing operation: {:?}", op);
+
     let result = yielder.async_suspend(async move {
         col.execute_operation(op, None).await
     });
 
-    let result_data = bincode::serialize(&result).unwrap();
+    log::debug!("Op result is: {:?}", result);
+
+    let result_data = bincode::serialize(&result).expect("Failed to serialize OpResult");
 
     let offset = env.allocate.get_ref().unwrap().call(result_data.len() as u32).unwrap();
 

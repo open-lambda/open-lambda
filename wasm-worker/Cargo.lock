@@ -147,6 +147,71 @@ dependencies = [
 ]
 
 [[package]]
+name = "cranelift-bforest"
+version = "0.70.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "31f782ffb172d8095cbb4c6464d85432c3bcfa8609b0bb1dc27cfd35bd90e052"
+dependencies = [
+ "cranelift-entity",
+]
+
+[[package]]
+name = "cranelift-codegen"
+version = "0.70.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "91e0910022b490bd0a65d5baa1693b0475cdbeea1c26472343f2acea1f1f55b8"
+dependencies = [
+ "byteorder",
+ "cranelift-bforest",
+ "cranelift-codegen-meta",
+ "cranelift-codegen-shared",
+ "cranelift-entity",
+ "gimli",
+ "log",
+ "regalloc",
+ "smallvec",
+ "target-lexicon",
+ "thiserror",
+]
+
+[[package]]
+name = "cranelift-codegen-meta"
+version = "0.70.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7cafe95cb5ac659e113549b2794a2c8d3a14f36e1a98728a6e0ea7a773be2129"
+dependencies = [
+ "cranelift-codegen-shared",
+ "cranelift-entity",
+]
+
+[[package]]
+name = "cranelift-codegen-shared"
+version = "0.70.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d1bd002e42cc094a131a8227d06d48df28ea3b9127e5e3bc3010e079858e9af"
+
+[[package]]
+name = "cranelift-entity"
+version = "0.70.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e55e9043403f0dec775f317280015150e78b2352fb947d2f37407fd4ce6311c7"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "cranelift-frontend"
+version = "0.70.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0153680ebce89aac7cad90a5442bb136faacfc86ea62587a01b8e8e79f8249c9"
+dependencies = [
+ "cranelift-codegen",
+ "log",
+ "smallvec",
+ "target-lexicon",
+]
+
+[[package]]
 name = "crc32fast"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -286,6 +351,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "fallible-iterator"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4443176a9f2c162692bd3d352d745ef9413eec5782a80d8fd6f8a1ac692a07f7"
+
+[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -399,6 +470,11 @@ name = "gimli"
 version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f6503fe142514ca4799d4c26297c4248239fe8838d827db6bd6065c6ed29a6ce"
+dependencies = [
+ "fallible-iterator",
+ "indexmap",
+ "stable_deref_trait",
+]
 
 [[package]]
 name = "goblin"
@@ -562,7 +638,7 @@ checksum = "dd25036021b0de88a0aff6b850051563c6516d0bf53f8638938edbb9de732736"
 [[package]]
 name = "lambda-store-client"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git#0f93642779e9929a917553b3577c49973a13fbbc"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git#0e4e263765653668badf13fd4c3b019576e205b7"
 dependencies = [
  "bincode",
  "dashmap",
@@ -579,7 +655,7 @@ dependencies = [
 [[package]]
 name = "lambda-store-utils"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git#0f93642779e9929a917553b3577c49973a13fbbc"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git#0e4e263765653668badf13fd4c3b019576e205b7"
 dependencies = [
  "async-trait",
  "bincode",
@@ -639,9 +715,9 @@ dependencies = [
 
 [[package]]
 name = "lock_api"
-version = "0.4.2"
+version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd96ffd135b2fd7b973ac026d28085defbe8983df057ced3eb4f2130b0831312"
+checksum = "5a3c91c24eae6777794bb1997ad98bbb87daf92890acab859f7eaa4320333176"
 dependencies = [
  "scopeguard",
 ]
@@ -693,9 +769,9 @@ checksum = "0ee1c47aaa256ecabcaea351eae4a9b01ef39ed810004e298d2511ed284b1525"
 
 [[package]]
 name = "memmap2"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "04e3e85b970d650e2ae6d70592474087051c11c54da7f7b4949725c5735fbcc6"
+checksum = "397d1a6d6d0563c0f5462bbdae662cf6c784edf5e828e40c7257f85d82bf56dd"
 dependencies = [
  "libc",
 ]
@@ -785,7 +861,7 @@ checksum = "af8b08b04175473088b46763e51ee54da5f9a164bc162f615b91bc179dbf15a3"
 [[package]]
 name = "open-lambda-protocol"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git#0f93642779e9929a917553b3577c49973a13fbbc"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git#0e4e263765653668badf13fd4c3b019576e205b7"
 dependencies = [
  "schema",
  "serde",
@@ -1014,6 +1090,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "regalloc"
+version = "0.0.31"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "571f7f397d61c4755285cd37853fe8e03271c243424a907415909379659381c5"
+dependencies = [
+ "log",
+ "rustc-hash",
+ "smallvec",
+]
+
+[[package]]
 name = "regex"
 version = "1.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1056,6 +1143,12 @@ name = "rustc-demangle"
 version = "0.1.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e3bad0ee36814ca07d7968269dd4b7ec89ec2da10c4bb613928d3077083c232"
+
+[[package]]
+name = "rustc-hash"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
 
 [[package]]
 name = "rustc_version"
@@ -1218,6 +1311,12 @@ dependencies = [
  "libc",
  "winapi",
 ]
+
+[[package]]
+name = "stable_deref_trait"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
 name = "strsim"
@@ -1453,6 +1552,7 @@ dependencies = [
  "pretty_env_logger",
  "tokio",
  "wasmer",
+ "wasmer-compiler-cranelift",
  "wasmer-compiler-llvm",
  "wasmer-engine-native",
 ]
@@ -1495,6 +1595,26 @@ dependencies = [
  "wasmer-types",
  "wasmer-vm",
  "wasmparser",
+]
+
+[[package]]
+name = "wasmer-compiler-cranelift"
+version = "1.0.2"
+source = "git+ssh://git@github.com/kaimast/wasmer.git?branch=async#57ba56974121ab4b5666ce3839dd546361749654"
+dependencies = [
+ "cranelift-codegen",
+ "cranelift-entity",
+ "cranelift-frontend",
+ "gimli",
+ "loupe",
+ "more-asserts",
+ "rayon",
+ "serde",
+ "smallvec",
+ "tracing",
+ "wasmer-compiler",
+ "wasmer-types",
+ "wasmer-vm",
 ]
 
 [[package]]

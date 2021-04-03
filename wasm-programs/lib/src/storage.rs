@@ -84,12 +84,13 @@ impl Collection {
 
         let mut out_len = 0u64;
         let data_ptr = unsafe{
-            internal::execute_operation(op_data.as_ptr(), op_data.len() as u32, (&mut out_len) as *mut u64)
+            let len = op_data.len() as u32;
+            let out_len_ptr = (&mut out_len) as *mut u64;
+            internal::execute_operation(op_data.as_ptr(), len, out_len_ptr)
         };
 
         if data_ptr <= 0 {
             panic!("Got unexpected error");
-            //return Err(OpError::Unexpected);
         }
 
         let out_len = out_len as usize;
@@ -97,7 +98,8 @@ impl Collection {
             Vec::<u8>::from_raw_parts(data_ptr as *mut u8, out_len, out_len)
         };
 
-        let result: OpResult = bincode::deserialize(&data).unwrap();
+        let result: OpResult = bincode::deserialize(&data)
+                        .expect("Failed to deserialize OpResult");
 
         match result {
             Ok(entry) => {

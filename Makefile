@@ -1,6 +1,6 @@
 PWD = $(shell pwd)
 WASM_TARGET = wasm32-unknown-unknown
-
+CARGO=cargo +nightly
 GO = go
 OL_DIR = $(abspath ./src)
 OL_GO_FILES = $(shell find src/ -name '*.go')
@@ -14,20 +14,20 @@ LAMBDA_FILES = $(shell find lambda)
 .PHONY: wasm-worker
 .PHONY: test-dir
 
-all: dependencies ol imgs/lambda wasm-worker wasm-programs
+all: ol imgs/lambda wasm-worker wasm-programs
 
 wasm-worker:
-	cd wasm-worker && cargo build --release
+	cd wasm-worker && ${CARGO} build --release
 	cp wasm-worker/target/release/wasm-worker ./ol-wasm
 
 wasm-programs: imgs/lambda
 	cd wasm-programs && cross build --release
-	cd wasm-programs && cargo build --release --target $(WASM_TARGET)
+	cd wasm-programs && ${CARGO} build --release --target $(WASM_TARGET)
 	bash ./wasm-programs/install.sh ${WASM_TARGET}
 
 update-dependencies:
-	cd wasm-worker && cargo update
-	cd wasm-programs && cargo update
+	cd wasm-worker && ${CARGO} update
+	cd wasm-programs && ${CARGO} update
 
 imgs/lambda: $(LAMBDA_FILES)
 	${MAKE} -C lambda
