@@ -57,6 +57,19 @@ impl Collection {
         self.execute_operation(operation, None)
     }
 
+    pub fn delete<K: Into<Value>>(&self, key: K) -> Result<HashMap<String, Value>, OpError> {
+        let key: Value = key.into();
+        let key = key.serialize_inner();
+
+        let operation = Operation::Delete{
+            key, collection: self.identifier
+        };
+
+        let filter = vec![];
+
+        self.execute_operation(operation, Some(filter))
+    }
+
     pub fn put<K: Into<Value>>(&self, key: K, mut fields: HashMap<String, Value>) -> Result<(), OpError> {
         let key: Value = key.into();
         let key = key.serialize_inner();

@@ -35,4 +35,8 @@ fn f() {
             Err(e) => { open_lambda::fatal!("{}", e); }
         }
     }
+
+    for i in 0..num_entries {
+        col.delete(format!("key{}", i)).unwrap();
+    }
 }

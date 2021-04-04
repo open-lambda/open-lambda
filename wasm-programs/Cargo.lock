@@ -313,7 +313,7 @@ checksum = "dd25036021b0de88a0aff6b850051563c6516d0bf53f8638938edbb9de732736"
 [[package]]
 name = "lambda-store-client"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git#7aa2e26a888e9ffe38a1007905ffa24caad7174f"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git#b2c6f5849c5af290c1920dd13914e1c1c2100eb0"
 dependencies = [
  "bincode",
  "dashmap",
@@ -330,7 +330,7 @@ dependencies = [
 [[package]]
 name = "lambda-store-utils"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git#7aa2e26a888e9ffe38a1007905ffa24caad7174f"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git#b2c6f5849c5af290c1920dd13914e1c1c2100eb0"
 dependencies = [
  "async-trait",
  "bincode",
@@ -495,7 +495,7 @@ dependencies = [
 [[package]]
 name = "open-lambda-protocol"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git#7aa2e26a888e9ffe38a1007905ffa24caad7174f"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git#b2c6f5849c5af290c1920dd13914e1c1c2100eb0"
 dependencies = [
  "schema",
  "serde",
