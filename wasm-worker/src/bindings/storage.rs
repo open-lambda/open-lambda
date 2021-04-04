@@ -61,7 +61,7 @@ fn get_collection_schema(env: &StorageEnv, name_ptr: WasmPtr<u8, Array>, name_le
     offset
 }
 
-fn execute_operation(env: &StorageEnv, op_data: WasmPtr<u8, Array>, op_data_len: u32, filter_data: WasmPtr<u8, Array>, filter_data_len: u32, len_out: WasmPtr<u64>) -> i64 {
+fn execute_operation(env: &StorageEnv, op_data: WasmPtr<u8, Array>, op_data_len: u32, len_out: WasmPtr<u64>) -> i64 {
     let memory = env.memory.get_ref().unwrap();
     let mut db_lock = env.database.lock().unwrap();
     let database = db_lock.take().expect("Database not initialized yet");
@@ -72,14 +72,6 @@ fn execute_operation(env: &StorageEnv, op_data: WasmPtr<u8, Array>, op_data_len:
         std::slice::from_raw_parts(raw_ptr, op_data_len as usize)
     };
 
-    let filter_slice = unsafe {
-        let offset = filter_data.offset();
-        let raw_ptr = memory.data_ptr().add(offset as usize);
-        std::slice::from_raw_parts(raw_ptr, filter_data_len as usize)
-    };
-
-    let filter: Option<Vec<String>> = bincode::deserialize(filter_slice).unwrap();
-
     let yielder = env.yielder.get_ref().unwrap().get();
 
     let op: Operation = bincode::deserialize(op_slice).unwrap();
@@ -89,7 +81,7 @@ fn execute_operation(env: &StorageEnv, op_data: WasmPtr<u8, Array>, op_data_len:
     log::debug!("Executing operation: {:?}", op);
 
     let result = yielder.async_suspend(async move {
-        col.execute_operation(op, filter).await
+        col.execute_operation(op).await
     });
 
     log::debug!("Op result is: {:?}", result);
