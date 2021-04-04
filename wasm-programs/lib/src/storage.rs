@@ -7,7 +7,7 @@ pub use schema::Value;
 use std::collections::HashMap;
 
 #[ cfg(target_arch="wasm32") ]
-use open_lambda_protocol::{CollectionInfo, CollectionId, OpResult, Operation};
+use open_lambda_protocol::{CollectionInfo, CollectionId, Operation};
 
 #[ cfg(not(target_arch="wasm32")) ]
 static mut DATABASE: Option<lambda_store_client::Client> = None;
@@ -31,7 +31,7 @@ macro_rules! entry(
 mod internal {
     #[link(wasm_import_module="ol_storage")]
     extern "C" {
-        pub fn execute_operation(op_data: *const u8, op_data_len: u32, out_len: *mut u64) -> i64;
+        pub fn execute_operation(op_data: *const u8, op_data_len: u32, filter_data: *const u8, filter_data_len: u32, out_len: *mut u64) -> i64;
 
         pub fn get_collection_schema(col_name_ptr: *const u8, col_name_len: u32, out_len: *mut u64) -> i64;
     }
@@ -81,42 +81,28 @@ impl Collection {
 
     fn execute_operation(&self, operation: Operation, filter: Option<Vec<String>>) -> Result<HashMap<String, Value>, OpError> {
         let op_data = bincode::serialize(&operation).unwrap();
+        let filter_data = bincode::serialize(&filter).unwrap();
 
         let mut out_len = 0u64;
         let data_ptr = unsafe{
-            let len = op_data.len() as u32;
+            let op_data_len = op_data.len() as u32;
+            let filter_data_len = filter_data.len() as u32;
             let out_len_ptr = (&mut out_len) as *mut u64;
-            internal::execute_operation(op_data.as_ptr(), len, out_len_ptr)
+            internal::execute_operation(op_data.as_ptr(), op_data_len, filter_data.as_ptr(), filter_data_len, out_len_ptr)
         };
 
-        if data_ptr <= 0 {
+        if data_ptr <= 0 || out_len <= 0 {
             panic!("Got unexpected error");
         }
 
         let out_len = out_len as usize;
+
         let data = unsafe {
             Vec::<u8>::from_raw_parts(data_ptr as *mut u8, out_len, out_len)
         };
 
-        let result: OpResult = bincode::deserialize(&data)
-                        .expect("Failed to deserialize OpResult");
-
-        match result {
-            Ok(entry) => {
-                let result = if let Some(f) = filter {
-                    let filter: Vec<&str> = f.iter().map(|s| s as &str).collect();
-                    self.schema.get_fields_with_filter(&entry, &filter)
-                } else {
-                    self.schema.get_fields(&entry)
-                };
-
-                match result {
-                    Ok(f) => Ok(f),
-                    Err(err) => Err(OpError::SchemaError(err))
-                }
-            },
-            Err(err) => Err(err)
-        }
+        bincode::deserialize(&data)
+                        .expect("Failed to deserialize OpResult")
     }
 
     pub fn get_name(&self) -> &str {
