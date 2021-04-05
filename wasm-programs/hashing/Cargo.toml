@@ -5,5 +5,5 @@ authors = ["Kai Mast <kaimast@cs.wisc.edu>"]
 edition = "2018"
 
 [dependencies]
-open-lambda = { path="../lib" }
+open-lambda = { path="../bindings" }
 sha2 = "0.9"

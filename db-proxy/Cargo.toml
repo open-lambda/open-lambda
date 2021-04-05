@@ -1,0 +1,15 @@
+[package]
+name = "db-proxy"
+version = "0.1.0"
+authors = ["Kai Mast <kaimast@cs.wisc.edu>"]
+edition = "2018"
+
+[dependencies]
+tokio = { version="1", features=["net", "rt-multi-thread"] }
+tokio-util = { version="0.6", features=["codec"] }
+futures-util = { version="0.3" }
+lambda-store-client = { git="ssh://git@github.com/kaimast/lambda-store.git", default-features=false }
+log = "0.4"
+nix = "0.20"
+bincode = "1"
+db-proxy-protocol = { path="../wasm-programs/proxy-protocol" }

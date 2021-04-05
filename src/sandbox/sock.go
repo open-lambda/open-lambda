@@ -104,6 +104,9 @@ func (container *SOCKContainer) freshProc() (err error) {
 			"/runtimes/python/server.py", "/host/bootstrap.py", strconv.Itoa(len(cgFiles)),
 		)
 	} else if container.rt_type == common.RT_BINARY {
+        // Launch db proxy
+        exec.Command("./ol-database-proxy", container.containerRootDir,).Run()
+
 		cmd = exec.Command(
 			"chroot", container.containerRootDir,
 			"env", "RUST_BACKTRACE=full", "/runtimes/rust/server", strconv.Itoa(len(cgFiles)),

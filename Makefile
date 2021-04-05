@@ -14,6 +14,8 @@ LAMBDA_FILES = $(shell find lambda)
 .PHONY: wasm-worker
 .PHONY: native-programs
 .PHONY: test-dir
+.PHONY: check-runtime
+.PHONY: db-proxy
 
 all: ol imgs/lambda wasm-worker wasm-programs native-programs
 
@@ -30,13 +32,22 @@ native-programs: imgs/lambda
 	bash ./wasm-programs/install.sh ${WASM_TARGET}
 
 update-dependencies:
+	cd lambda/runtimes/rust && ${CARGO} update
 	cd wasm-worker && ${CARGO} update
 	cd wasm-programs && ${CARGO} update
+	cd db-proxy && ${CARGO} update
 
 imgs/lambda: $(LAMBDA_FILES)
 	${MAKE} -C lambda
 	docker build -t lambda lambda
 	touch imgs/lambda
+
+check-runtime:
+	cd lambda/runtimes/rust && ${CARGO} check
+
+db-proxy:
+	cd db-proxy && ${CARGO} build --release
+	cp ./db-proxy/target/release/db-proxy ./ol-database-proxy
 
 test-dir:
 	cp lambda/runtimes/rust/target/release/open-lambda-runtime ./test-registry/hello-rust.bin

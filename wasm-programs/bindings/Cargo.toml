@@ -13,4 +13,4 @@ open-lambda-protocol = { git="ssh://git@github.com/kaimast/lambda-store.git" }
 [target.'cfg(not(target_arch="wasm32"))'.dependencies]
 log = "0.4"
 env_logger = "0.8"
-lambda-store-client = { git="ssh://git@github.com/kaimast/lambda-store.git", features=["sync"], default-features=false }
+db-proxy-protocol = { path="../proxy-protocol" }

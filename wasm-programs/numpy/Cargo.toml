@@ -6,5 +6,4 @@ edition = "2018"
 
 [dependencies]
 ndarray = { version="0.14" }
-open-lambda = { path="../lib" }
-
+open-lambda = { path="../bindings" }
