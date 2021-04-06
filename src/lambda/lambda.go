@@ -432,7 +432,7 @@ func (f *LambdaFunc) Task() {
 			// (and instances that use it) if necessary
 			oldCodeDir := f.codeDir
 			if err := f.pullHandlerIfStale(); err != nil {
-				f.printf("Error checking for new lambda code: %v", err)
+                f.printf("Error checking for new lambda code at `%s`: %v", f.codeDir, err)
 				req.w.WriteHeader(http.StatusInternalServerError)
 				req.w.Write([]byte(err.Error() + "\n"))
 				req.done <- true

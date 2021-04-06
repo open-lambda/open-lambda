@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+    "log"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -106,7 +107,9 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type common.R
 	}
 
 	if stat.Mode().IsDir() {
-		// this is really just a debug mode, and is not
+        log.Printf("Installing `%s` from a directory", stat.Name())
+
+        // this is really just a debug mode, and is not
 		// expected to be efficient
 		targetDir = cp.dirMaker.Get(lambdaName)
 
@@ -145,23 +148,32 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type common.R
 	targetDir = cp.dirMaker.Get(lambdaName)
 	if err := os.Mkdir(targetDir, os.ModeDir); err != nil {
 		return rt_type, "", err
-	}
+	} else {
+        log.Printf("Created new directory for lambda function at `%s`", targetDir)
+    }
 
-	if strings.HasSuffix(src, ".py") {
+    // Make sure we include the suffix
+	if strings.HasSuffix(stat.Name(), ".py") {
+        log.Printf("Installing `%s` from a python file", src)
+
 		cmd := exec.Command("cp", src, filepath.Join(targetDir, "f.py"))
 		rt_type = common.RT_PYTHON
 		
 		if output, err := cmd.CombinedOutput(); err != nil {
 			return rt_type, "", fmt.Errorf("%s :: %s", err, string(output))
 		}
-	} else if strings.HasSuffix(src, ".bin") {
+	} else if strings.HasSuffix(stat.Name(), ".bin") {
+        log.Printf("Installing `%s` from binary file", src)
+
 		cmd := exec.Command("cp", src, filepath.Join(targetDir, "f.bin"))
 		rt_type = common.RT_BINARY
 		
 		if output, err := cmd.CombinedOutput(); err != nil {
 			return rt_type, "", fmt.Errorf("%s :: %s", err, string(output))
 		}
-	} else if strings.HasSuffix(src, ".tar.gz") {
+	} else if strings.HasSuffix(stat.Name(), ".tar.gz") {
+        log.Printf("Installing `%s` from an archive file", src)
+
 		cmd := exec.Command("tar", "-xzf", src, "--directory", targetDir)
 		if output, err := cmd.CombinedOutput(); err != nil {
 			return rt_type, "", fmt.Errorf("%s :: %s", err, string(output))

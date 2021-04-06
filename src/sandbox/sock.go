@@ -105,6 +105,7 @@ func (container *SOCKContainer) freshProc() (err error) {
 		)
 	} else if container.rt_type == common.RT_BINARY {
         // Launch db proxy
+        log.Print("Starting database proxy...")
         exec.Command("./ol-database-proxy", container.containerRootDir,).Run()
 
 		cmd = exec.Command(
