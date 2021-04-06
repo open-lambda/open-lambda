@@ -1,16 +1,16 @@
-#[ cfg(target_arch="wasm32") ]
 use schema::Schema;
 
 pub use schema::Value;
 
-#[ cfg(target_arch="wasm32") ]
+#[ cfg(not(target_arch="wasm32")) ]
+use db_proxy_protocol::ProxyMessage;
+
 use std::collections::HashMap;
 
-#[ cfg(target_arch="wasm32") ]
-use open_lambda_protocol::{CollectionInfo, CollectionId, Operation, convert_to_client_result};
+use open_lambda_protocol::{ClientOpResult, CollectionId, Operation, convert_to_client_result};
 
-#[ cfg(not(target_arch="wasm32")) ]
-static mut DATABASE: Option<lambda_store_client::Client> = None;
+#[ cfg(target_arch="wasm32") ]
+use open_lambda_protocol::CollectionInfo;
 
 pub use open_lambda_protocol::OpError;
 
@@ -37,16 +37,33 @@ mod internal {
     }
 }
 
-#[ cfg(target_arch="wasm32") ]
 pub struct Collection {
     identifier: CollectionId,
     name: String,
     schema: Schema
 }
 
-#[ cfg(target_arch="wasm32") ]
+#[ cfg(not(target_arch="wasm32")) ]
 impl Collection {
-    pub fn get<K: Into<Value>>(&self, key: K) -> Result<HashMap<String, Value>, OpError> {
+    pub fn execute_operation(&self, op: Operation, filter: Option<Vec<String>>) -> ClientOpResult {
+        let mut proxy = crate::proxy_connection::ProxyConnection::get_instance();
+
+        let msg = ProxyMessage::ExecuteOperation{ collection: self.identifier, op };
+        proxy.get_mut().send_message(&msg);
+
+        let response = proxy.get_mut().receive_message();
+
+        if let ProxyMessage::OperationResult{ result } = response {
+            convert_to_client_result(result, &self.schema, filter)
+        } else {
+            panic!("Got unexpected response");
+        }
+    }
+}
+
+
+impl Collection {
+    pub fn get<K: Into<Value>>(&self, key: K) -> ClientOpResult {
         let key: Value = key.into();
         let key = key.serialize_inner();
 
@@ -57,7 +74,7 @@ impl Collection {
         self.execute_operation(operation, None)
     }
 
-    pub fn delete<K: Into<Value>>(&self, key: K) -> Result<HashMap<String, Value>, OpError> {
+    pub fn delete<K: Into<Value>>(&self, key: K) -> Result<(), OpError> {
         let key: Value = key.into();
         let key = key.serialize_inner();
 
@@ -67,7 +84,10 @@ impl Collection {
 
         let filter = vec![];
 
-        self.execute_operation(operation, Some(filter))
+        match self.execute_operation(operation, Some(filter)) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(e)
+        }
     }
 
     pub fn put<K: Into<Value>>(&self, key: K, mut fields: HashMap<String, Value>) -> Result<(), OpError> {
@@ -92,6 +112,13 @@ impl Collection {
         }
     }
 
+    pub fn get_name(&self) -> &str {
+        &self.name
+    }
+}
+
+#[ cfg(target_arch="wasm32") ]
+impl Collection {
     fn execute_operation(&self, operation: Operation, filter: Option<Vec<String>>) -> Result<HashMap<String, Value>, OpError> {
         let op_data = bincode::serialize(&operation).unwrap();
 
@@ -116,10 +143,6 @@ impl Collection {
                         .expect("Failed to deserialize OpResult");
 
         convert_to_client_result(result, &self.schema, filter)
-    }
-
-    pub fn get_name(&self) -> &str {
-        &self.name
     }
 }
 
@@ -147,16 +170,12 @@ pub fn get_collection<T: ToString>(name: T) -> Option<Collection> {
 }
 
 #[ cfg(not(target_arch="wasm32")) ]
-pub fn get_collection<T: ToString>(name: T) -> Option<lambda_store_client::Collection> {
-    let database = if let Some(inner) = unsafe{ DATABASE.take() } {
-        inner
-    } else {
-        lambda_store_client::create_client("localhost")
-    };
+pub fn get_collection<T: ToString>(name: T) -> Option<Collection> {
+    let name = name.to_string();
 
-    let col = database.get_collection(name.to_string());
+    let mut database = crate::proxy_connection::ProxyConnection::get_instance();
+    let (identifier, schema) = database.get_mut().get_collection(name.clone());
 
-    unsafe{ DATABASE = Some(database) };
-    col.ok()
+    Some(crate::storage::Collection{ name, identifier, schema })
 }
 

@@ -9,6 +9,9 @@ pub use storage::*;
 mod log;
 pub use crate::log::*;
 
+#[ cfg(not(target_arch="wasm32")) ]
+mod proxy_connection;
+
 #[ cfg(target_arch="wasm32") ]
 pub fn init() {}
 

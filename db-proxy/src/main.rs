@@ -3,13 +3,16 @@ use std::os::unix::net::UnixListener as StdUnixListener;
 use tokio::net::UnixStream;
 
 use futures_util::stream::StreamExt;
+use futures_util::sink::SinkExt;
 
 use tokio_util::codec::{FramedRead, FramedWrite};
 use tokio_util::codec::length_delimited::LengthDelimitedCodec;
 
 use nix::unistd::{fork, ForkResult};
 
-use lambda_store_client::{create_client, Operation};
+use db_proxy_protocol::ProxyMessage;
+
+use lambda_store_client::create_client;
 
 fn main() {
     let container_dir = {
@@ -49,11 +52,31 @@ fn main() {
 
         let client = create_client("localhost").await;
 
-        while let Some(msg) = reader.next().await {
-            let msg = msg.expect("Failed to receive data from runtime");
-            let op: Operation = bincode::deserialize(&msg).unwrap();
+        while let Some(data) = reader.next().await {
+            let data = data.expect("Failed to receive data from runtime");
+            let msg = bincode::deserialize(&data).unwrap();
 
-            //let result = client.execute_operation(op).await;
+            let response = match msg {
+                ProxyMessage::GetSchema{ collection: col_name } => {
+                    let col = client.get_collection(col_name).expect("No such collection");
+                    let (key, fields) = col.get_schema().clone_inner();
+                    let identifier = col.get_identifier();
+
+                    ProxyMessage::SchemaResult{ identifier, key, fields }
+                }
+                ProxyMessage::ExecuteOperation{ collection, op } => {
+                    let collection = client.get_collection_by_id(collection).unwrap();
+                    let result = collection.execute_operation(op).await;
+
+                    ProxyMessage::OperationResult{ result }
+                }
+                _ => {
+                    panic!("Got unexpected message");
+                }
+            };
+
+            let out_data = bincode::serialize(&response).unwrap();
+            writer.send(out_data.into()).await.expect("Failed to send response");
         };
     });
 }
