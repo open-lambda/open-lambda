@@ -10,7 +10,6 @@ fn f() {
     open_lambda::init();
     let num_entries = 1_000;
 
-/*
     let col = match get_collection("default") {
         Some(col) => col,
         None => open_lambda::fatal!("no such collection")
@@ -38,5 +37,5 @@ fn f() {
 
     for i in 0..num_entries {
         col.delete(format!("key{}", i)).unwrap();
-    }*/
+    }
 }

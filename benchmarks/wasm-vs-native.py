@@ -4,7 +4,7 @@ import sys
 import argparse
 
 from time import time
-from helper import *
+from helper import DatastoreWorker, ContainerWorker, WasmWorker, bench_in_filter, prepare_open_lambda
 
 OUTFILE=None
 NUM_WARMUPS=None
@@ -83,7 +83,7 @@ def main():
     parser.add_argument('--num_warmups', type=int, default=5)
     parser.add_argument('--num_runs', type=int, default=100)
     parser.add_argument('--reuse_config', action='store_true')
-    parser.add_argument('--worker_types', type=str, default="container,wasm")
+    parser.add_argument('--worker_types', type=str, default="datastore,container,wasm")
 
     args = parser.parse_args()
     BENCH_FILTER = [name for name in args.bench_filter.split(",") if name != '']
@@ -97,11 +97,14 @@ def main():
         WORKER_TYPES.append(ContainerWorker)
     if 'wasm' in worker_names:
         WORKER_TYPES.append(WasmWorker)
+    if 'datastore' in worker_names:
+        WORKER_TYPES.append(DatastoreWorker)
 
     OUTFILE = open("./bench-results.csv", 'w')
     OUTFILE.write("bench_name, worker_type, elapsed\n")
 
-    prepare_open_lambda(reuse_config=args.reuse_config)
+    if 'container' in worker_names:
+        prepare_open_lambda(reuse_config=args.reuse_config)
 
     hello()
     hash100()

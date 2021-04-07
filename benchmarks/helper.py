@@ -12,20 +12,28 @@ OLDIR="./bench-dir"
 REG_DIR=os.path.abspath("test-registry")
 
 class Datastore:
-    def __init__(self):
+    def __init__(self, enable_wasm=False):
+        args = []
+        if enable_wasm:
+            args.append("--enable_wasm=true")
+            args.append("--registry_path=./test-registry.wasm")
+        else:
+            args.append("--enable_wasm=false")
+
         print("Starting lambda store")
         self._running = False
-        self._coord = Popen(["lambda-store-coordinator", "--enable_wasm=false"])
+        self._coord = Popen(["lambda-store-coordinator"] + args)
         sleep(0.2)
         self._nodes = [Popen(["lambda-store-node"])]
         self._running = True
         sleep(0.2)
 
-        #FIXME remove this
+        #Maybe remove this?
         print("Creating default collection")
-        ls = lambdastore.create_client('localhost')
-        ls.create_collection('default', str, {'value': int})
-        ls.close()
+        self._client = lambdastore.create_client('localhost')
+        self._client.create_collection('default', str, {'value': int})
+
+        self._known_programs = []
 
         print("Datastore set up")
 
@@ -35,6 +43,13 @@ class Datastore:
     def is_running(self):
         return self._running
 
+    def call(self, fn_name, args=None):
+        if fn_name not in self._known_programs:
+            self._client.wait_for_program(fn_name)
+            self._known_programs.append(fn_name)
+
+        self._client.call(fn_name, args)
+
     def stop(self):
         if self.is_running():
             self._running = False
@@ -43,12 +58,14 @@ class Datastore:
 
         print("Stopping lambda store")
 
+        self._client.close()
+
         try:
             self._coord.terminate()
             self._coord.wait()
             self._coord = None
-        except Exception as e:
-            raise RuntimeError("Failed to stop lambda store coordinator: %s" % str(e))
+        except Exception as err:
+            raise RuntimeError("Failed to stop lambda store coordinator: %s" % str(err))
 
         try:
             for node in self._nodes:
@@ -56,8 +73,8 @@ class Datastore:
                 node.wait()
 
             self._nodes = []
-        except Exception as e:
-            raise RuntimeError("Failed to stop lambda store node: %s" % str(e))
+        except Exception as err:
+            raise RuntimeError("Failed to stop lambda store node: %s" % str(err))
 
 
 ''' Issues a post request to the OL worker '''
@@ -72,24 +89,24 @@ def bench_in_filter(name, bench_filter):
 
 def put_conf(conf):
     global curr_conf
-    with open(os.path.join(OLDIR, "config.json"), "w") as f:
-        json.dump(conf, f, indent=2)
+    with open(os.path.join(OLDIR, "config.json"), "w") as cfile:
+        json.dump(conf, cfile, indent=2)
     curr_conf = conf
 
 ''' Loads a config and overwrites certain fields with what is set in **keywords '''
 class BenchConf:
     def __init__(self, **keywords):
-        with open(os.path.join(OLDIR, "config.json")) as f:
-            orig = json.load(f)
+        with open(os.path.join(OLDIR, "config.json")) as cfile:
+            orig = json.load(cfile)
         new = copy.deepcopy(orig)
-        for k in keywords:
-            if not k in new:
-                raise Exception("unknown config param: %s" % k)
-            if type(keywords[k]) == dict:
-                for k2 in keywords[k]:
-                    new[k][k2] = keywords[k][k2]
+        for key in keywords:
+            if not key in new:
+                raise Exception("unknown config param: %s" % key)
+            if isinstance(dict, keywords[key]):
+                for key2 in keywords[key]:
+                    new[key][key2] = keywords[key][key2]
             else:
-                new[k] = keywords[k]
+                new[key] = keywords[key]
 
         # setup
         put_conf(new)
@@ -104,8 +121,8 @@ def run(cmd):
     try:
         out = check_output(cmd, stderr=subprocess.STDOUT)
         fail = False
-    except subprocess.CalledProcessError as e:
-        out = e.output
+    except subprocess.CalledProcessError as err:
+        out = err.output
         fail = True
 
     out = str(out, 'utf-8')
@@ -114,6 +131,25 @@ def run(cmd):
 
     if fail:
         raise Exception("command (%s) failed: %s"  % (" ".join(cmd), out))
+
+class DatastoreWorker():
+    def __init__(self):
+        self._datastore = Datastore(enable_wasm=True)
+
+    def __del__(self):
+        self.stop()
+
+    def is_running(self):
+        self._datastore.is_running()
+
+    def stop(self):
+        self._datastore.stop()
+
+    def run(self, fn_name, args=None):
+        self._datastore.call(fn_name, args)
+
+    def name(self):
+        return "lambda-store"
 
 class ContainerWorker():
     def __init__(self):
@@ -125,8 +161,8 @@ class ContainerWorker():
         try:
             print("Starting container worker")
             run(['./ol', 'worker', '-p='+OLDIR, '--detach'])
-        except Exception as e:
-            raise RuntimeError("failed to start worker: %s" % str(e))
+        except Exception as err:
+            raise RuntimeError("failed to start worker: %s" % str(err))
 
         self._running = True
 
@@ -154,8 +190,8 @@ class ContainerWorker():
         try:
             print("Stopping container worker")
             run(['./ol', 'kill', '-p='+OLDIR])
-        except Exception as e:
-            raise RuntimeError("failed to start worker: %s" % str(e))
+        except Exception as err:
+            raise RuntimeError("failed to start worker: %s" % str(err))
 
         self._datastore.stop()
 
@@ -172,7 +208,7 @@ class WasmWorker():
         self.stop()
 
     def is_running(self):
-        return self._process != None
+        return self._process is not None
 
     def name(self):
         return "wasm"
@@ -202,8 +238,8 @@ def prepare_open_lambda(reuse_config=False):
         try:
             run(['./ol', 'kill', '-p='+OLDIR])
             print("stopped existing worker")
-        except Exception as e:
-            print('could not kill existing worker: %s' % str(e))
+        except Exception as err:
+            print('could not kill existing worker: %s' % str(err))
 
     # general setup
     if not reuse_config:
@@ -221,4 +257,3 @@ def prepare_open_lambda(reuse_config=False):
         else:
             # There was never a config in the first place, create one
             run(['./ol', 'new', '-p='+OLDIR])
-
