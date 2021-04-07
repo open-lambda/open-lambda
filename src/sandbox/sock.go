@@ -1,7 +1,3 @@
-/*
-Provides the mechanism for managing a given SOCK container-based lambda.
-*/
-
 package sandbox
 
 import (
@@ -105,8 +101,14 @@ func (container *SOCKContainer) freshProc() (err error) {
 		)
 	} else if container.rt_type == common.RT_BINARY {
         // Launch db proxy
-        log.Print("Starting database proxy...")
-        exec.Command("./ol-database-proxy", container.containerRootDir,).Run()
+        out, err := exec.Command("env", "RUST_LOG=debug", "RUST_BACKTRACE=full",
+            "./ol-database-proxy", container.containerRootDir,).CombinedOutput()
+
+        if err == nil {
+            log.Print("Started database proxy")
+        } else {
+            return fmt.Errorf("Failed to start database proxy. Output was:\n%s", out,)
+        }
 
 		cmd = exec.Command(
 			"chroot", container.containerRootDir,

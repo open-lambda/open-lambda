@@ -10,11 +10,11 @@ fn f() {
     open_lambda::init();
     let num_entries = 1_000;
 
+/*
     let col = match get_collection("default") {
         Some(col) => col,
         None => open_lambda::fatal!("no such collection")
     };
-
     for i in 0..num_entries {
         if col.get(format!("key{}", i)) != Err(OpError::NoSuchEntry) {
             open_lambda::fatal!("Entry should not exist yet");
@@ -38,5 +38,5 @@ fn f() {
 
     for i in 0..num_entries {
         col.delete(format!("key{}", i)).unwrap();
-    }
+    }*/
 }

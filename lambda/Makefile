@@ -1,8 +1,7 @@
 .PHONY: all
 .PHONY: clean
-.PHONY: rust
 
-all: spin rust
+all: spin
 
 spin: spin.c
 	gcc -O2 --static -o spin spin.c

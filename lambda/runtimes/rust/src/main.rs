@@ -4,13 +4,16 @@ use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Method, Request, Response, Result, Server, StatusCode};
 
 use futures_util::stream::StreamExt;
+use futures_util::FutureExt;
 
-use std::process::Command;
 use std::env::args;
 use std::fs::File;
 use std::io::Write;
 use std::os::unix::io::FromRawFd;
 
+use tokio::io::AsyncReadExt;
+use tokio::select;
+use tokio::process::Command;
 use tokio::net::UnixListener;
 use tokio_stream::wrappers::UnixListenerStream;
 
@@ -54,6 +57,8 @@ fn main() {
                     }
                 }
             }
+
+            log::debug!("Got all");
 
             if method == &Method::POST {
                 execute_function(args).await
@@ -132,15 +137,37 @@ async fn execute_function(args: Vec<u8>) -> Result<Response<Body>> {
     let body;
     let status_code;
 
-    let output = Command::new("/handler/f.bin").arg(arg_str)
-            .env("RUST_LOG", "debug")
-            .output().expect("Failed to execute function");
+    let mut child = Command::new("/handler/f.bin").arg(arg_str)
+            .env("RUST_LOG", "debug").spawn().expect("Failed to spawn lambda process");
 
-    if !output.status.success() {
-        let e_str = format!("Function failed with exitcode: {}",
-                            output.status.code().expect("failed to get the return code; was the lambda killed by a signal?"));
+    let child_wait = child.wait().fuse();
 
+    let signal = tokio::signal::ctrl_c().fuse();
+    let mut e_str = String::from("");
 
+    log::debug!("Waiting for process to terminate or signal");
+
+    let success = select! {
+        _ = signal => {
+            e_str = String::from("Got ctrl+c");
+            child.kill().await.expect("Failed to kill child");
+            child.wait().await.unwrap();
+
+            false
+        }
+        res = child_wait => {
+            let status = res.unwrap();
+
+            if status.success() {
+                true
+            } else {
+                e_str = format!("Function failed with exitcode: {}", status.code().unwrap());
+                false
+            }
+        }
+    };
+
+    if !success {
         status_code = StatusCode::INTERNAL_SERVER_ERROR;
         log::error!("{}", e_str);
         body = e_str.into();
@@ -174,8 +201,11 @@ async fn execute_function(args: Vec<u8>) -> Result<Response<Body>> {
         }
     }
 
-    let stdout = String::from_utf8(output.stdout).unwrap();
-    let stderr = String::from_utf8(output.stderr).unwrap();
+    let mut stdout = String::from("");
+    let mut stderr = String::from("");
+
+    child.stdout.unwrap().read_to_string(&mut stdout).await.unwrap();
+    child.stderr.unwrap().read_to_string(&mut stderr).await.unwrap();
 
     if stdout == "" {
         log::debug!("Program has no stdout output");

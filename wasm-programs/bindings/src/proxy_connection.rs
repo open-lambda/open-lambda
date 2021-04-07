@@ -23,8 +23,8 @@ impl ProxyConnection {
         let inner = if let Some(inner) = unsafe{ CONNECTION.take() } {
             inner
         } else {
-            // establish new connection
-            let stream = UnixStream::connect("/host/db_proxy.sock").expect("Failed to connect to db-proxy");
+            log::debug!("Establishing connection to database proxy");
+            let stream = UnixStream::connect("/host/db-proxy.sock").expect("Failed to connect to db-proxy");
             let codec = LengthDelimitedCodec::new();
 
             Self{ stream, codec }
@@ -34,6 +34,8 @@ impl ProxyConnection {
     }
 
     pub fn get_collection(&mut self, name: String) -> (open_lambda_protocol::CollectionId, Schema) {
+        log::debug!("Getting information about collection `{}`", name);
+
         let msg = ProxyMessage::GetSchema{ collection: name.clone() };
         self.send_message(&msg);
 
@@ -55,6 +57,7 @@ impl ProxyConnection {
     }
 
     pub fn receive_message(&mut self) -> ProxyMessage {
+        log::debug!("Received message from proxy");
         let mut buffer = BytesMut::new();
 
         loop {

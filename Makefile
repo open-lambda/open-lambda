@@ -1,10 +1,10 @@
-PWD = $(shell pwd)
-WASM_TARGET = wasm32-unknown-unknown
+PWD=$(shell pwd)
+WASM_TARGET=wasm32-unknown-unknown
 CARGO=cargo +nightly
-GO = go
-OL_DIR = $(abspath ./src)
-OL_GO_FILES = $(shell find src/ -name '*.go')
-LAMBDA_FILES = $(shell find lambda)
+GO=go
+OL_DIR=$(abspath ./src)
+OL_GO_FILES=$(shell find src/ -name '*.go')
+LAMBDA_FILES=$(shell find lambda)
 
 .PHONY: install
 .PHONY: test-all

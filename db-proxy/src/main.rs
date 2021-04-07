@@ -15,14 +15,25 @@ use db_proxy_protocol::ProxyMessage;
 use lambda_store_client::create_client;
 
 fn main() {
+    pretty_env_logger::init();
+
     let container_dir = {
         let mut argv = std::env::args();
+        argv.next().unwrap();
         argv.next().expect("Expected exactly one argument")
     };
 
     let connection = {
-        let sock = StdUnixListener::bind(format!("{}/host/db-proxy.sock", container_dir))
-            .expect("Failed to bind db-proxy unix socket");
+        let path = format!("{}/host/db-proxy.sock", container_dir);
+        let sock = match StdUnixListener::bind(&path) {
+            Ok(sock) => {
+                log::info!("Bound socket at `{}`", path);
+                sock
+            }
+            Err(e) => {
+                panic!("Failed to bind db-proxy unix socket at `{}`: {}", path, e);
+            }
+        };
 
         // Fork to let parent know we bound socket successfully
         if let ForkResult::Parent{..} = unsafe{ fork().expect("Fork failed") } {
