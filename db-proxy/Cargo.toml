@@ -13,4 +13,4 @@ log = "0.4"
 nix = "0.20"
 bincode = "1"
 db-proxy-protocol = { path="../wasm-programs/proxy-protocol" }
-pretty_env_logger = { version="0.4" }
+simple-logging = "2"

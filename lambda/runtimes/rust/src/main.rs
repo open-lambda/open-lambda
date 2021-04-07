@@ -6,6 +6,7 @@ use hyper::{Body, Method, Request, Response, Result, Server, StatusCode};
 use futures_util::stream::StreamExt;
 use futures_util::FutureExt;
 
+use std::process::Stdio;
 use std::env::args;
 use std::fs::File;
 use std::io::Write;
@@ -57,7 +58,6 @@ fn main() {
                     }
                 }
             }
-
             log::debug!("Got all");
 
             if method == &Method::POST {
@@ -138,7 +138,9 @@ async fn execute_function(args: Vec<u8>) -> Result<Response<Body>> {
     let status_code;
 
     let mut child = Command::new("/handler/f.bin").arg(arg_str)
-            .env("RUST_LOG", "debug").spawn().expect("Failed to spawn lambda process");
+            .env("RUST_LOG", "debug")
+            .stdout(Stdio::piped()).stderr(Stdio::piped())
+            .spawn().expect("Failed to spawn lambda process");
 
     let child_wait = child.wait().fuse();
 
@@ -204,8 +206,10 @@ async fn execute_function(args: Vec<u8>) -> Result<Response<Body>> {
     let mut stdout = String::from("");
     let mut stderr = String::from("");
 
-    child.stdout.unwrap().read_to_string(&mut stdout).await.unwrap();
-    child.stderr.unwrap().read_to_string(&mut stderr).await.unwrap();
+    child.stdout.take().expect("Failed to get child stdout")
+        .read_to_string(&mut stdout).await.unwrap();
+    child.stderr.take().expect("Failed to get child stderr")
+        .read_to_string(&mut stderr).await.unwrap();
 
     if stdout == "" {
         log::debug!("Program has no stdout output");

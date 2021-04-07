@@ -102,7 +102,7 @@ func (container *SOCKContainer) freshProc() (err error) {
 	} else if container.rt_type == common.RT_BINARY {
         // Launch db proxy
         out, err := exec.Command("env", "RUST_LOG=debug", "RUST_BACKTRACE=full",
-            "./ol-database-proxy", container.containerRootDir,).CombinedOutput()
+            "./ol-database-proxy", container.scratchDir,).CombinedOutput()
 
         if err == nil {
             log.Print("Started database proxy")
@@ -129,8 +129,8 @@ func (container *SOCKContainer) freshProc() (err error) {
 		return err
 	}
 
-	// sock2.py forks off a process in a new container, so this
-	// won't block long
+	// Runtimes will fork off anew container,
+    // so this won't block long
 	return cmd.Wait()
 }
 
