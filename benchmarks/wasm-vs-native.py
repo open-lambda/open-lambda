@@ -111,8 +111,7 @@ def main():
     OUTFILE = open("./bench-results.csv", 'w')
     OUTFILE.write("bench_name, worker_type, elapsed\n")
 
-    if 'container' in worker_names:
-        prepare_open_lambda(reuse_config=args.reuse_config)
+    prepare_open_lambda(reuse_config=args.reuse_config)
 
     hello()
     hash100()

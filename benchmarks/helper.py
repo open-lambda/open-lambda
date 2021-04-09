@@ -106,7 +106,7 @@ class BenchConf:
         for key in keywords:
             if not key in new:
                 raise Exception("unknown config param: %s" % key)
-            if isinstance(dict, keywords[key]):
+            if isinstance(keywords[key], dict):
                 for key2 in keywords[key]:
                     new[key][key2] = keywords[key][key2]
             else:
