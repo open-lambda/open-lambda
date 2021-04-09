@@ -1,4 +1,4 @@
-use wasmer::{Array, Store, WasmerEnv, Exports, Function, Memory, WasmPtr, LazyInit};
+use wasmer::{Array, Store, WasmerEnv, Exports, LazyInit, Function, Memory, NativeFunc, WasmPtr};
 
 use std::sync::{Arc, Mutex};
 
@@ -6,29 +6,27 @@ use std::sync::{Arc, Mutex};
 struct ArgData {
     #[ wasmer(export) ]
     memory: LazyInit<Memory>,
-
+    #[wasmer(export(name="internal_alloc_buffer"))]
+    allocate: LazyInit<NativeFunc<u32, i64>>,
     args: Arc<Vec<u8>>,
-
     result: Arc<Mutex<Option<Vec<u8>>>>,
 }
 
-fn get_args_len(env: &ArgData) -> u32 {
-    env.args.len() as u32
-}
-
-fn get_args(env: &ArgData, buf_ptr: WasmPtr<u8, Array>, buf_len: u32) -> u32 {
-    if env.args.len() > (buf_len as usize) {
-        panic!("buffer too small");
-    }
-
+fn get_args(env: &ArgData, len_out: WasmPtr<u64>) -> i64 {
     let memory = env.memory.get_ref().unwrap();
+    let offset = env.allocate.get_ref().unwrap().call(env.args.len() as u32).unwrap();
 
-    unsafe {
-        let buf_ptr = memory.view::<u8>().as_ptr().add( buf_ptr.offset() as usize ) as *mut u8;
-        std::ptr::copy(env.args.as_ptr(), buf_ptr, env.args.len());
-    }
+    let out_slice = unsafe {
+        let raw_ptr = memory.data_ptr().add(offset as usize);
+        std::slice::from_raw_parts_mut(raw_ptr, env.args.len())
+    };
 
-    env.args.len() as u32
+    out_slice.clone_from_slice(&env.args.as_slice());
+
+    let len = unsafe{ len_out.deref_mut(memory) }.unwrap();
+    len.set(env.args.len() as u64);
+
+    offset
 }
 
 fn set_result(env: &ArgData, buf_ptr: WasmPtr<u8, Array>, buf_len: u32) {
@@ -54,11 +52,10 @@ fn set_result(env: &ArgData, buf_ptr: WasmPtr<u8, Array>, buf_len: u32) {
 }
 
 pub fn get_imports(store: &Store, args: Vec<u8>, result: Arc<Mutex<Option<Vec<u8>>>>) -> Exports {
-    let arg_data = ArgData{ args: Arc::new(args), result, memory: Default::default() };
+    let arg_data = ArgData{ args: Arc::new(args), result, memory: Default::default(), allocate: Default::default() };
 
     let mut ns = Exports::new();
     ns.insert("set_result", Function::new_native_with_env(&store, arg_data.clone(), set_result));
-    ns.insert("get_args_len", Function::new_native_with_env(&store, arg_data.clone(), get_args_len));
     ns.insert("get_args", Function::new_native_with_env(&store, arg_data.clone(), get_args));
 
     ns

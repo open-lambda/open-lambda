@@ -21,7 +21,8 @@ lambda-store-client = { git="ssh://git@github.com/kaimast/lambda-store.git", def
 async-wormhole = "0.3"
 
 [features]
-cranelift = []
+default = []
+cranelift = ["wasmer-compiler-cranelift"]
 
 [profile.release]
 debug = true

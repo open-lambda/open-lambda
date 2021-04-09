@@ -4,8 +4,7 @@ pub use serde_json as json;
 mod internal {
     #[link(wasm_import_module="ol_args")]
     extern "C" {
-        pub fn get_args_len() -> u32;
-        pub fn get_args(buf_ptr: *mut u8, buf_len: u32) -> u32;
+        pub fn get_args(len_out: *mut u64) -> i64;
         pub fn set_result(buf_ptr: *const u8, buf_len: u32);
     }
 }
@@ -26,19 +25,23 @@ pub fn get_args() -> Option<json::Value> {
 
 #[ cfg(target_arch="wasm32") ]
 pub fn get_args() -> Option<json::Value> {
-    let buf_len = unsafe{ internal::get_args_len() };
-    let mut arg_buffer = Vec::new();
-    arg_buffer.resize(buf_len as usize, 0);
+    let mut len = 0u64;
+    let data_ptr = unsafe{
+        let len_ptr = (&mut len) as *mut u64;
+        internal::get_args(len_ptr)
+    };
 
-    let arg_len = unsafe{ internal::get_args(arg_buffer[..].as_mut_ptr(), buf_len) };
-
-    if arg_len == 0 {
-        return None;
+    if data_ptr <= 0 || len <= 0 {
+        panic!("Got unexpected error");
     }
 
-    assert!(arg_len == buf_len);
+    let len = len as usize;
 
-    let json_str = String::from_utf8(arg_buffer).expect("Failed to parse argument string; not UTF-8?");
+    let data = unsafe {
+        Vec::<u8>::from_raw_parts(data_ptr as *mut u8, len, len)
+    };
+
+    let json_str = String::from_utf8(data).expect("Failed to parse argument string; not UTF-8?");
     let jvalue = json::from_str(&json_str).expect("Failed to parse JSON");
 
     Some(jvalue)
