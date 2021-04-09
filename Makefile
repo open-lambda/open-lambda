@@ -6,6 +6,7 @@ OL_DIR=$(abspath ./src)
 OL_GO_FILES=$(shell find src/ -name '*.go')
 LAMBDA_FILES=$(shell find lambda)
 USE_CRANELIFT?=0
+BUILDTYPE?=debug
 
 ifeq (${USE_CRANELIFT}, 1)
 	WASM_WORKER_FLAGS=--features=cranelift
@@ -13,6 +14,11 @@ else
 	WASM_WORKER_FLAGS=
 endif
 
+ifeq (${BUILDTYPE}, release)
+	BUILD_FLAGS=--release
+else
+	BUILD_FLAGS=
+endif
 
 .PHONY: install
 .PHONY: test-all
@@ -28,8 +34,8 @@ endif
 all: ol imgs/lambda wasm-worker wasm-programs native-programs
 
 wasm-worker:
-	cd wasm-worker && ${CARGO} build --release ${WASM_WORKER_FLAGS}
-	cp wasm-worker/target/release/wasm-worker ./ol-wasm
+	cd wasm-worker && ${CARGO} build ${BUILD_FLAGS} ${WASM_WORKER_FLAGS}
+	cp wasm-worker/target/${BUILDTYPE}/wasm-worker ./ol-wasm
 
 wasm-programs:
 	cd wasm-programs && ${CARGO} build --release --target $(WASM_TARGET)
@@ -54,8 +60,8 @@ check-runtime:
 	cd lambda/runtimes/rust && ${CARGO} check
 
 db-proxy:
-	cd db-proxy && ${CARGO} build --release
-	cp ./db-proxy/target/release/db-proxy ./ol-database-proxy
+	cd db-proxy && ${CARGO} build ${BUILD_FLAGS}
+	cp ./db-proxy/target/${BUILDTYPE}/db-proxy ./ol-database-proxy
 
 test-dir:
 	cp lambda/runtimes/rust/target/release/open-lambda-runtime ./test-registry/hello-rust.bin
