@@ -14,6 +14,11 @@ struct ArgData {
 
 fn get_args(env: &ArgData, len_out: WasmPtr<u64>) -> i64 {
     let memory = env.memory.get_ref().unwrap();
+
+    if env.args.len() == 0 {
+        return 0;
+    }
+
     let offset = env.allocate.get_ref().unwrap().call(env.args.len() as u32).unwrap();
 
     let out_slice = unsafe {

@@ -5,6 +5,14 @@ GO=go
 OL_DIR=$(abspath ./src)
 OL_GO_FILES=$(shell find src/ -name '*.go')
 LAMBDA_FILES=$(shell find lambda)
+USE_CRANELIFT?=0
+
+ifeq (${USE_CRANELIFT}, 1)
+	WASM_WORKER_FLAGS=--features=cranelift
+else
+	WASM_WORKER_FLAGS=
+endif
+
 
 .PHONY: install
 .PHONY: test-all
@@ -20,7 +28,7 @@ LAMBDA_FILES=$(shell find lambda)
 all: ol imgs/lambda wasm-worker wasm-programs native-programs
 
 wasm-worker:
-	cd wasm-worker && ${CARGO} build --release
+	cd wasm-worker && ${CARGO} build --release ${WASM_WORKER_FLAGS}
 	cp wasm-worker/target/release/wasm-worker ./ol-wasm
 
 wasm-programs:

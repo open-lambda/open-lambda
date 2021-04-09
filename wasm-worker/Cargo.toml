@@ -12,6 +12,7 @@ wasmer = { git="ssh://git@github.com/kaimast/wasmer.git", branch="async", defaul
 wasmer-compiler-cranelift = { git="ssh://git@github.com/kaimast/wasmer.git", branch="async", optional=true }
 wasmer-compiler-llvm = { git="ssh://git@github.com/kaimast/wasmer.git", branch="async" }
 wasmer-engine-native = { git="ssh://git@github.com/kaimast/wasmer.git", branch="async" }
+wasmer-vm = { git="ssh://git@github.com/kaimast/wasmer.git", branch="async" }
 pretty_env_logger = { version="0.4" }
 log = "0.4"
 dashmap = "4"

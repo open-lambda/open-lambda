@@ -56,6 +56,18 @@ def hello(worker):
     worker.run('hello', [])
 
 @benchmark
+def get_put1(worker):
+    worker.run('get_put', {"num_entries":1 , "entry_size": 1000*1000})
+
+@benchmark
+def get_put100(worker):
+    worker.run('get_put', {"num_entries":100 , "entry_size": 10*1000})
+
+@benchmark
+def get_put10000(worker):
+    worker.run('get_put', {"num_entries":10000 , "entry_size": 100})
+
+@benchmark
 def hash100(worker):
     worker.run('hashing', {"num_hashes": 100, "input_len": 1024})
 
@@ -66,10 +78,6 @@ def hash10000(worker):
 @benchmark
 def hash100000(worker):
     worker.run('hashing', {"num_hashes": 100*1000, "input_len": 1024})
-
-@benchmark
-def get_put(worker):
-    worker.run('get_put', {})
 
 def main():
     global BENCH_FILTER
@@ -110,7 +118,9 @@ def main():
     hash100()
     hash10000()
     hash100000()
-    get_put()
+    get_put1()
+    get_put100()
+    get_put10000()
 
 if __name__ == '__main__':
     main()

@@ -1,4 +1,4 @@
-use open_lambda::{OpError, get_collection, entry};
+use open_lambda::{OpError, get_args, get_collection, entry, fatal};
 
 fn main() {
     #[ cfg(not(target_arch="wasm32")) ]
@@ -8,7 +8,18 @@ fn main() {
 #[no_mangle]
 fn f() {
     open_lambda::init();
-    let num_entries = 1_000;
+    let args = get_args().expect("No argument given");
+    let num_entries;
+    let entry_size;
+
+    if let Some(args) = args.as_object() {
+        num_entries = args.get("num_entries").expect("Could not find `num_entries` argument")
+            .as_i64().unwrap() as usize;
+        entry_size = args.get("entry_size").expect("Coult not find `entry_size` argument")
+            .as_i64().unwrap() as usize;
+    } else {
+        fatal!("No arguments given");
+    }
 
     let col = match get_collection("default") {
         Some(col) => col,
@@ -21,13 +32,21 @@ fn f() {
     }
 
     for i in 0..num_entries {
-        if let Err(e) = col.put(format!("key{}", i), entry!{"value" => 5000}) {
+        let mut data = Vec::new();
+        data.resize(entry_size, 0);
+        let string = String::from_utf8(data).unwrap();
+
+        if let Err(e) = col.put(format!("key{}", i), entry!{"value" => string}) {
             open_lambda::fatal!("{}", e);
         }
     }
 
     for i in 0..num_entries {
-        let expected = entry!{"value" => 5000};
+        let mut data = Vec::new();
+        data.resize(entry_size, 0);
+        let string = String::from_utf8(data).unwrap();
+
+        let expected = entry!{"value" => string};
 
         match col.get(format!("key{}", i)) {
             Ok(res) => assert_eq!(res, expected),

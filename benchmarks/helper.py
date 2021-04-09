@@ -31,7 +31,7 @@ class Datastore:
         #Maybe remove this?
         print("Creating default collection")
         self._client = lambdastore.create_client('localhost')
-        self._client.create_collection('default', str, {'value': int})
+        self._client.create_collection('default', str, {'value': str})
 
         self._known_programs = []
 
@@ -85,7 +85,11 @@ def bench_in_filter(name, bench_filter):
     if len(bench_filter) == 0:
         return True
 
-    return name in bench_filter
+    for f in bench_filter:
+        if f in name:
+            return True
+
+    return False
 
 def put_conf(conf):
     global curr_conf

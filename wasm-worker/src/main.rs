@@ -87,7 +87,18 @@ async fn execute_function(name: String, args: Vec<u8>, program_mgr: Arc<ProgramM
     };
 
     let stack = async_wormhole::stack::EightMbStack::new().unwrap();
-    instance.call_with_stack("f", stack).await.expect("Lambda function failed");
+    if let Err(e) = instance.call_with_stack("f", stack).await {
+        if let Some(wasmer_vm::TrapCode::StackOverflow) = e.clone().to_trap() {
+            log::error!("Function failed due to stack overflow");
+        } else {
+            log::error!("Function failed with message \"{}\"", e.message());
+            log::error!("Stack trace:");
+
+            for frame in e.trace() {
+                log::error!("   {}::{}", frame.module_name(), frame.function_name().or(Some("unknown")).unwrap());
+            }
+        }
+    };
 
     let result = result.lock().unwrap().take();
 

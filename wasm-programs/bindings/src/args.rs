@@ -31,6 +31,10 @@ pub fn get_args() -> Option<json::Value> {
         internal::get_args(len_ptr)
     };
 
+    if data_ptr == 0 {
+        return None;
+    }
+
     if data_ptr <= 0 || len <= 0 {
         panic!("Got unexpected error");
     }

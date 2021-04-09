@@ -1555,6 +1555,7 @@ dependencies = [
  "wasmer-compiler-cranelift",
  "wasmer-compiler-llvm",
  "wasmer-engine-native",
+ "wasmer-vm",
 ]
 
 [[package]]
