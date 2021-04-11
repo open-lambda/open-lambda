@@ -263,7 +263,7 @@ dependencies = [
 [[package]]
 name = "open-lambda-protocol"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git#11315da53bf31e519404169ef282dded3552227f"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git#7dd5fb2b3d7a41471a5904808d08bcfd7b043604"
 dependencies = [
  "schema",
  "serde",
