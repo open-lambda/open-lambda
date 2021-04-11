@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"time"
 	"strings"
 	"syscall"
 
@@ -36,6 +37,8 @@ type SOCKContainer struct {
 
 	parent   Sandbox
 	children map[string]Sandbox
+
+	dbProxy *os.Process
 }
 
 // add ID to each log message so we know which logs correspond to
@@ -100,20 +103,21 @@ func (container *SOCKContainer) freshProc() (err error) {
 			"/runtimes/python/server.py", "/host/bootstrap.py", strconv.Itoa(len(cgFiles)),
 		)
 	} else if container.rt_type == common.RT_BINARY {
-        // Launch db proxy
-        out, err := exec.Command("env", "RUST_LOG=debug", "RUST_BACKTRACE=full",
-            "./ol-database-proxy", container.scratchDir,).CombinedOutput()
+		if container.dbProxy == nil {
+			err := container.launchDbProxy()
 
-        if err == nil {
-            log.Print("Started database proxy")
-        } else {
-            return fmt.Errorf("Failed to start database proxy. Output was:\n%s", out,)
-        }
+			if err != nil {
+				return err
+			}
+		}
+	
 
 		cmd = exec.Command(
 			"chroot", container.containerRootDir,
 			"env", "RUST_BACKTRACE=full", "/runtimes/rust/server", strconv.Itoa(len(cgFiles)),
 		)
+
+		
 	} else {
 		return fmt.Errorf("Unsupported runtime")
 	}
@@ -129,9 +133,71 @@ func (container *SOCKContainer) freshProc() (err error) {
 		return err
 	}
 
-	// Runtimes will fork off anew container,
-    // so this won't block long
+	// Runtimes will fork off a new container,
+	// so this won't block long
 	return cmd.Wait()
+}
+
+func (container *SOCKContainer) launchDbProxy() (err error) {
+	args := []string{}
+	args = append(args, "ol-database-proxy")
+	args = append(args, container.scratchDir)
+
+	var procAttr os.ProcAttr
+	procAttr.Files = []*os.File{os.Stdin, os.Stdout, os.Stderr}
+
+	proc, err := os.StartProcess("./ol-database-proxy", args, &procAttr)
+
+	died := make(chan error)
+	go func() {
+		_, err := proc.Wait()
+		died <- err
+	}()
+
+	if err != nil {
+		return fmt.Errorf("Failed to start database proxy")
+	}
+
+	var ping_err error
+
+	//TODO make more efficient
+	for i := 0; i < 300; i++ {
+		// check if it has died
+		select {
+		case err := <-died:
+			if err != nil {
+				return err
+			}
+			return fmt.Errorf("database proxy does not seem to be running")
+		default:
+		}
+
+		path := container.scratchDir + "/db-proxy.pid"
+		data, err := os.ReadFile(path)
+
+		if err != nil {
+			ping_err = err
+			time.Sleep(1 * time.Millisecond)
+			continue
+		}
+
+		pid, err := strconv.Atoi(string(data))
+		if err != nil {
+			ping_err = err
+			time.Sleep(1 * time.Millisecond)
+			continue
+		}
+
+		if pid != proc.Pid {
+			return fmt.Errorf("Database proxy pid does not match")
+		}
+
+		ping_err = nil
+		container.dbProxy = proc
+		break;
+	}
+
+	return ping_err
 }
 
 func (container *SOCKContainer) populateRoot() (err error) {
@@ -259,6 +325,11 @@ func (container *SOCKContainer) decCgRefCount() {
 
 		if container.parent != nil {
 			container.parent.childExit(container)
+		}
+
+		if container.dbProxy != nil {
+			container.dbProxy.Kill()
+			container.dbProxy.Wait()
 		}
 	}
 }

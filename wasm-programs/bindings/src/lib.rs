@@ -20,7 +20,7 @@ pub fn init() {
     env_logger::init();
 
     //Initialize connection so proxy does not run forever
- //   proxy_connection::ProxyConnection::get_instance();
+    proxy_connection::ProxyConnection::get_instance();
 }
 
 #[ cfg(target_arch="wasm32") ]

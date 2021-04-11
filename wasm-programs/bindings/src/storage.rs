@@ -46,6 +46,8 @@ pub struct Collection {
 #[ cfg(not(target_arch="wasm32")) ]
 impl Collection {
     pub fn execute_operation(&self, op: Operation, filter: Option<Vec<String>>) -> ClientOpResult {
+        log::trace!("Executing operation {:?}", op);
+
         let mut proxy = crate::proxy_connection::ProxyConnection::get_instance();
 
         let msg = ProxyMessage::ExecuteOperation{ collection: self.identifier, op };
@@ -60,7 +62,6 @@ impl Collection {
         }
     }
 }
-
 
 impl Collection {
     pub fn get<K: Into<Value>>(&self, key: K) -> ClientOpResult {
@@ -175,6 +176,8 @@ pub fn get_collection<T: ToString>(name: T) -> Option<Collection> {
 
     let mut database = crate::proxy_connection::ProxyConnection::get_instance();
     let (identifier, schema) = database.get_mut().get_collection(name.clone());
+
+    log::debug!("Got collection \"{}\"", name);
 
     Some(crate::storage::Collection{ name, identifier, schema })
 }

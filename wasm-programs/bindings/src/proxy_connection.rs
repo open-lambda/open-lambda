@@ -57,7 +57,8 @@ impl ProxyConnection {
     }
 
     pub fn receive_message(&mut self) -> ProxyMessage {
-        log::debug!("Received message from proxy");
+        log::trace!("Waiting for message from proxy");
+
         let mut buffer = BytesMut::new();
 
         loop {
@@ -71,6 +72,8 @@ impl ProxyConnection {
                 }
             }
 
+            log::trace!("Received {} bytes from proxy", len);
+
             if len > 0 {
                 buffer.extend_from_slice(&data[0..len]);
             } else {
@@ -79,7 +82,7 @@ impl ProxyConnection {
 
             match self.codec.decode(&mut buffer) {
                 Ok(Some(data)) => {
-                    bincode::deserialize(&data).unwrap()
+                    return bincode::deserialize(&data).unwrap();
                 }
                 Ok(None) => {
                     continue;

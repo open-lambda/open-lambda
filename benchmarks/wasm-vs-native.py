@@ -88,8 +88,8 @@ def main():
 
     parser = argparse.ArgumentParser(description='Run benchmarks between native containers and WebAssembly')
     parser.add_argument('--bench_filter', type=str, default="")
-    parser.add_argument('--num_warmups', type=int, default=5)
-    parser.add_argument('--num_runs', type=int, default=100)
+    parser.add_argument('--num_warmups', type=int, default=3)
+    parser.add_argument('--num_runs', type=int, default=20)
     parser.add_argument('--reuse_config', action='store_true')
     parser.add_argument('--worker_types', type=str, default="datastore,container,wasm")
 

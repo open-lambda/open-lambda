@@ -4,7 +4,6 @@ use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Method, Request, Response, Result, Server, StatusCode};
 
 use futures_util::stream::StreamExt;
-use futures_util::FutureExt;
 
 use std::process::Stdio;
 use std::env::args;
@@ -40,7 +39,7 @@ where
 fn main() {
     let make_service = make_service_fn(async move |_| {
         Ok::<_, hyper::Error>(service_fn(async move |req: Request<Body>| {
-            log::debug!("Got new request: {:?}", req);
+            log::trace!("Got new request: {:?}", req);
 
             let mut args = Vec::new();
             let method = req.method().clone();
@@ -58,7 +57,6 @@ fn main() {
                     }
                 }
             }
-            log::debug!("Got all");
 
             if method == &Method::POST {
                 execute_function(args).await
@@ -89,7 +87,7 @@ fn main() {
         let mut f = unsafe{ File::from_raw_fd(fd) };
 
         f.write(format!("{}", pid).as_bytes()).unwrap();
-        log::debug!("Joined cgroup, closing FD{}'", fd);
+        log::trace!("Joined cgroup, closing FD{}'", fd);
     }
 
     unshare(CloneFlags::CLONE_NEWUTS | CloneFlags::CLONE_NEWPID | CloneFlags::CLONE_NEWIPC).unwrap();
@@ -142,9 +140,9 @@ async fn execute_function(args: Vec<u8>) -> Result<Response<Body>> {
             .stdout(Stdio::piped()).stderr(Stdio::piped())
             .spawn().expect("Failed to spawn lambda process");
 
-    let child_wait = child.wait().fuse();
+    let child_wait = child.wait();
+    let signal = tokio::signal::ctrl_c();
 
-    let signal = tokio::signal::ctrl_c().fuse();
     let mut e_str = String::from("");
 
     log::debug!("Waiting for process to terminate or signal");

@@ -600,19 +600,16 @@ func (linst *LambdaInstance) Task() {
 		case req = <-f.instChan:
 		case killed := <-linst.killChan:
 			if sb != nil {
+				rt_log := sb.GetRuntimeLog()
 				sb.Destroy()
-                rt_log := sb.GetRuntimeLog()
 
-                 if rt_log != "" {
-                    log.Printf("Stopped sandbox. Runtime output is:")
+				 if rt_log != "" {
+					 log.Printf("Stopped sandbox. Runtime output is:")
 
-                    for _, line := range strings.Split(rt_log, "\n") {
-                        log.Printf("   %s", line)
-                    }
-                }
-
-
-
+					for _, line := range strings.Split(rt_log, "\n") {
+						log.Printf("   %s", line)
+					}
+				}
 			}
 			killed <- true
 			return
@@ -690,18 +687,16 @@ func (linst *LambdaInstance) Task() {
 			// check whether we should shutdown (non-blocking)
 			select {
 			case killed := <-linst.killChan:
+				rt_log := sb.GetRuntimeLog()
 				sb.Destroy()
-               rt_log := sb.GetRuntimeLog()
 
-                if rt_log != "" {
-                    log.Printf("Stopped sandbox. Runtime output is:")
+				if rt_log != "" {
+					log.Printf("Stopped sandbox. Runtime output is:")
 
-                    for _, line := range strings.Split(rt_log, "\n") {
-                        log.Printf("   %s", line)
-                    }
-                }
-
-
+					for _, line := range strings.Split(rt_log, "\n") {
+						log.Printf("   %s", line)
+					}
+				}
 
 				killed <- true
 				return
