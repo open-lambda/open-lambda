@@ -25,11 +25,16 @@ class Datastore:
         self._coord = Popen(["lambda-store-coordinator"] + args)
         sleep(0.5)
 
-        for pos in range(1, 4):
-            self._nodes = [Popen(["lambda-store-node"])]
+        self._nodes = []
 
+        for pos in range(1, 4):
+            node = Popen(["lambda-store-node", "--identifier=%i" % pos,
+                "-p=localhost:%i"%(50000+pos), "-l=localhost:%i"%(51000+pos)])
+
+            self._nodes.append(node)
+ 
         self._running = True
-        sleep(0.2)
+        sleep(0.5)
 
         #Maybe remove this?
         print("Creating default collection")
