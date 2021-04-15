@@ -22,9 +22,9 @@ dependencies = [
 
 [[package]]
 name = "async-trait"
-version = "0.1.48"
+version = "0.1.49"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36ea56748e10732c49404c153638a15ec3d6211ec5ff35d9bb20e13b93576adf"
+checksum = "589652ce7ccb335d1e7ecb3be145425702b290dbcb7029bbeaae263fc1d87b48"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -254,7 +254,7 @@ checksum = "dd25036021b0de88a0aff6b850051563c6516d0bf53f8638938edbb9de732736"
 [[package]]
 name = "lambda-store-client"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git#7dd5fb2b3d7a41471a5904808d08bcfd7b043604"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git#0a242f87b2d6afeef8b9b00ebb798d79e5841714"
 dependencies = [
  "bincode",
  "dashmap",
@@ -271,7 +271,7 @@ dependencies = [
 [[package]]
 name = "lambda-store-utils"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git#7dd5fb2b3d7a41471a5904808d08bcfd7b043604"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git#0a242f87b2d6afeef8b9b00ebb798d79e5841714"
 dependencies = [
  "async-trait",
  "bincode",
@@ -365,7 +365,7 @@ checksum = "af8b08b04175473088b46763e51ee54da5f9a164bc162f615b91bc179dbf15a3"
 [[package]]
 name = "open-lambda-protocol"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git#7dd5fb2b3d7a41471a5904808d08bcfd7b043604"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git#0a242f87b2d6afeef8b9b00ebb798d79e5841714"
 dependencies = [
  "schema",
  "serde",
@@ -451,7 +451,7 @@ checksum = "71d301d4193d031abdd79ff7e3dd721168a9572ef3fe51a1517aba235bd8f86e"
 [[package]]
 name = "schema"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/schema.git#2b93591821c26f255beb83c86840ebbfc952b826"
+source = "git+ssh://git@github.com/kaimast/schema.git#ef5e0abc5adb18516855a691075c206079711f11"
 dependencies = [
  "bincode",
  "log",
@@ -564,9 +564,9 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.4.0"
+version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "134af885d758d645f0f0505c9a8b3f9bf8a348fd822e112ab5248138348f1722"
+checksum = "83f0c8e7c0addab50b663055baf787d0af7f413a46e6e7fb9559a4e4db7137a5"
 dependencies = [
  "autocfg",
  "bytes",
@@ -594,9 +594,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-util"
-version = "0.6.5"
+version = "0.6.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5143d049e85af7fbc36f5454d990e62c2df705b3589f123b71f441b6b59f443f"
+checksum = "940a12c99365c31ea8dd9ba04ec1be183ffe4920102bb7122c2f515437601e8e"
 dependencies = [
  "bytes",
  "futures-core",

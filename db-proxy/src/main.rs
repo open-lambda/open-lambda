@@ -94,8 +94,14 @@ async fn handle_connection(stream: UnixStream) {
                 ProxyMessage::SchemaResult{ identifier, key, fields }
             }
             ProxyMessage::ExecuteOperation{ collection, op } => {
+                let ntype = if op.is_write() {
+                    lambda_store_client::NodeType::Head
+                } else {
+                    lambda_store_client::NodeType::Tail
+                };
+
                 let collection = client.get_collection_by_id(collection).unwrap();
-                let result = collection.execute_operation(op).await;
+                let result = collection.execute_operation(op, ntype).await;
 
                 ProxyMessage::OperationResult{ result }
             }

@@ -6,6 +6,8 @@ use lambda_store_client::Client as Database;
 
 use open_lambda_protocol::{CollectionInfo, Operation};
 
+//TODO use a transaction here
+
 #[ derive(Clone, WasmerEnv) ]
 struct StorageEnv {
     #[wasmer(export)]
@@ -81,7 +83,13 @@ fn execute_operation(env: &StorageEnv, op_data: WasmPtr<u8, Array>, op_data_len:
     log::debug!("Executing operation: {:?}", op);
 
     let result = yielder.async_suspend(async move {
-        col.execute_operation(op).await
+        let ntype = if op.is_write() {
+            lambda_store_client::NodeType::Head
+        } else {
+            lambda_store_client::NodeType::Tail
+        };
+
+        col.execute_operation(op, ntype).await
     });
 
     log::debug!("Op result is: {:?}", result);
