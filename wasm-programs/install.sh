@@ -5,6 +5,8 @@ shopt -s nullglob
 WASM_PREFIX=./wasm-programs/target/$1/release/
 NATIVE_PREFIX=./wasm-programs/target/release/
 
+mkdir -p test-registry
+
 for f in ${WASM_PREFIX}*.wasm; do
 	name=${f/${WASM_PREFIX}/}
 	echo "Installing '$name' from '$f'"

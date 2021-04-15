@@ -23,8 +23,11 @@ class Datastore:
         print("Starting lambda store")
         self._running = False
         self._coord = Popen(["lambda-store-coordinator"] + args)
-        sleep(0.2)
-        self._nodes = [Popen(["lambda-store-node"])]
+        sleep(0.5)
+
+        for pos in range(1, 4):
+            self._nodes = [Popen(["lambda-store-node"])]
+
         self._running = True
         sleep(0.2)
 
