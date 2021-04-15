@@ -67,6 +67,8 @@ fn main() {
 
 async fn handle_connection(stream: UnixStream) {
     log::info!("Connected to process");
+    stream.set_nodelay(true);
+
     let (reader, writer) = stream.into_split();
 
     let mut reader = FramedRead::new(reader, LengthDelimitedCodec::new());
