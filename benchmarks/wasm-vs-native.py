@@ -6,76 +6,91 @@ import argparse
 from time import time
 from helper import DatastoreWorker, ContainerWorker, WasmWorker, bench_in_filter, prepare_open_lambda
 
+from multiprocessing import Process
+
 OUTFILE=None
 NUM_WARMUPS=None
 NUM_RUNS=None
 WORKER_TYPES=[]
 BENCH_FILTER=[]
 
-def benchmark(fn):
-    def wrapper(*args, **kwargs):
-        global OUTFILE
+def benchmark(num_threads=1):
+    def inner_function(fn):
+        def wrapper(*args, **kwargs):
+            global OUTFILE
 
-        if len(args):
-            raise Exception("positional args not supported")
+            if len(args):
+                raise Exception("positional args not supported")
 
-        name = fn.__name__
+            name = fn.__name__
 
-        if not bench_in_filter(name, BENCH_FILTER):
-            print("Skipping test '%s'" % name)
-            return None
+            if not bench_in_filter(name, BENCH_FILTER):
+                print("Skipping test '%s'" % name)
+                return None
 
-        for Worker in WORKER_TYPES:
-            worker = Worker()
-            fargs = [worker]+list(args)
+            for Worker in WORKER_TYPES:
+                worker = Worker()
+                fargs = [worker]+list(args)
 
-            print("Worker started")
+                print("Worker started")
 
-            for _ in range(NUM_WARMUPS):
-                sys.stdout.write("Running benchmark `%s` with backend `%s` (warmup) ..." % (name, worker.name()))
-                fn(*fargs)
-                print("Done.")
+                for _ in range(NUM_WARMUPS):
+                    sys.stdout.write("Running benchmark `%s` with backend `%s` (warmup) ..." % (name, worker.name()))
+                    fn(*fargs)
+                    print("Done.")
 
-            for _ in range(NUM_RUNS):
-                sys.stdout.write("Running benchmark `%s` with backend `%s`..." % (name, worker.name()))
-                start = time()
-                fn(*fargs)
-                end = time()
+                for _ in range(NUM_RUNS):
+                    sys.stdout.write("Running benchmark `%s` with backend `%s`..." % (name, worker.name()))
+                    start = time()
+                    tasks = []
+                    for _ in range(num_threads):
+                        p = Process(target=fn, args=fargs)
+                        p.start()
+                        tasks.append(p)
 
-                elapsed = (end - start) * 1000.0
-                print("Done. (Elapsed time %fms)" % elapsed)
+                    for task in tasks:
+                        task.join()
+                    end = time()
 
-                OUTFILE.write("%s, %s, %f\n" % (name, worker.name(), elapsed))
+                    elapsed = (end - start) * 1000.0
+                    print("Done. (Elapsed time %fms)" % elapsed)
 
-            worker.stop()
+                    OUTFILE.write("%s, %s, %f\n" % (name, worker.name(), elapsed))
 
-    return wrapper
+                worker.stop()
 
-@benchmark
+        return wrapper
+    return inner_function
+
+@benchmark()
 def hello(worker):
     worker.run('hello', [])
 
-@benchmark
+@benchmark()
 def get_put1(worker):
     worker.run('get_put', {"num_entries":1 , "entry_size": 1000*1000})
 
-@benchmark
+@benchmark()
 def get_put100(worker):
     worker.run('get_put', {"num_entries":100 , "entry_size": 10*1000})
 
-@benchmark
+@benchmark()
 def get_put10000(worker):
     worker.run('get_put', {"num_entries":10000 , "entry_size": 100})
 
-@benchmark
+@benchmark(num_threads=10)
+def concurrent_get_put100(worker):
+    worker.run('get_put', {"num_entries":100 , "entry_size": 10*1000})
+
+@benchmark()
 def hash100(worker):
     worker.run('hashing', {"num_hashes": 100, "input_len": 1024})
 
-@benchmark
+@benchmark()
 def hash10000(worker):
     worker.run('hashing', {"num_hashes": 10*1000, "input_len": 1024})
 
-@benchmark
+@benchmark()
 def hash100000(worker):
     worker.run('hashing', {"num_hashes": 100*1000, "input_len": 1024})
 
@@ -120,6 +135,7 @@ def main():
     get_put1()
     get_put100()
     get_put10000()
+    concurrent_get_put100()
 
 if __name__ == '__main__':
     main()
