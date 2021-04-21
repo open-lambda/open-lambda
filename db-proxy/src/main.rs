@@ -74,6 +74,7 @@ async fn handle_connection(stream: UnixStream) {
     let mut writer = FramedWrite::new(writer, LengthDelimitedCodec::new());
 
     let client = create_client("localhost").await;
+    let mut tx = Some(client.begin_transaction());
 
     while let Some(res) = reader.next().await {
         let data = match res {
@@ -101,10 +102,17 @@ async fn handle_connection(stream: UnixStream) {
                     lambda_store_client::NodeType::Tail
                 };
 
-                let collection = client.get_collection_by_id(collection).unwrap();
+                let tx = tx.as_ref().expect("Transaction already committed?");
+                let collection = tx.get_collection_by_id(collection).unwrap();
                 let result = collection.execute_operation(op, ntype).await;
 
                 ProxyMessage::OperationResult{ result }
+            }
+            ProxyMessage::TxCommitRequest => {
+                let tx = tx.take().expect("Transaction already committed?");
+                let result = tx.commit().await.is_ok();
+
+                ProxyMessage::TxCommitResult{result}
             }
             _ => {
                 panic!("Got unexpected message");

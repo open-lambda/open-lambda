@@ -3,19 +3,35 @@ use wasmer::{Array, LazyInit, Function, Memory, NativeFunc, Store, Exports, Wasm
 use std::sync::{Arc, Mutex};
 
 use lambda_store_client::Client as Database;
+use lambda_store_client::Transaction;
 
 use open_lambda_protocol::{CollectionInfo, Operation};
 
-//TODO use a transaction here
-
-#[ derive(Clone, WasmerEnv) ]
-struct StorageEnv {
+#[ derive(Default, Clone, WasmerEnv) ]
+pub struct StorageEnv {
     #[wasmer(export)]
     memory: LazyInit<Memory>,
     #[wasmer(export(name="internal_alloc_buffer"))] allocate: LazyInit<NativeFunc<u32, i64>>,
     database: Arc<Mutex<Option<Database>>>,
+    transaction: Arc<Mutex<Option<Transaction>>>,
     #[wasmer(yielder)]
     yielder: LazyInit<Yielder>,
+}
+
+impl StorageEnv {
+    pub async fn commit(&self) -> bool {
+        let tx = {
+            let mut tx_lock = self.transaction.lock().unwrap();
+            if let Some(tx) = tx_lock.take() {
+                tx
+            } else {
+                // Nothing to commit
+                return true;
+            }
+        };
+
+        tx.commit().await.is_ok()
+    }
 }
 
 fn get_collection_schema(env: &StorageEnv, name_ptr: WasmPtr<u8, Array>, name_len: u32, len_out: WasmPtr<u64>) -> i64 {
@@ -68,6 +84,14 @@ fn execute_operation(env: &StorageEnv, op_data: WasmPtr<u8, Array>, op_data_len:
     let mut db_lock = env.database.lock().unwrap();
     let database = db_lock.take().expect("Database not initialized yet");
 
+    let mut tx_lock = env.transaction.lock().unwrap();
+
+    let tx = if let Some(tx) = tx_lock.take() {
+        tx
+    } else {
+        database.begin_transaction()
+    };
+
     let op_slice = unsafe {
         let offset = op_data.offset();
         let raw_ptr = memory.data_ptr().add(offset as usize);
@@ -78,7 +102,7 @@ fn execute_operation(env: &StorageEnv, op_data: WasmPtr<u8, Array>, op_data_len:
 
     let op: Operation = bincode::deserialize(op_slice).unwrap();
     let col_id = op.get_collection().unwrap();
-    let col = database.get_collection_by_id(col_id).expect("No such collection");
+    let col = tx.get_collection_by_id(col_id).expect("No such collection");
 
     log::debug!("Executing operation: {:?}", op);
 
@@ -109,19 +133,13 @@ fn execute_operation(env: &StorageEnv, op_data: WasmPtr<u8, Array>, op_data_len:
     len.set(result_data.len() as u64);
 
     *db_lock = Some(database);
+    *tx_lock = Some(tx);
 
     offset
 }
 
-pub fn get_imports(store: &Store) -> Exports {
+pub fn get_imports(store: &Store, env: StorageEnv) -> Exports {
     let mut ns = Exports::new();
-    let env = StorageEnv {
-        database: Arc::new(Mutex::new(None)),
-        yielder: Default::default(),
-        allocate: Default::default(),
-        memory: Default::default()
-    };
-
     ns.insert("get_collection_schema", Function::new_native_with_env(&store, env.clone(), get_collection_schema));
     ns.insert("execute_operation", Function::new_native_with_env(&store, env, execute_operation));
 

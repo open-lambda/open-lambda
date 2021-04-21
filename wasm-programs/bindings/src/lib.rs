@@ -12,15 +12,27 @@ pub use crate::log::*;
 #[ cfg(not(target_arch="wasm32")) ]
 mod proxy_connection;
 
-#[ cfg(target_arch="wasm32") ]
-pub fn init() {}
+#[ cfg(not(target_arch="wasm32")) ]
+pub fn internal_init() {
+    env_logger::init();
+}
 
 #[ cfg(not(target_arch="wasm32")) ]
-pub fn init() {
-    env_logger::init();
+pub fn internal_destroy() {
+    use std::fs::File;
+    use proxy_connection::ProxyConnection;
 
-    //Initialize connection so proxy does not run forever
-    proxy_connection::ProxyConnection::get_instance();
+    let success = if let Some(mut proxy) = ProxyConnection::try_get_instance() {
+        proxy.get_mut().commit()
+    } else {
+        true
+    };
+
+    // Create file to tell runtime we succeeded
+    if success {
+        let f = File::create("/tmp/tx_success").unwrap();
+        f.sync_all().unwrap();
+    }
 }
 
 #[ cfg(target_arch="wasm32") ]

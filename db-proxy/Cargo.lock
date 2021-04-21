@@ -22,9 +22,9 @@ dependencies = [
 
 [[package]]
 name = "async-trait"
-version = "0.1.49"
+version = "0.1.50"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "589652ce7ccb335d1e7ecb3be145425702b290dbcb7029bbeaae263fc1d87b48"
+checksum = "0b98e84bbb4cbcdd97da190ba0c58a1bb0de2c1fdf67d159e192ed766aeca722"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -254,7 +254,7 @@ checksum = "dd25036021b0de88a0aff6b850051563c6516d0bf53f8638938edbb9de732736"
 [[package]]
 name = "lambda-store-client"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git#f153deb84c4fc54603fe6f0bcc0500ad55680ce9"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git#7a910fe7d26b5e617eef411144effb5ffaa6e4de"
 dependencies = [
  "bincode",
  "dashmap",
@@ -271,7 +271,7 @@ dependencies = [
 [[package]]
 name = "lambda-store-utils"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git#f153deb84c4fc54603fe6f0bcc0500ad55680ce9"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git#7a910fe7d26b5e617eef411144effb5ffaa6e4de"
 dependencies = [
  "async-trait",
  "bincode",
@@ -365,7 +365,7 @@ checksum = "af8b08b04175473088b46763e51ee54da5f9a164bc162f615b91bc179dbf15a3"
 [[package]]
 name = "open-lambda-protocol"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git#f153deb84c4fc54603fe6f0bcc0500ad55680ce9"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git#7a910fe7d26b5e617eef411144effb5ffaa6e4de"
 dependencies = [
  "schema",
  "serde",
@@ -512,9 +512,9 @@ dependencies = [
 
 [[package]]
 name = "slab"
-version = "0.4.2"
+version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c111b5bd5695e56cffe5129854aa230b39c93a305372fdbb2668ca2394eea9f8"
+checksum = "f173ac3d1a7e3b28003f40de0b5ce7fe2710f9b9dc3fc38664cebee46b3b6527"
 
 [[package]]
 name = "strsim"

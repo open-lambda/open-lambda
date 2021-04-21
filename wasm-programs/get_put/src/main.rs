@@ -1,13 +1,7 @@
 use open_lambda::{OpError, get_args, get_collection, entry, fatal};
 
+#[ open_lambda_macros::main_func ]
 fn main() {
-    #[ cfg(not(target_arch="wasm32")) ]
-    f()
-}
-
-#[no_mangle]
-fn f() {
-    open_lambda::init();
     let args = get_args().expect("No argument given");
     let num_entries;
     let entry_size;

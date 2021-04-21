@@ -1,12 +1,6 @@
 use open_lambda::json::{json, Number, Value};
 use open_lambda::{debug, error, fatal};
 
-fn main() {
-    #[ cfg(not(target_arch="wasm32")) ]
-    f()
-}
-
-#[no_mangle]
 fn parse_array(mut jvalue: Value) -> Result<(Vec<usize>, Vec<f64>), ()> {
     if let Some(jvec) = jvalue.as_array_mut() {
         if jvec.len() == 0 {
@@ -58,10 +52,8 @@ fn parse_array(mut jvalue: Value) -> Result<(Vec<usize>, Vec<f64>), ()> {
     }
 }
 
-#[no_mangle]
-fn f() {
-    open_lambda::init();
-
+#[ open_lambda_macros::main_func ]
+fn main() {
     let args = if let Some(a) = open_lambda::get_args() {
         a
     } else {

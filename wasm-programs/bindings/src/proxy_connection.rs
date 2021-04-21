@@ -33,6 +33,14 @@ impl ProxyConnection {
         ProxyHandle{ inner: Some(inner) }
     }
 
+    pub fn try_get_instance() -> Option<ProxyHandle> {
+        if let Some(inner) = unsafe{ CONNECTION.take() } {
+            Some(ProxyHandle{ inner: Some(inner) })
+        } else {
+            None
+        }
+    }
+
     pub fn get_collection(&mut self, name: String) -> (open_lambda_protocol::CollectionId, Schema) {
         log::debug!("Getting information about collection `{}`", name);
 
@@ -46,6 +54,16 @@ impl ProxyConnection {
             (identifier, schema)
         } else {
             panic!("Got unexpected response");
+        }
+    }
+
+    pub fn commit(&mut self) -> bool {
+        self.send_message(&ProxyMessage::TxCommitRequest);
+
+        if let ProxyMessage::TxCommitResult{ result } = self.receive_message() {
+            result
+        } else {
+            panic!("got unexpected result");
         }
     }
 

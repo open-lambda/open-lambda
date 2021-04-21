@@ -2,16 +2,8 @@ use open_lambda::{fatal, get_args};
 
 use sha2::{Digest, Sha512};
 
-
+#[ open_lambda_macros::main_func ]
 fn main() {
-    #[ cfg(not(target_arch="wasm32")) ]
-    f()
-}
-
-#[no_mangle]
-fn f() {
-    open_lambda::init();
-
     let args = get_args().expect("No argument given");
     let num_hashes;
     let input_len;

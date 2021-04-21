@@ -8,4 +8,6 @@ pub enum ProxyMessage {
     SchemaResult{ identifier: CollectionId, key: ValueType, fields: Vec<(String, ValueType)>},
     ExecuteOperation{ collection: CollectionId, op: Operation },
     OperationResult{ result: OpResult },
+    TxCommitRequest,
+    TxCommitResult{ result: bool },
 }

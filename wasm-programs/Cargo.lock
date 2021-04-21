@@ -122,6 +122,7 @@ name = "get_put"
 version = "0.1.0"
 dependencies = [
  "open-lambda",
+ "open-lambda-macros",
 ]
 
 [[package]]
@@ -129,6 +130,7 @@ name = "hashing"
 version = "0.1.0"
 dependencies = [
  "open-lambda",
+ "open-lambda-macros",
  "sha2",
 ]
 
@@ -137,6 +139,7 @@ name = "hello"
 version = "0.1.0"
 dependencies = [
  "open-lambda",
+ "open-lambda-macros",
 ]
 
 [[package]]
@@ -237,6 +240,7 @@ version = "0.1.0"
 dependencies = [
  "ndarray",
  "open-lambda",
+ "open-lambda-macros",
 ]
 
 [[package]]
@@ -261,9 +265,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "open-lambda-macros"
+version = "0.1.0"
+dependencies = [
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "open-lambda-protocol"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git#f153deb84c4fc54603fe6f0bcc0500ad55680ce9"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git#7a910fe7d26b5e617eef411144effb5ffaa6e4de"
 dependencies = [
  "schema",
  "serde",

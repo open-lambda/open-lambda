@@ -75,45 +75,52 @@ async fn main() {
 
 async fn execute_function(name: String, args: Vec<u8>, program_mgr: Arc<ProgramManager>) -> Result<Response<Body>> {
     let program = program_mgr.get_program(name).await;
-    let result = Arc::new(std::sync::Mutex::new(None));
+    let args = Arc::new(args);
 
-    let instance = {
-        let mut import_object = ImportObject::new();
-        import_object.register("ol_args", crate::bindings::args::get_imports(&*program.store, args, result.clone()));
-        import_object.register("ol_log", crate::bindings::log::get_imports(&*program.store));
-        import_object.register("ol_storage", bindings::storage::get_imports(&*program.store));
+    loop {
+        let result = Arc::new(std::sync::Mutex::new(None));
+        let storage = bindings::storage::StorageEnv::default();
 
-        Instance::new(&program.module, &import_object).unwrap()
-    };
+        let instance = {
+            let mut import_object = ImportObject::new();
+            import_object.register("ol_args", bindings::args::get_imports(&*program.store, args.clone(), result.clone()));
+            import_object.register("ol_log", bindings::log::get_imports(&*program.store));
+            import_object.register("ol_storage", bindings::storage::get_imports(&*program.store, storage.clone()));
 
-    let stack = async_wormhole::stack::EightMbStack::new().unwrap();
-    if let Err(e) = instance.call_with_stack("f", stack).await {
-        if let Some(wasmer_vm::TrapCode::StackOverflow) = e.clone().to_trap() {
-            log::error!("Function failed due to stack overflow");
-        } else {
-            log::error!("Function failed with message \"{}\"", e.message());
-            log::error!("Stack trace:");
+            Instance::new(&program.module, &import_object).unwrap()
+        };
 
-            for frame in e.trace() {
-                log::error!("   {}::{}", frame.module_name(), frame.function_name().or(Some("unknown")).unwrap());
+        let stack = async_wormhole::stack::EightMbStack::new().unwrap();
+        if let Err(e) = instance.call_with_stack("f", stack).await {
+            if let Some(wasmer_vm::TrapCode::StackOverflow) = e.clone().to_trap() {
+                log::error!("Function failed due to stack overflow");
+            } else {
+                log::error!("Function failed with message \"{}\"", e.message());
+                log::error!("Stack trace:");
+
+                for frame in e.trace() {
+                    log::error!("   {}::{}", frame.module_name(), frame.function_name().or(Some("unknown")).unwrap());
+                }
             }
+        };
+
+        if storage.commit().await {
+            let result = result.lock().unwrap().take();
+
+            let body = if let Some(result) = result {
+                result.into()
+            } else {
+                Body::empty()
+            };
+
+            let response = Response::builder()
+                .status(StatusCode::OK)
+                .body(body)
+                .unwrap();
+
+            return Ok(response);
         }
-    };
-
-    let result = result.lock().unwrap().take();
-
-    let body = if let Some(result) = result {
-        result.into()
-    } else {
-        Body::empty()
-    };
-
-    let response = Response::builder()
-        .status(StatusCode::OK)
-        .body(body)
-        .unwrap();
-
-    Ok(response)
+    }
 }
 
 async fn get_status() -> Result<Response<Body>> {

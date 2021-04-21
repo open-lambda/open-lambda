@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "bindings",
+    "macros",
     "proxy-protocol",
     "hello",
     "numpy",
