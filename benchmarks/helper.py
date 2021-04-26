@@ -38,8 +38,8 @@ class Datastore:
 
         #Maybe remove this?
         print("Creating default collection")
-        self._client = lambdastore.create_client('localhost')
-        self._client.create_collection('default', str, {'value': str})
+        client = lambdastore.create_client('localhost')
+        client.create_collection('default', str, {'value': str})
 
         self._known_programs = []
 
@@ -51,12 +51,9 @@ class Datastore:
     def is_running(self):
         return self._running
 
-    def call(self, fn_name, args=None):
-        if fn_name not in self._known_programs:
-            self._client.wait_for_program(fn_name)
-            self._known_programs.append(fn_name)
-
-        self._client.call(fn_name, args)
+    def call(fn_name, args=None):
+        client = lambdastore.create_client('localhost')
+        client.call(fn_name, args)
 
     def stop(self):
         if self.is_running():
@@ -66,7 +63,6 @@ class Datastore:
 
         print("Stopping lambda store")
 
-        self._client.close()
 
         try:
             self._coord.terminate()
@@ -157,10 +153,10 @@ class DatastoreWorker():
     def stop(self):
         self._datastore.stop()
 
-    def run(self, fn_name, args=None):
-        self._datastore.call(fn_name, args)
+    def run(fn_name, args=None):
+        Datastore.call(fn_name, args)
 
-    def name(self):
+    def name():
         return "lambda-store"
 
 class ContainerWorker():
@@ -184,10 +180,10 @@ class ContainerWorker():
     def is_running(self):
         return self._running
 
-    def name(self):
+    def name():
         return "container"
 
-    def run(self, fn_name, args=None):
+    def run(fn_name, args=None):
         result = post("run/rust-%s"%fn_name, data=args)
 
         if result.status_code != 200:
@@ -222,10 +218,10 @@ class WasmWorker():
     def is_running(self):
         return self._process is not None
 
-    def name(self):
+    def name():
         return "wasm"
 
-    def run(self, fn_name, args=None):
+    def run(fn_name, args=None):
         result = post("run/%s"%fn_name, data=args)
 
         if result.status_code != 200:

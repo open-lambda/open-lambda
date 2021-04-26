@@ -1,13 +1,19 @@
-use open_lambda::{OpError, get_args, get_collection, entry, fatal};
+use open_lambda::{get_args, get_collection, entry, fatal};
 
 #[ open_lambda_macros::main_func ]
 fn main() {
     let args = get_args().expect("No argument given");
-    let num_entries;
+    let num_gets;
+    let num_puts;
+    let num_deletes;
     let entry_size;
 
     if let Some(args) = args.as_object() {
-        num_entries = args.get("num_entries").expect("Could not find `num_entries` argument")
+        num_puts= args.get("num_puts").expect("Could not find `num_puts` argument")
+            .as_i64().unwrap() as usize;
+        num_gets = args.get("num_gets").expect("Could not find `num_gets` argument")
+            .as_i64().unwrap() as usize;
+        num_deletes = args.get("num_deletes").expect("Could not find `num_deletes` argument")
             .as_i64().unwrap() as usize;
         entry_size = args.get("entry_size").expect("Coult not find `entry_size` argument")
             .as_i64().unwrap() as usize;
@@ -19,13 +25,8 @@ fn main() {
         Some(col) => col,
         None => open_lambda::fatal!("no such collection")
     };
-    for i in 0..num_entries {
-        if col.get(format!("key{}", i)) != Err(OpError::NoSuchEntry) {
-            open_lambda::fatal!("Entry should not exist yet");
-        }
-    }
 
-    for i in 0..num_entries {
+    for i in 0..num_puts {
         let mut data = Vec::new();
         data.resize(entry_size, 0);
         let string = String::from_utf8(data).unwrap();
@@ -35,7 +36,7 @@ fn main() {
         }
     }
 
-    for i in 0..num_entries {
+    for i in 0..num_gets {
         let mut data = Vec::new();
         data.resize(entry_size, 0);
         let string = String::from_utf8(data).unwrap();
@@ -48,7 +49,7 @@ fn main() {
         }
     }
 
-    for i in 0..num_entries {
+    for i in 0..num_deletes {
         col.delete(format!("key{}", i)).unwrap();
     }
 }

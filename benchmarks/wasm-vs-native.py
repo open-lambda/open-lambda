@@ -28,19 +28,18 @@ def benchmark(num_threads=1):
                 print("Skipping test '%s'" % name)
                 return None
 
-            for Worker in WORKER_TYPES:
-                worker = Worker()
-                fargs = [worker]+list(args)
-
+            for worker_type in WORKER_TYPES:
+                worker = worker_type()
+                fargs = [worker_type]+list(args)
                 print("Worker started")
 
                 for _ in range(NUM_WARMUPS):
-                    sys.stdout.write("Running benchmark `%s` with backend `%s` (warmup) ..." % (name, worker.name()))
+                    sys.stdout.write("Running benchmark `%s` with backend `%s` (warmup) ..." % (name, worker_type.name()))
                     fn(*fargs)
                     print("Done.")
 
                 for _ in range(NUM_RUNS):
-                    sys.stdout.write("Running benchmark `%s` with backend `%s`..." % (name, worker.name()))
+                    sys.stdout.write("Running benchmark `%s` with backend `%s`..." % (name, worker_type.name()))
                     start = time()
                     tasks = []
                     for _ in range(num_threads):
@@ -68,19 +67,15 @@ def hello(worker):
 
 @benchmark()
 def get_put1(worker):
-    worker.run('get_put', {"num_entries":1 , "entry_size": 1000*1000})
+    worker.run('get_put', {"num_gets":1, "num_puts":1, "num_deletes":1, "entry_size": 1000*1000})
 
 @benchmark()
 def get_put100(worker):
-    worker.run('get_put', {"num_entries":100 , "entry_size": 10*1000})
-
-@benchmark()
-def get_put10000(worker):
-    worker.run('get_put', {"num_entries":10000 , "entry_size": 100})
+    worker.run('get_put', {"num_gets":100, "num_puts":100, "num_deletes":100, "entry_size": 10*1000})
 
 @benchmark(num_threads=10)
 def concurrent_get_put100(worker):
-    worker.run('get_put', {"num_entries":100 , "entry_size": 10*1000})
+    worker.run('get_put', {"num_puts":100, "num_gets": 0, "num_deletes": 0, "entry_size": 10*1000})
 
 @benchmark()
 def hash100(worker):
@@ -134,7 +129,6 @@ def main():
     hash100000()
     get_put1()
     get_put100()
-    get_put10000()
     concurrent_get_put100()
 
 if __name__ == '__main__':
