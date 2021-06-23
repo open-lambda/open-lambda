@@ -32,8 +32,8 @@ async fn main() {
         Ok::<_, hyper::Error>(service_fn(async move |req: Request<Body>| {
             log::trace!("Got new request: {:?}", req);
 
-            let mut path = req.uri().path().split("/").filter(|x| x.len() > 0)
-                .map(|x| String::from(x)).collect::<Vec<String>>();
+            let mut path = req.uri().path().split('/').filter(|x| !x.is_empty())
+                .map(String::from).collect::<Vec<String>>();
 
             let mut args = Vec::new();
             let method = req.method().clone();
@@ -54,9 +54,9 @@ async fn main() {
 
             let program_mgr = unsafe{ PROGRAM_MGR.as_ref().unwrap().clone() };
 
-            if method == &Method::POST && path.len() == 2 && path[0] == "run" {
+            if method == Method::POST && path.len() == 2 && path[0] == "run" {
                 execute_function(path.pop().unwrap(), args, program_mgr).await
-            } else if  method == &Method::GET && path.len() == 1 && path[0] == "status" {
+            } else if  method == Method::GET && path.len() == 1 && path[0] == "status" {
                 get_status().await
             } else {
                 panic!("Got unexpected request to {:?} (Method: {:?})", path, method);

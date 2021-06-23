@@ -24,7 +24,7 @@ impl Condvar {
     }
 
     #[allow(dead_code)]
-    pub fn notify_one<'a, T>(&self, lock: MutexGuard<'a, T>) {
+    pub fn notify_one<T>(&self, lock: MutexGuard<T>) {
         let count = self.wait_count.load(atomic::Ordering::SeqCst);
 
         if count > 0 {
@@ -35,7 +35,7 @@ impl Condvar {
         }
     }
 
-    pub fn notify_all<'a, T>(&self, lock: MutexGuard<'a, T>) {
+    pub fn notify_all<T>(&self, lock: MutexGuard<T>) {
         let count = self.wait_count.swap(0, atomic::Ordering::SeqCst);
         drop(lock);
 

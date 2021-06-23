@@ -3,7 +3,7 @@ use wasmer::{Store, Module};
 use wasmer_compiler_llvm::LLVM;
 #[cfg(feature="cranelift")]
 use wasmer_compiler_cranelift::Cranelift;
-use wasmer_engine_native::Native as NativeEngine;
+use wasmer_engine_dylib::Dylib as NativeEngine;
 
 use std::sync::Arc;
 use tokio::sync::Mutex;

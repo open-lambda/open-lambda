@@ -26,7 +26,7 @@ fn get_args(env: &ArgData, len_out: WasmPtr<u64>) -> i64 {
         std::slice::from_raw_parts_mut(raw_ptr, env.args.len())
     };
 
-    out_slice.clone_from_slice(&env.args.as_slice());
+    out_slice.clone_from_slice(env.args.as_slice());
 
     let len = unsafe{ len_out.deref_mut(memory) }.unwrap();
     len.set(env.args.len() as u64);
@@ -60,8 +60,8 @@ pub fn get_imports(store: &Store, args: Arc<Vec<u8>>, result: Arc<Mutex<Option<V
     let arg_data = ArgData{ args, result, memory: Default::default(), allocate: Default::default() };
 
     let mut ns = Exports::new();
-    ns.insert("set_result", Function::new_native_with_env(&store, arg_data.clone(), set_result));
-    ns.insert("get_args", Function::new_native_with_env(&store, arg_data.clone(), get_args));
+    ns.insert("set_result", Function::new_native_with_env(store, arg_data.clone(), set_result));
+    ns.insert("get_args", Function::new_native_with_env(store, arg_data, get_args));
 
     ns
 }

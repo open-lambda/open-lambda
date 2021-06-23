@@ -11,7 +11,7 @@ futures-util = { version="0.3" }
 wasmer = { git="ssh://git@github.com/kaimast/wasmer.git", branch="async", default-features=false, features=["compiler", "async"] }
 wasmer-compiler-cranelift = { git="ssh://git@github.com/kaimast/wasmer.git", branch="async", optional=true }
 wasmer-compiler-llvm = { git="ssh://git@github.com/kaimast/wasmer.git", branch="async" }
-wasmer-engine-native = { git="ssh://git@github.com/kaimast/wasmer.git", branch="async" }
+wasmer-engine-dylib = { git="ssh://git@github.com/kaimast/wasmer.git", branch="async" }
 wasmer-vm = { git="ssh://git@github.com/kaimast/wasmer.git", branch="async" }
 pretty_env_logger = { version="0.4" }
 log = "0.4"
@@ -19,7 +19,7 @@ dashmap = "4"
 bincode = "1"
 open-lambda-protocol = { git="ssh://git@github.com/kaimast/lambda-store.git" }
 lambda-store-client = { git="ssh://git@github.com/kaimast/lambda-store.git", default-features=false, features=[] }
-async-wormhole = "0.3"
+async-wormhole = { git="https://github.com/lunatic-solutions/async-wormhole.git" }
 
 [features]
 default = []

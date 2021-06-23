@@ -3,7 +3,7 @@ use open_lambda::{debug, error, fatal};
 
 fn parse_array(mut jvalue: Value) -> Result<(Vec<usize>, Vec<f64>), ()> {
     if let Some(jvec) = jvalue.as_array_mut() {
-        if jvec.len() == 0 {
+        if jvec.is_empty() {
             error!("Array is empty");
             return Err(());
         }
@@ -48,7 +48,7 @@ fn parse_array(mut jvalue: Value) -> Result<(Vec<usize>, Vec<f64>), ()> {
         }
     } else {
         error!("Argument is not a vector");
-        return Err(());
+        Err(())
     }
 }
 

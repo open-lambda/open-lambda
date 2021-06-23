@@ -34,17 +34,13 @@ impl ProxyConnection {
     }
 
     pub fn try_get_instance() -> Option<ProxyHandle> {
-        if let Some(inner) = unsafe{ CONNECTION.take() } {
-            Some(ProxyHandle{ inner: Some(inner) })
-        } else {
-            None
-        }
+        unsafe{ CONNECTION.take() }.map(|inner| ProxyHandle{ inner: Some(inner) })
     }
 
     pub fn get_collection(&mut self, name: String) -> (open_lambda_protocol::CollectionId, Schema) {
         log::debug!("Getting information about collection `{}`", name);
 
-        let msg = ProxyMessage::GetSchema{ collection: name.clone() };
+        let msg = ProxyMessage::GetSchema{ collection: name };
         self.send_message(&msg);
 
         let response = self.receive_message();

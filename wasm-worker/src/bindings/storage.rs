@@ -69,7 +69,7 @@ fn get_collection_schema(env: &StorageEnv, name_ptr: WasmPtr<u8, Array>, name_le
         std::slice::from_raw_parts_mut(raw_ptr, data.len())
     };
 
-    out_slice.clone_from_slice(&data.as_slice());
+    out_slice.clone_from_slice(data.as_slice());
 
     let len = unsafe{ len_out.deref_mut(memory) }.unwrap();
     len.set(data.len() as u64);
@@ -127,7 +127,7 @@ fn execute_operation(env: &StorageEnv, op_data: WasmPtr<u8, Array>, op_data_len:
         std::slice::from_raw_parts_mut(raw_ptr, result_data.len())
     };
 
-    out_slice.clone_from_slice(&result_data.as_slice());
+    out_slice.clone_from_slice(result_data.as_slice());
 
     let len = unsafe{ len_out.deref_mut(memory) }.unwrap();
     len.set(result_data.len() as u64);
@@ -140,8 +140,8 @@ fn execute_operation(env: &StorageEnv, op_data: WasmPtr<u8, Array>, op_data_len:
 
 pub fn get_imports(store: &Store, env: StorageEnv) -> Exports {
     let mut ns = Exports::new();
-    ns.insert("get_collection_schema", Function::new_native_with_env(&store, env.clone(), get_collection_schema));
-    ns.insert("execute_operation", Function::new_native_with_env(&store, env, execute_operation));
+    ns.insert("get_collection_schema", Function::new_native_with_env(store, env.clone(), get_collection_schema));
+    ns.insert("execute_operation", Function::new_native_with_env(store, env, execute_operation));
 
     ns
 }
