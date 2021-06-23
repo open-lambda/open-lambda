@@ -54,7 +54,7 @@ def benchmark(num_threads=1):
                     elapsed = (end - start) * 1000.0
                     print("Done. (Elapsed time %fms)" % elapsed)
 
-                    OUTFILE.write("%s, %s, %f\n" % (name, worker.name(), elapsed))
+                    OUTFILE.write("%s, %s, %f\n" % (name, worker_type.name(), elapsed))
 
                 worker.stop()
 
