@@ -89,7 +89,17 @@ async fn handle_connection(stream: UnixStream) {
 
         let response = match msg {
             ProxyMessage::CallRequest{ func_name, arg_string } => {
-                todo!();
+                let server_addr = "localhost";
+                let url = format!("http://{}/run/{}", server_addr, func_name);
+                let client = reqwest::Client::new();
+
+                let result_string = client.post(url)
+                            .body(arg_string)
+                            .send().await.expect("Failed to send request")
+                            .text()
+                            .await.expect("Failed to parse result");
+
+                ProxyMessage::CallResult{ result_string }
             },
             ProxyMessage::GetSchema{ collection: col_name } => {
                 let col = client.get_collection(col_name).expect("No such collection");
