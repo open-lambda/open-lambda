@@ -88,6 +88,9 @@ async fn handle_connection(stream: UnixStream) {
         let msg = bincode::deserialize(&data).unwrap();
 
         let response = match msg {
+            ProxyMessage::CallRequest{ func_name, arg_string } => {
+                todo!();
+            },
             ProxyMessage::GetSchema{ collection: col_name } => {
                 let col = client.get_collection(col_name).expect("No such collection");
                 let (key, fields) = col.get_schema().clone_inner();

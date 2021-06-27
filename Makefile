@@ -39,16 +39,16 @@ wasm-worker:
 
 wasm-programs:
 	cd wasm-programs && ${CARGO} build --release --target $(WASM_TARGET)
-	bash ./wasm-programs/install.sh ${WASM_TARGET}
+	bash ./programs/install.sh ${WASM_TARGET}
 
 native-programs: imgs/lambda
-	cd wasm-programs && cross build --release
-	bash ./wasm-programs/install.sh ${WASM_TARGET}
+	cd programs && cross build --release
+	bash ./programs/install.sh test-registry test-registry.wasm ${WASM_TARGET} 1
 
 update-dependencies:
 	cd lambda/runtimes/rust && ${CARGO} update
 	cd wasm-worker && ${CARGO} update
-	cd wasm-programs && ${CARGO} update
+	cd programs && ${CARGO} update
 	cd db-proxy && ${CARGO} update
 
 imgs/lambda: $(LAMBDA_FILES)
