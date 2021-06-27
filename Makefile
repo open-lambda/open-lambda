@@ -38,7 +38,7 @@ wasm-worker:
 	cp wasm-worker/target/${BUILDTYPE}/wasm-worker ./ol-wasm
 
 wasm-programs:
-	cd wasm-programs && ${CARGO} build --release --target $(WASM_TARGET)
+	cd programs && ${CARGO} build --release --target $(WASM_TARGET)
 	bash ./programs/install.sh ${WASM_TARGET}
 
 native-programs: imgs/lambda

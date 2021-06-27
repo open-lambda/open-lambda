@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use lambda_store_client::Client as Database;
 use lambda_store_client::Transaction;
 
-use open_lambda_protocol::{CollectionInfo, Operation};
+use open_lambda_protocol::{CollectionInfo, DataOperation};
 
 #[ derive(Default, Clone, WasmerEnv) ]
 pub struct StorageEnv {
@@ -100,7 +100,7 @@ fn execute_operation(env: &StorageEnv, op_data: WasmPtr<u8, Array>, op_data_len:
 
     let yielder = env.yielder.get_ref().unwrap().get();
 
-    let op: Operation = bincode::deserialize(op_slice).unwrap();
+    let op: DataOperation = bincode::deserialize(op_slice).unwrap();
     let col_id = op.get_collection().unwrap();
     let col = tx.get_collection_by_id(col_id).expect("No such collection");
 
