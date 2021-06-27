@@ -1,7 +1,19 @@
 #!/usr/bin/env python3
 
+# pylint: disable=global-statement, too-many-statements, fixme
+
 import argparse
-import os, sys, json, time, requests, copy, traceback, tempfile, threading, subprocess
+import os
+import sys
+import json
+import time
+import requests
+import copy
+import traceback
+import tempfile
+import threading
+import subprocess
+
 from collections import OrderedDict
 from subprocess import check_output
 from multiprocessing import Pool
@@ -12,15 +24,15 @@ OLDIR = ''
 TEST_FILTER = []
 
 results = OrderedDict({"runs": []})
-curr_conf = None
+CURR_CONF = None
 
 ''' Issues a post request to the OL worker '''
 def post(path, data=None):
     return requests.post('http://localhost:5000/'+path, json.dumps(data))
 
-def raise_for_status(r):
-    if r.status_code != 200:
-        raise Exception("STATUS %d: %s" % (r.status_code, r.text))
+def raise_for_status(req):
+    if req.status_code != 200:
+        raise Exception("STATUS %d: %s" % (req.status_code, req.text))
 
 def test_in_filter(name):
     if len(TEST_FILTER) == 0:
@@ -29,11 +41,11 @@ def test_in_filter(name):
     return name in TEST_FILTER
 
 def get_mem_stat_mb(stat):
-    with open('/proc/meminfo') as f:
-        for l in f:
-            if l.startswith(stat+":"):
-                parts = l.strip().split()
-                assert(parts[-1] == 'kB')
+    with open('/proc/meminfo') as memfile:
+        for line in memfile:
+            if line.startswith(stat+":"):
+                parts = line.strip().split()
+                assert parts[-1] == 'kB'
                 return int(parts[1]) / 1024
     raise Exception('could not get stat')
 
@@ -44,12 +56,12 @@ def ol_oom_killer():
             os.system('pkill ol')
         time.sleep(1)
 
-def test(fn):
+def test(func):
     def wrapper(*args, **kwargs):
-        if len(args):
+        if len(args) > 0:
             raise Exception("positional args not supported for tests")
 
-        name = fn.__name__
+        name = func.__name__
 
         if not test_in_filter(name):
             print("Skipping test '%s'" % name)
@@ -65,7 +77,7 @@ def test(fn):
         result["test"] = name
         result["params"] = kwargs
         result["pass"] = None
-        result["conf"] = curr_conf
+        result["conf"] = CURR_CONF
         result["seconds"] = None
         result["total_seconds"] = None
         result["stats"] = None
@@ -81,20 +93,20 @@ def test(fn):
 
             # run test/benchmark
             test_t0 = time.time()
-            rv = fn(**kwargs)
+            return_val = func(**kwargs)
             test_t1 = time.time()
             result["seconds"] = test_t1 - test_t0
 
             result["pass"] = True
-        except Exception:
-            rv = None
+        except:
+            return_val = None
             result["pass"] = False
             result["errors"].append(traceback.format_exc().split("\n"))
 
         # cleanup worker
         try:
             run(['./ol', 'kill', '-p='+OLDIR])
-        except Exception:
+        except:
             result["pass"] = False
             result["errors"].append(traceback.format_exc().split("\n"))
         mounts1 = mounts()
@@ -105,32 +117,32 @@ def test(fn):
 
         # get internal stats from OL
         if os.path.exists(OLDIR+"/worker/stats.json"):
-            with open(OLDIR+"/worker/stats.json") as f:
-                olstats = json.load(f)
+            with open(OLDIR+"/worker/stats.json") as statsfile:
+                olstats = json.load(statsfile)
                 result["ol-stats"] = OrderedDict(sorted(list(olstats.items())))
 
         total_t1 = time.time()
         result["total_seconds"] = total_t1-total_t0
-        result["stats"] = rv
+        result["stats"] = return_val
 
-        with open(os.path.join(OLDIR, "worker.out")) as f:
-            result["worker_tail"] = f.read().split("\n")
+        with open(os.path.join(OLDIR, "worker.out")) as workerfile:
+            result["worker_tail"] = workerfile.read().split("\n")
             if result["pass"]:
                 # truncate because we probably won't use it for debugging
                 result["worker_tail"] = result["worker_tail"][-10:]
 
         results["runs"].append(result)
         print(json.dumps(result, indent=2))
-        return rv
+        return return_val
 
     return wrapper
 
 
 def put_conf(conf):
-    global curr_conf
-    with open(os.path.join(OLDIR, "config.json"), "w") as f:
-        json.dump(conf, f, indent=2)
-    curr_conf = conf
+    global CURR_CONF
+    with open(os.path.join(OLDIR, "config.json"), "w") as configfile:
+        json.dump(conf, configfile, indent=2)
+    CURR_CONF = conf
 
 
 def mounts():
@@ -139,20 +151,20 @@ def mounts():
     output = output.split("\n")
     return set(output)
 
-''' Loads a config and overwrites certain fields with what is set in **keywords '''
+# Loads a config and overwrites certain fields with what is set in **keywords
 @contextmanager
-def TestConf(**keywords):
-    with open(os.path.join(OLDIR, "config.json")) as f:
-        orig = json.load(f)
+def test_conf(**keywords):
+    with open(os.path.join(OLDIR, "config.json")) as conffile:
+        orig = json.load(conffile)
     new = copy.deepcopy(orig)
-    for k in keywords:
-        if not k in new:
-            raise Exception("unknown config param: %s" % k)
-        if type(keywords[k]) == dict:
-            for k2 in keywords[k]:
-                new[k][k2] = keywords[k][k2]
+    for key in keywords:
+        if not key in new:
+            raise Exception("unknown config param: %s" % key)
+        if isinstance(keywords[key], dict):
+            for key2 in keywords[key]:
+                new[key][key2] = keywords[key][key2]
         else:
-            new[k] = keywords[k]
+            new[key] = keywords[key]
 
     # setup
     print("PUSH conf:", keywords)
@@ -170,8 +182,8 @@ def run(cmd):
     try:
         out = check_output(cmd, stderr=subprocess.STDOUT)
         fail = False
-    except subprocess.CalledProcessError as e:
-        out = e.output
+    except subprocess.CalledProcessError as err:
+        out = err.output
         fail = True
 
     out = str(out, 'utf-8')
@@ -186,187 +198,185 @@ def run(cmd):
 def install_tests():
     # we want to make sure we see the expected number of pip installs,
     # so we don't want installs lying around from before
-    rc = os.system('rm -rf test-dir/lambda/packages/*')
-    assert(rc == 0)
+    return_code = os.system('rm -rf test-dir/lambda/packages/*')
+    assert return_code == 0
 
     # try something that doesn't install anything
     msg = 'hello world'
-    r = post("run/echo", msg)
-    raise_for_status(r)
-    if r.json() != msg:
-        raise Exception("found %s but expected %s" % (r.json(), msg))
-    r = post("stats", None)
-    raise_for_status(r)
-    installs = r.json().get('pull-package.cnt', 0)
-    assert(installs == 0)
+    req = post("run/echo", msg)
+    raise_for_status(req)
+    if req.json() != msg:
+        raise Exception("found %s but expected %s" % (req.json(), msg))
+    req = post("stats", None)
+    raise_for_status(req)
+    installs = req.json().get('pull-package.cnt', 0)
+    assert installs == 0
 
-    for i in range(3):
+    for pos in range(3):
         name = "install"
-        if i != 0:
-            name += str(i+1)
-        r = post("run/"+name, {})
-        raise_for_status(r)
-        assert r.json() == "imported"
+        if pos != 0:
+            name += str(pos+1)
+        req = post("run/"+name, {})
+        raise_for_status(req)
+        assert req.json() == "imported"
 
-        r = post("stats", None)
-        raise_for_status(r)
-        installs = r.json()['pull-package.cnt']
-        if i < 2:
+        req = post("stats", None)
+        raise_for_status(req)
+        installs = req.json()['pull-package.cnt']
+        if pos < 2:
             # with deps, requests should give us these:
             # certifi, chardet, idna, requests, urllib3
-            assert(installs == 5)            
+            assert installs == 5
         else:
-            assert(installs == 6)
+            assert installs == 6
 
 @test
 def hello_rust():
-    r = post("run/rust-hello", [])
-    if r.status_code != 200:
-        raise Exception("STATUS %d: %s" % (r.status_code, r.text))
+    req = post("run/rust-hello", [])
+    if req.status_code != 200:
+        raise Exception("STATUS %d: %s" % (req.status_code, req.text))
+
+@test
+def internal_call():
+    req = post("run/rust-internal_call", {"count": 5})
+    if req.status_code != 200:
+        raise Exception("STATUS %d: %s" % (req.status_code, req.text))
 
 @test
 def numpy_test():
     # try adding the nums in a few different matrixes.  Also make sure
     # we can have two different numpy versions co-existing.
-    r = post("run/numpy19", [1, 2])
-    if r.status_code != 200:
-        raise Exception("STATUS %d: %s" % (r.status_code, r.text))
-    j = r.json()
+    req = post("run/numpy19", [1, 2])
+    if req.status_code != 200:
+        raise Exception("STATUS %d: %s" % (req.status_code, req.text))
+    j = req.json()
     assert j['result'] == 3
     assert j['version'].startswith('1.19')
 
-    r = post("run/numpy20", [[1, 2], [3, 4]])
-    if r.status_code != 200:
-        raise Exception("STATUS %d: %s" % (r.status_code, r.text))
-    j = r.json()
+    req = post("run/numpy20", [[1, 2], [3, 4]])
+    if req.status_code != 200:
+        raise Exception("STATUS %d: %s" % (req.status_code, req.text))
+    j = req.json()
     assert j['result'] == 10
     assert j['version'].startswith('1.20')
 
-    r = post("run/numpy19", [[[1, 2], [3, 4]], [[1, 2], [3, 4]]])
-    if r.status_code != 200:
-        raise Exception("STATUS %d: %s" % (r.status_code, r.text))
-    j = r.json()
+    req = post("run/numpy19", [[[1, 2], [3, 4]], [[1, 2], [3, 4]]])
+    if req.status_code != 200:
+        raise Exception("STATUS %d: %s" % (req.status_code, req.text))
+    j = req.json()
     assert j['result'] == 20
     assert j['version'].startswith('1.19')
 
     # use rust binary
-    r = post("run/rust-numpy", [1, 2])
-    if r.status_code != 200:
-        raise Exception("STATUS %d: %s" % (r.status_code, r.text))
+    req = post("run/rust-numpy", [1, 2])
+    if req.status_code != 200:
+        raise Exception("STATUS %d: %s" % (req.status_code, req.text))
     try:
-        j = r.json()
+        j = req.json()
     except:
-        raise Exception("Failed to decode json for request %s" % r.text)
+        raise Exception("Failed to decode json for request %s" % req.text)
 
     assert j['result'] == 3
 
-    r = post("run/pandas", [[0, 1, 2], [3, 4, 5]])
-    if r.status_code != 200:
-        raise Exception("STATUS %d: %s" % (r.status_code, r.text))
-    j = r.json()
+    req = post("run/pandas", [[0, 1, 2], [3, 4, 5]])
+    if req.status_code != 200:
+        raise Exception("STATUS %d: %s" % (req.status_code, req.text))
+    j = req.json()
     print(j)
     assert j['result'] == 15
     assert float(".".join(j['version'].split('.')[:2])) >= 1.19
 
-    r = post("run/pandas18", [[1, 2, 3],[1, 2, 3]])
-    if r.status_code != 200:
-        raise Exception("STATUS %d: %s" % (r.status_code, r.text))
-    j = r.json()
+    req = post("run/pandas18", [[1, 2, 3],[1, 2, 3]])
+    if req.status_code != 200:
+        raise Exception("STATUS %d: %s" % (req.status_code, req.text))
+    j = req.json()
     assert j['result'] == 12
     assert j['version'].startswith('1.18')
 
-
 def stress_one_lambda_task(args):
-    t0, seconds = args
-    i = 0
-    while time.time() < t0 + seconds:
-        r = post("run/echo", i)
-        raise_for_status(r)
-        assert r.text == str(i)
-        i += 1
-    return i
-
+    start, seconds = args
+    pos = 0
+    while time.time() < start + seconds:
+        req = post("run/echo", pos)
+        raise_for_status(req)
+        assert req.text == str(pos)
+        pos += 1
+    return pos
 
 @test
 def stress_one_lambda(procs, seconds):
-    t0 = time.time()
+    start = time.time()
 
-    with Pool(procs) as p:
-        reqs = sum(p.map(stress_one_lambda_task, [(t0, seconds)] * procs, chunksize=1))
+    with Pool(procs) as pool:
+        reqs = sum(pool.map(stress_one_lambda_task, [(start, seconds)] * procs, chunksize=1))
 
     return {"reqs_per_sec": reqs/seconds}
-
 
 @test
 def call_each_once_exec(lambda_count, alloc_mb):
     # TODO: do in parallel
-    t0 = time.time()
-    for i in range(lambda_count):
-        r = post("run/L%d"%i, {"alloc_mb": alloc_mb})
-        raise_for_status(r)
-        assert r.text == str(i)
-    seconds = time.time() - t0
+    start = time.time()
+    for pos in range(lambda_count):
+        req = post("run/L%d"%pos, {"alloc_mb": alloc_mb})
+        raise_for_status(req)
+        assert req.text == str(pos)
+    seconds = time.time() - start
 
     return {"reqs_per_sec": lambda_count/seconds}
-
 
 def call_each_once(lambda_count, alloc_mb=0):
     with tempfile.TemporaryDirectory() as reg_dir:
         # create dummy lambdas
-        for i in range(lambda_count):
-            with open(os.path.join(reg_dir, "L%d.py"%i), "w") as f:
-                f.write("def f(event):\n")
-                f.write("    global s\n")
-                f.write("    s = '*' * %d * 1024**2\n" % alloc_mb)
-                f.write("    return %d\n" % i)
+        for pos in range(lambda_count):
+            with open(os.path.join(reg_dir, "L%d.py"%pos), "w") as code:
+                code.write("def f(event):\n")
+                code.write("    global s\n")
+                code.write("    s = '*' * %d * 1024**2\n" % alloc_mb)
+                code.write("    return %d\n" % pos)
 
-        with TestConf(registry=reg_dir):
+        with test_conf(registry=reg_dir):
             call_each_once_exec(lambda_count=lambda_count, alloc_mb=alloc_mb)
-
 
 @test
 def fork_bomb():
-    limit = curr_conf["limits"]["procs"]
-    r = post("run/fbomb", {"times": limit*2})
-    raise_for_status(r)
+    limit = CURR_CONF["limits"]["procs"]
+    req = post("run/fbomb", {"times": limit*2})
+    raise_for_status(req)
     # the function returns the number of children that we were able to fork
-    actual = int(r.text)
-    assert(1 <= actual <= limit)
-
+    actual = int(req.text)
+    assert 1 <= actual <= limit
 
 @test
 def max_mem_alloc():
-    limit = curr_conf["limits"]["mem_mb"]
-    r = post("run/max_mem_alloc", None)
-    raise_for_status(r)
+    limit = CURR_CONF["limits"]["mem_mb"]
+    req = post("run/max_mem_alloc", None)
+    raise_for_status(req)
     # the function returns the MB that was able to be allocated
-    actual = int(r.text)
-    assert(limit-16 <= actual <= limit)
-
+    actual = int(req.text)
+    assert limit-16 <= actual <= limit
 
 @test
 def ping_test():
     pings = 1000
-    t0 = time.time()
-    for i in range(pings):
-        r = requests.get("http://localhost:5000/status")
-        raise_for_status(r)
-    seconds = time.time() - t0
+    start = time.time()
+    for _ in range(pings):
+        req = requests.get("http://localhost:5000/status")
+        raise_for_status(req)
+    seconds = time.time() - start
     return {"pings_per_sec": pings/seconds}
 
-
 def sock_churn_task(args):
-    echo_path, parent, t0, seconds = args
-    i = 0
-    while time.time() < t0 + seconds:
+    echo_path, parent, start, seconds = args
+    count = 0
+    while time.time() < start + seconds:
         args = {"code": echo_path, "leaf": True, "parent": parent}
-        r = post("create", args)
-        raise_for_status(r)
-        sandbox_id = r.text.strip()
-        r = post("destroy/"+sandbox_id, {})
-        raise_for_status(r)
-        i += 1
-    return i
+        req = post("create", args)
+        raise_for_status(req)
+        sandbox_id = req.text.strip()
+        req = post("destroy/"+sandbox_id, {})
+        raise_for_status(req)
+        count += 1
+    return count
 
 
 @test
@@ -377,78 +387,78 @@ def sock_churn(baseline, procs, seconds, fork):
     echo_path = os.path.abspath("test-registry/echo")
 
     if fork:
-        r = post("create", {"code": "", "leaf": False})
-        raise_for_status(r)
-        parent = r.text.strip()
+        req = post("create", {"code": "", "leaf": False})
+        raise_for_status(req)
+        parent = req.text.strip()
     else:
         parent = ""
 
-    for i in range(baseline):
-        r = post("create", {"code": echo_path, "leaf": True, "parent": parent})
-        raise_for_status(r)
-        sandbox_id = r.text.strip()
-        r = post("pause/"+sandbox_id)
-        raise_for_status(r)
+    for _ in range(baseline):
+        req = post("create", {"code": echo_path, "leaf": True, "parent": parent})
+        raise_for_status(req)
+        sandbox_id = req.text.strip()
+        req = post("pause/"+sandbox_id)
+        raise_for_status(req)
 
-    t0 = time.time()
-    with Pool(procs) as p:
-        reqs = sum(p.map(sock_churn_task, [(echo_path, parent, t0, seconds)] * procs, chunksize=1))
+    start = time.time()
+    with Pool(procs) as pool:
+        reqs = sum(pool.map(sock_churn_task, [(echo_path, parent, start, seconds)] * procs,
+            chunksize=1))
 
     return {"sandboxes_per_sec": reqs/seconds}
 
 @test
 def rust_hashing():
-    r = post("run/rust-hashing", {"num_hashes": 100, "input_len": 1024})
-    if r.status_code != 200:
-        raise Exception("STATUS %d: %s" % (r.status_code, r.text))
+    req = post("run/rust-hashing", {"num_hashes": 100, "input_len": 1024})
+    if req.status_code != 200:
+        raise Exception("STATUS %d: %s" % (req.status_code, req.text))
 
 @test
 def update_code():
-    reg_dir = curr_conf['registry']
-    cache_seconds = curr_conf['registry_cache_ms'] / 1000
-    latencies = []
+    reg_dir = CURR_CONF['registry']
+    cache_seconds = CURR_CONF['registry_cache_ms'] / 1000
 
-    for i in range(3):
+    for pos in range(3):
         # update function code
-        with open(os.path.join(reg_dir, "version.py"), "w") as f:
-            f.write("def f(event):\n")
-            f.write("    return %d\n" % i)
+        with open(os.path.join(reg_dir, "version.py"), "w") as code:
+            code.write("def f(event):\n")
+            code.write("    return %d\n" % pos)
 
         # how long does it take for us to start seeing the latest code?
-        t0 = time.time()
+        start = time.time()
         while True:
-            r = post("run/version", None)
-            raise_for_status(r)
-            num = int(r.text)
-            assert(num >= i-1)
-            t1 = time.time()
+            req = post("run/version", None)
+            raise_for_status(req)
+            num = int(req.text)
+            assert num >= pos-1
+            end = time.time()
 
             # make sure the time to grab new code is about the time
             # specified for the registry cache (within ~1 second)
-            assert(t1 - t0 <= cache_seconds + 1)
-            if num == i:
-                if i > 0:
-                    assert(t1 - t0 >= cache_seconds - 1)
+            assert end - start <= cache_seconds + 1
+            if num == pos:
+                if pos > 0:
+                    assert end - start >= cache_seconds - 1
                 break
 
 
 @test
 def recursive_kill(depth):
     parent = ""
-    for i in range(depth):
-        r = post("create", {"code": "", "leaf": False, "parent": parent})
-        raise_for_status(r)
+    for _ in range(depth):
+        req = post("create", {"code": "", "leaf": False, "parent": parent})
+        raise_for_status(req)
         if parent:
             # don't need this parent any more, so pause it to get
             # memory back (so we can run this test with low memory)
             post("pause/"+parent)
-        parent = r.text.strip()
+        parent = req.text.strip()
 
-    r = post("destroy/1", None)
-    raise_for_status(r)
-    r = post("stats", None)
-    raise_for_status(r)
-    destroys = r.json()['Destroy():ms.cnt']
+    req = post("destroy/1", None)
+    raise_for_status(req)
+    req = post("stats", None)
+    raise_for_status(req)
+    destroys = req.json()['Destroy():ms.cnt']
     assert destroys == depth
 
 
@@ -458,8 +468,8 @@ def run_tests(sandboxes):
     for sandbox in sandboxes:
         print("Testing backend '%s'" % sandbox)
 
-        with TestConf(sandbox=sandbox):
-            with TestConf(registry=test_reg):
+        with test_conf(sandbox=sandbox):
+            with test_conf(registry=test_reg):
                 ping_test()
 
                 # test very basic rust program
@@ -469,11 +479,11 @@ def run_tests(sandboxes):
                 rust_hashing()
 
                 # do smoke tests under various configs
-                with TestConf(features={"import_cache": False}):
+                with test_conf(features={"import_cache": False}):
                     install_tests()
-                with TestConf(mem_pool_mb=500):
+                with test_conf(mem_pool_mb=500):
                     install_tests()
-                with TestConf(sandbox="docker", features={"import_cache": False}):
+                with test_conf(sandbox="docker", features={"import_cache": False}):
                     install_tests()
 
                 # test resource limits
@@ -481,28 +491,28 @@ def run_tests(sandboxes):
                 max_mem_alloc()
 
                 # numpy pip install needs a larger mem cap
-                with TestConf(mem_pool_mb=500):
+                with test_conf(mem_pool_mb=500):
                     numpy_test()
 
             # make sure code updates get pulled within the cache time
             with tempfile.TemporaryDirectory() as reg_dir:
-                with TestConf(registry=reg_dir, registry_cache_ms=3000):
+                with test_conf(registry=reg_dir, registry_cache_ms=3000):
                     update_code()
 
             # test heavy load
-            with TestConf(registry=test_reg):
+            with test_conf(registry=test_reg):
                 stress_one_lambda(procs=1, seconds=15)
                 stress_one_lambda(procs=2, seconds=15)
                 stress_one_lambda(procs=8, seconds=15)
 
-            with TestConf(features={"reuse_cgroups": True}):
+            with test_conf(features={"reuse_cgroups": True}):
                 call_each_once(lambda_count=100, alloc_mb=1)
                 call_each_once(lambda_count=1000, alloc_mb=10)
 
     if "sock" in sandboxes:
         print("Testing SOCK directly (without lambdas)")
 
-        with TestConf(server_mode="sock", mem_pool_mb=500):
+        with test_conf(server_mode="sock", mem_pool_mb=500):
             sock_churn(baseline=0, procs=1, seconds=5, fork=False)
             sock_churn(baseline=0, procs=1, seconds=10, fork=True)
             sock_churn(baseline=0, procs=15, seconds=10, fork=True)
@@ -531,18 +541,18 @@ def main():
     if len(sandboxes) == 0:
         raise RuntimeError("No server modes specified")
 
-    t0 = time.time()
+    start = time.time()
 
     # so our test script doesn't hang if we have a memory leak
-    timerThread = threading.Thread(target=ol_oom_killer, daemon=True)
-    timerThread.start()
+    timer_thread = threading.Thread(target=ol_oom_killer, daemon=True)
+    timer_thread.start()
 
     if os.path.exists(OLDIR):
         try:
             run(['./ol', 'kill', '-p='+OLDIR])
             print("stopped existing worker")
-        except Exception as e:
-            print('could not kill existing worker: %s' % str(e))
+        except Exception as err:
+            print('could not kill existing worker: %s' % str(err))
 
     # general setup
     if not args.reuse_config:
@@ -559,7 +569,7 @@ def main():
                 pass
 
     # run tests with various configs
-    with TestConf(limits={"installer_mem_mb": 250}):
+    with test_conf(limits={"installer_mem_mb": 250}):
         run_tests(sandboxes)
 
     # save test results
@@ -567,11 +577,11 @@ def main():
     failed = len([t for t in results["runs"] if not t["pass"]])
     results["passed"] = passed
     results["failed"] = failed
-    results["seconds"] = time.time() - t0
+    results["seconds"] = time.time() - start
     print("PASSED: %d, FAILED: %d" % (passed, failed))
 
-    with open("test.json", "w") as f:
-        json.dump(results, f, indent=2)
+    with open("test.json", "w") as resultsfile:
+        json.dump(results, resultsfile, indent=2)
 
     sys.exit(failed)
 
