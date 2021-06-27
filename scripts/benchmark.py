@@ -1,10 +1,12 @@
 #! /bin/env python3
 
+# pylint: disable=global-statement
+
 import sys
 import argparse
 
 from time import time
-from helper import DatastoreWorker, ContainerWorker, WasmWorker, bench_in_filter, prepare_open_lambda
+from helper import DatastoreWorker, ContainerWorker, WasmWorker, prepare_open_lambda, setup_config
 
 from multiprocessing import Process
 
@@ -14,19 +16,29 @@ NUM_RUNS=None
 WORKER_TYPES=[]
 BENCH_FILTER=[]
 
+def bench_in_filter(name, bench_filter):
+    if len(bench_filter) == 0:
+        return True
+
+    for fname in bench_filter:
+        if fname in name:
+            return True
+
+    return False
+
 def benchmark(num_threads=1):
-    def inner_function(fn):
-        def wrapper(*args, **kwargs):
+    def inner_function(func):
+        def wrapper(*args, **_kwargs):
             global OUTFILE
 
-            if len(args):
+            if len(args) > 0:
                 raise Exception("positional args not supported")
 
-            name = fn.__name__
+            name = func.__name__
 
             if not bench_in_filter(name, BENCH_FILTER):
                 print("Skipping test '%s'" % name)
-                return None
+                return
 
             for worker_type in WORKER_TYPES:
                 worker = worker_type()
@@ -35,7 +47,7 @@ def benchmark(num_threads=1):
 
                 for _ in range(NUM_WARMUPS):
                     sys.stdout.write("Running benchmark `%s` with backend `%s` (warmup) ..." % (name, worker_type.name()))
-                    fn(*fargs)
+                    func(*fargs)
                     print("Done.")
 
                 for _ in range(NUM_RUNS):
@@ -43,9 +55,9 @@ def benchmark(num_threads=1):
                     start = time()
                     tasks = []
                     for _ in range(num_threads):
-                        p = Process(target=fn, args=fargs)
-                        p.start()
-                        tasks.append(p)
+                        proc = Process(target=func, args=fargs)
+                        proc.start()
+                        tasks.append(proc)
 
                     for task in tasks:
                         task.join()
@@ -96,6 +108,8 @@ def main():
     global NUM_WARMUPS
     global WORKER_TYPES
 
+    setup_config("bench-dir", "test-registry")
+
     parser = argparse.ArgumentParser(description='Run benchmarks between native containers and WebAssembly')
     parser.add_argument('--bench_filter', type=str, default="")
     parser.add_argument('--num_warmups', type=int, default=3)
@@ -123,6 +137,7 @@ def main():
 
     prepare_open_lambda(reuse_config=args.reuse_config)
 
+    # pylint: disable=no-value-for-parameter
     hello()
     hash100()
     hash10000()
@@ -130,6 +145,7 @@ def main():
     get_put1()
     get_put100()
     concurrent_get_put100()
+    # pylint: enable=no-value-for-parameter
 
 if __name__ == '__main__':
     main()

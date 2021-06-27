@@ -1,5 +1,8 @@
+#pylint: disable=too-few-public-methods, c-extension-no-member, broad-except, global-statement
+
 from subprocess import check_output, Popen
 from time import sleep
+from collections import OrderedDict
 
 import copy
 import subprocess
@@ -8,8 +11,16 @@ import os
 import json
 import lambdastore
 
-OLDIR="./bench-dir"
-REG_DIR=os.path.abspath("test-registry")
+OLDIR=None
+REG_DIR=None
+CURR_CONF=None
+
+def setup_config(ol_dir, registry_dir):
+    global OLDIR
+    global REG_DIR
+
+    OLDIR = ol_dir
+    REG_DIR = os.path.abspath(registry_dir)
 
 class Datastore:
     def __init__(self, enable_wasm=False):
@@ -32,7 +43,7 @@ class Datastore:
                 "-p=localhost:%i"%(50000+pos), "-l=localhost:%i"%(51000+pos)])
 
             self._nodes.append(node)
- 
+
         self._running = True
         sleep(0.5)
 
@@ -51,6 +62,7 @@ class Datastore:
     def is_running(self):
         return self._running
 
+    @staticmethod
     def call(fn_name, args=None):
         client = lambdastore.create_client('localhost')
         client.call(fn_name, args)
@@ -69,7 +81,7 @@ class Datastore:
             self._coord.wait()
             self._coord = None
         except Exception as err:
-            raise RuntimeError("Failed to stop lambda store coordinator: %s" % str(err))
+            raise RuntimeError("Failed to stop lambda store coordinator: %s") from err
 
         try:
             for node in self._nodes:
@@ -78,31 +90,35 @@ class Datastore:
 
             self._nodes = []
         except Exception as err:
-            raise RuntimeError("Failed to stop lambda store node: %s" % str(err))
+            raise RuntimeError("Failed to stop lambda store node") from err
 
+def get_ol_stats():
+    if os.path.exists(OLDIR+"/worker/stats.json"):
+        with open(OLDIR+"/worker/stats.json") as statsfile:
+            olstats = json.load(statsfile)
+        return OrderedDict(sorted(list(olstats.items())))
 
-''' Issues a post request to the OL worker '''
+    return None
+
+def get_worker_output():
+    with open(os.path.join(OLDIR, "worker.out")) as workerfile:
+        return workerfile.read().splitlines()
+
+def get_current_config():
+    return CURR_CONF
+
 def post(path, data=None):
+    ''' Issues a post request to the OL worker '''
     return requests.post('http://localhost:5000/'+path, json.dumps(data))
 
-def bench_in_filter(name, bench_filter):
-    if len(bench_filter) == 0:
-        return True
-
-    for f in bench_filter:
-        if f in name:
-            return True
-
-    return False
-
 def put_conf(conf):
-    global curr_conf
+    global CURR_CONF
     with open(os.path.join(OLDIR, "config.json"), "w") as cfile:
         json.dump(conf, cfile, indent=2)
-    curr_conf = conf
+    CURR_CONF = conf
 
-''' Loads a config and overwrites certain fields with what is set in **keywords '''
-class BenchConf:
+class TestConf:
+    ''' Loads a config and overwrites certain fields with what is set in **keywords '''
     def __init__(self, **keywords):
         with open(os.path.join(OLDIR, "config.json")) as cfile:
             orig = json.load(cfile)
@@ -123,6 +139,17 @@ class BenchConf:
     def __del__(self):
         # cleanup
         put_conf(self.orig)
+
+class TestConfContext:
+    def __init__(self, **keywords):
+        self._conf = None
+        self._keywords = keywords
+
+    def __enter__(self):
+        self._conf = TestConf(**self._keywords)
+
+    def __exit__(self, _exc_type, _exc_value, _exc_traceback):
+        self._conf = None
 
 def run(cmd):
     print("RUN", " ".join(cmd))
@@ -153,16 +180,18 @@ class DatastoreWorker():
     def stop(self):
         self._datastore.stop()
 
+    @staticmethod
     def run(fn_name, args=None):
         Datastore.call(fn_name, args)
 
+    @staticmethod
     def name():
         return "lambda-store"
 
 class ContainerWorker():
     def __init__(self):
         self._running = False
-        self._config = BenchConf(registry=REG_DIR, sandbox="sock")
+        self._config = TestConf(registry=REG_DIR, sandbox="sock")
 
         self._datastore = Datastore()
 
@@ -170,7 +199,7 @@ class ContainerWorker():
             print("Starting container worker")
             run(['./ol', 'worker', '-p='+OLDIR, '--detach'])
         except Exception as err:
-            raise RuntimeError("failed to start worker: %s" % str(err))
+            raise RuntimeError("failed to start worker: %s" % str(err)) from err
 
         self._running = True
 
@@ -180,9 +209,11 @@ class ContainerWorker():
     def is_running(self):
         return self._running
 
+    @staticmethod
     def name():
         return "container"
 
+    @staticmethod
     def run(fn_name, args=None):
         result = post("run/rust-%s"%fn_name, data=args)
 
@@ -199,14 +230,14 @@ class ContainerWorker():
             print("Stopping container worker")
             run(['./ol', 'kill', '-p='+OLDIR])
         except Exception as err:
-            raise RuntimeError("failed to start worker: %s" % str(err))
+            raise RuntimeError("Failed to start worker") from err
 
         self._datastore.stop()
 
 class WasmWorker():
     def __init__(self):
         print("Starting WebAssembly worker")
-        self._config = BenchConf(registry=REG_DIR)
+        self._config = TestConf(registry=REG_DIR)
         self._datastore = Datastore()
         self._process = Popen(["./ol-wasm"])
 
@@ -218,9 +249,11 @@ class WasmWorker():
     def is_running(self):
         return self._process is not None
 
+    @staticmethod
     def name():
         return "wasm"
 
+    @staticmethod
     def run(fn_name, args=None):
         result = post("run/%s"%fn_name, data=args)
 
@@ -237,11 +270,11 @@ class WasmWorker():
 
         self._datastore.stop()
 
-'''
-Sets up the working director for open lambda,
-and stops currently running worker processes (if any)
-'''
 def prepare_open_lambda(reuse_config=False):
+    '''
+    Sets up the working director for open lambda,
+    and stops currently running worker processes (if any)
+    '''
     if os.path.exists(OLDIR):
         try:
             run(['./ol', 'kill', '-p='+OLDIR])
@@ -260,7 +293,7 @@ def prepare_open_lambda(reuse_config=False):
             # Make sure the pid file is gone even if the previous worker crashed
             try:
                 run(['rm', '-rf', '%s/worker' % OLDIR])
-            except:
+            except Exception as _:
                 pass
         else:
             # There was never a config in the first place, create one

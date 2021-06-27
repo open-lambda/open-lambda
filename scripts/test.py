@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# pylint: disable=global-statement, too-many-statements, fixme
+# pylint: disable=global-statement, too-many-statements, fixme, broad-except, too-many-locals
 
 import argparse
 import os
@@ -8,7 +8,6 @@ import sys
 import json
 import time
 import requests
-import copy
 import traceback
 import tempfile
 import threading
@@ -17,14 +16,14 @@ import subprocess
 from collections import OrderedDict
 from subprocess import check_output
 from multiprocessing import Pool
-from contextlib import contextmanager
+
+from helper import ContainerWorker, WasmWorker, prepare_open_lambda, setup_config, get_ol_stats, get_worker_output, get_current_config, TestConfContext
 
 # These will be set by argparse in main()
-OLDIR = ''
 TEST_FILTER = []
+WORKER_TYPE = None
 
 results = OrderedDict({"runs": []})
-CURR_CONF = None
 
 ''' Issues a post request to the OL worker '''
 def post(path, data=None):
@@ -77,7 +76,7 @@ def test(func):
         result["test"] = name
         result["params"] = kwargs
         result["pass"] = None
-        result["conf"] = CURR_CONF
+        result["conf"] = get_current_config()
         result["seconds"] = None
         result["total_seconds"] = None
         result["stats"] = None
@@ -88,8 +87,8 @@ def test(func):
         total_t0 = time.time()
         mounts0 = mounts()
         try:
-            # setup worker
-            run(['./ol', 'worker', '-p='+OLDIR, '--detach'])
+            worker = WORKER_TYPE()
+            print("Worker started")
 
             # run test/benchmark
             test_t0 = time.time()
@@ -98,17 +97,13 @@ def test(func):
             result["seconds"] = test_t1 - test_t0
 
             result["pass"] = True
-        except:
+        except Exception as _:
             return_val = None
             result["pass"] = False
             result["errors"].append(traceback.format_exc().split("\n"))
 
         # cleanup worker
-        try:
-            run(['./ol', 'kill', '-p='+OLDIR])
-        except:
-            result["pass"] = False
-            result["errors"].append(traceback.format_exc().split("\n"))
+        worker.stop()
         mounts1 = mounts()
         if len(mounts0) != len(mounts1):
             result["pass"] = False
@@ -116,20 +111,16 @@ def test(func):
                                      % (len(mounts0), len(mounts1), str(mounts1 - mounts0))])
 
         # get internal stats from OL
-        if os.path.exists(OLDIR+"/worker/stats.json"):
-            with open(OLDIR+"/worker/stats.json") as statsfile:
-                olstats = json.load(statsfile)
-                result["ol-stats"] = OrderedDict(sorted(list(olstats.items())))
+        result["ol-stats"] = get_ol_stats()
 
         total_t1 = time.time()
         result["total_seconds"] = total_t1-total_t0
         result["stats"] = return_val
 
-        with open(os.path.join(OLDIR, "worker.out")) as workerfile:
-            result["worker_tail"] = workerfile.read().split("\n")
-            if result["pass"]:
-                # truncate because we probably won't use it for debugging
-                result["worker_tail"] = result["worker_tail"][-10:]
+        result["worker_tail"] = get_worker_output()
+        if result["pass"]:
+            # truncate because we probably won't use it for debugging
+            result["worker_tail"] = result["worker_tail"][-10:]
 
         results["runs"].append(result)
         print(json.dumps(result, indent=2))
@@ -137,45 +128,11 @@ def test(func):
 
     return wrapper
 
-
-def put_conf(conf):
-    global CURR_CONF
-    with open(os.path.join(OLDIR, "config.json"), "w") as configfile:
-        json.dump(conf, configfile, indent=2)
-    CURR_CONF = conf
-
-
 def mounts():
     output = check_output(["mount"])
     output = str(output, "utf-8")
     output = output.split("\n")
     return set(output)
-
-# Loads a config and overwrites certain fields with what is set in **keywords
-@contextmanager
-def test_conf(**keywords):
-    with open(os.path.join(OLDIR, "config.json")) as conffile:
-        orig = json.load(conffile)
-    new = copy.deepcopy(orig)
-    for key in keywords:
-        if not key in new:
-            raise Exception("unknown config param: %s" % key)
-        if isinstance(keywords[key], dict):
-            for key2 in keywords[key]:
-                new[key][key2] = keywords[key][key2]
-        else:
-            new[key] = keywords[key]
-
-    # setup
-    print("PUSH conf:", keywords)
-    put_conf(new)
-
-    yield new
-
-    # cleanup
-    print("POP conf:", keywords)
-    put_conf(orig)
-
 
 def run(cmd):
     print("RUN", " ".join(cmd))
@@ -192,7 +149,6 @@ def run(cmd):
 
     if fail:
         raise Exception("command (%s) failed: %s"  % (" ".join(cmd), out))
-
 
 @test
 def install_tests():
@@ -273,8 +229,8 @@ def numpy_test():
         raise Exception("STATUS %d: %s" % (req.status_code, req.text))
     try:
         j = req.json()
-    except:
-        raise Exception("Failed to decode json for request %s" % req.text)
+    except Exception as err:
+        raise Exception("Failed to decode json for request %s" % req.text) from err
 
     assert j['result'] == 3
 
@@ -334,12 +290,12 @@ def call_each_once(lambda_count, alloc_mb=0):
                 code.write("    s = '*' * %d * 1024**2\n" % alloc_mb)
                 code.write("    return %d\n" % pos)
 
-        with test_conf(registry=reg_dir):
+        with TestConfContext(registry=reg_dir):
             call_each_once_exec(lambda_count=lambda_count, alloc_mb=alloc_mb)
 
 @test
 def fork_bomb():
-    limit = CURR_CONF["limits"]["procs"]
+    limit = get_current_config()["limits"]["procs"]
     req = post("run/fbomb", {"times": limit*2})
     raise_for_status(req)
     # the function returns the number of children that we were able to fork
@@ -348,7 +304,7 @@ def fork_bomb():
 
 @test
 def max_mem_alloc():
-    limit = CURR_CONF["limits"]["mem_mb"]
+    limit = get_current_config()["limits"]["mem_mb"]
     req = post("run/max_mem_alloc", None)
     raise_for_status(req)
     # the function returns the MB that was able to be allocated
@@ -415,8 +371,9 @@ def rust_hashing():
 
 @test
 def update_code():
-    reg_dir = CURR_CONF['registry']
-    cache_seconds = CURR_CONF['registry_cache_ms'] / 1000
+    curr_conf = get_current_config()
+    reg_dir = curr_conf['registry']
+    cache_seconds = curr_conf['registry_cache_ms'] / 1000
 
     for pos in range(3):
         # update function code
@@ -462,84 +419,85 @@ def recursive_kill(depth):
     assert destroys == depth
 
 
-def run_tests(sandboxes):
-    test_reg = os.path.abspath("test-registry")
+def run_tests():
+    ping_test()
 
-    for sandbox in sandboxes:
-        print("Testing backend '%s'" % sandbox)
+    # test very basic rust program
+    hello_rust()
 
-        with test_conf(sandbox=sandbox):
-            with test_conf(registry=test_reg):
-                ping_test()
+    # run some more computation in rust
+    rust_hashing()
 
-                # test very basic rust program
-                hello_rust()
+    internal_call()
 
-                # run some more computation in rust
-                rust_hashing()
+    # do smoke tests under various configs
+    with TestConfContext(features={"import_cache": False}):
+        install_tests()
+    with TestConfContext(mem_pool_mb=500):
+        install_tests()
+    with TestConfContext(sandbox="docker", features={"import_cache": False}):
+        install_tests()
 
-                # do smoke tests under various configs
-                with test_conf(features={"import_cache": False}):
-                    install_tests()
-                with test_conf(mem_pool_mb=500):
-                    install_tests()
-                with test_conf(sandbox="docker", features={"import_cache": False}):
-                    install_tests()
+    # test resource limits
+    fork_bomb()
+    max_mem_alloc()
 
-                # test resource limits
-                fork_bomb()
-                max_mem_alloc()
+    # numpy pip install needs a larger mem cap
+    with TestConfContext(mem_pool_mb=500):
+        numpy_test()
 
-                # numpy pip install needs a larger mem cap
-                with test_conf(mem_pool_mb=500):
-                    numpy_test()
+'''TODO # make sure code updates get pulled within the cache time
+    with tempfile.TemporaryDirectory() as reg_dir:
+        with TestConfContext(registry=reg_dir, registry_cache_ms=3000):
+            update_code()
 
-            # make sure code updates get pulled within the cache time
-            with tempfile.TemporaryDirectory() as reg_dir:
-                with test_conf(registry=reg_dir, registry_cache_ms=3000):
-                    update_code()
+    # test heavy load
+    with TestConfContext(registry=test_reg):
+        stress_one_lambda(procs=1, seconds=15)
+        stress_one_lambda(procs=2, seconds=15)
+        stress_one_lambda(procs=8, seconds=15)
 
-            # test heavy load
-            with test_conf(registry=test_reg):
-                stress_one_lambda(procs=1, seconds=15)
-                stress_one_lambda(procs=2, seconds=15)
-                stress_one_lambda(procs=8, seconds=15)
+    with TestConfContext(features={"reuse_cgroups": True}):
+        call_each_once(lambda_count=100, alloc_mb=1)
+        call_each_once(lambda_count=1000, alloc_mb=10)
+'''
 
-            with test_conf(features={"reuse_cgroups": True}):
-                call_each_once(lambda_count=100, alloc_mb=1)
-                call_each_once(lambda_count=1000, alloc_mb=10)
-
+''' TODO move sock-specific tests somewhere lse
     if "sock" in sandboxes:
         print("Testing SOCK directly (without lambdas)")
 
-        with test_conf(server_mode="sock", mem_pool_mb=500):
+        with TestConfContext(server_mode="sock", mem_pool_mb=500):
             sock_churn(baseline=0, procs=1, seconds=5, fork=False)
             sock_churn(baseline=0, procs=1, seconds=10, fork=True)
             sock_churn(baseline=0, procs=15, seconds=10, fork=True)
             sock_churn(baseline=32, procs=1, seconds=10, fork=True)
             sock_churn(baseline=32, procs=15, seconds=10, fork=True)
+'''
 
 def main():
-    global OLDIR
     global TEST_FILTER
+    global WORKER_TYPE
 
     parser = argparse.ArgumentParser(description='Run tests for OpenLambda')
     parser.add_argument('--reuse_config', action="store_true")
-    parser.add_argument('--sandboxes', type=str, default="docker,sock")
+    parser.add_argument('--worker_type', type=str, default="container")
     parser.add_argument('--test_filter', type=str, default="")
     parser.add_argument('--ol_dir', type=str, default="test-dir")
 
     args = parser.parse_args()
 
     TEST_FILTER = [name for name in args.test_filter.split(",") if name != '']
-    OLDIR = args.ol_dir
+    setup_config(args.ol_dir, "test-registry")
+    prepare_open_lambda()
 
-    print("Test filter is '%s' and OL directory is '%s'" % (TEST_FILTER, OLDIR))
+    print("Test filter is '%s' and OL directory is '%s'" % (TEST_FILTER, args.ol_dir))
 
-    sandboxes = [name for name in args.sandboxes.split(",") if name != '']
-
-    if len(sandboxes) == 0:
-        raise RuntimeError("No server modes specified")
+    if args.worker_type == 'container':
+        WORKER_TYPE = ContainerWorker
+    elif args.worker_type == 'wasm':
+        WORKER_TYPE = WasmWorker
+    else:
+        raise RuntimeError("Invalid worker type %s" % args.worker_type)
 
     start = time.time()
 
@@ -547,30 +505,9 @@ def main():
     timer_thread = threading.Thread(target=ol_oom_killer, daemon=True)
     timer_thread.start()
 
-    if os.path.exists(OLDIR):
-        try:
-            run(['./ol', 'kill', '-p='+OLDIR])
-            print("stopped existing worker")
-        except Exception as err:
-            print('could not kill existing worker: %s' % str(err))
-
-    # general setup
-    if not args.reuse_config:
-        if os.path.exists(OLDIR):
-            run(['rm', '-rf', OLDIR])
-
-        run(['./ol', 'new', '-p='+OLDIR])
-    else:
-        if os.path.exists(OLDIR):
-            # Make sure the pid file is gone even if the previous worker crashed
-            try:
-                run(['rm', '-rf', '%s/worker' % OLDIR])
-            except:
-                pass
-
     # run tests with various configs
-    with test_conf(limits={"installer_mem_mb": 250}):
-        run_tests(sandboxes)
+    with TestConfContext(limits={"installer_mem_mb": 250}):
+        run_tests()
 
     # save test results
     passed = len([t for t in results["runs"] if t["pass"]])
