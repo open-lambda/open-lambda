@@ -601,12 +601,22 @@ func (linst *LambdaInstance) Task() {
 		case killed := <-linst.killChan:
 			if sb != nil {
 				rt_log := sb.GetRuntimeLog()
+                proxy_log := sb.GetProxyLog()
 				sb.Destroy()
 
+                log.Printf("Stopped sandbox")
 				 if rt_log != "" {
-					 log.Printf("Stopped sandbox. Runtime output is:")
+					 log.Printf("Runtime output is:")
 
 					for _, line := range strings.Split(rt_log, "\n") {
+						log.Printf("   %s", line)
+					}
+				}
+
+				 if proxy_log != "" {
+					 log.Printf("Proxy output is:")
+
+					for _, line := range strings.Split(proxy_log, "\n") {
 						log.Printf("   %s", line)
 					}
 				}
@@ -688,12 +698,22 @@ func (linst *LambdaInstance) Task() {
 			select {
 			case killed := <-linst.killChan:
 				rt_log := sb.GetRuntimeLog()
+                proxy_log := sb.GetProxyLog()
 				sb.Destroy()
 
-				if rt_log != "" {
-					log.Printf("Stopped sandbox. Runtime output is:")
+                log.Printf("Stopped sandbox")
+				 if rt_log != "" {
+					 log.Printf("Runtime output is:")
 
 					for _, line := range strings.Split(rt_log, "\n") {
+						log.Printf("   %s", line)
+					}
+				}
+
+				 if proxy_log != "" {
+					 log.Printf("Proxy output is:")
+
+					for _, line := range strings.Split(proxy_log, "\n") {
 						log.Printf("   %s", line)
 					}
 				}

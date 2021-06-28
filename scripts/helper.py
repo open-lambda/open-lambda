@@ -23,13 +23,18 @@ def setup_config(ol_dir, registry_dir):
     REG_DIR = os.path.abspath(registry_dir)
 
 class Datastore:
-    def __init__(self, enable_wasm=False):
+    def __init__(self, enable_wasm=False, num_replicas=1):
+        if num_replicas < 1:
+            raise RuntimeError("Need at least one storage replica")
+
         args = []
         if enable_wasm:
             args.append("--enable_wasm=true")
             args.append("--registry_path=./test-registry.wasm")
         else:
             args.append("--enable_wasm=false")
+
+        args.append("--replica_set_size=%i" % num_replicas)
 
         print("Starting lambda store")
         self._running = False
@@ -38,8 +43,10 @@ class Datastore:
 
         self._nodes = []
 
-        for pos in range(1, 4):
-            node = Popen(["lambda-store-node", "--identifier=%i" % pos,
+        for pos in range(num_replicas):
+            identifier = pos+1
+
+            node = Popen(["lambda-store-node", "--identifier=%i" % identifier,
                 "-p=localhost:%i"%(50000+pos), "-l=localhost:%i"%(51000+pos)])
 
             self._nodes.append(node)
@@ -74,7 +81,6 @@ class Datastore:
             return # Already stopped
 
         print("Stopping lambda store")
-
 
         try:
             self._coord.terminate()

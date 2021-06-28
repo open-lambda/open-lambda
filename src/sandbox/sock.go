@@ -167,7 +167,7 @@ func (container *SOCKContainer) launchDbProxy() (err error) {
 		case err := <-died:
 			if err != nil {
 				return err
-			}
+			} 
 			return fmt.Errorf("database proxy does not seem to be running")
 		default:
 		}
@@ -431,6 +431,16 @@ func (container *SOCKContainer) Meta() *SandboxMeta {
 
 func (container *SOCKContainer) GetRuntimeLog() string {
     data, err := ioutil.ReadFile(filepath.Join(container.scratchDir, "ol-runtime.log"))
+
+    if err == nil {
+        return string(data)
+    } else {
+        return ""
+    }
+}
+
+func (container *SOCKContainer) GetProxyLog() string {
+    data, err := ioutil.ReadFile(filepath.Join(container.scratchDir, "db-proxy.log"))
 
     if err == nil {
         return string(data)

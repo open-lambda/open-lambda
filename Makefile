@@ -73,7 +73,7 @@ install: ol
 	cp ol /usr/local/bin
 
 test-all:
-	sudo python3 -u test.py
+	sudo python3 -u ./scripts/test.py
 
 clean:
 	rm -f ol

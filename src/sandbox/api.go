@@ -61,6 +61,9 @@ type Sandbox interface {
     // Get output of the runtime; if any
     GetRuntimeLog() string
 
+    // Get output of the database proxy; if any
+    GetProxyLog() string
+
 	// Represent state as a multi-line string
 	DebugString() string
 

@@ -12,7 +12,8 @@ use db_proxy_protocol::ProxyMessage;
 
 use lambda_store_client::create_client;
 
-fn main() {
+#[ tokio::main ]
+async fn main() {
     let container_dir = {
         let mut argv = std::env::args();
         argv.next().unwrap();
@@ -21,48 +22,64 @@ fn main() {
 
     simple_logging::log_to_file(format!("{}/db-proxy.log", container_dir), log::LevelFilter::Debug).unwrap();
 
-    let runtime = tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(4)
-        .enable_io().build().expect("Failed to start tokio");
+    let path = format!("{}/db-proxy.sock", container_dir);
+    let listener = UnixListener::bind(path).unwrap();
 
-    // Process data until the runtime disconnects
-    runtime.block_on(async move {
-        let path = format!("{}/db-proxy.sock", container_dir);
-        let listener = UnixListener::bind(path).unwrap();
+    // Create pid file to notify others that the socket is bound
+    let mut file = File::create(format!("{}/db-proxy.pid", container_dir)).await.unwrap();
 
-        // Create pid file to notify others that the socket is bound
-        let mut file = File::create(format!("{}/db-proxy.pid", container_dir)).await.unwrap();
+    let content = format!("{}", std::process::id()).into_bytes();
+    file.write_all(&content).await.unwrap();
 
-        let content = format!("{}", std::process::id()).into_bytes();
-        file.write_all(&content).await.unwrap();
+    loop {
+        let accept = listener.accept();
+        let signal = tokio::signal::ctrl_c();
 
-        loop {
-            let accept = listener.accept();
-            let signal = tokio::signal::ctrl_c();
-
-            tokio::select! {
-                _ = signal => {
-                    log::info!("Got ctrl+c");
-                    std::process::exit(0);
-                }
-                result = accept => {
-                    match result {
-                        Ok((stream, _)) => {
-                            tokio::spawn(async move {
-                                handle_connection(stream).await;
-                            });
-                        }
-                        Err(e) => {
-                            log::error!("Got error: {}", e);
-                            std::process::exit(-1);
-                        }
+        tokio::select! {
+            _ = signal => {
+                log::info!("Got ctrl+c");
+                std::process::exit(0);
+            }
+            result = accept => {
+                match result {
+                    Ok((stream, _)) => {
+                        tokio::spawn(async move {
+                            handle_connection(stream).await;
+                        });
+                    }
+                    Err(e) => {
+                        log::error!("Got error: {}", e);
+                        std::process::exit(-1);
                     }
                 }
             }
         }
-    });
+    }
+}
 
-    log::info!("Shutting down database proxy");
+async fn call_function(func_name: String, arg_string: String) -> Result<String, String> {
+    log::debug!("Issuing internal call to {}", func_name);
+    let server_addr = "localhost:5000";
+    let url = format!("http://{}/run/{}", server_addr, func_name);
+    let client = reqwest::Client::new();
+
+    let request = client.post(url).body(arg_string);
+
+    let result = match request.send().await {
+        Ok(result) => result,
+        Err(err) => {
+            return Err(format!("Failed to send call request: {}", err));
+        }
+    };
+
+    let result_string = match result.text().await {
+        Ok(result_string) => result_string,
+        Err(err) => {
+            return Err(format!("Failed to parse call result: {}", err));
+        }
+    };
+
+    Ok(result_string)
 }
 
 async fn handle_connection(stream: UnixStream) {
@@ -73,8 +90,10 @@ async fn handle_connection(stream: UnixStream) {
     let mut reader = FramedRead::new(reader, LengthDelimitedCodec::new());
     let mut writer = FramedWrite::new(writer, LengthDelimitedCodec::new());
 
+    // FIXME: reuse or create lazily
     let client = create_client("localhost").await;
     let mut tx = Some(client.begin_transaction());
+    log::debug!("Setup database connection");
 
     while let Some(res) = reader.next().await {
         let data = match res {
@@ -89,17 +108,8 @@ async fn handle_connection(stream: UnixStream) {
 
         let response = match msg {
             ProxyMessage::CallRequest{ func_name, arg_string } => {
-                let server_addr = "localhost";
-                let url = format!("http://{}/run/{}", server_addr, func_name);
-                let client = reqwest::Client::new();
-
-                let result_string = client.post(url)
-                            .body(arg_string)
-                            .send().await.expect("Failed to send request")
-                            .text()
-                            .await.expect("Failed to parse result");
-
-                ProxyMessage::CallResult{ result_string }
+                let result = call_function(func_name, arg_string).await;
+                ProxyMessage::CallResult(result)
             },
             ProxyMessage::GetSchema{ collection: col_name } => {
                 let col = client.get_collection(col_name).expect("No such collection");

@@ -247,6 +247,10 @@ func (c *DockerContainer) GetRuntimeLog() string {
     return "" //TODO
 }
 
+func (c *DockerContainer) GetProxyLog() string {
+    return "" //TODO
+}
+
 // NSPid returns the pid of the first process of the docker container.
 func (c *DockerContainer) NSPid() string {
 	return c.nspid
