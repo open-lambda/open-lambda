@@ -381,7 +381,7 @@ func (f *LambdaFunc) Task() {
 
 	// we want to perform various cleanup actions, such as killing
 	// instances and deleting old code.  We want to do these
-	// asyncronously, but in order.  Thus, we use a chan to get
+	// asynchronously, but in order.  Thus, we use a chan to get
 	// FIFO behavior and a single cleanup task to get async.
 	//
 	// two types can be sent to this chan:

@@ -14,11 +14,11 @@ use lambda_store_client::create_client;
 
 #[ tokio::main ]
 async fn main() {
-    let container_dir = {
-        let mut argv = std::env::args();
-        argv.next().unwrap();
-        argv.next().expect("Expected exactly one argument")
-    };
+    let mut argv = std::env::args();
+    argv.next().unwrap();
+
+    let container_dir = argv.next().expect("No container directory given");
+    let storage_url = argv.next().expect("No storage url given");
 
     simple_logging::log_to_file(format!("{}/db-proxy.log", container_dir), log::LevelFilter::Debug).unwrap();
 
@@ -41,10 +41,12 @@ async fn main() {
                 std::process::exit(0);
             }
             result = accept => {
+                let storage_url = storage_url.clone();
+
                 match result {
                     Ok((stream, _)) => {
                         tokio::spawn(async move {
-                            handle_connection(stream).await;
+                            handle_connection(storage_url, stream).await;
                         });
                     }
                     Err(e) => {
@@ -82,7 +84,7 @@ async fn call_function(func_name: String, arg_string: String) -> Result<String, 
     Ok(result_string)
 }
 
-async fn handle_connection(stream: UnixStream) {
+async fn handle_connection(storage_url: String, stream: UnixStream) {
     log::info!("Connected to process");
 
     let (reader, writer) = stream.into_split();
@@ -91,7 +93,7 @@ async fn handle_connection(stream: UnixStream) {
     let mut writer = FramedWrite::new(writer, LengthDelimitedCodec::new());
 
     // FIXME: reuse or create lazily
-    let client = create_client("localhost").await;
+    let client = create_client(&storage_url).await;
     let mut tx = Some(client.begin_transaction());
     log::debug!("Setup database connection");
 

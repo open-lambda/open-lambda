@@ -141,7 +141,7 @@ func (container *SOCKContainer) freshProc() (err error) {
 func (container *SOCKContainer) launchDbProxy() (err error) {
 	args := []string{}
 	args = append(args, "ol-database-proxy")
-	args = append(args, container.scratchDir)
+	args = append(args, container.scratchDir, common.Conf.Storage_url)
 
 	var procAttr os.ProcAttr
 	procAttr.Files = []*os.File{os.Stdin, os.Stdout, os.Stderr}
