@@ -18,7 +18,10 @@ type Config struct {
 	// worker directory, which contains handler code, pid file, logs, etc.
 	Worker_dir string `json:"worker_dir"`
 
-	// port the worker server listens to
+	// Url/ip the worker server listens to
+	Worker_url string `json:"worker_url"`
+
+    // port the worker server listens to
 	Worker_port string `json:"worker_port"`
 
 	// sandbox type: "docker" or "sock"
@@ -136,6 +139,7 @@ func LoadDefaults(olPath string) error {
 	Conf = &Config{
 		Worker_dir:        workerDir,
 		Server_mode:       "lambda",
+        Worker_url:        "localhost",
 		Worker_port:       "5000",
 		Registry:          registryDir,
 		Sandbox:           "sock",

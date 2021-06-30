@@ -77,7 +77,7 @@ func (s *LambdaServer) cleanup() {
 
 // NewLambdaServer creates a server based on the passed config."
 func NewLambdaServer() (*LambdaServer, error) {
-	log.Printf("Start Lambda Server")
+	log.Printf("Starting new lambda server")
 
 	lambdaMgr, err := lambda.NewLambdaMgr()
 	if err != nil {

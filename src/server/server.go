@@ -79,7 +79,7 @@ func Main() (err error) {
 
 	defer func() {
 		if err != nil {
-			log.Printf("remove PID file %s", pidPath)
+			log.Printf("Remvoing PID file %s", pidPath)
 			os.Remove(pidPath)
 		}
 	}()
@@ -127,7 +127,7 @@ func Main() (err error) {
 		os.Exit(1)
 	}()
 
-	port := fmt.Sprintf(":%s", common.Conf.Worker_port)
+	port := fmt.Sprintf("%s:%s", common.Conf.Worker_url, common.Conf.Worker_port)
 	log.Fatal(http.ListenAndServe(port, nil))
 	panic("ListenAndServe should never return")
 }
