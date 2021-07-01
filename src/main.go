@@ -368,7 +368,7 @@ func kill(ctx *cli.Context) error {
 		return err
 	}
 
-	fmt.Printf("Kill worker process with PID %d\n", pid)
+	fmt.Printf("Killing worker process with PID %d\n", pid)
 	p, err := os.FindProcess(pid)
 	if err != nil {
 		fmt.Printf("%s\n", err.Error())
@@ -382,6 +382,7 @@ func kill(ctx *cli.Context) error {
 	for i := 0; i < 300; i++ {
 		err := p.Signal(syscall.Signal(0))
 		if err != nil {
+            fmt.Printf("OL worker process stopped successfully")
 			return nil // good, process must have stopped
 		}
 		time.Sleep(100 * time.Millisecond)

@@ -300,6 +300,12 @@ func (container *SOCKContainer) decCgRefCount() {
 
 	// release all resources when we have no more dependents...
 	if container.cgRefCount == 0 {
+        // Stop proxy before unmounting (because it might write to a logfile)
+		if container.dbProxy != nil {
+			container.dbProxy.Kill()
+			container.dbProxy.Wait()
+		}
+
 		t := common.T0("Destroy()/kill-procs")
 		if container.cg != nil {
 			pids := container.cg.KillAllProcs()
@@ -325,11 +331,6 @@ func (container *SOCKContainer) decCgRefCount() {
 
 		if container.parent != nil {
 			container.parent.childExit(container)
-		}
-
-		if container.dbProxy != nil {
-			container.dbProxy.Kill()
-			container.dbProxy.Wait()
 		}
 	}
 }
