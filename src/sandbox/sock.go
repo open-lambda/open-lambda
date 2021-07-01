@@ -110,7 +110,6 @@ func (container *SOCKContainer) freshProc() (err error) {
 				return err
 			}
 		}
-	
 
 		cmd = exec.Command(
 			"chroot", container.containerRootDir,

@@ -16,6 +16,7 @@ use tokio::select;
 use tokio::process::Command;
 use tokio::net::UnixListener;
 use tokio_stream::wrappers::UnixListenerStream;
+use tokio::signal::unix::{signal, SignalKind};
 
 use nix::unistd::{getpid, fork, ForkResult};
 use nix::sched::{CloneFlags, unshare};
@@ -97,18 +98,9 @@ fn main() {
     }
 
     log::info!("Starting server loop...");
-    /* FIXME
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_io().build().expect("Failed to start tokio");
-    */
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(1)
         .enable_io().build().expect("Failed to start tokio");
-
-    /* FIXME
-    let local = tokio::task::LocalSet::new();
-    local.block_on(&runtime, async move {
-    */ 
 
     runtime.block_on(async move {
         let listener = UnixListener::from_std(listener).unwrap();
@@ -116,7 +108,6 @@ fn main() {
         let acceptor = hyper::server::accept::from_stream(stream);
 
         let server = Server::builder(acceptor).serve(make_service);
-        // let server = Server::builder(acceptor).executor(LocalExec).serve(make_service);
 
         log::info!("Listening on unix:{}", socket_path);
 
@@ -140,22 +131,24 @@ async fn execute_function(args: Vec<u8>) -> Result<Response<Body>> {
             .stdout(Stdio::piped()).stderr(Stdio::piped())
             .spawn().expect("Failed to spawn lambda process");
 
-    let child_wait = child.wait();
-    let signal = tokio::signal::ctrl_c();
+    let child_future = child.wait();
+
+    let mut sighandler = signal(SignalKind::terminate()).expect("Failed to install sighandler");
+    let sig_future = sighandler.recv();
 
     let mut e_str = String::from("");
 
     log::debug!("Waiting for process to terminate or signal");
 
     let success = select! {
-        _ = signal => {
-            e_str = String::from("Got ctrl+c");
+        _ = sig_future => {
+            log::info!("Got ctrl+c");
             child.kill().await.expect("Failed to kill child");
             child.wait().await.unwrap();
 
-            false
+            std::process::exit(0);
         }
-        res = child_wait => {
+        res = child_future => {
             let status = res.unwrap();
 
             if status.success() {
