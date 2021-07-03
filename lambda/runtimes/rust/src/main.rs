@@ -102,12 +102,18 @@ fn main() {
         .worker_threads(1)
         .enable_io().build().expect("Failed to start tokio");
 
+    let mut sighandler = signal(SignalKind::terminate()).expect("Failed to install sighandler");
+
     runtime.block_on(async move {
         let listener = UnixListener::from_std(listener).unwrap();
         let stream = UnixListenerStream::new(listener);
         let acceptor = hyper::server::accept::from_stream(stream);
 
-        let server = Server::builder(acceptor).serve(make_service);
+        let server = Server::builder(acceptor).serve(make_service)
+            .with_graceful_shutdown(async move {
+                sighandler.recv().await;
+                log::info!("Got ctrl+c");
+            });
 
         log::info!("Listening on unix:{}", socket_path);
 

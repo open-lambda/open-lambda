@@ -467,9 +467,9 @@ dependencies = [
 
 [[package]]
 name = "hashbrown"
-version = "0.9.1"
+version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7afe4a420e3fe79967a00898cc1f4db7c8a49a9333a29f8a4bd76a253d5cd04"
+checksum = "ab5ef0d4909ef3724cc8cce6ccc8572c5c817592e9285f5464f8e86f8bd3726e"
 
 [[package]]
 name = "hermit-abi"
@@ -554,9 +554,9 @@ checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
 
 [[package]]
 name = "indexmap"
-version = "1.6.2"
+version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "824845a0bf897a9042383849b02c1bc219c2383772efcd5c6f9766fa4b81aef3"
+checksum = "bc633605454125dec4b66843673f01c7df2b89479b32e0ed634e43a91cff62a5"
 dependencies = [
  "autocfg",
  "hashbrown",
@@ -616,7 +616,7 @@ checksum = "dd25036021b0de88a0aff6b850051563c6516d0bf53f8638938edbb9de732736"
 [[package]]
 name = "lambda-store-client"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git#052601e75c8fc70e8b1f912643edb0ca1330797e"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git#9dd3da2a46420bb0b65281a4c05302b30b5a72b4"
 dependencies = [
  "bincode",
  "dashmap",
@@ -633,7 +633,7 @@ dependencies = [
 [[package]]
 name = "lambda-store-utils"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git#052601e75c8fc70e8b1f912643edb0ca1330797e"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git#9dd3da2a46420bb0b65281a4c05302b30b5a72b4"
 dependencies = [
  "async-trait",
  "bincode",
@@ -1178,7 +1178,7 @@ checksum = "71d301d4193d031abdd79ff7e3dd721168a9572ef3fe51a1517aba235bd8f86e"
 [[package]]
 name = "schema"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/schema.git#d9098b0803784341db72675b87296d32e11fc00d"
+source = "git+ssh://git@github.com/kaimast/schema.git#1223047b8882b0aeeb19e66ecc26392e8f236bd7"
 dependencies = [
  "bincode",
  "log",
@@ -1380,18 +1380,18 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "1.0.25"
+version = "1.0.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa6f76457f59514c7eeb4e59d891395fab0b2fd1d40723ae737d64153392e9c6"
+checksum = "93119e4feac1cbe6c798c34d3a53ea0026b0b1de6a120deef895137c0529bfe2"
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "1.0.25"
+version = "1.0.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a36768c0fbf1bb15eca10defa29526bda730a2376c2ab4393ccfa16fb1a318d"
+checksum = "060d69a0afe7796bf42e9e2ff91f5ee691fb15c53d38b4b62a9a53eb23164745"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1400,9 +1400,9 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.7.1"
+version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5fb2ed024293bb19f7a5dc54fe83bf86532a44c12a2bb8ba40d64a4509395ca2"
+checksum = "570c2eb13b3ab38208130eccd41be92520388791207fde783bda7c1e8ace28d4"
 dependencies = [
  "autocfg",
  "bytes",
