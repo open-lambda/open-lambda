@@ -39,11 +39,11 @@ wasm-worker:
 
 wasm-programs:
 	cd programs && ${CARGO} build --release --target $(WASM_TARGET)
-	bash ./programs/install.sh ${WASM_TARGET}
+	bash ./programs/install-wasm.sh test-registry.wasm ${WASM_TARGET}
 
 native-programs: imgs/lambda
 	cd programs && cross build --release
-	bash ./programs/install.sh test-registry test-registry.wasm ${WASM_TARGET} 1
+	bash ./programs/install-native.sh test-registry
 
 update-dependencies:
 	cd lambda/runtimes/rust && ${CARGO} update

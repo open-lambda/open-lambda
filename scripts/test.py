@@ -188,13 +188,13 @@ def install_tests():
 
 @test
 def hello_rust():
-    req = post("run/rust-hello", [])
+    req = post("run/hello", [])
     if req.status_code != 200:
         raise Exception("STATUS %d: %s" % (req.status_code, req.text))
 
 @test
 def internal_call():
-    req = post("run/rust-internal_call", {"count": 5})
+    req = post("run/internal_call", {"count": 5})
     if req.status_code != 200:
         raise Exception("STATUS %d: %s" % (req.status_code, req.text))
 
@@ -224,7 +224,7 @@ def numpy_test():
     assert j['version'].startswith('1.19')
 
     # use rust binary
-    req = post("run/rust-numpy", [1, 2])
+    req = post("run/algebra", [[[1, 2], [3, 4]], [[1, 2], [3, 4]]])
     if req.status_code != 200:
         raise Exception("STATUS %d: %s" % (req.status_code, req.text))
     try:
@@ -365,7 +365,7 @@ def sock_churn(baseline, procs, seconds, fork):
 
 @test
 def rust_hashing():
-    req = post("run/rust-hashing", {"num_hashes": 100, "input_len": 1024})
+    req = post("run/hashing", {"num_hashes": 100, "input_len": 1024})
     if req.status_code != 200:
         raise Exception("STATUS %d: %s" % (req.status_code, req.text))
 
@@ -418,6 +418,10 @@ def recursive_kill(depth):
     destroys = req.json()['Destroy():ms.cnt']
     assert destroys == depth
 
+@test
+def increment():
+    req = post("run/increment", {})
+    raise_for_status(req)
 
 def run_tests():
     ping_test()
@@ -429,6 +433,8 @@ def run_tests():
     rust_hashing()
 
     internal_call()
+
+    increment()
 
     # do smoke tests under various configs
     with TestConfContext(features={"import_cache": False}):

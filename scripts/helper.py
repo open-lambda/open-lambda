@@ -57,7 +57,7 @@ class Datastore:
         #Maybe remove this?
         print("Creating default collection")
         client = lambdastore.create_client('localhost')
-        client.create_collection('default', str, {'value': str})
+        client.create_collection('default', str, {'value': int})
 
         self._known_programs = []
 

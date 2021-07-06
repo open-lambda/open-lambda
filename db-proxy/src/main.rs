@@ -74,14 +74,20 @@ async fn call_function(func_name: String, arg_string: String) -> Result<String, 
         }
     };
 
-    let result_string = match result.text().await {
-        Ok(result_string) => result_string,
-        Err(err) => {
-            return Err(format!("Failed to parse call result: {}", err));
-        }
-    };
+    let success = result.status().is_success();
 
-    Ok(result_string)
+    match result.text().await {
+        Ok(result_string) => {
+            if success {
+                Ok(result_string)
+            } else {
+                Err(result_string)
+            }
+        }
+        Err(err) => {
+            Err(format!("Failed to parse call result: {}", err))
+        }
+    }
 }
 
 async fn handle_connection(storage_url: String, stream: UnixStream) {
@@ -121,15 +127,9 @@ async fn handle_connection(storage_url: String, stream: UnixStream) {
                 ProxyMessage::SchemaResult{ identifier, key, fields }
             }
             ProxyMessage::ExecuteOperation{ collection, op } => {
-                let ntype = if op.is_write() {
-                    lambda_store_client::NodeType::Head
-                } else {
-                    lambda_store_client::NodeType::Tail
-                };
-
                 let tx = tx.as_ref().expect("Transaction already committed?");
-                let collection = tx.get_collection_by_id(collection).unwrap();
-                let result = collection.execute_operation(op, ntype).await;
+                let mut collection = tx.get_collection_by_id(collection).unwrap();
+                let result = collection.execute_operation(op).await;
 
                 ProxyMessage::OperationResult{ result }
             }

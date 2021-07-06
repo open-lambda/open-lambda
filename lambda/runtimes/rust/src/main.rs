@@ -67,7 +67,9 @@ fn main() {
         }))
     });
 
-    simple_logging::log_to_file("/host/ol-runtime.log", log::LevelFilter::Debug).unwrap();
+    if let Err(err) = simple_logging::log_to_file("/host/ol-runtime.log", log::LevelFilter::Debug) {
+        println!("Failed to create logfile: {}", err);
+    }
 
     let socket_path = "/host/ol.sock";
     let listener = StdUnixListener::bind(socket_path).expect("Failed to bind UNIX socket");
