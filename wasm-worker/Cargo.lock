@@ -616,7 +616,7 @@ checksum = "dd25036021b0de88a0aff6b850051563c6516d0bf53f8638938edbb9de732736"
 [[package]]
 name = "lambda-store-client"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git#538925f02f1e6e7c4bb0ff997d3ce5c37d1b7173"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git#914ccb3a08bb5d064940d47ae36b0c546c9012a9"
 dependencies = [
  "bincode",
  "dashmap",
@@ -624,6 +624,7 @@ dependencies = [
  "lambda-store-utils",
  "log",
  "open-lambda-protocol",
+ "rand",
  "schema",
  "serde_json",
  "tokio",
@@ -633,7 +634,7 @@ dependencies = [
 [[package]]
 name = "lambda-store-utils"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git#538925f02f1e6e7c4bb0ff997d3ce5c37d1b7173"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git#914ccb3a08bb5d064940d47ae36b0c546c9012a9"
 dependencies = [
  "async-trait",
  "bincode",
@@ -1400,9 +1401,9 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.8.0"
+version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "570c2eb13b3ab38208130eccd41be92520388791207fde783bda7c1e8ace28d4"
+checksum = "98c8b05dc14c75ea83d63dd391100353789f5f24b8b3866542a5e85c8be8e985"
 dependencies = [
  "autocfg",
  "bytes",
