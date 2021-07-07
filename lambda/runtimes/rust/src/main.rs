@@ -67,7 +67,7 @@ fn main() {
         }))
     });
 
-    if let Err(err) = simple_logging::log_to_file("/host/ol-runtime.log", log::LevelFilter::Debug) {
+    if let Err(err) = simple_logging::log_to_file("/host/ol-runtime.log", log::LevelFilter::Info) {
         println!("Failed to create logfile: {}", err);
     }
 

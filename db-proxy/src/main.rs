@@ -20,7 +20,7 @@ async fn main() {
     let container_dir = argv.next().expect("No container directory given");
     let storage_url = argv.next().expect("No storage url given");
 
-    simple_logging::log_to_file(format!("{}/db-proxy.log", container_dir), log::LevelFilter::Debug).unwrap();
+    simple_logging::log_to_file(format!("{}/db-proxy.log", container_dir), log::LevelFilter::Info).unwrap();
 
     let path = format!("{}/db-proxy.sock", container_dir);
     let listener = UnixListener::bind(path).unwrap();
