@@ -24,6 +24,9 @@ type Config struct {
     // port the worker server listens to
 	Worker_port string `json:"worker_port"`
 
+    // log output of the runtime and proxy?
+    Log_output bool `json:"log_output"`
+
 	// sandbox type: "docker" or "sock"
 	// currently ignored as cgroup sandbox is not fully integrated
 	Sandbox string `json:"sandbox"`
@@ -144,6 +147,7 @@ func LoadDefaults(olPath string) error {
 		Registry:          registryDir,
 		Sandbox:           "sock",
         Storage_url:       "localhost",
+        Log_output:        true,
 		Pkgs_dir:          packagesDir,
 		Sandbox_config:    map[string]interface{}{},
 		SOCK_base_path:    baseImgDir,

@@ -605,21 +605,24 @@ func (linst *LambdaInstance) Task() {
 				sb.Destroy()
 
                 log.Printf("Stopped sandbox")
-				 if rt_log != "" {
-					 log.Printf("Runtime output is:")
 
-					for _, line := range strings.Split(rt_log, "\n") {
-						log.Printf("   %s", line)
-					}
-				}
+                if common.Conf.Log_output {
+                    if rt_log != "" {
+                         log.Printf("Runtime output is:")
 
-				 if proxy_log != "" {
-					 log.Printf("Proxy output is:")
+                        for _, line := range strings.Split(rt_log, "\n") {
+                            log.Printf("   %s", line)
+                        }
+                    }
 
-					for _, line := range strings.Split(proxy_log, "\n") {
-						log.Printf("   %s", line)
-					}
-				}
+                     if proxy_log != "" {
+                         log.Printf("Proxy output is:")
+
+                        for _, line := range strings.Split(proxy_log, "\n") {
+                            log.Printf("   %s", line)
+                        }
+                    }
+                }
 			}
 			killed <- true
 			return
@@ -702,20 +705,23 @@ func (linst *LambdaInstance) Task() {
 				sb.Destroy()
 
                 log.Printf("Stopped sandbox")
-				 if rt_log != "" {
-					 log.Printf("Runtime output is:")
 
-					for _, line := range strings.Split(rt_log, "\n") {
-						log.Printf("   %s", line)
-					}
-				}
+               if common.Conf.Log_output {
+                    if rt_log != "" {
+                         log.Printf("Runtime output is:")
 
-				 if proxy_log != "" {
-					 log.Printf("Proxy output is:")
+                        for _, line := range strings.Split(rt_log, "\n") {
+                            log.Printf("   %s", line)
+                        }
+                    }
 
-					for _, line := range strings.Split(proxy_log, "\n") {
-						log.Printf("   %s", line)
-					}
+                     if proxy_log != "" {
+                         log.Printf("Proxy output is:")
+
+                        for _, line := range strings.Split(proxy_log, "\n") {
+                            log.Printf("   %s", line)
+                        }
+                    }
 				}
 
 				killed <- true
