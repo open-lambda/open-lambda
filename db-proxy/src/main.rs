@@ -120,7 +120,7 @@ async fn handle_connection(storage_url: String, stream: UnixStream) {
                 ProxyMessage::CallResult(result)
             },
             ProxyMessage::GetSchema{ collection: col_name } => {
-                let col = client.get_collection(col_name).expect("No such collection");
+                let col = client.get_collection(&col_name).expect("No such collection");
                 let (key, fields) = col.get_schema().clone_inner();
                 let identifier = col.get_identifier();
 
