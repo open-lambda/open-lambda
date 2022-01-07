@@ -240,16 +240,9 @@ func (f *LambdaFunc) printf(format string, args ...interface{}) {
 //
 // We support exact pkg versions (e.g., pkg==2.0.0), but not < or >.
 // If different lambdas import different versions of the same package,
-// we will install them, for example, to /packages/pkg==1.0.0/pkg and
-// /packages/pkg==2.0.0/pkg.  We'll symlink the version the user wants
-// to /handler/packages/pkg.  For example, two different lambdas might
-// have links as follows:
-//
-// /handler/packages/pkg => /packages/pkg==1.0.0/pkg
-// /handler/packages/pkg => /packages/pkg==2.0.0/pkg
-//
-// Lambdas should have /handler/packages in their path, but not
-// /packages.
+// we will install them, for example, to
+// /packages/pkg==1.0.0/files/pkg and /packages/pkg==2.0.0/files/pkg.
+// Each .../files path a handler needs is added to its sys.path.
 func parseMeta(codeDir string) (meta *sandbox.SandboxMeta, err error) {
 	installs := make([]string, 0)
 	imports := make([]string, 0)
@@ -294,7 +287,7 @@ func parseMeta(codeDir string) (meta *sandbox.SandboxMeta, err error) {
 
 // if there is any error:
 // 1. we won't switch to the new code
-// 2. we won't update pull time (so well check for a fix next tim)
+// 2. we won't update pull time (so well check for a fix next time)
 func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 	// check if there is newer code, download it if necessary
 	now := time.Now()
@@ -321,8 +314,7 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 				log.Printf("could not cleanup %s after failed pull", codeDir)
 			}
 
-			// we dirty this dir (e.g., by setting up
-			// symlinks to packages, so we want the
+			// we may dirty this dir, so we want the
 			// HandlerPuller to give us a new one next
 			// time, even if the code hasn't changed
 			f.lmgr.HandlerPuller.Reset(f.name)

@@ -208,11 +208,11 @@ def install_tests():
         r = post("stats", None)
         raise_for_status(r)
         installs = r.json()['pull-package.cnt']
-        if i < 2:
-            # with deps, requests should give us these:
-            # certifi, chardet, idna, requests, urllib3
-            assert(installs == 5)            
+        if i in (0, 1):
+            # expected: certifi, charset-normalizer, idna, requests, urllib3
+            assert(installs == 5)
         else:
+            # expected: certifi, charset-normalizer, idna, requests, urllib3, simplejson
             assert(installs == 6)
 
 
