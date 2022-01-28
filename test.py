@@ -314,6 +314,13 @@ def fork_bomb():
     actual = int(r.text)
     assert(1 <= actual <= limit)
 
+@test
+def version():
+    r = post("run/version")
+    raise_for_status(r)
+    version = r.text
+    print(version)
+    assert(version)
 
 @test
 def max_mem_alloc():
@@ -445,6 +452,9 @@ def tests():
         # test resource limits
         fork_bomb()
         max_mem_alloc()
+
+        # test python/ubuntu versioning
+        version()
 
         # numpy pip install needs a larger mem cap
         with TestConf(mem_pool_mb=500):
