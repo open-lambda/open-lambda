@@ -150,6 +150,10 @@ def main():
 
     print('sock2.py: started new process with args: ' + " ".join(sys.argv))
 
+    rc = ol.enable_seccomp()
+    assert rc >= 0
+    print('seccomp enabled')
+
     bootstrap_path = sys.argv[1]
     cgroup_fds = 0
     if len(sys.argv) > 2:
