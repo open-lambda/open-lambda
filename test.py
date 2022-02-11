@@ -471,6 +471,7 @@ def tests():
     # make sure code updates get pulled within the cache time
     with tempfile.TemporaryDirectory() as reg_dir:
         with TestConf(registry=reg_dir, registry_cache_ms=3000):
+            call_each_once(lambda_count=100, alloc_mb=1)
             update_code()
 
     # test heavy load
@@ -480,7 +481,6 @@ def tests():
         stress_one_lambda(procs=8, seconds=15)
 
     with TestConf(features={"reuse_cgroups": True}):
-        call_each_once(lambda_count=100, alloc_mb=10)
         call_each_once(lambda_count=1000, alloc_mb=10)
 
 
