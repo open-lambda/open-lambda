@@ -33,6 +33,14 @@ func getOlPath(ctx *cli.Context) (string, error) {
 	return filepath.Abs(olPath)
 }
 
+func getBossOlPath(ctx *cli.Context) (string, error) {
+	olPath := ctx.String("path")
+	if olPath == "" {
+		olPath = "default-boss-ol"
+	}
+	return filepath.Abs(olPath)
+}
+
 func initOLDir(olPath string) (err error) {
 	fmt.Printf("Init OL dir at %v\n", olPath)
 	if err := os.Mkdir(olPath, 0700); err != nil {
@@ -108,6 +116,16 @@ func initOLDir(olPath string) (err error) {
 // newOL corresponds to the "new" command of the admin tool.
 func newOL(ctx *cli.Context) error {
 	olPath, err := getOlPath(ctx)
+	if err != nil {
+		return err
+	}
+
+	return initOLDir(olPath)
+}
+
+// newBossOL corresponses to the "new-boss" command of the admin tool.
+func newBossOL(ctx *cli.Context) error {
+	olPath, err := getBossOlPath(ctx)
 	if err != nil {
 		return err
 	}
@@ -426,6 +444,14 @@ OPTIONS:
 			Description: "A cluster directory of the given name will be created with internal structure initialized.",
 			Flags:       []cli.Flag{pathFlag},
 			Action:      newOL,
+		},
+		cli.Command{
+			Name:	     "new-boss",
+			Usage:       "Create a new Boss",
+			UsageText:   "ol new-boss [--path=PATH]",
+			Description: "Testing Purposes Right Now",
+			Flags:       []cli.Flag{pathFlag},
+			Action:      newBossOL,
 		},
 		cli.Command{
 			Name:        "worker",
