@@ -123,16 +123,6 @@ func newOL(ctx *cli.Context) error {
 	return initOLDir(olPath)
 }
 
-// newBossOL corresponses to the "new-boss" command of the admin tool.
-func newBossOL(ctx *cli.Context) error {
-	olPath, err := getBossOlPath(ctx)
-	if err != nil {
-		return err
-	}
-
-	return initOLDir(olPath)
-}
-
 // status corresponds to the "status" command of the admin tool.
 func status(ctx *cli.Context) error {
 	olPath, err := getOlPath(ctx)
@@ -444,14 +434,6 @@ OPTIONS:
 			Description: "A cluster directory of the given name will be created with internal structure initialized.",
 			Flags:       []cli.Flag{pathFlag},
 			Action:      newOL,
-		},
-		cli.Command{
-			Name:	     "new-boss",
-			Usage:       "Create a new Boss",
-			UsageText:   "ol new-boss [--path=PATH]",
-			Description: "Testing Purposes Right Now",
-			Flags:       []cli.Flag{pathFlag},
-			Action:      newBossOL,
 		},
 		cli.Command{
 			Name:        "worker",
