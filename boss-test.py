@@ -2,6 +2,7 @@ import requests
 import os, sys
 from subprocess import run
 import time
+import json
 
 api_key = None
 boss_port = None
@@ -43,15 +44,15 @@ def tester(platform):
 
     # should create new config file
     run(["./ol", "new-boss"]).check_returncode()
-    assert os.path.exists("boss.json")
+    assert os.path.exists("default-boss-ol/config.json")
 
     # should have options platform (e.g., "aws", etc) and scaling ("manual" or "auto")
-    config = read_json("boss.json")
+    config = read_json("default-boss-ol/config.json")
     assert "platform" in config
     assert "scaling" in config
     config["platform"] = platform
     config["scaling"] = "manual"
-    write_json("boss.json", config)
+    write_json("default-boss-ol/config.json", config)
 
     # config should contain randomly generate secret API key
     assert "api_key" in config
