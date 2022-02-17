@@ -76,7 +76,68 @@ func getGCPtoken(service_account map[string]interface{}) (string, error) {
 	return result["access_token"].(string), nil
 }
 
-func main() {
+func GcpListInstances() {
+	// GET https://www.googleapis.com/compute/v1/projects/cs320-f21/zones/us-central1-a/instances
+	/*
+	   for item in resp["items"]:
+	       for interface in item["networkInterfaces"]:
+	           for conf in interface["accessConfigs"]:
+	               print(conf["natIP"])
+	*/
+}
+
+func GcpSnapshot() {
+	// TODO: take from config
+	service_account, err := getServiceAccount("key.json")
+	if err != nil {
+		panic(err)
+	}
+
+	// STEP 1: build body of REST request
+	
+	// TODO: take args from config (or better, read from service account somehow)
+	args := GcpSnapshotArgs{
+		Project: "cs320-f21",
+		Region: "us-central1",
+		Zone: "us-central1-a",
+		Disk: "instance-2",
+		SnapshotName: "test-snap",
+	}
+	temp := template.Must(template.New("gcp-launch").Parse(gcpSnapshotJSON))
+
+	var payload bytes.Buffer
+	if err := temp.Execute(&payload, args); err != nil {
+		panic (err)
+	}
+
+	fmt.Printf("%s\n", string(payload.Bytes()))
+
+	// STEP 2: get token for request
+
+	// TODO: re-use this and renew before it expires
+	token, err := getGCPtoken(service_account)
+	if err != nil {
+		panic(err)
+	}
+
+	// STEP 3: Snapshot VM
+	url := fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/zones/%s/disks/%s/createSnapshot?access_token=%s",
+		args.Project, args.Zone, args.Disk, token)
+	fmt.Printf("%s\n", url)
+
+	resp, err := http.Post(url, "application/json", bytes.NewReader(payload.Bytes()))
+	if err != nil {
+		panic (err)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("%V\n", string(body))
+}
+
+func LaunchGCP() {
 	// TODO: take from config
 	service_account, err := getServiceAccount("key.json")
 	if err != nil {
