@@ -112,6 +112,12 @@ func newOL(ctx *cli.Context) error {
 		return err
 	}
 
+	// Yuke updates the "new" command so it also
+	// creates a "boss-config.json" (similar to config.json)
+	newBossPath := filepath.Join(olPath, "boss-config.json")
+	if err := common.LoadConf(newBossPath); err != nil {
+		return err
+	}
 	return initOLDir(olPath)
 }
 
@@ -217,6 +223,10 @@ func overrideOpts(confPath, overridePath, optsStr string) error {
 	}
 	return nil
 }
+
+// func boss(ctx *cli.Context) error {
+
+// }
 
 // workers corresponds to the "workers" command of the admin tool.
 //
@@ -427,6 +437,16 @@ OPTIONS:
 			Flags:       []cli.Flag{pathFlag},
 			Action:      newOL,
 		},
+		// cli.Command{
+		// 	Name:  "boss",
+		// 	Usage: "Start one Boss server",
+		// 	// are we going to do detach and option like a worker?
+		// good to add a detach
+		// 	UsageText:   "ol boss [--path=PATH]",
+		// 	Description: "Start a boss server.",
+		// 	// Flags: depend on if we're going to add detach and option?
+		// 	Action: boss,
+		// },
 		cli.Command{
 			Name:        "worker",
 			Usage:       "Start one OL server",
