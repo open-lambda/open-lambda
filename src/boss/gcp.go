@@ -14,38 +14,52 @@ import (
 	"bytes"
 )
 
-func getServiceAccount(service_account_json string) (map[string]interface{}, error) {
-	var result map[string]interface{}
-	jsonFile, err := os.Open(service_account_json)
-	if err != nil {
-		return result, err
-	}
-	defer jsonFile.Close()
-	
-	byteValue, err := ioutil.ReadAll(jsonFile)
-	if err != nil {
-		return result, err
-	}
-
-	err = json.Unmarshal([]byte(byteValue), &result)
-	if err != nil {
-		return result, err
-	}
-
-	return result, nil
+type GCPClient struct {
+	service_account map[string]interface{} // from .json key exported from GCP service account
+	access_token string
 }
 
-func getGCPtoken(service_account map[string]interface{}) (string, error) {
+func NewGCPClient(service_account_json string) (*GCPClient, error) {
+	client := &GCPClient{}
+
+	// read key file
+	jsonFile, err := os.Open(service_account_json)
+	if err != nil {
+		return nil, err
+	}
+	defer jsonFile.Close()
+
+	byteValue, err := ioutil.ReadAll(jsonFile)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal([]byte(byteValue), &client.service_account)
+	if err != nil {
+		return nil, err
+	}
+
+	
+
+	return client, nil
+}
+
+func (c *GCPClient) GetAccessToken() (string, error) {
+	if c.access_token != "" {
+		// TODO: refresh it if stale?
+		return c.access_token, nil
+	}
+
 	now := time.Now()
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
-		"iss": service_account["client_email"],
+		"iss": c.service_account["client_email"],
 		"scope": "https://www.googleapis.com/auth/compute",
-		"aud": service_account["token_uri"],
+		"aud": c.service_account["token_uri"],
 		"exp": now.Add(time.Minute * 30).Unix(),
 		"iat": now.Unix(),
 	})
 
-	key, err := jwt.ParseRSAPrivateKeyFromPEM([]byte(service_account["private_key"].(string)))
+	key, err := jwt.ParseRSAPrivateKeyFromPEM([]byte(c.service_account["private_key"].(string)))
 	if err != nil {
 		return "", err
 	}
@@ -55,7 +69,7 @@ func getGCPtoken(service_account map[string]interface{}) (string, error) {
 		return "", err
 	}
 
-	resp, err := http.Post(service_account["token_uri"].(string),
+	resp, err := http.Post(c.service_account["token_uri"].(string),
 		"application/x-www-form-urlencoded",
 		strings.NewReader("grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion="+tokenString))
 
@@ -73,22 +87,68 @@ func getGCPtoken(service_account map[string]interface{}) (string, error) {
 		return "", err
 	}
 
-	return result["access_token"].(string), nil
+	c.access_token = result["access_token"].(string)
+	return c.access_token, nil
 }
 
-func GcpListInstances() {
-	// GET https://www.googleapis.com/compute/v1/projects/cs320-f21/zones/us-central1-a/instances
-	/*
-	   for item in resp["items"]:
-	       for interface in item["networkInterfaces"]:
-	           for conf in interface["accessConfigs"]:
-	               print(conf["natIP"])
-	*/
+func (c *GCPClient) get(url string) (map[string]interface{}, error) {
+	var result map[string]interface{}
+
+	token, err := c.GetAccessToken()
+	if err != nil {
+		return result, err
+	}
+
+	url = fmt.Sprintf("%s?access_token=%s", url, token)
+	resp, err := http.Get(url)
+	if err != nil {
+		return result, err
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return result, err
+	}
+
+	if err := json.Unmarshal([]byte(body), &result); err != nil {
+		return result, err
+	}
+
+	return result, nil
 }
 
-func GcpSnapshot() {
-	// TODO: take from config
-	service_account, err := getServiceAccount("key.json")
+func (c *GCPClient) GcpListInstances() (map[string]interface{}, error) {
+	return c.get("https://www.googleapis.com/compute/v1/projects/cs320-f21/zones/us-central1-a/instances")
+}
+
+func (c *GCPClient) GcpIPtoInstance() (map[string]string, error) {
+	resp, err := c.GcpListInstances()
+	if err != nil {
+		return nil, err
+	}
+
+	lookup := map[string]string{}
+
+	for _, item := range resp["items"].([]interface{}) {
+		instance_name := item.(map[string]interface{})["name"].(string)
+		interfaces := item.(map[string]interface{})["networkInterfaces"]
+		for _, netif := range interfaces.([]interface{}) {
+			confs := netif.(map[string]interface{})["accessConfigs"]
+			for _, conf := range confs.([]interface{}) {
+				iptmp := conf.(map[string]interface{})["natIP"]
+				switch ip := iptmp.(type) {
+				case string:
+					lookup[ip] = instance_name
+				}
+			}
+		}
+	}
+
+	return lookup, nil
+}
+
+func (c *GCPClient) GcpSnapshot() {
+	token, err := c.GetAccessToken()
 	if err != nil {
 		panic(err)
 	}
@@ -112,14 +172,6 @@ func GcpSnapshot() {
 
 	fmt.Printf("%s\n", string(payload.Bytes()))
 
-	// STEP 2: get token for request
-
-	// TODO: re-use this and renew before it expires
-	token, err := getGCPtoken(service_account)
-	if err != nil {
-		panic(err)
-	}
-
 	// STEP 3: Snapshot VM
 	url := fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/zones/%s/disks/%s/createSnapshot?access_token=%s",
 		args.Project, args.Zone, args.Disk, token)
@@ -137,9 +189,8 @@ func GcpSnapshot() {
 	fmt.Printf("%V\n", string(body))
 }
 
-func LaunchGCP() {
-	// TODO: take from config
-	service_account, err := getServiceAccount("key.json")
+func (c *GCPClient) LaunchGCP() {
+	token, err := c.GetAccessToken()
 	if err != nil {
 		panic(err)
 	}
@@ -148,7 +199,7 @@ func LaunchGCP() {
 	
 	// TODO: take args from config (or better, read from service account somehow)
 	args := GcpLaunchVmArgs{
-		ServiceAccountEmail: service_account["client_email"].(string),
+		ServiceAccountEmail: c.service_account["client_email"].(string),
 		Project: "cs320-f21",
 		Region: "us-central1",
 		Zone: "us-central1-a",
@@ -163,14 +214,6 @@ func LaunchGCP() {
 	}
 
 	fmt.Printf("%s\n", string(payload.Bytes()))
-
-	// STEP 2: get token for request
-
-	// TODO: re-use this and renew before it expires
-	token, err := getGCPtoken(service_account)
-	if err != nil {
-		panic(err)
-	}
 
 	// STEP 3: launch VM!
 	url := fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/zones/%s/instances?access_token=%s",
