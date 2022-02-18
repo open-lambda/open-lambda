@@ -644,7 +644,6 @@ func (linst *LambdaInstance) Task() {
 
 		// serve until we incoming queue is empty
 		for req != nil {
-			f.printf("Got here\n")
 			// /**
 			// Yuke's implementation on Timeout
 			servehttp_complete := make(chan bool)
@@ -653,13 +652,13 @@ func (linst *LambdaInstance) Task() {
 				proxy.ServeHTTP(req.w, req.r)
 				t.T1()
 				req.execMs = int(t.Milliseconds)
-				f.doneChan <- req // question: should req sent to done channel if timeout?
+				f.doneChan <- req
 				servehttp_complete <- true
 			}()
 			select {
-			case <-servehttp_complete: // should f.doneChan <- req be here instead?
+			case <-servehttp_complete:
 			case <-time.After(5 * time.Second):
-				fmt.Println("ServeHTTP timeout\n")
+				fmt.Println("ServeHTTP timeout")
 				killed := <-linst.killChan
 				sb.Destroy()
 				killed <- true
@@ -667,7 +666,7 @@ func (linst *LambdaInstance) Task() {
 			}
 			// */
 
-			///**
+			/**
 			// ask Sandbox to respond, via HTTP proxy
 			t := common.T0("ServeHTTP") // T0 records start time for ServeHTTP
 			// func (p *ReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request)
@@ -675,7 +674,7 @@ func (linst *LambdaInstance) Task() {
 			t.T1()                           // record latency to end time
 			req.execMs = int(t.Milliseconds) // how many mil-sec did ServeHTTP take
 			f.doneChan <- req
-			//**/
+			**/
 
 			// check whether we should shutdown (non-blocking)
 			select {
