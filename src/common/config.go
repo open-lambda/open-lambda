@@ -54,6 +54,14 @@ type Config struct {
 
 	// which OCI implementation to use for the docker sandbox (e.g., runc or runsc)
 	Docker_runtime string `json:"docker_runtime"`
+        
+	Platform string `json:"platform"`
+
+	Scaling string `json:"scaling"`
+       
+        API_key string `json:"api_key"`
+
+	Boss_port string  `json:"boss_port"`
 
 	Limits   LimitsConfig   `json:"limits"`
 	Features FeaturesConfig `json:"features"`
