@@ -2,6 +2,8 @@ package boss
 
 import (
 	"os"
+	"os/exec"
+	"os/user"
 	"io"
 	"io/ioutil"
 	"fmt"
@@ -12,11 +14,80 @@ import (
 	"strings"
 	"text/template"
 	"bytes"
+	"net"
+	"path/filepath"
 )
 
 type GCPClient struct {
 	service_account map[string]interface{} // from .json key exported from GCP service account
 	access_token string
+}
+
+func GCPBossTest() {
+	fmt.Printf("STEP 0: check SSH setup\n")
+	home, err := os.UserHomeDir()
+	if err != nil {
+		panic(err)
+	}
+
+	tmp, err := os.ReadFile(filepath.Join(home, ".ssh", "id_rsa.pub"))
+	if err != nil {
+		panic(err)
+	}
+	pub := strings.TrimSpace(string(tmp))
+
+	tmp, err = os.ReadFile(filepath.Join(home, ".ssh", "authorized_keys"))
+	if err != nil {
+		panic(err)
+	}
+	authorized := strings.Split(string(tmp), "\n")
+
+	matches := false
+	for _, v := range authorized {
+		if strings.TrimSpace(v) == pub {
+			matches = true
+			break
+		}
+	}
+
+	if !matches {
+		panic(fmt.Errorf("could not find id_rsa.pub in authorized_keys, consider running: cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys "))
+	}
+
+	fmt.Printf("STEP 1: get access token\n")
+	client, err := NewGCPClient("key.json")
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Printf("STEP 2: lookup instance from IP address\n")
+	instance, err := client.GcpInstanceName()
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Instance: %s\n", instance)
+
+	fmt.Printf("STEP 3: take crash-consistent snapshot of instance\n")
+	disk := instance // assume GCP disk name is same as instance name
+	resp, err := client.Wait(client.GcpSnapshot(disk))
+
+	fmt.Println(resp)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Printf("STEP 4: create new VM from snapshot\n")
+	resp, err = client.Wait(client.LaunchGCP("test-snap"))
+	fmt.Println(resp)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Printf("STEP 5: start worker\n")
+	err = client.StartRemoteWorker()
+	if err != nil {
+		panic(err)
+	}
 }
 
 func NewGCPClient(service_account_json string) (*GCPClient, error) {
@@ -39,9 +110,49 @@ func NewGCPClient(service_account_json string) (*GCPClient, error) {
 		return nil, err
 	}
 
-	
-
 	return client, nil
+}
+
+func (c *GCPClient) StartRemoteWorker() error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
+
+	user, err := user.Current()
+	if err != nil {
+		panic(err)
+	}
+
+	lookup, err := c.GcpInstancetoIP()
+	if err != nil {
+		panic(err)
+	}
+	ip, ok := lookup["instance-4"] // TODO
+	if !ok {
+		fmt.Println(lookup)
+		panic(fmt.Errorf("could not find IP for instance"))
+	}
+
+	cmd := fmt.Sprintf("cd %s; %s", cwd, "./ol worker --detach")
+
+	tries := 10
+	for tries > 0 {
+		sshcmd := exec.Command("ssh", user.Username+"@"+ip, "-o", "StrictHostKeyChecking=no", "-C", cmd)
+		stdoutStderr, err := sshcmd.CombinedOutput()
+		fmt.Printf("%s\n", stdoutStderr)
+		if err == nil {
+			break
+		}
+		tries -= 1
+		if tries == 0 {
+			fmt.Println(sshcmd.String())
+			panic(err)
+		}
+		time.Sleep(5 * time.Second)
+	}
+
+	return nil
 }
 
 func (c *GCPClient) GetAccessToken() (string, error) {
@@ -91,8 +202,14 @@ func (c *GCPClient) GetAccessToken() (string, error) {
 	return c.access_token, nil
 }
 
-func (c *GCPClient) get(url string) (map[string]interface{}, error) {
+func (c *GCPClient) get(url string) (rv map[string]interface{}, err error) {
 	var result map[string]interface{}
+
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("POST to %s failed: %s", url, err.Error())
+		}
+	}()
 
 	token, err := c.GetAccessToken()
 	if err != nil {
@@ -101,6 +218,38 @@ func (c *GCPClient) get(url string) (map[string]interface{}, error) {
 
 	url = fmt.Sprintf("%s?access_token=%s", url, token)
 	resp, err := http.Get(url)
+	if err != nil {
+		return result, err
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return result, err
+	}
+
+	if err := json.Unmarshal([]byte(body), &result); err != nil {
+		return result, err
+	}
+
+	return result, nil
+}
+
+func (c *GCPClient) post(url string, payload bytes.Buffer) (rv map[string]interface{}, err error) {
+	var result map[string]interface{}
+
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("POST to %s failed: %s", url, err.Error())
+		}
+	}()
+
+	token, err := c.GetAccessToken()
+	if err != nil {
+		return result, err
+	}
+
+	url = fmt.Sprintf("%s?access_token=%s", url, token)
+	resp, err := http.Post(url, "application/json", bytes.NewReader(payload.Bytes()))
 	if err != nil {
 		return result, err
 	}
@@ -133,6 +282,9 @@ func (c *GCPClient) GcpIPtoInstance() (map[string]string, error) {
 		instance_name := item.(map[string]interface{})["name"].(string)
 		interfaces := item.(map[string]interface{})["networkInterfaces"]
 		for _, netif := range interfaces.([]interface{}) {
+			ip := netif.(map[string]interface{})["networkIP"].(string)
+			lookup[ip] = instance_name
+
 			confs := netif.(map[string]interface{})["accessConfigs"]
 			for _, conf := range confs.([]interface{}) {
 				iptmp := conf.(map[string]interface{})["natIP"]
@@ -147,56 +299,104 @@ func (c *GCPClient) GcpIPtoInstance() (map[string]string, error) {
 	return lookup, nil
 }
 
-func (c *GCPClient) GcpSnapshot() {
-	token, err := c.GetAccessToken()
+func (c *GCPClient) GcpInstancetoIP() (map[string]string, error) {
+	lookup1, err := c.GcpIPtoInstance()
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
-	// STEP 1: build body of REST request
-	
+	lookup2 := map[string]string{}
+	for k,v := range lookup1 {
+		lookup2[v] = k
+	}
+
+	return lookup2, nil
+}
+
+// https://stackoverflow.com/questions/23558425/how-do-i-get-the-local-ip-address-in-go
+func getOutboundIP() (string, error) {
+	// we might be behind a
+	conn, err := net.Dial("udp", "8.8.8.8:80") // TODO: lookup DNS server from config
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+
+	return conn.LocalAddr().(*net.UDPAddr).IP.String(), nil
+}
+
+func (c *GCPClient) GcpInstanceName() (string, error) {
+	lookup, err := c.GcpIPtoInstance()
+	if err != nil {
+		return "", nil
+	}
+
+	ip, err := getOutboundIP()
+	if err != nil {
+		return "", nil
+	}
+
+	instance, ok := lookup[ip]
+	if !ok {
+		return "", fmt.Errorf("could not find GCP instance for %s", ip)
+	}
+	return instance, nil
+}
+
+func (c *GCPClient) Wait(resp1 map[string]interface{}, err1 error) (resp2 map[string]interface{}, err2 error) {
+	if err1 != nil {
+		return nil, fmt.Errorf("cannot Wait on on failed call: %s", err1.Error())
+	}
+
+	selfLink, ok := resp1["selfLink"]
+	if !ok {
+		return resp1, fmt.Errorf("GCP REST operation did not succeed")
+	}
+
+	poll_url := selfLink.(string) // TODO: + "/wait"
+
+	for i := 0; i<30; i++ {
+		resp2, err2 = c.get(poll_url)
+		if err2 != nil {
+			return nil, err2
+		}
+
+		fmt.Println("POLLING", resp2)
+		fmt.Println()
+
+		if resp2["status"].(string) != "RUNNING" {
+			return resp2, nil
+		}
+
+		time.Sleep(10 * time.Second)
+	}
+
+	return resp2, fmt.Errorf("Wait: operation timed out")
+}
+
+func (c *GCPClient) GcpSnapshot(disk string) (map[string]interface{}, error) {
 	// TODO: take args from config (or better, read from service account somehow)
 	args := GcpSnapshotArgs{
 		Project: "cs320-f21",
 		Region: "us-central1",
 		Zone: "us-central1-a",
-		Disk: "instance-2",
+		Disk: disk,
 		SnapshotName: "test-snap",
 	}
-	temp := template.Must(template.New("gcp-launch").Parse(gcpSnapshotJSON))
+
+	url := fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/zones/%s/disks/%s/createSnapshot",
+		args.Project, args.Zone, args.Disk)
 
 	var payload bytes.Buffer
+	temp := template.Must(template.New("gcp-snap").Parse(gcpSnapshotJSON))
 	if err := temp.Execute(&payload, args); err != nil {
 		panic (err)
 	}
 
-	fmt.Printf("%s\n", string(payload.Bytes()))
-
-	// STEP 3: Snapshot VM
-	url := fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/zones/%s/disks/%s/createSnapshot?access_token=%s",
-		args.Project, args.Zone, args.Disk, token)
-	fmt.Printf("%s\n", url)
-
-	resp, err := http.Post(url, "application/json", bytes.NewReader(payload.Bytes()))
-	if err != nil {
-		panic (err)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("%V\n", string(body))
+	return c.post(url, payload)
 }
 
-func (c *GCPClient) LaunchGCP() {
-	token, err := c.GetAccessToken()
-	if err != nil {
-		panic(err)
-	}
-
-	// STEP 1: build body of REST request
-	
+func (c *GCPClient) LaunchGCP(SnapshotName string) (map[string]interface{}, error) {
 	// TODO: take args from config (or better, read from service account somehow)
 	args := GcpLaunchVmArgs{
 		ServiceAccountEmail: c.service_account["client_email"].(string),
@@ -204,30 +404,18 @@ func (c *GCPClient) LaunchGCP() {
 		Region: "us-central1",
 		Zone: "us-central1-a",
 		InstanceName: "instance-4",
-		SourceImage: "projects/ubuntu-os-cloud/global/images/ubuntu-2004-focal-v20220204",
+		//SourceImage: "projects/ubuntu-os-cloud/global/images/ubuntu-2004-focal-v20220204",
+		SnapshotName: SnapshotName,
 	}
-	temp := template.Must(template.New("gcp-launch").Parse(gcpLaunchVmJSON))
+
+	url := fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/zones/%s/instances",
+		args.Project, args.Zone)
 
 	var payload bytes.Buffer
+	temp := template.Must(template.New("gcp-launch").Parse(gcpLaunchVmJSON))
 	if err := temp.Execute(&payload, args); err != nil {
 		panic (err)
 	}
 
-	fmt.Printf("%s\n", string(payload.Bytes()))
-
-	// STEP 3: launch VM!
-	url := fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/zones/%s/instances?access_token=%s",
-		args.Project, args.Zone, token)
-	fmt.Printf("%s\n", url)
-
-	resp, err := http.Post(url, "application/json", bytes.NewReader(payload.Bytes()))
-	if err != nil {
-		panic (err)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("%V\n", string(body))
+	return c.post(url, payload)
 }
