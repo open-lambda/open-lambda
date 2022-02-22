@@ -1,0 +1,38 @@
+{
+	"worker_dir": "/home/yukew/open-lambda/default-ol/worker",
+	"worker_port": "5000",
+	"sandbox": "sock",
+	"server_mode": "lambda",
+	"registry": "/home/yukew/open-lambda/default-ol/registry",
+	"registry_cache_ms": 5000,
+	"Pkgs_dir": "/home/yukew/open-lambda/default-ol/lambda/packages",
+	"pip_mirror": "",
+	"timeout_length": 10,
+	"mem_pool_mb": 500,
+	"import_cache_tree": "",
+	"SOCK_base_path": "/home/yukew/open-lambda/default-ol/lambda",
+	"sandbox_config": {},
+	"docker_runtime": "",
+	"limits": {
+		"procs": 10,
+		"mem_mb": 50,
+		"swappiness": 0,
+		"installer_mem_mb": 250
+	},
+	"features": {
+		"reuse_cgroups": false,
+		"import_cache": true,
+		"downsize_paused_mem": true
+	},
+	"trace": {
+		"cgroups": false,
+		"memory": false,
+		"evictor": false,
+		"package": false
+	},
+	"storage": {
+		"root": "private",
+		"scratch": "",
+		"code": ""
+	}
+}
