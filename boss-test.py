@@ -39,6 +39,9 @@ def boss_invoke(lambda_name, data, check=True):
 def tester(platform):
     global api_key, boss_port
     print(f"Testing {platform}")
+    
+    # PART 0: clear existing directory for rebuild
+    run(["rm", "-r", "default-boss-ol"]).check_returncode()
 
     # PART 1: config and launch
 
