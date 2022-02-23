@@ -20,6 +20,7 @@ import (
 
 	"github.com/open-lambda/open-lambda/ol/common"
 	"github.com/open-lambda/open-lambda/ol/server"
+	"github.com/open-lambda/open-lambda/ol/boss"
 	"github.com/urfave/cli"
 )
 
@@ -416,6 +417,11 @@ func kill(ctx *cli.Context) error {
 	return fmt.Errorf("worker didn't stop after 30s")
 }
 
+func gcp_test(ctx *cli.Context) error {
+	boss.GCPBossTest()
+	return nil
+}
+
 // main runs the admin tool
 func main() {
 	if c, err := docker.NewClientFromEnv(); err != nil {
@@ -505,6 +511,13 @@ OPTIONS:
 			UsageText: "ol kill [--path=NAME]",
 			Flags:     []cli.Flag{pathFlag},
 			Action:    kill,
+		},
+		cli.Command{
+			Name:      "gcp-test",
+			Usage:     "Start a GCP VM running the OL worker",
+			UsageText: "ol gcp-test",
+			Flags:     []cli.Flag{},
+			Action:    gcp_test,
 		},
 	}
 	err := app.Run(os.Args)
