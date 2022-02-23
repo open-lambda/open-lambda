@@ -454,10 +454,16 @@ OPTIONS:
 		cli.Command{
 			Name:	     "new-boss",
 			Usage:       "Create a new Boss",
-			UsageText:   "ol new-boss [--path=PATH]",
+			UsageText:   "ol new-boss [--path=PATH] [--detach]",
 			Description: "Testing Purposes Right Now",
-			Flags:       []cli.Flag{pathFlag},
-			Action:      newBossOL,
+			Flags: []cli.Flag{
+				pathFlag,
+				cli.BoolFlag{
+					Name: "detach, d",
+					Usage: "Run worker in background",
+				},
+			},
+			Action: newBossOL,
 		},
 		cli.Command{
 			Name:        "worker",
