@@ -62,9 +62,11 @@ def tester(platform):
     assert "boss_port" in config
     api_key = config["api_key"]
     boss_port = config["boss_port"]
+    
+    run(["rm", "-r", "default-boss-ol"]).check_returncode()
 
     # should be able to start boss as background process
-    run(["./ol", "boss", "--detach"]).check_returncode()
+    run(["./ol", "new-boss", "--detach"]).check_returncode()
 
     # TODO: sleep, or check some other way it is ready?
 
