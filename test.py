@@ -323,6 +323,14 @@ def version():
     assert(version)
 
 @test
+def timeout():
+    timeout_length = 10
+    r = post("run/timeout_invocation", timeout_length)
+    raise_for_status(r)
+    print(r.text)
+    assert(r.text)
+
+@test
 def max_mem_alloc():
     limit = curr_conf["limits"]["mem_mb"]
     r = post("run/max_mem_alloc", None)
