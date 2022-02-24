@@ -131,7 +131,14 @@ func newBossOL(ctx *cli.Context) error {
 		return err
 	}
 
-	return initOLDir(olPath)
+	initCode := initOLDir(olPath)
+        
+	confPath := filepath.Join(olPath, "worker_config.json")
+	if err := common.SaveConf(confPath); err != nil {
+		return err
+	}
+
+	return initCode
 }
 
 // status corresponds to the "status" command of the admin tool.

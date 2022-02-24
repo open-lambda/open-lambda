@@ -48,6 +48,7 @@ def tester(platform):
     # should create new config file
     run(["./ol", "new-boss"]).check_returncode()
     assert os.path.exists("default-boss-ol/config.json")
+    assert os.path.exists("default-boss-ol/worker_config.json")
 
     # should have options platform (e.g., "aws", etc) and scaling ("manual" or "auto")
     config = read_json("default-boss-ol/config.json")
@@ -63,10 +64,12 @@ def tester(platform):
     api_key = config["api_key"]
     boss_port = config["boss_port"]
     
+    #run(["./ol", "kill"]).check_returncode()
     run(["rm", "-r", "default-boss-ol"]).check_returncode()
 
     # should be able to start boss as background process
     run(["./ol", "new-boss", "--detach"]).check_returncode()
+    #run(["./ol","kill"]).check_returncode()
 
     # TODO: sleep, or check some other way it is ready?
 
