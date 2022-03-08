@@ -1,7 +1,7 @@
 FROM ubuntu:focal
 
 RUN apt-get update
-RUN apt-get -y install wget apt-transport-https curl
+RUN apt-get -y install wget apt-transport-https curl clang
 RUN apt-get -y install python3 python3-dev build-essential g++ python-is-python3
 RUN apt-get -y install python3-virtualenv python3-tornado python3-pip python3-requests
 
