@@ -69,7 +69,7 @@ ol-database-proxy
 
 bench-dir
 
-test-registry.wasm/*.wasm
+test-registry.wasm/
 wasm-programs/target/
 wasm-worker/target/
 db-proxy/target

@@ -13,23 +13,32 @@ struct ArgData {
 }
 
 fn get_args(env: &ArgData, len_out: WasmPtr<u64>) -> i64 {
+    log::trace!("Got `get_args` call");
+
     let memory = env.memory.get_ref().unwrap();
 
-    if env.args.len() == 0 {
+    let args = &env.args;
+
+    let offset = env
+        .allocate
+        .get_ref()
+        .unwrap()
+        .call(args.len() as u32)
+        .unwrap();
+
+    if args.len() == 0 {
         return 0;
     }
 
-    let offset = env.allocate.get_ref().unwrap().call(env.args.len() as u32).unwrap();
-
     let out_slice = unsafe {
         let raw_ptr = memory.data_ptr().add(offset as usize);
-        std::slice::from_raw_parts_mut(raw_ptr, env.args.len())
+        std::slice::from_raw_parts_mut(raw_ptr, args.len())
     };
 
-    out_slice.clone_from_slice(env.args.as_slice());
+    out_slice.clone_from_slice(args.as_slice());
 
-    let len = unsafe{ len_out.deref_mut(memory) }.unwrap();
-    len.set(env.args.len() as u64);
+    let len = len_out.deref(memory).unwrap();
+    len.set(args.len() as u64);
 
     offset
 }

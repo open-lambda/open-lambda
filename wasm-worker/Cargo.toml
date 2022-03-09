@@ -17,8 +17,8 @@ pretty_env_logger = { version="0.4" }
 log = "0.4"
 dashmap = "4"
 bincode = "1"
-open-lambda-protocol = { git="ssh://git@github.com/kaimast/open-lambda-protocol.git" }
-lambda-store-client = { git="ssh://git@github.com/kaimast/lambda-store.git", default-features=false, features=[] }
+open-lambda-protocol = { git="ssh://git@github.com/kaimast/lambda-store.git",default-features=false, branch="main", features=[] }
+lambda-store-client = { git="ssh://git@github.com/kaimast/lambda-store.git", default-features=false, branch="main", features=[] }
 async-wormhole = { git="https://github.com/lunatic-solutions/async-wormhole.git" }
 
 [features]
@@ -29,3 +29,7 @@ cranelift = ["wasmer-compiler-cranelift"]
 debug = true
 opt-level = 3
 lto = true
+
+[patch.'https://github.com/lunatic-solutions/async-wormhole.git']
+async-wormhole = { git="https://github.com/kaimast/async-wormhole.git", branch="std-asm" }
+switcheroo = { git="https://github.com/kaimast/async-wormhole.git", branch="std-asm" }
