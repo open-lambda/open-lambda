@@ -1,28 +1,29 @@
 #!/usr/bin/env python3
 
+''' Integration test for open lambda's WebAssembly runtime '''
+
+# pylint: disable=global-statement, missing-function-docstring, broad-except, invalid-name, consider-using-with
+
 import argparse
-import os, sys, json, time, requests, copy, traceback, tempfile, threading, subprocess
+import os
+import sys
+import json
+import time
+import traceback
+import threading
 
 from time import sleep
 from collections import OrderedDict
 from subprocess import Popen
-from multiprocessing import Pool
 from contextlib import contextmanager
+
+from api import OpenLambda
+import lambdastore
 
 # These will be set by argparse in main()
 TEST_FILTER = []
 
 results = OrderedDict({"runs": []})
-curr_conf = None
-
-''' Issues a post request to the OL worker '''
-def post(path, data=None):
-    return requests.post('http://localhost:5000/'+path, json.dumps(data))
-
-
-def raise_for_status(r):
-    if r.status_code != 200:
-        raise Exception("STATUS %d: %s" % (r.status_code, r.text))
 
 def test_in_filter(name):
     if len(TEST_FILTER) == 0:
@@ -31,11 +32,11 @@ def test_in_filter(name):
     return name in TEST_FILTER
 
 def get_mem_stat_mb(stat):
-    with open('/proc/meminfo') as f:
-        for l in f:
-            if l.startswith(stat+":"):
-                parts = l.strip().split()
-                assert(parts[-1] == 'kB')
+    with open('/proc/meminfo', 'r', encoding='utf-8') as file:
+        for line in file:
+            if line.startswith(stat+":"):
+                parts = line.strip().split()
+                assert parts[-1] == 'kB'
                 return int(parts[1]) / 1024
     raise Exception('could not get stat')
 
@@ -46,15 +47,15 @@ def ol_oom_killer():
             os.system('pkill ol')
         time.sleep(1)
 
-def test(fn):
+def test(func):
     def wrapper(*args, **kwargs):
-        if len(args):
+        if len(args) > 0:
             raise Exception("positional args not supported for tests")
 
-        name = fn.__name__
+        name = func.__name__
 
         if not test_in_filter(name):
-            print("Skipping test '%s'" % name)
+            print(f'"Skipping test "{name}"')
             return None
 
         print('='*40)
@@ -67,7 +68,7 @@ def test(fn):
         result["test"] = name
         result["params"] = kwargs
         result["pass"] = None
-        result["conf"] = curr_conf
+        result["conf"] = None
         result["seconds"] = None
         result["total_seconds"] = None
         result["stats"] = None
@@ -85,13 +86,13 @@ def test(fn):
 
             # run test/benchmark
             test_t0 = time.time()
-            rv = fn(**kwargs)
+            ret_val = func(**kwargs)
             test_t1 = time.time()
             result["seconds"] = test_t1 - test_t0
 
             result["pass"] = True
         except Exception:
-            rv = None
+            ret_val = None
             result["pass"] = False
             result["errors"].append(traceback.format_exc().split("\n"))
 
@@ -104,61 +105,55 @@ def test(fn):
             result["errors"].append(traceback.format_exc().split("\n"))
 
         total_t1 = time.time()
+        result["stats"] = ret_val
         result["total_seconds"] = total_t1-total_t0
-        result["stats"] = rv
         results["runs"].append(result)
 
         print(json.dumps(result, indent=2))
-        return rv
+        return ret_val
 
     return wrapper
 
-
-def put_conf(conf):
-    pass
-
-''' Loads a config and overwrites certain fields with what is set in **keywords '''
+# Loads a config and overwrites certain fields with what is set in **keywords
 @contextmanager
 
 @test
 def wasm_numpy_test():
-    r = post("run/numpy", [1, 2])
-    if r.status_code != 200:
-        raise Exception("STATUS %d: %s" % (r.status_code, r.text))
-    j = r.json()
-    assert j['result'] == 3
+    open_lambda = OpenLambda()
+    lstore = lambdastore.create_client()
 
-    r = post("run/numpy", [[1, 2], [3, 4]])
-    if r.status_code != 200:
-        raise Exception("STATUS %d: %s" % (r.status_code, r.text))
-    j = r.json()
-    assert j['result'] == 10
+    obj = lstore.create_object('test')
+    oid = obj.get_identifier().to_hex_string()
 
-    r = post("run/numpy", [[[1, 2], [3, 4]], [[1, 2], [3, 4]]])
-    if r.status_code != 200:
-        raise Exception("STATUS %d: %s" % (r.status_code, r.text))
-    j = r.json()
-    assert j['result'] == 20
+    jdata = open_lambda.run_on(oid, 'numpy', [1,2])
+    assert jdata['result'] == 3
+
+    jdata = open_lambda.run("numpy", [[1, 2], [3, 4]])
+    assert jdata['result'] == 10
+
+    jdata = open_lambda.run("numpy", [[[1, 2], [3, 4]], [[1, 2], [3, 4]]])
+    assert jdata['result'] == 20
 
 @test
 def ping_test():
+    open_lambda = OpenLambda()
+
     pings = 1000
-    t0 = time.time()
-    for i in range(pings):
-        r = requests.get("http://localhost:5000/status")
-        raise_for_status(r)
-    seconds = time.time() - t0
+    t_start = time.time()
+    for _ in range(pings):
+        open_lambda.get_status()
+    seconds = time.time() - t_start
     return {"pings_per_sec": pings/seconds}
 
 def run_tests():
-    test_reg = os.path.abspath("test-registry")
+    ''' Runs all tests '''
 
     print("Testing WASM")
 
     ping_test()
     wasm_numpy_test()
 
-def main():
+def _main():
     global TEST_FILTER
 
     parser = argparse.ArgumentParser(description='Run tests for OpenLambda')
@@ -168,13 +163,13 @@ def main():
 
     TEST_FILTER = [name for name in args.test_filter.split(",") if name != '']
 
-    print("Test filter is '%s'" % TEST_FILTER)
+    print(f'Test filter is "{TEST_FILTER}"')
 
-    t0 = time.time()
+    t_start = time.time()
 
     # so our test script doesn't hang if we have a memory leak
-    timerThread = threading.Thread(target=ol_oom_killer, daemon=True)
-    timerThread.start()
+    timer_thread = threading.Thread(target=ol_oom_killer, daemon=True)
+    timer_thread.start()
 
     # run tests with various configs
     run_tests()
@@ -184,14 +179,13 @@ def main():
     failed = len([t for t in results["runs"] if not t["pass"]])
     results["passed"] = passed
     results["failed"] = failed
-    results["seconds"] = time.time() - t0
-    print("PASSED: %d, FAILED: %d" % (passed, failed))
+    results["seconds"] = time.time() - t_start
+    print(f"PASSED: {passed}, FAILED: {failed}")
 
-    with open("test.json", "w") as f:
-        json.dump(results, f, indent=2)
+    with open("test.json", "w", encoding='utf-8') as file:
+        json.dump(results, file, indent=2)
 
     sys.exit(failed)
 
-
 if __name__ == '__main__':
-    main()
+    _main()

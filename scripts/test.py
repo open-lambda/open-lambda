@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
-# pylint: disable=global-statement, too-many-statements, fixme, broad-except, too-many-locals
+''' Various integration tests for the open lambda framwork '''
+
+# pylint: disable=global-statement, too-many-statements, fixme, broad-except, too-many-locals, missing-function-docstring
 
 import argparse
 import os
@@ -19,6 +21,8 @@ from multiprocessing import Pool
 
 from helper import ContainerWorker, WasmWorker, prepare_open_lambda, setup_config, get_ol_stats, get_worker_output, get_current_config, TestConfContext
 
+from api import OpenLambda
+
 # These will be set by argparse in main()
 TEST_FILTER = []
 WORKER_TYPE = None
@@ -31,7 +35,7 @@ def post(path, data=None):
 
 def raise_for_status(req):
     if req.status_code != 200:
-        raise Exception("STATUS %d: %s" % (req.status_code, req.text))
+        raise Exception(f"STATUS {req.status_code}: {req.text}")
 
 def test_in_filter(name):
     if len(TEST_FILTER) == 0:
@@ -40,7 +44,7 @@ def test_in_filter(name):
     return name in TEST_FILTER
 
 def get_mem_stat_mb(stat):
-    with open('/proc/meminfo') as memfile:
+    with open('/proc/meminfo', 'r', encoding='utf-8') as memfile:
         for line in memfile:
             if line.startswith(stat+":"):
                 parts = line.strip().split()
@@ -63,7 +67,7 @@ def test(func):
         name = func.__name__
 
         if not test_in_filter(name):
-            print("Skipping test '%s'" % name)
+            print(f'Skipping test "{name}"')
             return None
 
         print('='*40)
@@ -86,6 +90,8 @@ def test(func):
 
         total_t0 = time.time()
         mounts0 = mounts()
+        worker = None
+
         try:
             worker = WORKER_TYPE()
             print("Worker started")
@@ -97,18 +103,19 @@ def test(func):
             result["seconds"] = test_t1 - test_t0
 
             result["pass"] = True
-        except Exception as _:
+        except Exception as err:
+            print(f"Failed to start worker: {err}")
             return_val = None
             result["pass"] = False
             result["errors"].append(traceback.format_exc().split("\n"))
 
-        # cleanup worker
-        worker.stop()
+        if worker:
+            worker.stop()
+
         mounts1 = mounts()
         if len(mounts0) != len(mounts1):
             result["pass"] = False
-            result["errors"].append(["mounts are leaking (%d before, %d after), leaked: %s"
-                                     % (len(mounts0), len(mounts1), str(mounts1 - mounts0))])
+            result["errors"].append([f"mounts are leaking ({len(mounts0)} before, {len(mounts1)} after), leaked: {mounts1 - mounts0}"])
 
         # get internal stats from OL
         result["ol-stats"] = get_ol_stats()
@@ -148,7 +155,7 @@ def run(cmd):
         out = out[:500] + "..."
 
     if fail:
-        raise Exception("command (%s) failed: %s"  % (" ".join(cmd), out))
+        raise Exception(f'command ({" ".join(cmd)}) failed: {out}')
 
 @test
 def install_tests():
@@ -157,28 +164,27 @@ def install_tests():
     return_code = os.system('rm -rf test-dir/lambda/packages/*')
     assert return_code == 0
 
+    open_lambda = OpenLambda()
+
     # try something that doesn't install anything
     msg = 'hello world'
-    req = post("run/echo", msg)
-    raise_for_status(req)
-    if req.json() != msg:
-        raise Exception("found %s but expected %s" % (req.json(), msg))
-    req = post("stats", None)
-    raise_for_status(req)
-    installs = req.json().get('pull-package.cnt', 0)
+    jdata = open_lambda.run("echo", msg)
+    if jdata != msg:
+        raise Exception(f"found {jdata} but expected {msg}")
+
+    jdata = open_lambda.run("stats", None)
+    installs = jdata.get('pull-package.cnt', 0)
     assert installs == 0
 
     for pos in range(3):
         name = "install"
         if pos != 0:
             name += str(pos+1)
-        req = post("run/"+name, {})
-        raise_for_status(req)
-        assert req.json() == "imported"
+        result = open_lambda.run(name, {})
+        assert result == "imported"
 
-        req = post("stats", None)
-        raise_for_status(req)
-        installs = req.json()['pull-package.cnt']
+        result = open_lambda.run("stats", None)
+        installs = result['pull-package.cnt']
         if pos < 2:
             # with deps, requests should give us these:
             # certifi, chardet, idna, requests, urllib3
@@ -186,76 +192,54 @@ def install_tests():
         else:
             assert installs == 6
 
+def check_status_code(req):
+    if req.status_code != 200:
+        raise Exception(f"STATUS {req.status_code}: {req.text}")
+
 @test
 def hello_rust():
-    req = post("run/hello", [])
-    if req.status_code != 200:
-        raise Exception("STATUS %d: %s" % (req.status_code, req.text))
+    open_lambda = OpenLambda()
+    open_lambda.run("hello", [])
 
 @test
 def internal_call():
-    req = post("run/internal_call", {"count": 5})
-    if req.status_code != 200:
-        raise Exception("STATUS %d: %s" % (req.status_code, req.text))
+    open_lambda = OpenLambda()
+    open_lambda.run("run/internal_call", {"count": 5})
 
 @test
 def numpy_test():
+    open_lambda = OpenLambda()
+
     # try adding the nums in a few different matrixes.  Also make sure
     # we can have two different numpy versions co-existing.
-    req = post("run/numpy19", [1, 2])
-    if req.status_code != 200:
-        raise Exception("STATUS %d: %s" % (req.status_code, req.text))
-    j = req.json()
-    assert j['result'] == 3
-    assert j['version'].startswith('1.19')
+    result = open_lambda.run("numpy19", [1, 2])
+    assert result['result'] == 3
+    assert result['version'].startswith('1.19')
 
-    req = post("run/numpy20", [[1, 2], [3, 4]])
-    if req.status_code != 200:
-        raise Exception("STATUS %d: %s" % (req.status_code, req.text))
-    j = req.json()
-    assert j['result'] == 10
-    assert j['version'].startswith('1.20')
+    result = open_lambda.run("numpy20", [[1, 2], [3, 4]])
+    assert result['result'] == 10
+    assert result['version'].startswith('1.20')
 
-    req = post("run/numpy19", [[[1, 2], [3, 4]], [[1, 2], [3, 4]]])
-    if req.status_code != 200:
-        raise Exception("STATUS %d: %s" % (req.status_code, req.text))
-    j = req.json()
-    assert j['result'] == 20
-    assert j['version'].startswith('1.19')
+    result = open_lambda.run("numpy19", [[[1, 2], [3, 4]], [[1, 2], [3, 4]]])
+    assert result['result'] == 20
+    assert result['version'].startswith('1.19')
 
-    # use rust binary
-    req = post("run/algebra", [[[1, 2], [3, 4]], [[1, 2], [3, 4]]])
-    if req.status_code != 200:
-        raise Exception("STATUS %d: %s" % (req.status_code, req.text))
-    try:
-        j = req.json()
-    except Exception as err:
-        raise Exception("Failed to decode json for request %s" % req.text) from err
+    result = open_lambda.run("pandas", [[0, 1, 2], [3, 4, 5]])
+    assert result['result'] == 15
+    assert float(".".join(result['version'].split('.')[:2])) >= 1.19
 
-    assert j['result'] == 3
-
-    req = post("run/pandas", [[0, 1, 2], [3, 4, 5]])
-    if req.status_code != 200:
-        raise Exception("STATUS %d: %s" % (req.status_code, req.text))
-    j = req.json()
-    print(j)
-    assert j['result'] == 15
-    assert float(".".join(j['version'].split('.')[:2])) >= 1.19
-
-    req = post("run/pandas18", [[1, 2, 3],[1, 2, 3]])
-    if req.status_code != 200:
-        raise Exception("STATUS %d: %s" % (req.status_code, req.text))
-    j = req.json()
-    assert j['result'] == 12
-    assert j['version'].startswith('1.18')
+    result = open_lambda.run("pandas18", [[1, 2, 3],[1, 2, 3]])
+    assert result['result'] == 12
+    assert result['version'].startswith('1.18')
 
 def stress_one_lambda_task(args):
+    open_lambda = OpenLambda()
+
     start, seconds = args
     pos = 0
     while time.time() < start + seconds:
-        req = post("run/echo", pos)
-        raise_for_status(req)
-        assert req.text == str(pos)
+        result = open_lambda.run("echo", pos, json=False)
+        assert result.text == str(pos)
         pos += 1
     return pos
 
@@ -270,12 +254,13 @@ def stress_one_lambda(procs, seconds):
 
 @test
 def call_each_once_exec(lambda_count, alloc_mb):
+    open_lambda = OpenLambda()
+
     # TODO: do in parallel
     start = time.time()
     for pos in range(lambda_count):
-        req = post("run/L%d"%pos, {"alloc_mb": alloc_mb})
-        raise_for_status(req)
-        assert req.text == str(pos)
+        result = open_lambda.run(f"L{pos}", {"alloc_mb": alloc_mb}, json=False)
+        assert result == str(pos)
     seconds = time.time() - start
 
     return {"reqs_per_sec": lambda_count/seconds}
@@ -284,32 +269,34 @@ def call_each_once(lambda_count, alloc_mb=0):
     with tempfile.TemporaryDirectory() as reg_dir:
         # create dummy lambdas
         for pos in range(lambda_count):
-            with open(os.path.join(reg_dir, "L%d.py"%pos), "w") as code:
-                code.write("def f(event):\n")
-                code.write("    global s\n")
-                code.write("    s = '*' * %d * 1024**2\n" % alloc_mb)
-                code.write("    return %d\n" % pos)
+            with open(os.path.join(reg_dir, f"L{pos}.py"), "w", encoding='utf-8') as code:
+                code.write( "def f(event):\n")
+                code.write( "    global s\n")
+                code.write(f"    s = '*' * {alloc_mb} * 1024**2\n")
+                code.write(f"    return {pos}\n")
 
         with TestConfContext(registry=reg_dir):
             call_each_once_exec(lambda_count=lambda_count, alloc_mb=alloc_mb)
 
 @test
 def fork_bomb():
+    open_lambda = OpenLambda()
+
     limit = get_current_config()["limits"]["procs"]
-    req = post("run/fbomb", {"times": limit*2})
-    raise_for_status(req)
+    result = open_lambda.run("fbomb", {"times": limit*2}, json=False)
+
     # the function returns the number of children that we were able to fork
-    actual = int(req.text)
-    assert 1 <= actual <= limit
+    assert 1 <= int(result) <= limit
 
 @test
 def max_mem_alloc():
+    open_lambda = OpenLambda()
+
     limit = get_current_config()["limits"]["mem_mb"]
-    req = post("run/max_mem_alloc", None)
-    raise_for_status(req)
+    result = open_lambda.run("max_mem_alloc", None)
+
     # the function returns the MB that was able to be allocated
-    actual = int(req.text)
-    assert limit-16 <= actual <= limit
+    assert limit-16 <= int(result) <= limit
 
 @test
 def ping_test():
@@ -366,8 +353,7 @@ def sock_churn(baseline, procs, seconds, fork):
 @test
 def rust_hashing():
     req = post("run/hashing", {"num_hashes": 100, "input_len": 1024})
-    if req.status_code != 200:
-        raise Exception("STATUS %d: %s" % (req.status_code, req.text))
+    check_status_code(req)
 
 @test
 def update_code():
@@ -377,9 +363,9 @@ def update_code():
 
     for pos in range(3):
         # update function code
-        with open(os.path.join(reg_dir, "version.py"), "w") as code:
-            code.write("def f(event):\n")
-            code.write("    return %d\n" % pos)
+        with open(os.path.join(reg_dir, "version.py"), "w", encoding='utf-8') as code:
+            code.write( "def f(event):\n")
+            code.write(f"    return {pos}\n")
 
         # how long does it take for us to start seeing the latest code?
         start = time.time()
@@ -397,7 +383,6 @@ def update_code():
                 if pos > 0:
                     assert end - start >= cache_seconds - 1
                 break
-
 
 @test
 def recursive_kill(depth):
@@ -452,33 +437,33 @@ def run_tests():
     with TestConfContext(mem_pool_mb=500):
         numpy_test()
 
-'''TODO # make sure code updates get pulled within the cache time
-    with tempfile.TemporaryDirectory() as reg_dir:
-        with TestConfContext(registry=reg_dir, registry_cache_ms=3000):
-            update_code()
+#TODO # make sure code updates get pulled within the cache time
+#    with tempfile.TemporaryDirectory() as reg_dir:
+#        with TestConfContext(registry=reg_dir, registry_cache_ms=3000):
+#            update_code()
+#
+#    # test heavy load
+#    with TestConfContext(registry=test_reg):
+#        stress_one_lambda(procs=1, seconds=15)
+#        stress_one_lambda(procs=2, seconds=15)
+#        stress_one_lambda(procs=8, seconds=15)
+#
+#    with TestConfContext(features={"reuse_cgroups": True}):
+#        call_each_once(lambda_count=100, alloc_mb=1)
+#        call_each_once(lambda_count=1000, alloc_mb=10)
 
-    # test heavy load
-    with TestConfContext(registry=test_reg):
-        stress_one_lambda(procs=1, seconds=15)
-        stress_one_lambda(procs=2, seconds=15)
-        stress_one_lambda(procs=8, seconds=15)
 
-    with TestConfContext(features={"reuse_cgroups": True}):
-        call_each_once(lambda_count=100, alloc_mb=1)
-        call_each_once(lambda_count=1000, alloc_mb=10)
-'''
-
-''' TODO move sock-specific tests somewhere lse
-    if "sock" in sandboxes:
-        print("Testing SOCK directly (without lambdas)")
-
-        with TestConfContext(server_mode="sock", mem_pool_mb=500):
-            sock_churn(baseline=0, procs=1, seconds=5, fork=False)
-            sock_churn(baseline=0, procs=1, seconds=10, fork=True)
-            sock_churn(baseline=0, procs=15, seconds=10, fork=True)
-            sock_churn(baseline=32, procs=1, seconds=10, fork=True)
-            sock_churn(baseline=32, procs=15, seconds=10, fork=True)
-'''
+# TODO move sock-specific tests somewhere lse
+#    if "sock" in sandboxes:
+#        print("Testing SOCK directly (without lambdas)")
+#
+#        with TestConfContext(server_mode="sock", mem_pool_mb=500):
+#            sock_churn(baseline=0, procs=1, seconds=5, fork=False)
+#            sock_churn(baseline=0, procs=1, seconds=10, fork=True)
+#            sock_churn(baseline=0, procs=15, seconds=10, fork=True)
+#            sock_churn(baseline=32, procs=1, seconds=10, fork=True)
+#            sock_churn(baseline=32, procs=15, seconds=10, fork=True)
+#
 
 def main():
     global TEST_FILTER
@@ -496,14 +481,14 @@ def main():
     setup_config(args.ol_dir, "test-registry")
     prepare_open_lambda()
 
-    print("Test filter is '%s' and OL directory is '%s'" % (TEST_FILTER, args.ol_dir))
+    print(f'Test filter is "{TEST_FILTER}" and OL directory is "{args.ol_dir}"')
 
     if args.worker_type == 'container':
         WORKER_TYPE = ContainerWorker
     elif args.worker_type == 'wasm':
         WORKER_TYPE = WasmWorker
     else:
-        raise RuntimeError("Invalid worker type %s" % args.worker_type)
+        raise RuntimeError(f"Invalid worker type {args.worker_type}")
 
     start = time.time()
 
@@ -521,13 +506,12 @@ def main():
     results["passed"] = passed
     results["failed"] = failed
     results["seconds"] = time.time() - start
-    print("PASSED: %d, FAILED: %d" % (passed, failed))
+    print(f"PASSED: {passed}, FAILED: {failed}")
 
-    with open("test.json", "w") as resultsfile:
+    with open("test.json", "w", encoding='utf-8') as resultsfile:
         json.dump(results, resultsfile, indent=2)
 
     sys.exit(failed)
-
 
 if __name__ == '__main__':
     main()

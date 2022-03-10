@@ -1,4 +1,6 @@
-#pylint: disable=too-few-public-methods, c-extension-no-member, broad-except, global-statement
+''' Helper functions that are use by, both, test.py and wasm-test.py '''
+
+#pylint: disable=too-few-public-methods, c-extension-no-member, broad-except, global-statement, missing-function-docstring, missing-class-docstring, consider-using-with
 
 from subprocess import check_output, Popen
 from time import sleep
@@ -23,18 +25,14 @@ def setup_config(ol_dir, registry_dir):
     REG_DIR = os.path.abspath(registry_dir)
 
 class Datastore:
-    def __init__(self, enable_wasm=False, num_replicas=1):
+    def __init__(self, num_replicas=1):
         if num_replicas < 1:
             raise RuntimeError("Need at least one storage replica")
 
-        args = []
-        if enable_wasm:
-            args.append("--enable_wasm=true")
-            args.append("--registry_path=./test-registry.wasm")
-        else:
-            args.append("--enable_wasm=false")
-
-        args.append("--replica_set_size=%i" % num_replicas)
+        args = [
+            "--registry_path=./test-registry.wasm",
+            f"--replica_set_size={num_replicas}"
+        ]
 
         print("Starting lambda store")
         self._running = False
@@ -44,20 +42,13 @@ class Datastore:
         self._nodes = []
 
         for pos in range(num_replicas):
-            identifier = pos+1
-
-            node = Popen(["lambda-store-node", "--identifier=%i" % identifier,
-                "-p=localhost:%i"%(50000+pos), "-l=localhost:%i"%(51000+pos)])
+            node = Popen(["lambda-store-node", f"-p=localhost:{50000+pos}",
+                f"-l=localhost:{51000+pos}"])
 
             self._nodes.append(node)
 
         self._running = True
         sleep(0.5)
-
-        #Maybe remove this?
-        print("Creating default collection")
-        client = lambdastore.create_client('localhost')
-        client.create_collection('default', str, {'value': int})
 
         self._known_programs = []
 
@@ -100,14 +91,14 @@ class Datastore:
 
 def get_ol_stats():
     if os.path.exists(OLDIR+"/worker/stats.json"):
-        with open(OLDIR+"/worker/stats.json") as statsfile:
+        with open(OLDIR+"/worker/stats.json", "r", encoding='utf-8') as statsfile:
             olstats = json.load(statsfile)
         return OrderedDict(sorted(list(olstats.items())))
 
     return None
 
 def get_worker_output():
-    with open(os.path.join(OLDIR, "worker.out")) as workerfile:
+    with open(os.path.join(OLDIR, "worker.out"), "r", encoding='utf-8') as workerfile:
         return workerfile.read().splitlines()
 
 def get_current_config():
@@ -119,24 +110,26 @@ def post(path, data=None):
 
 def put_conf(conf):
     global CURR_CONF
-    with open(os.path.join(OLDIR, "config.json"), "w") as cfile:
+    with open(os.path.join(OLDIR, "config.json"), 'w', encoding='utf-8') as cfile:
         json.dump(conf, cfile, indent=2)
     CURR_CONF = conf
 
 class TestConf:
     ''' Loads a config and overwrites certain fields with what is set in **keywords '''
     def __init__(self, **keywords):
-        with open(os.path.join(OLDIR, "config.json")) as cfile:
+        with open(os.path.join(OLDIR, "config.json"), "r", encoding='utf-8') as cfile:
             orig = json.load(cfile)
+
         new = copy.deepcopy(orig)
-        for key in keywords:
+        for (key, value) in keywords.items():
             if not key in new:
-                raise Exception("unknown config param: %s" % key)
-            if isinstance(keywords[key], dict):
-                for key2 in keywords[key]:
-                    new[key][key2] = keywords[key][key2]
+                raise Exception(f"unknown config param: {key}")
+
+            if isinstance(value, dict):
+                for key2 in value:
+                    new[key][key2] = value[key2]
             else:
-                new[key] = keywords[key]
+                new[key] = value
 
         # setup
         put_conf(new)
@@ -171,7 +164,7 @@ def run(cmd):
         out = out[:500] + "..."
 
     if fail:
-        raise Exception("command (%s) failed: %s"  % (" ".join(cmd), out))
+        raise Exception(f"command ({' '.join(cmd)}) failed: {out}")
 
 class DatastoreWorker():
     def __init__(self):
@@ -205,7 +198,7 @@ class ContainerWorker():
             print("Starting container worker")
             run(['./ol', 'worker', '-p='+OLDIR, '--detach'])
         except Exception as err:
-            raise RuntimeError("failed to start worker: %s" % str(err)) from err
+            raise RuntimeError(f"failed to start worker: {err}") from err
 
         self._running = True
 
@@ -221,10 +214,10 @@ class ContainerWorker():
 
     @staticmethod
     def run(fn_name, args=None):
-        result = post("run/rust-%s"%fn_name, data=args)
+        result = post(f"run/rust-{fn_name}", data=args)
 
         if result.status_code != 200:
-            raise RuntimeError("Benchmark was not successful: %s" % result.text)
+            raise RuntimeError(f"Benchmark was not successful: {result.text}")
 
     def stop(self):
         if self.is_running():
@@ -261,10 +254,10 @@ class WasmWorker():
 
     @staticmethod
     def run(fn_name, args=None):
-        result = post("run/%s"%fn_name, data=args)
+        result = post(f"run/{fn_name}", data=args)
 
         if result.status_code != 200:
-            raise RuntimeError("Benchmark was not successful. %s" % result.text)
+            raise RuntimeError(f"Benchmark was not successful: {result.text}")
 
     def stop(self):
         if not self.is_running():
@@ -286,7 +279,7 @@ def prepare_open_lambda(reuse_config=False):
             run(['./ol', 'kill', '-p='+OLDIR])
             print("stopped existing worker")
         except Exception as err:
-            print('could not kill existing worker: %s' % str(err))
+            print(f"Could not kill existing worker: {err}")
 
     # general setup
     if not reuse_config:
@@ -298,7 +291,7 @@ def prepare_open_lambda(reuse_config=False):
         if os.path.exists(OLDIR):
             # Make sure the pid file is gone even if the previous worker crashed
             try:
-                run(['rm', '-rf', '%s/worker' % OLDIR])
+                run(['rm', '-rf', f'{OLDIR}/worker'])
             except Exception as _:
                 pass
         else:
