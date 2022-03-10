@@ -117,10 +117,12 @@ def put_conf(conf):
 class TestConf:
     ''' Loads a config and overwrites certain fields with what is set in **keywords '''
     def __init__(self, **keywords):
-        with open(os.path.join(OLDIR, "config.json"), "r", encoding='utf-8') as cfile:
-            orig = json.load(cfile)
+        self.orig = None
 
-        new = copy.deepcopy(orig)
+        with open(os.path.join(OLDIR, "config.json"), "r", encoding='utf-8') as cfile:
+            self.orig = json.load(cfile)
+
+        new = copy.deepcopy(self.orig)
         for (key, value) in keywords.items():
             if not key in new:
                 raise Exception(f"unknown config param: {key}")
@@ -133,7 +135,6 @@ class TestConf:
 
         # setup
         put_conf(new)
-        self.orig = orig
 
     def __del__(self):
         # cleanup

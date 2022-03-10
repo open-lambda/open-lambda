@@ -172,7 +172,7 @@ def install_tests():
     if jdata != msg:
         raise Exception(f"found {jdata} but expected {msg}")
 
-    jdata = open_lambda.run("stats", None)
+    jdata = open_lambda.get_statistics()
     installs = jdata.get('pull-package.cnt', 0)
     assert installs == 0
 
@@ -183,7 +183,7 @@ def install_tests():
         result = open_lambda.run(name, {})
         assert result == "imported"
 
-        result = open_lambda.run("stats", None)
+        result = open_lambda.get_statistics()
         installs = result['pull-package.cnt']
         if pos < 2:
             # with deps, requests should give us these:
@@ -300,11 +300,13 @@ def max_mem_alloc():
 
 @test
 def ping_test():
+    open_lambda = OpenLambda()
+
     pings = 1000
     start = time.time()
     for _ in range(pings):
-        req = requests.get("http://localhost:5000/status")
-        raise_for_status(req)
+        open_lambda.check_status()
+
     seconds = time.time() - start
     return {"pings_per_sec": pings/seconds}
 
@@ -386,14 +388,15 @@ def update_code():
 
 @test
 def recursive_kill(depth):
+    open_lambda = OpenLambda()
+
     parent = ""
     for _ in range(depth):
-        req = post("create", {"code": "", "leaf": False, "parent": parent})
-        raise_for_status(req)
+        open_lambda.create({"code": "", "leaf": False, "parent": parent})
         if parent:
             # don't need this parent any more, so pause it to get
             # memory back (so we can run this test with low memory)
-            post("pause/"+parent)
+            open_lambda.pause(parent)
         parent = req.text.strip()
 
     req = post("destroy/1", None)
@@ -412,14 +415,14 @@ def run_tests():
     ping_test()
 
     # test very basic rust program
-    hello_rust()
+    # hello_rust()
 
     # run some more computation in rust
-    rust_hashing()
+    # rust_hashing()
 
-    internal_call()
+    # internal_call()
 
-    increment()
+     # increment()
 
     # do smoke tests under various configs
     with TestConfContext(features={"import_cache": False}):

@@ -18,7 +18,7 @@ class OpenLambda:
 
         req = self.post(f"run/{fn_name}", args)
         if req.status_code != 200:
-            raise Exception(f"STATUS {req.stats_code}: {req.text}")
+            raise Exception(f"STATUS {req.status_code}: {req.text}")
 
         if json:
             return req.json()
@@ -34,8 +34,26 @@ class OpenLambda:
 
         return req.json()
 
-    def get_status(self):
-        ''' Returns the status of the OpenLambda server '''
+    def create(self, args):
+        req = self.post("create", args)
+        if req.status_code != 200:
+            raise Exception(f"STATUS {req.stats_code}: {req.text}")
+
+    def pause(self, cname):
+        req = self.post(f"pause/{name}", None)
+        if req.status_code != 200:
+            raise Exception(f"STATUS {req.stats_code}: {req.text}")
+
+    def get_statistics(self):
+        ''' Returns stats of the OpenLambda server '''
+        req = requests.get(f"http://{self._address}/stats")
+        if req.status_code != 200:
+            raise Exception(f"STATUS {req.stats_code}: {req.text}")
+
+        return req.json()
+
+    def check_status(self):
+        ''' Checks the status of the OpenLambda server '''
         req = requests.get(f"http://{self._address}/status")
         if req.status_code != 200:
             raise Exception(f"STATUS {req.stats_code}: {req.text}")
