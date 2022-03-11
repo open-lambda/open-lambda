@@ -191,8 +191,7 @@ class DatastoreWorker():
 class ContainerWorker():
     def __init__(self):
         self._running = False
-        self._config = TestConf(registry=REG_DIR, sandbox="sock")
-
+        self._config = TestConf()
         self._datastore = Datastore()
 
         try:

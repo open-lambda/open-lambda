@@ -27,7 +27,7 @@ type SOCKContainer struct {
     codeDir          string
     scratchDir       string
     cg               *Cgroup
-    rt_type          common.RuntimeType
+    rtType          common.RuntimeType
 
     // 1 for self, plus 1 for each child (we can't release memory
     // until all descendants are dead, because they share the
@@ -53,7 +53,7 @@ func (container *SOCKContainer) ID() string {
 }
 
 func (c *SOCKContainer) GetRuntimeType() common.RuntimeType {
-    return c.rt_type
+    return c.rtType
 }
 
 func (container *SOCKContainer) HttpProxy() (p *httputil.ReverseProxy, err error) {
@@ -95,12 +95,12 @@ func (container *SOCKContainer) freshProc() (err error) {
 
     var cmd *exec.Cmd
 
-    if container.rt_type == common.RT_PYTHON {
+    if container.rtType == common.RT_PYTHON {
         cmd = exec.Command(
             "chroot", container.containerRootDir, "python3", "-u",
             "/runtimes/python/server.py", "/host/bootstrap.py", strconv.Itoa(1),
         )
-    } else if container.rt_type == common.RT_BINARY {
+    } else if container.rtType == common.RT_BINARY {
         if container.dbProxy == nil {
             err := container.launchDbProxy()
 
@@ -153,7 +153,7 @@ func (container *SOCKContainer) launchDbProxy() (err error) {
         return fmt.Errorf("Failed to start database proxy")
     }
 
-    var ping_err error
+    var pingErr error
 
     //TODO make more efficient
     for i := 0; i < 300; i++ {
@@ -171,14 +171,14 @@ func (container *SOCKContainer) launchDbProxy() (err error) {
         data, err := os.ReadFile(path)
 
         if err != nil {
-            ping_err = err
+            pingErr = err
             time.Sleep(1 * time.Millisecond)
             continue
         }
 
         pid, err := strconv.Atoi(string(data))
         if err != nil {
-            ping_err = err
+            pingErr = err
             time.Sleep(1 * time.Millisecond)
             continue
         }
@@ -187,23 +187,23 @@ func (container *SOCKContainer) launchDbProxy() (err error) {
             return fmt.Errorf("Database proxy pid does not match")
         }
 
-        ping_err = nil
+        pingErr = nil
         container.dbProxy = proc
         break;
     }
 
-    return ping_err
+    return pingErr
 }
 
 func (container *SOCKContainer) populateRoot() (err error) {
     // FILE SYSTEM STEP 1: mount base
     baseDir := common.Conf.SOCK_base_path
     if err := syscall.Mount(baseDir, container.containerRootDir, "", common.BIND, ""); err != nil {
-        return fmt.Errorf("failed to bind root dir: %s -> %s :: %v\n", baseDir, container.containerRootDir, err)
+        return fmt.Errorf("failed to bind root dir: %s -> %s :: %v", baseDir, container.containerRootDir, err)
     }
 
     if err := syscall.Mount("none", container.containerRootDir, "", common.BIND_RO, ""); err != nil {
-        return fmt.Errorf("failed to bind root dir RO: %s :: %v\n", container.containerRootDir, err)
+        return fmt.Errorf("failed to bind root dir RO: %s :: %v", container.containerRootDir, err)
     }
 
     if err := syscall.Mount("none", container.containerRootDir, "", common.PRIVATE, ""); err != nil {
@@ -215,7 +215,7 @@ func (container *SOCKContainer) populateRoot() (err error) {
         sbCodeDir := filepath.Join(container.containerRootDir, "handler")
 
         if err := syscall.Mount(container.codeDir, sbCodeDir, "", common.BIND, ""); err != nil {
-            return fmt.Errorf("failed to bind code dir: %s -> %s :: %v", container.codeDir, sbCodeDir, err.Error())
+            return fmt.Errorf("Failed to bind code dir: %s -> %s :: %v", container.codeDir, sbCodeDir, err.Error())
         }
 
         if err := syscall.Mount("none", sbCodeDir, "", common.BIND_RO, ""); err != nil {
@@ -287,7 +287,7 @@ func (container *SOCKContainer) Destroy() {
 // all it's descendants are destroyed. Thus, it's safe to release it's
 // cgroups, and return the memory allocation to the memPool
 func (container *SOCKContainer) decCgRefCount() {
-    container.cgRefCount -= 1
+    container.cgRefCount--
     container.printf("CG ref count decremented to %d", container.cgRefCount)
     if container.cgRefCount < 0 {
         panic("cgRefCount should not be able to go negative")
@@ -397,7 +397,7 @@ func (container *SOCKContainer) fork(dst Sandbox) (err error) {
                 if err = dstSock.cg.AddPid(pid); err != nil {
                     return err
                 }
-                moved += 1
+                moved++
             }
         }
 
@@ -408,14 +408,17 @@ func (container *SOCKContainer) fork(dst Sandbox) (err error) {
     t.T1()
 
     container.children[dst.ID()] = dst
-    container.cgRefCount += 1
+    container.cgRefCount++
     return nil
 }
+
 
 func (container *SOCKContainer) Status(key SandboxStatus) (string, error) {
     switch key {
     case StatusMemFailures:
-        return strconv.FormatBool(container.cg.ReadInt("memory.failcnt") > 0), nil
+        // TODO should we only count max memory or also out of bounds?
+        status := container.cg.MemoryEvents()
+        return strconv.FormatBool(status["max"] > 0), nil
     default:
         return "", STATUS_UNSUPPORTED
     }

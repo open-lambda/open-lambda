@@ -9,7 +9,6 @@ import os
 import sys
 import json
 import time
-import requests
 import traceback
 import tempfile
 import threading
@@ -26,16 +25,13 @@ from api import OpenLambda
 # These will be set by argparse in main()
 TEST_FILTER = []
 WORKER_TYPE = None
+OL_DIR = None
 
 results = OrderedDict({"runs": []})
 
-''' Issues a post request to the OL worker '''
-def post(path, data=None):
-    return requests.post('http://localhost:5000/'+path, json.dumps(data))
-
-def raise_for_status(req):
-    if req.status_code != 200:
-        raise Exception(f"STATUS {req.status_code}: {req.text}")
+def assert_eq(actual, expected):
+    if expected != actual:
+        raise Exception(f'Expected value "{expected}", but was "{actual}"')
 
 def test_in_filter(name):
     if len(TEST_FILTER) == 0:
@@ -48,7 +44,7 @@ def get_mem_stat_mb(stat):
         for line in memfile:
             if line.startswith(stat+":"):
                 parts = line.strip().split()
-                assert parts[-1] == 'kB'
+                assert_eq(parts[-1], 'kB')
                 return int(parts[1]) / 1024
     raise Exception('could not get stat')
 
@@ -161,8 +157,8 @@ def run(cmd):
 def install_tests():
     # we want to make sure we see the expected number of pip installs,
     # so we don't want installs lying around from before
-    return_code = os.system('rm -rf test-dir/lambda/packages/*')
-    assert return_code == 0
+    return_code = os.system(f'rm -rf {OL_DIR}/lambda/packages/*')
+    assert_eq(return_code, 0)
 
     open_lambda = OpenLambda()
 
@@ -174,23 +170,22 @@ def install_tests():
 
     jdata = open_lambda.get_statistics()
     installs = jdata.get('pull-package.cnt', 0)
-    assert installs == 0
+    assert_eq(installs, 0)
 
     for pos in range(3):
-        name = "install"
-        if pos != 0:
-            name += str(pos+1)
+        name = f"install{pos+1}"
         result = open_lambda.run(name, {})
-        assert result == "imported"
+        assert_eq(result, "imported")
 
         result = open_lambda.get_statistics()
         installs = result['pull-package.cnt']
         if pos < 2:
             # with deps, requests should give us these:
-            # certifi, chardet, idna, requests, urllib3
-            assert installs == 5
+            # certifi, charset-normalizer, idna, requests, urllib3
+            assert_eq(installs, 5)
         else:
-            assert installs == 6
+            # requests (and deps) + simplejson
+            assert_eq(installs, 6)
 
 def check_status_code(req):
     if req.status_code != 200:
@@ -213,23 +208,23 @@ def numpy_test():
     # try adding the nums in a few different matrixes.  Also make sure
     # we can have two different numpy versions co-existing.
     result = open_lambda.run("numpy19", [1, 2])
-    assert result['result'] == 3
+    assert_eq(result['result'], 3)
     assert result['version'].startswith('1.19')
 
     result = open_lambda.run("numpy20", [[1, 2], [3, 4]])
-    assert result['result'] == 10
+    assert_eq(result['result'], 10)
     assert result['version'].startswith('1.20')
 
     result = open_lambda.run("numpy19", [[[1, 2], [3, 4]], [[1, 2], [3, 4]]])
-    assert result['result'] == 20
+    assert_eq(result['result'], 20)
     assert result['version'].startswith('1.19')
 
     result = open_lambda.run("pandas", [[0, 1, 2], [3, 4, 5]])
-    assert result['result'] == 15
+    assert_eq(result['result'], 15)
     assert float(".".join(result['version'].split('.')[:2])) >= 1.19
 
     result = open_lambda.run("pandas18", [[1, 2, 3],[1, 2, 3]])
-    assert result['result'] == 12
+    assert_eq(result['result'], 12)
     assert result['version'].startswith('1.18')
 
 def stress_one_lambda_task(args):
@@ -239,7 +234,7 @@ def stress_one_lambda_task(args):
     pos = 0
     while time.time() < start + seconds:
         result = open_lambda.run("echo", pos, json=False)
-        assert result.text == str(pos)
+        assert_eq(result, str(pos))
         pos += 1
     return pos
 
@@ -260,7 +255,7 @@ def call_each_once_exec(lambda_count, alloc_mb):
     start = time.time()
     for pos in range(lambda_count):
         result = open_lambda.run(f"L{pos}", {"alloc_mb": alloc_mb}, json=False)
-        assert result == str(pos)
+        assert_eq(result, str(pos))
     seconds = time.time() - start
 
     return {"reqs_per_sec": lambda_count/seconds}
@@ -311,18 +306,15 @@ def ping_test():
     return {"pings_per_sec": pings/seconds}
 
 def sock_churn_task(args):
+    open_lambda = OpenLambda()
+
     echo_path, parent, start, seconds = args
     count = 0
     while time.time() < start + seconds:
-        args = {"code": echo_path, "leaf": True, "parent": parent}
-        req = post("create", args)
-        raise_for_status(req)
-        sandbox_id = req.text.strip()
-        req = post("destroy/"+sandbox_id, {})
-        raise_for_status(req)
+        sandbox_id = open_lambda.create({"code": echo_path, "leaf": True, "parent": parent})
+        open_lambda.destroy(sandbox_id)
         count += 1
     return count
-
 
 @test
 def sock_churn(baseline, procs, seconds, fork):
@@ -330,20 +322,16 @@ def sock_churn(baseline, procs, seconds, fork):
     # procs: how many procs are concurrently creating and deleting other sandboxes
 
     echo_path = os.path.abspath("test-registry/echo")
+    open_lambda = OpenLambda()
 
     if fork:
-        req = post("create", {"code": "", "leaf": False})
-        raise_for_status(req)
-        parent = req.text.strip()
+        parent = open_lambda.create({"code": "", "leaf": False})
     else:
         parent = ""
 
     for _ in range(baseline):
-        req = post("create", {"code": echo_path, "leaf": True, "parent": parent})
-        raise_for_status(req)
-        sandbox_id = req.text.strip()
-        req = post("pause/"+sandbox_id)
-        raise_for_status(req)
+        sandbox_id = open_lambda.create({"code": echo_path, "leaf": True, "parent": parent})
+        open_lambda.pause(sandbox_id)
 
     start = time.time()
     with Pool(procs) as pool:
@@ -354,14 +342,16 @@ def sock_churn(baseline, procs, seconds, fork):
 
 @test
 def rust_hashing():
-    req = post("run/hashing", {"num_hashes": 100, "input_len": 1024})
-    check_status_code(req)
+    open_lambda = OpenLambda()
+    open_lambda.run("hashing", {"num_hashes": 100, "input_len": 1024})
 
 @test
 def update_code():
     curr_conf = get_current_config()
     reg_dir = curr_conf['registry']
     cache_seconds = curr_conf['registry_cache_ms'] / 1000
+
+    open_lambda = OpenLambda()
 
     for pos in range(3):
         # update function code
@@ -372,9 +362,8 @@ def update_code():
         # how long does it take for us to start seeing the latest code?
         start = time.time()
         while True:
-            req = post("run/version", None)
-            raise_for_status(req)
-            num = int(req.text)
+            text = open_lambda.run("version", None)
+            num = int(text)
             assert num >= pos-1
             end = time.time()
 
@@ -392,24 +381,23 @@ def recursive_kill(depth):
 
     parent = ""
     for _ in range(depth):
-        open_lambda.create({"code": "", "leaf": False, "parent": parent})
+        result = open_lambda.create({"code": "", "leaf": False, "parent": parent})
         if parent:
             # don't need this parent any more, so pause it to get
             # memory back (so we can run this test with low memory)
             open_lambda.pause(parent)
-        parent = req.text.strip()
+        parent = result.strip()
 
-    req = post("destroy/1", None)
-    raise_for_status(req)
-    req = post("stats", None)
-    raise_for_status(req)
-    destroys = req.json()['Destroy():ms.cnt']
-    assert destroys == depth
+    open_lambda.destroy("1")
+
+    stats = open_lambda.get_statistics()
+    destroys = stats['Destroy():ms.cnt']
+    assert_eq(destroys, depth)
 
 @test
 def increment():
-    req = post("run/increment", {})
-    raise_for_status(req)
+    open_lambda = OpenLambda()
+    open_lambda.run("increment", [])
 
 def run_tests():
     ping_test()
@@ -437,40 +425,38 @@ def run_tests():
     max_mem_alloc()
 
     # numpy pip install needs a larger mem cap
-    with TestConfContext(mem_pool_mb=500):
-        numpy_test()
+    #with TestConfContext(mem_pool_mb=500):
+    #    numpy_test()
 
-#TODO # make sure code updates get pulled within the cache time
-#    with tempfile.TemporaryDirectory() as reg_dir:
-#        with TestConfContext(registry=reg_dir, registry_cache_ms=3000):
-#            update_code()
-#
-#    # test heavy load
-#    with TestConfContext(registry=test_reg):
-#        stress_one_lambda(procs=1, seconds=15)
-#        stress_one_lambda(procs=2, seconds=15)
-#        stress_one_lambda(procs=8, seconds=15)
-#
-#    with TestConfContext(features={"reuse_cgroups": True}):
-#        call_each_once(lambda_count=100, alloc_mb=1)
-#        call_each_once(lambda_count=1000, alloc_mb=10)
+    # make sure code updates get pulled within the cache time
+    #with tempfile.TemporaryDirectory() as reg_dir:
+    #    with TestConfContext(registry=reg_dir, registry_cache_ms=3000):
+    #        update_code()
 
+    # test heavy load
+    with TestConfContext():
+        stress_one_lambda(procs=1, seconds=15)
+        stress_one_lambda(procs=2, seconds=15)
+        stress_one_lambda(procs=8, seconds=15)
 
-# TODO move sock-specific tests somewhere lse
-#    if "sock" in sandboxes:
-#        print("Testing SOCK directly (without lambdas)")
-#
-#        with TestConfContext(server_mode="sock", mem_pool_mb=500):
-#            sock_churn(baseline=0, procs=1, seconds=5, fork=False)
-#            sock_churn(baseline=0, procs=1, seconds=10, fork=True)
-#            sock_churn(baseline=0, procs=15, seconds=10, fork=True)
-#            sock_churn(baseline=32, procs=1, seconds=10, fork=True)
-#            sock_churn(baseline=32, procs=15, seconds=10, fork=True)
-#
+    with TestConfContext(features={"reuse_cgroups": True}):
+        call_each_once(lambda_count=100, alloc_mb=1)
+        call_each_once(lambda_count=1000, alloc_mb=10)
+
+    # TODO move sock-specific tests somewhere else
+    #print("Testing SOCK directly (without lambdas)")
+
+    #with TestConfContext(server_mode="sock", mem_pool_mb=500):
+    #    sock_churn(baseline=0, procs=1, seconds=5, fork=False)
+    #    sock_churn(baseline=0, procs=1, seconds=10, fork=True)
+    #    sock_churn(baseline=0, procs=15, seconds=10, fork=True)
+    #    sock_churn(baseline=32, procs=1, seconds=10, fork=True)
+    #    sock_churn(baseline=32, procs=15, seconds=10, fork=True)
 
 def main():
     global TEST_FILTER
     global WORKER_TYPE
+    global OL_DIR
 
     parser = argparse.ArgumentParser(description='Run tests for OpenLambda')
     parser.add_argument('--reuse_config', action="store_true")
@@ -481,6 +467,8 @@ def main():
     args = parser.parse_args()
 
     TEST_FILTER = [name for name in args.test_filter.split(",") if name != '']
+    OL_DIR = args.ol_dir
+
     setup_config(args.ol_dir, "test-registry")
     prepare_open_lambda()
 

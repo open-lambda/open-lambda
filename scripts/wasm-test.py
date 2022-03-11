@@ -141,7 +141,7 @@ def ping_test():
     pings = 1000
     t_start = time.time()
     for _ in range(pings):
-        open_lambda.get_status()
+        open_lambda.check_status()
     seconds = time.time() - t_start
     return {"pings_per_sec": pings/seconds}
 

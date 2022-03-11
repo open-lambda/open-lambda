@@ -4,6 +4,7 @@ import (
     "fmt"
     "io/ioutil"
     "log"
+    "bufio"
     "os"
     "path"
     "strconv"
@@ -141,7 +142,8 @@ Loop:
         select {
         case cg = <-pool.recycled:
             // restore cgroup to clean state
-            cg.WriteInt("memory.failcnt", 0)
+            // FIXME not possible in CG2?
+            // cg.WriteInt("memory.failcnt", 0)
             cg.Unpause()
         default:
             t := common.T0("fresh-cgroup")
@@ -212,6 +214,28 @@ func (pool *CgroupPool) GroupPath() string {
 // GroupPath returns the path to the Cgroup pool for OpenLambda
 func (cg *Cgroup) GroupPath() string {
     return fmt.Sprintf("%s/%s", cg.pool.GroupPath(), cg.Name)
+}
+
+func (cg *Cgroup) MemoryEvents() map[string]int64 {
+    result := map[string]int64 {}
+    path := cg.ResourcePath("memory.events")
+    f, err := os.Open(path)
+    if err != nil {
+        panic(err)
+    }
+
+    scanner := bufio.NewScanner(f)
+    for scanner.Scan() {
+        entries := strings.Split(scanner.Text(), " ")
+        key := entries[0]
+        value, err := strconv.ParseInt(entries[1], 10, 64)
+        if err != nil {
+            panic(err)
+        }
+        result[key] = value
+    }
+
+    return result
 }
 
 // ResourcePath returns the path to a specific resource in this cgroup

@@ -1,21 +1,21 @@
 package lambda
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
-	"io/ioutil"
-	"log"
-	"net/http"
-	"os"
-	"path/filepath"
-	"strconv"
-	"strings"
-	"sync"
-	"sync/atomic"
+    "bytes"
+    "encoding/json"
+    "fmt"
+    "io/ioutil"
+    "log"
+    "net/http"
+    "os"
+    "path/filepath"
+    "strconv"
+    "strings"
+    "sync"
+    "sync/atomic"
 
-	"github.com/open-lambda/open-lambda/ol/common"
-	"github.com/open-lambda/open-lambda/ol/sandbox"
+    "github.com/open-lambda/open-lambda/ol/common"
+    "github.com/open-lambda/open-lambda/ol/sandbox"
 )
 
 // we invoke this lambda to do the pip install in a Sandbox.
@@ -107,216 +107,217 @@ def f(event):
  * The manager installs to the worker host from an optional pip mirror.
  */
 type PackagePuller struct {
-	sbPool    sandbox.SandboxPool
-	depTracer *DepTracer
+    sbPool    sandbox.SandboxPool
+    depTracer *DepTracer
 
-	// directory of lambda code that installs pip packages
-	pipLambda string
+    // directory of lambda code that installs pip packages
+    pipLambda string
 
-	packages sync.Map
+    packages sync.Map
 }
 
 type Package struct {
-	name         string
-	meta         PackageMeta
-	installMutex sync.Mutex
-	installed    uint32
+    name         string
+    meta         PackageMeta
+    installMutex sync.Mutex
+    installed    uint32
 }
 
 // the pip-install admin lambda returns this
 type PackageMeta struct {
-	Deps     []string `json:"Deps"`
-	TopLevel []string `json:"TopLevel"`
+    Deps     []string `json:"Deps"`
+    TopLevel []string `json:"TopLevel"`
 }
 
 func NewPackagePuller(sbPool sandbox.SandboxPool, depTracer *DepTracer) (*PackagePuller, error) {
-	// create a lambda function for installing pip packages.  We do
-	// each install in a Sandbox for two reasons:
-	//
-	// 1. packages may be malicious
-	// 2. we want to install the right version, matching the Python
-	//    in the Sandbox
-	pipLambda := filepath.Join(common.Conf.Worker_dir, "admin-lambdas", "pip-install")
-	if err := os.MkdirAll(pipLambda, 0700); err != nil {
-		return nil, err
-	}
-	path := filepath.Join(pipLambda, "f.py")
-	code := []byte(installLambda)
-	if err := ioutil.WriteFile(path, code, 0600); err != nil {
-		return nil, err
-	}
+    // create a lambda function for installing pip packages.  We do
+    // each install in a Sandbox for two reasons:
+    //
+    // 1. packages may be malicious
+    // 2. we want to install the right version, matching the Python
+    //    in the Sandbox
+    pipLambda := filepath.Join(common.Conf.Worker_dir, "admin-lambdas", "pip-install")
+    if err := os.MkdirAll(pipLambda, 0700); err != nil {
+        return nil, err
+    }
+    path := filepath.Join(pipLambda, "f.py")
+    code := []byte(installLambda)
+    if err := ioutil.WriteFile(path, code, 0600); err != nil {
+        return nil, err
+    }
 
-	installer := &PackagePuller{
-		sbPool:    sbPool,
-		depTracer: depTracer,
-		pipLambda: pipLambda,
-	}
+    installer := &PackagePuller{
+        sbPool:    sbPool,
+        depTracer: depTracer,
+        pipLambda: pipLambda,
+    }
 
-	return installer, nil
+    return installer, nil
 }
 
 // From PEP-426: "All comparisons of distribution names MUST
 // be case insensitive, and MUST consider hyphens and
 // underscores to be equivalent."
 func normalizePkg(pkg string) string {
-	return strings.ReplaceAll(strings.ToLower(pkg), "_", "-")
+    return strings.ReplaceAll(strings.ToLower(pkg), "_", "-")
 }
 
 // "pip install" missing packages to Conf.Pkgs_dir
 func (pp *PackagePuller) InstallRecursive(installs []string) ([]string, error) {
-	// shrink capacity to length so that our appends are not
-	// visible to caller
-	installs = installs[:len(installs):len(installs)]
+    // shrink capacity to length so that our appends are not
+    // visible to caller
+    installs = installs[:len(installs):len(installs)]
 
-	installSet := make(map[string]bool)
-	for _, install := range installs {
-		name := strings.Split(install, "==")[0]
-		installSet[name] = true
-	}
+    installSet := make(map[string]bool)
+    for _, install := range installs {
+        name := strings.Split(install, "==")[0]
+        installSet[name] = true
+    }
 
-	// Installs may grow as we loop, because some installs have
-	// deps, leading to other installs
-	for i := 0; i < len(installs); i++ {
-		pkg := installs[i]
-		if common.Conf.Trace.Package {
-			log.Printf("On %v of %v", pkg, installs)
-		}
-		p, err := pp.GetPkg(pkg)
-		if err != nil {
-			return nil, err
-		}
+    // Installs may grow as we loop, because some installs have
+    // deps, leading to other installs
+    for i := 0; i < len(installs); i++ {
+        pkg := installs[i]
+        if common.Conf.Trace.Package {
+            log.Printf("On %v of %v", pkg, installs)
+        }
+        p, err := pp.GetPkg(pkg)
+        if err != nil {
+            return nil, err
+        }
 
-		if common.Conf.Trace.Package {
-			log.Printf("Package '%s' has deps %v", pkg, p.meta.Deps)
-			log.Printf("Package '%s' has top-level modules %v", pkg, p.meta.TopLevel)
-		}
+        if common.Conf.Trace.Package {
+            log.Printf("Package '%s' has deps %v", pkg, p.meta.Deps)
+            log.Printf("Package '%s' has top-level modules %v", pkg, p.meta.TopLevel)
+        }
 
-		// push any previously unseen deps on the list of ones to install
-		for _, dep := range p.meta.Deps {
-			if !installSet[dep] {
-				installs = append(installs, dep)
-				installSet[dep] = true
-			}
-		}
-	}
+        // push any previously unseen deps on the list of ones to install
+        for _, dep := range p.meta.Deps {
+            if !installSet[dep] {
+                installs = append(installs, dep)
+                installSet[dep] = true
+            }
+        }
+    }
 
-	return installs, nil
+    return installs, nil
 }
 
-// does the pip install in a Sandbox, taking care to never install the
+// GetPkg does the pip install in a Sandbox, taking care to never install the
 // same Sandbox more than once.
 //
 // the fast/slow path code is tweaked from the sync.Once code, the
 // difference being that may try the installed more than once, but we
 // will never try more after the first success
 func (pp *PackagePuller) GetPkg(pkg string) (*Package, error) {
-	// get (or create) package
-	pkg = normalizePkg(pkg)
-	tmp, _ := pp.packages.LoadOrStore(pkg, &Package{name: pkg})
-	p := tmp.(*Package)
+    // get (or create) package
+    pkg = normalizePkg(pkg)
+    tmp, _ := pp.packages.LoadOrStore(pkg, &Package{name: pkg})
+    p := tmp.(*Package)
 
-	// fast path
-	if atomic.LoadUint32(&p.installed) == 1 {
-		return p, nil
-	}
+    // fast path
+    if atomic.LoadUint32(&p.installed) == 1 {
+        return p, nil
+    }
 
-	// slow path
-	p.installMutex.Lock()
-	defer p.installMutex.Unlock()
-	if p.installed == 0 {
-		if err := pp.sandboxInstall(p); err != nil {
-			return p, err
-		} else {
-			atomic.StoreUint32(&p.installed, 1)
-			pp.depTracer.TracePackage(p)
-			return p, nil
-		}
-	}
+    // slow path
+    p.installMutex.Lock()
+    defer p.installMutex.Unlock()
+    if p.installed == 0 {
+        if err := pp.sandboxInstall(p); err != nil {
+            return p, err
+        }
 
-	return p, nil
+        atomic.StoreUint32(&p.installed, 1)
+        pp.depTracer.TracePackage(p)
+        return p, nil
+    }
+
+    return p, nil
 }
 
-// do the pip install within a new Sandbox, to a directory mapped from
+// sandboxInstall does the pip install within a new Sandbox, to a directory mapped from
 // the host.  We want the package on the host to share with all, but
 // want to run the install in the Sandbox because we don't trust it.
 func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
-	t := common.T0("pull-package")
-	defer t.T1()
+    t := common.T0("pull-package")
+    defer t.T1()
 
-	// the pip-install lambda installs to /host, which is the the
-	// same as scratchDir, which is the same as a sub-directory
-	// named after the package in the packages dir
-	scratchDir := filepath.Join(common.Conf.Pkgs_dir, p.name)
-	log.Printf("do pip install, using scratchDir='%v'", scratchDir)
+    // the pip-install lambda installs to /host, which is the the
+    // same as scratchDir, which is the same as a sub-directory
+    // named after the package in the packages dir
+    scratchDir := filepath.Join(common.Conf.Pkgs_dir, p.name)
+    log.Printf("do pip install, using scratchDir='%v'", scratchDir)
 
-	alreadyInstalled := false
-	if _, err := os.Stat(scratchDir); err == nil {
-		// assume dir exististence means it is installed already
-		log.Printf("%s appears already installed from previous run of OL", p.name)
-		alreadyInstalled = true
-	} else {
-		log.Printf("run pip install %s from a new Sandbox to %s on host", p.name, scratchDir)
-		if err := os.Mkdir(scratchDir, 0700); err != nil {
-			return err
-		}
-	}
+    alreadyInstalled := false
+    if _, err := os.Stat(scratchDir); err == nil {
+        // assume dir existence means it is installed already
+        log.Printf("%s appears already installed from previous run of OL", p.name)
+        alreadyInstalled = true
+    } else {
+        log.Printf("run pip install %s from a new Sandbox to %s on host", p.name, scratchDir)
+        if err := os.Mkdir(scratchDir, 0700); err != nil {
+            return err
+        }
+    }
 
-	defer func() {
-		if err != nil {
-			os.RemoveAll(scratchDir)
-		}
-	}()
+    defer func() {
+        if err != nil {
+            os.RemoveAll(scratchDir)
+        }
+    }()
 
-	meta := &sandbox.SandboxMeta{
-		MemLimitMB: common.Conf.Limits.Installer_mem_mb,
-	}
-	sb, err := pp.sbPool.Create(nil, true, pp.pipLambda, scratchDir, meta, common.RT_PYTHON)
-	if err != nil {
-		return err
-	}
-	defer sb.Destroy()
+    meta := &sandbox.SandboxMeta{
+        MemLimitMB: common.Conf.Limits.Installer_mem_mb,
+    }
+    sb, err := pp.sbPool.Create(nil, true, pp.pipLambda, scratchDir, meta, common.RT_PYTHON)
+    if err != nil {
+        return err
+    }
+    defer sb.Destroy()
 
-	proxy, err := sb.HttpProxy()
-	if err != nil {
-		return err
-	}
+    proxy, err := sb.HttpProxy()
+    if err != nil {
+        return err
+    }
 
-	// we still need to run a Sandbox to parse the dependencies, even if it is already installed
-	msg := fmt.Sprintf(`{"pkg": "%s", "alreadyInstalled": %v}`, p.name, alreadyInstalled)
-	reqBody := bytes.NewReader([]byte(msg))
-	// the URL doesn't matter, since it is local anyway
-	req, err := http.NewRequest("POST", "http://container/run/pip-install", reqBody)
-	if err != nil {
-		return err
-	}
-	resp, err := proxy.Transport.RoundTrip(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
+    // we still need to run a Sandbox to parse the dependencies, even if it is already installed
+    msg := fmt.Sprintf(`{"pkg": "%s", "alreadyInstalled": %v}`, p.name, alreadyInstalled)
+    reqBody := bytes.NewReader([]byte(msg))
 
-	if resp.StatusCode != http.StatusOK {
-		// did we run out of memory?
-		if stat, err := sb.Status(sandbox.StatusMemFailures); err == nil {
-			if b, err := strconv.ParseBool(stat); err == nil && b {
-				return fmt.Errorf("ran out of memory while installing %s", p.name)
-			}
-		}
+    // the URL doesn't matter, since it is local anyway
+    req, err := http.NewRequest("POST", "http://container/run/pip-install", reqBody)
+    if err != nil {
+        return err
+    }
+    resp, err := proxy.Transport.RoundTrip(req)
+    if err != nil {
+        return err
+    }
+    defer resp.Body.Close()
+    body, err := ioutil.ReadAll(resp.Body)
+    if err != nil {
+        return err
+    }
 
-		return fmt.Errorf("install lambda returned status %d, body '%s'", resp.StatusCode, string(body))
-	}
+    if resp.StatusCode != http.StatusOK {
+        // did we run out of memory?
+        if stat, err := sb.Status(sandbox.StatusMemFailures); err == nil {
+            if b, err := strconv.ParseBool(stat); err == nil && b {
+                return fmt.Errorf("ran out of memory while installing %s", p.name)
+            }
+        }
 
-	if err := json.Unmarshal(body, &p.meta); err != nil {
-		return err
-	}
+        return fmt.Errorf("install lambda returned status %d, body '%s'", resp.StatusCode, string(body))
+    }
 
-	for i, pkg := range p.meta.Deps {
-		p.meta.Deps[i] = normalizePkg(pkg)
-	}
+    if err := json.Unmarshal(body, &p.meta); err != nil {
+        return err
+    }
 
-	return nil
+    for i, pkg := range p.meta.Deps {
+        p.meta.Deps[i] = normalizePkg(pkg)
+    }
+
+    return nil
 }
