@@ -50,7 +50,11 @@ class Datastore:
             self._nodes.append(node)
 
         self._running = True
-        sleep(0.5)
+        sleep(0.1)
+
+        # blocks until connection is set up
+        client = lambdastore.create_client('localhost')
+        client.close()
 
         self._known_programs = []
 

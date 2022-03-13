@@ -9,34 +9,27 @@ use lambda_store_client::Transaction;
 
 use open_lambda_protocol::DataOperation;
 
-#[derive(Default, Clone, WasmerEnv)]
+#[derive(Clone, WasmerEnv)]
 pub struct StorageEnv {
     #[wasmer(export)]
     memory: LazyInit<Memory>,
     #[wasmer(export(name = "internal_alloc_buffer"))]
     allocate: LazyInit<NativeFunc<u32, i64>>,
-    database: Arc<Mutex<Option<Database>>>,
+    database: Arc<Database>,
     transaction: Arc<Mutex<Option<Transaction>>>,
     #[wasmer(yielder)]
     yielder: LazyInit<Yielder>,
 }
 
 impl StorageEnv {
-    pub fn get_database(&self) -> MutexGuard<'_, Option<Database>> {
-        let mut db_lock = self.database.lock().unwrap();
-
-        if db_lock.is_none() {
-            let yielder = self.yielder.get_ref().unwrap().get();
-
-            let db = yielder.async_suspend(async move {
-                // Connect to lambda store
-                lambda_store_client::create_client("localhost").await
-            });
-
-            *db_lock = Some(db);
+    pub fn new(database: Arc<Database>) -> Self {
+        Self {
+            database,
+            memory: Default::default(),
+            allocate: Default::default(),
+            transaction: Default::default(),
+            yielder: Default::default(),
         }
-
-        db_lock
     }
 
     pub async fn commit(&self) -> bool {
@@ -58,9 +51,8 @@ fn get_configuration(env: &StorageEnv, len_out: WasmPtr<u64>) -> i64 {
     log::trace!("Got `get_configuration` call");
 
     let memory = env.memory.get_ref().unwrap();
-    let db_lock = env.get_database();
 
-    let object_types = db_lock.as_ref().unwrap().get_object_types();
+    let object_types = env.database.get_object_types();
     let data = bincode::serialize(&object_types).unwrap();
 
     let offset = env
@@ -94,12 +86,10 @@ fn execute_operation(
     len_out: WasmPtr<u64>,
 ) -> i64 {
     let memory = env.memory.get_ref().unwrap();
-    let db_lock = env.get_database();
-
     let mut tx_lock = env.transaction.lock().unwrap();
 
     if tx_lock.is_none() {
-        *tx_lock = Some(db_lock.as_ref().unwrap().begin_transaction())
+        *tx_lock = Some(env.database.begin_transaction())
     }
 
     let tx = tx_lock.as_mut().unwrap();

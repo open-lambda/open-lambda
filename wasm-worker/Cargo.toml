@@ -7,23 +7,30 @@ edition = "2018"
 [dependencies]
 tokio = { version="1", features=["net", "rt-multi-thread", "macros"] }
 hyper = { version="0.14", features=["server", "http1", "runtime", "stream"] }
+serde_bytes = "0.11"
+ron = "0"
 futures-util = { version="0.3" }
-wasmer = { git="ssh://git@github.com/kaimast/wasmer.git", branch="async", default-features=false, features=["compiler", "async"] }
-wasmer-compiler-cranelift = { git="ssh://git@github.com/kaimast/wasmer.git", branch="async", optional=true }
-wasmer-compiler-llvm = { git="ssh://git@github.com/kaimast/wasmer.git", branch="async" }
-wasmer-engine-dylib = { git="ssh://git@github.com/kaimast/wasmer.git", branch="async" }
-wasmer-vm = { git="ssh://git@github.com/kaimast/wasmer.git", branch="async" }
+wasmer = { git="ssh://git@github.com/kaimast/wasmer.git", branch="zygote", default-features=false, features=["compiler", "async"] }
+wasmer-compiler-singlepass = { git="ssh://git@github.com/kaimast/wasmer.git", branch="zygote" }
+wasmer-compiler-cranelift = { git="ssh://git@github.com/kaimast/wasmer.git", branch="zygote" }
+wasmer-compiler-llvm = { git="ssh://git@github.com/kaimast/wasmer.git", branch="zygote", optional=true }
+wasmer-engine-dylib = { git="ssh://git@github.com/kaimast/wasmer.git", branch="zygote" }
+wasmer-engine = { git="ssh://git@github.com/kaimast/wasmer.git", branch="zygote" }
+wasmer-vm = { git="ssh://git@github.com/kaimast/wasmer.git", branch="zygote" }
 pretty_env_logger = { version="0.4" }
 log = "0.4"
 dashmap = "4"
+cfg-if = "1"
 bincode = "1"
+serde = "1"
 open-lambda-protocol = { git="ssh://git@github.com/kaimast/lambda-store.git",default-features=false, branch="main", features=[] }
 lambda-store-client = { git="ssh://git@github.com/kaimast/lambda-store.git", default-features=false, branch="main", features=[] }
+lambda-store-utils = { git="ssh://git@github.com/kaimast/lambda-store.git", default-features=false, branch="main", features=[] }
 async-wormhole = { git="https://github.com/lunatic-solutions/async-wormhole.git" }
 
 [features]
 default = []
-cranelift = ["wasmer-compiler-cranelift"]
+llvm-backend = ["wasmer-compiler-llvm"]
 
 [profile.release]
 debug = true
