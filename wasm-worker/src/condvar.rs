@@ -1,5 +1,4 @@
 /// Condvar wrapper for tokio
-
 use std::sync::atomic;
 use tokio::sync::{Mutex, MutexGuard, Notify};
 
@@ -12,10 +11,17 @@ pub struct Condvar {
 
 impl Condvar {
     pub fn new() -> Self {
-        Self{ wait_count: atomic::AtomicU32::new(0), notifier: Notify::new() }
+        Self {
+            wait_count: atomic::AtomicU32::new(0),
+            notifier: Notify::new(),
+        }
     }
 
-    pub async fn wait<'a, 'b, T>(&self, lock: MutexGuard<'a, T>, mutex: &'b Mutex<T>) -> MutexGuard<'b, T> {
+    pub async fn wait<'a, 'b, T>(
+        &self,
+        lock: MutexGuard<'a, T>,
+        mutex: &'b Mutex<T>,
+    ) -> MutexGuard<'b, T> {
         self.wait_count.fetch_add(1, atomic::Ordering::SeqCst);
         drop(lock);
 
@@ -28,7 +34,7 @@ impl Condvar {
         let count = self.wait_count.load(atomic::Ordering::SeqCst);
 
         if count > 0 {
-            self.wait_count.store(count-1, atomic::Ordering::SeqCst);
+            self.wait_count.store(count - 1, atomic::Ordering::SeqCst);
             drop(lock);
 
             self.notifier.notify_one();

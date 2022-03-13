@@ -1,4 +1,4 @@
-#![feature(async_closure) ]
+#![feature(async_closure)]
 
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Method, Request, Response, Result, Server, StatusCode};
@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use async_wormhole::stack::Stack;
 
-use wasmer::{Instance, ImportObject};
+use wasmer::{ImportObject, Instance};
 
 static mut PROGRAM_MGR: Option<Arc<ProgramManager>> = None;
 
@@ -26,14 +26,19 @@ async fn main() {
 
     let addr = "127.0.0.1:5000".parse().unwrap();
     let programs = Arc::new(ProgramManager::new());
-    unsafe{ PROGRAM_MGR = Some(programs) };
+    unsafe { PROGRAM_MGR = Some(programs) };
 
     let make_service = make_service_fn(async move |_| {
         Ok::<_, hyper::Error>(service_fn(async move |req: Request<Body>| {
             log::trace!("Got new request: {:?}", req);
 
-            let mut path = req.uri().path().split('/').filter(|x| !x.is_empty())
-                .map(String::from).collect::<Vec<String>>();
+            let mut path = req
+                .uri()
+                .path()
+                .split('/')
+                .filter(|x| !x.is_empty())
+                .map(String::from)
+                .collect::<Vec<String>>();
 
             let mut args = Vec::new();
             let method = req.method().clone();
@@ -52,14 +57,17 @@ async fn main() {
                 }
             }
 
-            let program_mgr = unsafe{ PROGRAM_MGR.as_ref().unwrap().clone() };
+            let program_mgr = unsafe { PROGRAM_MGR.as_ref().unwrap().clone() };
 
             if method == Method::POST && path.len() == 2 && path[0] == "run" {
                 execute_function(path.pop().unwrap(), args, program_mgr).await
-            } else if  method == Method::GET && path.len() == 1 && path[0] == "status" {
+            } else if method == Method::GET && path.len() == 1 && path[0] == "status" {
                 get_status().await
             } else {
-                panic!("Got unexpected request to {:?} (Method: {:?})", path, method);
+                panic!(
+                    "Got unexpected request to {:?} (Method: {:?})",
+                    path, method
+                );
             }
         }))
     });
@@ -73,7 +81,11 @@ async fn main() {
     }
 }
 
-async fn execute_function(name: String, args: Vec<u8>, program_mgr: Arc<ProgramManager>) -> Result<Response<Body>> {
+async fn execute_function(
+    name: String,
+    args: Vec<u8>,
+    program_mgr: Arc<ProgramManager>,
+) -> Result<Response<Body>> {
     let program = program_mgr.get_program(name).await;
     let args = Arc::new(args);
 
@@ -83,9 +95,15 @@ async fn execute_function(name: String, args: Vec<u8>, program_mgr: Arc<ProgramM
 
         let instance = {
             let mut import_object = ImportObject::new();
-            import_object.register("ol_args", bindings::args::get_imports(&*program.store, args.clone(), result.clone()));
+            import_object.register(
+                "ol_args",
+                bindings::args::get_imports(&*program.store, args.clone(), result.clone()),
+            );
             import_object.register("ol_log", bindings::log::get_imports(&*program.store));
-            import_object.register("ol_storage", bindings::storage::get_imports(&*program.store, storage.clone()));
+            import_object.register(
+                "ol_storage",
+                bindings::storage::get_imports(&*program.store, storage.clone()),
+            );
 
             Instance::new(&program.module, &import_object).unwrap()
         };
@@ -99,7 +117,11 @@ async fn execute_function(name: String, args: Vec<u8>, program_mgr: Arc<ProgramM
                 log::error!("Stack trace:");
 
                 for frame in e.trace() {
-                    log::error!("   {}::{}", frame.module_name(), frame.function_name().or(Some("unknown")).unwrap());
+                    log::error!(
+                        "   {}::{}",
+                        frame.module_name(),
+                        frame.function_name().or(Some("unknown")).unwrap()
+                    );
                 }
             }
         };

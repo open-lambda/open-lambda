@@ -1,4 +1,6 @@
-use wasmer::{Array, LazyInit, Function, Memory, NativeFunc, Store, Exports, WasmPtr, WasmerEnv, Yielder};
+use wasmer::{
+    Array, Exports, Function, LazyInit, Memory, NativeFunc, Store, WasmPtr, WasmerEnv, Yielder,
+};
 
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -7,11 +9,12 @@ use lambda_store_client::Transaction;
 
 use open_lambda_protocol::DataOperation;
 
-#[ derive(Default, Clone, WasmerEnv) ]
+#[derive(Default, Clone, WasmerEnv)]
 pub struct StorageEnv {
     #[wasmer(export)]
     memory: LazyInit<Memory>,
-    #[wasmer(export(name="internal_alloc_buffer"))] allocate: LazyInit<NativeFunc<u32, i64>>,
+    #[wasmer(export(name = "internal_alloc_buffer"))]
+    allocate: LazyInit<NativeFunc<u32, i64>>,
     database: Arc<Mutex<Option<Database>>>,
     transaction: Arc<Mutex<Option<Transaction>>>,
     #[wasmer(yielder)]
@@ -84,7 +87,12 @@ fn get_configuration(env: &StorageEnv, len_out: WasmPtr<u64>) -> i64 {
     offset
 }
 
-fn execute_operation(env: &StorageEnv, op_data: WasmPtr<u8, Array>, op_data_len: u32, len_out: WasmPtr<u64>) -> i64 {
+fn execute_operation(
+    env: &StorageEnv,
+    op_data: WasmPtr<u8, Array>,
+    op_data_len: u32,
+    len_out: WasmPtr<u64>,
+) -> i64 {
     let memory = env.memory.get_ref().unwrap();
     let db_lock = env.get_database();
 
@@ -107,15 +115,18 @@ fn execute_operation(env: &StorageEnv, op_data: WasmPtr<u8, Array>, op_data_len:
     let op: DataOperation = bincode::deserialize(op_slice).unwrap();
 
     log::debug!("Executing operation: {op:?}");
-    let result = yielder.async_suspend(async move {
-        tx.execute_operation(op).await
-    });
+    let result = yielder.async_suspend(async move { tx.execute_operation(op).await });
 
     log::debug!("Op result is: {result:?}");
 
     let result_data = bincode::serialize(&result).expect("Failed to serialize OpResult");
 
-    let offset = env.allocate.get_ref().unwrap().call(result_data.len() as u32).unwrap();
+    let offset = env
+        .allocate
+        .get_ref()
+        .unwrap()
+        .call(result_data.len() as u32)
+        .unwrap();
 
     let out_slice = unsafe {
         let raw_ptr = memory.data_ptr().add(offset as usize);
@@ -132,8 +143,14 @@ fn execute_operation(env: &StorageEnv, op_data: WasmPtr<u8, Array>, op_data_len:
 
 pub fn get_imports(store: &Store, env: StorageEnv) -> Exports {
     let mut ns = Exports::new();
-    ns.insert("get_configuration", Function::new_native_with_env(store, env.clone(), get_configuration));
-    ns.insert("execute_operation", Function::new_native_with_env(store, env, execute_operation));
+    ns.insert(
+        "get_configuration",
+        Function::new_native_with_env(store, env.clone(), get_configuration),
+    );
+    ns.insert(
+        "execute_operation",
+        Function::new_native_with_env(store, env, execute_operation),
+    );
 
     ns
 }

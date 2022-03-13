@@ -1,8 +1,8 @@
-use wasmer::{Store, Module};
-#[cfg(not(feature="cranelift"))]
-use wasmer_compiler_llvm::LLVM;
-#[cfg(feature="cranelift")]
+use wasmer::{Module, Store};
+#[cfg(feature = "cranelift")]
 use wasmer_compiler_cranelift::Cranelift;
+#[cfg(not(feature = "cranelift"))]
+use wasmer_compiler_llvm::LLVM;
 use wasmer_engine_dylib::Dylib as NativeEngine;
 
 use std::sync::Arc;
@@ -15,7 +15,7 @@ use crate::condvar::Condvar;
 enum ProgramState {
     Empty,
     Loading,
-    Loaded(Arc<Program>)
+    Loaded(Arc<Program>),
 }
 
 pub struct Program {
@@ -30,27 +30,30 @@ pub struct ProgramHandle {
 
 impl ProgramHandle {
     fn empty() -> Self {
-        Self{ state: Mutex::new(ProgramState::Empty), condition: Condvar::new() }
+        Self {
+            state: Mutex::new(ProgramState::Empty),
+            condition: Condvar::new(),
+        }
     }
 }
 
 pub struct ProgramManager {
     store: Arc<Store>,
-    programs: DashMap<String, ProgramHandle>
+    programs: DashMap<String, ProgramHandle>,
 }
 
 impl ProgramManager {
     pub fn new() -> Self {
-        #[cfg(feature="cranelift")]
+        #[cfg(feature = "cranelift")]
         let compiler = Cranelift::default();
-        #[cfg(not(feature="cranelift"))]
+        #[cfg(not(feature = "cranelift"))]
         let compiler = LLVM::default();
 
-        let engine = Box::new( NativeEngine::new(compiler).engine() );
+        let engine = Box::new(NativeEngine::new(compiler).engine());
         let store = Arc::new(Store::new(&*engine));
         let programs = DashMap::new();
 
-        Self{ store, programs }
+        Self { store, programs }
     }
 
     pub async fn get_program(&self, name: String) -> Arc<Program> {
@@ -64,7 +67,7 @@ impl ProgramManager {
                 ProgramState::Empty => {
                     *state = ProgramState::Loading;
                     break;
-                                }
+                }
                 ProgramState::Loading => {
                     state = e.value().condition.wait(state, &e.value().state).await;
                 }
@@ -79,9 +82,9 @@ impl ProgramManager {
         // Load and compile
         match Module::from_file(&*self.store, &path) {
             Ok(m) => {
-                let p = Arc::new(Program{
+                let p = Arc::new(Program {
                     module: Arc::new(m),
-                    store: self.store.clone()
+                    store: self.store.clone(),
                 });
 
                 let mut state = e.value().state.lock().await;
@@ -91,8 +94,8 @@ impl ProgramManager {
                 log::info!("Loaded new program `{}`", path);
 
                 p
-            },
-            Err(e) => panic!("Failed to compile wasm `{}`: {:?}", path, e)
+            }
+            Err(e) => panic!("Failed to compile wasm `{}`: {:?}", path, e),
         }
     }
 }

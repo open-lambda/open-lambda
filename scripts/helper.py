@@ -25,6 +25,8 @@ def setup_config(ol_dir, registry_dir):
     REG_DIR = os.path.abspath(registry_dir)
 
 class Datastore:
+    ''' Sets up a local lambdastore cluster '''
+
     def __init__(self, num_replicas=1):
         if num_replicas < 1:
             raise RuntimeError("Need at least one storage replica")

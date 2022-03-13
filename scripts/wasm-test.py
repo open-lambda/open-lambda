@@ -18,6 +18,7 @@ from subprocess import Popen
 from contextlib import contextmanager
 
 from api import OpenLambda
+from helper import Datastore
 import lambdastore
 
 # These will be set by argparse in main()
@@ -77,6 +78,7 @@ def test(func):
         result["worker_tail"] = None
 
         total_t0 = time.time()
+        datastore = Datastore()
         worker = None
 
         try:
@@ -109,6 +111,8 @@ def test(func):
         result["total_seconds"] = total_t1-total_t0
         results["runs"].append(result)
 
+        datastore.stop()
+
         print(json.dumps(result, indent=2))
         return ret_val
 
@@ -120,7 +124,7 @@ def test(func):
 @test
 def wasm_numpy_test():
     open_lambda = OpenLambda()
-    lstore = lambdastore.create_client()
+    lstore = lambdastore.create_client('localhost')
 
     obj = lstore.create_object('test')
     oid = obj.get_identifier().to_hex_string()

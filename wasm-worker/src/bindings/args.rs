@@ -1,12 +1,12 @@
-use wasmer::{Array, Store, WasmerEnv, Exports, LazyInit, Function, Memory, NativeFunc, WasmPtr};
+use wasmer::{Array, Exports, Function, LazyInit, Memory, NativeFunc, Store, WasmPtr, WasmerEnv};
 
 use std::sync::{Arc, Mutex};
 
-#[ derive(Clone, WasmerEnv) ]
+#[derive(Clone, WasmerEnv)]
 struct ArgData {
-    #[ wasmer(export) ]
+    #[wasmer(export)]
     memory: LazyInit<Memory>,
-    #[wasmer(export(name="internal_alloc_buffer"))]
+    #[wasmer(export(name = "internal_alloc_buffer"))]
     allocate: LazyInit<NativeFunc<u32, i64>>,
     args: Arc<Vec<u8>>,
     result: Arc<Mutex<Option<Vec<u8>>>>,
@@ -55,7 +55,7 @@ fn set_result(env: &ArgData, buf_ptr: WasmPtr<u8, Array>, buf_len: u32) {
     let memory = env.memory.get_ref().unwrap();
 
     let buf_slice = unsafe {
-        let buf_ptr = memory.view::<u8>().as_ptr().add( buf_ptr.offset() as usize ) as *mut u8;
+        let buf_ptr = memory.view::<u8>().as_ptr().add(buf_ptr.offset() as usize) as *mut u8;
         std::slice::from_raw_parts(buf_ptr, buf_len as usize)
     };
 
@@ -65,12 +65,27 @@ fn set_result(env: &ArgData, buf_ptr: WasmPtr<u8, Array>, buf_len: u32) {
     *result = Some(vec);
 }
 
-pub fn get_imports(store: &Store, args: Arc<Vec<u8>>, result: Arc<Mutex<Option<Vec<u8>>>>) -> Exports {
-    let arg_data = ArgData{ args, result, memory: Default::default(), allocate: Default::default() };
+pub fn get_imports(
+    store: &Store,
+    args: Arc<Vec<u8>>,
+    result: Arc<Mutex<Option<Vec<u8>>>>,
+) -> Exports {
+    let arg_data = ArgData {
+        args,
+        result,
+        memory: Default::default(),
+        allocate: Default::default(),
+    };
 
     let mut ns = Exports::new();
-    ns.insert("set_result", Function::new_native_with_env(store, arg_data.clone(), set_result));
-    ns.insert("get_args", Function::new_native_with_env(store, arg_data, get_args));
+    ns.insert(
+        "set_result",
+        Function::new_native_with_env(store, arg_data.clone(), set_result),
+    );
+    ns.insert(
+        "get_args",
+        Function::new_native_with_env(store, arg_data, get_args),
+    );
 
     ns
 }
