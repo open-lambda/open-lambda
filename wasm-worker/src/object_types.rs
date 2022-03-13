@@ -7,9 +7,8 @@ use crate::functions::FunctionManager;
 
 use serde::{Deserialize, Serialize};
 
-use lambda_store_utils::Configuration;
 use open_lambda_protocol::{
-    CollectionId, FieldId, FieldType, FunctionId, FunctionMetadata, ObjectTypeId, ROOT_OBJECT_TYPE,
+    CollectionId, FieldId, FieldType, FunctionId, FunctionMetadata, ObjectTypeId,
 };
 
 pub struct ObjectTypeLoader {}
@@ -36,12 +35,11 @@ impl ObjectTypeLoader {
 
     pub async fn run(
         &self,
-        config: &Arc<Configuration>,
         function_mgr: &Arc<FunctionManager>,
         registry_path: &str,
     ) {
         let compiler_name = format!("{}", function_mgr.get_compiler_type()).to_lowercase();
-        let cache_path: PathBuf = format!("{registry_path}.{compiler_name}.cache").into();
+        let cache_path: PathBuf = format!("{registry_path}.worker.{compiler_name}.cache").into();
 
         let directory = match read_dir(&registry_path) {
             Ok(dir) => dir,
@@ -51,12 +49,6 @@ impl ObjectTypeLoader {
         };
 
         let mut object_types: HashMap<String, ObjectType> = Default::default();
-
-        // Special root object type
-        {
-            let fields = vec![(0, "children".to_string(), FieldType::List)];
-            config.set_object_type("root".to_string(), ROOT_OBJECT_TYPE, vec![], fields, vec![]);
-        }
 
         for entry in directory {
             let entry = entry.expect("Failed to read next file");
@@ -145,8 +137,6 @@ impl ObjectTypeLoader {
                 )
                 .await;
             }
-
-            config.set_object_type(name, type_id, collections, fields, functions);
         }
     }
 }

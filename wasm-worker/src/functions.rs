@@ -5,11 +5,7 @@ use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use tokio::sync::{Mutex, Notify};
-
-use serde_bytes::ByteBuf;
-
-use lambda_store_utils::{Message, WasmCompilerType};
+use lambda_store_utils::WasmCompilerType;
 use open_lambda_protocol::ObjectTypeId;
 
 use wasmer::{BaseTunables, Module, Pages, Store};
@@ -20,12 +16,6 @@ use wasmer_engine_dylib::Dylib as NativeEngine;
 
 #[cfg(feature = "llvm-backend")]
 use wasmer_compiler_llvm::LLVM;
-
-#[derive(Debug, PartialEq)]
-enum FunctionState {
-    Compiling,
-    Compiled { binary: Arc<Vec<u8>> },
-}
 
 pub struct ObjectFunctions {
     pub store: Arc<Store>,

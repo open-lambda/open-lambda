@@ -27,7 +27,7 @@ class OpenLambda:
     def run_on(self, object_id, fn_name, args):
         ''' Execute a serverless function on a LambdaObject '''
 
-        req = self._post(f"run/{fn_name}?object_id={object_id}", args)
+        req = requests.post(f'http://{self._address}/run_on/{fn_name}', json.dumps(args), params={'object_id': object_id})
         self._check_status_code(req, "run_on")
         return req.json()
 

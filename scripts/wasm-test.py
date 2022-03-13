@@ -86,6 +86,16 @@ def test(func):
             worker = Popen(['./ol-wasm'])
             sleep(0.1)
 
+            # wait for worker to be ready
+            while True:
+                try:
+                    open_lambda = OpenLambda()
+                    open_lambda.check_status()
+                    break
+                except:
+                    # wait some more...
+                    sleep(0.1)
+
             # run test/benchmark
             test_t0 = time.time()
             ret_val = func(**kwargs)
@@ -132,10 +142,10 @@ def wasm_numpy_test():
     jdata = open_lambda.run_on(oid, 'numpy', [1,2])
     assert jdata['result'] == 3
 
-    jdata = open_lambda.run("numpy", [[1, 2], [3, 4]])
+    jdata = open_lambda.run_on(oid, "numpy", [[1, 2], [3, 4]])
     assert jdata['result'] == 10
 
-    jdata = open_lambda.run("numpy", [[[1, 2], [3, 4]], [[1, 2], [3, 4]]])
+    jdata = open_lambda.run_on(oid, "numpy", [[[1, 2], [3, 4]], [[1, 2], [3, 4]]])
     assert jdata['result'] == 20
 
 @test

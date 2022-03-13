@@ -5,20 +5,21 @@ use hyper::{Body, Method, Request, Response, Result, Server, StatusCode};
 
 use futures_util::stream::StreamExt;
 
+use percent_encoding::percent_decode_str;
+
 mod functions;
 use functions::FunctionManager;
-
-mod condvar;
 
 mod bindings;
 
 mod object_types;
+use object_types::ObjectTypeLoader;
 
 use std::sync::Arc;
 
 use async_wormhole::stack::Stack;
 
-use open_lambda_protocol::{ObjectId, ObjectTypeId};
+use open_lambda_protocol::ObjectId;
 use lambda_store_utils::WasmCompilerType;
 
 use wasmer::{ImportObject, Instance};
@@ -31,6 +32,10 @@ async fn main() {
 
     let addr = "127.0.0.1:5000".parse().unwrap();
     let functions = Arc::new(FunctionManager::new(WasmCompilerType::Cranelift).await);
+
+    let loader = ObjectTypeLoader::new();
+    loader.run(&functions, "test-registry.wasm").await;
+
     unsafe { FUNCTION_MGR = Some(functions) };
 
     let make_service = make_service_fn(async move |_| {
@@ -45,8 +50,18 @@ async fn main() {
                 .map(String::from)
                 .collect::<Vec<String>>();
 
-            let object_id = req.uri().query()
-                .map(ObjectId::from_hex_string);
+            let object_id = if let Some(query) = req.uri().query() {
+                let mut split = query.split('=');
+                if split.next().unwrap() == "object_id" {
+                    let oid = percent_decode_str(split.next().unwrap())
+                        .decode_utf8().unwrap();
+                    Some(ObjectId::from_hex_string(&*oid))
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
 
             let mut args = Vec::new();
             let method = req.method().clone();
@@ -67,8 +82,8 @@ async fn main() {
 
             let function_mgr = unsafe { FUNCTION_MGR.as_ref().unwrap().clone() };
 
-            if method == Method::POST && path.len() == 2 && path[0] == "run" {
-                execute_function(object_id.expect("No object id given"), path.pop().unwrap(), args, function_mgr).await
+            if method == Method::POST && path.len() == 2 && path[0] == "run_on" {
+                execute_function(object_id.expect("No object id given"), &path.pop().unwrap(), args, function_mgr).await
             } else if method == Method::GET && path.len() == 1 && path[0] == "status" {
                 get_status().await
             } else {
@@ -88,7 +103,7 @@ async fn main() {
 
 async fn execute_function(
     object_id: ObjectId,
-    name: String,
+    name: &str,
     args: Vec<u8>,
     function_mgr: Arc<FunctionManager>,
 ) -> Result<Response<Body>> {
@@ -120,7 +135,7 @@ async fn execute_function(
         };
 
         let stack = async_wormhole::stack::EightMbStack::new().unwrap();
-        if let (Err(e), _) = instance.call_with_stack("f", stack, vec![object_id.into_int()]).await {
+        if let (Err(e), _) = instance.call_with_stack(name, stack, vec![object_id.into_int()]).await {
             if let Some(wasmer_vm::TrapCode::StackOverflow) = e.clone().to_trap() {
                 log::error!("Function failed due to stack overflow");
             } else {

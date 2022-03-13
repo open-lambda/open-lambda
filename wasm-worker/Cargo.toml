@@ -2,7 +2,7 @@
 name = "wasm-worker"
 version = "0.1.0"
 authors = ["Kai Mast <kaimast@cs.wisc.edu>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 tokio = { version="1", features=["net", "rt-multi-thread", "macros"] }
@@ -17,6 +17,7 @@ wasmer-compiler-llvm = { git="ssh://git@github.com/kaimast/wasmer.git", branch="
 wasmer-engine-dylib = { git="ssh://git@github.com/kaimast/wasmer.git", branch="zygote" }
 wasmer-engine = { git="ssh://git@github.com/kaimast/wasmer.git", branch="zygote" }
 wasmer-vm = { git="ssh://git@github.com/kaimast/wasmer.git", branch="zygote" }
+percent-encoding = "2"
 pretty_env_logger = { version="0.4" }
 log = "0.4"
 dashmap = "4"

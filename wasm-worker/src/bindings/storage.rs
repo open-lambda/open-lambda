@@ -2,7 +2,7 @@ use wasmer::{
     Array, Exports, Function, LazyInit, Memory, NativeFunc, Store, WasmPtr, WasmerEnv, Yielder,
 };
 
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex};
 
 use lambda_store_client::Client as Database;
 use lambda_store_client::Transaction;
