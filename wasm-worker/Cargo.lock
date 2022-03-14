@@ -161,11 +161,14 @@ version = "3.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8c93436c21e4698bacadf42917db28b23017027a4deccb35dbe47a7e7840123"
 dependencies = [
+ "atty",
  "bitflags",
  "clap_derive",
  "indexmap",
  "lazy_static",
  "os_str_bytes",
+ "strsim",
+ "termcolor",
  "textwrap",
 ]
 
@@ -1724,6 +1727,7 @@ dependencies = [
  "async-wormhole",
  "bincode",
  "cfg-if",
+ "clap",
  "dashmap",
  "futures-util",
  "hyper",

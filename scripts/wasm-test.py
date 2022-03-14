@@ -83,7 +83,7 @@ def test(func):
 
         try:
             # setup worker
-            worker = Popen(['./ol-wasm'])
+            worker = Popen(['./ol-wasm', '--wasm_compiler=llvm'])
             sleep(0.1)
 
             # wait for worker to be ready
@@ -149,6 +149,19 @@ def wasm_numpy_test():
     assert jdata['result'] == 20
 
 @test
+def call_child_test():
+    key = "child_key"
+
+    lstore = lambdastore.create_client('localhost')
+    open_lambda = OpenLambda()
+
+    obj = lstore.create_object('test')
+    oid = obj.get_identifier().to_hex_string()
+    obj.create_child_in_map("children", key, "test")
+
+    open_lambda.run_on(oid, 'call_child', {"count": 100, "child_key": key}, json=False)
+
+@test
 def ping_test():
     open_lambda = OpenLambda()
 
@@ -166,6 +179,7 @@ def run_tests():
 
     ping_test()
     wasm_numpy_test()
+    call_child_test()
 
 def _main():
     global TEST_FILTER

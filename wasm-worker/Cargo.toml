@@ -6,9 +6,10 @@ edition = "2021"
 
 [dependencies]
 tokio = { version="1", features=["net", "rt-multi-thread", "macros"] }
-hyper = { version="0.14", features=["server", "http1", "runtime", "stream"] }
+hyper = { version="0.14", features=["server", "client", "http1", "runtime", "stream"] }
 serde_bytes = "0.11"
 ron = "0"
+clap = { version = "3", default-features=false, features=["suggestions", "color", "std", "cargo", "derive"]}
 futures-util = { version="0.3" }
 wasmer = { git="ssh://git@github.com/kaimast/wasmer.git", branch="zygote", default-features=false, features=["compiler", "async"] }
 wasmer-compiler-singlepass = { git="ssh://git@github.com/kaimast/wasmer.git", branch="zygote" }

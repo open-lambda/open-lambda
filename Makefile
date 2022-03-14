@@ -5,11 +5,11 @@ GO=go
 OL_DIR=$(abspath ./src)
 OL_GO_FILES=$(shell find src/ -name '*.go')
 LAMBDA_FILES=$(shell find lambda)
-USE_CRANELIFT?=0
+USE_LLVM?=1
 BUILDTYPE?=debug
 
-ifeq (${USE_CRANELIFT}, 1)
-	WASM_WORKER_FLAGS=--features=cranelift
+ifeq (${USE_LLVM}, 1)
+	WASM_WORKER_FLAGS=--features=llvm-backend
 else
 	WASM_WORKER_FLAGS=
 endif

@@ -3,8 +3,13 @@ use wasmer::{
 };
 
 use std::sync::Arc;
+use std::net::SocketAddr;
+
+use serde_bytes::ByteBuf;
 
 use lambda_store_client::Client as Database;
+
+use hyper::Request;
 
 use open_lambda_protocol::{BatchCallData, BatchCallResult};
 
@@ -17,6 +22,7 @@ pub struct IpcEnv {
     #[wasmer(yielder)]
     yielder: LazyInit<Yielder>,
     database: Arc<Database>,
+    addr: SocketAddr,
 }
 
 fn batch_call(
@@ -47,24 +53,52 @@ fn batch_call(
     let mut results: BatchCallResult = vec![];
 
     for (object_id, function_id, args) in call_data.drain(..) {
-        let object_type = yielder.async_suspend(async move {
-            match env.database.get_object(object_id).await {
+        let result = yielder.async_suspend(async move {
+            let object_type = match env.database.get_object(object_id).await {
                 Ok(object) => object.get_object_type(),
                 Err(err) => {
                     panic!("Failed to get object: {err}");
                 }
+            };
+
+            let metadata = match object_type.get_function_by_id(&function_id) {
+                Some(meta) => meta,
+                None => {
+                    panic!("No such function");
+                }
+            };
+
+            let oid_hex = object_id.to_hex_string()
+                .replace("#", "%23").replace(":", "%3A");
+
+            let uri = hyper::Uri::builder()
+                .scheme("http")
+                .authority(format!("{}:{}", env.addr.ip(), env.addr.port()))
+                .path_and_query(format!("/run_on/{}?object_id={oid_hex}", metadata.name))
+                .build().unwrap();
+
+            println!("{uri}");
+
+            let request = Request::builder()
+                .header("User-Agent", "open-lambda-wasm/1.0")
+                .method("POST")
+                .uri(uri)
+                .body(args.into())
+                .unwrap();
+
+            let client = hyper::client::Client::new();
+            let response = client.request(request).await
+                .expect("Request failed");
+
+            if !response.status().is_success() {
+                panic!("Request failed");
             }
+
+            let buf = hyper::body::to_bytes(response).await.unwrap();
+            Ok(ByteBuf::from(buf.to_vec()))
         });
 
-        let metadata = match object_type.get_function_by_id(&function_id) {
-            Some(meta) => meta,
-            None => {
-                log::error!("No such function");
-                return -1;
-            }
-        };
-
-        todo!();
+        results.push(result);
     }
 
     let result_data = bincode::serialize(&results).unwrap();
@@ -99,6 +133,7 @@ fn batch_call(
 
 pub fn get_imports(
     store: &Store,
+    addr: SocketAddr,
     database: Arc<Database>,
 ) -> Exports {
     let mut ns = Exports::new();
@@ -106,7 +141,7 @@ pub fn get_imports(
         memory: Default::default(),
         allocate: Default::default(),
         yielder: Default::default(),
-        database,
+        database, addr,
     };
 
     ns.insert(

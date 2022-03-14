@@ -77,12 +77,12 @@ impl FunctionManager {
     }
 
     pub async fn load_object_functions(
-        self_ptr: Arc<Self>,
+        &self,
         object_type: ObjectTypeId,
         path: PathBuf,
         cache_path: PathBuf,
     ) {
-        let store = self_ptr.store.clone();
+        let store = self.store.clone();
         let os_name = path.file_stem().unwrap();
         let name = String::from(os_name.to_str().unwrap());
 
@@ -131,7 +131,7 @@ impl FunctionManager {
             file.read_to_end(&mut code).unwrap();
 
             // Load and compile
-            let module = match Module::new(&*self_ptr.store, code) {
+            let module = match Module::new(&*self.store, code) {
                 Ok(module) => {
                     log::info!("Compiled program \"{name}\"");
                     module
@@ -166,6 +166,6 @@ impl FunctionManager {
         };
 
         let functions = Arc::new(ObjectFunctions{ store, module });
-        self_ptr.functions.insert(object_type, functions);
+        self.functions.insert(object_type, functions);
     }
 }

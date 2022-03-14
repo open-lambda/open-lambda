@@ -1,7 +1,7 @@
 ''' OpenLambda's Python API '''
 
 import requests
-import json
+import json as pyjson
 
 class OpenLambda:
     ''' Represents a client connection to OpenLambda '''
@@ -11,7 +11,7 @@ class OpenLambda:
 
     def _post(self, path, data = None):
         ''' Issues a _post request to the OL worker '''
-        return requests.post(f'http://{self._address}/{path}', json.dumps(data))
+        return requests.post(f'http://{self._address}/{path}', pyjson.dumps(data))
 
     def run(self, fn_name, args, json=True):
         ''' Execute a serverless function '''
@@ -24,12 +24,16 @@ class OpenLambda:
 
         return req.text
 
-    def run_on(self, object_id, fn_name, args):
+    def run_on(self, object_id, fn_name, args, json=True):
         ''' Execute a serverless function on a LambdaObject '''
 
-        req = requests.post(f'http://{self._address}/run_on/{fn_name}', json.dumps(args), params={'object_id': object_id})
+        req = requests.post(f'http://{self._address}/run_on/{fn_name}', pyjson.dumps(args), params={'object_id': object_id})
         self._check_status_code(req, "run_on")
-        return req.json()
+
+        if json:
+            return req.json()
+
+        return req.text
 
     def create(self, args):
         ''' Create a new sandbox '''
