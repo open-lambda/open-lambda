@@ -21,8 +21,8 @@ use clap::Parser;
 
 use async_wormhole::stack::Stack;
 
-use open_lambda_protocol::ObjectId;
 use lambda_store_utils::WasmCompilerType;
+use open_lambda_protocol::ObjectId;
 
 use wasmer::{ImportObject, Instance};
 
@@ -42,7 +42,8 @@ async fn load_functions(function_mgr: &Arc<FunctionManager>) {
     let compiler_name = format!("{}", function_mgr.get_compiler_type()).to_lowercase();
     let cache_path: PathBuf = format!("{registry_path}.worker.{compiler_name}.cache").into();
 
-    let db = lambda_store_client::create_client("localhost").await
+    let db = lambda_store_client::create_client("localhost")
+        .await
         .expect("Failed to connect to database");
 
     for (type_id, name, _object_type) in db.get_object_types() {
@@ -53,12 +54,13 @@ async fn load_functions(function_mgr: &Arc<FunctionManager>) {
 
         let file_name = format!("{registry_path}/{name}.wasm");
 
-        function_mgr.load_object_functions(
-            type_id,
-            Path::new(&file_name).to_path_buf(),
-            cache_path.clone(),
-        )
-        .await;
+        function_mgr
+            .load_object_functions(
+                type_id,
+                Path::new(&file_name).to_path_buf(),
+                cache_path.clone(),
+            )
+            .await;
     }
 
     db.close().await;
@@ -78,8 +80,6 @@ async fn main() {
     unsafe { FUNCTION_MGR = Some(function_mgr) };
 
     let make_service = make_service_fn(async move |_| {
-        let addr = addr.clone();
-
         Ok::<_, hyper::Error>(service_fn(async move |req: Request<Body>| {
             log::trace!("Got new request: {req:?}");
 
@@ -95,7 +95,8 @@ async fn main() {
                 let mut split = query.split('=');
                 if split.next().unwrap() == "object_id" {
                     let oid = percent_decode_str(split.next().unwrap())
-                        .decode_utf8().unwrap();
+                        .decode_utf8()
+                        .unwrap();
                     Some(ObjectId::from_hex_string(&*oid))
                 } else {
                     None
@@ -124,8 +125,14 @@ async fn main() {
             let function_mgr = unsafe { FUNCTION_MGR.as_ref().unwrap().clone() };
 
             if method == Method::POST && path.len() == 2 && path[0] == "run_on" {
-                execute_function(addr, object_id.expect("No object id given"),
-                    &path.pop().unwrap(), args, function_mgr).await
+                execute_function(
+                    addr,
+                    object_id.expect("No object id given"),
+                    &path.pop().unwrap(),
+                    args,
+                    function_mgr,
+                )
+                .await
             } else if method == Method::GET && path.len() == 1 && path[0] == "status" {
                 get_status().await
             } else {
@@ -150,11 +157,16 @@ async fn execute_function(
     args: Vec<u8>,
     function_mgr: Arc<FunctionManager>,
 ) -> Result<Response<Body>> {
-    let db = Arc::new(lambda_store_client::create_client("localhost").await
-        .expect("Failed to set up client"));
-    let object= db.get_object(object_id).await.expect("No such object");
+    let db = Arc::new(
+        lambda_store_client::create_client("localhost")
+            .await
+            .expect("Failed to set up client"),
+    );
+    let object = db.get_object(object_id).await.expect("No such object");
 
-    let functions = function_mgr.get_object_functions(&object.get_type_id()).await
+    let functions = function_mgr
+        .get_object_functions(&object.get_type_id())
+        .await
         .expect("Binary for object type is missing");
     let args = Arc::new(args);
 
@@ -168,7 +180,10 @@ async fn execute_function(
                 "ol_args",
                 bindings::args::get_imports(&*functions.store, args.clone(), result.clone()),
             );
-            import_object.register("ol_ipc", bindings::ipc::get_imports(&*functions.store, addr.clone(), db.clone()));
+            import_object.register(
+                "ol_ipc",
+                bindings::ipc::get_imports(&*functions.store, addr, db.clone()),
+            );
             import_object.register("ol_log", bindings::log::get_imports(&*functions.store));
             import_object.register(
                 "ol_storage",
@@ -179,7 +194,10 @@ async fn execute_function(
         };
 
         let stack = async_wormhole::stack::EightMbStack::new().unwrap();
-        if let (Err(e), _) = instance.call_with_stack(name, stack, vec![object_id.into_int()]).await {
+        if let (Err(e), _) = instance
+            .call_with_stack(name, stack, vec![object_id.into_int()])
+            .await
+        {
             if let Some(wasmer_vm::TrapCode::StackOverflow) = e.clone().to_trap() {
                 log::error!("Function failed due to stack overflow");
             } else {

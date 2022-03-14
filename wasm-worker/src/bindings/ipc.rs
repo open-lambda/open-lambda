@@ -2,8 +2,8 @@ use wasmer::{
     Array, Exports, Function, LazyInit, Memory, NativeFunc, Store, WasmPtr, WasmerEnv, Yielder,
 };
 
-use std::sync::Arc;
 use std::net::SocketAddr;
+use std::sync::Arc;
 
 use serde_bytes::ByteBuf;
 
@@ -68,14 +68,17 @@ fn batch_call(
                 }
             };
 
-            let oid_hex = object_id.to_hex_string()
-                .replace("#", "%23").replace(":", "%3A");
+            let oid_hex = object_id
+                .to_hex_string()
+                .replace('#', "%23")
+                .replace(':', "%3A");
 
             let uri = hyper::Uri::builder()
                 .scheme("http")
                 .authority(format!("{}:{}", env.addr.ip(), env.addr.port()))
                 .path_and_query(format!("/run_on/{}?object_id={oid_hex}", metadata.name))
-                .build().unwrap();
+                .build()
+                .unwrap();
 
             println!("{uri}");
 
@@ -87,8 +90,7 @@ fn batch_call(
                 .unwrap();
 
             let client = hyper::client::Client::new();
-            let response = client.request(request).await
-                .expect("Request failed");
+            let response = client.request(request).await.expect("Request failed");
 
             if !response.status().is_success() {
                 panic!("Request failed");
@@ -131,22 +133,19 @@ fn batch_call(
     offset
 }
 
-pub fn get_imports(
-    store: &Store,
-    addr: SocketAddr,
-    database: Arc<Database>,
-) -> Exports {
+pub fn get_imports(store: &Store, addr: SocketAddr, database: Arc<Database>) -> Exports {
     let mut ns = Exports::new();
     let env = IpcEnv {
         memory: Default::default(),
         allocate: Default::default(),
         yielder: Default::default(),
-        database, addr,
+        database,
+        addr,
     };
 
     ns.insert(
         "batch_call",
-        Function::new_native_with_env(store, env.clone(), batch_call),
+        Function::new_native_with_env(store, env, batch_call),
     );
 
     ns

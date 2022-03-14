@@ -69,9 +69,11 @@ impl FunctionManager {
         &self.compiler_type
     }
 
-    pub async fn get_object_functions(&self, object_type: &ObjectTypeId) -> Option<Arc<ObjectFunctions>> {
-        self
-            .functions
+    pub async fn get_object_functions(
+        &self,
+        object_type: &ObjectTypeId,
+    ) -> Option<Arc<ObjectFunctions>> {
+        self.functions
             .get(object_type)
             .map(|entry| entry.value().clone())
     }
@@ -101,9 +103,7 @@ impl FunctionManager {
             let file_meta = fs::metadata(&path).expect("Failed to read file metadata");
 
             match fs::metadata(&cpath) {
-                Ok(cache_meta) => {
-                    cache_meta.modified().unwrap() > file_meta.modified().unwrap()
-                }
+                Ok(cache_meta) => cache_meta.modified().unwrap() > file_meta.modified().unwrap(),
                 Err(err) => {
                     if err.kind() == std::io::ErrorKind::NotFound {
                         false
@@ -123,9 +123,7 @@ impl FunctionManager {
 
             log::info!("Loaded cached version of program \"{name}\"");
 
-            unsafe {
-                Module::deserialize(&*store, &binary).expect("Failed to deserialize module")
-            }
+            unsafe { Module::deserialize(&*store, &binary).expect("Failed to deserialize module") }
         } else {
             let mut code = Vec::new();
             file.read_to_end(&mut code).unwrap();
@@ -154,8 +152,7 @@ impl FunctionManager {
             {
                 //FIXME add a header with wasmer/compiler version and checksum
 
-                let mut cache_file =
-                    fs::File::create(&cpath).expect("Failed to create cache file");
+                let mut cache_file = fs::File::create(&cpath).expect("Failed to create cache file");
                 cache_file
                     .write_all(&binary)
                     .expect("Failed to write cache file");
@@ -165,7 +162,7 @@ impl FunctionManager {
             module
         };
 
-        let functions = Arc::new(ObjectFunctions{ store, module });
+        let functions = Arc::new(ObjectFunctions { store, module });
         self.functions.insert(object_type, functions);
     }
 }
