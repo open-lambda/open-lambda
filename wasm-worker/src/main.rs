@@ -1,6 +1,6 @@
 #![feature(async_closure)]
 
-use std::net::SocketAddr;
+use std::net::{SocketAddr, ToSocketAddrs};
 use std::path::{Path, PathBuf};
 
 use hyper::service::{make_service_fn, service_fn};
@@ -81,7 +81,13 @@ async fn main() {
 
     let args = Args::parse();
 
-    let worker_addr: SocketAddr = args.listen_address.parse().unwrap();
+    let worker_addr: SocketAddr = match args.listen_address.to_socket_addrs() {
+        Ok(mut addrs) => addrs.next().unwrap(),
+        Err(err) => {
+            log::error!("Failed to parse listen address \"{}\": {err}", args.listen_address);
+            return;
+        }
+    };
 
     let function_mgr = Arc::new(FunctionManager::new(args.wasm_compiler).await);
 
