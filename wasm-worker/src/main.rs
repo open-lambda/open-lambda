@@ -27,6 +27,7 @@ use open_lambda_protocol::ObjectId;
 use wasmer::{ImportObject, Instance};
 
 static mut FUNCTION_MGR: Option<Arc<FunctionManager>> = None;
+static mut LS_ADDRESS: Option<String> = None;
 
 #[derive(Parser)]
 #[clap(rename_all = "snake-case")]
@@ -35,14 +36,22 @@ struct Args {
     #[clap(long, arg_enum, default_value = "llvm")]
     #[clap(help = "Which compiler should be used to compile WebAssembly to native code?")]
     wasm_compiler: WasmCompilerType,
+
+    #[clap(long, short='c', default_value = "localhost")]
+    #[clap(help = "What is the address of the lambda store coordinator?")]
+    coordinator_address: String,
+
+    #[clap(long, short='l', default_value = "localhost")]
+    #[clap(help = "What is the address to listen on for client requests?")]
+    listen_address: String,
 }
 
-async fn load_functions(function_mgr: &Arc<FunctionManager>) {
+async fn load_functions(args: &Args, function_mgr: &Arc<FunctionManager>) {
     let registry_path = "test-registry.wasm";
     let compiler_name = format!("{}", function_mgr.get_compiler_type()).to_lowercase();
     let cache_path: PathBuf = format!("{registry_path}.worker.{compiler_name}.cache").into();
 
-    let db = lambda_store_client::create_client("localhost")
+    let db = lambda_store_client::create_client(&args.coordinator_address)
         .await
         .expect("Failed to connect to database");
 
@@ -72,12 +81,16 @@ async fn main() {
 
     let args = Args::parse();
 
-    let addr: SocketAddr = "127.0.0.1:5000".parse().unwrap();
+    let worker_addr: SocketAddr = args.listen_address.parse().unwrap();
+
     let function_mgr = Arc::new(FunctionManager::new(args.wasm_compiler).await);
 
-    load_functions(&function_mgr).await;
+    load_functions(&args, &function_mgr).await;
 
-    unsafe { FUNCTION_MGR = Some(function_mgr) };
+    unsafe {
+        FUNCTION_MGR = Some(function_mgr);
+        LS_ADDRESS = Some(args.coordinator_address);
+    }
 
     let make_service = make_service_fn(async move |_| {
         Ok::<_, hyper::Error>(service_fn(async move |req: Request<Body>| {
@@ -123,10 +136,11 @@ async fn main() {
             }
 
             let function_mgr = unsafe { FUNCTION_MGR.as_ref().unwrap().clone() };
+            let ls_addr = unsafe { LS_ADDRESS.as_ref().unwrap().clone() };
 
             if method == Method::POST && path.len() == 2 && path[0] == "run_on" {
                 execute_function(
-                    addr,
+                    worker_addr, &ls_addr,
                     object_id.expect("No object id given"),
                     &path.pop().unwrap(),
                     args,
@@ -141,9 +155,9 @@ async fn main() {
         }))
     });
 
-    let server = Server::bind(&addr).serve(make_service);
+    let server = Server::bind(&worker_addr).serve(make_service);
 
-    log::info!("Listening on http://{addr}");
+    log::info!("Listening on http://{worker_addr}");
 
     if let Err(err) = server.await {
         log::error!("server error: {err}");
@@ -151,14 +165,15 @@ async fn main() {
 }
 
 async fn execute_function(
-    addr: SocketAddr,
+    worker_addr: SocketAddr,
+    ls_addr: &str,
     object_id: ObjectId,
     name: &str,
     args: Vec<u8>,
     function_mgr: Arc<FunctionManager>,
 ) -> Result<Response<Body>> {
     let db = Arc::new(
-        lambda_store_client::create_client("localhost")
+        lambda_store_client::create_client(&ls_addr)
             .await
             .expect("Failed to set up client"),
     );
@@ -182,7 +197,7 @@ async fn execute_function(
             );
             import_object.register(
                 "ol_ipc",
-                bindings::ipc::get_imports(&*functions.store, addr, db.clone()),
+                bindings::ipc::get_imports(&*functions.store, worker_addr, db.clone()),
             );
             import_object.register("ol_log", bindings::log::get_imports(&*functions.store));
             import_object.register(
