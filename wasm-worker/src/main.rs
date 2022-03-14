@@ -41,7 +41,7 @@ struct Args {
     #[clap(help = "What is the address of the lambda store coordinator?")]
     coordinator_address: String,
 
-    #[clap(long, short='l', default_value = "localhost")]
+    #[clap(long, short='l', default_value = "localhost:5000")]
     #[clap(help = "What is the address to listen on for client requests?")]
     listen_address: String,
 }
