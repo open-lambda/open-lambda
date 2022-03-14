@@ -8,6 +8,8 @@ use hyper::{Body, Method, Request, Response, Result, Server, StatusCode};
 
 use futures_util::stream::StreamExt;
 
+use tokio::signal::unix::{signal, SignalKind};
+
 use percent_encoding::percent_decode_str;
 
 mod functions;
@@ -169,8 +171,29 @@ async fn main() {
 
     log::info!("Listening on http://{worker_addr}");
 
-    if let Err(err) = server.await {
-        log::error!("server error: {err}");
+    let mut sigterm = signal(SignalKind::terminate()).expect("Failed to install sighandler");
+    let mut sigint = signal(SignalKind::interrupt()).expect("Failed to install sighandler");
+
+    tokio::select! {
+        result = server => {
+            if let Err(err) = result {
+                log::error!("Got server error: {err}");
+            }
+        }
+        result = sigterm.recv() => {
+            if result.is_none() {
+                log::error!("Failed to receive signal. Shutting down.");
+            } else {
+                log::info!("Received SIGTERM. Shutting down gracefully...");
+            }
+        },
+        result = sigint.recv() => {
+            if result.is_none() {
+                log::error!("Failed to receive signal. Shutting down.");
+            } else {
+                log::info!("Received SIGINT. Shutting down gracefully...");
+            }
+        }
     }
 }
 
