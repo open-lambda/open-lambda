@@ -65,6 +65,10 @@ fn set_result(env: &ArgData, buf_ptr: WasmPtr<u8, Array>, buf_len: u32) {
     *result = Some(vec);
 }
 
+fn get_random_value() -> u64 {
+    rand::random()
+}
+
 pub fn get_imports(
     store: &Store,
     args: Arc<Vec<u8>>,
@@ -85,6 +89,10 @@ pub fn get_imports(
     ns.insert(
         "get_args",
         Function::new_native_with_env(store, arg_data, get_args),
+    );
+    ns.insert(
+        "get_random_value",
+        Function::new_native(store, get_random_value),
     );
 
     ns

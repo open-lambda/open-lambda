@@ -116,7 +116,7 @@ dependencies = [
 name = "db-proxy-protocol"
 version = "0.1.0"
 dependencies = [
- "open-lambda-protocol 0.1.0 (git+ssh://git@github.com/kaimast/open-lambda-protocol.git)",
+ "open-lambda-protocol 0.1.0 (git+ssh://git@github.com/kaimast/open-lambda-protocol.git?branch=main)",
  "schema",
  "serde",
 ]
@@ -256,14 +256,14 @@ checksum = "d39cd93900197114fa1fcb7ae84ca742095eed9442088988ae74fa744e930e77"
 dependencies = [
  "cfg-if",
  "libc",
- "wasi",
+ "wasi 0.10.2+wasi-snapshot-preview1",
 ]
 
 [[package]]
 name = "h2"
-version = "0.3.11"
+version = "0.3.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9f1f717ddc7b2ba36df7e871fd88db79326551d3d6f1fc406fbfd28b582ff8e"
+checksum = "62eeb471aa3e3c9197aa4bfeabfe02982f6dc96f750486c0bb0009ac58b26d2b"
 dependencies = [
  "bytes",
  "fnv",
@@ -411,7 +411,7 @@ dependencies = [
 [[package]]
 name = "lambda-store-client"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git#232c53e4ce660868eb9b43ea96635a3510ab0a78"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git#5725784fb687355ae9f38d607ab0e519aae92033"
 dependencies = [
  "bincode",
  "cfg-if",
@@ -431,7 +431,7 @@ dependencies = [
 [[package]]
 name = "lambda-store-utils"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git#232c53e4ce660868eb9b43ea96635a3510ab0a78"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git#5725784fb687355ae9f38d607ab0e519aae92033"
 dependencies = [
  "bincode",
  "clap",
@@ -500,14 +500,15 @@ checksum = "2a60c7ce501c71e03a9c9c0d35b861413ae925bd979cc7a4e30d060069aaac8d"
 
 [[package]]
 name = "mio"
-version = "0.8.0"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba272f85fa0b41fc91872be579b3bbe0f56b792aa361a380eb669469f68dafb2"
+checksum = "7ba42135c6a5917b9db9cd7b293e5409e1c6b041e6f9825e92e55a894c63b6f8"
 dependencies = [
  "libc",
  "log",
  "miow",
  "ntapi",
+ "wasi 0.11.0+wasi-snapshot-preview1",
  "winapi",
 ]
 
@@ -548,12 +549,11 @@ checksum = "87f3e037eac156d1775da914196f0f37741a274155e34a0b7e427c35d2a2ecb9"
 [[package]]
 name = "open-lambda-protocol"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git#232c53e4ce660868eb9b43ea96635a3510ab0a78"
+source = "git+ssh://git@github.com/kaimast/open-lambda-protocol.git?branch=main#6e0afd0447b7141d02518ada9d363d6af8967814"
 dependencies = [
  "bincode",
  "byte-slice-cast",
  "derive_more",
- "rand",
  "schema",
  "serde",
  "serde_bytes",
@@ -562,11 +562,12 @@ dependencies = [
 [[package]]
 name = "open-lambda-protocol"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/open-lambda-protocol.git#6e0afd0447b7141d02518ada9d363d6af8967814"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git#5725784fb687355ae9f38d607ab0e519aae92033"
 dependencies = [
  "bincode",
  "byte-slice-cast",
  "derive_more",
+ "rand",
  "schema",
  "serde",
  "serde_bytes",
@@ -977,9 +978,9 @@ checksum = "360dfd1d6d30e05fda32ace2c8c70e9c0a9da713275777f5a4dbb8a1893930c6"
 
 [[package]]
 name = "tracing"
-version = "0.1.31"
+version = "0.1.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6c650a8ef0cd2dd93736f033d21cbd1224c5a967aa0c258d00fcf7dafef9b9f"
+checksum = "4a1bdf54a7c28a2bbf701e1d2233f6c77f473486b94bee4f9678da5a148dca7f"
 dependencies = [
  "cfg-if",
  "pin-project-lite",
@@ -988,9 +989,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-core"
-version = "0.1.22"
+version = "0.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "03cfcb51380632a72d3111cb8d3447a8d908e577d31beeac006f836383d29a23"
+checksum = "aa31669fa42c09c34d94d8165dd2012e8ff3c66aca50f3bb226b68f216f2706c"
 dependencies = [
  "lazy_static",
 ]
@@ -1055,6 +1056,12 @@ name = "wasi"
 version = "0.10.2+wasi-snapshot-preview1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd6fbd9a79829dd1ad0cc20627bf1ed606756a7f77edff7b66b7064f9cb327c6"
+
+[[package]]
+name = "wasi"
+version = "0.11.0+wasi-snapshot-preview1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c8d87e72b64a3b4db28d11ce29237c246188f4f51057d65a7eab63b7987e423"
 
 [[package]]
 name = "wasm-bindgen"

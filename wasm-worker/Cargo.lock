@@ -739,7 +739,7 @@ dependencies = [
 [[package]]
 name = "lambda-store-client"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git?branch=main#00a2d463dd126859642fb693d5242a5b87dca714"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git?branch=main#5725784fb687355ae9f38d607ab0e519aae92033"
 dependencies = [
  "bincode",
  "cfg-if",
@@ -759,7 +759,7 @@ dependencies = [
 [[package]]
 name = "lambda-store-utils"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git?branch=main#00a2d463dd126859642fb693d5242a5b87dca714"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git?branch=main#5725784fb687355ae9f38d607ab0e519aae92033"
 dependencies = [
  "bincode",
  "clap",
@@ -982,7 +982,7 @@ checksum = "87f3e037eac156d1775da914196f0f37741a274155e34a0b7e427c35d2a2ecb9"
 [[package]]
 name = "open-lambda-protocol"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git?branch=main#00a2d463dd126859642fb693d5242a5b87dca714"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git?branch=main#5725784fb687355ae9f38d607ab0e519aae92033"
 dependencies = [
  "bincode",
  "byte-slice-cast",
@@ -1733,6 +1733,7 @@ dependencies = [
  "open-lambda-protocol",
  "percent-encoding",
  "pretty_env_logger",
+ "rand",
  "ron",
  "serde",
  "serde_bytes",

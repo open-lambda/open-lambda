@@ -28,6 +28,7 @@ open-lambda-protocol = { git="ssh://git@github.com/kaimast/lambda-store.git",def
 lambda-store-client = { git="ssh://git@github.com/kaimast/lambda-store.git", default-features=false, branch="main", features=[] }
 lambda-store-utils = { git="ssh://git@github.com/kaimast/lambda-store.git", default-features=false, branch="main", features=[] }
 async-wormhole = { git="https://github.com/lunatic-solutions/async-wormhole.git" }
+rand = "0.8"
 
 [features]
 default = []

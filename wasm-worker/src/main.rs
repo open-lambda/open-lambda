@@ -125,6 +125,7 @@ async fn execute_function(
                 "ol_args",
                 bindings::args::get_imports(&*functions.store, args.clone(), result.clone()),
             );
+            import_object.register("ol_ipc", bindings::ipc::get_imports(&*functions.store, db.clone()));
             import_object.register("ol_log", bindings::log::get_imports(&*functions.store));
             import_object.register(
                 "ol_storage",
