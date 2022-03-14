@@ -17,7 +17,7 @@ from collections import OrderedDict
 from subprocess import Popen
 from contextlib import contextmanager
 
-from api import OpenLambda
+from open_lambda import OpenLambda
 from helper import Datastore
 import lambdastore
 

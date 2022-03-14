@@ -56,6 +56,9 @@ imgs/lambda: $(LAMBDA_FILES)
 	docker build -t lambda lambda
 	touch imgs/lambda
 
+install-python-bindings:
+	cd scripts && python setup.py install
+
 check-runtime:
 	cd lambda/runtimes/rust && ${CARGO} check
 

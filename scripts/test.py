@@ -20,7 +20,7 @@ from multiprocessing import Pool
 
 from helper import ContainerWorker, WasmWorker, prepare_open_lambda, setup_config, get_ol_stats, get_worker_output, get_current_config, TestConfContext
 
-from api import OpenLambda
+from open_lambda import OpenLambda
 
 # These will be set by argparse in main()
 TEST_FILTER = []

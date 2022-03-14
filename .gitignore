@@ -79,4 +79,8 @@ lambda/runtimes/rust/target
 bench-results.csv
 bench-results.pdf
 
+scripts/build
+scripts/dist
+scripts/open_lambda.egg-info
+
 *.lsm
