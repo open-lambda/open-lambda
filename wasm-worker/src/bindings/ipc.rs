@@ -80,8 +80,6 @@ fn batch_call(
                 .build()
                 .unwrap();
 
-            println!("{uri}");
-
             let request = Request::builder()
                 .header("User-Agent", "open-lambda-wasm/1.0")
                 .method("POST")
