@@ -21,13 +21,14 @@ use clap::Parser;
 
 use async_wormhole::stack::Stack;
 
+use lambda_store_client::Client as Database;
 use lambda_store_utils::WasmCompilerType;
 use open_lambda_protocol::ObjectId;
 
 use wasmer::{ImportObject, Instance};
 
 static mut FUNCTION_MGR: Option<Arc<FunctionManager>> = None;
-static mut LS_ADDRESS: Option<String> = None;
+static mut LAMBDA_STORE: Option<Arc<Database>> = None;
 
 #[derive(Parser)]
 #[clap(rename_all = "snake-case")]
@@ -93,9 +94,12 @@ async fn main() {
 
     load_functions(&args, &function_mgr).await;
 
+    let db = lambda_store_client::create_client(&args.coordinator_address)
+        .await.expect("Failed to create lambda store client");
+
     unsafe {
         FUNCTION_MGR = Some(function_mgr);
-        LS_ADDRESS = Some(args.coordinator_address);
+        LAMBDA_STORE = Some(Arc::new(db));
     }
 
     let make_service = make_service_fn(async move |_| {
@@ -142,11 +146,11 @@ async fn main() {
             }
 
             let function_mgr = unsafe { FUNCTION_MGR.as_ref().unwrap().clone() };
-            let ls_addr = unsafe { LS_ADDRESS.as_ref().unwrap().clone() };
+            let db = unsafe { LAMBDA_STORE.as_ref().unwrap().clone() };
 
             if method == Method::POST && path.len() == 2 && path[0] == "run_on" {
                 execute_function(
-                    worker_addr, &ls_addr,
+                    worker_addr, db,
                     object_id.expect("No object id given"),
                     &path.pop().unwrap(),
                     args,
@@ -172,17 +176,12 @@ async fn main() {
 
 async fn execute_function(
     worker_addr: SocketAddr,
-    ls_addr: &str,
+    db: Arc<Database>,
     object_id: ObjectId,
     name: &str,
     args: Vec<u8>,
     function_mgr: Arc<FunctionManager>,
 ) -> Result<Response<Body>> {
-    let db = Arc::new(
-        lambda_store_client::create_client(&ls_addr)
-            .await
-            .expect("Failed to set up client"),
-    );
     let object = db.get_object(object_id).await.expect("No such object");
 
     let functions = function_mgr
@@ -249,7 +248,6 @@ async fn execute_function(
                 .body(body)
                 .unwrap();
 
-            db.close().await;
             return Ok(response);
         }
     }
