@@ -249,6 +249,7 @@ async fn execute_function(
                 .body(body)
                 .unwrap();
 
+            db.close().await;
             return Ok(response);
         }
     }
