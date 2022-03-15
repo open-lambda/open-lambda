@@ -1,6 +1,6 @@
 ''' OpenLambda's Python API '''
 
-import requests
+from requests import Session
 import json as pyjson
 
 class OpenLambda:
@@ -8,10 +8,11 @@ class OpenLambda:
 
     def __init__(self, address = "localhost:5000"):
         self._address = address
+        self._session = Session()
 
     def _post(self, path, data = None):
         ''' Issues a _post request to the OL worker '''
-        return requests.post(f'http://{self._address}/{path}', pyjson.dumps(data))
+        return self._session.post(f'http://{self._address}/{path}', pyjson.dumps(data))
 
     def run(self, fn_name, args, json=True):
         ''' Execute a serverless function '''
@@ -27,7 +28,7 @@ class OpenLambda:
     def run_on(self, object_id, fn_name, args, json=True):
         ''' Execute a serverless function on a LambdaObject '''
 
-        req = requests.post(f'http://{self._address}/run_on/{fn_name}', pyjson.dumps(args), params={'object_id': object_id})
+        req = self._session.post(f'http://{self._address}/run_on/{fn_name}', pyjson.dumps(args), params={'object_id': object_id})
         self._check_status_code(req, "run_on")
 
         if json:
@@ -57,7 +58,7 @@ class OpenLambda:
     def get_statistics(self):
         ''' Returns stats of the OpenLambda server '''
 
-        req = requests.get(f"http://{self._address}/stats")
+        req = self._session.get(f"http://{self._address}/stats")
         self._check_status_code(req, "get_statistics")
         return req.json()
 
@@ -68,5 +69,5 @@ class OpenLambda:
 
     def check_status(self):
         ''' Checks the status of the OpenLambda server '''
-        req = requests.get(f"http://{self._address}/status")
+        req = self._session.get(f"http://{self._address}/status")
         self._check_status_code(req, "check_status")
