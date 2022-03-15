@@ -19,6 +19,7 @@ wasmer-engine-dylib = { git="ssh://git@github.com/kaimast/wasmer.git", branch="z
 wasmer-engine = { git="ssh://git@github.com/kaimast/wasmer.git", branch="zygote" }
 wasmer-vm = { git="ssh://git@github.com/kaimast/wasmer.git", branch="zygote" }
 percent-encoding = "2"
+lazy_static = "1"
 pretty_env_logger = { version="0.4" }
 log = "0.4"
 dashmap = "4"

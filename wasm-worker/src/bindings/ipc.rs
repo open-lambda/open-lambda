@@ -9,7 +9,9 @@ use serde_bytes::ByteBuf;
 
 use lambda_store_client::Client as Database;
 
-use hyper::Request;
+use hyper::{Body, Request};
+use hyper::client::Client as HttpClient;
+use hyper::client::connect::HttpConnector;
 
 use open_lambda_protocol::{BatchCallData, BatchCallResult};
 
@@ -33,11 +35,13 @@ fn batch_call(
 ) -> i64 {
     log::trace!("Got `batch_call` call");
 
-    // Right now, for pachinko, this assumes that the calls are child calls
-    // If we ever introduce parent, or sibling, calls things might need to be changed
-
     let memory = env.memory.get_ref().unwrap();
     let yielder = env.yielder.get_ref().unwrap().get();
+
+    // This sets up a connection pool that will be reused
+    lazy_static::lazy_static! {
+        static ref HTTP_CLIENT: HttpClient<HttpConnector, Body> = HttpClient::new();
+    };
 
     let mut call_data: BatchCallData = unsafe {
         let ptr = memory
@@ -87,8 +91,7 @@ fn batch_call(
                 .body(args.into())
                 .unwrap();
 
-            let client = hyper::client::Client::new();
-            let response = match client.request(request).await {
+            let response = match HTTP_CLIENT.request(request).await {
                 Ok(resp) => resp,
                 Err(err) => {
                     panic!("Internal call to {} failed: {err}", env.addr);

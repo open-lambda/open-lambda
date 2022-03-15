@@ -1733,6 +1733,7 @@ dependencies = [
  "hyper",
  "lambda-store-client",
  "lambda-store-utils",
+ "lazy_static",
  "log",
  "open-lambda-protocol",
  "percent-encoding",
