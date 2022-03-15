@@ -1,23 +1,40 @@
 use wasmer::{Array, Exports, Function, LazyInit, Memory, NativeFunc, Store, WasmPtr, WasmerEnv};
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+
+use parking_lot::Mutex;
+
+pub type ResultHandle = Arc<Mutex<Option<Vec<u8>>>>;
 
 #[derive(Clone, WasmerEnv)]
-struct ArgData {
+pub struct ArgsEnv {
     #[wasmer(export)]
     memory: LazyInit<Memory>,
     #[wasmer(export(name = "internal_alloc_buffer"))]
     allocate: LazyInit<NativeFunc<u32, i64>>,
-    args: Arc<Vec<u8>>,
-    result: Arc<Mutex<Option<Vec<u8>>>>,
+    args: Arc<Mutex<Arc<Vec<u8>>>>,
+    result: Arc<Mutex<ResultHandle>>,
 }
 
-fn get_args(env: &ArgData, len_out: WasmPtr<u64>) -> i64 {
+impl ArgsEnv {
+    pub fn set_args(&self, args: Arc<Vec<u8>>) {
+        let mut lock = self.args.lock();
+        *lock = args;
+    }
+
+    pub fn set_result_handle(&self, new_hdl: ResultHandle) {
+        let mut result = self.result.lock();
+        *result = new_hdl;
+    }
+}
+
+fn get_args(env: &ArgsEnv, len_out: WasmPtr<u64>) -> i64 {
     log::trace!("Got `get_args` call");
 
     let memory = env.memory.get_ref().unwrap();
 
-    let args = &env.args;
+    let args_lock = env.args.lock();
+    let args = &*args_lock;
 
     let offset = env
         .allocate
@@ -43,10 +60,13 @@ fn get_args(env: &ArgData, len_out: WasmPtr<u64>) -> i64 {
     offset
 }
 
-fn set_result(env: &ArgData, buf_ptr: WasmPtr<u8, Array>, buf_len: u32) {
+fn set_result(env: &ArgsEnv, buf_ptr: WasmPtr<u8, Array>, buf_len: u32) {
     log::debug!("Got result of size {}", buf_len);
 
-    let mut result = env.result.lock().unwrap();
+    let result_outer_lock = env.result.lock();
+    let result_outer= &*result_outer_lock;
+
+    let mut result = result_outer.lock();
 
     if result.is_some() {
         panic!("Result was already set");
@@ -72,11 +92,11 @@ fn get_random_value() -> u64 {
 pub fn get_imports(
     store: &Store,
     args: Arc<Vec<u8>>,
-    result: Arc<Mutex<Option<Vec<u8>>>>,
-) -> Exports {
-    let arg_data = ArgData {
-        args,
-        result,
+    result: ResultHandle,
+) -> (Exports, ArgsEnv) {
+    let args_env = ArgsEnv {
+        args: Arc::new(Mutex::new(args)),
+        result: Arc::new(Mutex::new(result)),
         memory: Default::default(),
         allocate: Default::default(),
     };
@@ -84,16 +104,16 @@ pub fn get_imports(
     let mut ns = Exports::new();
     ns.insert(
         "set_result",
-        Function::new_native_with_env(store, arg_data.clone(), set_result),
+        Function::new_native_with_env(store, args_env.clone(), set_result),
     );
     ns.insert(
         "get_args",
-        Function::new_native_with_env(store, arg_data, get_args),
+        Function::new_native_with_env(store, args_env.clone(), get_args),
     );
     ns.insert(
         "get_random_value",
         Function::new_native(store, get_random_value),
     );
 
-    ns
+    (ns, args_env)
 }

@@ -79,7 +79,7 @@ fn batch_call(
 
             let uri = hyper::Uri::builder()
                 .scheme("http")
-                .authority(format!("{}:{}", env.addr.ip(), env.addr.port()))
+                .authority(format!("{}", env.addr))
                 .path_and_query(format!("/run_on/{}?object_id={oid_hex}", metadata.name))
                 .build()
                 .unwrap();
@@ -139,7 +139,7 @@ fn batch_call(
     offset
 }
 
-pub fn get_imports(store: &Store, addr: SocketAddr, database: Arc<Database>) -> Exports {
+pub fn get_imports(store: &Store, addr: SocketAddr, database: Arc<Database>) -> (Exports, IpcEnv) {
     let mut ns = Exports::new();
     let env = IpcEnv {
         memory: Default::default(),
@@ -151,8 +151,8 @@ pub fn get_imports(store: &Store, addr: SocketAddr, database: Arc<Database>) -> 
 
     ns.insert(
         "batch_call",
-        Function::new_native_with_env(store, env, batch_call),
+        Function::new_native_with_env(store, env.clone(), batch_call),
     );
 
-    ns
+    (ns, env)
 }

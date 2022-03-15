@@ -15,6 +15,8 @@ use percent_encoding::percent_decode_str;
 mod functions;
 use functions::FunctionManager;
 
+use parking_lot::Mutex;
+
 mod bindings;
 
 use std::sync::Arc;
@@ -26,8 +28,6 @@ use async_wormhole::stack::Stack;
 use lambda_store_client::Client as Database;
 use lambda_store_utils::WasmCompilerType;
 use open_lambda_protocol::ObjectId;
-
-use wasmer::{ImportObject, Instance};
 
 static mut FUNCTION_MGR: Option<Arc<FunctionManager>> = None;
 static mut LAMBDA_STORE: Option<Arc<Database>> = None;
@@ -207,37 +207,22 @@ async fn execute_function(
 ) -> Result<Response<Body>> {
     let object = db.get_object(object_id).await.expect("No such object");
 
+    let args = Arc::new(args);
+
     let functions = function_mgr
         .get_object_functions(&object.get_type_id())
         .await
         .expect("Binary for object type is missing");
-    let args = Arc::new(args);
 
     loop {
-        let result = Arc::new(std::sync::Mutex::new(None));
-        let storage = bindings::storage::StorageEnv::new(db.clone());
+        let result = Arc::new(Mutex::new(None));
 
-        let instance = {
-            let mut import_object = ImportObject::new();
-            import_object.register(
-                "ol_args",
-                bindings::args::get_imports(&*functions.store, args.clone(), result.clone()),
-            );
-            import_object.register(
-                "ol_ipc",
-                bindings::ipc::get_imports(&*functions.store, worker_addr, db.clone()),
-            );
-            import_object.register("ol_log", bindings::log::get_imports(&*functions.store));
-            import_object.register(
-                "ol_storage",
-                bindings::storage::get_imports(&*functions.store, storage.clone()),
-            );
+        let txn = Arc::new(Mutex::new(Some(db.begin_transaction())));
 
-            Instance::new(&functions.module, &import_object).unwrap()
-        };
+        let instance = functions.get_idle_instance(db.clone(), txn.clone(), args.clone(), worker_addr, result.clone());
 
         let stack = async_wormhole::stack::EightMbStack::new().unwrap();
-        if let (Err(e), _) = instance
+        if let (Err(e), _) = instance.get()
             .call_with_stack(name, stack, vec![object_id.into_int()])
             .await
         {
@@ -257,8 +242,10 @@ async fn execute_function(
             }
         };
 
-        if storage.commit().await {
-            let result = result.lock().unwrap().take();
+        let txn = txn.lock().take().unwrap();
+
+        if txn.commit().await.is_ok() {
+            let result = result.lock().take();
 
             let body = if let Some(result) = result {
                 result.into()
@@ -271,7 +258,10 @@ async fn execute_function(
                 .body(body)
                 .unwrap();
 
+            instance.mark_idle();
             return Ok(response);
+        } else {
+            instance.discard();
         }
     }
 }

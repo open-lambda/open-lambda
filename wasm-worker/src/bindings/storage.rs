@@ -2,12 +2,15 @@ use wasmer::{
     Array, Exports, Function, LazyInit, Memory, NativeFunc, Store, WasmPtr, WasmerEnv, Yielder,
 };
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use parking_lot::Mutex;
 
 use lambda_store_client::Client as Database;
 use lambda_store_client::Transaction;
 
 use open_lambda_protocol::DataOperation;
+
+pub type TransactionHandle = Arc<Mutex<Option<Transaction>>>;
 
 #[derive(Clone, WasmerEnv)]
 pub struct StorageEnv {
@@ -16,34 +19,24 @@ pub struct StorageEnv {
     #[wasmer(export(name = "internal_alloc_buffer"))]
     allocate: LazyInit<NativeFunc<u32, i64>>,
     database: Arc<Database>,
-    transaction: Arc<Mutex<Option<Transaction>>>,
+    transaction: Arc<Mutex<TransactionHandle>>,
     #[wasmer(yielder)]
     yielder: LazyInit<Yielder>,
 }
 
 impl StorageEnv {
-    pub fn new(database: Arc<Database>) -> Self {
+    pub fn new(database: Arc<Database>, transaction: TransactionHandle) -> Self {
         Self {
-            database,
+            database, transaction: Arc::new(Mutex::new(transaction)),
             memory: Default::default(),
             allocate: Default::default(),
-            transaction: Default::default(),
             yielder: Default::default(),
         }
     }
 
-    pub async fn commit(&self) -> bool {
-        let tx = {
-            let mut tx_lock = self.transaction.lock().unwrap();
-            if let Some(tx) = tx_lock.take() {
-                tx
-            } else {
-                // Nothing to commit
-                return true;
-            }
-        };
-
-        tx.commit().await.is_ok()
+    pub fn set_transaction(&self, transaction: Arc<Mutex<Option<Transaction>>>) {
+        let mut lock = self.transaction.lock();
+        *lock = transaction;
     }
 }
 
@@ -86,13 +79,9 @@ fn execute_operation(
     len_out: WasmPtr<u64>,
 ) -> i64 {
     let memory = env.memory.get_ref().unwrap();
-    let mut tx_lock = env.transaction.lock().unwrap();
-
-    if tx_lock.is_none() {
-        *tx_lock = Some(env.database.begin_transaction())
-    }
-
-    let tx = tx_lock.as_mut().unwrap();
+    let txn_outer = env.transaction.lock();
+    let mut txn_lock = txn_outer.lock();
+    let txn = txn_lock.as_mut().unwrap();
 
     let op_slice = unsafe {
         let offset = op_data.offset();
@@ -105,7 +94,7 @@ fn execute_operation(
     let op: DataOperation = bincode::deserialize(op_slice).unwrap();
 
     log::debug!("Executing operation: {op:?}");
-    let result = yielder.async_suspend(async move { tx.execute_operation(op).await });
+    let result =  yielder.async_suspend(async move { txn.execute_operation(op).await });
 
     log::debug!("Op result is: {result:?}");
 
@@ -131,16 +120,18 @@ fn execute_operation(
     offset
 }
 
-pub fn get_imports(store: &Store, env: StorageEnv) -> Exports {
+pub fn get_imports(store: &Store, database: Arc<Database>, transaction: Arc<Mutex<Option<Transaction>>>) -> (Exports, StorageEnv) {
+    let env = StorageEnv::new(database, transaction);
     let mut ns = Exports::new();
+
     ns.insert(
         "get_configuration",
         Function::new_native_with_env(store, env.clone(), get_configuration),
     );
     ns.insert(
         "execute_operation",
-        Function::new_native_with_env(store, env, execute_operation),
+        Function::new_native_with_env(store, env.clone(), execute_operation),
     );
 
-    ns
+    (ns, env)
 }

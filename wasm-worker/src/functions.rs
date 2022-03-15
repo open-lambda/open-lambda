@@ -4,22 +4,147 @@ use std::fs;
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::net::SocketAddr;
+use std::sync::atomic::{AtomicU64, Ordering};
 
+use lambda_store_client::Client as Database;
 use lambda_store_utils::WasmCompilerType;
+
 use open_lambda_protocol::ObjectTypeId;
 
-use wasmer::{BaseTunables, Module, Pages, Store};
+use parking_lot::Mutex;
+
+use wasmer::{BaseTunables, Instance, ImportObject, Module, Pages, Store};
 use wasmer_compiler_cranelift::Cranelift;
 use wasmer_compiler_singlepass::Singlepass;
 use wasmer_engine::Engine;
 use wasmer_engine_dylib::Dylib as NativeEngine;
 
+use crate::bindings::{
+    self,
+    args::{ArgsEnv, ResultHandle},
+    ipc::IpcEnv,
+    storage::{StorageEnv, TransactionHandle},
+};
+
 #[cfg(feature = "llvm-backend")]
 use wasmer_compiler_llvm::LLVM;
 
+const MAX_IDLE_INSTANCES: usize = 20;
+
+type IdleInstancesList = Mutex<Vec<InstanceData>>;
+
 pub struct ObjectFunctions {
-    pub store: Arc<Store>,
-    pub module: Module,
+    module: Module,
+    next_instance_id: Arc<AtomicU64>,
+    store: Arc<Store>,
+    idle_list: Arc<IdleInstancesList>,
+}
+
+struct InstanceData {
+    identifier: u64,
+    instance: Instance,
+    args_env: ArgsEnv,
+    storage_env: StorageEnv,
+    #[ allow(dead_code) ]
+    ipc_env: IpcEnv,
+}
+
+pub struct InstanceHandle {
+    idle_list: Arc<IdleInstancesList>,
+    data: InstanceData,
+}
+
+impl ObjectFunctions {
+    pub fn get_idle_instance(
+        &self,
+        database: Arc<Database>,
+        transaction: TransactionHandle,
+        args: Arc<Vec<u8>>,
+        addr: SocketAddr,
+        result_hdl: ResultHandle,
+    ) -> InstanceHandle {
+        {
+            if let Some(data) = self.idle_list.lock().pop() {
+                log::trace!("Reusing WASM instance with id={}", data.identifier);
+
+                data.args_env.set_args(args);
+                data.args_env.set_result_handle(result_hdl);
+                data.storage_env.set_transaction(transaction);
+
+                return InstanceHandle {
+                    idle_list: self.idle_list.clone(),
+                    data,
+                };
+            }
+        }
+
+        let identifier = self.next_instance_id.fetch_add(1, Ordering::SeqCst);
+
+        log::trace!("Creating new WASM instance with id={identifier}");
+
+        let mut import_object = ImportObject::new();
+
+        let (args_imports, args_env) = bindings::args::get_imports(&*self.store, args, result_hdl);
+        let log_imports = bindings::log::get_imports(&*self.store);
+        let (storage_imports, storage_env) = bindings::storage::get_imports(
+            &*self.store,
+            database.clone(),
+            transaction.clone(),
+        );
+        let (ipc_imports, ipc_env) = bindings::ipc::get_imports(&*self.store, addr, database.clone());
+
+        import_object.register("ol_args", args_imports);
+        import_object.register("ol_log", log_imports);
+        import_object.register("ol_storage", storage_imports);
+        import_object.register("ol_ipc", ipc_imports);
+
+        let instance = Instance::new(&self.module, &import_object)
+            .expect("failed to create instance");
+
+        let data = InstanceData {
+            identifier,
+            instance,
+            storage_env,
+            args_env,
+            ipc_env,
+        };
+
+        InstanceHandle {
+            data,
+            idle_list: self.idle_list.clone(),
+        }
+    }
+}
+
+impl InstanceHandle {
+    pub fn get(&self) -> &Instance {
+        &self.data.instance
+    }
+
+    pub fn mark_idle(self) {
+        let mut idle_list = self.idle_list.lock();
+
+        if idle_list.len() < MAX_IDLE_INSTANCES {
+            log::trace!(
+                "Putting instance with id={} back into idle list",
+                self.data.identifier
+            );
+            idle_list.push(self.data);
+        } else {
+            log::trace!(
+                "Discarding instance with id={}; idle list is already full",
+                self.data.identifier
+            );
+        }
+    }
+
+    pub fn discard(self) {
+        log::trace!(
+            "Discarding instance with id={} as requested",
+            self.data.identifier
+        );
+    }
 }
 
 pub struct FunctionManager {
@@ -162,7 +287,11 @@ impl FunctionManager {
             module
         };
 
-        let functions = Arc::new(ObjectFunctions { store, module });
+        let functions = Arc::new(ObjectFunctions {
+            next_instance_id: Arc::new(AtomicU64::new(1)),
+            idle_list: Default::default(),
+            store, module
+        });
         self.functions.insert(object_type, functions);
     }
 }
