@@ -88,10 +88,15 @@ fn batch_call(
                 .unwrap();
 
             let client = hyper::client::Client::new();
-            let response = client.request(request).await.expect("Request failed");
+            let response = match client.request(request).await {
+                Ok(resp) => resp,
+                Err(err) => {
+                    panic!("Internal call to {} failed: {err}", env.addr);
+                }
+            };
 
             if !response.status().is_success() {
-                panic!("Request failed");
+                panic!("Request was unsuccessful. Go status code: {}", response.status());
             }
 
             let buf = hyper::body::to_bytes(response).await.unwrap();
