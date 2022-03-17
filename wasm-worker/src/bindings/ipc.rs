@@ -9,9 +9,9 @@ use serde_bytes::ByteBuf;
 
 use lambda_store_client::Client as Database;
 
-use hyper::{Body, Request};
-use hyper::client::Client as HttpClient;
 use hyper::client::connect::HttpConnector;
+use hyper::client::Client as HttpClient;
+use hyper::{Body, Request};
 
 use open_lambda_protocol::{BatchCallData, BatchCallResult};
 
@@ -43,7 +43,7 @@ fn batch_call(
         static ref HTTP_CLIENT: HttpClient<HttpConnector, Body> = HttpClient::new();
     };
 
-    let mut call_data: BatchCallData = unsafe {
+    let call_data: BatchCallData = unsafe {
         let ptr = memory
             .view::<u8>()
             .as_ptr()
@@ -56,7 +56,7 @@ fn batch_call(
 
     let mut results: BatchCallResult = vec![];
 
-    for (object_id, function_id, args) in call_data.drain(..) {
+    for (object_id, function_id, args) in call_data.into_iter() {
         let result = yielder.async_suspend(async move {
             let object_type = match env.database.get_object(object_id).await {
                 Ok(object) => object.get_object_type(),
@@ -99,7 +99,10 @@ fn batch_call(
             };
 
             if !response.status().is_success() {
-                panic!("Request was unsuccessful. Go status code: {}", response.status());
+                panic!(
+                    "Request was unsuccessful. Go status code: {}",
+                    response.status()
+                );
             }
 
             let buf = hyper::body::to_bytes(response).await.unwrap();

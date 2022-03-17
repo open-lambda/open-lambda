@@ -2,10 +2,10 @@ use dashmap::DashMap;
 
 use std::fs;
 use std::io::{Read, Write};
-use std::path::PathBuf;
-use std::sync::Arc;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
 use lambda_store_client::Client as Database;
 use lambda_store_utils::WasmCompilerType;
@@ -14,7 +14,7 @@ use open_lambda_protocol::ObjectTypeId;
 
 use parking_lot::Mutex;
 
-use wasmer::{BaseTunables, Instance, ImportObject, Module, Pages, Store};
+use wasmer::{BaseTunables, ImportObject, Instance, Module, Pages, Store};
 use wasmer_compiler_cranelift::Cranelift;
 use wasmer_compiler_singlepass::Singlepass;
 use wasmer_engine::Engine;
@@ -46,7 +46,7 @@ struct InstanceData {
     instance: Instance,
     args_env: ArgsEnv,
     storage_env: StorageEnv,
-    #[ allow(dead_code) ]
+    #[allow(dead_code)]
     ipc_env: IpcEnv,
 }
 
@@ -87,20 +87,18 @@ impl ObjectFunctions {
 
         let (args_imports, args_env) = bindings::args::get_imports(&*self.store, args, result_hdl);
         let log_imports = bindings::log::get_imports(&*self.store);
-        let (storage_imports, storage_env) = bindings::storage::get_imports(
-            &*self.store,
-            database.clone(),
-            transaction.clone(),
-        );
-        let (ipc_imports, ipc_env) = bindings::ipc::get_imports(&*self.store, addr, database.clone());
+        let (storage_imports, storage_env) =
+            bindings::storage::get_imports(&*self.store, database.clone(), transaction);
+        let (ipc_imports, ipc_env) =
+            bindings::ipc::get_imports(&*self.store, addr, database);
 
         import_object.register("ol_args", args_imports);
         import_object.register("ol_log", log_imports);
         import_object.register("ol_storage", storage_imports);
         import_object.register("ol_ipc", ipc_imports);
 
-        let instance = Instance::new(&self.module, &import_object)
-            .expect("failed to create instance");
+        let instance =
+            Instance::new(&self.module, &import_object).expect("failed to create instance");
 
         let data = InstanceData {
             identifier,
@@ -290,7 +288,8 @@ impl FunctionManager {
         let functions = Arc::new(ObjectFunctions {
             next_instance_id: Arc::new(AtomicU64::new(1)),
             idle_list: Default::default(),
-            store, module
+            store,
+            module,
         });
         self.functions.insert(object_type, functions);
     }

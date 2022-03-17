@@ -2,8 +2,8 @@ use wasmer::{
     Array, Exports, Function, LazyInit, Memory, NativeFunc, Store, WasmPtr, WasmerEnv, Yielder,
 };
 
-use std::sync::Arc;
 use parking_lot::Mutex;
+use std::sync::Arc;
 
 use lambda_store_client::Client as Database;
 use lambda_store_client::Transaction;
@@ -27,7 +27,8 @@ pub struct StorageEnv {
 impl StorageEnv {
     pub fn new(database: Arc<Database>, transaction: TransactionHandle) -> Self {
         Self {
-            database, transaction: Arc::new(Mutex::new(transaction)),
+            database,
+            transaction: Arc::new(Mutex::new(transaction)),
             memory: Default::default(),
             allocate: Default::default(),
             yielder: Default::default(),
@@ -94,7 +95,7 @@ fn execute_operation(
     let op: DataOperation = bincode::deserialize(op_slice).unwrap();
 
     log::debug!("Executing operation: {op:?}");
-    let result =  yielder.async_suspend(async move { txn.execute_operation(op).await });
+    let result = yielder.async_suspend(async move { txn.execute_operation(op).await });
 
     log::debug!("Op result is: {result:?}");
 
@@ -120,7 +121,11 @@ fn execute_operation(
     offset
 }
 
-pub fn get_imports(store: &Store, database: Arc<Database>, transaction: Arc<Mutex<Option<Transaction>>>) -> (Exports, StorageEnv) {
+pub fn get_imports(
+    store: &Store,
+    database: Arc<Database>,
+    transaction: Arc<Mutex<Option<Transaction>>>,
+) -> (Exports, StorageEnv) {
     let env = StorageEnv::new(database, transaction);
     let mut ns = Exports::new();
 

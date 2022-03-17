@@ -40,11 +40,11 @@ struct Args {
     #[clap(help = "Which compiler should be used to compile WebAssembly to native code?")]
     wasm_compiler: WasmCompilerType,
 
-    #[clap(long, short='c', default_value = "localhost")]
+    #[clap(long, short = 'c', default_value = "localhost")]
     #[clap(help = "What is the address of the lambda store coordinator?")]
     coordinator_address: String,
 
-    #[clap(long, short='l', default_value = "localhost:5000")]
+    #[clap(long, short = 'l', default_value = "localhost:5000")]
     #[clap(help = "What is the address to listen on for client requests?")]
     listen_address: String,
 }
@@ -87,7 +87,10 @@ async fn main() {
     let worker_addr: SocketAddr = match args.listen_address.to_socket_addrs() {
         Ok(mut addrs) => addrs.next().unwrap(),
         Err(err) => {
-            log::error!("Failed to parse listen address \"{}\": {err}", args.listen_address);
+            log::error!(
+                "Failed to parse listen address \"{}\": {err}",
+                args.listen_address
+            );
             return;
         }
     };
@@ -97,7 +100,8 @@ async fn main() {
     load_functions(&args, &function_mgr).await;
 
     let db = lambda_store_client::create_client(&args.coordinator_address)
-        .await.expect("Failed to create lambda store client");
+        .await
+        .expect("Failed to create lambda store client");
 
     unsafe {
         FUNCTION_MGR = Some(function_mgr);
@@ -152,7 +156,8 @@ async fn main() {
 
             if method == Method::POST && path.len() == 2 && path[0] == "run_on" {
                 execute_function(
-                    worker_addr, db,
+                    worker_addr,
+                    db,
                     object_id.expect("No object id given"),
                     &path.pop().unwrap(),
                     args,
@@ -219,10 +224,17 @@ async fn execute_function(
 
         let txn = Arc::new(Mutex::new(Some(db.begin_transaction())));
 
-        let instance = functions.get_idle_instance(db.clone(), txn.clone(), args.clone(), worker_addr, result.clone());
+        let instance = functions.get_idle_instance(
+            db.clone(),
+            txn.clone(),
+            args.clone(),
+            worker_addr,
+            result.clone(),
+        );
 
         let stack = async_wormhole::stack::EightMbStack::new().unwrap();
-        if let (Err(e), _) = instance.get()
+        if let (Err(e), _) = instance
+            .get()
             .call_with_stack(name, stack, vec![object_id.into_int()])
             .await
         {

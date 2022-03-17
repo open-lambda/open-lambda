@@ -64,7 +64,7 @@ fn set_result(env: &ArgsEnv, buf_ptr: WasmPtr<u8, Array>, buf_len: u32) {
     log::debug!("Got result of size {}", buf_len);
 
     let result_outer_lock = env.result.lock();
-    let result_outer= &*result_outer_lock;
+    let result_outer = &*result_outer_lock;
 
     let mut result = result_outer.lock();
 
@@ -89,11 +89,7 @@ fn get_random_value() -> u64 {
     rand::random()
 }
 
-pub fn get_imports(
-    store: &Store,
-    args: Arc<Vec<u8>>,
-    result: ResultHandle,
-) -> (Exports, ArgsEnv) {
+pub fn get_imports(store: &Store, args: Arc<Vec<u8>>, result: ResultHandle) -> (Exports, ArgsEnv) {
     let args_env = ArgsEnv {
         args: Arc::new(Mutex::new(args)),
         result: Arc::new(Mutex::new(result)),
