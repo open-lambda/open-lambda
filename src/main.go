@@ -425,6 +425,8 @@ func gcp_test(ctx *cli.Context) error {
 
 // main runs the admin tool
 func main() {
+	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
+
 	if c, err := docker.NewClientFromEnv(); err != nil {
 		log.Fatal("failed to get docker client: ", err)
 	} else {

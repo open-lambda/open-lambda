@@ -577,6 +577,8 @@ func (linst *LambdaInstance) Task() {
 	for {
 		// wait for a request (blocking) before making the
 		// Sandbox ready, or kill if we receive that signal
+
+		t := common.T0("LambdaInstance-WaitRequest")
 		var req *Invocation
 		select {
 		case req = <-f.instChan:
@@ -587,7 +589,9 @@ func (linst *LambdaInstance) Task() {
 			killed <- true
 			return
 		}
+		t.T1()
 
+		t = common.T0("LambdaInstance-WaitSandbox")
 		// if we have a sandbox, try unpausing it to see if it is still alive
 		if sb != nil {
 			// Unpause will often fail, because evictors
@@ -639,10 +643,12 @@ func (linst *LambdaInstance) Task() {
 				continue // wait for another request before retrying
 			}
 		}
+		t.T1()
 
 		// below here, we're guaranteed (1) sb != nil, (2) proxy != nil, (3) sb is unpaused
 
 		// serve until we incoming queue is empty
+		t = common.T0("LambdaInstance-ServeRequests")
 		for req != nil {
 			// /**
 			// Yuke's implementation on Timeout
@@ -697,6 +703,8 @@ func (linst *LambdaInstance) Task() {
 			f.printf("discard sandbox %s due to Pause error: %v", sb.ID(), err)
 			sb = nil
 		}
+
+		t.T1()
 	}
 }
 
