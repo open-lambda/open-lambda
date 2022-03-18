@@ -88,9 +88,9 @@ impl ObjectFunctions {
         let (args_imports, args_env) = bindings::args::get_imports(&*self.store, args, result_hdl);
         let log_imports = bindings::log::get_imports(&*self.store);
         let (storage_imports, storage_env) =
-            bindings::storage::get_imports(&*self.store, database.clone(), transaction);
+            bindings::storage::get_imports(&*self.store, database.clone(), transaction.clone());
         let (ipc_imports, ipc_env) =
-            bindings::ipc::get_imports(&*self.store, addr, database);
+            bindings::ipc::get_imports(&*self.store, addr, database, transaction);
 
         import_object.register("ol_args", args_imports);
         import_object.register("ol_log", log_imports);

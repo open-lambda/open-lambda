@@ -743,7 +743,7 @@ dependencies = [
 [[package]]
 name = "lambda-store-client"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git?branch=linearizable#1bbd6fc2491453e6fafdb2d100a2ab67e1bd6f51"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git?branch=linearizable#93aad907e6dd1cf8c94fc65392ae6a937e9f44fc"
 dependencies = [
  "bincode",
  "cfg-if",
@@ -763,7 +763,7 @@ dependencies = [
 [[package]]
 name = "lambda-store-utils"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git?branch=linearizable#1bbd6fc2491453e6fafdb2d100a2ab67e1bd6f51"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git?branch=linearizable#93aad907e6dd1cf8c94fc65392ae6a937e9f44fc"
 dependencies = [
  "bincode",
  "clap",
@@ -986,7 +986,7 @@ checksum = "87f3e037eac156d1775da914196f0f37741a274155e34a0b7e427c35d2a2ecb9"
 [[package]]
 name = "open-lambda-protocol"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git?branch=linearizable#1bbd6fc2491453e6fafdb2d100a2ab67e1bd6f51"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git?branch=linearizable#93aad907e6dd1cf8c94fc65392ae6a937e9f44fc"
 dependencies = [
  "bincode",
  "byte-slice-cast",
@@ -1135,9 +1135,9 @@ checksum = "a1d01941d82fa2ab50be1e79e6714289dd7cde78eba4c074bc5a4374f650dfe0"
 
 [[package]]
 name = "quote"
-version = "1.0.15"
+version = "1.0.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "864d3e96a899863136fc6e99f3d7cae289dafe43bf2c5ac19b70df7210c0a145"
+checksum = "b4af2ec4714533fcdf07e886f17025ace8b997b9ce51204ee69b6da831c3da57"
 dependencies = [
  "proc-macro2",
 ]

@@ -5,6 +5,8 @@ use wasmer::{
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use parking_lot::Mutex;
+
 use serde_bytes::ByteBuf;
 
 use lambda_store_client::Client as Database;
@@ -15,6 +17,8 @@ use hyper::{Body, Request};
 
 use open_lambda_protocol::{BatchCallData, BatchCallResult};
 
+use crate::bindings::storage::TransactionHandle;
+
 #[derive(Clone, WasmerEnv)]
 pub struct IpcEnv {
     #[wasmer(export)]
@@ -24,6 +28,7 @@ pub struct IpcEnv {
     #[wasmer(yielder)]
     yielder: LazyInit<Yielder>,
     database: Arc<Database>,
+    transaction: Arc<Mutex<TransactionHandle>>,
     addr: SocketAddr,
 }
 
@@ -37,6 +42,24 @@ fn batch_call(
 
     let memory = env.memory.get_ref().unwrap();
     let yielder = env.yielder.get_ref().unwrap().get();
+
+    // First commit the transaction to prevent deadlocks
+    // TODO we should have a way to enable "linearizable"-mode
+    {
+        let tx_outer_lock = env.transaction.lock();
+        let mut tx_lock = tx_outer_lock.lock();
+
+        let tx = tx_lock.take().expect("no transaction?");
+
+        let result = yielder.async_suspend(tx.commit());
+
+        if let Err(err) = result {
+            panic!("Transaction failed: {err}");
+        }
+
+        // Create a new transaction in case there is more
+        *tx_lock = Some(env.database.begin_transaction());
+    }
 
     // This sets up a connection pool that will be reused
     lazy_static::lazy_static! {
@@ -142,13 +165,19 @@ fn batch_call(
     offset
 }
 
-pub fn get_imports(store: &Store, addr: SocketAddr, database: Arc<Database>) -> (Exports, IpcEnv) {
+pub fn get_imports(
+    store: &Store,
+    addr: SocketAddr,
+    database: Arc<Database>,
+    transaction: TransactionHandle,
+) -> (Exports, IpcEnv) {
     let mut ns = Exports::new();
     let env = IpcEnv {
         memory: Default::default(),
         allocate: Default::default(),
         yielder: Default::default(),
         database,
+        transaction: Arc::new(Mutex::new(transaction)),
         addr,
     };
 
