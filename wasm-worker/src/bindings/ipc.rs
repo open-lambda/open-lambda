@@ -49,12 +49,12 @@ fn batch_call(
         let tx_outer_lock = env.transaction.lock();
         let mut tx_lock = tx_outer_lock.lock();
 
-        let tx = tx_lock.take().expect("no transaction?");
+        if let Some(tx) = tx_lock.take() {
+            let result = yielder.async_suspend(tx.commit());
 
-        let result = yielder.async_suspend(tx.commit());
-
-        if let Err(err) = result {
-            panic!("Transaction failed: {err}");
+            if let Err(err) = result {
+                panic!("Transaction failed: {err}");
+            }
         }
 
         // Create a new transaction in case there is more
