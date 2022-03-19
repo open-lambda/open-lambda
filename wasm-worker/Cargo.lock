@@ -105,12 +105,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4a45a46ab1f2412e53d3a0ade76ffad2025804294569aae387231a0cd6e0899"
 
 [[package]]
-name = "byte-slice-cast"
-version = "1.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87c5fdd0166095e1d463fc6cc01aa8ce547ad77a4e84d42eb6762b084e28067e"
-
-[[package]]
 name = "bytecheck"
 version = "0.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -262,9 +256,9 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-channel"
-version = "0.5.3"
+version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fdbfe11fe19ff083c48923cf179540e8cd0535903dc35e178a1fdeeb59aef51f"
+checksum = "5aaa7bd5fb665c6864b5f963dd9097905c54125909c7aa94c9e18507cdbe6c53"
 dependencies = [
  "cfg-if",
  "crossbeam-utils",
@@ -743,7 +737,7 @@ dependencies = [
 [[package]]
 name = "lambda-store-client"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git?branch=linearizable#93aad907e6dd1cf8c94fc65392ae6a937e9f44fc"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git?branch=linearizable#658b188f9657d0a0ab51e135b3832f8afd50284b"
 dependencies = [
  "bincode",
  "cfg-if",
@@ -763,7 +757,7 @@ dependencies = [
 [[package]]
 name = "lambda-store-utils"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git?branch=linearizable#93aad907e6dd1cf8c94fc65392ae6a937e9f44fc"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git?branch=linearizable#658b188f9657d0a0ab51e135b3832f8afd50284b"
 dependencies = [
  "bincode",
  "clap",
@@ -795,9 +789,9 @@ checksum = "884e2677b40cc8c339eaefcb701c32ef1fd2493d71118dc0ca4b6a736c93bd67"
 
 [[package]]
 name = "libc"
-version = "0.2.120"
+version = "0.2.121"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad5c14e80759d0939d013e6ca49930e59fc53dd8e5009132f76240c179380c09"
+checksum = "efaa7b300f3b5fe8eb6bf21ce3895e1751d9665086af2d64b42f19701015ff4f"
 
 [[package]]
 name = "libloading"
@@ -986,10 +980,9 @@ checksum = "87f3e037eac156d1775da914196f0f37741a274155e34a0b7e427c35d2a2ecb9"
 [[package]]
 name = "open-lambda-protocol"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git?branch=linearizable#93aad907e6dd1cf8c94fc65392ae6a937e9f44fc"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git?branch=linearizable#658b188f9657d0a0ab51e135b3832f8afd50284b"
 dependencies = [
  "bincode",
- "byte-slice-cast",
  "derive_more",
  "rand",
  "schema",
