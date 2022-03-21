@@ -144,7 +144,13 @@ func (cache *ImportCache) recursiveKill(node *ImportCacheNode) {
 
 // (1) find Zygote and (2) use it to try creating a new Sandbox
 func (cache *ImportCache) Create(childSandboxPool sandbox.SandboxPool, isLeaf bool, codeDir, scratchDir string, meta *sandbox.SandboxMeta) (sandbox.Sandbox, error) {
+	t := common.T0("ImportCache.Create")
+	defer t.T1()
+
+	t2 := common.T0("ImportCache.root.Lookup")
 	node := cache.root.Lookup(meta.Installs)
+	t2.T1()
+
 	if node == nil {
 		panic(fmt.Errorf("did not find Zygote; at least expected to find the root"))
 	}
@@ -152,13 +158,16 @@ func (cache *ImportCache) Create(childSandboxPool sandbox.SandboxPool, isLeaf bo
 	return cache.createChildSandboxFromNode(childSandboxPool, node, isLeaf, codeDir, scratchDir, meta)
 }
 
-// use getSandboxInNode to create a Zygote for the node (creating one
-// if necessary), then use that Zygote to create a new Sandbox.
+// use getSandboxInNode to get a Zygote Sandbox for the node (creating one
+// if necessary), then use that Zygote Sandbox to create a new Sandbox.
 //
 // the new Sandbox may either be for a Zygote, or a leaf Sandbox
 func (cache *ImportCache) createChildSandboxFromNode(
 	childSandboxPool sandbox.SandboxPool, node *ImportCacheNode, isLeaf bool,
 	codeDir, scratchDir string, meta *sandbox.SandboxMeta) (sandbox.Sandbox, error) {
+
+	t := common.T0("ImportCache.createChildSandboxFromNode")
+	defer t.T1()
 
 	// try twice, restarting parent Sandbox if it fails the first time
 	forceNew := false
@@ -168,6 +177,7 @@ func (cache *ImportCache) createChildSandboxFromNode(
 			return nil, err
 		}
 
+		t2 := common.T0("ImportCache.createChildSandboxFromNode:childSandboxPool.Create")
 		sb, err := childSandboxPool.Create(zygoteSB, isLeaf, codeDir, scratchDir, meta)
 		if err == nil {
 			if isLeaf {
@@ -176,6 +186,7 @@ func (cache *ImportCache) createChildSandboxFromNode(
 				atomic.AddInt64(&node.createNonleafChild, 1)
 			}
 		}
+		t2.T1()
 
 		// dec ref count
 		cache.putSandboxInNode(node, zygoteSB)
@@ -199,6 +210,9 @@ func (cache *ImportCache) createChildSandboxFromNode(
 // the Sandbox returned is guaranteed to be in Unpaused state.  After
 // use, caller must also call putSandboxInNode to release ref count
 func (cache *ImportCache) getSandboxInNode(node *ImportCacheNode, forceNew bool) (sb sandbox.Sandbox, isNew bool, err error) {
+	t := common.T0("ImportCache.getSandboxInNode")
+	defer t.T1()
+
 	node.mutex.Lock()
 	defer node.mutex.Unlock()
 
@@ -231,7 +245,12 @@ func (cache *ImportCache) getSandboxInNode(node *ImportCacheNode, forceNew bool)
 
 // decrease refs to SB, pausing if nobody else is still using it
 func (cache *ImportCache) putSandboxInNode(node *ImportCacheNode, sb sandbox.Sandbox) {
+	t := common.T0("ImportCache.putSandboxInNode")
+	defer t.T1()
+
+	t2 := common.T0("ImportCache.putSandboxInNode:Lock")
 	node.mutex.Lock()
+	t2.T1()
 	defer node.mutex.Unlock()
 
 	if node.sb != sb {
@@ -247,9 +266,11 @@ func (cache *ImportCache) putSandboxInNode(node *ImportCacheNode, sb sandbox.San
 	node.sbRefCount -= 1
 
 	if node.sbRefCount == 0 {
+		t2 := common.T0("ImportCache.putSandboxInNode:Pause")
 		if err := node.sb.Pause(); err != nil {
 			node.sb = nil
 		}
+		t2.T1()
 	}
 
 	if node.sbRefCount < 0 {

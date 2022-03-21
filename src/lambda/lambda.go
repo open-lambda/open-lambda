@@ -169,8 +169,47 @@ func (mgr *LambdaMgr) Debug() string {
 	return mgr.sbPool.DebugString() + "\n"
 }
 
+func (mgr *LambdaMgr) DumpStatsToLog() {
+	snapshot := common.SnapshotStats()
+
+	sec := func(name string) (float64) {
+		return float64(snapshot[name+".cnt"] * snapshot[name+".ms-avg"]) / 1000
+	}
+
+	time := func(indent int, name string, parent string) {
+		selftime := sec(name)
+		ptime := sec(parent)
+		tabs := strings.Repeat("\t", indent)
+		if ptime > 0 {
+			log.Printf("%s%s: %.3f (%.1f%%)", tabs, name, selftime, selftime/ptime*100)
+		} else {
+			log.Printf("%s%s: %.3f", tabs, name, selftime)
+		}
+	}
+
+	log.Printf("Request Profiling (cumulative seconds):")
+	time(0, "LambdaFunc.Invoke", "")
+
+	time(1, "LambdaInstance-WaitSandbox", "LambdaFunc.Invoke")
+	time(2, "LambdaInstance-WaitSandbox-Unpause", "LambdaInstance-WaitSandbox")
+	time(2, "LambdaInstance-WaitSandbox-NoImportCache", "LambdaInstance-WaitSandbox")
+	time(2, "ImportCache.Create", "LambdaInstance-WaitSandbox")
+	time(3, "ImportCache.root.Lookup", "ImportCache.Create")
+	time(3, "ImportCache.createChildSandboxFromNode", "ImportCache.Create")
+	time(4, "ImportCache.getSandboxInNode", "ImportCache.createChildSandboxFromNode")
+	time(4, "ImportCache.createChildSandboxFromNode:childSandboxPool.Create",
+		"ImportCache.createChildSandboxFromNode")
+	time(4, "ImportCache.putSandboxInNode", "ImportCache.createChildSandboxFromNode")
+	time(5, "ImportCache.putSandboxInNode:Lock", "ImportCache.putSandboxInNode")
+	time(5, "ImportCache.putSandboxInNode:Pause", "ImportCache.putSandboxInNode")
+	time(1, "LambdaInstance-ServeRequests", "LambdaFunc.Invoke")
+	time(2, "ServeHTTP", "LambdaInstance-ServeRequests")
+}
+
 func (mgr *LambdaMgr) Cleanup() {
 	mgr.mapMutex.Lock() // don't unlock, because this shouldn't be used anymore
+
+	mgr.DumpStatsToLog()
 
 	// HandlerPuller+PackagePuller requires no cleanup
 
@@ -578,7 +617,6 @@ func (linst *LambdaInstance) Task() {
 		// wait for a request (blocking) before making the
 		// Sandbox ready, or kill if we receive that signal
 
-		t := common.T0("LambdaInstance-WaitRequest")
 		var req *Invocation
 		select {
 		case req = <-f.instChan:
@@ -589,9 +627,8 @@ func (linst *LambdaInstance) Task() {
 			killed <- true
 			return
 		}
-		t.T1()
 
-		t = common.T0("LambdaInstance-WaitSandbox")
+		t := common.T0("LambdaInstance-WaitSandbox")
 		// if we have a sandbox, try unpausing it to see if it is still alive
 		if sb != nil {
 			// Unpause will often fail, because evictors
@@ -599,16 +636,18 @@ func (linst *LambdaInstance) Task() {
 			// sandboxes rather than inactive sandboxes.
 			// Thus, if this fails, we'll try to handle it
 			// by just creating a new sandbox.
+			t2 := common.T0("LambdaInstance-WaitSandbox-Unpause")
 			if err := sb.Unpause(); err != nil {
 				f.printf("discard sandbox %s due to Unpause error: %v", sb.ID(), err)
 				sb = nil
 			}
+			t2.T1()
+			
 		}
 
 		// if we don't already have a Sandbox, create one, and
 		// HTTP proxy over the channel
 		if sb == nil {
-			sb = nil
 			if f.lmgr.ImportCache != nil {
 				scratchDir := f.lmgr.scratchDirs.Make(f.name)
 
@@ -622,8 +661,10 @@ func (linst *LambdaInstance) Task() {
 
 			// import cache is either disabled or it failed
 			if sb == nil {
+				t2 := common.T0("LambdaInstance-WaitSandbox-NoImportCache")
 				scratchDir := f.lmgr.scratchDirs.Make(f.name)
 				sb, err = f.lmgr.sbPool.Create(nil, true, linst.codeDir, scratchDir, linst.meta)
+				t2.T1()
 			}
 
 			if err != nil {
@@ -650,37 +691,23 @@ func (linst *LambdaInstance) Task() {
 		// serve until we incoming queue is empty
 		t = common.T0("LambdaInstance-ServeRequests")
 		for req != nil {
-			// /**
-			// Yuke's implementation on Timeout
 			servehttp_complete := make(chan bool)
 			go func() {
-				t := common.T0("ServeHTTP")
+				t2 := common.T0("ServeHTTP")
 				proxy.ServeHTTP(req.w, req.r)
-				t.T1()
+				t2.T1()
 				req.execMs = int(t.Milliseconds)
 				f.doneChan <- req
 				servehttp_complete <- true
 			}()
 			select {
-			case <-servehttp_complete:
-			case <-time.After(5 * time.Second):
-				fmt.Println("ServeHTTP timeout")
-				killed := <-linst.killChan
+			case <- servehttp_complete:
+			case <- time.After(5 * time.Second):
+				log.Println("ServeHTTP timeout")
 				sb.Destroy()
-				killed <- true
-				return
+				sb = nil
+				break
 			}
-			// */
-
-			/**
-			// ask Sandbox to respond, via HTTP proxy
-			t := common.T0("ServeHTTP") // T0 records start time for ServeHTTP
-			// func (p *ReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request)
-			proxy.ServeHTTP(req.w, req.r)
-			t.T1()                           // record latency to end time
-			req.execMs = int(t.Milliseconds) // how many mil-sec did ServeHTTP take
-			f.doneChan <- req
-			**/
 
 			// check whether we should shutdown (non-blocking)
 			select {
@@ -699,9 +726,11 @@ func (linst *LambdaInstance) Task() {
 			}
 		}
 
-		if err := sb.Pause(); err != nil {
-			f.printf("discard sandbox %s due to Pause error: %v", sb.ID(), err)
-			sb = nil
+		if sb != nil {
+			if err := sb.Pause(); err != nil {
+				f.printf("discard sandbox %s due to Pause error: %v", sb.ID(), err)
+				sb = nil
+			}
 		}
 
 		t.T1()
