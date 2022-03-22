@@ -737,7 +737,7 @@ dependencies = [
 [[package]]
 name = "lambda-store-client"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git?branch=linearizable#658b188f9657d0a0ab51e135b3832f8afd50284b"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git?branch=experiments#402cd0b049cf1e78175844be01c07c06f94a17b3"
 dependencies = [
  "bincode",
  "cfg-if",
@@ -757,7 +757,7 @@ dependencies = [
 [[package]]
 name = "lambda-store-utils"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git?branch=linearizable#658b188f9657d0a0ab51e135b3832f8afd50284b"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git?branch=experiments#402cd0b049cf1e78175844be01c07c06f94a17b3"
 dependencies = [
  "bincode",
  "clap",
@@ -828,9 +828,9 @@ dependencies = [
 
 [[package]]
 name = "log"
-version = "0.4.14"
+version = "0.4.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51b9bbe6c47d51fc3e1a9b945965946b4c44142ab8792c50835a980d362c2710"
+checksum = "6389c490849ff5bc16be905ae24bc913a9c8892e19b2341dbc175e14c341c2b8"
 dependencies = [
  "cfg-if",
 ]
@@ -980,7 +980,7 @@ checksum = "87f3e037eac156d1775da914196f0f37741a274155e34a0b7e427c35d2a2ecb9"
 [[package]]
 name = "open-lambda-protocol"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git?branch=linearizable#658b188f9657d0a0ab51e135b3832f8afd50284b"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git?branch=experiments#402cd0b049cf1e78175844be01c07c06f94a17b3"
 dependencies = [
  "bincode",
  "derive_more",
@@ -1979,9 +1979,9 @@ checksum = "52144d4c78e5cf8b055ceab8e5fa22814ce4315d6002ad32cfd914f37c12fd65"
 
 [[package]]
 name = "which"
-version = "4.2.4"
+version = "4.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a5a7e487e921cf220206864a94a89b6c6905bfc19f1057fa26a4cb360e5c1d2"
+checksum = "5c4fb54e6113b6a8772ee41c3404fb0301ac79604489467e0a9ce1f3e97c24ae"
 dependencies = [
  "either",
  "lazy_static",

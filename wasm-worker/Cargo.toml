@@ -27,9 +27,9 @@ dashmap = "4"
 cfg-if = "1"
 bincode = "1"
 serde = "1"
-open-lambda-protocol = { git="ssh://git@github.com/kaimast/lambda-store.git",default-features=false, branch="linearizable", features=[] }
-lambda-store-client = { git="ssh://git@github.com/kaimast/lambda-store.git", default-features=false, branch="linearizable", features=[] }
-lambda-store-utils = { git="ssh://git@github.com/kaimast/lambda-store.git", default-features=false, branch="linearizable", features=[] }
+open-lambda-protocol = { git="ssh://git@github.com/kaimast/lambda-store.git",default-features=false, branch="experiments", features=[] }
+lambda-store-client = { git="ssh://git@github.com/kaimast/lambda-store.git", default-features=false, branch="experiments", features=[] }
+lambda-store-utils = { git="ssh://git@github.com/kaimast/lambda-store.git", default-features=false, branch="experiments", features=[] }
 async-wormhole = { git="https://github.com/lunatic-solutions/async-wormhole.git" }
 rand = "0.8"
 
