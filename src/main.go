@@ -138,6 +138,8 @@ func newBossOL(ctx *cli.Context) error {
 		return err
 	}
 
+	boss_start(ctx)
+
 	return initCode
 }
 
@@ -242,6 +244,17 @@ func overrideOpts(confPath, overridePath, optsStr string) error {
 		return err
 	}
 	return nil
+}
+
+func boss_start(ctx *cli.Context) error {
+
+	//if err := server.BossMain(); err != nil {
+	//	return err
+	//}
+	worker(ctx)
+
+	return fmt.Errorf("this code should not be reachable!")
+
 }
 
 // workers corresponds to the "workers" command of the admin tool.

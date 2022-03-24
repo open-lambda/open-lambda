@@ -9,61 +9,13 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strconv"
 	"syscall"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 )
 
-const (
-	RUN_PATH    = "/run/"
-	PID_PATH    = "/pid"
-	STATUS_PATH = "/status"
-	STATS_PATH  = "/stats"
-	DEBUG_PATH  = "/debug"
-)
+func BossMain() (err error) {
 
-// GetPid returns process ID, useful for making sure we're talking to the expected server
-func GetPid(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Receive request to %s\n", r.URL.Path)
-
-	wbody := []byte(strconv.Itoa(os.Getpid()) + "\n")
-	if _, err := w.Write(wbody); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-	}
-}
-
-// Status writes "ready" to the response.
-func Status(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Receive request to %s\n", r.URL.Path)
-	m := make(map[string][]int)
-	m["workers"] = []int{}
-	log.Printf("get to m map")
-	if b, err := json.MarshalIndent(m, "", "\t"); err != nil {
-		panic(err)
-	} else {
-		w.Write(b)
-	}
-	//if _, err := w.Write([]byte("ready\n")); err != nil {
-	//	log.Printf("error in Status: %v", err)
-	//}
-}
-
-func Stats(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Receive request to %s\n", r.URL.Path)
-	snapshot := common.SnapshotStats()
-	log.Printf("snapshot = %T\n", snapshot)
-	m := make(map[string]int)
-	m["k1"] = 7
-	m["k2"] = 13
-	if b, err := json.MarshalIndent(m, "", "\t"); err != nil {
-		panic(err)
-	} else {
-		w.Write(b)
-	}
-}
-
-func Main() (err error) {
 	var s interface {
 		cleanup()
 	}
@@ -88,17 +40,14 @@ func Main() (err error) {
 		return err
 	}
 
-	defer func() {
+        defer func() {
 		if err != nil {
 			log.Printf("remove PID file %s", pidPath)
 			os.Remove(pidPath)
 		}
 	}()
 
-	// things shared by all servers
-	http.HandleFunc(PID_PATH, GetPid)
 	http.HandleFunc(STATUS_PATH, Status)
-	http.HandleFunc(STATS_PATH, Stats)
 
 	switch common.Conf.Server_mode {
 	case "lambda":

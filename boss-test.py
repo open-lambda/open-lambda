@@ -5,7 +5,7 @@ import time
 import json
 
 api_key = None
-boss_port = None
+boss_port = 5000
 
 def read_json(path):
     with open(path) as f:
@@ -18,8 +18,13 @@ def write_json(path, data):
 def boss_get(resource, check=True):
     url = f"http://localhost:{boss_port}/{resource}"
     resp = requests.get(url, headers={"api_key": api_key})
+    print("$$$$$$ BeFore rEQUEST")
+    #resp = requests.get(url)
+    print("$$$$$ aftER REQUEST")
+    #raise_for_status(r)
+    print(resp.text)
     if check:
-        resp.raise_for_status()
+       resp.raise_for_status()
     return resp
 
 def boss_post(resource, data, check=True):
@@ -46,7 +51,8 @@ def tester(platform):
     # PART 1: config and launch
 
     # should create new config file
-    run(["./ol", "new-boss"]).check_returncode()
+    run(["./ol", "new-boss", "--detach"]).check_returncode()
+    print("code here doesn't get reached")
     assert os.path.exists("default-boss-ol/config.json")
     assert os.path.exists("default-boss-ol/worker_config.json")
 
@@ -57,18 +63,21 @@ def tester(platform):
     config["platform"] = platform
     config["scaling"] = "manual"
     write_json("default-boss-ol/config.json", config)
-
+    
+    print("GET HERE")
     # config should contain randomly generate secret API key
     assert "api_key" in config
     assert "boss_port" in config
     api_key = config["api_key"]
     boss_port = config["boss_port"]
+    print(config["boss_port"])
+    boss_port = 5000
     
     #run(["./ol", "kill"]).check_returncode()
-    run(["rm", "-r", "default-boss-ol"]).check_returncode()
+    #run(["rm", "-r", "default-boss-ol"]).check_returncode()
 
     # should be able to start boss as background process
-    run(["./ol", "new-boss", "--detach"]).check_returncode()
+    #run(["./ol", "new-boss", "--detach"]).check_returncode()
     #run(["./ol","kill"]).check_returncode()
 
     # TODO: sleep, or check some other way it is ready?
@@ -76,7 +85,8 @@ def tester(platform):
     # PART 2: scaling
 
     # should start with zero workers
-    status = boss_get("status").json()
+    #status = boss_get("status").json()
+    print(boss_get("status"))
     assert len(status["workers"]) == 0
 
     # start a worker (because we're chose "manual" scaling)
