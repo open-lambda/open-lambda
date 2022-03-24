@@ -18,10 +18,6 @@ def write_json(path, data):
 def boss_get(resource, check=True):
     url = f"http://localhost:{boss_port}/{resource}"
     resp = requests.get(url, headers={"api_key": api_key})
-    print("$$$$$$ BeFore rEQUEST")
-    #resp = requests.get(url)
-    print("$$$$$ aftER REQUEST")
-    #raise_for_status(r)
     print(resp.text)
     if check:
        resp.raise_for_status()
@@ -52,7 +48,6 @@ def tester(platform):
 
     # should create new config file
     run(["./ol", "new-boss", "--detach"]).check_returncode()
-    print("code here doesn't get reached")
     assert os.path.exists("default-boss-ol/config.json")
     assert os.path.exists("default-boss-ol/worker_config.json")
 
@@ -64,7 +59,6 @@ def tester(platform):
     config["scaling"] = "manual"
     write_json("default-boss-ol/config.json", config)
     
-    print("GET HERE")
     # config should contain randomly generate secret API key
     assert "api_key" in config
     assert "boss_port" in config
@@ -86,7 +80,8 @@ def tester(platform):
 
     # should start with zero workers
     #status = boss_get("status").json()
-    print(boss_get("status"))
+    status = boss_get("bstatus")
+    print(status)
     assert len(status["workers"]) == 0
 
     # start a worker (because we're chose "manual" scaling)

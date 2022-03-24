@@ -14,8 +14,26 @@ import (
 	"github.com/open-lambda/open-lambda/ol/common"
 )
 
-func BossMain() (err error) {
+const (
+	BOSS_STATUS_PATH = "/bstatus"
+)
 
+func BossStatus(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Receive request to %s\n", r.URL.Path)
+	m := make(map[string][]int)
+	m["workers"] = []int{}
+	log.Printf("get to m map")
+	if b, err := json.MarshalIndent(m, "", "\t"); err != nil {
+		panic(err)
+	} else {
+		w.Write(b)
+	}
+	//if _, err := w.Write([]byte("ready\n")); err != nil {
+	//	log.Printf("error in Status: %v", err)
+	//}
+}
+
+func BossMain() (err error) {
 	var s interface {
 		cleanup()
 	}
@@ -40,14 +58,15 @@ func BossMain() (err error) {
 		return err
 	}
 
-        defer func() {
+	defer func() {
 		if err != nil {
 			log.Printf("remove PID file %s", pidPath)
 			os.Remove(pidPath)
 		}
 	}()
 
-	http.HandleFunc(STATUS_PATH, Status)
+	// things shared by all servers
+	http.HandleFunc(STATUS_PATH, BossStatus)
 
 	switch common.Conf.Server_mode {
 	case "lambda":

@@ -248,21 +248,7 @@ func overrideOpts(confPath, overridePath, optsStr string) error {
 
 func boss_start(ctx *cli.Context) error {
 
-	//if err := server.BossMain(); err != nil {
-	//	return err
-	//}
-	worker(ctx)
-
-	return fmt.Errorf("this code should not be reachable!")
-
-}
-
-// workers corresponds to the "workers" command of the admin tool.
-//
-// The JSON config in the cluster template directory will be populated for each
-// worker, and their pid will be written to the log directory. worker_exec will
-// be called to run the worker processes.
-func worker(ctx *cli.Context) error {
+	// get path of worker files
 	olPath, err := getOlPath(ctx)
 	if err != nil {
 		return err
@@ -299,10 +285,12 @@ func worker(ctx *cli.Context) error {
 	if detach {
 		// stdout+stderr both go to log
 		logPath := filepath.Join(olPath, "worker.out")
+		// creates a worker.out file
 		f, err := os.Create(logPath)
 		if err != nil {
 			return err
 		}
+		// holds attributes that will be used when os.StartProcess
 		attr := os.ProcAttr{
 			Files: []*os.File{nil, f, f},
 		}
@@ -312,15 +300,19 @@ func worker(ctx *cli.Context) error {
 				cmd = append(cmd, arg)
 			}
 		}
+		// looks for ./ol path
 		binPath, err := exec.LookPath(os.Args[0])
 		if err != nil {
 			return err
 		}
+		// start the worker process
+		fmt.Printf("starting process: binpath= %s, cmd=%s\n", binPath, cmd)
 		proc, err := os.StartProcess(binPath, cmd, &attr)
 		if err != nil {
 			return err
 		}
 
+		// died is error message
 		died := make(chan error)
 		go func() {
 			_, err := proc.Wait()
@@ -328,9 +320,143 @@ func worker(ctx *cli.Context) error {
 		}()
 
 		fmt.Printf("Starting worker: pid=%d, port=%s, log=%s\n", proc.Pid, common.Conf.Worker_port, logPath)
-
+		
 		var ping_err error
+		
+		for i := 0; i < 300; i++ {
+			// check if it has died
+			select {
+			case err := <-died:
+				if err != nil {
+					return err
+				}
+				return fmt.Errorf("worker process %d does not a appear to be running, check worker.out", proc.Pid)
+			default:
+			}
 
+			// is the worker still alive?
+			err := proc.Signal(syscall.Signal(0))
+			if err != nil {
+
+			}
+
+			// is it reachable?
+			url := fmt.Sprintf("http://localhost:%s/pid", common.Conf.Worker_port)
+			response, err := http.Get(url)
+			if err != nil {
+				ping_err = err
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+			defer response.Body.Close()
+
+			// are we talking with the expected PID?
+			body, err := ioutil.ReadAll(response.Body)
+			pid, err := strconv.Atoi(strings.TrimSpace(string(body)))
+			if err != nil {
+				return fmt.Errorf("/pid did not return an int :: %s", err)
+			}
+
+			if pid == proc.Pid {
+				fmt.Printf("ready\n")
+				return nil // server is started and ready for requests
+			} else {
+				return fmt.Errorf("expected PID %v but found %v (port conflict?)", proc.Pid, pid)
+			}
+		}
+
+		return fmt.Errorf("worker still not reachable after 30 seconds :: %s", ping_err)
+	} else {
+		if err := server.BossMain(); err != nil {
+			return err
+		}
+	}
+
+	return fmt.Errorf("this code should not be reachable!")
+
+}
+
+// workers corresponds to the "workers" command of the admin tool.
+//
+// The JSON config in the cluster template directory will be populated for each
+// worker, and their pid will be written to the log directory. worker_exec will
+// be called to run the worker processes.
+func worker(ctx *cli.Context) error {
+	// get path of worker files
+	olPath, err := getOlPath(ctx)
+	if err != nil {
+		return err
+	}
+
+	// if `./ol new` not previously run, do that init now
+	if _, err := os.Stat(olPath); os.IsNotExist(err) {
+		fmt.Printf("no OL directory found at %s\n", olPath)
+		if err := initOLDir(olPath); err != nil {
+			return err
+		}
+	} else {
+		fmt.Printf("using existing OL directory at %s\n", olPath)
+	}
+
+	confPath := filepath.Join(olPath, "config.json")
+	overrides := ctx.String("options")
+	if overrides != "" {
+		overridesPath := confPath + ".overrides"
+		err = overrideOpts(confPath, overridesPath, overrides)
+		if err != nil {
+			return err
+		}
+		confPath = overridesPath
+	}
+
+	if err := common.LoadConf(confPath); err != nil {
+		return err
+	}
+
+	// should we run as a background process?
+	detach := ctx.Bool("detach")
+
+	if detach {
+		// stdout+stderr both go to log
+		logPath := filepath.Join(olPath, "worker.out")
+		// creates a worker.out file
+		f, err := os.Create(logPath)
+		if err != nil {
+			return err
+		}
+		// holds attributes that will be used when os.StartProcess
+		attr := os.ProcAttr{
+			Files: []*os.File{nil, f, f},
+		}
+		cmd := []string{}
+		for _, arg := range os.Args {
+			if arg != "-d" && arg != "--detach" {
+				cmd = append(cmd, arg)
+			}
+		}
+		// looks for ./ol path
+		binPath, err := exec.LookPath(os.Args[0])
+		if err != nil {
+			return err
+		}
+		// start the worker process
+		fmt.Printf("starting process: binpath= %s, cmd=%s\n", binPath, cmd)
+		proc, err := os.StartProcess(binPath, cmd, &attr)
+		if err != nil {
+			return err
+		}
+
+		// died is error message
+		died := make(chan error)
+		go func() {
+			_, err := proc.Wait()
+			died <- err
+		}()
+
+		fmt.Printf("Starting worker: pid=%d, port=%s, log=%s\n", proc.Pid, common.Conf.Worker_port, logPath)
+		
+		var ping_err error
+		
 		for i := 0; i < 300; i++ {
 			// check if it has died
 			select {
