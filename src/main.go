@@ -434,6 +434,8 @@ func gcp_test(ctx *cli.Context) error {
 
 // main runs the admin tool
 func main() {
+	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
+
 	if c, err := docker.NewClientFromEnv(); err != nil {
 		log.Fatal("failed to get docker client: ", err)
 	} else {
@@ -471,6 +473,16 @@ OPTIONS:
 			Flags:       []cli.Flag{pathFlag},
 			Action:      newOL,
 		},
+		// cli.Command{
+		// 	Name:  "boss",
+		// 	Usage: "Start one Boss server",
+		// 	// are we going to do detach and option like a worker?
+		// good to add a detach
+		// 	UsageText:   "ol boss [--path=PATH]",
+		// 	Description: "Start a boss server.",
+		// 	// Flags: depend on if we're going to add detach and option?
+		// 	Action: boss,
+		// },
 		cli.Command{
 			Name:	     "new-boss",
 			Usage:       "Create a new Boss",
