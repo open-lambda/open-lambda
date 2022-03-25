@@ -18,10 +18,9 @@ def write_json(path, data):
 def boss_get(resource, check=True):
     url = f"http://localhost:{boss_port}/{resource}"
     resp = requests.get(url, headers={"api_key": api_key})
-    print(resp.text)
     if check:
        resp.raise_for_status()
-    return resp
+    return resp.text
 
 def boss_post(resource, data, check=True):
     url = f"http://localhost:{boss_port}/{resource}"
@@ -81,6 +80,7 @@ def tester(platform):
     # should start with zero workers
     #status = boss_get("status").json()
     status = boss_get("bstatus")
+    status = json.loads(status)
     print(status)
     assert len(status["workers"]) == 0
 
