@@ -77,10 +77,11 @@ fn batch_call(
         bincode::deserialize(raw_data).expect("Failed to parse call data")
     };
 
-    let mut results: BatchCallResult = vec![];
+    let results = yielder.async_suspend(async move {
+        let mut results: BatchCallResult = vec![];
+        let mut calls = vec![];
 
-    for (object_id, function_id, args) in call_data.into_iter() {
-        let result = yielder.async_suspend(async move {
+        for (object_id, function_id, args) in call_data.into_iter() {
             let object_type = match env.database.get_object(object_id).await {
                 Ok(object) => object.get_object_type(),
                 Err(err) => {
@@ -114,7 +115,12 @@ fn batch_call(
                 .body(args.into())
                 .unwrap();
 
-            let response = match HTTP_CLIENT.request(request).await {
+            let call = HTTP_CLIENT.request(request);
+            calls.push(call);
+        }
+
+        for call in calls {
+            let response = match call.await {
                 Ok(resp) => resp,
                 Err(err) => {
                     panic!("Internal call to {} failed: {err}", env.addr);
@@ -129,11 +135,13 @@ fn batch_call(
             }
 
             let buf = hyper::body::to_bytes(response).await.unwrap();
-            Ok(ByteBuf::from(buf.to_vec()))
-        });
+            let result = Ok(ByteBuf::from(buf.to_vec()));
 
-        results.push(result);
-    }
+            results.push(result);
+        }
+
+        results
+    });
 
     let result_data = bincode::serialize(&results).unwrap();
     let buffer_len = result_data.len();
