@@ -122,7 +122,9 @@ func (l *Latency) T1() {
 	}
 	l.t0 = zero
 
-	log.Printf("%s=%d ms", l.name, l.Milliseconds) // TODO: remove debug code
+	if Conf.Trace.Latency {
+		log.Printf("%s=%d ms", l.name, l.Milliseconds)
+	}
 }
 
 // start measuring a sub latency

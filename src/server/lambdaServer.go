@@ -36,34 +36,25 @@ func getUrlComponents(r *http.Request) []string {
 
 // RunLambda expects POST requests like this:
 //
+// curl localhost:8080/run/<lambda-name>
 // curl -X POST localhost:8080/run/<lambda-name> -d '{}'
+// ...
 func (s *LambdaServer) RunLambda(w http.ResponseWriter, r *http.Request) {
 	t := common.T0("web-request")
 	defer t.T1()
 
 	log.Printf("Receive request to %s\n", r.URL.Path)
 
-	// write response headers
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods",
-		"GET, PUT, POST, DELETE, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers",
-		"Content-Type, Content-Range, Content-Disposition, Content-Description, X-Requested-With")
-
-	if r.Method == "OPTIONS" {
-		// TODO: why not let the lambda decide?
-		w.WriteHeader(http.StatusOK)
+	// components represent run[0]/<name_of_sandbox>[1]/<extra_things>...
+	// ergo we want [1] for name of sandbox
+	urlParts := getUrlComponents(r)
+	if len(urlParts) < 2 {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("expected invocation format: /run/<lambda-name>"))
 	} else {
-		// components represent run[0]/<name_of_sandbox>[1]/<extra_things>...
-		// ergo we want [1] for name of sandbox
-		urlParts := getUrlComponents(r)
-		if len(urlParts) < 2 {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("expected invocation format: /run/<lambda-name>"))
-		} else {
-			img := urlParts[1]
-			s.lambdaMgr.Get(img).Invoke(w, r)
-		}
+		img := urlParts[1]
+		s.lambdaMgr.Get(img).Invoke(w, r)
 	}
 }
 
