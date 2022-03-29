@@ -6,6 +6,8 @@ use std::path::{Path, PathBuf};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Method, Request, Response, Result, Server, StatusCode};
 
+use rand::random;
+
 use futures_util::stream::StreamExt;
 
 use tokio::signal::unix::{signal, SignalKind};
@@ -20,6 +22,7 @@ use parking_lot::Mutex;
 mod bindings;
 
 use std::sync::Arc;
+use std::thread::available_parallelism;
 
 use clap::Parser;
 
@@ -30,7 +33,7 @@ use lambda_store_utils::WasmCompilerType;
 use open_lambda_protocol::ObjectId;
 
 static mut FUNCTION_MGR: Option<Arc<FunctionManager>> = None;
-static mut LAMBDA_STORE: Option<Arc<Database>> = None;
+static mut LAMBDA_STORE: Vec<Arc<Database>> = vec![];
 
 #[derive(Parser)]
 #[clap(rename_all = "snake-case")]
@@ -99,13 +102,24 @@ async fn main() {
 
     load_functions(&args, &function_mgr).await;
 
-    let db = lambda_store_client::create_client(&args.coordinator_address)
-        .await
-        .expect("Failed to create lambda store client");
+    let db_conns = {
+        let mut dbs = vec![];
+
+        for _ in 0..available_parallelism().unwrap().get() {
+            let db = lambda_store_client::create_client(&args.coordinator_address)
+                .await
+                .expect("Failed to create lambda store client");
+
+            dbs.push(Arc::new(db));
+        }
+
+        dbs
+    };
+
 
     unsafe {
         FUNCTION_MGR = Some(function_mgr);
-        LAMBDA_STORE = Some(Arc::new(db));
+        LAMBDA_STORE = db_conns;
     }
 
     let make_service = make_service_fn(async move |_| {
@@ -152,7 +166,10 @@ async fn main() {
             }
 
             let function_mgr = unsafe { FUNCTION_MGR.as_ref().unwrap().clone() };
-            let db = unsafe { LAMBDA_STORE.as_ref().unwrap().clone() };
+            let db: Arc<Database> = unsafe {
+                let pos = random::<usize>() % LAMBDA_STORE.len();
+                LAMBDA_STORE.get(pos).unwrap().clone()
+            };
 
             if method == Method::POST && path.len() == 2 && path[0] == "run_on" {
                 execute_function(
