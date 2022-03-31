@@ -17,7 +17,7 @@ def write_json(path, data):
 
 def boss_get(resource, check=True):
     url = f"http://localhost:{boss_port}/{resource}"
-    resp = requests.get(url, headers={"api_key": api_key})
+    resp = requests.get(url)
     if check:
        resp.raise_for_status()
     return resp.text
@@ -46,7 +46,7 @@ def tester(platform):
     # PART 1: config and launch
 
     # should create new config file
-    run(["./ol", "new-boss", "--detach"]).check_returncode()
+    run(["./ol", "new-boss"]).check_returncode()
     assert os.path.exists("default-boss-ol/config.json")
     assert os.path.exists("default-boss-ol/worker_config.json")
 
@@ -63,11 +63,7 @@ def tester(platform):
     assert "boss_port" in config
     api_key = config["api_key"]
     boss_port = config["boss_port"]
-    print(config["boss_port"])
     boss_port = 5000
-    
-    #run(["./ol", "kill"]).check_returncode()
-    #run(["rm", "-r", "default-boss-ol"]).check_returncode()
 
     # should be able to start boss as background process
     #run(["./ol", "new-boss", "--detach"]).check_returncode()
@@ -78,10 +74,8 @@ def tester(platform):
     # PART 2: scaling
 
     # should start with zero workers
-    #status = boss_get("status").json()
     status = boss_get("bstatus")
     status = json.loads(status)
-    print(status)
     assert len(status["workers"]) == 0
 
     # start a worker (because we're chose "manual" scaling)
