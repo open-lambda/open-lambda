@@ -54,19 +54,17 @@ type Config struct {
 
 	// which OCI implementation to use for the docker sandbox (e.g., runc or runsc)
 	Docker_runtime string `json:"docker_runtime"`
-        
-	Platform string `json:"platform"`
-
-	Scaling string `json:"scaling"`
-       
-        API_key string `json:"api_key"`
-
-	Boss_port string  `json:"boss_port"`
-
+     
 	Limits   LimitsConfig   `json:"limits"`
 	Features FeaturesConfig `json:"features"`
 	Trace    TraceConfig    `json:"trace"`
 	Storage  StorageConfig  `json:"storage"`
+
+	// TODO: drop these?  (should be in boss-only config)
+	Platform string `json:"platform"`
+	Scaling string `json:"scaling"`
+        API_key string `json:"api_key"`
+	Boss_port string  `json:"boss_port"`
 }
 
 type FeaturesConfig struct {
@@ -80,6 +78,7 @@ type TraceConfig struct {
 	Memory  bool `json:"memory"`
 	Evictor bool `json:"evictor"`
 	Package bool `json:"package"`
+	Latency bool `json:"latency"`
 }
 
 type StoreString string
@@ -111,6 +110,12 @@ type LimitsConfig struct {
 	// how much memory can a regular lambda use?  The lambda can
 	// always set a lower limit for itself.
 	Mem_mb int `json:"mem_mb"`
+
+	// what percent of a core can it use per period?  (0-100, or more for multiple cores)
+	CPU_percent int `json:"cpu_percent"`
+
+	// how many seconds can Lambdas run?  (maybe be overridden on per-lambda basis)
+	Max_runtime_default int `json:"max_runtime_default"`
 
 	// how aggresively will the mem of the Sandbox be swapped?
 	Swappiness int `json:"swappiness"`
@@ -152,6 +157,8 @@ func LoadDefaults(olPath string) error {
 		Limits: LimitsConfig{
 			Procs:            10,
 			Mem_mb:           50,
+			CPU_percent:      100,
+			Max_runtime_default: 30,
 			Installer_mem_mb: Max(250, Min(500, mem_pool_mb/2)),
 			Swappiness:       0,
 		},

@@ -696,13 +696,14 @@ func (linst *LambdaInstance) Task() {
 				t2 := common.T0("ServeHTTP")
 				proxy.ServeHTTP(req.w, req.r)
 				t2.T1()
-				req.execMs = int(t.Milliseconds)
+				req.execMs = int(t2.Milliseconds)
 				f.doneChan <- req
 				servehttp_complete <- true
 			}()
 			select {
 			case <- servehttp_complete:
-			case <- time.After(5 * time.Second):
+			case <- time.After(time.Duration(common.Conf.Limits.Max_runtime_default) * time.Second):
+				// TODO: have per-lambda config
 				log.Println("ServeHTTP timeout")
 				sb.Destroy()
 				sb = nil

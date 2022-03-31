@@ -196,9 +196,10 @@ func (pool *CgroupPool) Destroy() {
 	}
 }
 
-func (pool *CgroupPool) GetCg(memLimitMB int, moveMemCharge bool) *Cgroup {
+func (pool *CgroupPool) GetCg(memLimitMB int, moveMemCharge bool, cpuPercent int) *Cgroup {
 	cg := <-pool.ready
 	cg.setMemLimitMB(memLimitMB)
+	cg.setCPUPercent(cpuPercent)
 	if moveMemCharge {
 		cg.WriteInt("memory", "memory.move_charge_at_immigrate", 1)
 	} else {
@@ -334,6 +335,14 @@ func (cg *Cgroup) setMemLimitMB(mb int) {
 	}
 
 	cg.memLimitMB = mb
+}
+
+// percent of a core
+func (cg *Cgroup) setCPUPercent(percent int) {
+	period := 100000 // 100 ms
+	quota := period * percent / 100
+	cg.WriteInt("cpu", "cpu.cfs_period_us", int64(period))
+	cg.WriteInt("cpu", "cpu.cfs_quota_us", int64(quota))
 }
 
 func (cg *Cgroup) Pause() error {

@@ -95,7 +95,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 	// don't want to use this cgroup feature, because the child
 	// would take the blame for ALL of the parent's allocations
 	moveMemCharge := (parent == nil)
-	cSock.cg = pool.cgPool.GetCg(meta.MemLimitMB, moveMemCharge)
+	cSock.cg = pool.cgPool.GetCg(meta.MemLimitMB, moveMemCharge, meta.CPUPercent)
 	t2.T1()
 	cSock.printf("use cgroup %s", cSock.cg.Name)
 

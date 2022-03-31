@@ -72,6 +72,7 @@ type SandboxMeta struct {
 	Installs   []string
 	Imports    []string
 	MemLimitMB int
+	CPUPercent int
 }
 
 type SockError string
