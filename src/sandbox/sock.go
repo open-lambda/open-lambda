@@ -1,479 +1,478 @@
 package sandbox
 
 import (
-    "fmt"
-    "io/ioutil"
-    "log"
-    "net"
-    "net/http"
-    "net/http/httputil"
-    "net/url"
-    "os"
-    "os/exec"
-    "path/filepath"
-    "strconv"
-    "time"
-    "strings"
-    "syscall"
+	"fmt"
+	"io/ioutil"
+	"log"
+	"net"
+	"net/http"
+	"net/http/httputil"
+	"net/url"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"syscall"
+	"time"
 
-    "github.com/open-lambda/open-lambda/ol/common"
+	"github.com/open-lambda/open-lambda/ol/common"
 )
 
 type SOCKContainer struct {
-    pool             *SOCKPool
-    id               string
-    meta             *SandboxMeta
-    containerRootDir string
-    codeDir          string
-    scratchDir       string
-    cg               *Cgroup
-    rtType          common.RuntimeType
+	pool             *SOCKPool
+	id               string
+	meta             *SandboxMeta
+	containerRootDir string
+	codeDir          string
+	scratchDir       string
+	cg               *Cgroup
+	rtType           common.RuntimeType
 
-    // 1 for self, plus 1 for each child (we can't release memory
-    // until all descendants are dead, because they share the
-    // pages of this Container, but this is the only container
-    // charged)
-    cgRefCount int
+	// 1 for self, plus 1 for each child (we can't release memory
+	// until all descendants are dead, because they share the
+	// pages of this Container, but this is the only container
+	// charged)
+	cgRefCount int
 
-    parent   Sandbox
-    children map[string]Sandbox
+	parent   Sandbox
+	children map[string]Sandbox
 
-    dbProxy *os.Process
+	dbProxy *os.Process
 }
 
 // add ID to each log message so we know which logs correspond to
 // which containers
 func (container *SOCKContainer) printf(format string, args ...interface{}) {
-    msg := fmt.Sprintf(format, args...)
-    log.Printf("%s [SOCK %s]", strings.TrimRight(msg, "\n"), container.id)
+	msg := fmt.Sprintf(format, args...)
+	log.Printf("%s [SOCK %s]", strings.TrimRight(msg, "\n"), container.id)
 }
 
 func (container *SOCKContainer) ID() string {
-    return container.id
+	return container.id
 }
 
 func (c *SOCKContainer) GetRuntimeType() common.RuntimeType {
-    return c.rtType
+	return c.rtType
 }
 
 func (container *SOCKContainer) HttpProxy() (p *httputil.ReverseProxy, err error) {
-    // note, for debugging, you can directly contact the sock file like this:
-    // curl -XPOST --unix-socket ./ol.sock http:/test -d '{"some": "data"}'
+	// note, for debugging, you can directly contact the sock file like this:
+	// curl -XPOST --unix-socket ./ol.sock http:/test -d '{"some": "data"}'
 
-    sockPath := filepath.Join(container.scratchDir, "ol.sock")
-    if len(sockPath) > 108 {
-        return nil, fmt.Errorf("socket path length cannot exceed 108 characters (try moving cluster closer to the root directory")
-    }
+	sockPath := filepath.Join(container.scratchDir, "ol.sock")
+	if len(sockPath) > 108 {
+		return nil, fmt.Errorf("socket path length cannot exceed 108 characters (try moving cluster closer to the root directory")
+	}
 
-    log.Printf("Connecting to container at '%s'", sockPath)
+	log.Printf("Connecting to container at '%s'", sockPath)
 
-    dial := func(proto, addr string) (net.Conn, error) {
-        return net.Dial("unix", sockPath)
-    }
+	dial := func(proto, addr string) (net.Conn, error) {
+		return net.Dial("unix", sockPath)
+	}
 
-    tr := &http.Transport{Dial: dial}
-    u, err := url.Parse("http://sock-container")
-    if err != nil {
-        panic(err)
-    }
+	tr := &http.Transport{Dial: dial}
+	u, err := url.Parse("http://sock-container")
+	if err != nil {
+		panic(err)
+	}
 
-    proxy := httputil.NewSingleHostReverseProxy(u)
-    proxy.Transport = tr
-    return proxy, nil
+	proxy := httputil.NewSingleHostReverseProxy(u)
+	proxy.Transport = tr
+	return proxy, nil
 }
 
 func (container *SOCKContainer) freshProc() (err error) {
-    // get FD to cgroup
-    cgFiles := make([]*os.File, 1)
-    path := container.cg.ResourcePath("cgroup.procs")
-    fd, err := syscall.Open(path, syscall.O_WRONLY, 0600)
-    if err != nil {
-        return err
-    }
-    cgFiles[0]= os.NewFile(uintptr(fd), path)
-    defer cgFiles[0].Close()
+	// get FD to cgroup
+	cgFiles := make([]*os.File, 1)
+	path := container.cg.ResourcePath("cgroup.procs")
+	fd, err := syscall.Open(path, syscall.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	cgFiles[0] = os.NewFile(uintptr(fd), path)
+	defer cgFiles[0].Close()
 
-    var cmd *exec.Cmd
+	var cmd *exec.Cmd
 
-    if container.rtType == common.RT_PYTHON {
-        cmd = exec.Command(
-            "chroot", container.containerRootDir, "python3", "-u",
-            "/runtimes/python/server.py", "/host/bootstrap.py", strconv.Itoa(1),
-        )
-    } else if container.rtType == common.RT_BINARY {
-        if container.dbProxy == nil {
-            err := container.launchDbProxy()
+	if container.rtType == common.RT_PYTHON {
+		cmd = exec.Command(
+			"chroot", container.containerRootDir, "python3", "-u",
+			"/runtimes/python/server.py", "/host/bootstrap.py", strconv.Itoa(1),
+		)
+	} else if container.rtType == common.RT_BINARY {
+		if container.dbProxy == nil {
+			err := container.launchDbProxy()
 
-            if err != nil {
-                return err
-            }
-        }
+			if err != nil {
+				return err
+			}
+		}
 
-        cmd = exec.Command(
-            "chroot", container.containerRootDir,
-            "env", "RUST_BACKTRACE=full", "/runtimes/rust/server", strconv.Itoa(1),
-        )
-    } else {
-        return fmt.Errorf("Unsupported runtime")
-    }
+		cmd = exec.Command(
+			"chroot", container.containerRootDir,
+			"env", "RUST_BACKTRACE=full", "/runtimes/rust/server", strconv.Itoa(1),
+		)
+	} else {
+		return fmt.Errorf("Unsupported runtime")
+	}
 
-    cmd.Env = []string{} // for security, DO NOT expose host env to guest
-    cmd.ExtraFiles = cgFiles
+	cmd.Env = []string{} // for security, DO NOT expose host env to guest
+	cmd.ExtraFiles = cgFiles
 
-    // TODO: route this to a file
-    cmd.Stdout = os.Stdout
-    cmd.Stderr = os.Stderr
+	// TODO: route this to a file
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 
-    if err := cmd.Start(); err != nil {
-        return err
-    }
+	if err := cmd.Start(); err != nil {
+		return err
+	}
 
-    // Runtimes will fork off a new container,
-    // so this won't block long
-    return cmd.Wait()
+	// Runtimes will fork off a new container,
+	// so this won't block long
+	return cmd.Wait()
 }
 
 func (container *SOCKContainer) launchDbProxy() (err error) {
-    args := []string{}
-    args = append(args, "ol-database-proxy")
-    args = append(args, container.scratchDir, common.Conf.Storage_url)
+	args := []string{}
+	args = append(args, "ol-database-proxy")
+	args = append(args, container.scratchDir, common.Conf.Storage_url)
 
-    var procAttr os.ProcAttr
-    procAttr.Files = []*os.File{os.Stdin, os.Stdout, os.Stderr}
+	var procAttr os.ProcAttr
+	procAttr.Files = []*os.File{os.Stdin, os.Stdout, os.Stderr}
 
-    proc, err := os.StartProcess("./ol-database-proxy", args, &procAttr)
+	proc, err := os.StartProcess("./ol-database-proxy", args, &procAttr)
 
-    died := make(chan error)
-    go func() {
-        _, err := proc.Wait()
-        died <- err
-    }()
+	died := make(chan error)
+	go func() {
+		_, err := proc.Wait()
+		died <- err
+	}()
 
-    if err != nil {
-        return fmt.Errorf("Failed to start database proxy")
-    }
+	if err != nil {
+		return fmt.Errorf("Failed to start database proxy")
+	}
 
-    var pingErr error
+	var pingErr error
 
-    //TODO make more efficient
-    for i := 0; i < 300; i++ {
-        // check if it has died
-        select {
-        case err := <-died:
-            if err != nil {
-                return err
-            } 
-            return fmt.Errorf("database proxy does not seem to be running")
-        default:
-        }
+	//TODO make more efficient
+	for i := 0; i < 300; i++ {
+		// check if it has died
+		select {
+		case err := <-died:
+			if err != nil {
+				return err
+			}
+			return fmt.Errorf("database proxy does not seem to be running")
+		default:
+		}
 
-        path := container.scratchDir + "/db-proxy.pid"
-        data, err := os.ReadFile(path)
+		path := container.scratchDir + "/db-proxy.pid"
+		data, err := os.ReadFile(path)
 
-        if err != nil {
-            pingErr = err
-            time.Sleep(1 * time.Millisecond)
-            continue
-        }
+		if err != nil {
+			pingErr = err
+			time.Sleep(1 * time.Millisecond)
+			continue
+		}
 
-        pid, err := strconv.Atoi(string(data))
-        if err != nil {
-            pingErr = err
-            time.Sleep(1 * time.Millisecond)
-            continue
-        }
+		pid, err := strconv.Atoi(string(data))
+		if err != nil {
+			pingErr = err
+			time.Sleep(1 * time.Millisecond)
+			continue
+		}
 
-        if pid != proc.Pid {
-            return fmt.Errorf("Database proxy pid does not match")
-        }
+		if pid != proc.Pid {
+			return fmt.Errorf("Database proxy pid does not match")
+		}
 
-        pingErr = nil
-        container.dbProxy = proc
-        break;
-    }
+		pingErr = nil
+		container.dbProxy = proc
+		break
+	}
 
-    return pingErr
+	return pingErr
 }
 
 func (container *SOCKContainer) populateRoot() (err error) {
-    // FILE SYSTEM STEP 1: mount base
-    baseDir := common.Conf.SOCK_base_path
-    if err := syscall.Mount(baseDir, container.containerRootDir, "", common.BIND, ""); err != nil {
-        return fmt.Errorf("failed to bind root dir: %s -> %s :: %v", baseDir, container.containerRootDir, err)
-    }
+	// FILE SYSTEM STEP 1: mount base
+	baseDir := common.Conf.SOCK_base_path
+	if err := syscall.Mount(baseDir, container.containerRootDir, "", common.BIND, ""); err != nil {
+		return fmt.Errorf("failed to bind root dir: %s -> %s :: %v", baseDir, container.containerRootDir, err)
+	}
 
-    if err := syscall.Mount("none", container.containerRootDir, "", common.BIND_RO, ""); err != nil {
-        return fmt.Errorf("failed to bind root dir RO: %s :: %v", container.containerRootDir, err)
-    }
+	if err := syscall.Mount("none", container.containerRootDir, "", common.BIND_RO, ""); err != nil {
+		return fmt.Errorf("failed to bind root dir RO: %s :: %v", container.containerRootDir, err)
+	}
 
-    if err := syscall.Mount("none", container.containerRootDir, "", common.PRIVATE, ""); err != nil {
-        return fmt.Errorf("failed to make root dir private :: %v", err)
-    }
+	if err := syscall.Mount("none", container.containerRootDir, "", common.PRIVATE, ""); err != nil {
+		return fmt.Errorf("failed to make root dir private :: %v", err)
+	}
 
-    // FILE SYSTEM STEP 2: code dir
-    if container.codeDir != "" {
-        sbCodeDir := filepath.Join(container.containerRootDir, "handler")
+	// FILE SYSTEM STEP 2: code dir
+	if container.codeDir != "" {
+		sbCodeDir := filepath.Join(container.containerRootDir, "handler")
 
-        if err := syscall.Mount(container.codeDir, sbCodeDir, "", common.BIND, ""); err != nil {
-            return fmt.Errorf("Failed to bind code dir: %s -> %s :: %v", container.codeDir, sbCodeDir, err.Error())
-        }
+		if err := syscall.Mount(container.codeDir, sbCodeDir, "", common.BIND, ""); err != nil {
+			return fmt.Errorf("Failed to bind code dir: %s -> %s :: %v", container.codeDir, sbCodeDir, err.Error())
+		}
 
-        if err := syscall.Mount("none", sbCodeDir, "", common.BIND_RO, ""); err != nil {
-            return fmt.Errorf("failed to bind code dir RO: %v", err.Error())
-        }
-    }
+		if err := syscall.Mount("none", sbCodeDir, "", common.BIND_RO, ""); err != nil {
+			return fmt.Errorf("failed to bind code dir RO: %v", err.Error())
+		}
+	}
 
-    // FILE SYSTEM STEP 3: scratch dir (tmp and communication)
-    tmpDir := filepath.Join(container.scratchDir, "tmp")
-    if err := os.Mkdir(tmpDir, 0777); err != nil && !os.IsExist(err) {
-        return err
-    }
+	// FILE SYSTEM STEP 3: scratch dir (tmp and communication)
+	tmpDir := filepath.Join(container.scratchDir, "tmp")
+	if err := os.Mkdir(tmpDir, 0777); err != nil && !os.IsExist(err) {
+		return err
+	}
 
-    sbScratchDir := filepath.Join(container.containerRootDir, "host")
-    if err := syscall.Mount(container.scratchDir, sbScratchDir, "", common.BIND, ""); err != nil {
-        return fmt.Errorf("failed to bind scratch dir: %v", err.Error())
-    }
+	sbScratchDir := filepath.Join(container.containerRootDir, "host")
+	if err := syscall.Mount(container.scratchDir, sbScratchDir, "", common.BIND, ""); err != nil {
+		return fmt.Errorf("failed to bind scratch dir: %v", err.Error())
+	}
 
-    // TODO: cheaper to handle with symlink in lambda image?
-    sbTmpDir := filepath.Join(container.containerRootDir, "tmp")
-    if err := syscall.Mount(tmpDir, sbTmpDir, "", common.BIND, ""); err != nil {
-        return fmt.Errorf("failed to bind tmp dir: %v", err.Error())
-    }
+	// TODO: cheaper to handle with symlink in lambda image?
+	sbTmpDir := filepath.Join(container.containerRootDir, "tmp")
+	if err := syscall.Mount(tmpDir, sbTmpDir, "", common.BIND, ""); err != nil {
+		return fmt.Errorf("failed to bind tmp dir: %v", err.Error())
+	}
 
-    return nil
+	return nil
 }
 
 func (container *SOCKContainer) Pause() (err error) {
-    if err := container.cg.Pause(); err != nil {
-        return err
-    }
+	if err := container.cg.Pause(); err != nil {
+		return err
+	}
 
-    if common.Conf.Features.Downsize_paused_mem {
-        // drop mem limit to what is used when we're paused, because
-        // we know the Sandbox cannot allocate more when it's not
-        // schedulable.  Then release saved memory back to the pool.
-        oldLimit := container.cg.getMemLimitMB()
-        newLimit := container.cg.getMemUsageMB() + 1
-        if newLimit < oldLimit {
-            container.cg.setMemLimitMB(newLimit)
-            container.pool.mem.adjustAvailableMB(oldLimit - newLimit)
-        }
-    }
-    return nil
+	if common.Conf.Features.Downsize_paused_mem {
+		// drop mem limit to what is used when we're paused, because
+		// we know the Sandbox cannot allocate more when it's not
+		// schedulable.  Then release saved memory back to the pool.
+		oldLimit := container.cg.getMemLimitMB()
+		newLimit := container.cg.getMemUsageMB() + 1
+		if newLimit < oldLimit {
+			container.cg.setMemLimitMB(newLimit)
+			container.pool.mem.adjustAvailableMB(oldLimit - newLimit)
+		}
+	}
+	return nil
 }
 
 func (container *SOCKContainer) Unpause() (err error) {
-    if common.Conf.Features.Downsize_paused_mem {
-        // block until we have enough mem to upsize limit to the
-        // normal size before unpausing
-        oldLimit := container.cg.getMemLimitMB()
-        newLimit := common.Conf.Limits.Mem_mb
-        container.pool.mem.adjustAvailableMB(oldLimit - newLimit)
-        container.cg.setMemLimitMB(newLimit)
-    }
+	if common.Conf.Features.Downsize_paused_mem {
+		// block until we have enough mem to upsize limit to the
+		// normal size before unpausing
+		oldLimit := container.cg.getMemLimitMB()
+		newLimit := common.Conf.Limits.Mem_mb
+		container.pool.mem.adjustAvailableMB(oldLimit - newLimit)
+		container.cg.setMemLimitMB(newLimit)
+	}
 
-    return container.cg.Unpause()
+	return container.cg.Unpause()
 }
 
 func (container *SOCKContainer) Destroy() {
-    if err := container.cg.Pause(); err != nil {
-        panic(err)
-    }
+	if err := container.cg.Pause(); err != nil {
+		panic(err)
+	}
 
-    container.decCgRefCount()
+	container.decCgRefCount()
 }
 
 // when the count goes to zero, it means (a) this container and (b)
 // all it's descendants are destroyed. Thus, it's safe to release it's
 // cgroups, and return the memory allocation to the memPool
 func (container *SOCKContainer) decCgRefCount() {
-    container.cgRefCount--
-    container.printf("CG ref count decremented to %d", container.cgRefCount)
-    if container.cgRefCount < 0 {
-        panic("cgRefCount should not be able to go negative")
-    }
+	container.cgRefCount--
+	container.printf("CG ref count decremented to %d", container.cgRefCount)
+	if container.cgRefCount < 0 {
+		panic("cgRefCount should not be able to go negative")
+	}
 
-    // release all resources when we have no more dependents...
-    if container.cgRefCount == 0 {
-        // Stop proxy before unmounting (because it might write to a logfile)
-        if container.dbProxy != nil {
-            container.dbProxy.Kill()
-            container.dbProxy.Wait()
-        }
+	// release all resources when we have no more dependents...
+	if container.cgRefCount == 0 {
+		// Stop proxy before unmounting (because it might write to a logfile)
+		if container.dbProxy != nil {
+			container.dbProxy.Kill()
+			container.dbProxy.Wait()
+		}
 
-        t := common.T0("Destroy()/kill-procs")
-        if container.cg != nil {
-            pids := container.cg.KillAllProcs()
-            container.printf("killed PIDs %v in CG\n", pids)
-        }
-        t.T1()
+		t := common.T0("Destroy()/kill-procs")
+		if container.cg != nil {
+			pids := container.cg.KillAllProcs()
+			container.printf("killed PIDs %v in CG\n", pids)
+		}
+		t.T1()
 
-        container.printf("unmount and remove dirs\n")
-        t = common.T0("Destroy()/detach-root")
-        if err := syscall.Unmount(container.containerRootDir, syscall.MNT_DETACH); err != nil {
-            container.printf("unmount root dir %s failed :: %v\n", container.containerRootDir, err)
-        }
-        t.T1()
+		container.printf("unmount and remove dirs\n")
+		t = common.T0("Destroy()/detach-root")
+		if err := syscall.Unmount(container.containerRootDir, syscall.MNT_DETACH); err != nil {
+			container.printf("unmount root dir %s failed :: %v\n", container.containerRootDir, err)
+		}
+		t.T1()
 
-        t = common.T0("Destroy()/remove-root")
-        if err := os.RemoveAll(container.containerRootDir); err != nil {
-            container.printf("remove root dir %s failed :: %v\n", container.containerRootDir, err)
-        }
-        t.T1()
+		t = common.T0("Destroy()/remove-root")
+		if err := os.RemoveAll(container.containerRootDir); err != nil {
+			container.printf("remove root dir %s failed :: %v\n", container.containerRootDir, err)
+		}
+		t.T1()
 
-        container.cg.Release()
-        container.pool.mem.adjustAvailableMB(container.cg.getMemLimitMB())
+		container.cg.Release()
+		container.pool.mem.adjustAvailableMB(container.cg.getMemLimitMB())
 
-        if container.parent != nil {
-            container.parent.childExit(container)
-        }
-    }
+		if container.parent != nil {
+			container.parent.childExit(container)
+		}
+	}
 }
 
 func (container *SOCKContainer) childExit(child Sandbox) {
-    delete(container.children, child.ID())
-    container.decCgRefCount()
+	delete(container.children, child.ID())
+	container.decCgRefCount()
 }
 
 // fork a new process from the Zygote in c, relocate it to be the server in dst
 func (container *SOCKContainer) fork(dst Sandbox) (err error) {
-    spareMB := container.cg.getMemLimitMB() - container.cg.getMemUsageMB()
-    if spareMB < 3 {
-        return fmt.Errorf("only %vMB of spare memory in parent, rejecting fork request (need at least 3MB)", spareMB)
-    }
+	spareMB := container.cg.getMemLimitMB() - container.cg.getMemUsageMB()
+	if spareMB < 3 {
+		return fmt.Errorf("only %vMB of spare memory in parent, rejecting fork request (need at least 3MB)", spareMB)
+	}
 
-    dstSock := dst.(*safeSandbox).Sandbox.(*SOCKContainer)
+	dstSock := dst.(*safeSandbox).Sandbox.(*SOCKContainer)
 
-    origPids, err := container.cg.GetPIDs()
-    if err != nil {
-        return err
-    }
+	origPids, err := container.cg.GetPIDs()
+	if err != nil {
+		return err
+	}
 
-    root, err := os.Open(dstSock.containerRootDir)
-    if err != nil {
-        return err
-    }
-    defer root.Close()
+	root, err := os.Open(dstSock.containerRootDir)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
 
-    cg := dstSock.cg
-    cgProcs, err := os.OpenFile(cg.ResourcePath("cgroup.procs"), os.O_WRONLY, 0600)
-    if err != nil {
-        return err
-    }
-    defer cgProcs.Close()
+	cg := dstSock.cg
+	cgProcs, err := os.OpenFile(cg.ResourcePath("cgroup.procs"), os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	defer cgProcs.Close()
 
-    t := common.T0("forkRequest")
-    err = container.forkRequest(fmt.Sprintf("%s/ol.sock", container.scratchDir), root, cgProcs)
-    if err != nil {
-        return err
-    }
-    t.T1()
+	t := common.T0("forkRequest")
+	err = container.forkRequest(fmt.Sprintf("%s/ol.sock", container.scratchDir), root, cgProcs)
+	if err != nil {
+		return err
+	}
+	t.T1()
 
-    // move new PIDs to new cgroup.
-    //
-    // Make multiple passes in case new processes are being
-    // spawned (TODO: better way to do this?  This lets a forking
-    // process potentially kill our cache entry, which isn't
-    // great).
-    t = common.T0("move-to-cg-after-fork")
-    for {
-        currPids, err := container.cg.GetPIDs()
-        if err != nil {
-            return err
-        }
+	// move new PIDs to new cgroup.
+	//
+	// Make multiple passes in case new processes are being
+	// spawned (TODO: better way to do this?  This lets a forking
+	// process potentially kill our cache entry, which isn't
+	// great).
+	t = common.T0("move-to-cg-after-fork")
+	for {
+		currPids, err := container.cg.GetPIDs()
+		if err != nil {
+			return err
+		}
 
-        moved := 0
+		moved := 0
 
-        for _, pid := range currPids {
-            isOrig := false
-            for _, origPid := range origPids {
-                if pid == origPid {
-                    isOrig = true
-                    break
-                }
-            }
-            if !isOrig {
-                container.printf("move PID %v from CG %v to CG %v\n", pid, container.cg.Name, dstSock.cg.Name)
-                if err = dstSock.cg.AddPid(pid); err != nil {
-                    return err
-                }
-                moved++
-            }
-        }
+		for _, pid := range currPids {
+			isOrig := false
+			for _, origPid := range origPids {
+				if pid == origPid {
+					isOrig = true
+					break
+				}
+			}
+			if !isOrig {
+				container.printf("move PID %v from CG %v to CG %v\n", pid, container.cg.Name, dstSock.cg.Name)
+				if err = dstSock.cg.AddPid(pid); err != nil {
+					return err
+				}
+				moved++
+			}
+		}
 
-        if moved == 0 {
-            break
-        }
-    }
-    t.T1()
+		if moved == 0 {
+			break
+		}
+	}
+	t.T1()
 
-    container.children[dst.ID()] = dst
-    container.cgRefCount++
-    return nil
+	container.children[dst.ID()] = dst
+	container.cgRefCount++
+	return nil
 }
 
-
 func (container *SOCKContainer) Status(key SandboxStatus) (string, error) {
-    switch key {
-    case StatusMemFailures:
-        // TODO should we only count max memory or also out of bounds?
-        status := container.cg.MemoryEvents()
-        return strconv.FormatBool(status["max"] > 0), nil
-    default:
-        return "", STATUS_UNSUPPORTED
-    }
+	switch key {
+	case StatusMemFailures:
+		// TODO should we only count max memory or also out of bounds?
+		status := container.cg.MemoryEvents()
+		return strconv.FormatBool(status["max"] > 0), nil
+	default:
+		return "", STATUS_UNSUPPORTED
+	}
 }
 
 func (container *SOCKContainer) Meta() *SandboxMeta {
-    return container.meta
+	return container.meta
 }
 
 func (container *SOCKContainer) GetRuntimeLog() string {
-    data, err := ioutil.ReadFile(filepath.Join(container.scratchDir, "ol-runtime.log"))
+	data, err := ioutil.ReadFile(filepath.Join(container.scratchDir, "ol-runtime.log"))
 
-    if err == nil {
-        return string(data)
-    }
+	if err == nil {
+		return string(data)
+	}
 
-    return ""
+	return ""
 }
 
 func (container *SOCKContainer) GetProxyLog() string {
-    data, err := ioutil.ReadFile(filepath.Join(container.scratchDir, "db-proxy.log"))
+	data, err := ioutil.ReadFile(filepath.Join(container.scratchDir, "db-proxy.log"))
 
-    if err == nil {
-        return string(data)
-    }
+	if err == nil {
+		return string(data)
+	}
 
-    return ""
+	return ""
 }
 
 func (container *SOCKContainer) DebugString() string {
-    var s string = fmt.Sprintf("SOCK %s\n", container.ID())
+	var s string = fmt.Sprintf("SOCK %s\n", container.ID())
 
-    s += fmt.Sprintf("ROOT DIR: %s\n", container.containerRootDir)
+	s += fmt.Sprintf("ROOT DIR: %s\n", container.containerRootDir)
 
-    s += fmt.Sprintf("HOST DIR: %s\n", container.scratchDir)
+	s += fmt.Sprintf("HOST DIR: %s\n", container.scratchDir)
 
-    if pids, err := container.cg.GetPIDs(); err == nil {
-        s += fmt.Sprintf("CGROUP PIDS: %s\n", strings.Join(pids, ", "))
-    } else {
-        s += fmt.Sprintf("CGROUP PIDS: unknown (%s)\n", err)
-    }
+	if pids, err := container.cg.GetPIDs(); err == nil {
+		s += fmt.Sprintf("CGROUP PIDS: %s\n", strings.Join(pids, ", "))
+	} else {
+		s += fmt.Sprintf("CGROUP PIDS: unknown (%s)\n", err)
+	}
 
-    s += fmt.Sprintf("CGROUPS: %s\n", container.cg.ResourcePath("<RESOURCE>."))
+	s += fmt.Sprintf("CGROUPS: %s\n", container.cg.ResourcePath("<RESOURCE>."))
 
-    if state, err := ioutil.ReadFile(container.cg.ResourcePath("cgroup.freeze")); err == nil {
-        s += fmt.Sprintf("FREEZE STATE: %s", state)
-    } else {
-        s += fmt.Sprintf("FREEZE STATE: unknown (%s)\n", err)
-    }
+	if state, err := ioutil.ReadFile(container.cg.ResourcePath("cgroup.freeze")); err == nil {
+		s += fmt.Sprintf("FREEZE STATE: %s", state)
+	} else {
+		s += fmt.Sprintf("FREEZE STATE: unknown (%s)\n", err)
+	}
 
-    s += fmt.Sprintf("MEMORY USED: %d of %d MB\n",
-        container.cg.getMemUsageMB(), container.cg.getMemLimitMB())
+	s += fmt.Sprintf("MEMORY USED: %d of %d MB\n",
+		container.cg.getMemUsageMB(), container.cg.getMemLimitMB())
 
-    s += fmt.Sprintf("MEMORY FAILURES: %d\n",
-        container.cg.ReadInt("memory.failcnt"))
+	s += fmt.Sprintf("MEMORY FAILURES: %d\n",
+		container.cg.ReadInt("memory.failcnt"))
 
-    return s
+	return s
 }

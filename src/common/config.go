@@ -21,11 +21,11 @@ type Config struct {
 	// Url/ip the worker server listens to
 	Worker_url string `json:"worker_url"`
 
-    // port the worker server listens to
+	// port the worker server listens to
 	Worker_port string `json:"worker_port"`
 
-    // log output of the runtime and proxy?
-    Log_output bool `json:"log_output"`
+	// log output of the runtime and proxy?
+	Log_output bool `json:"log_output"`
 
 	// sandbox type: "docker" or "sock"
 	// currently ignored as cgroup sandbox is not fully integrated
@@ -49,8 +49,8 @@ type Config struct {
 	// CACHE OPTIONS
 	Mem_pool_mb int `json:"mem_pool_mb"`
 
-    // url to the storage server
-    Storage_url string `json:"storage_url"`
+	// url to the storage server
+	Storage_url string `json:"storage_url"`
 
 	// can be empty (use root zygote only), a JSON obj (specifying
 	// the tree), or a path (to a file specifying the tree)
@@ -142,12 +142,12 @@ func LoadDefaults(olPath string) error {
 	Conf = &Config{
 		Worker_dir:        workerDir,
 		Server_mode:       "lambda",
-        Worker_url:        "localhost",
+		Worker_url:        "localhost",
 		Worker_port:       "5000",
 		Registry:          registryDir,
 		Sandbox:           "sock",
-        Storage_url:       "localhost",
-        Log_output:        true,
+		Storage_url:       "localhost",
+		Log_output:        true,
 		Pkgs_dir:          packagesDir,
 		Sandbox_config:    map[string]interface{}{},
 		SOCK_base_path:    baseImgDir,

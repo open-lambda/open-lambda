@@ -78,6 +78,9 @@ install: ol
 test-all:
 	sudo python3 -u ./scripts/test.py
 
+fmt:
+	cd src && go fmt ...
+
 clean:
 	rm -f ol
 	rm -f imgs/lambda

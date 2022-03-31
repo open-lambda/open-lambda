@@ -432,7 +432,7 @@ func (f *LambdaFunc) Task() {
 			// (and instances that use it) if necessary
 			oldCodeDir := f.codeDir
 			if err := f.pullHandlerIfStale(); err != nil {
-                f.printf("Error checking for new lambda code at `%s`: %v", f.codeDir, err)
+				f.printf("Error checking for new lambda code at `%s`: %v", f.codeDir, err)
 				req.w.WriteHeader(http.StatusInternalServerError)
 				req.w.Write([]byte(err.Error() + "\n"))
 				req.done <- true
@@ -601,28 +601,28 @@ func (linst *LambdaInstance) Task() {
 		case killed := <-linst.killChan:
 			if sb != nil {
 				rt_log := sb.GetRuntimeLog()
-                proxy_log := sb.GetProxyLog()
+				proxy_log := sb.GetProxyLog()
 				sb.Destroy()
 
-                log.Printf("Stopped sandbox")
+				log.Printf("Stopped sandbox")
 
-                if common.Conf.Log_output {
-                    if rt_log != "" {
-                         log.Printf("Runtime output is:")
+				if common.Conf.Log_output {
+					if rt_log != "" {
+						log.Printf("Runtime output is:")
 
-                        for _, line := range strings.Split(rt_log, "\n") {
-                            log.Printf("   %s", line)
-                        }
-                    }
+						for _, line := range strings.Split(rt_log, "\n") {
+							log.Printf("   %s", line)
+						}
+					}
 
-                     if proxy_log != "" {
-                         log.Printf("Proxy output is:")
+					if proxy_log != "" {
+						log.Printf("Proxy output is:")
 
-                        for _, line := range strings.Split(proxy_log, "\n") {
-                            log.Printf("   %s", line)
-                        }
-                    }
-                }
+						for _, line := range strings.Split(proxy_log, "\n") {
+							log.Printf("   %s", line)
+						}
+					}
+				}
 			}
 			killed <- true
 			return
@@ -701,27 +701,27 @@ func (linst *LambdaInstance) Task() {
 			select {
 			case killed := <-linst.killChan:
 				rt_log := sb.GetRuntimeLog()
-                proxy_log := sb.GetProxyLog()
+				proxy_log := sb.GetProxyLog()
 				sb.Destroy()
 
-                log.Printf("Stopped sandbox")
+				log.Printf("Stopped sandbox")
 
-               if common.Conf.Log_output {
-                    if rt_log != "" {
-                         log.Printf("Runtime output is:")
+				if common.Conf.Log_output {
+					if rt_log != "" {
+						log.Printf("Runtime output is:")
 
-                        for _, line := range strings.Split(rt_log, "\n") {
-                            log.Printf("   %s", line)
-                        }
-                    }
+						for _, line := range strings.Split(rt_log, "\n") {
+							log.Printf("   %s", line)
+						}
+					}
 
-                     if proxy_log != "" {
-                         log.Printf("Proxy output is:")
+					if proxy_log != "" {
+						log.Printf("Proxy output is:")
 
-                        for _, line := range strings.Split(proxy_log, "\n") {
-                            log.Printf("   %s", line)
-                        }
-                    }
+						for _, line := range strings.Split(proxy_log, "\n") {
+							log.Printf("   %s", line)
+						}
+					}
 				}
 
 				killed <- true

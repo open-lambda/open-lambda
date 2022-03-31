@@ -1,8 +1,8 @@
 package sandbox
 
 import (
-	"net/http/httputil"
 	"github.com/open-lambda/open-lambda/ol/common"
+	"net/http/httputil"
 )
 
 type SandboxPool interface {
@@ -58,11 +58,11 @@ type Sandbox interface {
 	// Lookup a particular stat (changes over time)
 	Status(SandboxStatus) (string, error)
 
-    // Get output of the runtime; if any
-    GetRuntimeLog() string
+	// Get output of the runtime; if any
+	GetRuntimeLog() string
 
-    // Get output of the database proxy; if any
-    GetProxyLog() string
+	// Get output of the database proxy; if any
+	GetProxyLog() string
 
 	// Represent state as a multi-line string
 	DebugString() string

@@ -4,8 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-    "log"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -107,9 +107,9 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type common.R
 	}
 
 	if stat.Mode().IsDir() {
-        log.Printf("Installing `%s` from a directory", stat.Name())
+		log.Printf("Installing `%s` from a directory", stat.Name())
 
-        // this is really just a debug mode, and is not
+		// this is really just a debug mode, and is not
 		// expected to be efficient
 		targetDir = cp.dirMaker.Get(lambdaName)
 
@@ -119,9 +119,9 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type common.R
 		}
 
 		// Figure out runtime type
-		if _, err := os.Stat(src+"/f.py"); !os.IsNotExist(err) {
+		if _, err := os.Stat(src + "/f.py"); !os.IsNotExist(err) {
 			rt_type = common.RT_PYTHON
-		} else if _, err := os.Stat(src+"/f.bin"); !os.IsNotExist(err) {
+		} else if _, err := os.Stat(src + "/f.bin"); !os.IsNotExist(err) {
 			rt_type = common.RT_BINARY
 		} else {
 			return rt_type, "", fmt.Errorf("Unknown runtime type")
@@ -149,30 +149,30 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type common.R
 	if err := os.Mkdir(targetDir, os.ModeDir); err != nil {
 		return rt_type, "", err
 	} else {
-        log.Printf("Created new directory for lambda function at `%s`", targetDir)
-    }
+		log.Printf("Created new directory for lambda function at `%s`", targetDir)
+	}
 
-    // Make sure we include the suffix
+	// Make sure we include the suffix
 	if strings.HasSuffix(stat.Name(), ".py") {
-        log.Printf("Installing `%s` from a python file", src)
+		log.Printf("Installing `%s` from a python file", src)
 
 		cmd := exec.Command("cp", src, filepath.Join(targetDir, "f.py"))
 		rt_type = common.RT_PYTHON
-		
+
 		if output, err := cmd.CombinedOutput(); err != nil {
 			return rt_type, "", fmt.Errorf("%s :: %s", err, string(output))
 		}
 	} else if strings.HasSuffix(stat.Name(), ".bin") {
-        log.Printf("Installing `%s` from binary file", src)
+		log.Printf("Installing `%s` from binary file", src)
 
 		cmd := exec.Command("cp", src, filepath.Join(targetDir, "f.bin"))
 		rt_type = common.RT_BINARY
-		
+
 		if output, err := cmd.CombinedOutput(); err != nil {
 			return rt_type, "", fmt.Errorf("%s :: %s", err, string(output))
 		}
 	} else if strings.HasSuffix(stat.Name(), ".tar.gz") {
-        log.Printf("Installing `%s` from an archive file", src)
+		log.Printf("Installing `%s` from an archive file", src)
 
 		cmd := exec.Command("tar", "-xzf", src, "--directory", targetDir)
 		if output, err := cmd.CombinedOutput(); err != nil {
@@ -180,9 +180,9 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type common.R
 		}
 
 		// Figure out runtime type
-		if _, err := os.Stat(targetDir+"f.py"); !os.IsNotExist(err) {
+		if _, err := os.Stat(targetDir + "f.py"); !os.IsNotExist(err) {
 			rt_type = common.RT_PYTHON
-		} else if _, err := os.Stat(targetDir+"/f.bin"); !os.IsNotExist(err) {
+		} else if _, err := os.Stat(targetDir + "/f.bin"); !os.IsNotExist(err) {
 			rt_type = common.RT_BINARY
 		} else {
 			return rt_type, "", fmt.Errorf("Found unknown runtime type or no code at all")

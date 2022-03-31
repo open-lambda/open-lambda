@@ -174,7 +174,7 @@ func (s *SOCKServer) HandleInternal(w http.ResponseWriter, r *http.Request) erro
 	}
 
 	if h, ok := routes[rsrc[1]]; ok {
-        log.Printf("Got %s", rsrc[1])
+		log.Printf("Got %s", rsrc[1])
 		return h(w, rsrc[2:], args)
 	} else {
 		return fmt.Errorf("unknown op %s", rsrc[1])
