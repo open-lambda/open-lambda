@@ -8,9 +8,9 @@ from collections import OrderedDict
 
 import copy
 import subprocess
-import requests
 import os
 import json
+import requests
 import lambdastore
 
 OLDIR=None
@@ -96,8 +96,8 @@ class Datastore:
             raise RuntimeError("Failed to stop lambda store node") from err
 
 def get_ol_stats():
-    if os.path.exists(OLDIR+"/worker/stats.json"):
-        with open(OLDIR+"/worker/stats.json", "r", encoding='utf-8') as statsfile:
+    if os.path.exists(f"{OLDIR}/worker/stats.json"):
+        with open(f"{OLDIR}/worker/stats.json", "r", encoding='utf-8') as statsfile:
             olstats = json.load(statsfile)
         return OrderedDict(sorted(list(olstats.items())))
 
@@ -112,7 +112,7 @@ def get_current_config():
 
 def post(path, data=None):
     ''' Issues a post request to the OL worker '''
-    return requests.post('http://localhost:5000/'+path, json.dumps(data))
+    return requests.post(f'http://localhost:5000/{path}', json.dumps(data))
 
 def put_conf(conf):
     global CURR_CONF
@@ -126,7 +126,10 @@ class TestConf:
         self.orig = None
 
         with open(os.path.join(OLDIR, "config.json"), "r", encoding='utf-8') as cfile:
-            self.orig = json.load(cfile)
+            try:
+                self.orig = json.load(cfile)
+            except json.JSONDecodeError as err:
+                raise Exception(f"Failed to parse JSON file. Contents are:\n{cfile.read()}") from err
 
         new = copy.deepcopy(self.orig)
         for (key, value) in keywords.items():
@@ -194,14 +197,14 @@ class DatastoreWorker():
     def name():
         return "lambda-store"
 
-class ContainerWorker():
+class DockerWorker():
     def __init__(self):
         self._running = False
-        self._config = TestConf()
-        self._datastore = Datastore()
+        self._config = TestConf(sandbox="docker", features={"import_cache": False},
+                registry=REG_DIR)
 
         try:
-            print("Starting container worker")
+            print("Starting Docker container worker")
             run(['./ol', 'worker', '-p='+OLDIR, '--detach'])
         except Exception as err:
             raise RuntimeError(f"failed to start worker: {err}") from err
@@ -216,14 +219,7 @@ class ContainerWorker():
 
     @staticmethod
     def name():
-        return "container"
-
-    @staticmethod
-    def run(fn_name, args=None):
-        result = post(f"run/rust-{fn_name}", data=args)
-
-        if result.status_code != 200:
-            raise RuntimeError(f"Benchmark was not successful: {result.text}")
+        return "docker"
 
     def stop(self):
         if self.is_running():
@@ -232,18 +228,50 @@ class ContainerWorker():
             return # Already stopped
 
         try:
-            print("Stopping container worker")
+            print("Stopping Docker container worker")
             run(['./ol', 'kill', '-p='+OLDIR])
         except Exception as err:
             raise RuntimeError("Failed to start worker") from err
 
-        self._datastore.stop()
+class SockWorker():
+    def __init__(self):
+        self._running = False
+        self._config = TestConf(sandbox="sock", registry=REG_DIR)
+
+        try:
+            print("Starting SOCK container worker")
+            run(['./ol', 'worker', '-p='+OLDIR, '--detach'])
+        except Exception as err:
+            raise RuntimeError(f"failed to start worker: {err}") from err
+
+        self._running = True
+
+    def __del__(self):
+        self.stop()
+
+    def is_running(self):
+        return self._running
+
+    @staticmethod
+    def name():
+        return "SOCK"
+
+    def stop(self):
+        if self.is_running():
+            self._running = False
+        else:
+            return # Already stopped
+
+        try:
+            print("Stopping SOCK container worker")
+            run(['./ol', 'kill', '-p='+OLDIR])
+        except Exception as err:
+            raise RuntimeError("Failed to start worker") from err
 
 class WasmWorker():
     def __init__(self):
         print("Starting WebAssembly worker")
         self._config = TestConf(registry=REG_DIR)
-        self._datastore = Datastore()
         self._process = Popen(["./ol-wasm"])
 
         sleep(0.5)
@@ -273,33 +301,63 @@ class WasmWorker():
         self._process.terminate()
         self._process = None
 
-        self._datastore.stop()
-
-def prepare_open_lambda(reuse_config=False):
+def prepare_open_lambda(ol_dir, reuse_config=False):
     '''
     Sets up the working director for open lambda,
     and stops currently running worker processes (if any)
     '''
     if os.path.exists(OLDIR):
         try:
-            run(['./ol', 'kill', '-p='+OLDIR])
+            run(['./ol', 'kill', f'-p={ol_dir}'])
             print("stopped existing worker")
         except Exception as err:
             print(f"Could not kill existing worker: {err}")
 
     # general setup
     if not reuse_config:
-        if os.path.exists(OLDIR):
-            run(['rm', '-rf', OLDIR])
+        if os.path.exists(ol_dir):
+            run(['rm', '-rf', ol_dir])
 
-        run(['./ol', 'new', '-p='+OLDIR])
+        run(['./ol', 'new', f'-p={ol_dir}'])
     else:
         if os.path.exists(OLDIR):
             # Make sure the pid file is gone even if the previous worker crashed
             try:
-                run(['rm', '-rf', f'{OLDIR}/worker'])
+                run(['rm', '-rf', f'{ol_dir}/worker'])
             except Exception as _:
                 pass
         else:
             # There was never a config in the first place, create one
-            run(['./ol', 'new', '-p='+OLDIR])
+            run(['./ol', 'new', f'-p={ol_dir}'])
+
+def mounts():
+    ''' Returns a list of all mounted directories '''
+
+    output = check_output(["mount"])
+    output = str(output, "utf-8")
+    output = output.split("\n")
+    return set(output)
+
+def ol_oom_killer():
+    ''' Will terminate OpenLambda if we run out of memory '''
+
+    while True:
+        if get_mem_stat_mb('MemAvailable') < 128:
+            print("out of memory, trying to kill OL")
+            os.system('pkill ol')
+        sleep(1)
+
+def get_mem_stat_mb(stat):
+    with open('/proc/meminfo', 'r', encoding='utf-8') as memfile:
+        for line in memfile:
+            if line.startswith(stat+":"):
+                parts = line.strip().split()
+                assert_eq(parts[-1], 'kB')
+                return int(parts[1]) / 1024
+    raise Exception('could not get stat')
+
+def assert_eq(actual, expected):
+    ''' Test helper. Will fail if actual != expected '''
+
+    if expected != actual:
+        raise Exception(f'Expected value "{expected}", but was "{actual}"')

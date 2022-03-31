@@ -15,10 +15,12 @@ import threading
 import subprocess
 
 from collections import OrderedDict
-from subprocess import check_output
+from subprocess import check_output, call
 from multiprocessing import Pool
 
-from helper import ContainerWorker, WasmWorker, prepare_open_lambda, setup_config, get_ol_stats, get_worker_output, get_current_config, TestConfContext
+from helper import DockerWorker, SockWorker, prepare_open_lambda, setup_config, get_ol_stats
+from helper import get_worker_output, get_current_config, TestConfContext, mounts
+from helper import assert_eq, ol_oom_killer
 
 from open_lambda import OpenLambda
 
@@ -29,31 +31,11 @@ OL_DIR = None
 
 results = OrderedDict({"runs": []})
 
-def assert_eq(actual, expected):
-    if expected != actual:
-        raise Exception(f'Expected value "{expected}", but was "{actual}"')
-
 def test_in_filter(name):
     if len(TEST_FILTER) == 0:
         return True
 
     return name in TEST_FILTER
-
-def get_mem_stat_mb(stat):
-    with open('/proc/meminfo', 'r', encoding='utf-8') as memfile:
-        for line in memfile:
-            if line.startswith(stat+":"):
-                parts = line.strip().split()
-                assert_eq(parts[-1], 'kB')
-                return int(parts[1]) / 1024
-    raise Exception('could not get stat')
-
-def ol_oom_killer():
-    while True:
-        if get_mem_stat_mb('MemAvailable') < 128:
-            print("out of memory, trying to kill OL")
-            os.system('pkill ol')
-        time.sleep(1)
 
 def test(func):
     def wrapper(*args, **kwargs):
@@ -111,7 +93,10 @@ def test(func):
         mounts1 = mounts()
         if len(mounts0) != len(mounts1):
             result["pass"] = False
-            result["errors"].append([f"mounts are leaking ({len(mounts0)} before, {len(mounts1)} after), leaked: {mounts1 - mounts0}"])
+            result["errors"].append([
+                f"mounts are leaking ({len(mounts0)} before, "
+                f"{len(mounts1)} after), leaked: {mounts1 - mounts0}"
+            ])
 
         # get internal stats from OL
         result["ol-stats"] = get_ol_stats()
@@ -130,12 +115,6 @@ def test(func):
         return return_val
 
     return wrapper
-
-def mounts():
-    output = check_output(["mount"])
-    output = str(output, "utf-8")
-    output = output.split("\n")
-    return set(output)
 
 def run(cmd):
     print("RUN", " ".join(cmd))
@@ -157,7 +136,7 @@ def run(cmd):
 def install_tests():
     # we want to make sure we see the expected number of pip installs,
     # so we don't want installs lying around from before
-    return_code = os.system(f'rm -rf {OL_DIR}/lambda/packages/*')
+    return_code = call(['rm', '-rf', f'{OL_DIR}/lambda/packages/*'])
     assert_eq(return_code, 0)
 
     open_lambda = OpenLambda()
@@ -305,41 +284,6 @@ def ping_test():
     seconds = time.time() - start
     return {"pings_per_sec": pings/seconds}
 
-def sock_churn_task(args):
-    open_lambda = OpenLambda()
-
-    echo_path, parent, start, seconds = args
-    count = 0
-    while time.time() < start + seconds:
-        sandbox_id = open_lambda.create({"code": echo_path, "leaf": True, "parent": parent})
-        open_lambda.destroy(sandbox_id)
-        count += 1
-    return count
-
-@test
-def sock_churn(baseline, procs, seconds, fork):
-    # baseline: how many sandboxes are sitting idly throughout the experiment
-    # procs: how many procs are concurrently creating and deleting other sandboxes
-
-    echo_path = os.path.abspath("test-registry/echo")
-    open_lambda = OpenLambda()
-
-    if fork:
-        parent = open_lambda.create({"code": "", "leaf": False})
-    else:
-        parent = ""
-
-    for _ in range(baseline):
-        sandbox_id = open_lambda.create({"code": echo_path, "leaf": True, "parent": parent})
-        open_lambda.pause(sandbox_id)
-
-    start = time.time()
-    with Pool(procs) as pool:
-        reqs = sum(pool.map(sock_churn_task, [(echo_path, parent, start, seconds)] * procs,
-            chunksize=1))
-
-    return {"sandboxes_per_sec": reqs/seconds}
-
 @test
 def rust_hashing():
     open_lambda = OpenLambda()
@@ -394,30 +338,13 @@ def recursive_kill(depth):
     destroys = stats['Destroy():ms.cnt']
     assert_eq(destroys, depth)
 
-@test
-def increment():
-    open_lambda = OpenLambda()
-    open_lambda.run("increment", [])
-
 def run_tests():
     ping_test()
-
-    # test very basic rust program
-    # hello_rust()
-
-    # run some more computation in rust
-    # rust_hashing()
-
-    # internal_call()
-
-     # increment()
 
     # do smoke tests under various configs
     with TestConfContext(features={"import_cache": False}):
         install_tests()
-    with TestConfContext(mem_pool_mb=500):
-        install_tests()
-    with TestConfContext(sandbox="docker", features={"import_cache": False}):
+    with TestConfContext(mem_pool_mb=1000):
         install_tests()
 
     # test resource limits
@@ -425,8 +352,8 @@ def run_tests():
     max_mem_alloc()
 
     # numpy pip install needs a larger mem cap
-    #with TestConfContext(mem_pool_mb=500):
-    #    numpy_test()
+    with TestConfContext(mem_pool_mb=1000):
+        numpy_test()
 
     # make sure code updates get pulled within the cache time
     #with tempfile.TemporaryDirectory() as reg_dir:
@@ -439,19 +366,9 @@ def run_tests():
         stress_one_lambda(procs=2, seconds=15)
         stress_one_lambda(procs=8, seconds=15)
 
-    with TestConfContext(features={"reuse_cgroups": True}):
-        call_each_once(lambda_count=100, alloc_mb=1)
-        call_each_once(lambda_count=1000, alloc_mb=10)
-
-    # TODO move sock-specific tests somewhere else
-    #print("Testing SOCK directly (without lambdas)")
-
-    #with TestConfContext(server_mode="sock", mem_pool_mb=500):
-    #    sock_churn(baseline=0, procs=1, seconds=5, fork=False)
-    #    sock_churn(baseline=0, procs=1, seconds=10, fork=True)
-    #    sock_churn(baseline=0, procs=15, seconds=10, fork=True)
-    #    sock_churn(baseline=32, procs=1, seconds=10, fork=True)
-    #    sock_churn(baseline=32, procs=15, seconds=10, fork=True)
+    #with TestConfContext(features={"reuse_cgroups": True}):
+    #    call_each_once(lambda_count=100, alloc_mb=1)
+    #    call_each_once(lambda_count=1000, alloc_mb=10)
 
 def main():
     global TEST_FILTER
@@ -460,7 +377,7 @@ def main():
 
     parser = argparse.ArgumentParser(description='Run tests for OpenLambda')
     parser.add_argument('--reuse_config', action="store_true")
-    parser.add_argument('--worker_type', type=str, default="container")
+    parser.add_argument('--worker_type', type=str, default="sock")
     parser.add_argument('--test_filter', type=str, default="")
     parser.add_argument('--ol_dir', type=str, default="test-dir")
 
@@ -470,14 +387,14 @@ def main():
     OL_DIR = args.ol_dir
 
     setup_config(args.ol_dir, "test-registry")
-    prepare_open_lambda()
+    prepare_open_lambda(args.ol_dir)
 
     print(f'Test filter is "{TEST_FILTER}" and OL directory is "{args.ol_dir}"')
 
-    if args.worker_type == 'container':
-        WORKER_TYPE = ContainerWorker
-    elif args.worker_type == 'wasm':
-        WORKER_TYPE = WasmWorker
+    if args.worker_type == 'docker':
+        WORKER_TYPE = DockerWorker
+    elif args.worker_type == 'sock':
+        WORKER_TYPE = SockWorker
     else:
         raise RuntimeError(f"Invalid worker type {args.worker_type}")
 
@@ -487,9 +404,7 @@ def main():
     timer_thread = threading.Thread(target=ol_oom_killer, daemon=True)
     timer_thread.start()
 
-    # run tests with various configs
-    with TestConfContext(limits={"installer_mem_mb": 250}):
-        run_tests()
+    run_tests()
 
     # save test results
     passed = len([t for t in results["runs"] if t["pass"]])
