@@ -84,13 +84,14 @@ def tester(platform):
     # there should be a worker, though probably not ready
     status = boss_get("bstatus")
     status = json.loads(status)
+    print(status)
     assert len(status["workers"]) == 1
 
     # wait until it is ready (up to 3 minutes)
     t0 = t1 = time.time()
     while t1 - t0 < 180:
         time.sleep(1)
-        status = boss_get("status").json()
+        status = boss_get("bstatus").json()
         assert len(status["workers"]) == 1
         if status["workers"][0]["state"] == "ready":
             break

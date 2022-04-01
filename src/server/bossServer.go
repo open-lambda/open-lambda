@@ -14,10 +14,10 @@ const (
 	SCALING_PATH     = "/scaling/worker_count"
 )
 
+var m = map[string][]int{"workers": []int{}}
+
 func BossStatus(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Receive request to %s\n", r.URL.Path)
-	m := make(map[string][]int)
-	m["workers"] = []int{}
 	if b, err := json.MarshalIndent(m, "", "\t"); err != nil {
 		panic(err)
 	} else {
@@ -27,9 +27,11 @@ func BossStatus(w http.ResponseWriter, r *http.Request) {
 
 func ScalingWorker(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Receive request to %s\n", r.URL.Path)
-	m := make(map[string][]int)
-	m["workers"] = []int{}
-	m["workers"] = append(m["workers"], 1)
+	var s []int
+	m["workers"] = append(s, 1)
+	for k, v := range m {
+		fmt.Println(k, "value is", v)
+	}
 	if b, err := json.MarshalIndent(m, "", "\t"); err != nil {
 		panic(err)
 	} else {
