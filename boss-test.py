@@ -46,7 +46,7 @@ def tester(platform):
     # PART 1: config and launch
 
     # should create new config file
-    run(["./ol", "new-boss"]).check_returncode()
+    run(["./ol", "new-boss", "--detach"]).check_returncode()
     assert os.path.exists("default-boss-ol/config.json")
     assert os.path.exists("default-boss-ol/worker_config.json")
 
@@ -79,10 +79,11 @@ def tester(platform):
     assert len(status["workers"]) == 0
 
     # start a worker (because we're chose "manual" scaling)
-    boss_post("scaling/worker_count", 1)
+    boss_post("scaling/worker_count", {"count": 1})
 
     # there should be a worker, though probably not ready
-    status = boss_get("status").json()
+    status = boss_get("bstatus")
+    status = json.loads(status)
     assert len(status["workers"]) == 1
 
     # wait until it is ready (up to 3 minutes)

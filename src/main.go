@@ -142,7 +142,7 @@ func newBossOL(ctx *cli.Context) error {
 	}
 
 	fmt.Printf("running a boss\n")
-	boss_start(ctx)
+	boss_start(ctx, olPath)
 
 	return initCode
 }
@@ -250,10 +250,64 @@ func overrideOpts(confPath, overridePath, optsStr string) error {
 	return nil
 }
 
-func boss_start(ctx *cli.Context) error {
+func boss_start(ctx *cli.Context, olPath string) error {
 
-	if err := server.BossMain(); err != nil {
+	// olPath, err := getBossOlPath(ctx)
+	// if err != nil {
+	// 	return err
+	// }
+
+	confPath := filepath.Join(olPath, "config.json")
+
+	if err := common.LoadConf(confPath); err != nil {
 		return err
+	}
+
+	detach := ctx.Bool("detach")
+
+	if detach {
+		// stdout+stderr both go to log
+		logPath := filepath.Join(olPath, "worker.out")
+		// creates a worker.out file
+		f, err := os.Create(logPath)
+		if err != nil {
+			return err
+		}
+		// holds attributes that will be used when os.StartProcess
+		attr := os.ProcAttr{
+			Files: []*os.File{nil, f, f},
+		}
+		cmd := []string{}
+		for _, arg := range os.Args {
+			if arg != "-d" && arg != "--detach" {
+				cmd = append(cmd, arg)
+			}
+		}
+		// looks for ./ol path
+		binPath, err := exec.LookPath(os.Args[0])
+		if err != nil {
+			return err
+		}
+		// start the worker process
+		fmt.Printf("starting process: binpath= %s, cmd=%s\n", binPath, cmd)
+		proc, err := os.StartProcess(binPath, cmd, &attr)
+		if err != nil {
+			return err
+		}
+
+		// died is error message
+		died := make(chan error)
+		go func() {
+			_, err := proc.Wait()
+			died <- err
+		}()
+
+		fmt.Printf("Starting worker: pid=%d, port=%s, log=%s\n", proc.Pid, common.Conf.Worker_port, logPath)
+
+	} else {
+		if err := server.BossMain(); err != nil {
+			return err
+		}
 	}
 
 	return fmt.Errorf("this code should not be reachable!")
