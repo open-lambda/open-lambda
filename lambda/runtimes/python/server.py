@@ -1,4 +1,5 @@
 import os, sys, json, argparse, importlib, traceback, time, fcntl, array, socket, struct
+sys.path.append("/usr/local/lib/python3.8/dist-packages")
 import tornado.ioloop
 import tornado.web
 import tornado.httpserver
@@ -150,6 +151,10 @@ def main():
         sys.exit(1)
 
     print('server.py: started new process with args: ' + " ".join(sys.argv))
+
+    rc = ol.enable_seccomp()
+    assert rc >= 0
+    print('seccomp enabled')
 
     bootstrap_path = sys.argv[1]
     cgroup_fds = 0

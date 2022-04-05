@@ -3,6 +3,7 @@ package sandbox
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"syscall"
 
@@ -84,12 +85,19 @@ func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir 
 		return nil, err
 	}
 
+	// add installed packages to the path
+	var pkgDirs []string
+	for _, pkg := range meta.Installs {
+		pkgDirs = append(pkgDirs, "/packages/" + pkg + "/files")
+	}
+
 	container, err := pool.client.CreateContainer(
 		docker.CreateContainerOptions{
 			Config: &docker.Config{
 				Cmd:    []string{"/spin"},
 				Image:  dockerutil.LAMBDA_IMAGE,
 				Labels: pool.labels,
+				Env: []string{"PYTHONPATH=" + strings.Join(pkgDirs, ":")},
 			},
 			HostConfig: &docker.HostConfig{
 				Binds:   volumes,

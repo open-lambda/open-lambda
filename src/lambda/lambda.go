@@ -242,16 +242,9 @@ func (f *LambdaFunc) printf(format string, args ...interface{}) {
 //
 // We support exact pkg versions (e.g., pkg==2.0.0), but not < or >.
 // If different lambdas import different versions of the same package,
-// we will install them, for example, to /packages/pkg==1.0.0/pkg and
-// /packages/pkg==2.0.0/pkg.  We'll symlink the version the user wants
-// to /handler/packages/pkg.  For example, two different lambdas might
-// have links as follows:
-//
-// /handler/packages/pkg => /packages/pkg==1.0.0/pkg
-// /handler/packages/pkg => /packages/pkg==2.0.0/pkg
-//
-// Lambdas should have /handler/packages in their path, but not
-// /packages.
+// we will install them, for example, to
+// /packages/pkg==1.0.0/files/pkg and /packages/pkg==2.0.0/files/pkg.
+// Each .../files path a handler needs is added to its sys.path.
 func parseMeta(codeDir string) (meta *sandbox.SandboxMeta, err error) {
 	installs := make([]string, 0)
 	imports := make([]string, 0)
