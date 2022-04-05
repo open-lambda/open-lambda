@@ -388,10 +388,9 @@ def main():
     OL_DIR = args.ol_dir
 
     setup_config(args.ol_dir)
+    prepare_open_lambda(args.ol_dir)
 
     with TestConfContext(registry=os.path.abspath(args.registry)):
-        prepare_open_lambda(args.ol_dir)
-
         print(f'Test filter is "{TEST_FILTER}" and OL directory is "{args.ol_dir}"')
 
         if args.worker_type == 'docker':
