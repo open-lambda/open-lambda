@@ -4,7 +4,7 @@ CARGO=cargo +nightly
 GO=go
 OL_DIR=$(abspath ./src)
 OL_GO_FILES=$(shell find src/ -name '*.go')
-LAMBDA_FILES = lambda/Dockerfile lambda/Makefile lambda/server.py lambda/setup.py lambda/sock2.py lambda/spin.c lambda/ol.c
+LAMBDA_FILES = lambda/Dockerfile lambda/Makefile lambda/spin.c lambda/runtimes/python/server.py lambda/runtimes/python/setup.py lambda/runtimes/python/ol.c
 USE_LLVM?=1
 BUILDTYPE?=debug
 

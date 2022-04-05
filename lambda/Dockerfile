@@ -26,8 +26,6 @@ RUN mv /tmp/py-runtime/server.py /runtimes/python/server.py
 RUN rm -rf /tmp/py-runtime
 
 # for the Docker container engine
-# TODO get rid of this old server.py
-COPY server.py /
 COPY spin /
 
 CMD ["/spin"]

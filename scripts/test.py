@@ -356,9 +356,9 @@ def run_tests():
         numpy_test()
 
     # make sure code updates get pulled within the cache time
-    #with tempfile.TemporaryDirectory() as reg_dir:
-    #    with TestConfContext(registry=reg_dir, registry_cache_ms=3000):
-    #        update_code()
+    with tempfile.TemporaryDirectory() as reg_dir:
+        with TestConfContext(registry=reg_dir, registry_cache_ms=3000):
+            update_code()
 
     # test heavy load
     with TestConfContext():
@@ -366,9 +366,9 @@ def run_tests():
         stress_one_lambda(procs=2, seconds=15)
         stress_one_lambda(procs=8, seconds=15)
 
-    #with TestConfContext(features={"reuse_cgroups": True}):
-    #    call_each_once(lambda_count=100, alloc_mb=1)
-    #    call_each_once(lambda_count=1000, alloc_mb=10)
+    with TestConfContext(features={"reuse_cgroups": True}):
+        call_each_once(lambda_count=100, alloc_mb=1)
+        call_each_once(lambda_count=1000, alloc_mb=10)
 
 def main():
     global TEST_FILTER
@@ -379,6 +379,7 @@ def main():
     parser.add_argument('--reuse_config', action="store_true")
     parser.add_argument('--worker_type', type=str, default="sock")
     parser.add_argument('--test_filter', type=str, default="")
+    parser.add_argument('--registry', type=str, default="test-registry")
     parser.add_argument('--ol_dir', type=str, default="test-dir")
 
     args = parser.parse_args()
@@ -386,38 +387,40 @@ def main():
     TEST_FILTER = [name for name in args.test_filter.split(",") if name != '']
     OL_DIR = args.ol_dir
 
-    setup_config(args.ol_dir, "test-registry")
-    prepare_open_lambda(args.ol_dir)
+    setup_config(args.ol_dir)
 
-    print(f'Test filter is "{TEST_FILTER}" and OL directory is "{args.ol_dir}"')
+    with TestConfContext(registry=os.path.abspath(args.registry)):
+        prepare_open_lambda(args.ol_dir)
 
-    if args.worker_type == 'docker':
-        WORKER_TYPE = DockerWorker
-    elif args.worker_type == 'sock':
-        WORKER_TYPE = SockWorker
-    else:
-        raise RuntimeError(f"Invalid worker type {args.worker_type}")
+        print(f'Test filter is "{TEST_FILTER}" and OL directory is "{args.ol_dir}"')
 
-    start = time.time()
+        if args.worker_type == 'docker':
+            WORKER_TYPE = DockerWorker
+        elif args.worker_type == 'sock':
+            WORKER_TYPE = SockWorker
+        else:
+            raise RuntimeError(f"Invalid worker type {args.worker_type}")
 
-    # so our test script doesn't hang if we have a memory leak
-    timer_thread = threading.Thread(target=ol_oom_killer, daemon=True)
-    timer_thread.start()
+        start = time.time()
 
-    run_tests()
+        # so our test script doesn't hang if we have a memory leak
+        timer_thread = threading.Thread(target=ol_oom_killer, daemon=True)
+        timer_thread.start()
 
-    # save test results
-    passed = len([t for t in results["runs"] if t["pass"]])
-    failed = len([t for t in results["runs"] if not t["pass"]])
-    results["passed"] = passed
-    results["failed"] = failed
-    results["seconds"] = time.time() - start
-    print(f"PASSED: {passed}, FAILED: {failed}")
+        run_tests()
 
-    with open("test.json", "w", encoding='utf-8') as resultsfile:
-        json.dump(results, resultsfile, indent=2)
+        # save test results
+        passed = len([t for t in results["runs"] if t["pass"]])
+        failed = len([t for t in results["runs"] if not t["pass"]])
+        results["passed"] = passed
+        results["failed"] = failed
+        results["seconds"] = time.time() - start
+        print(f"PASSED: {passed}, FAILED: {failed}")
 
-    sys.exit(failed)
+        with open("test.json", "w", encoding='utf-8') as resultsfile:
+            json.dump(results, resultsfile, indent=2)
+
+        sys.exit(failed)
 
 if __name__ == '__main__':
     main()

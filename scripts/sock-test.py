@@ -173,7 +173,7 @@ def main():
     OL_DIR = args.ol_dir
 
     setup_config(args.ol_dir, "test-registry")
-    prepare_open_lambda()
+    prepare_open_lambda(args.ol_dir)
 
     print(f'Test filter is "{TEST_FILTER}" and OL directory is "{args.ol_dir}"')
 

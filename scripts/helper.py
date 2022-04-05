@@ -13,16 +13,12 @@ import json
 import requests
 import lambdastore
 
-OLDIR=None
-REG_DIR=None
+OL_DIR=None
 CURR_CONF=None
 
-def setup_config(ol_dir, registry_dir):
-    global OLDIR
-    global REG_DIR
-
-    OLDIR = ol_dir
-    REG_DIR = os.path.abspath(registry_dir)
+def setup_config(ol_dir):
+    global OL_DIR
+    OL_DIR = ol_dir
 
 class Datastore:
     ''' Sets up a local lambdastore cluster '''
@@ -96,15 +92,15 @@ class Datastore:
             raise RuntimeError("Failed to stop lambda store node") from err
 
 def get_ol_stats():
-    if os.path.exists(f"{OLDIR}/worker/stats.json"):
-        with open(f"{OLDIR}/worker/stats.json", "r", encoding='utf-8') as statsfile:
+    if os.path.exists(f"{OL_DIR}/worker/stats.json"):
+        with open(f"{OL_DIR}/worker/stats.json", "r", encoding='utf-8') as statsfile:
             olstats = json.load(statsfile)
         return OrderedDict(sorted(list(olstats.items())))
 
     return None
 
 def get_worker_output():
-    with open(os.path.join(OLDIR, "worker.out"), "r", encoding='utf-8') as workerfile:
+    with open(os.path.join(OL_DIR, "worker.out"), "r", encoding='utf-8') as workerfile:
         return workerfile.read().splitlines()
 
 def get_current_config():
@@ -116,7 +112,7 @@ def post(path, data=None):
 
 def put_conf(conf):
     global CURR_CONF
-    with open(os.path.join(OLDIR, "config.json"), 'w', encoding='utf-8') as cfile:
+    with open(os.path.join(OL_DIR, "config.json"), 'w', encoding='utf-8') as cfile:
         json.dump(conf, cfile, indent=2)
     CURR_CONF = conf
 
@@ -125,11 +121,14 @@ class TestConf:
     def __init__(self, **keywords):
         self.orig = None
 
-        with open(os.path.join(OLDIR, "config.json"), "r", encoding='utf-8') as cfile:
+        with open(os.path.join(OL_DIR, "config.json"), "r", encoding='utf-8') as cfile:
             try:
                 self.orig = json.load(cfile)
             except json.JSONDecodeError as err:
-                raise Exception(f"Failed to parse JSON file. Contents are:\n{cfile.read()}") from err
+                raise Exception(
+                    f"Failed to parse JSON file. Contents are:\n"
+                    f"{cfile.read()}"
+                ) from err
 
         new = copy.deepcopy(self.orig)
         for (key, value) in keywords.items():
@@ -200,12 +199,11 @@ class DatastoreWorker():
 class DockerWorker():
     def __init__(self):
         self._running = False
-        self._config = TestConf(sandbox="docker", features={"import_cache": False},
-                registry=REG_DIR)
+        self._config = TestConf(sandbox="docker", features={"import_cache": False})
 
         try:
             print("Starting Docker container worker")
-            run(['./ol', 'worker', '-p='+OLDIR, '--detach'])
+            run(['./ol', 'worker', f'-p={OL_DIR}', '--detach'])
         except Exception as err:
             raise RuntimeError(f"failed to start worker: {err}") from err
 
@@ -229,18 +227,18 @@ class DockerWorker():
 
         try:
             print("Stopping Docker container worker")
-            run(['./ol', 'kill', '-p='+OLDIR])
+            run(['./ol', 'kill', '-p='+OL_DIR])
         except Exception as err:
             raise RuntimeError("Failed to start worker") from err
 
 class SockWorker():
     def __init__(self):
         self._running = False
-        self._config = TestConf(sandbox="sock", registry=REG_DIR)
+        self._config = TestConf(sandbox="sock")
 
         try:
             print("Starting SOCK container worker")
-            run(['./ol', 'worker', '-p='+OLDIR, '--detach'])
+            run(['./ol', 'worker', '-p='+OL_DIR, '--detach'])
         except Exception as err:
             raise RuntimeError(f"failed to start worker: {err}") from err
 
@@ -264,14 +262,14 @@ class SockWorker():
 
         try:
             print("Stopping SOCK container worker")
-            run(['./ol', 'kill', '-p='+OLDIR])
+            run(['./ol', 'kill', '-p='+OL_DIR])
         except Exception as err:
             raise RuntimeError("Failed to start worker") from err
 
 class WasmWorker():
     def __init__(self):
         print("Starting WebAssembly worker")
-        self._config = TestConf(registry=REG_DIR)
+        self._config = TestConf()
         self._process = Popen(["./ol-wasm"])
 
         sleep(0.5)
@@ -306,7 +304,7 @@ def prepare_open_lambda(ol_dir, reuse_config=False):
     Sets up the working director for open lambda,
     and stops currently running worker processes (if any)
     '''
-    if os.path.exists(OLDIR):
+    if os.path.exists(OL_DIR):
         try:
             run(['./ol', 'kill', f'-p={ol_dir}'])
             print("stopped existing worker")
@@ -320,7 +318,7 @@ def prepare_open_lambda(ol_dir, reuse_config=False):
 
         run(['./ol', 'new', f'-p={ol_dir}'])
     else:
-        if os.path.exists(OLDIR):
+        if os.path.exists(OL_DIR):
             # Make sure the pid file is gone even if the previous worker crashed
             try:
                 run(['rm', '-rf', f'{ol_dir}/worker'])
