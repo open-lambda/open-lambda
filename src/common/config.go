@@ -49,9 +49,6 @@ type Config struct {
 	// CACHE OPTIONS
 	Mem_pool_mb int `json:"mem_pool_mb"`
 
-	// url to the storage server
-	Storage_url string `json:"storage_url"`
-
 	// can be empty (use root zygote only), a JSON obj (specifying
 	// the tree), or a path (to a file specifying the tree)
 	Import_cache_tree interface{} `json:"import_cache_tree"`
@@ -146,7 +143,6 @@ func LoadDefaults(olPath string) error {
 		Worker_port:       "5000",
 		Registry:          registryDir,
 		Sandbox:           "sock",
-		Storage_url:       "localhost",
 		Log_output:        true,
 		Pkgs_dir:          packagesDir,
 		Sandbox_config:    map[string]interface{}{},

@@ -81,7 +81,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 		children:         make(map[string]Sandbox),
 		meta:             meta,
 		rtType:           rtType,
-		dbProxy:          nil,
+		containerProxy:   nil,
 	}
 	var c Sandbox = cSock
 

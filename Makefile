@@ -29,7 +29,7 @@ endif
 .PHONY: native-programs
 .PHONY: test-dir
 .PHONY: check-runtime
-.PHONY: db-proxy
+.PHONY: container-proxy
 
 all: ol imgs/lambda wasm-worker wasm-programs native-programs
 
@@ -38,12 +38,12 @@ wasm-worker:
 	cp wasm-worker/target/${BUILDTYPE}/wasm-worker ./ol-wasm
 
 wasm-programs:
-	cd programs && just wasm-programs
-	bash ./programs/install-wasm.sh test-registry.wasm ${WASM_TARGET}
+	cd bin-programs && just wasm-programs
+	bash ./bin-programs/install-wasm.sh test-registry.wasm ${WASM_TARGET}
 
 native-programs: imgs/lambda
-	cd programs && cross build --release
-	bash ./programs/install-native.sh test-registry
+	cd bin-programs && cross build --release
+	bash ./bin-programs/install-native.sh test-registry
 
 update-dependencies:
 	cd lambda/runtimes/rust && ${CARGO} update
@@ -62,9 +62,9 @@ install-python-bindings:
 check-runtime:
 	cd lambda/runtimes/rust && ${CARGO} check
 
-db-proxy:
-	cd db-proxy && ${CARGO} build ${BUILD_FLAGS}
-	cp ./db-proxy/target/${BUILDTYPE}/db-proxy ./ol-database-proxy
+container-proxy:
+	cd container-proxy && ${CARGO} build ${BUILD_FLAGS}
+	cp ./container-proxy/target/${BUILDTYPE}/open-lambda-container-proxy ./ol-container-proxy
 
 test-dir:
 	cp lambda/runtimes/rust/target/release/open-lambda-runtime ./test-registry/hello-rust.bin

@@ -63,16 +63,16 @@ src/vendor
 # binaries
 ol
 ol-wasm
-ol-database-proxy
+ol-container-proxy
 
 *.bin
 
 bench-dir
 
 test-registry.wasm/
-wasm-programs/target/
+bin-programs/target/
 wasm-worker/target/
-db-proxy/target
+container-proxy/target
 
 lambda/runtimes/rust/target
 

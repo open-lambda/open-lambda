@@ -38,7 +38,7 @@ type SOCKContainer struct {
 	parent   Sandbox
 	children map[string]Sandbox
 
-	dbProxy *os.Process
+	containerProxy *os.Process
 }
 
 // add ID to each log message so we know which logs correspond to
@@ -101,7 +101,7 @@ func (container *SOCKContainer) freshProc() (err error) {
 			"/runtimes/python/server.py", "/host/bootstrap.py", strconv.Itoa(1),
 		)
 	} else if container.rtType == common.RT_BINARY {
-		if container.dbProxy == nil {
+		if container.containerProxy == nil {
 			err := container.launchDbProxy()
 
 			if err != nil {
@@ -135,13 +135,13 @@ func (container *SOCKContainer) freshProc() (err error) {
 
 func (container *SOCKContainer) launchDbProxy() (err error) {
 	args := []string{}
-	args = append(args, "ol-database-proxy")
-	args = append(args, container.scratchDir, common.Conf.Storage_url)
+	args = append(args, "ol-container-proxy")
+	args = append(args, container.scratchDir)
 
 	var procAttr os.ProcAttr
 	procAttr.Files = []*os.File{os.Stdin, os.Stdout, os.Stderr}
 
-	proc, err := os.StartProcess("./ol-database-proxy", args, &procAttr)
+	proc, err := os.StartProcess("./ol-container-proxy", args, &procAttr)
 
 	died := make(chan error)
 	go func() {
@@ -167,7 +167,7 @@ func (container *SOCKContainer) launchDbProxy() (err error) {
 		default:
 		}
 
-		path := container.scratchDir + "/db-proxy.pid"
+		path := container.scratchDir + "/proxy.pid"
 		data, err := os.ReadFile(path)
 
 		if err != nil {
@@ -188,7 +188,7 @@ func (container *SOCKContainer) launchDbProxy() (err error) {
 		}
 
 		pingErr = nil
-		container.dbProxy = proc
+		container.containerProxy = proc
 		break
 	}
 
@@ -296,9 +296,9 @@ func (container *SOCKContainer) decCgRefCount() {
 	// release all resources when we have no more dependents...
 	if container.cgRefCount == 0 {
 		// Stop proxy before unmounting (because it might write to a logfile)
-		if container.dbProxy != nil {
-			container.dbProxy.Kill()
-			container.dbProxy.Wait()
+		if container.containerProxy != nil {
+			container.containerProxy.Kill()
+			container.containerProxy.Wait()
 		}
 
 		t := common.T0("Destroy()/kill-procs")
@@ -438,7 +438,7 @@ func (container *SOCKContainer) GetRuntimeLog() string {
 }
 
 func (container *SOCKContainer) GetProxyLog() string {
-	data, err := ioutil.ReadFile(filepath.Join(container.scratchDir, "db-proxy.log"))
+    data, err := ioutil.ReadFile(filepath.Join(container.scratchDir, "proxy.log"))
 
 	if err == nil {
 		return string(data)

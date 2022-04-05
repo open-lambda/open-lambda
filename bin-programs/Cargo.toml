@@ -1,0 +1,12 @@
+[workspace]
+members = [
+    "bindings",
+    "macros",
+    "noop",
+    "hashing",
+]
+
+[profile.release]
+debug = true
+opt-level = 3
+lto = true
