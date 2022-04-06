@@ -53,7 +53,7 @@ update-dependencies:
 
 imgs/lambda: $(LAMBDA_FILES)
 	${MAKE} -C lambda
-	docker build -t lambda lambda
+	sudo docker build -t lambda lambda
 	touch imgs/lambda
 
 install-python-bindings:
@@ -76,6 +76,7 @@ install: ol
 	cp ol /usr/local/bin
 
 test-all:
+<<<<<<< HEAD
 	sudo python3 -u ./scripts/test.py
 
 fmt:
@@ -86,6 +87,9 @@ fmt:
 lint:
 	cd wasm-worker && cargo clippy
 	cd bin-functions && cargo clippy
+=======
+	sudo python3 -u test.py
+>>>>>>> master
 
 clean:
 	rm -f ol
