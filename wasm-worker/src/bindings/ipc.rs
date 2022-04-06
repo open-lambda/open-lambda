@@ -113,10 +113,7 @@ fn call(
     offset
 }
 
-pub fn get_imports(
-    store: &Store,
-    addr: SocketAddr,
-) -> (Exports, IpcEnv) {
+pub fn get_imports(store: &Store, addr: SocketAddr) -> (Exports, IpcEnv) {
     let mut ns = Exports::new();
     let env = IpcEnv {
         memory: Default::default(),

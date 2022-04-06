@@ -79,8 +79,7 @@ impl Function {
 
         let (args_imports, args_env) = bindings::args::get_imports(&*self.store, args, result_hdl);
         let log_imports = bindings::log::get_imports(&*self.store);
-        let (ipc_imports, ipc_env) =
-            bindings::ipc::get_imports(&*self.store, addr);
+        let (ipc_imports, ipc_env) = bindings::ipc::get_imports(&*self.store, addr);
 
         import_object.register("ol_args", args_imports);
         import_object.register("ol_log", log_imports);
@@ -125,7 +124,7 @@ impl InstanceHandle {
         }
     }
 
-    #[ allow(dead_code) ]
+    #[allow(dead_code)]
     pub fn discard(self) {
         log::trace!(
             "Discarding instance with id={} as requested",
@@ -181,20 +180,11 @@ impl FunctionManager {
         &self.compiler_type
     }
 
-    pub async fn get_function(
-        &self,
-        name: &str,
-    ) -> Option<Arc<Function>> {
-        self.functions
-            .get(name)
-            .map(|entry| entry.value().clone())
+    pub async fn get_function(&self, name: &str) -> Option<Arc<Function>> {
+        self.functions.get(name).map(|entry| entry.value().clone())
     }
 
-    pub async fn load_function(
-        &self,
-        path: PathBuf,
-        cache_path: PathBuf,
-    ) {
+    pub async fn load_function(&self, path: PathBuf, cache_path: PathBuf) {
         let store = self.store.clone();
         let os_name = path.file_stem().unwrap();
         let name = String::from(os_name.to_str().unwrap());

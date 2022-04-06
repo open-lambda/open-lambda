@@ -4,7 +4,7 @@ use std::fs::read_dir;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::path::PathBuf;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Method, Request, Response, Result, Server, StatusCode};
@@ -72,7 +72,7 @@ async fn load_functions(function_mgr: &Arc<FunctionManager>) {
             continue;
         }
 
-         let extension = match file_path.extension() {
+        let extension = match file_path.extension() {
             Some(ext) => ext,
             None => {
                 log::warn!("Entry {file_path:?} does not have a file extension. Skipping...");
@@ -85,7 +85,9 @@ async fn load_functions(function_mgr: &Arc<FunctionManager>) {
             continue;
         }
 
-        function_mgr.load_function(file_path, cache_path.clone()).await;
+        function_mgr
+            .load_function(file_path, cache_path.clone())
+            .await;
     }
 }
 
@@ -146,13 +148,7 @@ async fn main() {
             let function_mgr = unsafe { FUNCTION_MGR.as_ref().unwrap().clone() };
 
             if method == Method::POST && path.len() == 2 && path[0] == "run" {
-                execute_function(
-                    worker_addr,
-                    &path.pop().unwrap(),
-                    args,
-                    function_mgr,
-                )
-                .await
+                execute_function(worker_addr, &path.pop().unwrap(), args, function_mgr).await
             } else if method == Method::GET && path.len() == 1 && path[0] == "status" {
                 get_status().await
             } else {
@@ -203,23 +199,15 @@ async fn execute_function(
 
     let function = match function_mgr.get_function(name).await {
         Some(func) => func,
-        None => panic!("No such function \"{name}\"")
+        None => panic!("No such function \"{name}\""),
     };
 
-    let instance = function.get_idle_instance(
-        args.clone(),
-        worker_addr,
-        result.clone(),
-    );
+    let instance = function.get_idle_instance(args.clone(), worker_addr, result.clone());
 
     let func_args: Vec<u32> = vec![];
 
     let stack = async_wormhole::stack::EightMbStack::new().unwrap();
-    if let (Err(e), _) = instance
-        .get()
-        .call_with_stack("f", stack, func_args)
-        .await
-    {
+    if let (Err(e), _) = instance.get().call_with_stack("f", stack, func_args).await {
         if let Some(wasmer_vm::TrapCode::StackOverflow) = e.clone().to_trap() {
             log::error!("Function failed due to stack overflow");
         } else {

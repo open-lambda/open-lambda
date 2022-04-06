@@ -84,12 +84,13 @@ test-all:
 	sudo python3 -u ./scripts/bin_test.py --worker_type=sock
 
 fmt:
-	cd src && go fmt ...
+	#cd src && go fmt ...
 	cd wasm-worker && cargo fmt
 	cd bin-functions && cargo fmt
 
 check-fmt:
-	cd src && diff -u <(echo -n) <(go fmt -d $$(go list))
+	cd wasm-worker && cargo fmt --check
+	cd bin-functions && cargo fmt --check
 
 lint:
 	cd wasm-worker && cargo clippy
