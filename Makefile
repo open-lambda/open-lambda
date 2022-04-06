@@ -80,6 +80,12 @@ test-all:
 
 fmt:
 	cd src && go fmt ...
+	cd wasm-worker && cargo fmt
+	cd bin-functions && cargo fmt
+
+lint:
+	cd wasm-worker && cargo clippy
+	cd bin-functions && cargo clippy
 
 clean:
 	rm -f ol

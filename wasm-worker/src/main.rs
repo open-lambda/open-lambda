@@ -230,7 +230,7 @@ async fn execute_function(
                 log::error!(
                     "   {}::{}",
                     frame.module_name(),
-                    frame.function_name().or(Some("unknown")).unwrap()
+                    frame.function_name().unwrap_or("unknown")
                 );
             }
         }

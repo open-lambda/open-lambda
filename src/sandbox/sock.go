@@ -438,7 +438,7 @@ func (container *SOCKContainer) GetRuntimeLog() string {
 }
 
 func (container *SOCKContainer) GetProxyLog() string {
-    data, err := ioutil.ReadFile(filepath.Join(container.scratchDir, "proxy.log"))
+	data, err := ioutil.ReadFile(filepath.Join(container.scratchDir, "proxy.log"))
 
 	if err == nil {
 		return string(data)
