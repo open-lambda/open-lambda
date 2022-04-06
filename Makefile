@@ -76,7 +76,6 @@ install: ol
 	cp ol /usr/local/bin
 
 test-all:
-<<<<<<< HEAD
 	sudo python3 -u ./scripts/test.py
 
 fmt:
@@ -87,9 +86,6 @@ fmt:
 lint:
 	cd wasm-worker && cargo clippy
 	cd bin-functions && cargo clippy
-=======
-	sudo python3 -u test.py
->>>>>>> master
 
 clean:
 	rm -f ol
