@@ -33,3 +33,15 @@ jobs:
       run: cargo install cross
     - name: Linting
       run: make lint
+    - name: Build open lambda
+      run: sudo make ol wasm-worker wasm-programs native-programs install-python-bindings
+    - name: Test Python (Docker)
+      run: sudo ./script/test.py --worker_type=docker
+    - name: Test Python (SOCK)
+      run: sudo ./script/test.py --worker_type=sock
+    - name: Test Binaries (WebAssembly)
+      run: sudo ./script/bin-test.py --worker_type=wasm
+    - name: Test Binaries (SOCK)
+      run: sudo ./script/bin-test.py --worker_type=socka
+    - name: Test SOCK
+      run: sudo ./script/sock-test.py

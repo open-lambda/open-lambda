@@ -26,7 +26,6 @@ tar -C /usr/local -xzf /tmp/go1.17.6.linux-amd64.tar.gz
 ln -s /usr/local/go/bin/go /usr/bin/go
 ```
 
-
 Further, you need to have a recent nightly version of Rust, the wasm32 toolchain, and the `cross` tool installed. The easiest way to do this is.
 ```
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain=nightly
