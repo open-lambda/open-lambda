@@ -1,7 +1,7 @@
 ''' OpenLambda's Python API '''
 
-from requests import Session
 import json as pyjson
+from requests import Session
 
 class OpenLambda:
     ''' Represents a client connection to OpenLambda '''
@@ -28,7 +28,8 @@ class OpenLambda:
     def run_on(self, object_id, fn_name, args, json=True):
         ''' Execute a serverless function on a LambdaObject '''
 
-        req = self._session.post(f'http://{self._address}/run_on/{fn_name}', pyjson.dumps(args), params={'object_id': object_id})
+        req = self._session.post(f'http://{self._address}/run_on/{fn_name}',
+                pyjson.dumps(args), params={'object_id': object_id})
         self._check_status_code(req, "run_on")
 
         if json:

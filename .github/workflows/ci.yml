@@ -31,8 +31,6 @@ jobs:
          target: wasm32-unknown-unknown
     - name: Install cross
       run: cargo install cross
-    - name: Linting
-      run: make lint
     - name: Build open lambda
       run: sudo make ol wasm-worker wasm-programs native-programs install-python-bindings
     - name: Test Python (Docker)
@@ -45,3 +43,5 @@ jobs:
       run: sudo ./script/bin-test.py --worker_type=socka
     - name: Test SOCK
       run: sudo ./script/sock-test.py
+    - name: Linting
+      run: make lint

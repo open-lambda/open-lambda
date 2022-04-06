@@ -6,131 +6,21 @@
 
 import argparse
 import os
-import sys
-import json
-import time
-import traceback
 import tempfile
-import threading
-import subprocess
 
-from collections import OrderedDict
-from subprocess import check_output, call
+from time import time
+from subprocess import call
 from multiprocessing import Pool
 
-from helper import DockerWorker, SockWorker, prepare_open_lambda, setup_config, get_ol_stats
-from helper import get_worker_output, get_current_config, TestConfContext, mounts
-from helper import assert_eq, ol_oom_killer
+from helper import DockerWorker, SockWorker, prepare_open_lambda, setup_config
+from helper import get_current_config, TestConfContext, assert_eq
+
+from helper.test import set_test_filter, start_tests, check_test_results, set_worker_type, test
 
 from open_lambda import OpenLambda
 
 # These will be set by argparse in main()
-TEST_FILTER = []
-WORKER_TYPE = None
 OL_DIR = None
-
-results = OrderedDict({"runs": []})
-
-def test_in_filter(name):
-    if len(TEST_FILTER) == 0:
-        return True
-
-    return name in TEST_FILTER
-
-def test(func):
-    def wrapper(*args, **kwargs):
-        if len(args) > 0:
-            raise Exception("positional args not supported for tests")
-
-        name = func.__name__
-
-        if not test_in_filter(name):
-            print(f'Skipping test "{name}"')
-            return None
-
-        print('='*40)
-        if len(kwargs):
-            print(name, kwargs)
-        else:
-            print(name)
-        print('='*40)
-        result = OrderedDict()
-        result["test"] = name
-        result["params"] = kwargs
-        result["pass"] = None
-        result["conf"] = get_current_config()
-        result["seconds"] = None
-        result["total_seconds"] = None
-        result["stats"] = None
-        result["ol-stats"] = None
-        result["errors"] = []
-        result["worker_tail"] = None
-
-        total_t0 = time.time()
-        mounts0 = mounts()
-        worker = None
-
-        try:
-            worker = WORKER_TYPE()
-            print("Worker started")
-
-            # run test/benchmark
-            test_t0 = time.time()
-            return_val = func(**kwargs)
-            test_t1 = time.time()
-            result["seconds"] = test_t1 - test_t0
-
-            result["pass"] = True
-        except Exception as err:
-            print(f"Failed to start worker: {err}")
-            return_val = None
-            result["pass"] = False
-            result["errors"].append(traceback.format_exc().split("\n"))
-
-        if worker:
-            worker.stop()
-
-        mounts1 = mounts()
-        if len(mounts0) != len(mounts1):
-            result["pass"] = False
-            result["errors"].append([
-                f"mounts are leaking ({len(mounts0)} before, "
-                f"{len(mounts1)} after), leaked: {mounts1 - mounts0}"
-            ])
-
-        # get internal stats from OL
-        result["ol-stats"] = get_ol_stats()
-
-        total_t1 = time.time()
-        result["total_seconds"] = total_t1-total_t0
-        result["stats"] = return_val
-
-        result["worker_tail"] = get_worker_output()
-        if result["pass"]:
-            # truncate because we probably won't use it for debugging
-            result["worker_tail"] = result["worker_tail"][-10:]
-
-        results["runs"].append(result)
-        print(json.dumps(result, indent=2))
-        return return_val
-
-    return wrapper
-
-def run(cmd):
-    print("RUN", " ".join(cmd))
-    try:
-        out = check_output(cmd, stderr=subprocess.STDOUT)
-        fail = False
-    except subprocess.CalledProcessError as err:
-        out = err.output
-        fail = True
-
-    out = str(out, 'utf-8')
-    if len(out) > 500:
-        out = out[:500] + "..."
-
-    if fail:
-        raise Exception(f'command ({" ".join(cmd)}) failed: {out}')
 
 @test
 def install_tests():
@@ -371,8 +261,6 @@ def run_tests():
         call_each_once(lambda_count=1000, alloc_mb=10)
 
 def main():
-    global TEST_FILTER
-    global WORKER_TYPE
     global OL_DIR
 
     parser = argparse.ArgumentParser(description='Run tests for OpenLambda')
@@ -384,42 +272,24 @@ def main():
 
     args = parser.parse_args()
 
-    TEST_FILTER = [name for name in args.test_filter.split(",") if name != '']
+    set_test_filter([name for name in args.test_filter.split(",") if name != ''])
     OL_DIR = args.ol_dir
 
     setup_config(args.ol_dir)
     prepare_open_lambda(args.ol_dir)
 
     with TestConfContext(registry=os.path.abspath(args.registry)):
-        print(f'Test filter is "{TEST_FILTER}" and OL directory is "{args.ol_dir}"')
-
         if args.worker_type == 'docker':
-            WORKER_TYPE = DockerWorker
+            set_worker_type(DockerWorker)
         elif args.worker_type == 'sock':
-            WORKER_TYPE = SockWorker
+            set_worker_type(SockWorker)
         else:
             raise RuntimeError(f"Invalid worker type {args.worker_type}")
 
-        start = time.time()
-
-        # so our test script doesn't hang if we have a memory leak
-        timer_thread = threading.Thread(target=ol_oom_killer, daemon=True)
-        timer_thread.start()
-
+        start_tests()
         run_tests()
 
-        # save test results
-        passed = len([t for t in results["runs"] if t["pass"]])
-        failed = len([t for t in results["runs"] if not t["pass"]])
-        results["passed"] = passed
-        results["failed"] = failed
-        results["seconds"] = time.time() - start
-        print(f"PASSED: {passed}, FAILED: {failed}")
-
-        with open("test.json", "w", encoding='utf-8') as resultsfile:
-            json.dump(results, resultsfile, indent=2)
-
-        sys.exit(failed)
+    check_test_results()
 
 if __name__ == '__main__':
     main()

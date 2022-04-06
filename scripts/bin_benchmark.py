@@ -2,7 +2,7 @@
 
 ''' Benchmarks web assembly against SOCK and Docker '''
 
-# pylint: disable=global-statement, missing-function-docstring
+# pylint: disable=global-statement, missing-function-docstring, consider-using-with
 
 import sys
 import argparse

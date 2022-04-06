@@ -1,3 +1,5 @@
+''' Installer for the OpenLambda python bindings '''
+
 from setuptools import setup
 
 setup(

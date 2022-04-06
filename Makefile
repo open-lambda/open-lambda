@@ -30,6 +30,7 @@ endif
 .PHONY: test-dir
 .PHONY: check-runtime
 .PHONY: container-proxy
+.PHONY: fmt check-fmt
 
 all: ol imgs/lambda wasm-worker wasm-functions native-functions
 
@@ -76,16 +77,24 @@ install: ol
 	cp ol /usr/local/bin
 
 test-all:
-	sudo python3 -u ./scripts/test.py
+	sudo python3 -u ./scripts/test.py --worker_type=sock
+	sudo python3 -u ./scripts/test.py --worker_type=docker
+	sudo python3 -u ./scripts/sock_test.py
+	sudo python3 -u ./scripts/bin_test.py --worker_type=wasm
+	sudo python3 -u ./scripts/bin_test.py --worker_type=sock
 
 fmt:
 	cd src && go fmt ...
 	cd wasm-worker && cargo fmt
 	cd bin-functions && cargo fmt
 
+check-fmt:
+	cd src && diff -u <(echo -n) <(go fmt -d $$(go list))
+
 lint:
 	cd wasm-worker && cargo clippy
 	cd bin-functions && cargo clippy
+	pylint scripts --ignore build
 
 clean:
 	rm -f ol
