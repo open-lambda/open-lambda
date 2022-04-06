@@ -24,32 +24,32 @@ endif
 .PHONY: test-all
 .PHONY: clean
 .PHONY: update-dependencies
-.PHONY: wasm-programs
+.PHONY: wasm-functions
 .PHONY: wasm-worker
-.PHONY: native-programs
+.PHONY: native-functions
 .PHONY: test-dir
 .PHONY: check-runtime
 .PHONY: container-proxy
 
-all: ol imgs/lambda wasm-worker wasm-programs native-programs
+all: ol imgs/lambda wasm-worker wasm-functions native-functions
 
 wasm-worker:
 	cd wasm-worker && ${CARGO} build ${BUILD_FLAGS} ${WASM_WORKER_FLAGS}
 	cp wasm-worker/target/${BUILDTYPE}/wasm-worker ./ol-wasm
 
-wasm-programs:
-	cd bin-programs && make wasm-programs
-	bash ./bin-programs/install-wasm.sh test-registry.wasm ${WASM_TARGET}
+wasm-functions:
+	cd bin-functions && make wasm-functions
+	bash ./bin-functions/install-wasm.sh test-registry.wasm ${WASM_TARGET}
 
-native-programs: imgs/lambda
-	cd bin-programs && cross build --release
-	bash ./bin-programs/install-native.sh test-registry
+native-functions: imgs/lambda
+	cd bin-functions && cross build --release
+	bash ./bin-functions/install-native.sh test-registry
 
 update-dependencies:
 	cd lambda/runtimes/rust && ${CARGO} update
 	cd wasm-worker && ${CARGO} update
-	cd programs && ${CARGO} update
-	cd db-proxy && ${CARGO} update
+	cd bin-functions && ${CARGO} update
+	cd container-proxy && ${CARGO} update
 
 imgs/lambda: $(LAMBDA_FILES)
 	${MAKE} -C lambda

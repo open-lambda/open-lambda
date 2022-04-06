@@ -70,7 +70,7 @@ ol-container-proxy
 bench-dir
 
 test-registry.wasm/
-bin-programs/target/
+bin-functions/target/
 wasm-worker/target/
 container-proxy/target
 

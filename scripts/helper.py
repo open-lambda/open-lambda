@@ -103,27 +103,6 @@ def run(cmd):
     if fail:
         raise Exception(f"command ({' '.join(cmd)}) failed: {out}")
 
-class DatastoreWorker():
-    def __init__(self):
-        self._datastore = Datastore(enable_wasm=True)
-
-    def __del__(self):
-        self.stop()
-
-    def is_running(self):
-        self._datastore.is_running()
-
-    def stop(self):
-        self._datastore.stop()
-
-    @staticmethod
-    def run(fn_name, args=None):
-        Datastore.call(fn_name, args)
-
-    @staticmethod
-    def name():
-        return "lambda-store"
-
 class DockerWorker():
     def __init__(self):
         self._running = False

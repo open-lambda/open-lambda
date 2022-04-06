@@ -29,7 +29,7 @@ bincode = "1"
 serde = "1"
 async-wormhole = { git="https://github.com/lunatic-solutions/async-wormhole.git" }
 rand = "0.8"
-open-lambda-proxy-protocol = { path="../bin-programs/proxy-protocol" }
+open-lambda-proxy-protocol = { path="../bin-functions/proxy-protocol" }
 
 [features]
 default = []

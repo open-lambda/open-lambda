@@ -14,13 +14,16 @@ import threading
 
 from time import sleep
 from collections import OrderedDict
-from subprocess import Popen
 from contextlib import contextmanager
 
 from open_lambda import OpenLambda
 
+from helper import DockerWorker, WasmWorker, SockWorker, TestConfContext
+from helper import prepare_open_lambda, setup_config
+
 # These will be set by argparse in main()
 TEST_FILTER = []
+WORKER_TYPE = None
 
 results = OrderedDict({"runs": []})
 
@@ -80,7 +83,7 @@ def test(func):
 
         try:
             # setup worker
-            worker = Popen(['./ol-wasm', '--wasm_compiler=llvm'])
+            worker = WORKER_TYPE()
             sleep(0.1)
 
             # wait for worker to be ready
@@ -108,7 +111,7 @@ def test(func):
         # cleanup worker
         try:
             if worker:
-                worker.kill()
+                worker.stop()
         except Exception:
             result["pass"] = False
             result["errors"].append(traceback.format_exc().split("\n"))
@@ -150,32 +153,51 @@ def hashing():
 def run_tests():
     ''' Runs all tests '''
 
-    print("Testing WASM")
-
     ping()
     noop()
     hashing()
 
 def _main():
     global TEST_FILTER
+    global WORKER_TYPE
 
     parser = argparse.ArgumentParser(description='Run tests for OpenLambda')
     parser.add_argument('--test_filter', type=str, default="")
+    parser.add_argument('--worker_type', type=str, default="sock")
+    parser.add_argument('--ol_dir', type=str, default="test-dir")
+    parser.add_argument('--registry', type=str, default="test-registry")
 
     args = parser.parse_args()
 
     TEST_FILTER = [name for name in args.test_filter.split(",") if name != '']
 
-    print(f'Test filter is "{TEST_FILTER}"')
+    if args.worker_type == 'docker':
+        WORKER_TYPE = DockerWorker
+    elif args.worker_type == 'sock':
+        WORKER_TYPE = SockWorker
+    elif args.worker_type in ["webassembly", "wasm"]:
+        WORKER_TYPE = WasmWorker
+    else:
+        raise RuntimeError(f"Invalid worker type {args.worker_type}")
 
-    t_start = time.time()
+    print(f'Test filter is "{TEST_FILTER}" and worker type "{WORKER_TYPE}"')
 
-    # so our test script doesn't hang if we have a memory leak
-    timer_thread = threading.Thread(target=ol_oom_killer, daemon=True)
-    timer_thread.start()
+    if WORKER_TYPE == WasmWorker:
+        t_start = time.time()
 
-    # run tests with various configs
-    run_tests()
+        run_tests()
+    else:
+        setup_config(args.ol_dir)
+        prepare_open_lambda(args.ol_dir)
+
+        with TestConfContext(registry=os.path.abspath(args.registry)):
+            t_start = time.time()
+
+            # so our test script doesn't hang if we have a memory leak
+            timer_thread = threading.Thread(target=ol_oom_killer, daemon=True)
+            timer_thread.start()
+
+            run_tests()
 
     # save test results
     passed = len([t for t in results["runs"] if t["pass"]])
