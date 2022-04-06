@@ -1,5 +1,5 @@
 [package]
-name = "hello"
+name = "noop"
 version = "0.1.0"
 authors = ["Kai Mast <kaimast@cs.wisc.edu>"]
 edition = "2021"

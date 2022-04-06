@@ -1,7 +1,16 @@
 use serde::{Serialize, Deserialize};
+use serde_bytes::ByteBuf;
+
+#[ derive(Serialize, Deserialize) ]
+pub struct CallData {
+    pub fn_name: String,
+    pub args: ByteBuf,
+}
+
+pub type CallResult = Result<ByteBuf, String>;
 
 #[ derive(Serialize, Deserialize) ]
 pub enum ProxyMessage {
-    CallRequest{ func_name: String, arg_string: String },
-    CallResult(Result<String, String>),
+    CallRequest(CallData),
+    CallResult(CallResult),
 }

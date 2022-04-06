@@ -3,7 +3,7 @@
 shopt -s nullglob
 
 REGISTRY_PATH=$1
-NATIVE_PREFIX=./native-programs/target/release/
+NATIVE_PREFIX=./bin-programs/target/release/
 
 mkdir -p ${REGISTRY_PATH}
 

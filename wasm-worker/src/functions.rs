@@ -7,11 +7,6 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
-use lambda_store_client::Client as Database;
-use lambda_store_utils::WasmCompilerType;
-
-use open_lambda_protocol::ObjectTypeId;
-
 use parking_lot::Mutex;
 
 use wasmer::{BaseTunables, ImportObject, Instance, Module, Pages, Store};
@@ -20,11 +15,12 @@ use wasmer_compiler_singlepass::Singlepass;
 use wasmer_engine::Engine;
 use wasmer_engine_dylib::Dylib as NativeEngine;
 
+use crate::WasmCompilerType;
+
 use crate::bindings::{
     self,
     args::{ArgsEnv, ResultHandle},
     ipc::IpcEnv,
-    storage::{StorageEnv, TransactionHandle},
 };
 
 #[cfg(feature = "llvm-backend")]
@@ -34,7 +30,7 @@ const MAX_IDLE_INSTANCES: usize = 20;
 
 type IdleInstancesList = Mutex<Vec<InstanceData>>;
 
-pub struct ObjectFunctions {
+pub struct Function {
     module: Module,
     next_instance_id: Arc<AtomicU64>,
     store: Arc<Store>,
@@ -45,7 +41,6 @@ struct InstanceData {
     identifier: u64,
     instance: Instance,
     args_env: ArgsEnv,
-    storage_env: StorageEnv,
     #[allow(dead_code)]
     ipc_env: IpcEnv,
 }
@@ -55,11 +50,9 @@ pub struct InstanceHandle {
     data: InstanceData,
 }
 
-impl ObjectFunctions {
+impl Function {
     pub fn get_idle_instance(
         &self,
-        database: Arc<Database>,
-        transaction: TransactionHandle,
         args: Arc<Vec<u8>>,
         addr: SocketAddr,
         result_hdl: ResultHandle,
@@ -70,7 +63,6 @@ impl ObjectFunctions {
 
                 data.args_env.set_args(args);
                 data.args_env.set_result_handle(result_hdl);
-                data.storage_env.set_transaction(transaction);
 
                 return InstanceHandle {
                     idle_list: self.idle_list.clone(),
@@ -87,14 +79,11 @@ impl ObjectFunctions {
 
         let (args_imports, args_env) = bindings::args::get_imports(&*self.store, args, result_hdl);
         let log_imports = bindings::log::get_imports(&*self.store);
-        let (storage_imports, storage_env) =
-            bindings::storage::get_imports(&*self.store, database.clone(), transaction.clone());
         let (ipc_imports, ipc_env) =
-            bindings::ipc::get_imports(&*self.store, addr, database, transaction);
+            bindings::ipc::get_imports(&*self.store, addr);
 
         import_object.register("ol_args", args_imports);
         import_object.register("ol_log", log_imports);
-        import_object.register("ol_storage", storage_imports);
         import_object.register("ol_ipc", ipc_imports);
 
         let instance =
@@ -103,7 +92,6 @@ impl ObjectFunctions {
         let data = InstanceData {
             identifier,
             instance,
-            storage_env,
             args_env,
             ipc_env,
         };
@@ -137,6 +125,7 @@ impl InstanceHandle {
         }
     }
 
+    #[ allow(dead_code) ]
     pub fn discard(self) {
         log::trace!(
             "Discarding instance with id={} as requested",
@@ -146,8 +135,8 @@ impl InstanceHandle {
 }
 
 pub struct FunctionManager {
-    functions: Arc<DashMap<ObjectTypeId, Arc<ObjectFunctions>>>,
     store: Arc<Store>,
+    functions: Arc<DashMap<String, Arc<Function>>>,
     compiler_type: WasmCompilerType,
 }
 
@@ -192,18 +181,17 @@ impl FunctionManager {
         &self.compiler_type
     }
 
-    pub async fn get_object_functions(
+    pub async fn get_function(
         &self,
-        object_type: &ObjectTypeId,
-    ) -> Option<Arc<ObjectFunctions>> {
+        name: &str,
+    ) -> Option<Arc<Function>> {
         self.functions
-            .get(object_type)
+            .get(name)
             .map(|entry| entry.value().clone())
     }
 
-    pub async fn load_object_functions(
+    pub async fn load_function(
         &self,
-        object_type: ObjectTypeId,
         path: PathBuf,
         cache_path: PathBuf,
     ) {
@@ -217,7 +205,7 @@ impl FunctionManager {
         let mut file = match fs::File::open(&path) {
             Ok(f) => f,
             Err(err) => {
-                log::error!("Failed to open function file at `{path:?}`: {err}");
+                log::error!("Failed to open function file at \"{path:?}\": {err}");
                 std::process::exit(1);
             }
         };
@@ -285,12 +273,12 @@ impl FunctionManager {
             module
         };
 
-        let functions = Arc::new(ObjectFunctions {
+        let function = Arc::new(Function {
             next_instance_id: Arc::new(AtomicU64::new(1)),
             idle_list: Default::default(),
             store,
             module,
         });
-        self.functions.insert(object_type, functions);
+        self.functions.insert(name, function);
     }
 }

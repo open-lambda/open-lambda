@@ -3,21 +3,14 @@ use wasmer::{
 };
 
 use std::net::SocketAddr;
-use std::sync::Arc;
-
-use parking_lot::Mutex;
 
 use serde_bytes::ByteBuf;
-
-use lambda_store_client::Client as Database;
 
 use hyper::client::connect::HttpConnector;
 use hyper::client::Client as HttpClient;
 use hyper::{Body, Request};
 
-use open_lambda_protocol::{BatchCallData, BatchCallResult};
-
-use crate::bindings::storage::TransactionHandle;
+use open_lambda_proxy_protocol::{CallData, CallResult};
 
 #[derive(Clone, WasmerEnv)]
 pub struct IpcEnv {
@@ -27,12 +20,10 @@ pub struct IpcEnv {
     allocate: LazyInit<NativeFunc<u32, i64>>,
     #[wasmer(yielder)]
     yielder: LazyInit<Yielder>,
-    database: Arc<Database>,
-    transaction: Arc<Mutex<TransactionHandle>>,
     addr: SocketAddr,
 }
 
-fn batch_call(
+fn call(
     env: &IpcEnv,
     call_data_ptr: WasmPtr<u8, Array>,
     call_data_len: u32,
@@ -43,30 +34,12 @@ fn batch_call(
     let memory = env.memory.get_ref().unwrap();
     let yielder = env.yielder.get_ref().unwrap().get();
 
-    // First commit the transaction to prevent deadlocks
-    // TODO we should have a way to enable "linearizable"-mode
-    {
-        let tx_outer_lock = env.transaction.lock();
-        let mut tx_lock = tx_outer_lock.lock();
-
-        if let Some(tx) = tx_lock.take() {
-            let result = yielder.async_suspend(tx.commit());
-
-            if let Err(err) = result {
-                panic!("Transaction failed: {err}");
-            }
-        }
-
-        // Create a new transaction in case there is more
-        *tx_lock = Some(env.database.begin_transaction());
-    }
-
     // This sets up a connection pool that will be reused
     lazy_static::lazy_static! {
         static ref HTTP_CLIENT: HttpClient<HttpConnector, Body> = HttpClient::new();
     };
 
-    let call_data: BatchCallData = unsafe {
+    let call_data: CallData = unsafe {
         let ptr = memory
             .view::<u8>()
             .as_ptr()
@@ -77,73 +50,40 @@ fn batch_call(
         bincode::deserialize(raw_data).expect("Failed to parse call data")
     };
 
-    let results = yielder.async_suspend(async move {
-        let mut results: BatchCallResult = vec![];
-        let mut calls = vec![];
+    let result: CallResult = yielder.async_suspend(async move {
+        let uri = hyper::Uri::builder()
+            .scheme("http")
+            .authority(format!("{}", env.addr))
+            .path_and_query(format!("/run/{}", call_data.fn_name))
+            .build()
+            .unwrap();
 
-        for (object_id, function_id, args) in call_data.into_iter() {
-            let object_type = match env.database.get_object(object_id).await {
-                Ok(object) => object.get_object_type(),
-                Err(err) => {
-                    panic!("Failed to get object: {err}");
-                }
-            };
+        let request = Request::builder()
+            .header("User-Agent", "open-lambda-wasm/1.0")
+            .method("POST")
+            .uri(uri)
+            .body(call_data.args.into_vec().into())
+            .unwrap();
 
-            let metadata = match object_type.get_function_by_id(&function_id) {
-                Some(meta) => meta,
-                None => {
-                    panic!("No such function");
-                }
-            };
-
-            let oid_hex = object_id
-                .to_hex_string()
-                .replace('#', "%23")
-                .replace(':', "%3A");
-
-            let uri = hyper::Uri::builder()
-                .scheme("http")
-                .authority(format!("{}", env.addr))
-                .path_and_query(format!("/run_on/{}?object_id={oid_hex}", metadata.name))
-                .build()
-                .unwrap();
-
-            let request = Request::builder()
-                .header("User-Agent", "open-lambda-wasm/1.0")
-                .method("POST")
-                .uri(uri)
-                .body(args.into())
-                .unwrap();
-
-            let call = HTTP_CLIENT.request(request);
-            calls.push(call);
-        }
-
-        for call in calls {
-            let response = match call.await {
-                Ok(resp) => resp,
-                Err(err) => {
-                    panic!("Internal call to {} failed: {err}", env.addr);
-                }
-            };
-
-            if !response.status().is_success() {
-                panic!(
-                    "Request was unsuccessful. Go status code: {}",
-                    response.status()
-                );
+        let response = match HTTP_CLIENT.request(request).await {
+            Ok(resp) => resp,
+            Err(err) => {
+                panic!("Internal call to {} failed: {err}", env.addr);
             }
+        };
 
-            let buf = hyper::body::to_bytes(response).await.unwrap();
-            let result = Ok(ByteBuf::from(buf.to_vec()));
-
-            results.push(result);
+        if !response.status().is_success() {
+            panic!(
+                "Request was unsuccessful. Go status code: {}",
+                response.status()
+            );
         }
 
-        results
+        let buf = hyper::body::to_bytes(response).await.unwrap();
+        Ok(ByteBuf::from(buf.to_vec()))
     });
 
-    let result_data = bincode::serialize(&results).unwrap();
+    let result_data = bincode::serialize(&result).unwrap();
     let buffer_len = result_data.len();
     let offset = env
         .allocate
@@ -176,22 +116,18 @@ fn batch_call(
 pub fn get_imports(
     store: &Store,
     addr: SocketAddr,
-    database: Arc<Database>,
-    transaction: TransactionHandle,
 ) -> (Exports, IpcEnv) {
     let mut ns = Exports::new();
     let env = IpcEnv {
         memory: Default::default(),
         allocate: Default::default(),
         yielder: Default::default(),
-        database,
-        transaction: Arc::new(Mutex::new(transaction)),
         addr,
     };
 
     ns.insert(
-        "batch_call",
-        Function::new_native_with_env(store, env.clone(), batch_call),
+        "call",
+        Function::new_native_with_env(store, env.clone(), call),
     );
 
     (ns, env)

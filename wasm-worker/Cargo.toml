@@ -5,10 +5,11 @@ authors = ["Kai Mast <kaimast@cs.wisc.edu>"]
 edition = "2021"
 
 [dependencies]
-tokio = { version="1", features=["net", "rt-multi-thread", "macros"] }
+tokio = { version="1", features=["net", "rt-multi-thread", "signal", "macros"] }
 hyper = { version="0.14", features=["server", "client", "http1", "runtime", "stream"] }
 serde_bytes = "0.11"
 ron = "0"
+derive_more = "0.99"
 clap = { version = "3", default-features=false, features=["suggestions", "color", "std", "cargo", "derive"]}
 futures-util = { version="0.3" }
 wasmer = { git="ssh://git@github.com/kaimast/wasmer.git", branch="zygote", default-features=false, features=["compiler", "async"] }
@@ -18,7 +19,6 @@ wasmer-compiler-llvm = { git="ssh://git@github.com/kaimast/wasmer.git", branch="
 wasmer-engine-dylib = { git="ssh://git@github.com/kaimast/wasmer.git", branch="zygote" }
 wasmer-engine = { git="ssh://git@github.com/kaimast/wasmer.git", branch="zygote" }
 wasmer-vm = { git="ssh://git@github.com/kaimast/wasmer.git", branch="zygote" }
-percent-encoding = "2"
 lazy_static = "1"
 pretty_env_logger = { version="0.4" }
 log = "0.4"
@@ -27,11 +27,9 @@ dashmap = "4"
 cfg-if = "1"
 bincode = "1"
 serde = "1"
-open-lambda-protocol = { git="ssh://git@github.com/kaimast/lambda-store.git",default-features=false, branch="experiments", features=[] }
-lambda-store-client = { git="ssh://git@github.com/kaimast/lambda-store.git", default-features=false, branch="experiments", features=[] }
-lambda-store-utils = { git="ssh://git@github.com/kaimast/lambda-store.git", default-features=false, branch="experiments", features=[] }
 async-wormhole = { git="https://github.com/lunatic-solutions/async-wormhole.git" }
 rand = "0.8"
+open-lambda-proxy-protocol = { path="../bin-programs/proxy-protocol" }
 
 [features]
 default = []

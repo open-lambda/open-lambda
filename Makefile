@@ -38,7 +38,7 @@ wasm-worker:
 	cp wasm-worker/target/${BUILDTYPE}/wasm-worker ./ol-wasm
 
 wasm-programs:
-	cd bin-programs && just wasm-programs
+	cd bin-programs && make wasm-programs
 	bash ./bin-programs/install-wasm.sh test-registry.wasm ${WASM_TARGET}
 
 native-programs: imgs/lambda

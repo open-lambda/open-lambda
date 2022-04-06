@@ -11,7 +11,6 @@ import subprocess
 import os
 import json
 import requests
-import lambdastore
 
 OL_DIR=None
 CURR_CONF=None
@@ -19,77 +18,6 @@ CURR_CONF=None
 def setup_config(ol_dir):
     global OL_DIR
     OL_DIR = ol_dir
-
-class Datastore:
-    ''' Sets up a local lambdastore cluster '''
-
-    def __init__(self, num_replicas=1):
-        if num_replicas < 1:
-            raise RuntimeError("Need at least one storage replica")
-
-        args = [
-            "--registry_path=./test-registry.wasm",
-            f"--replica_set_size={num_replicas}"
-        ]
-
-        print("Starting lambda store")
-        self._running = False
-        self._coord = Popen(["lambda-store-coordinator"] + args)
-        sleep(0.5)
-
-        self._nodes = []
-
-        for pos in range(num_replicas):
-            node = Popen(["lambda-store-node", f"-p=localhost:{50000+pos}",
-                f"-l=localhost:{51000+pos}"])
-
-            self._nodes.append(node)
-
-        self._running = True
-        sleep(0.1)
-
-        # blocks until connection is set up
-        client = lambdastore.create_client('localhost')
-        client.close()
-
-        self._known_programs = []
-
-        print("Datastore set up")
-
-    def __del__(self):
-        self.stop()
-
-    def is_running(self):
-        return self._running
-
-    @staticmethod
-    def call(fn_name, args=None):
-        client = lambdastore.create_client('localhost')
-        client.call(fn_name, args)
-
-    def stop(self):
-        if self.is_running():
-            self._running = False
-        else:
-            return # Already stopped
-
-        print("Stopping lambda store")
-
-        try:
-            self._coord.terminate()
-            self._coord.wait()
-            self._coord = None
-        except Exception as err:
-            raise RuntimeError("Failed to stop lambda store coordinator: %s") from err
-
-        try:
-            for node in self._nodes:
-                node.terminate()
-                node.wait()
-
-            self._nodes = []
-        except Exception as err:
-            raise RuntimeError("Failed to stop lambda store node") from err
 
 def get_ol_stats():
     if os.path.exists(f"{OL_DIR}/worker/stats.json"):

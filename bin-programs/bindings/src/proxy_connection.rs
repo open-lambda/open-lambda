@@ -7,7 +7,9 @@ use std::os::unix::net::UnixStream;
 use tokio_util::codec::{Encoder, Decoder};
 use tokio_util::codec::length_delimited::LengthDelimitedCodec;
 
-use open_lambda_proxy_protocol::ProxyMessage;
+use serde_bytes::ByteBuf;
+
+use open_lambda_proxy_protocol::{CallData, CallResult, ProxyMessage};
 
 pub(crate) struct ProxyConnection {
     codec: LengthDelimitedCodec,
@@ -22,7 +24,8 @@ impl ProxyConnection {
             inner
         } else {
             log::debug!("Establishing connection to database proxy");
-            let stream = UnixStream::connect("/host/db-proxy.sock").expect("Failed to connect to db-proxy");
+            let stream = UnixStream::connect("/host/proxy.sock")
+                .expect("Failed to connect to container proxy");
             let codec = LengthDelimitedCodec::new();
 
             Self{ stream, codec }
@@ -31,9 +34,10 @@ impl ProxyConnection {
         ProxyHandle{ inner: Some(inner) }
     }
 
-    pub fn call(&mut self, func_name: String, arg_string: String) -> Result<String, String> {
+    pub fn call(&mut self, fn_name: String, args: Vec<u8>) -> CallResult {
         log::trace!("Issuing call request");
-        self.send_message(&ProxyMessage::CallRequest{ func_name, arg_string });
+        let cdata = CallData{ fn_name, args: ByteBuf::from(args) };
+        self.send_message(&ProxyMessage::CallRequest(cdata));
 
         if let ProxyMessage::CallResult(result) = self.receive_message() {
             result
@@ -56,16 +60,12 @@ impl ProxyConnection {
 
         loop {
             let mut data = [0; 1024];
-            let len;
+            let len = match self.stream.read(&mut data) {
+                Ok(l) => l,
+                Err(err) => panic!("failed to read from socket: {err}"),
+            };
 
-            match self.stream.read(&mut data) {
-                Ok(l) => { len = l; }
-                Err(e) => {
-                    panic!("failed to read from socket: {}" , e);
-                }
-            }
-
-            log::info!("Received {} bytes from proxy", len);
+            log::info!("Received {len} bytes from proxy");
 
             if len > 0 {
                 buffer.extend_from_slice(&data[0..len]);
@@ -80,9 +80,7 @@ impl ProxyConnection {
                 Ok(None) => {
                     continue;
                 }
-                Err(e) => {
-                    panic!("Failed to decode from socket; error = {:?}", e);
-                }
+                Err(err) => panic!("Failed to decode from socket: {err}"),
             }
         }
     }

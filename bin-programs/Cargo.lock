@@ -115,14 +115,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hello"
-version = "0.1.0"
-dependencies = [
- "open-lambda",
- "open-lambda-macros",
-]
-
-[[package]]
 name = "hermit-abi"
 version = "0.1.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -165,6 +157,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "308cc39be01b73d0d18f82a0e7b2a3df85245f84af96fdddc5d202d27e47b86a"
 
 [[package]]
+name = "noop"
+version = "0.1.0"
+dependencies = [
+ "open-lambda",
+ "open-lambda-macros",
+]
+
+[[package]]
 name = "opaque-debug"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -179,7 +179,7 @@ dependencies = [
  "env_logger",
  "log",
  "open-lambda-proxy-protocol",
- "schema",
+ "serde_bytes",
  "serde_json",
  "tokio-util",
 ]
@@ -197,6 +197,7 @@ name = "open-lambda-proxy-protocol"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "serde_bytes",
 ]
 
 [[package]]
@@ -247,23 +248,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73b4b750c782965c211b42f022f59af1fbceabdd026623714f104152f1ec149f"
 
 [[package]]
-name = "schema"
-version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/schema.git#47abd77b710f3e43c4061c9666d4a33b3a6bfac2"
-dependencies = [
- "bincode",
- "log",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "serde"
 version = "1.0.136"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ce31e24b01e1e524df96f1c2fdd054405f8d7376249a5110886fb4b658484789"
 dependencies = [
  "serde_derive",
+]
+
+[[package]]
+name = "serde_bytes"
+version = "0.11.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16ae07dd2f88a366f15bd0632ba725227018c69a1c8550a927324f8eb8368bb9"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

@@ -1,5 +1,7 @@
 use serde_json as json;
 
+use open_lambda_proxy_protocol::CallResult;
+
 #[ cfg(target_arch="wasm32") ]
 mod internal {
     #[link(wasm_import_module="ol_ipc")]
@@ -31,40 +33,37 @@ pub fn call(func_name: &str, args: &json::Value) -> Result<Option<json::Value>, 
     };
 
     //TODO get rid of this additional serialization
-    match bincode::deserialize(&result_data).unwrap() {
-        Ok(data) => {
-            let result_string = String::from_utf8(data).unwrap();
-            parse_call_result(Ok(result_string))
-        }
-        Err(err) => parse_call_result(Err(err))
-    }
+    parse_json_result(bincode::deserialize(&result_data).unwrap())
 }
 
 #[ cfg(not(target_arch="wasm32")) ]
 pub fn call<S: ToString>(func_name: S, args: &json::Value) -> Result<Option<json::Value>, String> {
     let func_name = func_name.to_string();
-    log::debug!("Got call request for '{}'", func_name);
+    log::debug!("Got call request for \"{func_name}\"");
 
     let arg_string = serde_json::to_string(args).unwrap();
+    let jdata = arg_string.as_bytes().to_vec();
 
     let mut proxy = crate::proxy_connection::ProxyConnection::get_instance();
-    let result = proxy.get_mut().call(func_name, arg_string);
+    let result = proxy.get_mut().call(func_name, jdata);
 
-    parse_call_result(result)
+    parse_json_result(result)
 }
 
-fn parse_call_result(result: Result<String, String>) -> Result<Option<json::Value>, String> {
+fn parse_json_result(result: CallResult) -> Result<Option<json::Value>, String> {
     match result {
-        Ok(result_string) => {
-            if result_string.is_empty() {
+        Ok(result_data) => {
+            if result_data.is_empty() {
                 // Is this needed? Result should always be a valid json
                 Ok(None)
             } else {
+                let result_string = String::from_utf8(result_data.into_vec())
+                    .expect("Result not a valid utf-8 string?");
+
                 match json::from_str(&result_string) {
                     Ok(json) => Ok(Some(json)),
                     Err(err) => {
-                        Err(format!("Failed to parse call result JSON `{}`: {}",
-                                    result_string, err))
+                        Err(format!("Failed to parse call result JSON \"{result_string}\": {err}"))
                     }
                 }
             }

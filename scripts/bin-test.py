@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
-''' Integration test for open lambda's WebAssembly runtime '''
+''' Integration test for open lambda's native and WebAssembly runtimes '''
 
-# pylint: disable=global-statement, missing-function-docstring, broad-except, invalid-name, consider-using-with
+# pylint: disable=global-statement, missing-function-docstring, broad-except, invalid-name, consider-using-with, too-many-statements
 
 import argparse
 import os
@@ -18,8 +18,6 @@ from subprocess import Popen
 from contextlib import contextmanager
 
 from open_lambda import OpenLambda
-from helper import Datastore
-import lambdastore
 
 # These will be set by argparse in main()
 TEST_FILTER = []
@@ -78,7 +76,6 @@ def test(func):
         result["worker_tail"] = None
 
         total_t0 = time.time()
-        datastore = Datastore()
         worker = None
 
         try:
@@ -121,8 +118,6 @@ def test(func):
         result["total_seconds"] = total_t1-total_t0
         results["runs"].append(result)
 
-        datastore.stop()
-
         print(json.dumps(result, indent=2))
         return ret_val
 
@@ -132,37 +127,7 @@ def test(func):
 @contextmanager
 
 @test
-def wasm_numpy_test():
-    open_lambda = OpenLambda()
-    lstore = lambdastore.create_client('localhost')
-
-    obj = lstore.create_object('test')
-    oid = obj.get_identifier().to_hex_string()
-
-    jdata = open_lambda.run_on(oid, 'numpy', [1,2])
-    assert jdata['result'] == 3
-
-    jdata = open_lambda.run_on(oid, "numpy", [[1, 2], [3, 4]])
-    assert jdata['result'] == 10
-
-    jdata = open_lambda.run_on(oid, "numpy", [[[1, 2], [3, 4]], [[1, 2], [3, 4]]])
-    assert jdata['result'] == 20
-
-@test
-def call_child_test():
-    key = "child_key"
-
-    lstore = lambdastore.create_client('localhost')
-    open_lambda = OpenLambda()
-
-    obj = lstore.create_object('test')
-    oid = obj.get_identifier().to_hex_string()
-    obj.create_child_in_map("children", key, "test")
-
-    open_lambda.run_on(oid, 'call_child', {"count": 100, "child_key": key}, json=False)
-
-@test
-def ping_test():
+def ping():
     open_lambda = OpenLambda()
 
     pings = 1000
@@ -172,14 +137,24 @@ def ping_test():
     seconds = time.time() - t_start
     return {"pings_per_sec": pings/seconds}
 
+@test
+def noop():
+    open_lambda = OpenLambda()
+    open_lambda.run("noop", args=[], json=False)
+
+@test
+def hashing():
+    open_lambda = OpenLambda()
+    open_lambda.run("hashing", args={"num_hashes": 100, "input_len": 1024}, json=False)
+
 def run_tests():
     ''' Runs all tests '''
 
     print("Testing WASM")
 
-    ping_test()
-    wasm_numpy_test()
-    call_child_test()
+    ping()
+    noop()
+    hashing()
 
 def _main():
     global TEST_FILTER
