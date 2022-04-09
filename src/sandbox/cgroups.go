@@ -298,6 +298,12 @@ func (cg *Cgroup) getMemUsageMB() int {
 	return int((usage + mb - 1) / mb)
 }
 
+// get max mem usage in MB
+func (cg *Cgroup) getMaxMemUsageMB() float64 {
+	usage := cg.ReadInt("memory", "memory.max_usage_in_bytes")
+	return float64(usage) / 1024 / 1024
+}
+
 // get mem limit in MB
 func (cg *Cgroup) getMemLimitMB() int {
 	return cg.memLimitMB

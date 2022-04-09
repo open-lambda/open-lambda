@@ -167,6 +167,8 @@ func (c *SOCKContainer) Pause() (err error) {
 		return err
 	}
 
+	c.printf("max mem MB at pause: %f", c.cg.getMaxMemUsageMB())
+
 	if common.Conf.Features.Downsize_paused_mem {
 		// drop mem limit to what is used when we're paused, because
 		// we know the Sandbox cannot allocate more when it's not
@@ -178,6 +180,7 @@ func (c *SOCKContainer) Pause() (err error) {
 			c.pool.mem.adjustAvailableMB(oldLimit - newLimit)
 		}
 	}
+
 	return nil
 }
 
