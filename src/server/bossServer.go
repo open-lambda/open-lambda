@@ -10,6 +10,7 @@ import (
 	"strconv"
 
 	"github.com/open-lambda/open-lambda/ol/common"
+	"github.com/open-lambda/open-lambda/ol/boss"
 )
 
 const (
@@ -18,7 +19,11 @@ const (
 )
 
 type Boss struct {
+	reqChan chan *boss.Invocation
+
 	mutex      sync.Mutex
+	workerPool boss.WorkerPool
+	workers []boss.Worker
 }
 
 var m = map[string][]int{"workers": []int{}}
@@ -69,8 +74,21 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// STEP 2: adjust worker count (TODO)
+	if worker_count > 3 {
+		worker_count = 3
+		// TODO: config cap
+		log.Printf("capping workers at %d to avoid big bills during debugging\n", worker_count)
+	}
 
+	// STEP 2: adjust worker count (TODO)
+	for len(b.workers) < worker_count {
+		worker := b.workerPool.Create(b.reqChan)
+		b.workers = append(b.workers, worker)
+	}
+
+	// TODO: cleanup workers if necessary
+
+	// TODO: respond based on number of workers
 	log.Printf("Receive request to %s, worker_count of %d requested\n", r.URL.Path, worker_count)
 	var s []int
 	m["workers"] = append(s, 1)
@@ -84,12 +102,34 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (b *Boss) RunLambda(w http.ResponseWriter, r *http.Request) {
+	invocation := boss.NewInvocation(w, r)
+
+	select {
+	case b.reqChan <- invocation:
+		<- invocation.Done // wait for completion
+	default:
+		// the channel is not taking requests, must be too busy
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, err := w.Write([]byte("request queue is full\n"))
+		if err != nil {
+			log.Printf("(4) could not write web response: %s\n", err.Error())
+		}
+	}
+}
+
 func BossMain() (err error) {
-	boss := Boss{}
+	// TODO: choose correct worker pool type based on config
+	workerPool := boss.NewMockWorkerPool()
+	boss := Boss{
+		workerPool: workerPool,
+		reqChan: make(chan *boss.Invocation),
+	}
 
 	// things shared by all servers
 	http.HandleFunc(BOSS_STATUS_PATH, boss.BossStatus)
 	http.HandleFunc(SCALING_PATH, boss.ScalingWorker)
+	http.HandleFunc(RUN_PATH, boss.RunLambda)
 
 	port := fmt.Sprintf(":%s", common.Conf.Worker_port)
 	fmt.Printf("Listen on port %s\n", port)
