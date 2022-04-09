@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"io"
+	"strconv"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 )
@@ -37,7 +39,39 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
 
-	log.Printf("Receive request to %s\n", r.URL.Path)
+	// STEP 1: get int (worker count) from POST body, or return an error
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		_, err := w.Write([]byte("POST a count to /scaling/worker_count\n"))
+		if err != nil {
+			log.Printf("(1) could not write web response: %s\n", err.Error())
+		}
+		return
+	}
+
+	contents, err := io.ReadAll(r.Body)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, err := w.Write([]byte("could not read body of web request\n"))
+		if err != nil {
+			log.Printf("(2) could not write web response: %s\n", err.Error())
+		}
+		return
+	}
+
+	worker_count, err := strconv.Atoi(string(contents))
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, err := w.Write([]byte("body of post to /scaling/worker_count should be an int\n"))
+		if err != nil {
+			log.Printf("(3) could not write web response: %s\n", err.Error())
+		}
+		return
+	}
+
+	// STEP 2: adjust worker count (TODO)
+
+	log.Printf("Receive request to %s, worker_count of %d requested\n", r.URL.Path, worker_count)
 	var s []int
 	m["workers"] = append(s, 1)
 	for k, v := range m {
