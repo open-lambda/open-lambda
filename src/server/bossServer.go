@@ -3,19 +3,20 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
-	"sync"
-	"io"
 	"strconv"
+	"sync"
 
-	"github.com/open-lambda/open-lambda/ol/common"
 	"github.com/open-lambda/open-lambda/ol/boss"
+	"github.com/open-lambda/open-lambda/ol/common"
 )
 
 const (
 	BOSS_STATUS_PATH = "/bstatus"
 	SCALING_PATH     = "/scaling/worker_count"
+	STORAGE_PATH     = "registry/upload"
 )
 
 type Boss struct {
@@ -23,7 +24,7 @@ type Boss struct {
 
 	mutex      sync.Mutex
 	workerPool boss.WorkerPool
-	workers []boss.Worker
+	workers    []boss.Worker
 }
 
 var m = map[string][]int{"workers": []int{}}
@@ -107,7 +108,7 @@ func (b *Boss) RunLambda(w http.ResponseWriter, r *http.Request) {
 
 	select {
 	case b.reqChan <- invocation:
-		<- invocation.Done // wait for completion
+		<-invocation.Done // wait for completion
 	default:
 		// the channel is not taking requests, must be too busy
 		w.WriteHeader(http.StatusTooManyRequests)
@@ -123,7 +124,7 @@ func BossMain() (err error) {
 	workerPool := boss.NewMockWorkerPool()
 	boss := Boss{
 		workerPool: workerPool,
-		reqChan: make(chan *boss.Invocation),
+		reqChan:    make(chan *boss.Invocation),
 	}
 
 	// things shared by all servers
