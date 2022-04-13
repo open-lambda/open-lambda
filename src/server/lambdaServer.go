@@ -41,7 +41,7 @@ func (s *LambdaServer) RunLambda(w http.ResponseWriter, r *http.Request) {
 	t := common.T0("web-request")
 	defer t.T1()
 
-	log.Printf("Receive request to %s\n", r.URL.Path)
+	log.Printf("Received request to %s\n", r.URL.Path)
 
 	// write response headers
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -57,12 +57,12 @@ func (s *LambdaServer) RunLambda(w http.ResponseWriter, r *http.Request) {
 		// components represent run[0]/<name_of_sandbox>[1]/<extra_things>...
 		// ergo we want [1] for name of sandbox
 		urlParts := getUrlComponents(r)
-		if len(urlParts) < 2 {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("expected invocation format: /run/<lambda-name>"))
-		} else {
+		if len(urlParts) == 2 {
 			img := urlParts[1]
 			s.lambdaMgr.Get(img).Invoke(w, r)
+		} else {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("expected invocation format: /run/<lambda-name>"))
 		}
 	}
 }
@@ -77,7 +77,7 @@ func (s *LambdaServer) cleanup() {
 
 // NewLambdaServer creates a server based on the passed config."
 func NewLambdaServer() (*LambdaServer, error) {
-	log.Printf("Start Lambda Server")
+	log.Printf("Starting new lambda server")
 
 	lambdaMgr, err := lambda.NewLambdaMgr()
 	if err != nil {

@@ -57,7 +57,7 @@ func NewDockerPool(pidMode string, caps []string) (*DockerPool, error) {
 }
 
 // Create creates a docker sandbox from the handler and sandbox directory.
-func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, meta *SandboxMeta) (sb Sandbox, err error) {
+func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, meta *SandboxMeta, _rt_type common.RuntimeType) (sb Sandbox, err error) {
 	meta = fillMetaDefaults(meta)
 	t := common.T0("Create()")
 	defer t.T1()
@@ -88,7 +88,7 @@ func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir 
 	// add installed packages to the path
 	var pkgDirs []string
 	for _, pkg := range meta.Installs {
-		pkgDirs = append(pkgDirs, "/packages/" + pkg + "/files")
+		pkgDirs = append(pkgDirs, "/packages/"+pkg+"/files")
 	}
 
 	container, err := pool.client.CreateContainer(
@@ -97,7 +97,7 @@ func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir 
 				Cmd:    []string{"/spin"},
 				Image:  dockerutil.LAMBDA_IMAGE,
 				Labels: pool.labels,
-				Env: []string{"PYTHONPATH=" + strings.Join(pkgDirs, ":")},
+				Env:    []string{"PYTHONPATH=" + strings.Join(pkgDirs, ":")},
 			},
 			HostConfig: &docker.HostConfig{
 				Binds:   volumes,

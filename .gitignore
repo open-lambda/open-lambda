@@ -37,6 +37,8 @@
 
 *~
 *.swp
+*.swo
+*.swn
 
 .vagrant
 .sock
@@ -55,4 +57,27 @@
 /test-dir
 /test.json
 
+# binaries
 ol
+ol-wasm
+ol-container-proxy
+
+*.bin
+
+bench-dir
+
+test-registry.wasm/
+bin-functions/target/
+wasm-worker/target/
+container-proxy/target
+
+lambda/runtimes/rust/target
+
+bench-results.csv
+bench-results.pdf
+
+scripts/build
+scripts/dist
+scripts/open_lambda.egg-info
+
+*.lsm

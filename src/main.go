@@ -58,7 +58,7 @@ func initOLDir(olPath string) (err error) {
 
 	// create a base directory to run sock handlers
 	base := common.Conf.SOCK_base_path
-	fmt.Printf("Create lambda base at %v (may take several minutes)\n", base)
+	fmt.Printf("Creating lambda base at %v (may take several minutes)\n", base)
 	err = dutil.DumpDockerImage(client, "lambda", base)
 	if err != nil {
 		return err
@@ -178,7 +178,6 @@ func overrideOpts(confPath, overridePath, optsStr string) error {
 			default:
 				return fmt.Errorf("%s refers to a %T, not a map", keys[i], c[keys[i]])
 			}
-
 		}
 
 		key := keys[len(keys)-1]
@@ -257,6 +256,7 @@ func worker(ctx *cli.Context) error {
 	// should we run as a background process?
 	detach := ctx.Bool("detach")
 
+	// If detach is specified, we start another ol-process with the worker argument
 	if detach {
 		// stdout+stderr both go to log
 		logPath := filepath.Join(olPath, "worker.out")
@@ -273,6 +273,8 @@ func worker(ctx *cli.Context) error {
 				cmd = append(cmd, arg)
 			}
 		}
+
+		// Get the path of this binary
 		binPath, err := exec.LookPath(os.Args[0])
 		if err != nil {
 			return err
@@ -366,7 +368,7 @@ func kill(ctx *cli.Context) error {
 		return err
 	}
 
-	fmt.Printf("Kill worker process with PID %d\n", pid)
+	fmt.Printf("Killing worker process with PID %d\n", pid)
 	p, err := os.FindProcess(pid)
 	if err != nil {
 		fmt.Printf("%s\n", err.Error())
@@ -380,6 +382,7 @@ func kill(ctx *cli.Context) error {
 	for i := 0; i < 300; i++ {
 		err := p.Signal(syscall.Signal(0))
 		if err != nil {
+			fmt.Printf("OL worker process stopped successfully")
 			return nil // good, process must have stopped
 		}
 		time.Sleep(100 * time.Millisecond)

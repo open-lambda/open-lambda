@@ -27,15 +27,15 @@ type SOCKServer struct {
 	sandboxes sync.Map
 }
 
-func (s *SOCKServer) GetSandbox(id string) sandbox.Sandbox {
-	val, ok := s.sandboxes.Load(id)
+func (server *SOCKServer) GetSandbox(id string) sandbox.Sandbox {
+	val, ok := server.sandboxes.Load(id)
 	if !ok {
 		return nil
 	}
 	return val.(sandbox.Sandbox)
 }
 
-func (s *SOCKServer) Create(w http.ResponseWriter, rsrc []string, args map[string]interface{}) error {
+func (server *SOCKServer) Create(w http.ResponseWriter, rsrc []string, args map[string]interface{}) error {
 	var leaf bool
 	if b, ok := args["leaf"]; !ok || b.(bool) {
 		leaf = true
@@ -48,7 +48,7 @@ func (s *SOCKServer) Create(w http.ResponseWriter, rsrc []string, args map[strin
 
 	var parent sandbox.Sandbox = nil
 	if p, ok := args["parent"]; ok && p != "" {
-		parent = s.GetSandbox(p.(string))
+		parent = server.GetSandbox(p.(string))
 		if parent == nil {
 			return fmt.Errorf("no sandbox found with ID '%s'", p)
 		}
@@ -67,14 +67,33 @@ func (s *SOCKServer) Create(w http.ResponseWriter, rsrc []string, args map[strin
 	if err := os.MkdirAll(scratchDir, 0777); err != nil {
 		panic(err)
 	}
+
+	rt_type := common.RT_PYTHON
+
+	if rt_name, ok := args["runtime"]; ok {
+		if rt_name == "python" {
+			rt_type = common.RT_PYTHON
+		} else if rt_name == "binary" {
+			rt_type = common.RT_BINARY
+		} else {
+			return fmt.Errorf("No such runtime `%s`", rt_name)
+		}
+	}
+
+	if parent != nil && parent.GetRuntimeType() != rt_type {
+		return fmt.Errorf("Parent and child have different runtimes")
+	}
+
 	meta := &sandbox.SandboxMeta{
 		Installs: packages,
 	}
-	c, err := s.sbPool.Create(parent, leaf, codeDir, scratchDir, meta)
+
+	c, err := server.sbPool.Create(parent, leaf, codeDir, scratchDir, meta, rt_type)
 	if err != nil {
 		return err
 	}
-	s.sandboxes.Store(c.ID(), c)
+
+	server.sandboxes.Store(c.ID(), c)
 	log.Printf("Save ID '%s' to map\n", c.ID())
 
 	w.Write([]byte(fmt.Sprintf("%v\n", c.ID())))
@@ -155,6 +174,7 @@ func (s *SOCKServer) HandleInternal(w http.ResponseWriter, r *http.Request) erro
 	}
 
 	if h, ok := routes[rsrc[1]]; ok {
+		log.Printf("Got %s", rsrc[1])
 		return h(w, rsrc[2:], args)
 	} else {
 		return fmt.Errorf("unknown op %s", rsrc[1])

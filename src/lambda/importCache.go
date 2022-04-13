@@ -143,13 +143,13 @@ func (cache *ImportCache) recursiveKill(node *ImportCacheNode) {
 }
 
 // (1) find Zygote and (2) use it to try creating a new Sandbox
-func (cache *ImportCache) Create(childSandboxPool sandbox.SandboxPool, isLeaf bool, codeDir, scratchDir string, meta *sandbox.SandboxMeta) (sandbox.Sandbox, error) {
+func (cache *ImportCache) Create(childSandboxPool sandbox.SandboxPool, isLeaf bool, codeDir, scratchDir string, meta *sandbox.SandboxMeta, rt_type common.RuntimeType) (sandbox.Sandbox, error) {
 	node := cache.root.Lookup(meta.Installs)
 	if node == nil {
 		panic(fmt.Errorf("did not find Zygote; at least expected to find the root"))
 	}
 	log.Printf("Try using Zygote from <%v>", node)
-	return cache.createChildSandboxFromNode(childSandboxPool, node, isLeaf, codeDir, scratchDir, meta)
+	return cache.createChildSandboxFromNode(childSandboxPool, node, isLeaf, codeDir, scratchDir, meta, rt_type)
 }
 
 // use getSandboxInNode to create a Zygote for the node (creating one
@@ -158,17 +158,17 @@ func (cache *ImportCache) Create(childSandboxPool sandbox.SandboxPool, isLeaf bo
 // the new Sandbox may either be for a Zygote, or a leaf Sandbox
 func (cache *ImportCache) createChildSandboxFromNode(
 	childSandboxPool sandbox.SandboxPool, node *ImportCacheNode, isLeaf bool,
-	codeDir, scratchDir string, meta *sandbox.SandboxMeta) (sandbox.Sandbox, error) {
+	codeDir, scratchDir string, meta *sandbox.SandboxMeta, rt_type common.RuntimeType) (sandbox.Sandbox, error) {
 
 	// try twice, restarting parent Sandbox if it fails the first time
 	forceNew := false
 	for i := 0; i < 2; i++ {
-		zygoteSB, isNew, err := cache.getSandboxInNode(node, forceNew)
+		zygoteSB, isNew, err := cache.getSandboxInNode(node, forceNew, rt_type)
 		if err != nil {
 			return nil, err
 		}
 
-		sb, err := childSandboxPool.Create(zygoteSB, isLeaf, codeDir, scratchDir, meta)
+		sb, err := childSandboxPool.Create(zygoteSB, isLeaf, codeDir, scratchDir, meta, rt_type)
 		if err == nil {
 			if isLeaf {
 				atomic.AddInt64(&node.createLeafChild, 1)
@@ -198,7 +198,7 @@ func (cache *ImportCache) createChildSandboxFromNode(
 //
 // the Sandbox returned is guaranteed to be in Unpaused state.  After
 // use, caller must also call putSandboxInNode to release ref count
-func (cache *ImportCache) getSandboxInNode(node *ImportCacheNode, forceNew bool) (sb sandbox.Sandbox, isNew bool, err error) {
+func (cache *ImportCache) getSandboxInNode(node *ImportCacheNode, forceNew bool, rt_type common.RuntimeType) (sb sandbox.Sandbox, isNew bool, err error) {
 	node.mutex.Lock()
 	defer node.mutex.Unlock()
 
@@ -221,7 +221,7 @@ func (cache *ImportCache) getSandboxInNode(node *ImportCacheNode, forceNew bool)
 		return node.sb, false, nil
 	} else {
 		// SLOW PATH
-		if err := cache.createSandboxInNode(node); err != nil {
+		if err := cache.createSandboxInNode(node, rt_type); err != nil {
 			return nil, false, err
 		}
 		node.sbRefCount = 1
@@ -257,7 +257,7 @@ func (cache *ImportCache) putSandboxInNode(node *ImportCacheNode, sb sandbox.San
 	}
 }
 
-func (cache *ImportCache) createSandboxInNode(node *ImportCacheNode) (err error) {
+func (cache *ImportCache) createSandboxInNode(node *ImportCacheNode, rt_type common.RuntimeType) (err error) {
 	// populate codeDir/packages with deps, and record top-level mods)
 	if node.codeDir == "" {
 		codeDir := cache.codeDirs.Make("import-cache")
@@ -290,9 +290,9 @@ func (cache *ImportCache) createSandboxInNode(node *ImportCacheNode) (err error)
 	scratchDir := cache.scratchDirs.Make("import-cache")
 	var sb sandbox.Sandbox
 	if node.parent != nil {
-		sb, err = cache.createChildSandboxFromNode(cache.sbPool, node.parent, false, node.codeDir, scratchDir, node.meta)
+		sb, err = cache.createChildSandboxFromNode(cache.sbPool, node.parent, false, node.codeDir, scratchDir, node.meta, rt_type)
 	} else {
-		sb, err = cache.sbPool.Create(nil, false, node.codeDir, scratchDir, node.meta)
+		sb, err = cache.sbPool.Create(nil, false, node.codeDir, scratchDir, node.meta, common.RT_PYTHON)
 	}
 
 	if err != nil {

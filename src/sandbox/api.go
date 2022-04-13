@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"github.com/open-lambda/open-lambda/ol/common"
 	"net/http/httputil"
 )
 
@@ -12,7 +13,7 @@ type SandboxPool interface {
 	// codeDir: directory where lambda code exists
 	// scratchDir: directory where handler code can write (caller is responsible for creating and deleting)
 	// meta: details about installs, imports, etc.  Will be populated with defaults if not specified
-	Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, meta *SandboxMeta) (sb Sandbox, err error)
+	Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, meta *SandboxMeta, rt_type common.RuntimeType) (sb Sandbox, err error)
 
 	// blocks until all Sandboxes are deleted, so caller must
 	// either delete them before this call, or from another asyncronously
@@ -57,6 +58,12 @@ type Sandbox interface {
 	// Lookup a particular stat (changes over time)
 	Status(SandboxStatus) (string, error)
 
+	// Get output of the runtime; if any
+	GetRuntimeLog() string
+
+	// Get output of the database proxy; if any
+	GetProxyLog() string
+
 	// Represent state as a multi-line string
 	DebugString() string
 
@@ -66,6 +73,8 @@ type Sandbox interface {
 
 	// Child calls this on parent to notify of child Destroy
 	childExit(child Sandbox)
+
+	GetRuntimeType() common.RuntimeType
 }
 
 type SandboxMeta struct {

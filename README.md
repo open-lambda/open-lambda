@@ -11,21 +11,33 @@ paper](https://www.usenix.org/system/files/conference/hotcloud16/hotcloud16_hend
 OpenLambda relies heavily on operations that require root
 privilege. To simplify this, we suggest that you run all commands as
 the root user.  OpenLambda is only actively tested on Ubuntu 20.04 LTS
-(AWS AMI `ami-0fb653ca2d3203ac1`, in particular).  On Ubuntu 20.04
-LTS, you can install the following.
+(AWS AMI `ami-0fb653ca2d3203ac1`, in particular).
 
+### Build and Test
+Make sure you have all basic dependencies installed:
 ```
-apt update
-apt upgrade -y
-apt update
-apt remove -y unattended-upgrades
+apt install docker.io llvm-11-dev libclang-common-11-dev build-essential python3
+```
 
-apt install -y python3-pip make gcc docker.io curl
-pip3 install boto3
-
+For a recent version of go, run the following:
+```
 wget -q -O /tmp/go1.17.6.linux-amd64.tar.gz https://dl.google.com/go/go1.17.6.linux-amd64.tar.gz
 tar -C /usr/local -xzf /tmp/go1.17.6.linux-amd64.tar.gz
 ln -s /usr/local/go/bin/go /usr/bin/go
+```
+
+Further, you need to have a recent nightly version of Rust, the wasm32 toolchain, and the `cross` tool installed. The easiest way to do this is.
+```
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain=nightly
+source $HOME/.cargo/env
+rustup target add wasm32-unknown-unknown
+cargo install cross
+```
+
+Finally, add your user to the docker group to enable cross-compilation of native binaries to open-lambda's environment. Do not forget to restart your shell/session afterwards!
+```
+gpasswd -a $username docker
+
 ```
 
 We recommend syncing to a commit that passes our daily tests:

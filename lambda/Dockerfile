@@ -1,21 +1,31 @@
 FROM ubuntu:focal
 
 RUN apt-get -y --fix-missing update
-RUN apt-get -y install wget apt-transport-https
-RUN apt-get -y install python3 python3-dev python3-pip build-essential libseccomp-dev
+RUN apt-get -y install wget apt-transport-https curl clang
+RUN apt-get -y install python3 python3-dev python3-pip python-is-python3
+RUN apt-get -y install build-essential libseccomp-dev
 RUN pip3 install --upgrade pip
 RUN pip3 install virtualenv requests tornado==6.1.0
 
-# for SOCK container engine
-COPY sock2.py /
+RUN mkdir /runtimes
 
-# Build python module in container to avoid depending on the host
-COPY ol.c /
-COPY setup.py /
-RUN cd / && python3 setup.py build_ext --inplace && mv ol.*.so /ol.so
+# Build Rust Runtime in the Container
+RUN mkdir /runtimes/rust
+COPY runtimes/rust /tmp/rust-runtime
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain nightly
+RUN cd /tmp/rust-runtime && ~/.cargo/bin/cargo build --release
+RUN mv /tmp/rust-runtime/target/release/open-lambda-runtime /runtimes/rust/server
+RUN rm -rf /tmp/rust-runtime
 
-# for Docker container engine
-COPY server.py /
+# Build the python module also in the Container
+RUN mkdir /runtimes/python
+COPY runtimes/python /tmp/py-runtime
+RUN cd /tmp/py-runtime && python3 setup.py build_ext --inplace
+RUN mv /tmp/py-runtime/ol.*.so /runtimes/python/ol.so
+RUN mv /tmp/py-runtime/server.py /runtimes/python/server.py
+RUN rm -rf /tmp/py-runtime
+
+# for the Docker container engine
 COPY spin /
 
 CMD ["/spin"]
