@@ -10,12 +10,12 @@ package azblob
 
 import (
 	"context"
+	"fmt"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"net/http"
 	"strconv"
 	"time"
-
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 )
 
 type directoryClient struct {
@@ -39,7 +39,7 @@ func (client *directoryClient) Create(ctx context.Context, directoryCreateOption
 		return DirectoryCreateResponse{}, err
 	}
 	if !runtime.HasStatusCode(resp, http.StatusCreated) {
-		return DirectoryCreateResponse{}, runtime.NewResponseError(resp)
+		return DirectoryCreateResponse{}, client.createHandleError(resp)
 	}
 	return client.createHandleResponse(resp)
 }
@@ -142,6 +142,19 @@ func (client *directoryClient) createHandleResponse(resp *http.Response) (Direct
 	return result, nil
 }
 
+// createHandleError handles the Create error response.
+func (client *directoryClient) createHandleError(resp *http.Response) error {
+	body, err := runtime.Payload(resp)
+	if err != nil {
+		return runtime.NewResponseError(err, resp)
+	}
+	errType := DataLakeStorageError{raw: string(body)}
+	if err := runtime.UnmarshalAsXML(resp, &errType); err != nil {
+		return runtime.NewResponseError(fmt.Errorf("%s\n%s", string(body), err), resp)
+	}
+	return runtime.NewResponseError(&errType, resp)
+}
+
 // Delete - Deletes the directory
 // If the operation fails it returns the *DataLakeStorageError error type.
 func (client *directoryClient) Delete(ctx context.Context, recursiveDirectoryDelete bool, directoryDeleteOptions *DirectoryDeleteOptions, leaseAccessConditions *LeaseAccessConditions, modifiedAccessConditions *ModifiedAccessConditions) (DirectoryDeleteResponse, error) {
@@ -154,7 +167,7 @@ func (client *directoryClient) Delete(ctx context.Context, recursiveDirectoryDel
 		return DirectoryDeleteResponse{}, err
 	}
 	if !runtime.HasStatusCode(resp, http.StatusOK) {
-		return DirectoryDeleteResponse{}, runtime.NewResponseError(resp)
+		return DirectoryDeleteResponse{}, client.deleteHandleError(resp)
 	}
 	return client.deleteHandleResponse(resp)
 }
@@ -222,6 +235,19 @@ func (client *directoryClient) deleteHandleResponse(resp *http.Response) (Direct
 	return result, nil
 }
 
+// deleteHandleError handles the Delete error response.
+func (client *directoryClient) deleteHandleError(resp *http.Response) error {
+	body, err := runtime.Payload(resp)
+	if err != nil {
+		return runtime.NewResponseError(err, resp)
+	}
+	errType := DataLakeStorageError{raw: string(body)}
+	if err := runtime.UnmarshalAsXML(resp, &errType); err != nil {
+		return runtime.NewResponseError(fmt.Errorf("%s\n%s", string(body), err), resp)
+	}
+	return runtime.NewResponseError(&errType, resp)
+}
+
 // GetAccessControl - Get the owner, group, permissions, or access control list for a directory.
 // If the operation fails it returns the *DataLakeStorageError error type.
 func (client *directoryClient) GetAccessControl(ctx context.Context, directoryGetAccessControlOptions *DirectoryGetAccessControlOptions, leaseAccessConditions *LeaseAccessConditions, modifiedAccessConditions *ModifiedAccessConditions) (DirectoryGetAccessControlResponse, error) {
@@ -234,7 +260,7 @@ func (client *directoryClient) GetAccessControl(ctx context.Context, directoryGe
 		return DirectoryGetAccessControlResponse{}, err
 	}
 	if !runtime.HasStatusCode(resp, http.StatusOK) {
-		return DirectoryGetAccessControlResponse{}, runtime.NewResponseError(resp)
+		return DirectoryGetAccessControlResponse{}, client.getAccessControlHandleError(resp)
 	}
 	return client.getAccessControlHandleResponse(resp)
 }
@@ -318,6 +344,19 @@ func (client *directoryClient) getAccessControlHandleResponse(resp *http.Respons
 	return result, nil
 }
 
+// getAccessControlHandleError handles the GetAccessControl error response.
+func (client *directoryClient) getAccessControlHandleError(resp *http.Response) error {
+	body, err := runtime.Payload(resp)
+	if err != nil {
+		return runtime.NewResponseError(err, resp)
+	}
+	errType := DataLakeStorageError{raw: string(body)}
+	if err := runtime.UnmarshalAsXML(resp, &errType); err != nil {
+		return runtime.NewResponseError(fmt.Errorf("%s\n%s", string(body), err), resp)
+	}
+	return runtime.NewResponseError(&errType, resp)
+}
+
 // Rename - Rename a directory. By default, the destination is overwritten and if the destination already exists and has a lease the lease is broken. This
 // operation supports conditional HTTP requests. For more
 // information, see Specifying Conditional Headers for Blob Service Operations [https://docs.microsoft.com/en-us/rest/api/storageservices/specifying-conditional-headers-for-blob-service-operations].
@@ -334,7 +373,7 @@ func (client *directoryClient) Rename(ctx context.Context, renameSource string, 
 		return DirectoryRenameResponse{}, err
 	}
 	if !runtime.HasStatusCode(resp, http.StatusCreated) {
-		return DirectoryRenameResponse{}, runtime.NewResponseError(resp)
+		return DirectoryRenameResponse{}, client.renameHandleError(resp)
 	}
 	return client.renameHandleResponse(resp)
 }
@@ -461,6 +500,19 @@ func (client *directoryClient) renameHandleResponse(resp *http.Response) (Direct
 	return result, nil
 }
 
+// renameHandleError handles the Rename error response.
+func (client *directoryClient) renameHandleError(resp *http.Response) error {
+	body, err := runtime.Payload(resp)
+	if err != nil {
+		return runtime.NewResponseError(err, resp)
+	}
+	errType := DataLakeStorageError{raw: string(body)}
+	if err := runtime.UnmarshalAsXML(resp, &errType); err != nil {
+		return runtime.NewResponseError(fmt.Errorf("%s\n%s", string(body), err), resp)
+	}
+	return runtime.NewResponseError(&errType, resp)
+}
+
 // SetAccessControl - Set the owner, group, permissions, or access control list for a directory.
 // If the operation fails it returns the *DataLakeStorageError error type.
 func (client *directoryClient) SetAccessControl(ctx context.Context, directorySetAccessControlOptions *DirectorySetAccessControlOptions, leaseAccessConditions *LeaseAccessConditions, modifiedAccessConditions *ModifiedAccessConditions) (DirectorySetAccessControlResponse, error) {
@@ -473,7 +525,7 @@ func (client *directoryClient) SetAccessControl(ctx context.Context, directorySe
 		return DirectorySetAccessControlResponse{}, err
 	}
 	if !runtime.HasStatusCode(resp, http.StatusOK) {
-		return DirectorySetAccessControlResponse{}, runtime.NewResponseError(resp)
+		return DirectorySetAccessControlResponse{}, client.setAccessControlHandleError(resp)
 	}
 	return client.setAccessControlHandleResponse(resp)
 }
@@ -552,4 +604,17 @@ func (client *directoryClient) setAccessControlHandleResponse(resp *http.Respons
 		result.Version = &val
 	}
 	return result, nil
+}
+
+// setAccessControlHandleError handles the SetAccessControl error response.
+func (client *directoryClient) setAccessControlHandleError(resp *http.Response) error {
+	body, err := runtime.Payload(resp)
+	if err != nil {
+		return runtime.NewResponseError(err, resp)
+	}
+	errType := DataLakeStorageError{raw: string(body)}
+	if err := runtime.UnmarshalAsXML(resp, &errType); err != nil {
+		return runtime.NewResponseError(fmt.Errorf("%s\n%s", string(body), err), resp)
+	}
+	return runtime.NewResponseError(&errType, resp)
 }

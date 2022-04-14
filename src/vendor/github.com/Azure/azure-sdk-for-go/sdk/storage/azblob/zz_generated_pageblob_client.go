@@ -11,13 +11,13 @@ package azblob
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"io"
 	"net/http"
 	"strconv"
 	"time"
-
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 )
 
 type pageBlobClient struct {
@@ -36,7 +36,7 @@ func (client *pageBlobClient) ClearPages(ctx context.Context, contentLength int6
 		return PageBlobClearPagesResponse{}, err
 	}
 	if !runtime.HasStatusCode(resp, http.StatusCreated) {
-		return PageBlobClearPagesResponse{}, runtime.NewResponseError(resp)
+		return PageBlobClearPagesResponse{}, client.clearPagesHandleError(resp)
 	}
 	return client.clearPagesHandleResponse(resp)
 }
@@ -158,6 +158,19 @@ func (client *pageBlobClient) clearPagesHandleResponse(resp *http.Response) (Pag
 	return result, nil
 }
 
+// clearPagesHandleError handles the ClearPages error response.
+func (client *pageBlobClient) clearPagesHandleError(resp *http.Response) error {
+	body, err := runtime.Payload(resp)
+	if err != nil {
+		return runtime.NewResponseError(err, resp)
+	}
+	errType := StorageError{raw: string(body)}
+	if err := runtime.UnmarshalAsXML(resp, &errType); err != nil {
+		return runtime.NewResponseError(fmt.Errorf("%s\n%s", string(body), err), resp)
+	}
+	return runtime.NewResponseError(&errType, resp)
+}
+
 // CopyIncremental - The Copy Incremental operation copies a snapshot of the source page blob to a destination page blob. The snapshot is copied such that
 // only the differential changes between the previously copied
 // snapshot are transferred to the destination. The copied snapshots are complete copies of the original snapshot and can be read or copied from as usual.
@@ -174,7 +187,7 @@ func (client *pageBlobClient) CopyIncremental(ctx context.Context, copySource st
 		return PageBlobCopyIncrementalResponse{}, err
 	}
 	if !runtime.HasStatusCode(resp, http.StatusAccepted) {
-		return PageBlobCopyIncrementalResponse{}, runtime.NewResponseError(resp)
+		return PageBlobCopyIncrementalResponse{}, client.copyIncrementalHandleError(resp)
 	}
 	return client.copyIncrementalHandleResponse(resp)
 }
@@ -253,6 +266,19 @@ func (client *pageBlobClient) copyIncrementalHandleResponse(resp *http.Response)
 	return result, nil
 }
 
+// copyIncrementalHandleError handles the CopyIncremental error response.
+func (client *pageBlobClient) copyIncrementalHandleError(resp *http.Response) error {
+	body, err := runtime.Payload(resp)
+	if err != nil {
+		return runtime.NewResponseError(err, resp)
+	}
+	errType := StorageError{raw: string(body)}
+	if err := runtime.UnmarshalAsXML(resp, &errType); err != nil {
+		return runtime.NewResponseError(fmt.Errorf("%s\n%s", string(body), err), resp)
+	}
+	return runtime.NewResponseError(&errType, resp)
+}
+
 // Create - The Create operation creates a new page blob.
 // If the operation fails it returns the *StorageError error type.
 func (client *pageBlobClient) Create(ctx context.Context, contentLength int64, blobContentLength int64, pageBlobCreateOptions *PageBlobCreateOptions, blobHTTPHeaders *BlobHTTPHeaders, leaseAccessConditions *LeaseAccessConditions, cpkInfo *CpkInfo, cpkScopeInfo *CpkScopeInfo, modifiedAccessConditions *ModifiedAccessConditions) (PageBlobCreateResponse, error) {
@@ -265,7 +291,7 @@ func (client *pageBlobClient) Create(ctx context.Context, contentLength int64, b
 		return PageBlobCreateResponse{}, err
 	}
 	if !runtime.HasStatusCode(resp, http.StatusCreated) {
-		return PageBlobCreateResponse{}, runtime.NewResponseError(resp)
+		return PageBlobCreateResponse{}, client.createHandleError(resp)
 	}
 	return client.createHandleResponse(resp)
 }
@@ -409,6 +435,19 @@ func (client *pageBlobClient) createHandleResponse(resp *http.Response) (PageBlo
 	return result, nil
 }
 
+// createHandleError handles the Create error response.
+func (client *pageBlobClient) createHandleError(resp *http.Response) error {
+	body, err := runtime.Payload(resp)
+	if err != nil {
+		return runtime.NewResponseError(err, resp)
+	}
+	errType := StorageError{raw: string(body)}
+	if err := runtime.UnmarshalAsXML(resp, &errType); err != nil {
+		return runtime.NewResponseError(fmt.Errorf("%s\n%s", string(body), err), resp)
+	}
+	return runtime.NewResponseError(&errType, resp)
+}
+
 // GetPageRanges - The Get Page Ranges operation returns the list of valid page ranges for a page blob or snapshot of a page blob
 // If the operation fails it returns the *StorageError error type.
 func (client *pageBlobClient) GetPageRanges(ctx context.Context, pageBlobGetPageRangesOptions *PageBlobGetPageRangesOptions, leaseAccessConditions *LeaseAccessConditions, modifiedAccessConditions *ModifiedAccessConditions) (PageBlobGetPageRangesResponse, error) {
@@ -421,7 +460,7 @@ func (client *pageBlobClient) GetPageRanges(ctx context.Context, pageBlobGetPage
 		return PageBlobGetPageRangesResponse{}, err
 	}
 	if !runtime.HasStatusCode(resp, http.StatusOK) {
-		return PageBlobGetPageRangesResponse{}, runtime.NewResponseError(resp)
+		return PageBlobGetPageRangesResponse{}, client.getPageRangesHandleError(resp)
 	}
 	return client.getPageRangesHandleResponse(resp)
 }
@@ -512,6 +551,19 @@ func (client *pageBlobClient) getPageRangesHandleResponse(resp *http.Response) (
 	return result, nil
 }
 
+// getPageRangesHandleError handles the GetPageRanges error response.
+func (client *pageBlobClient) getPageRangesHandleError(resp *http.Response) error {
+	body, err := runtime.Payload(resp)
+	if err != nil {
+		return runtime.NewResponseError(err, resp)
+	}
+	errType := StorageError{raw: string(body)}
+	if err := runtime.UnmarshalAsXML(resp, &errType); err != nil {
+		return runtime.NewResponseError(fmt.Errorf("%s\n%s", string(body), err), resp)
+	}
+	return runtime.NewResponseError(&errType, resp)
+}
+
 // GetPageRangesDiff - The Get Page Ranges Diff operation returns the list of valid page ranges for a page blob that were changed between target blob and
 // previous snapshot.
 // If the operation fails it returns the *StorageError error type.
@@ -525,7 +577,7 @@ func (client *pageBlobClient) GetPageRangesDiff(ctx context.Context, pageBlobGet
 		return PageBlobGetPageRangesDiffResponse{}, err
 	}
 	if !runtime.HasStatusCode(resp, http.StatusOK) {
-		return PageBlobGetPageRangesDiffResponse{}, runtime.NewResponseError(resp)
+		return PageBlobGetPageRangesDiffResponse{}, client.getPageRangesDiffHandleError(resp)
 	}
 	return client.getPageRangesDiffHandleResponse(resp)
 }
@@ -622,6 +674,19 @@ func (client *pageBlobClient) getPageRangesDiffHandleResponse(resp *http.Respons
 	return result, nil
 }
 
+// getPageRangesDiffHandleError handles the GetPageRangesDiff error response.
+func (client *pageBlobClient) getPageRangesDiffHandleError(resp *http.Response) error {
+	body, err := runtime.Payload(resp)
+	if err != nil {
+		return runtime.NewResponseError(err, resp)
+	}
+	errType := StorageError{raw: string(body)}
+	if err := runtime.UnmarshalAsXML(resp, &errType); err != nil {
+		return runtime.NewResponseError(fmt.Errorf("%s\n%s", string(body), err), resp)
+	}
+	return runtime.NewResponseError(&errType, resp)
+}
+
 // Resize - Resize the Blob
 // If the operation fails it returns the *StorageError error type.
 func (client *pageBlobClient) Resize(ctx context.Context, blobContentLength int64, pageBlobResizeOptions *PageBlobResizeOptions, leaseAccessConditions *LeaseAccessConditions, cpkInfo *CpkInfo, cpkScopeInfo *CpkScopeInfo, modifiedAccessConditions *ModifiedAccessConditions) (PageBlobResizeResponse, error) {
@@ -634,7 +699,7 @@ func (client *pageBlobClient) Resize(ctx context.Context, blobContentLength int6
 		return PageBlobResizeResponse{}, err
 	}
 	if !runtime.HasStatusCode(resp, http.StatusOK) {
-		return PageBlobResizeResponse{}, runtime.NewResponseError(resp)
+		return PageBlobResizeResponse{}, client.resizeHandleError(resp)
 	}
 	return client.resizeHandleResponse(resp)
 }
@@ -729,6 +794,19 @@ func (client *pageBlobClient) resizeHandleResponse(resp *http.Response) (PageBlo
 	return result, nil
 }
 
+// resizeHandleError handles the Resize error response.
+func (client *pageBlobClient) resizeHandleError(resp *http.Response) error {
+	body, err := runtime.Payload(resp)
+	if err != nil {
+		return runtime.NewResponseError(err, resp)
+	}
+	errType := StorageError{raw: string(body)}
+	if err := runtime.UnmarshalAsXML(resp, &errType); err != nil {
+		return runtime.NewResponseError(fmt.Errorf("%s\n%s", string(body), err), resp)
+	}
+	return runtime.NewResponseError(&errType, resp)
+}
+
 // UpdateSequenceNumber - Update the sequence number of the blob
 // If the operation fails it returns the *StorageError error type.
 func (client *pageBlobClient) UpdateSequenceNumber(ctx context.Context, sequenceNumberAction SequenceNumberActionType, pageBlobUpdateSequenceNumberOptions *PageBlobUpdateSequenceNumberOptions, leaseAccessConditions *LeaseAccessConditions, modifiedAccessConditions *ModifiedAccessConditions) (PageBlobUpdateSequenceNumberResponse, error) {
@@ -741,7 +819,7 @@ func (client *pageBlobClient) UpdateSequenceNumber(ctx context.Context, sequence
 		return PageBlobUpdateSequenceNumberResponse{}, err
 	}
 	if !runtime.HasStatusCode(resp, http.StatusOK) {
-		return PageBlobUpdateSequenceNumberResponse{}, runtime.NewResponseError(resp)
+		return PageBlobUpdateSequenceNumberResponse{}, client.updateSequenceNumberHandleError(resp)
 	}
 	return client.updateSequenceNumberHandleResponse(resp)
 }
@@ -827,6 +905,19 @@ func (client *pageBlobClient) updateSequenceNumberHandleResponse(resp *http.Resp
 	return result, nil
 }
 
+// updateSequenceNumberHandleError handles the UpdateSequenceNumber error response.
+func (client *pageBlobClient) updateSequenceNumberHandleError(resp *http.Response) error {
+	body, err := runtime.Payload(resp)
+	if err != nil {
+		return runtime.NewResponseError(err, resp)
+	}
+	errType := StorageError{raw: string(body)}
+	if err := runtime.UnmarshalAsXML(resp, &errType); err != nil {
+		return runtime.NewResponseError(fmt.Errorf("%s\n%s", string(body), err), resp)
+	}
+	return runtime.NewResponseError(&errType, resp)
+}
+
 // UploadPages - The Upload Pages operation writes a range of pages to a page blob
 // If the operation fails it returns the *StorageError error type.
 func (client *pageBlobClient) UploadPages(ctx context.Context, contentLength int64, body io.ReadSeekCloser, pageBlobUploadPagesOptions *PageBlobUploadPagesOptions, leaseAccessConditions *LeaseAccessConditions, cpkInfo *CpkInfo, cpkScopeInfo *CpkScopeInfo, sequenceNumberAccessConditions *SequenceNumberAccessConditions, modifiedAccessConditions *ModifiedAccessConditions) (PageBlobUploadPagesResponse, error) {
@@ -839,7 +930,7 @@ func (client *pageBlobClient) UploadPages(ctx context.Context, contentLength int
 		return PageBlobUploadPagesResponse{}, err
 	}
 	if !runtime.HasStatusCode(resp, http.StatusCreated) {
-		return PageBlobUploadPagesResponse{}, runtime.NewResponseError(resp)
+		return PageBlobUploadPagesResponse{}, client.uploadPagesHandleError(resp)
 	}
 	return client.uploadPagesHandleResponse(resp)
 }
@@ -980,6 +1071,19 @@ func (client *pageBlobClient) uploadPagesHandleResponse(resp *http.Response) (Pa
 	return result, nil
 }
 
+// uploadPagesHandleError handles the UploadPages error response.
+func (client *pageBlobClient) uploadPagesHandleError(resp *http.Response) error {
+	body, err := runtime.Payload(resp)
+	if err != nil {
+		return runtime.NewResponseError(err, resp)
+	}
+	errType := StorageError{raw: string(body)}
+	if err := runtime.UnmarshalAsXML(resp, &errType); err != nil {
+		return runtime.NewResponseError(fmt.Errorf("%s\n%s", string(body), err), resp)
+	}
+	return runtime.NewResponseError(&errType, resp)
+}
+
 // UploadPagesFromURL - The Upload Pages operation writes a range of pages to a page blob where the contents are read from a URL
 // If the operation fails it returns the *StorageError error type.
 func (client *pageBlobClient) UploadPagesFromURL(ctx context.Context, sourceURL string, sourceRange string, contentLength int64, rangeParam string, pageBlobUploadPagesFromURLOptions *PageBlobUploadPagesFromURLOptions, cpkInfo *CpkInfo, cpkScopeInfo *CpkScopeInfo, leaseAccessConditions *LeaseAccessConditions, sequenceNumberAccessConditions *SequenceNumberAccessConditions, modifiedAccessConditions *ModifiedAccessConditions, sourceModifiedAccessConditions *SourceModifiedAccessConditions) (PageBlobUploadPagesFromURLResponse, error) {
@@ -992,7 +1096,7 @@ func (client *pageBlobClient) UploadPagesFromURL(ctx context.Context, sourceURL 
 		return PageBlobUploadPagesFromURLResponse{}, err
 	}
 	if !runtime.HasStatusCode(resp, http.StatusCreated) {
-		return PageBlobUploadPagesFromURLResponse{}, runtime.NewResponseError(resp)
+		return PageBlobUploadPagesFromURLResponse{}, client.uploadPagesFromURLHandleError(resp)
 	}
 	return client.uploadPagesFromURLHandleResponse(resp)
 }
@@ -1140,4 +1244,17 @@ func (client *pageBlobClient) uploadPagesFromURLHandleResponse(resp *http.Respon
 		result.EncryptionScope = &val
 	}
 	return result, nil
+}
+
+// uploadPagesFromURLHandleError handles the UploadPagesFromURL error response.
+func (client *pageBlobClient) uploadPagesFromURLHandleError(resp *http.Response) error {
+	body, err := runtime.Payload(resp)
+	if err != nil {
+		return runtime.NewResponseError(err, resp)
+	}
+	errType := StorageError{raw: string(body)}
+	if err := runtime.UnmarshalAsXML(resp, &errType); err != nil {
+		return runtime.NewResponseError(fmt.Errorf("%s\n%s", string(body), err), resp)
+	}
+	return runtime.NewResponseError(&errType, resp)
 }

@@ -1,26 +1,27 @@
 package boss
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"io/ioutil"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/user"
-	"io"
-	"io/ioutil"
-	"fmt"
-	"time"
-	"encoding/json"
-	"github.com/golang-jwt/jwt"
-	"net/http"
+	"path/filepath"
 	"strings"
 	"text/template"
-	"bytes"
-	"net"
-	"path/filepath"
+	"time"
+
+	"github.com/golang-jwt/jwt"
 )
 
 type GCPClient struct {
 	service_account map[string]interface{} // from .json key exported from GCP service account
-	access_token string
+	access_token    string
 }
 
 func GCPBossTest() {
@@ -163,11 +164,11 @@ func (c *GCPClient) GetAccessToken() (string, error) {
 
 	now := time.Now()
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
-		"iss": c.service_account["client_email"],
+		"iss":   c.service_account["client_email"],
 		"scope": "https://www.googleapis.com/auth/compute",
-		"aud": c.service_account["token_uri"],
-		"exp": now.Add(time.Minute * 30).Unix(),
-		"iat": now.Unix(),
+		"aud":   c.service_account["token_uri"],
+		"exp":   now.Add(time.Minute * 30).Unix(),
+		"iat":   now.Unix(),
 	})
 
 	key, err := jwt.ParseRSAPrivateKeyFromPEM([]byte(c.service_account["private_key"].(string)))
@@ -306,7 +307,7 @@ func (c *GCPClient) GcpInstancetoIP() (map[string]string, error) {
 	}
 
 	lookup2 := map[string]string{}
-	for k,v := range lookup1 {
+	for k, v := range lookup1 {
 		lookup2[v] = k
 	}
 
@@ -355,7 +356,7 @@ func (c *GCPClient) Wait(resp1 map[string]interface{}, err1 error) (resp2 map[st
 
 	poll_url := selfLink.(string) // TODO: + "/wait"
 
-	for i := 0; i<30; i++ {
+	for i := 0; i < 30; i++ {
 		resp2, err2 = c.get(poll_url)
 		if err2 != nil {
 			return nil, err2
@@ -377,10 +378,10 @@ func (c *GCPClient) Wait(resp1 map[string]interface{}, err1 error) (resp2 map[st
 func (c *GCPClient) GcpSnapshot(disk string) (map[string]interface{}, error) {
 	// TODO: take args from config (or better, read from service account somehow)
 	args := GcpSnapshotArgs{
-		Project: "cs320-f21",
-		Region: "us-central1",
-		Zone: "us-central1-a",
-		Disk: disk,
+		Project:      "cs320-f21",
+		Region:       "us-central1",
+		Zone:         "us-central1-a",
+		Disk:         disk,
 		SnapshotName: "test-snap",
 	}
 
@@ -390,7 +391,7 @@ func (c *GCPClient) GcpSnapshot(disk string) (map[string]interface{}, error) {
 	var payload bytes.Buffer
 	temp := template.Must(template.New("gcp-snap").Parse(gcpSnapshotJSON))
 	if err := temp.Execute(&payload, args); err != nil {
-		panic (err)
+		panic(err)
 	}
 
 	return c.post(url, payload)
@@ -400,10 +401,10 @@ func (c *GCPClient) LaunchGCP(SnapshotName string) (map[string]interface{}, erro
 	// TODO: take args from config (or better, read from service account somehow)
 	args := GcpLaunchVmArgs{
 		ServiceAccountEmail: c.service_account["client_email"].(string),
-		Project: "cs320-f21",
-		Region: "us-central1",
-		Zone: "us-central1-a",
-		InstanceName: "instance-4",
+		Project:             "cs320-f21",
+		Region:              "us-central1",
+		Zone:                "us-central1-a",
+		InstanceName:        "instance-4",
 		//SourceImage: "projects/ubuntu-os-cloud/global/images/ubuntu-2004-focal-v20220204",
 		SnapshotName: SnapshotName,
 	}
@@ -414,7 +415,7 @@ func (c *GCPClient) LaunchGCP(SnapshotName string) (map[string]interface{}, erro
 	var payload bytes.Buffer
 	temp := template.Must(template.New("gcp-launch").Parse(gcpLaunchVmJSON))
 	if err := temp.Execute(&payload, args); err != nil {
-		panic (err)
+		panic(err)
 	}
 
 	return c.post(url, payload)

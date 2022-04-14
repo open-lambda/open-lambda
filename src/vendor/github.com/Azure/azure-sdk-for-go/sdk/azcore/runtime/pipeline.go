@@ -1,5 +1,5 @@
-//go:build go1.18
-// +build go1.18
+//go:build go1.16
+// +build go1.16
 
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
@@ -11,47 +11,26 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 )
 
-// PipelineOptions contains Pipeline options for SDK developers
-type PipelineOptions struct {
-	AllowedHeaders, AllowedQueryParameters []string
-	PerCall, PerRetry                      []policy.Policy
-}
-
 // NewPipeline creates a pipeline from connection options, with any additional policies as specified.
 // module, version: used by the telemetry policy, when enabled
 // perCall: additional policies to invoke once per request
 // perRetry: additional policies to invoke once per request and once per retry of that request
-func NewPipeline(module, version string, plOpts PipelineOptions, options *policy.ClientOptions) Pipeline {
-	cp := policy.ClientOptions{}
-	if options != nil {
-		cp = *options
+func NewPipeline(module, version string, perCall, perRetry []policy.Policy, options *policy.ClientOptions) Pipeline {
+	if options == nil {
+		options = &policy.ClientOptions{}
 	}
-	if len(plOpts.AllowedHeaders) > 0 {
-		headers := make([]string, 0, len(plOpts.AllowedHeaders)+len(cp.Logging.AllowedHeaders))
-		copy(headers, plOpts.AllowedHeaders)
-		headers = append(headers, cp.Logging.AllowedHeaders...)
-		cp.Logging.AllowedHeaders = headers
+	policies := []policy.Policy{}
+	if !options.Telemetry.Disabled {
+		policies = append(policies, NewTelemetryPolicy(module, version, &options.Telemetry))
 	}
-	if len(plOpts.AllowedQueryParameters) > 0 {
-		qp := make([]string, 0, len(plOpts.AllowedQueryParameters)+len(cp.Logging.AllowedQueryParams))
-		copy(qp, plOpts.AllowedQueryParameters)
-		qp = append(qp, cp.Logging.AllowedQueryParams...)
-		cp.Logging.AllowedQueryParams = qp
-	}
-	// we put the includeResponsePolicy at the very beginning so that the raw response
-	// is populated with the final response (some policies might mutate the response)
-	policies := []policy.Policy{pipeline.PolicyFunc(includeResponsePolicy)}
-	if !cp.Telemetry.Disabled {
-		policies = append(policies, NewTelemetryPolicy(module, version, &cp.Telemetry))
-	}
-	policies = append(policies, cp.PerCallPolicies...)
-	policies = append(policies, plOpts.PerCall...)
-	policies = append(policies, NewRetryPolicy(&cp.Retry))
-	policies = append(policies, cp.PerRetryPolicies...)
-	policies = append(policies, plOpts.PerRetry...)
-	policies = append(policies, NewLogPolicy(&cp.Logging))
+	policies = append(policies, options.PerCallPolicies...)
+	policies = append(policies, perCall...)
+	policies = append(policies, NewRetryPolicy(&options.Retry))
+	policies = append(policies, options.PerRetryPolicies...)
+	policies = append(policies, perRetry...)
+	policies = append(policies, NewLogPolicy(&options.Logging))
 	policies = append(policies, pipeline.PolicyFunc(httpHeaderPolicy), pipeline.PolicyFunc(bodyDownloadPolicy))
-	transport := cp.Transport
+	transport := options.Transport
 	if transport == nil {
 		transport = defaultHTTPClient
 	}

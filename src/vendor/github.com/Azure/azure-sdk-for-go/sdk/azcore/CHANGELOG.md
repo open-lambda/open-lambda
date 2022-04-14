@@ -1,60 +1,5 @@
 # Release History
 
-## 0.23.0 (2022-04-04)
-
-### Features Added
-* Added `runtime.Pager[T any]` and `runtime.Poller[T any]` supporting types for central, generic, implementations.
-* Added `cloud` package with a new API for cloud configuration
-* Added `FinalStateVia` field to `runtime.NewPollerOptions[T any]` type.
-
-### Breaking Changes
-* Removed the `Poller` type-alias to the internal poller implementation.
-* Added `Ptr[T any]` and `SliceOfPtrs[T any]` in the `to` package and removed all non-generic implementations.
-* `NullValue` and `IsNullValue` now take a generic type parameter instead of an interface func parameter.
-* Replaced `arm.Endpoint` with `cloud` API
-  * Removed the `endpoint` parameter from `NewRPRegistrationPolicy()`
-  * `arm/runtime.NewPipeline()` and `.NewRPRegistrationPolicy()` now return an `error`
-* Refactored `NewPoller` and `NewPollerFromResumeToken` funcs in `arm/runtime` and `runtime` packages.
-  * Removed the `pollerID` parameter as it's no longer required.
-  * Created optional parameter structs and moved optional parameters into them.
-* Changed `FinalStateVia` field to a `const` type.
-
-### Other Changes
-* Converted expiring resource and dependent types to use generics.
-
-## 0.22.0 (2022-03-03)
-
-### Features Added
-* Added header `WWW-Authenticate` to the default allow-list of headers for logging.
-* Added a pipeline policy that enables the retrieval of HTTP responses from API calls.
-  * Added `runtime.WithCaptureResponse` to enable the policy at the API level (off by default).
-
-### Breaking Changes
-* Moved `WithHTTPHeader` and `WithRetryOptions` from the `policy` package to the `runtime` package.
-
-## 0.21.1 (2022-02-04)
-
-### Bugs Fixed
-* Restore response body after reading in `Poller.FinalResponse()`. (#16911)
-* Fixed bug in `NullValue` that could lead to incorrect comparisons for empty maps/slices (#16969)
-
-### Other Changes
-* `BearerTokenPolicy` is more resilient to transient authentication failures. (#16789)
-
-## 0.21.0 (2022-01-11)
-
-### Features Added
-* Added `AllowedHeaders` and `AllowedQueryParams` to `policy.LogOptions` to control which headers and query parameters are written to the logger.
-* Added `azcore.ResponseError` type which is returned from APIs when a non-success HTTP status code is received.
-
-### Breaking Changes
-* Moved `[]policy.Policy` parameters of `arm/runtime.NewPipeline` and `runtime.NewPipeline` into a new struct, `runtime.PipelineOptions`
-* Renamed `arm/ClientOptions.Host` to `.Endpoint`
-* Moved `Request.SkipBodyDownload` method to function `runtime.SkipBodyDownload`
-* Removed `azcore.HTTPResponse` interface type
-* `arm.NewPoller()` and `runtime.NewPoller()` no longer require an `eu` parameter
-* `runtime.NewResponseError()` no longer requires an `error` parameter
-
 ## 0.20.0 (2021-10-22)
 
 ### Breaking Changes
@@ -73,7 +18,6 @@
 * Added string typdef `arm.Endpoint` to provide a hint toward expected ARM client endpoints
 * `azcore.ClientOptions` contains common pipeline configuration settings
 * Added support for multi-tenant authorization in `arm/runtime`
-* Require one second minimum when calling `PollUntilDone()`
 
 ### Bug Fixes
 * Fixed a potential panic when creating the default Transporter.

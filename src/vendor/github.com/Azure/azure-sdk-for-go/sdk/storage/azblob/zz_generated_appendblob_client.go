@@ -11,13 +11,13 @@ package azblob
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"io"
 	"net/http"
 	"strconv"
 	"time"
-
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 )
 
 type appendBlobClient struct {
@@ -38,7 +38,7 @@ func (client *appendBlobClient) AppendBlock(ctx context.Context, contentLength i
 		return AppendBlobAppendBlockResponse{}, err
 	}
 	if !runtime.HasStatusCode(resp, http.StatusCreated) {
-		return AppendBlobAppendBlockResponse{}, runtime.NewResponseError(resp)
+		return AppendBlobAppendBlockResponse{}, client.appendBlockHandleError(resp)
 	}
 	return client.appendBlockHandleResponse(resp)
 }
@@ -176,6 +176,19 @@ func (client *appendBlobClient) appendBlockHandleResponse(resp *http.Response) (
 	return result, nil
 }
 
+// appendBlockHandleError handles the AppendBlock error response.
+func (client *appendBlobClient) appendBlockHandleError(resp *http.Response) error {
+	body, err := runtime.Payload(resp)
+	if err != nil {
+		return runtime.NewResponseError(err, resp)
+	}
+	errType := StorageError{raw: string(body)}
+	if err := runtime.UnmarshalAsXML(resp, &errType); err != nil {
+		return runtime.NewResponseError(fmt.Errorf("%s\n%s", string(body), err), resp)
+	}
+	return runtime.NewResponseError(&errType, resp)
+}
+
 // AppendBlockFromURL - The Append Block operation commits a new block of data to the end of an existing append blob where the contents are read from a
 // source url. The Append Block operation is permitted only if the blob was
 // created with x-ms-blob-type set to AppendBlob. Append Block is supported only on version 2015-02-21 version or later.
@@ -190,7 +203,7 @@ func (client *appendBlobClient) AppendBlockFromURL(ctx context.Context, sourceUR
 		return AppendBlobAppendBlockFromURLResponse{}, err
 	}
 	if !runtime.HasStatusCode(resp, http.StatusCreated) {
-		return AppendBlobAppendBlockFromURLResponse{}, runtime.NewResponseError(resp)
+		return AppendBlobAppendBlockFromURLResponse{}, client.appendBlockFromURLHandleError(resp)
 	}
 	return client.appendBlockFromURLHandleResponse(resp)
 }
@@ -344,6 +357,19 @@ func (client *appendBlobClient) appendBlockFromURLHandleResponse(resp *http.Resp
 	return result, nil
 }
 
+// appendBlockFromURLHandleError handles the AppendBlockFromURL error response.
+func (client *appendBlobClient) appendBlockFromURLHandleError(resp *http.Response) error {
+	body, err := runtime.Payload(resp)
+	if err != nil {
+		return runtime.NewResponseError(err, resp)
+	}
+	errType := StorageError{raw: string(body)}
+	if err := runtime.UnmarshalAsXML(resp, &errType); err != nil {
+		return runtime.NewResponseError(fmt.Errorf("%s\n%s", string(body), err), resp)
+	}
+	return runtime.NewResponseError(&errType, resp)
+}
+
 // Create - The Create Append Blob operation creates a new append blob.
 // If the operation fails it returns the *StorageError error type.
 func (client *appendBlobClient) Create(ctx context.Context, contentLength int64, appendBlobCreateOptions *AppendBlobCreateOptions, blobHTTPHeaders *BlobHTTPHeaders, leaseAccessConditions *LeaseAccessConditions, cpkInfo *CpkInfo, cpkScopeInfo *CpkScopeInfo, modifiedAccessConditions *ModifiedAccessConditions) (AppendBlobCreateResponse, error) {
@@ -356,7 +382,7 @@ func (client *appendBlobClient) Create(ctx context.Context, contentLength int64,
 		return AppendBlobCreateResponse{}, err
 	}
 	if !runtime.HasStatusCode(resp, http.StatusCreated) {
-		return AppendBlobCreateResponse{}, runtime.NewResponseError(resp)
+		return AppendBlobCreateResponse{}, client.createHandleError(resp)
 	}
 	return client.createHandleResponse(resp)
 }
@@ -493,6 +519,19 @@ func (client *appendBlobClient) createHandleResponse(resp *http.Response) (Appen
 	return result, nil
 }
 
+// createHandleError handles the Create error response.
+func (client *appendBlobClient) createHandleError(resp *http.Response) error {
+	body, err := runtime.Payload(resp)
+	if err != nil {
+		return runtime.NewResponseError(err, resp)
+	}
+	errType := StorageError{raw: string(body)}
+	if err := runtime.UnmarshalAsXML(resp, &errType); err != nil {
+		return runtime.NewResponseError(fmt.Errorf("%s\n%s", string(body), err), resp)
+	}
+	return runtime.NewResponseError(&errType, resp)
+}
+
 // Seal - The Seal operation seals the Append Blob to make it read-only. Seal is supported only on version 2019-12-12 version or later.
 // If the operation fails it returns the *StorageError error type.
 func (client *appendBlobClient) Seal(ctx context.Context, appendBlobSealOptions *AppendBlobSealOptions, leaseAccessConditions *LeaseAccessConditions, modifiedAccessConditions *ModifiedAccessConditions, appendPositionAccessConditions *AppendPositionAccessConditions) (AppendBlobSealResponse, error) {
@@ -505,7 +544,7 @@ func (client *appendBlobClient) Seal(ctx context.Context, appendBlobSealOptions 
 		return AppendBlobSealResponse{}, err
 	}
 	if !runtime.HasStatusCode(resp, http.StatusOK) {
-		return AppendBlobSealResponse{}, runtime.NewResponseError(resp)
+		return AppendBlobSealResponse{}, client.sealHandleError(resp)
 	}
 	return client.sealHandleResponse(resp)
 }
@@ -585,4 +624,17 @@ func (client *appendBlobClient) sealHandleResponse(resp *http.Response) (AppendB
 		result.IsSealed = &isSealed
 	}
 	return result, nil
+}
+
+// sealHandleError handles the Seal error response.
+func (client *appendBlobClient) sealHandleError(resp *http.Response) error {
+	body, err := runtime.Payload(resp)
+	if err != nil {
+		return runtime.NewResponseError(err, resp)
+	}
+	errType := StorageError{raw: string(body)}
+	if err := runtime.UnmarshalAsXML(resp, &errType); err != nil {
+		return runtime.NewResponseError(fmt.Errorf("%s\n%s", string(body), err), resp)
+	}
+	return runtime.NewResponseError(&errType, resp)
 }

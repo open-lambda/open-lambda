@@ -1,5 +1,5 @@
-//go:build go1.18
-// +build go1.18
+//go:build go1.16
+// +build go1.16
 
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"reflect"
 	"time"
@@ -18,23 +19,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/internal/pipeline"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/internal/shared"
 	"github.com/Azure/azure-sdk-for-go/sdk/internal/log"
-)
-
-// FinalStateVia is the enumerated type for the possible final-state-via values.
-type FinalStateVia string
-
-const (
-	// FinalStateViaAzureAsyncOp indicates the final payload comes from the Azure-AsyncOperation URL.
-	FinalStateViaAzureAsyncOp FinalStateVia = "azure-async-operation"
-
-	// FinalStateViaLocation indicates the final payload comes from the Location URL.
-	FinalStateViaLocation FinalStateVia = "location"
-
-	// FinalStateViaOriginalURI indicates the final payload comes from the original URL.
-	FinalStateViaOriginalURI FinalStateVia = "original-uri"
-
-	// FinalStateViaOpLocation indicates the final payload comes from the Operation-Location URL.
-	FinalStateViaOpLocation FinalStateVia = "operation-location"
 )
 
 // KindFromToken extracts the poller kind from the provided token.
@@ -71,14 +55,15 @@ func PollerType(p *Poller) reflect.Type {
 }
 
 // NewPoller creates a Poller from the specified input.
-func NewPoller(lro Operation, resp *http.Response, pl pipeline.Pipeline) *Poller {
-	return &Poller{lro: lro, pl: pl, resp: resp}
+func NewPoller(lro Operation, resp *http.Response, pl pipeline.Pipeline, eu func(*http.Response) error) *Poller {
+	return &Poller{lro: lro, pl: pl, eu: eu, resp: resp}
 }
 
 // Poller encapsulates state and logic for polling on long-running operations.
 type Poller struct {
 	lro  Operation
 	pl   pipeline.Pipeline
+	eu   func(*http.Response) error
 	resp *http.Response
 	err  error
 }
@@ -112,7 +97,7 @@ func (l *Poller) Poll(ctx context.Context) (*http.Response, error) {
 	defer resp.Body.Close()
 	if !StatusCodeValid(resp) {
 		// the LRO failed.  unmarshall the error and update state
-		l.err = shared.NewResponseError(resp)
+		l.err = l.eu(resp)
 		l.resp = nil
 		return nil, l.err
 	}
@@ -122,7 +107,7 @@ func (l *Poller) Poll(ctx context.Context) (*http.Response, error) {
 	l.resp = resp
 	log.Writef(log.EventLRO, "Status %s", l.lro.Status())
 	if Failed(l.lro.Status()) {
-		l.err = shared.NewResponseError(resp)
+		l.err = l.eu(resp)
 		l.resp = nil
 		return nil, l.err
 	}
@@ -159,7 +144,7 @@ func (l *Poller) FinalResponse(ctx context.Context, respType interface{}) (*http
 			return nil, err
 		}
 		if !StatusCodeValid(resp) {
-			return nil, shared.NewResponseError(resp)
+			return nil, l.eu(resp)
 		}
 		l.resp = resp
 	}
@@ -170,7 +155,8 @@ func (l *Poller) FinalResponse(ctx context.Context, respType interface{}) (*http
 		log.Write(log.EventLRO, "final response specifies a response type but no payload was received")
 		return l.resp, nil
 	}
-	body, err := shared.Payload(l.resp)
+	body, err := ioutil.ReadAll(l.resp.Body)
+	l.resp.Body.Close()
 	if err != nil {
 		return nil, err
 	}
@@ -183,11 +169,9 @@ func (l *Poller) FinalResponse(ctx context.Context, respType interface{}) (*http
 // PollUntilDone will handle the entire span of the polling operation until a terminal state is reached,
 // then return the final HTTP response for the polling operation and unmarshal the content of the payload
 // into the respType interface that is provided.
-// freq - the time to wait between intervals in absence of a Retry-After header.  Minimum is one second.
+// freq - the time to wait between polling intervals if the endpoint doesn't send a Retry-After header.
+//        A good starting value is 30 seconds.  Note that some resources might benefit from a different value.
 func (l *Poller) PollUntilDone(ctx context.Context, freq time.Duration, respType interface{}) (*http.Response, error) {
-	if freq < time.Second {
-		return nil, errors.New("polling frequency minimum is one second")
-	}
 	start := time.Now()
 	logPollUntilDoneExit := func(v interface{}) {
 		log.Writef(log.EventLRO, "END PollUntilDone() for %T: %v, total time: %s", l.lro, v, time.Since(start))

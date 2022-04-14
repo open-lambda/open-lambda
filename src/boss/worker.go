@@ -1,14 +1,14 @@
 package boss
 
 import (
-	"log"
 	"fmt"
+	"log"
 	"net/http"
 )
 
 type Invocation struct {
-	w http.ResponseWriter
-	r *http.Request
+	w    http.ResponseWriter
+	r    *http.Request
 	Done chan bool
 }
 
@@ -34,7 +34,7 @@ type MockWorkerPool struct {
 
 type MockWorker struct {
 	workerId int
-	reqChan chan *Invocation
+	reqChan  chan *Invocation
 }
 
 func NewMockWorkerPool() *MockWorkerPool {
@@ -47,7 +47,7 @@ func (pool *MockWorkerPool) Create(reqChan chan *Invocation) Worker {
 	log.Printf("creating mock worker")
 	worker := &MockWorker{
 		workerId: pool.nextId,
-		reqChan: reqChan,
+		reqChan:  reqChan,
 	}
 	pool.nextId += 1
 	go worker.task()
@@ -56,7 +56,7 @@ func (pool *MockWorkerPool) Create(reqChan chan *Invocation) Worker {
 
 func (worker *MockWorker) task() {
 	for {
-		req := <- worker.reqChan
+		req := <-worker.reqChan
 
 		if req == nil {
 			// nil request sent from Cleanup

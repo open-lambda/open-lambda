@@ -1,4 +1,4 @@
-package main
+package boss
 
 import (
 	"bufio"
@@ -20,10 +20,10 @@ func randomString() string {
 	return strconv.Itoa(r.Int())
 }
 
-func main() {
+func AzureMain() {
 	fmt.Printf("Azure Blob storage quick start sample\n")
 
-	url := "https://<StorageAccountName>.blob.core.windows.net/" //replace <StorageAccountName> with your Azure storage account name
+	url := "https://openlambda.blob.core.windows.net/" //replace <StorageAccountName> with your Azure storage account name
 	ctx := context.Background()
 
 	// Create a default request pipeline using your storage account name and account key.

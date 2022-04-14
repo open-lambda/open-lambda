@@ -1,5 +1,5 @@
-//go:build go1.18
-// +build go1.18
+//go:build go1.16
+// +build go1.16
 
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
@@ -41,7 +41,6 @@ func setDefaults(o *policy.RetryOptions) {
 	if o.StatusCodes == nil {
 		o.StatusCodes = []int{
 			http.StatusRequestTimeout,      // 408
-			http.StatusTooManyRequests,     // 429
 			http.StatusInternalServerError, // 500
 			http.StatusBadGateway,          // 502
 			http.StatusServiceUnavailable,  // 503
@@ -173,12 +172,6 @@ func (p *retryPolicy) Do(req *policy.Request) (resp *http.Response, err error) {
 			return
 		}
 	}
-}
-
-// WithRetryOptions adds the specified RetryOptions to the parent context.
-// Use this to specify custom RetryOptions at the API-call level.
-func WithRetryOptions(parent context.Context, options policy.RetryOptions) context.Context {
-	return context.WithValue(parent, shared.CtxWithRetryOptionsKey{}, options)
 }
 
 // ********** The following type/methods implement the retryableRequestBody (a ReadSeekCloser)

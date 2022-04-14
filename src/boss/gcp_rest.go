@@ -2,19 +2,19 @@ package boss
 
 type GcpLaunchVmArgs struct {
 	ServiceAccountEmail string
-	Project string
-	Region string
-	Zone string
-	InstanceName string
+	Project             string
+	Region              string
+	Zone                string
+	InstanceName        string
 	//SourceImage string
 	SnapshotName string
 }
 
 type GcpSnapshotArgs struct {
-	Project string
-	Region string
-	Zone string
-	Disk string
+	Project      string
+	Region       string
+	Zone         string
+	Disk         string
 	SnapshotName string
 }
 
@@ -181,7 +181,6 @@ const gcpLaunchVmJSON2 = `{
   "zone": "projects/cs320-f21/zones/us-central1-a"
 }
 `
-
 
 const gcpLaunchVmJSON = `{
   "canIpForward": false,

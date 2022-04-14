@@ -1,5 +1,5 @@
-//go:build go1.18
-// +build go1.18
+//go:build go1.16
+// +build go1.16
 
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
@@ -141,11 +141,6 @@ func SetMultipartFormData(req *policy.Request, formData map[string]interface{}) 
 		return err
 	}
 	return req.SetBody(shared.NopCloser(bytes.NewReader(body.Bytes())), writer.FormDataContentType())
-}
-
-// SkipBodyDownload will disable automatic downloading of the response body.
-func SkipBodyDownload(req *policy.Request) {
-	req.SetOperationValue(bodyDownloadPolicyOpValues{Skip: true})
 }
 
 // returns a clone of the object graph pointed to by v, omitting values of all read-only

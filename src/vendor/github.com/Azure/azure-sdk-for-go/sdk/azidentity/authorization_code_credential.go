@@ -9,105 +9,69 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
-	"github.com/AzureAD/microsoft-authentication-library-for-go/apps/confidential"
-	"github.com/AzureAD/microsoft-authentication-library-for-go/apps/public"
 )
 
-const credNameAuthCode = "AuthorizationCodeCredential"
-
-// AuthorizationCodeCredentialOptions contains optional parameters for AuthorizationCodeCredential.
+// AuthorizationCodeCredentialOptions contain optional parameters that can be used to configure the AuthorizationCodeCredential.
+// All zero-value fields will be initialized with their default values.
 type AuthorizationCodeCredentialOptions struct {
 	azcore.ClientOptions
 
-	// ClientSecret is one of the application's client secrets.
+	// Gets the client secret that was generated for the App Registration used to authenticate the client.
 	ClientSecret string
+	// The host of the Azure Active Directory authority. The default is AzurePublicCloud.
+	// Leave empty to allow overriding the value from the AZURE_AUTHORITY_HOST environment variable.
+	AuthorityHost AuthorityHost
 }
 
-// AuthorizationCodeCredential authenticates by redeeming an authorization code previously
-// obtained from Azure Active Directory. The authorization code flow is described in more detail
-// in Azure Active Directory documentation: https://docs.microsoft.com/azure/active-directory/develop/v2-oauth2-auth-code-flow
+// AuthorizationCodeCredential enables authentication to Azure Active Directory using an authorization code
+// that was obtained through the authorization code flow, described in more detail in the Azure Active Directory
+// documentation: https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-oauth2-auth-code-flow.
 type AuthorizationCodeCredential struct {
-	cca          confidentialClient
-	pca          publicClient
-	authCode     string
-	clientSecret string
-	redirectURI  string
-	account      confidential.Account
+	client       *aadIdentityClient
+	tenantID     string // Gets the Azure Active Directory tenant (directory) ID of the service principal
+	clientID     string // Gets the client (application) ID of the service principal
+	authCode     string // The authorization code received from the authorization code flow. The authorization code must not have been used to obtain another token.
+	clientSecret string // Gets the client secret that was generated for the App Registration used to authenticate the client.
+	redirectURI  string // The redirect URI that was used to request the authorization code. Must be the same URI that is configured for the App Registration.
 }
 
-// NewAuthorizationCodeCredential constructs an AuthorizationCodeCredential.
-// tenantID: The application's Azure Active Directory tenant or directory ID.
-// clientID: The application's client ID.
-// authCode: The authorization code received from the authorization code flow. Note that authorization codes are single-use.
-// redirectURL: The application's redirect URL. Must match the redirect URL used to request the authorization code.
-// options: Optional configuration. Pass nil to accept default settings.
+// NewAuthorizationCodeCredential constructs a new AuthorizationCodeCredential with the details needed to authenticate against Azure Active Directory with an authorization code.
+// tenantID: The Azure Active Directory tenant (directory) ID of the service principal.
+// clientID: The client (application) ID of the service principal.
+// authCode: The authorization code received from the authorization code flow. The authorization code must not have been used to obtain another token.
+// redirectURL: The redirect URL that was used to request the authorization code. Must be the same URL that is configured for the App Registration.
+// options: Manage the configuration of the requests sent to Azure Active Directory, they can also include a client secret for web app authentication.
 func NewAuthorizationCodeCredential(tenantID string, clientID string, authCode string, redirectURL string, options *AuthorizationCodeCredentialOptions) (*AuthorizationCodeCredential, error) {
 	if !validTenantID(tenantID) {
 		return nil, errors.New(tenantIDValidationErr)
 	}
-	if options == nil {
-		options = &AuthorizationCodeCredentialOptions{}
+	cp := AuthorizationCodeCredentialOptions{}
+	if options != nil {
+		cp = *options
 	}
-	authorityHost, err := setAuthorityHost(options.Cloud)
+	authorityHost, err := setAuthorityHost(cp.AuthorityHost)
 	if err != nil {
 		return nil, err
 	}
-	if options.ClientSecret != "" {
-		cred, err := confidential.NewCredFromSecret(options.ClientSecret)
-		if err != nil {
-			return nil, err
-		}
-		c, err := confidential.New(clientID, cred,
-			confidential.WithAuthority(runtime.JoinPaths(authorityHost, tenantID)),
-			confidential.WithHTTPClient(newPipelineAdapter(&options.ClientOptions)),
-		)
-		if err != nil {
-			return nil, err
-		}
-		return &AuthorizationCodeCredential{authCode: authCode, clientSecret: options.ClientSecret, redirectURI: redirectURL, cca: c}, nil
-	}
-	c, err := public.New(clientID,
-		public.WithAuthority(runtime.JoinPaths(authorityHost, tenantID)),
-		public.WithHTTPClient(newPipelineAdapter(&options.ClientOptions)),
-	)
+	c, err := newAADIdentityClient(authorityHost, &cp.ClientOptions)
 	if err != nil {
 		return nil, err
 	}
-	return &AuthorizationCodeCredential{authCode: authCode, clientSecret: options.ClientSecret, redirectURI: redirectURL, pca: c}, nil
+	return &AuthorizationCodeCredential{tenantID: tenantID, clientID: clientID, authCode: authCode, clientSecret: cp.ClientSecret, redirectURI: redirectURL, client: c}, nil
 }
 
-// GetToken obtains a token from Azure Active Directory by redeeming the authorization code. This method is called automatically by Azure SDK clients.
-// ctx: Context controlling the request lifetime.
-// opts: Options for the token request, in particular the desired scope of the access token.
+// GetToken obtains a token from Azure Active Directory, using the specified authorization code to authenticate.
+// ctx: Context used to control the request lifetime.
+// opts: TokenRequestOptions contains the list of scopes for which the token will have access.
+// Returns an AccessToken which can be used to authenticate service client calls.
 func (c *AuthorizationCodeCredential) GetToken(ctx context.Context, opts policy.TokenRequestOptions) (*azcore.AccessToken, error) {
-	if c.cca != nil {
-		ar, err := c.cca.AcquireTokenSilent(ctx, opts.Scopes, confidential.WithSilentAccount(c.account))
-		if err == nil {
-			logGetTokenSuccess(c, opts)
-			return &azcore.AccessToken{Token: ar.AccessToken, ExpiresOn: ar.ExpiresOn.UTC()}, err
-		}
-		ar, err = c.cca.AcquireTokenByAuthCode(ctx, c.authCode, c.redirectURI, opts.Scopes)
-		if err != nil {
-			return nil, newAuthenticationFailedErrorFromMSALError(credNameAuthCode, err)
-		}
-		logGetTokenSuccess(c, opts)
-		c.account = ar.Account
-		return &azcore.AccessToken{Token: ar.AccessToken, ExpiresOn: ar.ExpiresOn.UTC()}, err
-	}
-
-	ar, err := c.pca.AcquireTokenSilent(ctx, opts.Scopes, public.WithSilentAccount(c.account))
-	if err == nil {
-		logGetTokenSuccess(c, opts)
-		return &azcore.AccessToken{Token: ar.AccessToken, ExpiresOn: ar.ExpiresOn.UTC()}, err
-	}
-	ar, err = c.pca.AcquireTokenByAuthCode(ctx, c.authCode, c.redirectURI, opts.Scopes)
+	tk, err := c.client.authenticateAuthCode(ctx, c.tenantID, c.clientID, c.authCode, c.clientSecret, "", c.redirectURI, opts.Scopes)
 	if err != nil {
-		return nil, newAuthenticationFailedErrorFromMSALError(credNameAuthCode, err)
+		addGetTokenFailureLogs("Authorization Code Credential", err, true)
+		return nil, err
 	}
 	logGetTokenSuccess(c, opts)
-	c.account = ar.Account
-	return &azcore.AccessToken{Token: ar.AccessToken, ExpiresOn: ar.ExpiresOn.UTC()}, err
+	return tk, nil
 }
 
 var _ azcore.TokenCredential = (*AuthorizationCodeCredential)(nil)

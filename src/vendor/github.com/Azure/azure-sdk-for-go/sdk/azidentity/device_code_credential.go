@@ -7,32 +7,42 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
-	"github.com/AzureAD/microsoft-authentication-library-for-go/apps/public"
 )
 
-const credNameDeviceCode = "DeviceCodeCredential"
+const (
+	deviceCodeGrantType = "urn:ietf:params:oauth:grant-type:device_code"
+)
 
-// DeviceCodeCredentialOptions contains optional parameters for DeviceCodeCredential.
+// DeviceCodeCredentialOptions provide options that can configure DeviceCodeCredential instead of using the default values.
+// All zero-value fields will be initialized with their default values. Please note, that both the TenantID or ClientID fields should
+// changed together if default values are not desired.
 type DeviceCodeCredentialOptions struct {
 	azcore.ClientOptions
 
-	// TenantID is the Azure Active Directory tenant the credential authenticates in. Defaults to the
-	// "organizations" tenant, which can authenticate work and school accounts. Required for single-tenant
-	// applications.
+	// Gets the Azure Active Directory tenant (directory) ID of the service principal
+	// The default value is "organizations". If this value is changed, then also change ClientID to the corresponding value.
 	TenantID string
-	// ClientID is the ID of the application users will authenticate to.
-	// Defaults to the ID of an Azure development application.
+	// Gets the client (application) ID of the service principal
+	// The default value is the developer sign on ID for the corresponding "organizations" TenantID.
 	ClientID string
-	// UserPrompt controls how the credential presents authentication instructions. The credential calls
-	// this function with authentication details when it receives a device code. By default, the credential
-	// prints these details to stdout.
+	// The callback function used to send the login message back to the user
+	// The default will print device code log in information to stdout.
 	UserPrompt func(context.Context, DeviceCodeMessage) error
+	// The host of the Azure Active Directory authority. The default is AzurePublicCloud.
+	// Leave empty to allow overriding the value from the AZURE_AUTHORITY_HOST environment variable.
+	AuthorityHost AuthorityHost
 }
 
+// init provides the default settings for DeviceCodeCredential.
+// It will set the following default values:
+// TenantID set to "organizations".
+// ClientID set to the default developer sign on client ID "04b07795-8ddb-461a-bbee-02f9e1bf7b46".
+// UserPrompt set to output login information for the user to stdout.
 func (o *DeviceCodeCredentialOptions) init() {
 	if o.TenantID == "" {
 		o.TenantID = organizationsTenantID
@@ -48,29 +58,29 @@ func (o *DeviceCodeCredentialOptions) init() {
 	}
 }
 
-// DeviceCodeMessage contains the information a user needs to complete authentication.
+// DeviceCodeMessage is used to store device code related information to help the user login and allow the device code flow to continue
+// to request a token to authenticate a user.
 type DeviceCodeMessage struct {
-	// UserCode is the user code returned by the service.
+	// User code returned by the service.
 	UserCode string `json:"user_code"`
-	// VerificationURL is the URL at which the user must authenticate.
+	// Verification URL where the user must navigate to authenticate using the device code and credentials.
 	VerificationURL string `json:"verification_uri"`
-	// Message is user instruction from Azure Active Directory.
+	// User friendly text response that can be used for display purposes.
 	Message string `json:"message"`
 }
 
-// DeviceCodeCredential acquires tokens for a user via the device code flow, which has the
-// user browse to an Azure Active Directory URL, enter a code, and authenticate. It's useful
-// for authenticating a user in an environment without a web browser, such as an SSH session.
-// If a web browser is available, InteractiveBrowserCredential is more convenient because it
-// automatically opens a browser to the login page.
+// DeviceCodeCredential authenticates a user using the device code flow, and provides access tokens for that user account.
+// For more information on the device code authentication flow see: https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-oauth2-device-code.
 type DeviceCodeCredential struct {
-	client     publicClient
-	userPrompt func(context.Context, DeviceCodeMessage) error
-	account    public.Account
+	client       *aadIdentityClient
+	tenantID     string
+	clientID     string
+	userPrompt   func(context.Context, DeviceCodeMessage) error
+	refreshToken string
 }
 
-// NewDeviceCodeCredential creates a DeviceCodeCredential.
-// options: Optional configuration. Pass nil to accept default settings.
+// NewDeviceCodeCredential constructs a new DeviceCodeCredential used to authenticate against Azure Active Directory with a device code.
+// options: Options used to configure the management of the requests sent to Azure Active Directory, please see DeviceCodeCredentialOptions for a description of each field.
 func NewDeviceCodeCredential(options *DeviceCodeCredentialOptions) (*DeviceCodeCredential, error) {
 	cp := DeviceCodeCredentialOptions{}
 	if options != nil {
@@ -80,48 +90,93 @@ func NewDeviceCodeCredential(options *DeviceCodeCredentialOptions) (*DeviceCodeC
 	if !validTenantID(cp.TenantID) {
 		return nil, errors.New(tenantIDValidationErr)
 	}
-	authorityHost, err := setAuthorityHost(cp.Cloud)
+	authorityHost, err := setAuthorityHost(cp.AuthorityHost)
 	if err != nil {
 		return nil, err
 	}
-	c, err := public.New(cp.ClientID,
-		public.WithAuthority(runtime.JoinPaths(authorityHost, cp.TenantID)),
-		public.WithHTTPClient(newPipelineAdapter(&cp.ClientOptions)),
-	)
+	c, err := newAADIdentityClient(authorityHost, &cp.ClientOptions)
 	if err != nil {
 		return nil, err
 	}
-	return &DeviceCodeCredential{userPrompt: cp.UserPrompt, client: c}, nil
+	return &DeviceCodeCredential{tenantID: cp.TenantID, clientID: cp.ClientID, userPrompt: cp.UserPrompt, client: c}, nil
 }
 
-// GetToken obtains a token from Azure Active Directory. It will begin the device code flow and poll until the user completes authentication.
-// This method is called automatically by Azure SDK clients.
-// ctx: Context used to control the request lifetime.
-// opts: Options for the token request, in particular the desired scope of the access token.
+// GetToken obtains a token from Azure Active Directory, following the device code authentication
+// flow. This function first requests a device code and requests that the user login before continuing to authenticate the device.
+// This function will keep polling the service for a token until the user logs in.
+// scopes: The list of scopes for which the token will have access. The "offline_access" scope is checked for and automatically added in case it isn't present to allow for silent token refresh.
+// ctx: The context for controlling the request lifetime.
+// Returns an AccessToken which can be used to authenticate service client calls.
 func (c *DeviceCodeCredential) GetToken(ctx context.Context, opts policy.TokenRequestOptions) (*azcore.AccessToken, error) {
-	ar, err := c.client.AcquireTokenSilent(ctx, opts.Scopes, public.WithSilentAccount(c.account))
-	if err == nil {
-		return &azcore.AccessToken{Token: ar.AccessToken, ExpiresOn: ar.ExpiresOn.UTC()}, err
+	for i, scope := range opts.Scopes {
+		if scope == "offline_access" { // if we find that the opts.Scopes slice contains "offline_access" then we don't need to do anything and exit
+			break
+		}
+		if i == len(opts.Scopes)-1 && scope != "offline_access" { // if we haven't found "offline_access" when reaching the last element in the slice then we append it
+			opts.Scopes = append(opts.Scopes, "offline_access")
+		}
 	}
-	dc, err := c.client.AcquireTokenByDeviceCode(ctx, opts.Scopes)
+	if len(c.refreshToken) != 0 {
+		tk, err := c.client.refreshAccessToken(ctx, c.tenantID, c.clientID, "", c.refreshToken, opts.Scopes)
+		if err != nil {
+			addGetTokenFailureLogs("Device Code Credential", err, true)
+			return nil, err
+		}
+		// assign new refresh token to the credential for future use
+		c.refreshToken = tk.refreshToken
+		logGetTokenSuccess(c, opts)
+		// passing the access token and/or error back up
+		return tk.token, nil
+	}
+	// if there is no refreshToken, then begin the Device Code flow from the beginning
+	// make initial request to the device code endpoint for a device code and instructions for authentication
+	dc, err := c.client.requestNewDeviceCode(ctx, c.tenantID, c.clientID, opts.Scopes)
 	if err != nil {
-		return nil, newAuthenticationFailedErrorFromMSALError(credNameDeviceCode, err)
+		authErr := newAuthenticationFailedError(err, nil)
+		addGetTokenFailureLogs("Device Code Credential", authErr, true)
+		return nil, authErr
 	}
+	// send authentication flow instructions back to the user to log in and authorize the device
+
 	err = c.userPrompt(ctx, DeviceCodeMessage{
-		UserCode:        dc.Result.UserCode,
-		VerificationURL: dc.Result.VerificationURL,
-		Message:         dc.Result.Message,
+		UserCode:        dc.UserCode,
+		VerificationURL: dc.VerificationURL,
+		Message:         dc.Message,
 	})
 	if err != nil {
 		return nil, err
 	}
-	ar, err = dc.AuthenticationResult(ctx)
-	if err != nil {
-		return nil, newAuthenticationFailedErrorFromMSALError(credNameDeviceCode, err)
+	// poll the token endpoint until a valid access token is received or until authentication fails
+	for {
+		tk, err := c.client.authenticateDeviceCode(ctx, c.tenantID, c.clientID, dc.DeviceCode, opts.Scopes)
+		// if there is no error, save the refresh token and return the token credential
+		if err == nil {
+			c.refreshToken = tk.refreshToken
+			logGetTokenSuccess(c, opts)
+			return tk.token, err
+		}
+		// if there is an error, check for an AADAuthenticationFailedError in order to check the status for token retrieval
+		// if the error is not an AADAuthenticationFailedError, then fail here since something unexpected occurred
+		var authFailed AuthenticationFailedError
+		if errors.As(err, &authFailed) && strings.Contains(authFailed.Error(), "authorization_pending") {
+			// wait for the interval specified from the initial device code endpoint and then poll for the token again
+			time.Sleep(time.Duration(dc.Interval) * time.Second)
+		} else {
+			addGetTokenFailureLogs("Device Code Credential", err, true)
+			// any other error should be returned
+			return nil, err
+		}
 	}
-	c.account = ar.Account
-	logGetTokenSuccess(c, opts)
-	return &azcore.AccessToken{Token: ar.AccessToken, ExpiresOn: ar.ExpiresOn.UTC()}, err
+}
+
+// deviceCodeResult is used to store device code related information to help the user login and allow the device code flow to continue
+// to request a token to authenticate a user
+type deviceCodeResult struct {
+	UserCode        string `json:"user_code"`        // User code returned by the service.
+	DeviceCode      string `json:"device_code"`      // Device code returned by the service.
+	VerificationURL string `json:"verification_uri"` // Verification URL where the user must navigate to authenticate using the device code and credentials.
+	Interval        int64  `json:"interval"`         // Polling interval time to check for completion of authentication flow.
+	Message         string `json:"message"`          // User friendly text response that can be used for display purposes.
 }
 
 var _ azcore.TokenCredential = (*DeviceCodeCredential)(nil)

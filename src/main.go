@@ -16,12 +16,13 @@ import (
 	"time"
 
 	docker "github.com/fsouza/go-dockerclient"
+	"github.com/open-lambda/open-lambda/ol/boss"
 	dutil "github.com/open-lambda/open-lambda/ol/sandbox/dockerutil"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 	"github.com/open-lambda/open-lambda/ol/server"
 
-	//"github.com/open-lambda/open-lambda/ol/boss"
+	// "github.com/open-lambda/open-lambda/ol/boss"
 	"github.com/urfave/cli"
 )
 
@@ -491,10 +492,15 @@ func kill(ctx *cli.Context) error {
 	return fmt.Errorf("worker didn't stop after 30s")
 }
 
-// func gcp_test(ctx *cli.Context) error {
-// 	boss.GCPBossTest()
-// 	return nil
-// }
+func gcp_test(ctx *cli.Context) error {
+	boss.GCPBossTest()
+	return nil
+}
+
+func azure_test(ctx *cli.Context) error {
+	boss.AzureMain()
+	return nil
+}
 
 // main runs the admin tool
 func main() {
@@ -541,7 +547,6 @@ OPTIONS:
 		// 	Name:  "boss",
 		// 	Usage: "Start one Boss server",
 		// 	// are we going to do detach and option like a worker?
-		// good to add a detach
 		// 	UsageText:   "ol boss [--path=PATH]",
 		// 	Description: "Start a boss server.",
 		// 	// Flags: depend on if we're going to add detach and option?
@@ -594,13 +599,20 @@ OPTIONS:
 			Flags:     []cli.Flag{pathFlag},
 			Action:    kill,
 		},
-		// cli.Command{
-		// 	Name:      "gcp-test",
-		// 	Usage:     "Start a GCP VM running the OL worker",
-		// 	UsageText: "ol gcp-test",
-		// 	Flags:     []cli.Flag{},
-		// 	Action:    gcp_test,
-		// },
+		cli.Command{
+			Name:      "gcp-test",
+			Usage:     "Start a GCP VM running the OL worker",
+			UsageText: "ol gcp-test",
+			Flags:     []cli.Flag{},
+			Action:    gcp_test,
+		},
+		cli.Command{
+			Name:      "azure-test",
+			Usage:     "Start an Azure Blob ",
+			UsageText: "ol zure-test",
+			Flags:     []cli.Flag{},
+			Action:    azure_test,
+		},
 	}
 	err := app.Run(os.Args)
 	if err != nil {
