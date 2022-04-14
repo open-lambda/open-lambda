@@ -16,7 +16,7 @@ import (
 const (
 	BOSS_STATUS_PATH = "/bstatus"
 	SCALING_PATH     = "/scaling/worker_count"
-	STORAGE_PATH     = "registry/upload"
+	STORAGE_PATH     = "/registry/upload"
 )
 
 type Boss struct {
@@ -119,6 +119,20 @@ func (b *Boss) RunLambda(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (b *Boss) StorageLambda(w http.ResponseWriter, r *http.Request) {
+	contents, err := io.ReadAll(r.Body)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, err := w.Write([]byte("could not read body of web request\n"))
+		if err != nil {
+			log.Printf("(2) could not write web response: %s\n", err.Error())
+		}
+		return
+	}
+	log.Printf(string(contents))
+	boss.AzureMain(string(contents))
+}
+
 func BossMain() (err error) {
 	// TODO: choose correct worker pool type based on config
 	workerPool := boss.NewMockWorkerPool()
@@ -131,6 +145,7 @@ func BossMain() (err error) {
 	http.HandleFunc(BOSS_STATUS_PATH, boss.BossStatus)
 	http.HandleFunc(SCALING_PATH, boss.ScalingWorker)
 	http.HandleFunc(RUN_PATH, boss.RunLambda)
+	http.HandleFunc(STORAGE_PATH, boss.StorageLambda)
 
 	port := fmt.Sprintf(":%s", common.Conf.Worker_port)
 	fmt.Printf("Listen on port %s\n", port)
