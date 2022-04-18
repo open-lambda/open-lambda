@@ -16,7 +16,9 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v2
     - name: Install Docker and prereqs
-      run: sudo apt-get install build-essential docker.io python3 libclang-common-11-dev llvm-dev
+      run: |
+        sudo apt-get update
+        sudo apt-get install build-essential docker.io python3 libclang-common-11-dev llvm-dev -y
     - name: Install golang
       uses: actions/setup-go@v3
       with:
