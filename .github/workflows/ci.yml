@@ -24,14 +24,10 @@ jobs:
       uses: actions/setup-go@v3
       with:
          go-version: '>=1.17.0'
-    - name: Install rustc and clippy nightly
-      uses: actions-rs/toolchain@v1
-      with:
-         profile: minimal
-         toolchain: nightly
-         override: true
-         components: cargo, rustc, clippy
-         target: wasm32-unknown-unknown
+    - name: Install rustc and clippy nightlya
+      run: |
+        sudo curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain=nightly -y
+        sudo rustup target add wasm32-unknown-unknown
     - name: Install cross
       run: cargo install cross
     - name: Build open lambda
