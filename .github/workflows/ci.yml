@@ -29,6 +29,10 @@ jobs:
          override: true
          components: cargo, rustc, clippy, rustfmt
          target: wasm32-unknown-unknown
+    - name: Setup rust dependency caching
+      uses: Swatinem/rust-cache@v1
+      with:
+         working-directory: wasm-worker
     - name: Install golang
       uses: actions/setup-go@v3
       with:
@@ -40,14 +44,14 @@ jobs:
         sudo make ol install-python-bindings
         make wasm-worker wasm-functions native-functions
     - name: Test Python (Docker)
-      run: sudo ./script/test.py --worker_type=docker
+      run: sudo ./scripts/test.py --worker_type=docker
     - name: Test Python (SOCK)
-      run: sudo ./script/test.py --worker_type=sock
+      run: sudo ./scripts/test.py --worker_type=sock
     - name: Test Binaries (WebAssembly)
       run: ./script/bin-test.py --worker_type=wasm
     - name: Test Binaries (SOCK)
-      run: sudo ./script/bin-test.py --worker_type=sock
+      run: sudo ./scripts/bin-test.py --worker_type=sock
     - name: Test SOCK
-      run: sudo ./script/sock-test.py
+      run: sudo ./scripts/sock-test.py
     - name: Linting
       run: make lint
