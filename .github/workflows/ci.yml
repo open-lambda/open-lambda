@@ -38,7 +38,7 @@ jobs:
     - name: Build open lambda
       run: |
         sudo make ol install-python-bindings
-        make wasm-worker wasm-programs native-programs
+        make wasm-worker wasm-functions native-functions
     - name: Test Python (Docker)
       run: sudo ./script/test.py --worker_type=docker
     - name: Test Python (SOCK)

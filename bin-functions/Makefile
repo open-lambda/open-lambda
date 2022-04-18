@@ -1,9 +1,9 @@
-.PHONY: lint cargo-clean update-dependencies cargo-clean udeps wasm-programs native-programs
+.PHONY: lint cargo-clean update-dependencies cargo-clean udeps wasm-functions native-functions
 
 CLIPPY_FLAGS=-- --deny "warnings"
 WASM_TARGET=wasm32-unknown-unknown
 
-all: wasm-programs native-programs
+all: wasm-functions native-functions
 
 lint:
 	cargo clippy ${CLIPPY_FLAGS}
@@ -19,8 +19,8 @@ udeps:
 	cargo udeps
 	cargo udeps --target=${WASM_TARGET}
 
-wasm-programs:
+wasm-functions:
 	cargo build --target=${WASM_TARGET} --release
 
-native-programs:
+native-functions:
 	cargo build --release
