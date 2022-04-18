@@ -20,7 +20,7 @@ jobs:
         sudo apt-get update
         sudo apt-get install build-essential python3 libclang-common-11-dev llvm-dev -y
         sudo apt-get install runc containerd docker.io -y
-        sudo gpasswd -a $USERNAME docker
+        sudo gpasswd -a ubuntu docker
     - name: Install rustc and clippy nightly
       uses: actions-rs/toolchain@v1
       with:
