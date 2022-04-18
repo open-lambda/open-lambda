@@ -36,7 +36,7 @@ cargo install cross
 
 Finally, add your user to the docker group to enable cross-compilation of native binaries to open-lambda's environment. Do not forget to restart your shell/session afterwards!
 ```
-sudo gpasswd -a $USERNAME docker
+sudo gpasswd -a $USER docker
 
 ```
 
