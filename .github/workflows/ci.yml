@@ -20,16 +20,16 @@ jobs:
         sudo apt-get update
         sudo apt-get install build-essential python3 libclang-common-11-dev llvm-dev -y
         sudo apt-get install runc containerd docker.io -y
+    - name: Install rustc and clippy nightly
+      run: |
+        curl https://sh.rustup.rs -sSf | sudo sh -s -- --default-toolchain=nightly -y
+        sudo rustup target add wasm32-unknown-unknown
     - name: Install golang
       uses: actions/setup-go@v3
       with:
          go-version: '>=1.17.0'
-    - name: Install rustc and clippy nightlya
-      run: |
-        sudo curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain=nightly -y
-        sudo rustup target add wasm32-unknown-unknown
     - name: Install cross
-      run: cargo install cross
+      run: sudo cargo install cross
     - name: Build open lambda
       run: sudo make ol wasm-worker wasm-programs native-programs install-python-bindings
     - name: Test Python (Docker)
@@ -43,4 +43,4 @@ jobs:
     - name: Test SOCK
       run: sudo ./script/sock-test.py
     - name: Linting
-      run: make lint
+      run: sudo make lint
