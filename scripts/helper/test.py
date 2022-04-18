@@ -10,7 +10,7 @@ import sys
 import json
 import traceback
 
-from .. import ol_oom_killer, mounts, get_ol_stats, get_current_config, get_worker_output
+from . import ol_oom_killer, mounts, get_ol_stats, get_current_config, get_worker_output
 
 TEST_FILTER = []
 WORKER_TYPE = []
@@ -43,7 +43,7 @@ def check_test_results():
     results = RESULTS
     passed = len([t for t in results["runs"] if t["pass"]])
     failed = len([t for t in results["runs"] if not t["pass"]])
-    elapsed = time - START_TIME
+    elapsed = time() - START_TIME
 
     results["passed"] = passed
     results["failed"] = failed
@@ -102,9 +102,9 @@ def test(func):
             print("Worker started")
 
             # run test/benchmark
-            test_t0 = time.time()
+            test_t0 = time()
             return_val = func(**kwargs)
-            test_t1 = time.time()
+            test_t1 = time()
             result["seconds"] = test_t1 - test_t0
 
             result["pass"] = True
@@ -128,7 +128,7 @@ def test(func):
         # get internal stats from OL
         result["ol-stats"] = get_ol_stats()
 
-        total_t1 = time.time()
+        total_t1 = time()
         result["total_seconds"] = total_t1-total_t0
         result["stats"] = return_val
 

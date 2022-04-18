@@ -101,7 +101,7 @@ def stress_one_lambda_task(args):
 
     start, seconds = args
     pos = 0
-    while time.time() < start + seconds:
+    while time() < start + seconds:
         result = open_lambda.run("echo", pos, json=False)
         assert_eq(result, str(pos))
         pos += 1
@@ -109,7 +109,7 @@ def stress_one_lambda_task(args):
 
 @test
 def stress_one_lambda(procs, seconds):
-    start = time.time()
+    start = time()
 
     with Pool(procs) as pool:
         reqs = sum(pool.map(stress_one_lambda_task, [(start, seconds)] * procs, chunksize=1))
@@ -121,11 +121,11 @@ def call_each_once_exec(lambda_count, alloc_mb):
     open_lambda = OpenLambda()
 
     # TODO: do in parallel
-    start = time.time()
+    start = time()
     for pos in range(lambda_count):
         result = open_lambda.run(f"L{pos}", {"alloc_mb": alloc_mb}, json=False)
         assert_eq(result, str(pos))
-    seconds = time.time() - start
+    seconds = time() - start
 
     return {"reqs_per_sec": lambda_count/seconds}
 
@@ -167,11 +167,11 @@ def ping_test():
     open_lambda = OpenLambda()
 
     pings = 1000
-    start = time.time()
+    start = time()
     for _ in range(pings):
         open_lambda.check_status()
 
-    seconds = time.time() - start
+    seconds = time() - start
     return {"pings_per_sec": pings/seconds}
 
 @test
@@ -194,12 +194,12 @@ def update_code():
             code.write(f"    return {pos}\n")
 
         # how long does it take for us to start seeing the latest code?
-        start = time.time()
+        start = time()
         while True:
             text = open_lambda.run("version", None)
             num = int(text)
             assert num >= pos-1
-            end = time.time()
+            end = time()
 
             # make sure the time to grab new code is about the time
             # specified for the registry cache (within ~1 second)
