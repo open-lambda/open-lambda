@@ -64,16 +64,16 @@ checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
 name = "backtrace"
-version = "0.3.64"
+version = "0.3.65"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e121dee8023ce33ab248d9ce1493df03c3b38a659b240096fcbd7048ff9c31f"
+checksum = "11a17d453482a265fd5f8479f2a3f405566e6ca627837aaddb85af8b1ab8ef61"
 dependencies = [
  "addr2line",
  "cc",
  "cfg-if",
  "libc",
  "miniz_oxide",
- "object",
+ "object 0.28.3",
  "rustc-demangle",
 ]
 
@@ -151,16 +151,16 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "clap"
-version = "3.1.8"
+version = "3.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71c47df61d9e16dc010b55dba1952a57d8c215dbb533fd13cdd13369aac73b1c"
+checksum = "6aad2534fad53df1cc12519c5cda696dd3e20e6118a027e24054aea14a0bdcbe"
 dependencies = [
  "atty",
  "bitflags",
  "clap_derive",
+ "clap_lex",
  "indexmap",
  "lazy_static",
- "os_str_bytes",
  "strsim",
  "termcolor",
  "textwrap",
@@ -177,6 +177,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "clap_lex"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "189ddd3b5d32a70b35e7686054371742a937b0d99128e76dde6340210e966669"
+dependencies = [
+ "os_str_bytes",
 ]
 
 [[package]]
@@ -301,9 +310,9 @@ dependencies = [
 
 [[package]]
 name = "darling"
-version = "0.13.3"
+version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dbcc37e3091b4dfd0af76cb0087b9c89b8e03072abc28ae2efc8fdd733bfc5f5"
+checksum = "a01d95850c592940db9b8194bc39f4bc0e89dee5c4265e4b1807c34a9aba453c"
 dependencies = [
  "darling_core",
  "darling_macro",
@@ -311,9 +320,9 @@ dependencies = [
 
 [[package]]
 name = "darling_core"
-version = "0.13.3"
+version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9569a966dba8cd57879b8efd2bf82b5c56bb466e19767a69c560bddee1a27f5c"
+checksum = "859d65a907b6852c9361e3185c862aae7fafd2887876799fa55f5f99dc40d610"
 dependencies = [
  "fnv",
  "ident_case",
@@ -324,9 +333,9 @@ dependencies = [
 
 [[package]]
 name = "darling_macro"
-version = "0.13.3"
+version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "efae147148c6380157050146a2040b65dbe91bef6e97aaaa39ef0d469d2eb4af"
+checksum = "9c972679f83bdf9c42bd905396b6c3588a843a17f0f16dfcfa3e2c5d57441835"
 dependencies = [
  "darling_core",
  "quote",
@@ -390,18 +399,18 @@ checksum = "e78d4f1cc4ae33bbfc157ed5d5a5ef3bc29227303d595861deb238fcec4e9457"
 
 [[package]]
 name = "enumset"
-version = "1.0.10"
+version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8b6b2301b38343c1f00b2cc5116d6c28306758344db73e3347f21aa1e60e756"
+checksum = "4799cdb24d48f1f8a7a98d06b7fde65a85a2d1e42b25a889f5406aa1fbefe074"
 dependencies = [
  "enumset_derive",
 ]
 
 [[package]]
 name = "enumset_derive"
-version = "0.5.7"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b201779d9a5dee6b1478eb1c6b9643b1fbca784ce98ac74e7f33cd1dad620058"
+checksum = "ea83a3fbdc1d999ccfbcbee717eab36f8edf2d71693a23ce0d7cca19e085304c"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -571,9 +580,9 @@ dependencies = [
 
 [[package]]
 name = "httparse"
-version = "1.6.0"
+version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9100414882e15fb7feccb4897e5f0ff0ff1ca7d1a86a23208ada4d7a18e6c6c4"
+checksum = "6330e8a36bd8c859f3fa6d9382911fbb7147ec39807f63b923933a247240b9ba"
 
 [[package]]
 name = "httpdate"
@@ -682,9 +691,9 @@ checksum = "1aab8fc367588b89dcee83ab0fd66b72b50b72fa1904d7095045ace2b0c81c35"
 
 [[package]]
 name = "js-sys"
-version = "0.3.56"
+version = "0.3.57"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a38fc24e30fd564ce974c02bf1d337caddff65be6cc4735a1f7eab22a7440f04"
+checksum = "671a26f820db17c2a2750743f1dd03bafd15b98c9f30c7c2628c024c05d73397"
 dependencies = [
  "wasm-bindgen",
 ]
@@ -703,9 +712,9 @@ checksum = "884e2677b40cc8c339eaefcb701c32ef1fd2493d71118dc0ca4b6a736c93bd67"
 
 [[package]]
 name = "libc"
-version = "0.2.121"
+version = "0.2.123"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "efaa7b300f3b5fe8eb6bf21ce3895e1751d9665086af2d64b42f19701015ff4f"
+checksum = "cb691a747a7ab48abc15c5b42066eaafde10dc427e3b6ee2a1cf43db04c763bd"
 
 [[package]]
 name = "libloading"
@@ -805,12 +814,11 @@ dependencies = [
 
 [[package]]
 name = "miniz_oxide"
-version = "0.4.4"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a92518e98c078586bc6c934028adcca4c92a53d6a958196de835170a01d84e4b"
+checksum = "d2b29bd4bc3f33391105ebee3589c19197c4271e3e5a9ec9bfe8127eeff8f082"
 dependencies = [
  "adler",
- "autocfg",
 ]
 
 [[package]]
@@ -886,6 +894,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "object"
+version = "0.28.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "40bec70ba014595f99f7aa110b84331ffe1ee9aece7fe6f387cc7e3ecda4d456"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "once_cell"
 version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -904,9 +921,6 @@ name = "os_str_bytes"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e22443d1643a904602595ba1cd8f7d896afe56d26712531c5ff73a15b2fbf64"
-dependencies = [
- "memchr",
-]
 
 [[package]]
 name = "parking_lot"
@@ -996,9 +1010,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.36"
+version = "1.0.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c7342d5883fbccae1cc37a2353b09c87c9b0f3afd73f5fb9bba687a1f733b029"
+checksum = "ec757218438d5fda206afc041538b2f6d889286160d649a86a24d37e1235afd1"
 dependencies = [
  "unicode-xid",
 ]
@@ -1031,9 +1045,9 @@ checksum = "a1d01941d82fa2ab50be1e79e6714289dd7cde78eba4c074bc5a4374f650dfe0"
 
 [[package]]
 name = "quote"
-version = "1.0.17"
+version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "632d02bff7f874a36f33ea8bb416cd484b90cc66c1194b1a1110d067a7013f58"
+checksum = "a1feb54ed693b93a84e14094943b84b7c4eae204c512b7ccb95ab0c66d278ad1"
 dependencies = [
  "proc-macro2",
 ]
@@ -1070,9 +1084,9 @@ dependencies = [
 
 [[package]]
 name = "rayon"
-version = "1.5.1"
+version = "1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c06aca804d41dbc8ba42dfd964f0d01334eceb64314b9ecf7c5fad5188a06d90"
+checksum = "fd249e82c21598a9a426a4e00dd7adc1d640b22445ec8545feef801d1a74c221"
 dependencies = [
  "autocfg",
  "crossbeam-deque",
@@ -1082,14 +1096,13 @@ dependencies = [
 
 [[package]]
 name = "rayon-core"
-version = "1.9.1"
+version = "1.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d78120e2c850279833f1dd3582f730c4ab53ed95aeaaaa862a2a5c71b1656d8e"
+checksum = "9f51245e1e62e1f1629cbfec37b5793bbabcaeb90f30e94d2ba03564687353e4"
 dependencies = [
  "crossbeam-channel",
  "crossbeam-deque",
  "crossbeam-utils",
- "lazy_static",
  "num_cpus",
 ]
 
@@ -1442,9 +1455,9 @@ checksum = "360dfd1d6d30e05fda32ace2c8c70e9c0a9da713275777f5a4dbb8a1893930c6"
 
 [[package]]
 name = "tracing"
-version = "0.1.32"
+version = "0.1.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a1bdf54a7c28a2bbf701e1d2233f6c77f473486b94bee4f9678da5a148dca7f"
+checksum = "5d0ecdcb44a79f0fe9844f0c4f33a342cbcbb5117de8001e6ba0dc2351327d09"
 dependencies = [
  "cfg-if",
  "log",
@@ -1466,9 +1479,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-core"
-version = "0.1.24"
+version = "0.1.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "90442985ee2f57c9e1b548ee72ae842f4a9a20e3f417cc38dbc5dc684d9bb4ee"
+checksum = "f54c8ca710e81886d498c2fd3331b56c93aa248d49de2222ad2742247c60072f"
 dependencies = [
  "lazy_static",
 ]
@@ -1521,9 +1534,9 @@ checksum = "9c8d87e72b64a3b4db28d11ce29237c246188f4f51057d65a7eab63b7987e423"
 
 [[package]]
 name = "wasm-bindgen"
-version = "0.2.79"
+version = "0.2.80"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25f1af7423d8588a3d840681122e72e6a24ddbcb3f0ec385cac0d12d24256c06"
+checksum = "27370197c907c55e3f1a9fbe26f44e937fe6451368324e009cba39e139dc08ad"
 dependencies = [
  "cfg-if",
  "wasm-bindgen-macro",
@@ -1531,9 +1544,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-backend"
-version = "0.2.79"
+version = "0.2.80"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b21c0df030f5a177f3cba22e9bc4322695ec43e7257d865302900290bcdedca"
+checksum = "53e04185bfa3a779273da532f5025e33398409573f348985af9a1cbf3774d3f4"
 dependencies = [
  "bumpalo",
  "lazy_static",
@@ -1546,9 +1559,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-macro"
-version = "0.2.79"
+version = "0.2.80"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f4203d69e40a52ee523b2529a773d5ffc1dc0071801c87b3d270b471b80ed01"
+checksum = "17cae7ff784d7e83a2fe7611cfe766ecf034111b49deb850a3dc7699c08251f5"
 dependencies = [
  "quote",
  "wasm-bindgen-macro-support",
@@ -1556,9 +1569,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-macro-support"
-version = "0.2.79"
+version = "0.2.80"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bfa8a30d46208db204854cadbb5d4baf5fcf8071ba5bf48190c3e59937962ebc"
+checksum = "99ec0dc7a4756fffc231aab1b9f2f578d23cd391390ab27f952ae0c9b3ece20b"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1569,9 +1582,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-shared"
-version = "0.2.79"
+version = "0.2.80"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d958d035c4438e28c70e4321a2911302f10135ce78a9c7834c0cab4123d06a2"
+checksum = "d554b7f530dee5964d9a9468d95c1f8b8acae4f282807e7d27d4b03099a46744"
 
 [[package]]
 name = "wasm-worker"
@@ -1607,7 +1620,7 @@ dependencies = [
 [[package]]
 name = "wasmer"
 version = "2.1.1"
-source = "git+ssh://git@github.com/kaimast/wasmer.git?branch=zygote#c288794b9a7f1a23d6ed565a3c80486ab776f805"
+source = "git+https://github.com/kaimast/wasmer.git?branch=zygote#c288794b9a7f1a23d6ed565a3c80486ab776f805"
 dependencies = [
  "async-wormhole",
  "cfg-if",
@@ -1633,7 +1646,7 @@ dependencies = [
 [[package]]
 name = "wasmer-compiler"
 version = "2.1.1"
-source = "git+ssh://git@github.com/kaimast/wasmer.git?branch=zygote#c288794b9a7f1a23d6ed565a3c80486ab776f805"
+source = "git+https://github.com/kaimast/wasmer.git?branch=zygote#c288794b9a7f1a23d6ed565a3c80486ab776f805"
 dependencies = [
  "enumset",
  "loupe",
@@ -1651,7 +1664,7 @@ dependencies = [
 [[package]]
 name = "wasmer-compiler-cranelift"
 version = "2.1.1"
-source = "git+ssh://git@github.com/kaimast/wasmer.git?branch=zygote#c288794b9a7f1a23d6ed565a3c80486ab776f805"
+source = "git+https://github.com/kaimast/wasmer.git?branch=zygote#c288794b9a7f1a23d6ed565a3c80486ab776f805"
 dependencies = [
  "cranelift-codegen",
  "cranelift-entity",
@@ -1671,7 +1684,7 @@ dependencies = [
 [[package]]
 name = "wasmer-compiler-llvm"
 version = "2.1.1"
-source = "git+ssh://git@github.com/kaimast/wasmer.git?branch=zygote#c288794b9a7f1a23d6ed565a3c80486ab776f805"
+source = "git+https://github.com/kaimast/wasmer.git?branch=zygote#c288794b9a7f1a23d6ed565a3c80486ab776f805"
 dependencies = [
  "byteorder",
  "cc",
@@ -1680,7 +1693,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "loupe",
- "object",
+ "object 0.27.1",
  "rayon",
  "regex",
  "rustc_version",
@@ -1695,7 +1708,7 @@ dependencies = [
 [[package]]
 name = "wasmer-compiler-singlepass"
 version = "2.1.1"
-source = "git+ssh://git@github.com/kaimast/wasmer.git?branch=zygote#c288794b9a7f1a23d6ed565a3c80486ab776f805"
+source = "git+https://github.com/kaimast/wasmer.git?branch=zygote#c288794b9a7f1a23d6ed565a3c80486ab776f805"
 dependencies = [
  "byteorder",
  "dynasm",
@@ -1713,7 +1726,7 @@ dependencies = [
 [[package]]
 name = "wasmer-derive"
 version = "2.1.1"
-source = "git+ssh://git@github.com/kaimast/wasmer.git?branch=zygote#c288794b9a7f1a23d6ed565a3c80486ab776f805"
+source = "git+https://github.com/kaimast/wasmer.git?branch=zygote#c288794b9a7f1a23d6ed565a3c80486ab776f805"
 dependencies = [
  "proc-macro-error",
  "proc-macro2",
@@ -1724,7 +1737,7 @@ dependencies = [
 [[package]]
 name = "wasmer-engine"
 version = "2.1.1"
-source = "git+ssh://git@github.com/kaimast/wasmer.git?branch=zygote#c288794b9a7f1a23d6ed565a3c80486ab776f805"
+source = "git+https://github.com/kaimast/wasmer.git?branch=zygote#c288794b9a7f1a23d6ed565a3c80486ab776f805"
 dependencies = [
  "backtrace",
  "enumset",
@@ -1745,7 +1758,7 @@ dependencies = [
 [[package]]
 name = "wasmer-engine-dylib"
 version = "2.1.1"
-source = "git+ssh://git@github.com/kaimast/wasmer.git?branch=zygote#c288794b9a7f1a23d6ed565a3c80486ab776f805"
+source = "git+https://github.com/kaimast/wasmer.git?branch=zygote#c288794b9a7f1a23d6ed565a3c80486ab776f805"
 dependencies = [
  "cfg-if",
  "enumset",
@@ -1767,7 +1780,7 @@ dependencies = [
 [[package]]
 name = "wasmer-engine-universal"
 version = "2.1.1"
-source = "git+ssh://git@github.com/kaimast/wasmer.git?branch=zygote#c288794b9a7f1a23d6ed565a3c80486ab776f805"
+source = "git+https://github.com/kaimast/wasmer.git?branch=zygote#c288794b9a7f1a23d6ed565a3c80486ab776f805"
 dependencies = [
  "cfg-if",
  "enumset",
@@ -1785,9 +1798,9 @@ dependencies = [
 [[package]]
 name = "wasmer-object"
 version = "2.1.1"
-source = "git+ssh://git@github.com/kaimast/wasmer.git?branch=zygote#c288794b9a7f1a23d6ed565a3c80486ab776f805"
+source = "git+https://github.com/kaimast/wasmer.git?branch=zygote#c288794b9a7f1a23d6ed565a3c80486ab776f805"
 dependencies = [
- "object",
+ "object 0.27.1",
  "thiserror",
  "wasmer-compiler",
  "wasmer-types",
@@ -1796,7 +1809,7 @@ dependencies = [
 [[package]]
 name = "wasmer-types"
 version = "2.1.1"
-source = "git+ssh://git@github.com/kaimast/wasmer.git?branch=zygote#c288794b9a7f1a23d6ed565a3c80486ab776f805"
+source = "git+https://github.com/kaimast/wasmer.git?branch=zygote#c288794b9a7f1a23d6ed565a3c80486ab776f805"
 dependencies = [
  "indexmap",
  "loupe",
@@ -1808,7 +1821,7 @@ dependencies = [
 [[package]]
 name = "wasmer-vm"
 version = "2.1.1"
-source = "git+ssh://git@github.com/kaimast/wasmer.git?branch=zygote#c288794b9a7f1a23d6ed565a3c80486ab776f805"
+source = "git+https://github.com/kaimast/wasmer.git?branch=zygote#c288794b9a7f1a23d6ed565a3c80486ab776f805"
 dependencies = [
  "backtrace",
  "cc",

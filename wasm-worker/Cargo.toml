@@ -12,13 +12,13 @@ ron = "0"
 derive_more = "0.99"
 clap = { version = "3", default-features=false, features=["suggestions", "color", "std", "cargo", "derive"]}
 futures-util = { version="0.3" }
-wasmer = { git="ssh://git@github.com/kaimast/wasmer.git", branch="zygote", default-features=false, features=["compiler", "async"] }
-wasmer-compiler-singlepass = { git="ssh://git@github.com/kaimast/wasmer.git", branch="zygote" }
-wasmer-compiler-cranelift = { git="ssh://git@github.com/kaimast/wasmer.git", branch="zygote" }
-wasmer-compiler-llvm = { git="ssh://git@github.com/kaimast/wasmer.git", branch="zygote", optional=true }
-wasmer-engine-dylib = { git="ssh://git@github.com/kaimast/wasmer.git", branch="zygote" }
-wasmer-engine = { git="ssh://git@github.com/kaimast/wasmer.git", branch="zygote" }
-wasmer-vm = { git="ssh://git@github.com/kaimast/wasmer.git", branch="zygote" }
+wasmer = { git="https://github.com/kaimast/wasmer.git", branch="zygote", default-features=false, features=["compiler", "async"] }
+wasmer-compiler-singlepass = { git="https://github.com/kaimast/wasmer.git", branch="zygote" }
+wasmer-compiler-cranelift = { git="https://github.com/kaimast/wasmer.git", branch="zygote" }
+wasmer-compiler-llvm = { git="https://github.com/kaimast/wasmer.git", branch="zygote", optional=true }
+wasmer-engine-dylib = { git="https://github.com/kaimast/wasmer.git", branch="zygote" }
+wasmer-engine = { git="https://github.com/kaimast/wasmer.git", branch="zygote" }
+wasmer-vm = { git="https://github.com/kaimast/wasmer.git", branch="zygote" }
 lazy_static = "1"
 pretty_env_logger = { version="0.4" }
 log = "0.4"
