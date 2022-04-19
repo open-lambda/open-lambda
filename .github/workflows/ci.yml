@@ -44,7 +44,7 @@ jobs:
       run: cargo install cross
     - name: Build open lambda
       run: |
-         sudo make ol install-python-bindings
+         make ol install-python-bindings
          make wasm-worker wasm-functions native-functions
     - name: Test Python (Docker)
       # not all features are supported by docker yet, so we only run some of the tests
