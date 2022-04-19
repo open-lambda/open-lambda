@@ -18,7 +18,7 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v2
-    - name: Install Docker and prereqs
+    - name: Install Docker and Prereqs
       run: |
          apt-get update
          apt-get install build-essential python3 libclang-common-12-dev llvm-12-dev zlib1g-dev -y
@@ -42,8 +42,9 @@ jobs:
          go-version: '>=1.17.0'
     - name: Install cross
       run: cargo install cross
-    - name: Build open lambda
+    - name: Build OpenLambda
       run: |
+         source ${HOME}/.cargo/env
          make ol install-python-bindings
          make wasm-worker wasm-functions native-functions
     - name: Test Python (Docker)
