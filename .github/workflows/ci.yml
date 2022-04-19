@@ -53,7 +53,9 @@ jobs:
     #   run: ./scripts/test.py --worker_type=sock
     #   timeout-minutes: 20
     - name: Test Binaries (WebAssembly)
-      run: ./scripts/bin_test.py --worker_type=wasm
+      run: |
+        sudo rm -f test.json
+        env RUST_LOG=info ./scripts/bin_test.py --worker_type=wasm
       timeout-minutes: 10
     # - name: Test Binaries (SOCK)
     #   run: ./scripts/bin_test.py --worker_type=sock
