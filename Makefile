@@ -54,7 +54,7 @@ update-dependencies:
 
 imgs/lambda: $(LAMBDA_FILES)
 	${MAKE} -C lambda
-	sudo docker build -t lambda lambda
+	docker build -t lambda lambda
 	touch imgs/lambda
 
 install-python-bindings:

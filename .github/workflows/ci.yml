@@ -21,7 +21,7 @@ jobs:
     - name: Install Docker and prereqs
       run: |
          apt-get update
-         apt-get install build-essential python3 libclang-common-12-dev llvm-12-dev zlib1g-dev sudo -y
+         apt-get install build-essential python3 libclang-common-12-dev llvm-12-dev zlib1g-dev -y
          apt-get install runc containerd docker.io curl python3 python-is-python3 python3-setuptools -y
          # gpasswd -a $USER docker
     - name: Install rustc and clippy nightly
@@ -48,14 +48,14 @@ jobs:
          make wasm-worker wasm-functions native-functions
     - name: Test Python (Docker)
       # not all features are supported by docker yet, so we only run some of the tests
-      run: sudo ./scripts/test.py --worker_type=docker --test_filter=stress_one_lambda,numpy,ping_test
+      run: ./scripts/test.py --worker_type=docker --test_filter=stress_one_lambda,numpy,ping_test
     - name: Test Python (SOCK)
-      run: sudo  ./scripts/test.py --worker_type=sock
+      run: ./scripts/test.py --worker_type=sock
     - name: Test Binaries (WebAssembly)
       run: ./script/bin-test.py --worker_type=wasm
     - name: Test Binaries (SOCK)
-      run: sudo ./scripts/bin-test.py --worker_type=sock
+      run: ./scripts/bin-test.py --worker_type=sock
     - name: Test SOCK
-      run: sudo ./scripts/sock-test.py
+      run: ./scripts/sock-test.py
     - name: Linting
       run: make lint
