@@ -176,7 +176,6 @@ class SockWorker():
 class WasmWorker():
     def __init__(self):
         print("Starting WebAssembly worker")
-        self._config = TestConf()
         self._process = Popen(["./ol-wasm"])
 
         sleep(0.5)
