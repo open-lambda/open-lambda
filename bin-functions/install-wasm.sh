@@ -5,7 +5,7 @@ shopt -s nullglob
 REGISTRY_PATH_WASM=$1
 WASM_TARGET=$2
 
-WASM_PREFIX=./bin-function/target/${WASM_TARGET}/release/
+WASM_PREFIX=./bin-functions/target/${WASM_TARGET}/release/
 
 mkdir -p ${REGISTRY_PATH_WASM}
 
