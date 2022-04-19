@@ -101,7 +101,7 @@ func (container *SOCKContainer) freshProc() (err error) {
 			"chroot", container.containerRootDir, "python3", "-u",
 			"/runtimes/python/server.py", "/host/bootstrap.py", strconv.Itoa(1),
 		)
-	} else if container.rtType == common.RT_BINARY {
+	} else if container.rtType == common.RT_NATIVE {
 		if container.containerProxy == nil {
 			err := container.launchContainerProxy()
 
@@ -112,7 +112,7 @@ func (container *SOCKContainer) freshProc() (err error) {
 
 		cmd = exec.Command(
 			"chroot", container.containerRootDir,
-			"env", "RUST_BACKTRACE=full", "/runtimes/rust/server", strconv.Itoa(1),
+			"env", "RUST_BACKTRACE=full", "/runtimes/native/server", strconv.Itoa(1),
 		)
 	} else {
 		return fmt.Errorf("Unsupported runtime")

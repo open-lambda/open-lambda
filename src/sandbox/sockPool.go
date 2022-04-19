@@ -144,7 +144,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 		if err := ioutil.WriteFile(path, code, 0600); err != nil {
 			return nil, err
 		}
-	} else if rtType == common.RT_BINARY {
+	} else if rtType == common.RT_NATIVE {
 		// nothing to do?
 	} else {
 		return nil, fmt.Errorf("Unsupported runtime")

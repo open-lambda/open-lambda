@@ -1,4 +1,4 @@
-# pylint: disable=line-too-long,global-statement,invalid-name
+# pylint: disable=line-too-long,global-statement,invalid-name,broad-except
 
 ''' Python runtime for sock '''
 
@@ -21,6 +21,7 @@ import ol
 
 file_sock_path = "/host/ol.sock"
 file_sock = None
+bootstrap_path = None
 
 def recv_fds(sock, msglen, maxfds):
     '''
@@ -28,7 +29,7 @@ def recv_fds(sock, msglen, maxfds):
     '''
 
     fds = array.array("i")   # Array of ints
-    msg, ancdata, _flags, addr = sock.recvmsg(msglen, socket.CMSG_LEN(maxfds * fds.itemsize))
+    msg, ancdata, _flags, _addr = sock.recvmsg(msglen, socket.CMSG_LEN(maxfds * fds.itemsize))
     for cmsg_level, cmsg_type, cmsg_data in ancdata:
         if (cmsg_level == socket.SOL_SOCKET and cmsg_type == socket.SCM_RIGHTS):
             # Append data, ignoring any truncated integers at the end.
@@ -117,11 +118,14 @@ def fork_server():
             os._exit(1) # only reachable if program unnexpectedly returns
 
 
-# 1. this assumes chroot has taken us to the location where the
-#    container should start.
-# 2. it launches the container code by running whatever is in the
-#    bootstrap file (from argv)
 def start_container():
+    '''
+    1. this assumes chroot has taken us to the location where the
+        container should start.
+    2. it launches the container code by running whatever is in the
+        bootstrap file (from argv)
+    '''
+
     global file_sock
 
     # TODO: if we can get rid of this, we can get rid of the ns module
@@ -150,7 +154,7 @@ def start_container():
         code = f.read()
         try:
             exec(code)
-        except Exception as e:
+        except Exception as _:
             print("Exception: " + traceback.format_exc())
             print("Problematic Python Code:\n" + code)
 

@@ -25,18 +25,6 @@ class OpenLambda:
 
         return req.text
 
-    def run_on(self, object_id, fn_name, args, json=True):
-        ''' Execute a serverless function on a LambdaObject '''
-
-        req = self._session.post(f'http://{self._address}/run_on/{fn_name}',
-                pyjson.dumps(args), params={'object_id': object_id})
-        self._check_status_code(req, "run_on")
-
-        if json:
-            return req.json()
-
-        return req.text
-
     def create(self, args):
         ''' Create a new sandbox '''
 

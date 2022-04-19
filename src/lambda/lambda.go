@@ -342,8 +342,8 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 		}
 		f.lmgr.DepTracer.TraceFunction(codeDir, meta.Installs)
 		f.meta = meta
-	} else if rtType == common.RT_BINARY {
-		log.Printf("Got binary function")
+	} else if rtType == common.RT_NATIVE {
+		log.Printf("Got native function")
 	}
 
 	f.codeDir = codeDir
@@ -452,7 +452,7 @@ func (f *LambdaFunc) Task() {
 			select {
 			case f.instChan <- req:
 				// msg: function -> instance
-				outstandingReqs += 1
+				outstandingReqs++
 			default:
 				// queue cannot accept more, so reply with backoff
 				req.w.WriteHeader(http.StatusTooManyRequests)
@@ -463,7 +463,7 @@ func (f *LambdaFunc) Task() {
 			// msg: instance -> function
 
 			execMs.Add(req.execMs)
-			outstandingReqs -= 1
+			outstandingReqs--
 
 			// msg: function -> client
 			req.done <- true
@@ -594,7 +594,7 @@ func (linst *LambdaInstance) Task() {
 		case killed := <-linst.killChan:
 			if sb != nil {
 				rtLog := sb.GetRuntimeLog()
-				proxy_log := sb.GetProxyLog()
+				proxyLog := sb.GetProxyLog()
 				sb.Destroy()
 
 				log.Printf("Stopped sandbox")
@@ -608,10 +608,10 @@ func (linst *LambdaInstance) Task() {
 						}
 					}
 
-					if proxy_log != "" {
+					if proxyLog != "" {
 						log.Printf("Proxy output is:")
 
-						for _, line := range strings.Split(proxy_log, "\n") {
+						for _, line := range strings.Split(proxyLog, "\n") {
 							log.Printf("   %s", line)
 						}
 					}
@@ -728,7 +728,7 @@ func (linst *LambdaInstance) Task() {
 	}
 }
 
-// signal the instance to die, return chan that can be used to block
+// AsyncKill signals the instance to die, return chan that can be used to block
 // until it's done
 func (linst *LambdaInstance) AsyncKill() chan bool {
 	done := make(chan bool)
