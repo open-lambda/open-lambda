@@ -175,11 +175,6 @@ def ping_test():
     return {"pings_per_sec": pings/seconds}
 
 @test
-def rust_hashing():
-    open_lambda = OpenLambda()
-    open_lambda.run("hashing", {"num_hashes": 100, "input_len": 1024})
-
-@test
 def update_code():
     curr_conf = get_current_config()
     reg_dir = curr_conf['registry']

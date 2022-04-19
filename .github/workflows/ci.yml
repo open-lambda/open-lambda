@@ -44,7 +44,8 @@ jobs:
         sudo make ol install-python-bindings
         make wasm-worker wasm-functions native-functions
     - name: Test Python (Docker)
-      run: sudo ./scripts/test.py --worker_type=docker
+      # not all features are supported by docker yet, so we only run some of the tests
+      run: sudo ./scripts/test.py --worker_type=docker --test_filter=stress_one_lambda,numpy,ping_test
     - name: Test Python (SOCK)
       run: sudo ./scripts/test.py --worker_type=sock
     - name: Test Binaries (WebAssembly)
