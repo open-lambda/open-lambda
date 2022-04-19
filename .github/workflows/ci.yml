@@ -47,18 +47,17 @@ jobs:
       run: cargo install cross
     - name: Build OpenLambda
       run: |
-         make ol install-python-bindings
+         make ol install-python-bindings imgs/lambda
          make wasm-worker wasm-functions
          #make native-functions
-    # Broken inside docker
-    # - name: Test Python (Docker)
-    # not all features are supported by docker yet, so we only run some of the tests
-    #   run: ./scripts/test.py --worker_type=docker --test_filter=stress_one_lambda,numpy,ping_test
+     - name: Test Python (Docker)
+     not all features are supported by docker yet, so we only run some of the tests
+       run: ./scripts/test.py --worker_type=docker --test_filter=stress_one_lambda,numpy,ping_test
     - name: Test Python (SOCK)
       run: ./scripts/test.py --worker_type=sock
     - name: Test Binaries (WebAssembly)
       run: ./script/bin-test.py --worker_type=wasm
-    # Cross is broken inside Docker as well
+    # Broken inside Docker
     #    - name: Test Binaries (SOCK)
     #      run: ./scripts/bin-test.py --worker_type=sock
     - name: Test SOCK
