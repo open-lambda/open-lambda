@@ -53,12 +53,12 @@ jobs:
     #   run: ./scripts/test.py --worker_type=sock
     #   timeout-minutes: 20
     - name: Test Binaries (WebAssembly)
-      run: ./script/bin-test.py --worker_type=wasm
+      run: ./script/bin_test.py --worker_type=wasm
       timeout-minutes: 10
     # - name: Test Binaries (SOCK)
-    #   run: ./scripts/bin-test.py --worker_type=sock
+    #   run: ./scripts/bin_test.py --worker_type=sock
     # - name: Test SOCK
-    #   run: ./scripts/sock-test.py
+    #   run: ./scripts/sock_test.py
     #   timeout-minutes: 20
     - name: Linting
       run: make lint
