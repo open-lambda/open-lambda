@@ -61,16 +61,6 @@ def check_status_code(req):
         raise Exception(f"STATUS {req.status_code}: {req.text}")
 
 @test
-def hello_rust():
-    open_lambda = OpenLambda()
-    open_lambda.run("hello", [])
-
-@test
-def internal_call():
-    open_lambda = OpenLambda()
-    open_lambda.run("run/internal_call", {"count": 5})
-
-@test
 def numpy_test():
     open_lambda = OpenLambda()
 
