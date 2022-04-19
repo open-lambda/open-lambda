@@ -5,6 +5,9 @@
 from subprocess import check_output, Popen
 from time import sleep
 from collections import OrderedDict
+from sys import stdout
+from os.path import exists
+from os import remove
 
 import copy
 import subprocess
@@ -175,10 +178,22 @@ class SockWorker():
 
 class WasmWorker():
     def __init__(self):
-        print("Starting WebAssembly worker")
+        # TODO use a similar mechanism to regular OpenLambda
+
+        stdout.write("Starting WebAssembly worker.")
+        stdout.flush()
+
+        if exists('./ol-wasm.ready'):
+            remove('./ol-wasm.ready')
+
         self._process = Popen(["./ol-wasm"])
 
-        sleep(0.5)
+        while not exists('./ol-wasm.ready'):
+            sleep(0.5)
+            stdout.write('.')
+            stdout.flush()
+
+        print("Done")
 
     def __del__(self):
         self.stop()

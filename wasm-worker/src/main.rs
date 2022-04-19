@@ -1,6 +1,6 @@
 #![feature(async_closure)]
 
-use std::fs::read_dir;
+use std::fs::{File, remove_file, read_dir};
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::path::PathBuf;
 
@@ -164,6 +164,8 @@ async fn main() {
     let mut sigterm = signal(SignalKind::terminate()).expect("Failed to install sighandler");
     let mut sigint = signal(SignalKind::interrupt()).expect("Failed to install sighandler");
 
+    File::create("./ol-wasm.ready").expect("Failed to create ready file");
+
     tokio::select! {
         result = server => {
             if let Err(err) = result {
@@ -185,6 +187,8 @@ async fn main() {
             }
         }
     }
+
+    remove_file("./ol-wasm.ready").unwrap();
 }
 
 async fn execute_function(
