@@ -51,7 +51,7 @@ jobs:
          make wasm-worker wasm-functions
          #make native-functions
     - name: Test Python (Docker)
-     not all features are supported by docker yet, so we only run some of the tests
+    # not all features are supported by docker yet, so we only run some of the tests
        run: ./scripts/test.py --worker_type=docker --test_filter=stress_one_lambda,numpy,ping_test
     - name: Test Python (SOCK)
       run: ./scripts/test.py --worker_type=sock
