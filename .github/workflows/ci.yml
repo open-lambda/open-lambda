@@ -53,7 +53,7 @@ jobs:
     #   run: ./scripts/test.py --worker_type=sock
     #   timeout-minutes: 20
     - name: Test Binaries (WebAssembly)
-      run: ./script/bin_test.py --worker_type=wasm
+      run: ./scripts/bin_test.py --worker_type=wasm
       timeout-minutes: 10
     # - name: Test Binaries (SOCK)
     #   run: ./scripts/bin_test.py --worker_type=sock
