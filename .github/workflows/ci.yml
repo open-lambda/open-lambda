@@ -15,6 +15,7 @@ jobs:
     # We run inside the 22.04 docker container until its environment as a virtual environment
     # This is needed because we need cgroups2
     container: ubuntu:jammy
+    shell: bash
     steps:
     - name: Checkout repository
       uses: actions/checkout@v2
