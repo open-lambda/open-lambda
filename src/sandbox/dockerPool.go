@@ -13,7 +13,7 @@ import (
 	"github.com/open-lambda/open-lambda/ol/sandbox/dockerutil"
 )
 
-// DockerPool is a ContainerFactory that creats docker containers.
+// DockerPool is a ContainerFactory that creates docker containers.
 type DockerPool struct {
 	client         *docker.Client
 	labels         map[string]string
@@ -21,7 +21,7 @@ type DockerPool struct {
 	pidMode        string
 	pkgsDir        string
 	idxPtr         *int64
-	docker_runtime string
+	dockerRuntime string
 	eventHandlers  []SandboxEventFunc
 	debugger
 }
@@ -47,7 +47,7 @@ func NewDockerPool(pidMode string, caps []string) (*DockerPool, error) {
 		pidMode:        pidMode,
 		pkgsDir:        common.Conf.Pkgs_dir,
 		idxPtr:         idxPtr,
-		docker_runtime: common.Conf.Docker_runtime,
+		dockerRuntime: common.Conf.Docker_runtime,
 		eventHandlers:  []SandboxEventFunc{},
 	}
 
@@ -57,7 +57,7 @@ func NewDockerPool(pidMode string, caps []string) (*DockerPool, error) {
 }
 
 // Create creates a docker sandbox from the handler and sandbox directory.
-func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, meta *SandboxMeta, _rt_type common.RuntimeType) (sb Sandbox, err error) {
+func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, meta *SandboxMeta, _rtType common.RuntimeType) (sb Sandbox, err error) {
 	meta = fillMetaDefaults(meta)
 	t := common.T0("Create()")
 	defer t.T1()
@@ -103,7 +103,7 @@ func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir 
 				Binds:   volumes,
 				CapAdd:  pool.caps,
 				PidMode: pool.pidMode,
-				Runtime: pool.docker_runtime,
+				Runtime: pool.dockerRuntime,
 			},
 		},
 	)
@@ -112,7 +112,7 @@ func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir 
 	}
 
 	c := &DockerContainer{
-		host_id:   id,
+		hostID:    id,
 		hostDir:   scratchDir,
 		container: container,
 		client:    pool.client,
@@ -141,12 +141,16 @@ func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir 
 	return safe, nil
 }
 
+// Cleanup will free up any unneeded data/resources
+// Currently, this function does nothing and cleanup is handled by the docker daemon
 func (pool *DockerPool) Cleanup() {}
 
+// DebugString returns debug information
 func (pool *DockerPool) DebugString() string {
 	return pool.debugger.Dump()
 }
 
+// AddListener allows registering event handlers
 func (pool *DockerPool) AddListener(handler SandboxEventFunc) {
 	pool.eventHandlers = append(pool.eventHandlers, handler)
 }

@@ -23,6 +23,7 @@ COPY runtimes/python /tmp/py-runtime
 RUN cd /tmp/py-runtime && python3 setup.py build_ext --inplace
 RUN mv /tmp/py-runtime/ol.*.so /runtimes/python/ol.so
 RUN mv /tmp/py-runtime/server.py /runtimes/python/server.py
+RUN mv /tmp/py-runtime/server_legacy.py /runtimes/python/server_legacy.py
 RUN rm -rf /tmp/py-runtime
 
 # for the Docker container engine

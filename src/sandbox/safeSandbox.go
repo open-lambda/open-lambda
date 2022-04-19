@@ -150,7 +150,7 @@ func (sb *safeSandbox) HttpProxy() (p *httputil.ReverseProxy, err error) {
 		return nil, DEAD_SANDBOX
 	}
 
-	p, err = sb.Sandbox.HttpProxy()
+	p, err = sb.Sandbox.HTTPProxy()
 	if err != nil {
 		sb.destroyOnErr(err)
 	}

@@ -1,20 +1,34 @@
-import os, sys, json, argparse, importlib, traceback, time, fcntl, array, socket, struct
+# pylint: disable=line-too-long,global-statement,invalid-name
+
+''' Python runtime for sock '''
+
+import os
+import sys
+import json
+import traceback
+import array
+import socket
+import struct
+
 sys.path.append("/usr/local/lib/python3.8/dist-packages")
+
 import tornado.ioloop
 import tornado.web
 import tornado.httpserver
 import tornado.netutil
-import ol
 
-from subprocess import call
+import ol
 
 file_sock_path = "/host/ol.sock"
 file_sock = None
 
-# copied from https://docs.python.org/3/library/socket.html#socket.socket.recvmsg
 def recv_fds(sock, msglen, maxfds):
+    '''
+    copied from https://docs.python.org/3/library/socket.html#socket.socket.recvmsg
+    '''
+
     fds = array.array("i")   # Array of ints
-    msg, ancdata, flags, addr = sock.recvmsg(msglen, socket.CMSG_LEN(maxfds * fds.itemsize))
+    msg, ancdata, _flags, addr = sock.recvmsg(msglen, socket.CMSG_LEN(maxfds * fds.itemsize))
     for cmsg_level, cmsg_type, cmsg_data in ancdata:
         if (cmsg_level == socket.SOL_SOCKET and cmsg_type == socket.SCM_RIGHTS):
             # Append data, ignoring any truncated integers at the end.
@@ -22,7 +36,7 @@ def recv_fds(sock, msglen, maxfds):
     return msg, list(fds)
 
 def web_server():
-    print("server.py: start web server on fd: %d" % file_sock.fileno())
+    print(f"server.py: start web server on fd: {file_sock.fileno()}")
     sys.path.append('/handler')
 
     class SockFileHandler(tornado.web.RequestHandler):
@@ -39,7 +53,7 @@ def web_server():
                     event = json.loads(data)
                 except:
                     self.set_status(400)
-                    self.write('bad POST data: "%s"'%str(data))
+                    self.write(f'bad POST data: "{data}"')
                     return
                 self.write(json.dumps(f.f(event)))
             except Exception:
@@ -59,10 +73,10 @@ def fork_server():
     global file_sock
 
     file_sock.setblocking(True)
-    print("server.py: start fork server on fd: %d" % file_sock.fileno())
+    print(f"server.py: start fork server on fd: {file_sock.fileno()}")
 
     while True:
-        client, info = file_sock.accept()
+        client, _info = file_sock.accept()
         _, fds = recv_fds(client, 8, 2)
         root_fd, mem_cgroup_fd = fds
 
@@ -111,8 +125,8 @@ def start_container():
     global file_sock
 
     # TODO: if we can get rid of this, we can get rid of the ns module
-    rv = ol.unshare()
-    assert rv == 0
+    return_val = ol.unshare()
+    assert return_val == 0
 
     # we open a new .sock file in the child, before starting the grand
     # child, which will actually use it.  This is so that the parent
@@ -121,7 +135,7 @@ def start_container():
     file_sock = tornado.netutil.bind_unix_socket(file_sock_path)
 
     pid = os.fork()
-    assert(pid >= 0)
+    assert pid >= 0
 
     if pid > 0:
         # orphan the new process by exiting parent.  The parent
@@ -129,7 +143,7 @@ def start_container():
         # works for the process that calls it.
         os._exit(0)
 
-    with open(bootstrap_path) as f:
+    with open(bootstrap_path, encoding='utf-8') as f:
         # this code can be whatever OL decides, but it will probably do the following:
         # 1. some imports
         # 2. call either web_server or fork_server
@@ -140,9 +154,12 @@ def start_container():
             print("Exception: " + traceback.format_exc())
             print("Problematic Python Code:\n" + code)
 
-# caller is expected to do chroot, because we want to use the
-# python.exe inside the container
 def main():
+    '''
+    caller is expected to do chroot, because we want to use the
+    python.exe inside the container
+    '''
+
     global bootstrap_path
 
     if len(sys.argv) < 2:
@@ -152,8 +169,8 @@ def main():
 
     print('server.py: started new process with args: ' + " ".join(sys.argv))
 
-    rc = ol.enable_seccomp()
-    assert rc >= 0
+    return_code = ol.enable_seccomp()
+    assert return_code >= 0
     print('seccomp enabled')
 
     bootstrap_path = sys.argv[1]
@@ -168,11 +185,10 @@ def main():
     pid = str(os.getpid())
     for i in range(cgroup_fds):
         # golang guarantees extras start at 3: https://golang.org/pkg/os/exec/#Cmd
-        fd = 3 + i
-        f = os.fdopen(fd, "w")
-        f.write(pid)
-        print('server.py: joined cgroup, close FD %d' % fd)
-        f.close()
+        fd_id = 3 + i
+        with os.fdopen(fd_id, "w") as file:
+            file.write(pid)
+            print(f'server.py: joined cgroup, close FD {fd_id}')
 
     start_container()
 
