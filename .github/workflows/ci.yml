@@ -48,7 +48,7 @@ jobs:
          make wasm-worker wasm-functions native-functions
     - name: Test Python (Docker)
     # not all features are supported by docker yet, so we only run some of the tests
-      run: sudo ./scripts/test.py --worker_type=docker --test_filter=ping_test,numpy
+      run: ./scripts/test.py --worker_type=docker --test_filter=ping_test,numpy
     # - name: Test Python (SOCK)
     #   run: ./scripts/test.py --worker_type=sock
     #   timeout-minutes: 20

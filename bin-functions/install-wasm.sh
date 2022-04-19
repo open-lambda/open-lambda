@@ -5,11 +5,11 @@ shopt -s nullglob
 REGISTRY_PATH_WASM=$1
 WASM_TARGET=$2
 
-WASM_PREFIX=./bin-programs/target/${WASM_TARGET}/release/
+WASM_PREFIX=./bin-function/target/${WASM_TARGET}/release/
 
 mkdir -p ${REGISTRY_PATH_WASM}
 
-echo "Searching for programs ins ${WASM_PREFIX}"
+echo "Searching for function ins ${WASM_PREFIX}"
 
 for f in ${WASM_PREFIX}*.wasm; do
     name=${f/${WASM_PREFIX}/}
