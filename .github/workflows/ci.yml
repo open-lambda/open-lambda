@@ -47,9 +47,9 @@ jobs:
       run: cargo install cross
     - name: Build OpenLambda
       run: |
-         source ${HOME}/.cargo/env
          make ol install-python-bindings
-         make wasm-worker wasm-functions native-functions
+         make wasm-worker wasm-functions
+         #make native-functions
     - name: Test Python (Docker)
       # not all features are supported by docker yet, so we only run some of the tests
       run: ./scripts/test.py --worker_type=docker --test_filter=stress_one_lambda,numpy,ping_test
@@ -57,8 +57,8 @@ jobs:
       run: ./scripts/test.py --worker_type=sock
     - name: Test Binaries (WebAssembly)
       run: ./script/bin-test.py --worker_type=wasm
-    - name: Test Binaries (SOCK)
-      run: ./scripts/bin-test.py --worker_type=sock
+        #    - name: Test Binaries (SOCK)
+        #      run: ./scripts/bin-test.py --worker_type=sock
     - name: Test SOCK
       run: ./scripts/sock-test.py
     - name: Linting
