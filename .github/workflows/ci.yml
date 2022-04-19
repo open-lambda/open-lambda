@@ -1,4 +1,4 @@
-name: CI
+ame: CI
 
 on:
   push:
@@ -45,7 +45,7 @@ jobs:
     - name: Build open lambda
       run: |
          make ol install-python-bindings
-        make wasm-worker wasm-functions native-functions
+         make wasm-worker wasm-functions native-functions
     - name: Test Python (Docker)
       # not all features are supported by docker yet, so we only run some of the tests
       run:  ./scripts/test.py --worker_type=docker --test_filter=stress_one_lambda,numpy,ping_test
