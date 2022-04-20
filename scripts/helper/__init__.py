@@ -1,6 +1,6 @@
 ''' Helper functions that are use by, both, test.py and wasm-test.py '''
 
-#pylint: disable=too-few-public-methods, c-extension-no-member, broad-except, global-statement, missing-function-docstring, missing-class-docstring, consider-using-with
+#pylint: disable=too-few-public-methods, c-extension-no-member, broad-except, global-statement, missing-function-docstring, missing-class-docstring, consider-using-with, fixme
 
 from subprocess import check_output, Popen
 from time import sleep
@@ -15,8 +15,8 @@ import os
 import json
 import requests
 
-OL_DIR=None
-CURR_CONF=None
+OL_DIR = None
+CURR_CONF = None
 
 def setup_config(ol_dir):
     global OL_DIR

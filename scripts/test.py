@@ -82,7 +82,7 @@ def numpy_test():
     assert_eq(result['result'], 15)
     assert float(".".join(result['version'].split('.')[:2])) >= 1.19
 
-    result = open_lambda.run("pandas18", [[1, 2, 3],[1, 2, 3]])
+    result = open_lambda.run("pandas18", [[1, 2, 3], [1, 2, 3]])
     assert_eq(result['result'], 12)
     assert result['version'].startswith('1.18')
 
@@ -124,8 +124,8 @@ def call_each_once(lambda_count, alloc_mb=0):
         # create dummy lambdas
         for pos in range(lambda_count):
             with open(os.path.join(reg_dir, f"L{pos}.py"), "w", encoding='utf-8') as code:
-                code.write( "def f(event):\n")
-                code.write( "    global s\n")
+                code.write("def f(event):\n")
+                code.write("    global s\n")
                 code.write(f"    s = '*' * {alloc_mb} * 1024**2\n")
                 code.write(f"    return {pos}\n")
 
