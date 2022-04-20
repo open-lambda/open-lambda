@@ -76,7 +76,7 @@ def test(func):
             return None
 
         print('='*40)
-        if len(kwargs):
+        if len(kwargs) > 0:
             print(name, kwargs)
         else:
             print(name)

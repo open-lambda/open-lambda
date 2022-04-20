@@ -6,11 +6,11 @@ from requests import Session
 class OpenLambda:
     ''' Represents a client connection to OpenLambda '''
 
-    def __init__(self, address = "localhost:5000"):
+    def __init__(self, address="localhost:5000"):
         self._address = address
         self._session = Session()
 
-    def _post(self, path, data = None):
+    def _post(self, path, data=None):
         ''' Issues a _post request to the OL worker '''
         return self._session.post(f'http://{self._address}/{path}', pyjson.dumps(data))
 

@@ -175,7 +175,7 @@ def update_code():
     for pos in range(3):
         # update function code
         with open(os.path.join(reg_dir, "version.py"), "w", encoding='utf-8') as code:
-            code.write( "def f(event):\n")
+            code.write("def f(event):\n")
             code.write(f"    return {pos}\n")
 
         # how long does it take for us to start seeing the latest code?
