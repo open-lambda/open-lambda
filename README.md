@@ -37,7 +37,6 @@ cargo install cross
 Finally, add your user to the docker group to enable cross-compilation of native binaries to open-lambda's environment. Do not forget to restart your shell/session afterwards!
 ```
 sudo gpasswd -a $USER docker
-
 ```
 
 You can build the `ol` and other resources with just `make`.
@@ -46,6 +45,8 @@ Then make sure it passes the tests:
 ```
 make test-all
 ```
+
+We recommend syncing to a commit that passes our [daily tests](https://s3.us-east-2.amazonaws.com/open-lambda-public/tests.html).
 
 ### Getting Started
 
