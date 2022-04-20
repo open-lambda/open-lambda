@@ -73,8 +73,8 @@ func (server *SOCKServer) Create(w http.ResponseWriter, rsrc []string, args map[
 	if rt_name, ok := args["runtime"]; ok {
 		if rt_name == "python" {
 			rt_type = common.RT_PYTHON
-		} else if rt_name == "binary" {
-			rt_type = common.RT_BINARY
+		} else if rt_name == "native" {
+			rt_type = common.RT_NATIVE
 		} else {
 			return fmt.Errorf("No such runtime `%s`", rt_name)
 		}

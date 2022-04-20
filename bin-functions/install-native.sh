@@ -7,14 +7,14 @@ NATIVE_PREFIX=./bin-functions/target/release/
 
 mkdir -p ${REGISTRY_PATH}
 
-echo "Searching for programs ins ${NATIVE_PREFIX}"
+echo "Searching for functions ins ${NATIVE_PREFIX}"
 
 for f in ${NATIVE_PREFIX}/*; do
     name=${f/${NATIVE_PREFIX}/}
 
     # Ignore subdirectories, libraries, and non-executable files
     if [[ $name != *".so" && -f "$f" && -x "$f" ]]; then
-        echo "Installing native program '$name.bin' from '$f' to ${REGISTRY_PATH}/${name}.bin"
+        echo "Installing native function '$name.bin' from '$f' to ${REGISTRY_PATH}/${name}.bin"
         rsync -c $f ${REGISTRY_PATH}/$name.bin
     fi
 done

@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, master ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, master ]
 
 env:
   CARGO_TERM_COLOR: always
@@ -12,36 +12,56 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
     steps:
     - name: Checkout repository
       uses: actions/checkout@v2
-    - name: Install Docker and prereqs
-      run: apt-get install build-essential docker.io python3 libclang-common-11-dev llvm-dev
-    - name: Install golang
-      uses: actions/setup-go@v3
-      with:
-         go-version: '>=1.17.0'
+    - name: Install Docker and Prereqs
+      run: |
+         sudo apt-get update
+         sudo apt-get install build-essential python3 libclang-common-12-dev llvm-12-dev zlib1g-dev -y
+         sudo apt-get install runc containerd docker.io curl python3 python-is-python3 python3-setuptools python3-pip -y
+         sudo gpasswd -a $USER docker
+         pip3 install pylint
     - name: Install rustc and clippy nightly
       uses: actions-rs/toolchain@v1
       with:
          profile: minimal
          toolchain: nightly
          override: true
-         components: cargo, rustc, clippy
+         components: cargo, rustc, clippy, rustfmt
          target: wasm32-unknown-unknown
+    - name: Setup rust dependency caching
+      uses: Swatinem/rust-cache@v1
+      with:
+         working-directory: wasm-worker
+    - name: Install golang
+      uses: actions/setup-go@v3
+      with:
+         go-version: '>=1.17.0'
     - name: Install cross
       run: cargo install cross
-    - name: Build open lambda
-      run: sudo make ol wasm-worker wasm-programs native-programs install-python-bindings
+    - name: Build OpenLambda
+      run: |
+        make ol imgs/lambda wasm-worker wasm-functions native-functions
+        sudo make install-python-bindings
     - name: Test Python (Docker)
-      run: sudo ./script/test.py --worker_type=docker
-    - name: Test Python (SOCK)
-      run: sudo ./script/test.py --worker_type=sock
+    # not all features are supported by docker yet, so we only run some of the tests
+      run: sudo ./scripts/test.py --worker_type=docker --test_filter=ping_test,numpy
+    # - name: Test Python (SOCK)
+    #   run: ./scripts/test.py --worker_type=sock
+    #   timeout-minutes: 20
     - name: Test Binaries (WebAssembly)
-      run: sudo ./script/bin-test.py --worker_type=wasm
-    - name: Test Binaries (SOCK)
-      run: sudo ./script/bin-test.py --worker_type=socka
-    - name: Test SOCK
-      run: sudo ./script/sock-test.py
+      run: |
+        sudo rm -f test.json
+        env RUST_LOG=info ./scripts/bin_test.py --worker_type=wasm
+      timeout-minutes: 10
+    # - name: Test Binaries (SOCK)
+    #   run: ./scripts/bin_test.py --worker_type=sock
+    # - name: Test SOCK
+    #   run: ./scripts/sock_test.py
+    #   timeout-minutes: 20
     - name: Linting
       run: make lint

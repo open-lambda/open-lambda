@@ -6,11 +6,11 @@ from requests import Session
 class OpenLambda:
     ''' Represents a client connection to OpenLambda '''
 
-    def __init__(self, address = "localhost:5000"):
+    def __init__(self, address="localhost:5000"):
         self._address = address
         self._session = Session()
 
-    def _post(self, path, data = None):
+    def _post(self, path, data=None):
         ''' Issues a _post request to the OL worker '''
         return self._session.post(f'http://{self._address}/{path}', pyjson.dumps(data))
 
@@ -19,18 +19,6 @@ class OpenLambda:
 
         req = self._post(f"run/{fn_name}", args)
         self._check_status_code(req, "run")
-
-        if json:
-            return req.json()
-
-        return req.text
-
-    def run_on(self, object_id, fn_name, args, json=True):
-        ''' Execute a serverless function on a LambdaObject '''
-
-        req = self._session.post(f'http://{self._address}/run_on/{fn_name}',
-                pyjson.dumps(args), params={'object_id': object_id})
-        self._check_status_code(req, "run_on")
 
         if json:
             return req.json()

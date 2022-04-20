@@ -2,7 +2,7 @@
 
 ''' Benchmarks web assembly against SOCK and Docker '''
 
-# pylint: disable=global-statement, missing-function-docstring, consider-using-with
+# pylint: disable=global-statement,missing-function-docstring,consider-using-with
 
 import sys
 import argparse
@@ -12,11 +12,11 @@ from time import time
 
 from helper import DockerWorker, SockWorker, WasmWorker, prepare_open_lambda, setup_config
 
-OUTFILE=None
-NUM_WARMUPS=None
-NUM_RUNS=None
-WORKER_TYPES=[]
-BENCH_FILTER=[]
+OUTFILE = None
+NUM_WARMUPS = None
+NUM_RUNS = None
+WORKER_TYPES = []
+BENCH_FILTER = []
 
 def bench_in_filter(name, bench_filter):
     if len(bench_filter) == 0:
@@ -88,13 +88,13 @@ def hello(worker):
 @benchmark()
 def get_put1(worker):
     worker.run('get_put',
-            {"num_gets":1, "num_puts":1, "num_deletes":1, "entry_size": 1000*1000}
+               {"num_gets":1, "num_puts":1, "num_deletes":1, "entry_size": 1000*1000}
     )
 
 @benchmark()
 def get_put100(worker):
     worker.run('get_put',
-            {"num_gets":100, "num_puts":100, "num_deletes":100, "entry_size": 10*1000}
+               {"num_gets":100, "num_puts":100, "num_deletes":100, "entry_size": 10*1000}
     )
 
 @benchmark(num_threads=10)
@@ -121,7 +121,7 @@ def main():
     global WORKER_TYPES
 
     parser = argparse.ArgumentParser(
-            description='Run benchmarks between native containers and WebAssembly')
+        description='Run benchmarks between native containers and WebAssembly')
     parser.add_argument('--bench_filter', type=str, default="")
     parser.add_argument('--num_warmups', type=int, default=3)
     parser.add_argument('--num_runs', type=int, default=20)
@@ -134,9 +134,9 @@ def main():
     setup_config(args.ol_dir)
 
     BENCH_FILTER = [name for name in args.bench_filter.split(",") if name != '']
-    NUM_WARMUPS=args.num_warmups
-    NUM_RUNS=args.num_runs
-    WORKER_TYPES=[]
+    NUM_WARMUPS = args.num_warmups
+    NUM_RUNS = args.num_runs
+    WORKER_TYPES = []
 
     worker_names = [name for name in args.worker_types.split(",") if name != '']
 

@@ -1,10 +1,13 @@
 ''' Helper functions that are use by, both, test.py and wasm-test.py '''
 
-#pylint: disable=too-few-public-methods, c-extension-no-member, broad-except, global-statement, missing-function-docstring, missing-class-docstring, consider-using-with
+#pylint: disable=too-few-public-methods, c-extension-no-member, broad-except, global-statement, missing-function-docstring, missing-class-docstring, consider-using-with, fixme
 
 from subprocess import check_output, Popen
 from time import sleep
 from collections import OrderedDict
+from sys import stdout
+from os.path import exists
+from os import remove
 
 import copy
 import subprocess
@@ -12,8 +15,8 @@ import os
 import json
 import requests
 
-OL_DIR=None
-CURR_CONF=None
+OL_DIR = None
+CURR_CONF = None
 
 def setup_config(ol_dir):
     global OL_DIR
@@ -175,11 +178,22 @@ class SockWorker():
 
 class WasmWorker():
     def __init__(self):
-        print("Starting WebAssembly worker")
-        self._config = TestConf()
+        # TODO use a similar mechanism to regular OpenLambda
+
+        stdout.write("Starting WebAssembly worker.")
+        stdout.flush()
+
+        if exists('./ol-wasm.ready'):
+            remove('./ol-wasm.ready')
+
         self._process = Popen(["./ol-wasm"])
 
-        sleep(0.5)
+        while not exists('./ol-wasm.ready'):
+            sleep(0.5)
+            stdout.write('.')
+            stdout.flush()
+
+        print("Done")
 
     def __del__(self):
         self.stop()

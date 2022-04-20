@@ -27,7 +27,6 @@ endif
 .PHONY: wasm-functions
 .PHONY: wasm-worker
 .PHONY: native-functions
-.PHONY: test-dir
 .PHONY: check-runtime
 .PHONY: container-proxy
 .PHONY: fmt check-fmt
@@ -54,7 +53,7 @@ update-dependencies:
 
 imgs/lambda: $(LAMBDA_FILES)
 	${MAKE} -C lambda
-	sudo docker build -t lambda lambda
+	docker build -t lambda lambda
 	touch imgs/lambda
 
 install-python-bindings:
@@ -67,9 +66,6 @@ container-proxy:
 	cd container-proxy && ${CARGO} build ${BUILD_FLAGS}
 	cp ./container-proxy/target/${BUILDTYPE}/open-lambda-container-proxy ./ol-container-proxy
 
-test-dir:
-	cp lambda/runtimes/rust/target/release/open-lambda-runtime ./test-registry/hello-rust.bin
-
 ol: $(OL_GO_FILES)
 	cd $(OL_DIR) && $(GO) build -o ../ol
 
@@ -78,7 +74,7 @@ install: ol
 
 test-all:
 	sudo python3 -u ./scripts/test.py --worker_type=sock
-	sudo python3 -u ./scripts/test.py --worker_type=docker
+	sudo python3 -u ./scripts/test.py --worker_type=docker --test_filter=ping_test,numpy
 	sudo python3 -u ./scripts/sock_test.py
 	sudo python3 -u ./scripts/bin_test.py --worker_type=wasm
 	sudo python3 -u ./scripts/bin_test.py --worker_type=sock

@@ -122,7 +122,7 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type common.R
 		if _, err := os.Stat(src + "/f.py"); !os.IsNotExist(err) {
 			rt_type = common.RT_PYTHON
 		} else if _, err := os.Stat(src + "/f.bin"); !os.IsNotExist(err) {
-			rt_type = common.RT_BINARY
+			rt_type = common.RT_NATIVE
 		} else {
 			return rt_type, "", fmt.Errorf("Unknown runtime type")
 		}
@@ -166,7 +166,7 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type common.R
 		log.Printf("Installing `%s` from binary file", src)
 
 		cmd := exec.Command("cp", src, filepath.Join(targetDir, "f.bin"))
-		rt_type = common.RT_BINARY
+		rt_type = common.RT_NATIVE
 
 		if output, err := cmd.CombinedOutput(); err != nil {
 			return rt_type, "", fmt.Errorf("%s :: %s", err, string(output))
@@ -183,7 +183,7 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type common.R
 		if _, err := os.Stat(targetDir + "f.py"); !os.IsNotExist(err) {
 			rt_type = common.RT_PYTHON
 		} else if _, err := os.Stat(targetDir + "/f.bin"); !os.IsNotExist(err) {
-			rt_type = common.RT_BINARY
+			rt_type = common.RT_NATIVE
 		} else {
 			return rt_type, "", fmt.Errorf("Found unknown runtime type or no code at all")
 		}

@@ -48,6 +48,7 @@ func (container *SOCKContainer) printf(format string, args ...interface{}) {
 	log.Printf("%s [SOCK %s]", strings.TrimRight(msg, "\n"), container.id)
 }
 
+// ID returns the unique identifier of this container
 func (container *SOCKContainer) ID() string {
 	return container.id
 }
@@ -56,7 +57,7 @@ func (c *SOCKContainer) GetRuntimeType() common.RuntimeType {
 	return c.rtType
 }
 
-func (container *SOCKContainer) HttpProxy() (p *httputil.ReverseProxy, err error) {
+func (container *SOCKContainer) HTTPProxy() (p *httputil.ReverseProxy, err error) {
 	// note, for debugging, you can directly contact the sock file like this:
 	// curl -XPOST --unix-socket ./ol.sock http:/test -d '{"some": "data"}'
 
@@ -100,9 +101,9 @@ func (container *SOCKContainer) freshProc() (err error) {
 			"chroot", container.containerRootDir, "python3", "-u",
 			"/runtimes/python/server.py", "/host/bootstrap.py", strconv.Itoa(1),
 		)
-	} else if container.rtType == common.RT_BINARY {
+	} else if container.rtType == common.RT_NATIVE {
 		if container.containerProxy == nil {
-			err := container.launchDbProxy()
+			err := container.launchContainerProxy()
 
 			if err != nil {
 				return err
@@ -111,7 +112,7 @@ func (container *SOCKContainer) freshProc() (err error) {
 
 		cmd = exec.Command(
 			"chroot", container.containerRootDir,
-			"env", "RUST_BACKTRACE=full", "/runtimes/rust/server", strconv.Itoa(1),
+			"env", "RUST_BACKTRACE=full", "/runtimes/native/server", strconv.Itoa(1),
 		)
 	} else {
 		return fmt.Errorf("Unsupported runtime")
@@ -133,7 +134,7 @@ func (container *SOCKContainer) freshProc() (err error) {
 	return cmd.Wait()
 }
 
-func (container *SOCKContainer) launchDbProxy() (err error) {
+func (container *SOCKContainer) launchContainerProxy() (err error) {
 	args := []string{}
 	args = append(args, "ol-container-proxy")
 	args = append(args, container.scratchDir)
@@ -163,7 +164,7 @@ func (container *SOCKContainer) launchDbProxy() (err error) {
 			if err != nil {
 				return err
 			}
-			return fmt.Errorf("database proxy does not seem to be running")
+			return fmt.Errorf("container proxy does not seem to be running")
 		default:
 		}
 
@@ -243,6 +244,7 @@ func (container *SOCKContainer) populateRoot() (err error) {
 	return nil
 }
 
+// Pause stops/freezes the container
 func (container *SOCKContainer) Pause() (err error) {
 	if err := container.cg.Pause(); err != nil {
 		return err
@@ -262,6 +264,7 @@ func (container *SOCKContainer) Pause() (err error) {
 	return nil
 }
 
+// Unpause resumes/unfreezes the container
 func (container *SOCKContainer) Unpause() (err error) {
 	if common.Conf.Features.Downsize_paused_mem {
 		// block until we have enough mem to upsize limit to the
@@ -275,6 +278,7 @@ func (container *SOCKContainer) Unpause() (err error) {
 	return container.cg.Unpause()
 }
 
+// Destroy shuts down the container
 func (container *SOCKContainer) Destroy() {
 	if err := container.cg.Pause(); err != nil {
 		panic(err)
@@ -427,6 +431,7 @@ func (container *SOCKContainer) Meta() *SandboxMeta {
 	return container.meta
 }
 
+// GetRuntimeLog returns the log of the runtime
 func (container *SOCKContainer) GetRuntimeLog() string {
 	data, err := ioutil.ReadFile(filepath.Join(container.scratchDir, "ol-runtime.log"))
 
@@ -437,6 +442,7 @@ func (container *SOCKContainer) GetRuntimeLog() string {
 	return ""
 }
 
+// GetProxyLog returns the log of the http proxy
 func (container *SOCKContainer) GetProxyLog() string {
 	data, err := ioutil.ReadFile(filepath.Join(container.scratchDir, "proxy.log"))
 

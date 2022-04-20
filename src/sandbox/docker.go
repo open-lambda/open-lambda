@@ -29,14 +29,14 @@ import (
 
 // DockerContainer is a sandbox inside a docker container.
 type DockerContainer struct {
-	host_id   string
+	hostID	string
 	hostDir   string
-	nspid     string
+	nspid	 string
 	container *docker.Container
-	client    *docker.Client
+	client	*docker.Client
 	installed map[string]bool
-	meta      *SandboxMeta
-	rt_type   common.RuntimeType
+	meta	  *SandboxMeta
+	rtType   common.RuntimeType
 }
 
 type HandlerState int
@@ -111,8 +111,8 @@ func (c *DockerContainer) State() (hstate HandlerState, err error) {
 	return hstate, nil
 }
 
-// Channel returns a file socket channel for direct communication with the sandbox.
-func (c *DockerContainer) HttpProxy() (p *httputil.ReverseProxy, err error) {
+// HTTPProxy returns a file socket channel for direct communication with the sandbox.
+func (c *DockerContainer) HTTPProxy() (p *httputil.ReverseProxy, err error) {
 	sockPath := filepath.Join(c.hostDir, "ol.sock")
 	if len(sockPath) > 108 {
 		return nil, fmt.Errorf("socket path length cannot exceed 108 characters (try moving cluster closer to the root directory")
@@ -151,7 +151,7 @@ func (c *DockerContainer) start() error {
 	return nil
 }
 
-// Pause pauses the container.
+// Pause stops/freezes the container.
 func (c *DockerContainer) Pause() error {
 	st, err := c.State()
 	if err != nil {
@@ -168,7 +168,7 @@ func (c *DockerContainer) Pause() error {
 	return nil
 }
 
-// Unpause unpauses the container.
+// Unpause resumes/unfreezes the container.
 func (c *DockerContainer) Unpause() error {
 	st, err := c.State()
 	if err != nil {
@@ -185,14 +185,15 @@ func (c *DockerContainer) Unpause() error {
 	return nil
 }
 
+// Destroy shuts down this container
 func (c *DockerContainer) Destroy() {
-	if err := c.destroy(); err != nil {
+	if err := c.internalDestroy(); err != nil {
 		panic(fmt.Sprintf("Failed to cleanup container %v: %v", c.container.ID, err))
 	}
 }
 
 // frees all resources associated with the lambda
-func (c *DockerContainer) destroy() error {
+func (c *DockerContainer) internalDestroy() error {
 	c.Unpause()
 
 	// TODO(tyler): is there any advantage to trying to stop
@@ -223,30 +224,34 @@ func (c *DockerContainer) destroy() error {
 
 // Logs returns log output for the container.
 func (c *DockerContainer) Logs() (string, error) {
-	stdout_path := filepath.Join(c.hostDir, "stdout")
-	stderr_path := filepath.Join(c.hostDir, "stderr")
+	stdoutPath := filepath.Join(c.hostDir, "stdout")
+	stderrPath := filepath.Join(c.hostDir, "stderr")
 
-	stdout, err := ioutil.ReadFile(stdout_path)
+	stdout, err := ioutil.ReadFile(stdoutPath)
 	if err != nil {
 		return "", err
 	}
 
-	stderr, err := ioutil.ReadFile(stderr_path)
+	stderr, err := ioutil.ReadFile(stderrPath)
 	if err != nil {
 		return "", err
 	}
 
-	stdout_hdr := fmt.Sprintf("Container (%s) stdout:", c.container.ID)
-	stderr_hdr := fmt.Sprintf("Container (%s) stderr:", c.container.ID)
-	ret := fmt.Sprintf("%s\n%s\n%s\n%s\n", stdout_hdr, stdout, stderr_hdr, stderr)
+	stdoutHdr := fmt.Sprintf("Container (%s) stdout:", c.container.ID)
+	stderrHdr := fmt.Sprintf("Container (%s) stderr:", c.container.ID)
+	ret := fmt.Sprintf("%s\n%s\n%s\n%s\n", stdoutHdr, stdout, stderrHdr, stderr)
 
 	return ret, nil
 }
 
+// GetRuntimeLog returns the log of the runtime
+// Note, this is not supported for docker yet
 func (c *DockerContainer) GetRuntimeLog() string {
 	return "" //TODO
 }
 
+// GetProxyLog returns the log of the http proxy
+// Note, this is not supported for docker yet
 func (c *DockerContainer) GetProxyLog() string {
 	return "" //TODO
 }
@@ -256,20 +261,32 @@ func (c *DockerContainer) NSPid() string {
 	return c.nspid
 }
 
+// ID returns the identifier of this container
 func (c *DockerContainer) ID() string {
-	return c.host_id
+	return c.hostID
 }
 
+// GetRuntimeType returns what runtime is being used by this container?
 func (c *DockerContainer) GetRuntimeType() common.RuntimeType {
-	return c.rt_type
+	return c.rtType
 }
 
+// DockerID returns the id assigned by docker itself, not by open lambda
 func (c *DockerContainer) DockerID() string {
 	return c.container.ID
 }
 
+// HostDir returns the host directory of this container
+func (c *DockerContainer) HostDir() string {
+	return c.hostDir
+}
+
 func (c *DockerContainer) runServer() error {
-	cmd := []string{"python3", "server.py"}
+	if c.rtType != common.RT_PYTHON {
+		return fmt.Errorf("Unsupported runtime")
+	}
+
+	cmd := []string{"python3", "/runtimes/python/server_legacy.py"}
 
 	execOpts := docker.CreateExecOptions{
 		AttachStdin:  false,
@@ -286,14 +303,6 @@ func (c *DockerContainer) runServer() error {
 	}
 
 	return nil
-}
-
-func (c *DockerContainer) RootDir() string {
-	return "/"
-}
-
-func (c *DockerContainer) HostDir() string {
-	return c.hostDir
 }
 
 func (c *DockerContainer) DebugString() string {
@@ -325,9 +334,9 @@ func waitForServerPipeReady(hostDir string) error {
 		buf := make([]byte, 5)
 		_, err = pipe.Read(buf)
 		if err != nil {
-			ready <- fmt.Errorf("Cannot read from stdout of sandbox :: %v\n", err)
+			ready <- fmt.Errorf("cannot read from stdout of sandbox :: %v", err)
 		} else if string(buf) != "ready" {
-			ready <- fmt.Errorf("Expect to see `ready` but got %s\n", string(buf))
+			ready <- fmt.Errorf("expect to see `ready` but got %s", string(buf))
 		}
 		ready <- nil
 	}()

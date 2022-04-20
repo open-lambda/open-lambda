@@ -49,7 +49,7 @@ def sock_churn(baseline, procs, seconds, fork):
     start = time()
     with Pool(procs) as pool:
         reqs = sum(pool.map(sock_churn_task, [(echo_path, parent, start, seconds)] * procs,
-            chunksize=1))
+                            chunksize=1))
 
     return {"sandboxes_per_sec": reqs/seconds}
 

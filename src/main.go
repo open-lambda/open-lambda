@@ -131,12 +131,12 @@ func status(ctx *cli.Context) error {
 	url := fmt.Sprintf("http://localhost:%s/status", common.Conf.Worker_port)
 	response, err := http.Get(url)
 	if err != nil {
-		return fmt.Errorf("  Could not send GET to %s\n", url)
+		return fmt.Errorf("  could not send GET to %s", url)
 	}
 	defer response.Body.Close()
 	body, err := ioutil.ReadAll(response.Body)
 	if err != nil {
-		return fmt.Errorf("  Failed to read body from GET to %s\n", url)
+		return fmt.Errorf("  failed to read body from GET to %s", url)
 	}
 	fmt.Printf("  %s => %s [%s]\n", url, body, response.Status)
 	fmt.Printf("\n")
@@ -292,7 +292,7 @@ func worker(ctx *cli.Context) error {
 
 		fmt.Printf("Starting worker: pid=%d, port=%s, log=%s\n", proc.Pid, common.Conf.Worker_port, logPath)
 
-		var ping_err error
+		var pingErr error
 
 		for i := 0; i < 300; i++ {
 			// check if it has died
@@ -315,7 +315,7 @@ func worker(ctx *cli.Context) error {
 			url := fmt.Sprintf("http://localhost:%s/pid", common.Conf.Worker_port)
 			response, err := http.Get(url)
 			if err != nil {
-				ping_err = err
+				pingErr = err
 				time.Sleep(100 * time.Millisecond)
 				continue
 			}
@@ -328,22 +328,22 @@ func worker(ctx *cli.Context) error {
 				return fmt.Errorf("/pid did not return an int :: %s", err)
 			}
 
-			if pid == proc.Pid {
-				fmt.Printf("ready\n")
-				return nil // server is started and ready for requests
-			} else {
-				return fmt.Errorf("expected PID %v but found %v (port conflict?)", proc.Pid, pid)
-			}
+			if pid != proc.Pid {
+			    return fmt.Errorf("expected PID %v but found %v (port conflict?)", proc.Pid, pid)
+            }
+
+			fmt.Printf("ready\n")
+			return nil // server is started and ready for requests
 		}
 
-		return fmt.Errorf("worker still not reachable after 30 seconds :: %s", ping_err)
-	} else {
-		if err := server.Main(); err != nil {
-			return err
-		}
+		return fmt.Errorf("worker still not reachable after 30 seconds :: %s", pingErr)
 	}
+	
+    if err := server.Main(); err != nil {
+        return err
+    }
 
-	return fmt.Errorf("this code should not be reachable!")
+	return fmt.Errorf("this code should not be reachable")
 }
 
 // kill corresponds to the "kill" command of the admin tool.
