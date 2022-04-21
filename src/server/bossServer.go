@@ -129,7 +129,6 @@ func (b *Boss) StorageLambda(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	log.Printf(string(contents))
 	boss.AzureMain(string(contents))
 }
 

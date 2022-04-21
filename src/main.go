@@ -498,7 +498,7 @@ func gcp_test(ctx *cli.Context) error {
 }
 
 func azure_test(ctx *cli.Context) error {
-	boss.AzureMain()
+	boss.AzureMain("default contents")
 	return nil
 }
 

@@ -20,7 +20,7 @@ func randomString() string {
 	return strconv.Itoa(r.Int())
 }
 
-func AzureMain() {
+func AzureMain(contents string) {
 	fmt.Printf("Azure Blob storage quick start sample\n")
 
 	url := "https://openlambda.blob.core.windows.net/" //replace <StorageAccountName> with your Azure storage account name
@@ -48,7 +48,7 @@ func AzureMain() {
 
 	fmt.Printf("Creating a dummy file to test the upload and download\n")
 
-	data := []byte("\nhello world this is a blob\n")
+	data := []byte(contents)
 	blobName := "quickstartblob" + "-" + randomString()
 
 	blobClient, err := azblob.NewBlockBlobClient(url+containerName+"/"+blobName, credential, nil)
