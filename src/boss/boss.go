@@ -1,4 +1,4 @@
-package server
+package boss
 
 import (
 	"encoding/json"
@@ -8,23 +8,21 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
-
-	"github.com/open-lambda/open-lambda/ol/boss"
-	"github.com/open-lambda/open-lambda/ol/common"
 )
 
 const (
-	BOSS_STATUS_PATH = "/bstatus"
+	RUN_PATH    = "/run/"
+	BOSS_STATUS_PATH = "/status"
 	SCALING_PATH     = "/scaling/worker_count"
 	STORAGE_PATH     = "/registry/upload"
 )
 
 type Boss struct {
-	reqChan chan *boss.Invocation
+	reqChan chan *Invocation
 
 	mutex      sync.Mutex
-	workerPool boss.WorkerPool
-	workers    []boss.Worker
+	workerPool WorkerPool
+	workers    []Worker
 }
 
 var m = map[string][]int{"workers": []int{}}
@@ -104,7 +102,7 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 }
 
 func (b *Boss) RunLambda(w http.ResponseWriter, r *http.Request) {
-	invocation := boss.NewInvocation(w, r)
+	invocation := NewInvocation(w, r)
 
 	select {
 	case b.reqChan <- invocation:
@@ -129,15 +127,15 @@ func (b *Boss) StorageLambda(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	boss.AzureMain(string(contents))
+	AzureMain(string(contents))
 }
 
 func BossMain() (err error) {
 	// TODO: choose correct worker pool type based on config
-	workerPool := boss.NewMockWorkerPool()
+	workerPool := NewMockWorkerPool()
 	boss := Boss{
 		workerPool: workerPool,
-		reqChan:    make(chan *boss.Invocation),
+		reqChan:    make(chan *Invocation),
 	}
 
 	// things shared by all servers
@@ -146,7 +144,7 @@ func BossMain() (err error) {
 	http.HandleFunc(RUN_PATH, boss.RunLambda)
 	http.HandleFunc(STORAGE_PATH, boss.StorageLambda)
 
-	port := fmt.Sprintf(":%s", common.Conf.Worker_port)
+	port := fmt.Sprintf(":%s", Conf.Boss_port)
 	fmt.Printf("Listen on port %s\n", port)
 	log.Fatal(http.ListenAndServe(port, nil))
 	panic("ListenAndServe should never return")

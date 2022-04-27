@@ -16,13 +16,12 @@ import (
 	"time"
 
 	docker "github.com/fsouza/go-dockerclient"
-	"github.com/open-lambda/open-lambda/ol/boss"
 	dutil "github.com/open-lambda/open-lambda/ol/sandbox/dockerutil"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 	"github.com/open-lambda/open-lambda/ol/server"
+	"github.com/open-lambda/open-lambda/ol/boss"
 
-	// "github.com/open-lambda/open-lambda/ol/boss"
 	"github.com/urfave/cli"
 )
 
@@ -32,14 +31,6 @@ func getOlPath(ctx *cli.Context) (string, error) {
 	olPath := ctx.String("path")
 	if olPath == "" {
 		olPath = "default-ol"
-	}
-	return filepath.Abs(olPath)
-}
-
-func getBossOlPath(ctx *cli.Context) (string, error) {
-	olPath := ctx.String("path")
-	if olPath == "" {
-		olPath = "default-boss-ol"
 	}
 	return filepath.Abs(olPath)
 }
@@ -124,195 +115,6 @@ func newOL(ctx *cli.Context) error {
 	}
 
 	return initOLDir(olPath)
-}
-
-// newBossOL corresponses to the "new-boss" command of the admin tool.
-func newBossOL(ctx *cli.Context) error {
-	fmt.Printf("In new boss\n")
-	olPath, err := getBossOlPath(ctx)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("in this function\n")
-
-	initCode := initOLDir(olPath)
-
-	confPath := filepath.Join(olPath, "worker_config.json")
-	if err := common.SaveConf(confPath); err != nil {
-		return err
-	}
-
-	fmt.Printf("running a boss\n")
-	boss_start(ctx, olPath)
-
-	return initCode
-}
-
-// status corresponds to the "status" command of the admin tool.
-func status(ctx *cli.Context) error {
-	olPath, err := getOlPath(ctx)
-	if err != nil {
-		return err
-	}
-
-	fmt.Printf("Worker Ping:\n")
-	err = common.LoadConf(filepath.Join(olPath, "config.json"))
-	if err != nil {
-		return err
-	}
-
-	url := fmt.Sprintf("http://localhost:%s/status", common.Conf.Worker_port)
-	response, err := http.Get(url)
-	if err != nil {
-		return fmt.Errorf("  Could not send GET to %s\n", url)
-	}
-	defer response.Body.Close()
-	body, err := ioutil.ReadAll(response.Body)
-	if err != nil {
-		return fmt.Errorf("  Failed to read body from GET to %s\n", url)
-	}
-	fmt.Printf("  %s => %s [%s]\n", url, body, response.Status)
-	fmt.Printf("\n")
-
-	return nil
-}
-
-// modify the config.json file based on settings from cmdline: -o opt1=val1,opt2=val2,...
-//
-// apply changes in optsStr to config from confPath, saving result to overridePath
-func overrideOpts(confPath, overridePath, optsStr string) error {
-	b, err := ioutil.ReadFile(confPath)
-	if err != nil {
-		return err
-	}
-	conf := make(map[string]interface{})
-	if err := json.Unmarshal(b, &conf); err != nil {
-		return err
-	}
-
-	opts := strings.Split(optsStr, ",")
-	for _, opt := range opts {
-		parts := strings.Split(opt, "=")
-		if len(parts) != 2 {
-			return fmt.Errorf("Could not parse key=val: '%s'", opt)
-		}
-		keys := strings.Split(parts[0], ".")
-		val := parts[1]
-
-		c := conf
-		for i := 0; i < len(keys)-1; i++ {
-			sub, ok := c[keys[i]]
-			if !ok {
-				return fmt.Errorf("key '%s' not found", keys[i])
-			}
-			switch v := sub.(type) {
-			case map[string]interface{}:
-				c = v
-			default:
-				return fmt.Errorf("%s refers to a %T, not a map", keys[i], c[keys[i]])
-			}
-
-		}
-
-		key := keys[len(keys)-1]
-		prev, ok := c[key]
-		if !ok {
-			return fmt.Errorf("invalid option: '%s'", key)
-		}
-		switch prev.(type) {
-		case string:
-			c[key] = val
-		case float64:
-			c[key], err = strconv.Atoi(val)
-			if err != nil {
-				return err
-			}
-		case bool:
-			if strings.ToLower(val) == "true" {
-				c[key] = true
-			} else if strings.ToLower(val) == "false" {
-				c[key] = false
-			} else {
-				return fmt.Errorf("'%s' for %s not a valid boolean value", val, key)
-			}
-		default:
-			return fmt.Errorf("config values of type %T (%s) must be edited manually in the config file ", prev, key)
-		}
-	}
-
-	// save back config
-	s, err := json.MarshalIndent(conf, "", "\t")
-	if err != nil {
-		return err
-	}
-	if err := ioutil.WriteFile(overridePath, s, 0644); err != nil {
-		return err
-	}
-	return nil
-}
-
-func boss_start(ctx *cli.Context, olPath string) error {
-
-	// olPath, err := getBossOlPath(ctx)
-	// if err != nil {
-	// 	return err
-	// }
-
-	confPath := filepath.Join(olPath, "config.json")
-
-	if err := common.LoadConf(confPath); err != nil {
-		return err
-	}
-
-	detach := ctx.Bool("detach")
-
-	if detach {
-		// stdout+stderr both go to log
-		logPath := filepath.Join(olPath, "worker.out")
-		// creates a worker.out file
-		f, err := os.Create(logPath)
-		if err != nil {
-			return err
-		}
-		// holds attributes that will be used when os.StartProcess
-		attr := os.ProcAttr{
-			Files: []*os.File{nil, f, f},
-		}
-		cmd := []string{}
-		for _, arg := range os.Args {
-			if arg != "-d" && arg != "--detach" {
-				cmd = append(cmd, arg)
-			}
-		}
-		// looks for ./ol path
-		binPath, err := exec.LookPath(os.Args[0])
-		if err != nil {
-			return err
-		}
-		// start the worker process
-		fmt.Printf("starting process: binpath= %s, cmd=%s\n", binPath, cmd)
-		proc, err := os.StartProcess(binPath, cmd, &attr)
-		if err != nil {
-			return err
-		}
-
-		// died is error message
-		died := make(chan error)
-		go func() {
-			_, err := proc.Wait()
-			died <- err
-		}()
-
-		fmt.Printf("Starting worker: pid=%d, port=%s, log=%s\n", proc.Pid, common.Conf.Worker_port, logPath)
-
-	} else {
-		if err := server.BossMain(); err != nil {
-			return err
-		}
-	}
-
-	return fmt.Errorf("this code should not be reachable!")
-
 }
 
 // workers corresponds to the "workers" command of the admin tool.
@@ -448,6 +250,192 @@ func worker(ctx *cli.Context) error {
 	return fmt.Errorf("this code should not be reachable!")
 }
 
+func newBossConf() error {
+	if err := boss.LoadDefaults(); err != nil {
+		return err
+	}
+	
+	if err := boss.SaveConf("boss.json"); err != nil {
+		return err
+	}
+
+	fmt.Printf("populated boss.json with default settings\n")
+	return nil
+}
+
+// newBoss corresponses to the "new-boss" command of the admin tool.
+func newBoss(ctx *cli.Context) error {
+	return newBossConf()
+}
+
+// runBoss corresponses to the "boss" command of the admin tool.
+func runBoss(ctx *cli.Context) error {
+	if _, err := os.Stat("boss.json"); os.IsNotExist(err) {
+		newBossConf()
+	}
+	
+	if err := boss.LoadConf("boss.json"); err != nil {
+		return err
+	}
+
+	return boss_start(ctx)
+}
+
+// status corresponds to the "status" command of the admin tool.
+func status(ctx *cli.Context) error {
+	olPath, err := getOlPath(ctx)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Worker Ping:\n")
+	err = common.LoadConf(filepath.Join(olPath, "config.json"))
+	if err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf("http://localhost:%s/status", common.Conf.Worker_port)
+	response, err := http.Get(url)
+	if err != nil {
+		return fmt.Errorf("  Could not send GET to %s\n", url)
+	}
+	defer response.Body.Close()
+	body, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return fmt.Errorf("  Failed to read body from GET to %s\n", url)
+	}
+	fmt.Printf("  %s => %s [%s]\n", url, body, response.Status)
+	fmt.Printf("\n")
+
+	return nil
+}
+
+// modify the config.json file based on settings from cmdline: -o opt1=val1,opt2=val2,...
+//
+// apply changes in optsStr to config from confPath, saving result to overridePath
+func overrideOpts(confPath, overridePath, optsStr string) error {
+	b, err := ioutil.ReadFile(confPath)
+	if err != nil {
+		return err
+	}
+	conf := make(map[string]interface{})
+	if err := json.Unmarshal(b, &conf); err != nil {
+		return err
+	}
+
+	opts := strings.Split(optsStr, ",")
+	for _, opt := range opts {
+		parts := strings.Split(opt, "=")
+		if len(parts) != 2 {
+			return fmt.Errorf("Could not parse key=val: '%s'", opt)
+		}
+		keys := strings.Split(parts[0], ".")
+		val := parts[1]
+
+		c := conf
+		for i := 0; i < len(keys)-1; i++ {
+			sub, ok := c[keys[i]]
+			if !ok {
+				return fmt.Errorf("key '%s' not found", keys[i])
+			}
+			switch v := sub.(type) {
+			case map[string]interface{}:
+				c = v
+			default:
+				return fmt.Errorf("%s refers to a %T, not a map", keys[i], c[keys[i]])
+			}
+
+		}
+
+		key := keys[len(keys)-1]
+		prev, ok := c[key]
+		if !ok {
+			return fmt.Errorf("invalid option: '%s'", key)
+		}
+		switch prev.(type) {
+		case string:
+			c[key] = val
+		case float64:
+			c[key], err = strconv.Atoi(val)
+			if err != nil {
+				return err
+			}
+		case bool:
+			if strings.ToLower(val) == "true" {
+				c[key] = true
+			} else if strings.ToLower(val) == "false" {
+				c[key] = false
+			} else {
+				return fmt.Errorf("'%s' for %s not a valid boolean value", val, key)
+			}
+		default:
+			return fmt.Errorf("config values of type %T (%s) must be edited manually in the config file ", prev, key)
+		}
+	}
+
+	// save back config
+	s, err := json.MarshalIndent(conf, "", "\t")
+	if err != nil {
+		return err
+	}
+	if err := ioutil.WriteFile(overridePath, s, 0644); err != nil {
+		return err
+	}
+	return nil
+}
+
+func boss_start(ctx *cli.Context) error {
+	detach := ctx.Bool("detach")
+
+	if detach {
+		// stdout+stderr both go to log
+		logPath := "boss.out"
+		// creates a worker.out file
+		f, err := os.Create(logPath)
+		if err != nil {
+			return err
+		}
+		// holds attributes that will be used when os.StartProcess
+		attr := os.ProcAttr{
+			Files: []*os.File{nil, f, f},
+		}
+		cmd := []string{}
+		for _, arg := range os.Args {
+			if arg != "-d" && arg != "--detach" {
+				cmd = append(cmd, arg)
+			}
+		}
+		// looks for ./ol path
+		binPath, err := exec.LookPath(os.Args[0])
+		if err != nil {
+			return err
+		}
+		// start the worker process
+		fmt.Printf("starting process: binpath= %s, cmd=%s\n", binPath, cmd)
+		proc, err := os.StartProcess(binPath, cmd, &attr)
+		if err != nil {
+			return err
+		}
+
+		// died is error message
+		died := make(chan error)
+		go func() {
+			_, err := proc.Wait()
+			died <- err
+		}()
+
+		fmt.Printf("Starting boss: pid=%d, port=%s, log=%s\n", proc.Pid, boss.Conf.Boss_port, logPath)
+		return nil // TODO: ping status to make sure it is actually running?
+	} else {
+		if err := boss.BossMain(); err != nil {
+			return err
+		}
+	}
+
+	return fmt.Errorf("this code should not be reachable!")
+
+}
+
 // kill corresponds to the "kill" command of the admin tool.
 func kill(ctx *cli.Context) error {
 	olPath, err := getOlPath(ctx)
@@ -543,29 +531,6 @@ OPTIONS:
 			Flags:       []cli.Flag{pathFlag},
 			Action:      newOL,
 		},
-		// cli.Command{
-		// 	Name:  "boss",
-		// 	Usage: "Start one Boss server",
-		// 	// are we going to do detach and option like a worker?
-		// 	UsageText:   "ol boss [--path=PATH]",
-		// 	Description: "Start a boss server.",
-		// 	// Flags: depend on if we're going to add detach and option?
-		// 	Action: boss,
-		// },
-		cli.Command{
-			Name:        "new-boss",
-			Usage:       "Create a new Boss",
-			UsageText:   "ol new-boss [--path=PATH] [--detach]",
-			Description: "Testing Purposes Right Now",
-			Flags: []cli.Flag{
-				pathFlag,
-				cli.BoolFlag{
-					Name:  "detach, d",
-					Usage: "Run worker in background",
-				},
-			},
-			Action: newBossOL,
-		},
 		cli.Command{
 			Name:        "worker",
 			Usage:       "Start one OL server",
@@ -583,6 +548,26 @@ OPTIONS:
 				},
 			},
 			Action: worker,
+		},
+		cli.Command{
+			Name:        "new-boss",
+			Usage:       "Create a new Boss",
+			UsageText:   "ol new-boss [--path=PATH] [--detach]",
+			Description: "Create config for new boss",
+			Action: newBoss,
+		},
+		cli.Command{
+		 	Name:  "boss",
+		 	Usage: "Start one Boss server",
+		 	UsageText:   "ol boss [--path=PATH] [--detach]",
+			Description: "Start a boss server.",
+			Flags: []cli.Flag{
+				cli.BoolFlag{
+					Name:  "detach, d",
+					Usage: "Run worker in background",
+				},
+			},
+			Action: runBoss,
 		},
 		cli.Command{
 			Name:        "status",

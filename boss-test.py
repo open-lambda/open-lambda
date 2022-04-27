@@ -39,25 +39,24 @@ def boss_invoke(lambda_name, data, check=True):
 def tester(platform):
     global api_key, boss_port
     print(f"Testing {platform}")
-    
-    # PART 0: clear existing directory for rebuild
-    run(["rm", "-r", "default-boss-ol"]).check_returncode()
+
+    # PART 0: clear existing config
+    run(["rm", "boss.json"])
 
     # PART 1: config and launch
 
     # should create new config file
-    run(["./ol", "new-boss", "--detach"]).check_returncode()
-    assert os.path.exists("default-boss-ol/config.json")
-    assert os.path.exists("default-boss-ol/worker_config.json")
+    run(["./ol", "new-boss"]).check_returncode()
+    assert os.path.exists("boss.json")
 
     # should have options platform (e.g., "aws", etc) and scaling ("manual" or "auto")
-    config = read_json("default-boss-ol/config.json")
+    config = read_json("boss.json")
     assert "platform" in config
     assert "scaling" in config
     config["platform"] = platform
     config["scaling"] = "manual"
-    write_json("default-boss-ol/config.json", config)
-    
+    write_json("boss.json", config)
+
     # config should contain randomly generate secret API key
     assert "api_key" in config
     assert "boss_port" in config
@@ -66,23 +65,21 @@ def tester(platform):
     boss_port = 5000
 
     # should be able to start boss as background process
-    #run(["./ol", "new-boss", "--detach"]).check_returncode()
-    #run(["./ol","kill"]).check_returncode()
-
-    # TODO: sleep, or check some other way it is ready?
+    run(["./ol", "boss", "--detach"]).check_returncode()
+    time.sleep(1) # TODO: better ping
 
     # PART 2: scaling
 
     # should start with zero workers
-    status = boss_get("bstatus")
+    status = boss_get("status")
     status = json.loads(status)
     assert len(status["workers"]) == 0
 
     # start a worker (because we're chose "manual" scaling)
-    boss_post("scaling/worker_count", {"count": 1})
+    boss_post("scaling/worker_count", "1")
 
     # there should be a worker, though probably not ready
-    status = boss_get("bstatus")
+    status = boss_get("status")
     status = json.loads(status)
     assert len(status["workers"]) == 1
 
@@ -92,7 +89,7 @@ def tester(platform):
     t0 = t1 = time.time()
     while t1 - t0 < 180:
         time.sleep(1)
-        status = boss_get("bstatus")
+        status = boss_get("status")
         status = json.loads(status)
         assert len(status["workers"]) == 1
         if status["workers"][0]["state"] == "ready":
@@ -100,7 +97,7 @@ def tester(platform):
         t1 = time.time()
 
     # PART 3: registry
-    
+
     lambda1_name = "hi"
     code = ["def f(event):", "\treturn 'hello'"]
     boss_post("registry/upload", {"name": lambda1_name, "code": "\n".join(code)})

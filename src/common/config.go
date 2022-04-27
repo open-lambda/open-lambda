@@ -59,12 +59,6 @@ type Config struct {
 	Features FeaturesConfig `json:"features"`
 	Trace    TraceConfig    `json:"trace"`
 	Storage  StorageConfig  `json:"storage"`
-
-	// TODO: drop these?  (should be in boss-only config)
-	Platform string `json:"platform"`
-	Scaling string `json:"scaling"`
-        API_key string `json:"api_key"`
-	Boss_port string  `json:"boss_port"`
 }
 
 type FeaturesConfig struct {
