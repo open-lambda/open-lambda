@@ -131,10 +131,21 @@ func (b *Boss) StorageLambda(w http.ResponseWriter, r *http.Request) {
 }
 
 func BossMain() (err error) {
-	// TODO: choose correct worker pool type based on config
-	workerPool := NewMockWorkerPool()
+	var pool WorkerPool
+	if Conf.Platform == "gcp" {
+		pool, err = NewGcpWorkerPool()
+	} else if Conf.Platform == "mock" {
+		pool, err = NewMockWorkerPool()
+	} else {
+		return fmt.Errorf("worker pool '%s' not valid", Conf.Platform)
+	}
+	if err != nil {
+		return err
+	}
+	fmt.Printf("READY: worker pool of type %s", Conf.Platform)
+
 	boss := Boss{
-		workerPool: workerPool,
+		workerPool: pool,
 		reqChan:    make(chan *Invocation),
 	}
 

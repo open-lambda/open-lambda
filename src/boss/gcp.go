@@ -78,7 +78,7 @@ func GCPBossTest() {
 	}
 
 	fmt.Printf("STEP 4: create new VM from snapshot\n")
-	resp, err = client.Wait(client.LaunchGCP("test-snap"))
+	resp, err = client.Wait(client.LaunchGCP("test-snap", "test-vm"))
 	fmt.Println(resp)
 	if err != nil {
 		panic(err)
@@ -97,6 +97,7 @@ func NewGCPClient(service_account_json string) (*GCPClient, error) {
 	// read key file
 	jsonFile, err := os.Open(service_account_json)
 	if err != nil {
+		fmt.Printf("To get a .json KEY for a service account, go to https://console.cloud.google.com/iam-admin/serviceaccounts")
 		return nil, err
 	}
 	defer jsonFile.Close()
@@ -397,14 +398,14 @@ func (c *GCPClient) GcpSnapshot(disk string) (map[string]interface{}, error) {
 	return c.post(url, payload)
 }
 
-func (c *GCPClient) LaunchGCP(SnapshotName string) (map[string]interface{}, error) {
+func (c *GCPClient) LaunchGCP(SnapshotName string, VMName string) (map[string]interface{}, error) {
 	// TODO: take args from config (or better, read from service account somehow)
 	args := GcpLaunchVmArgs{
 		ServiceAccountEmail: c.service_account["client_email"].(string),
 		Project:             "cs320-f21",
 		Region:              "us-central1",
 		Zone:                "us-central1-a",
-		InstanceName:        "instance-4",
+		InstanceName:        VMName,
 		//SourceImage: "projects/ubuntu-os-cloud/global/images/ubuntu-2004-focal-v20220204",
 		SnapshotName: SnapshotName,
 	}
