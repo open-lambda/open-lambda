@@ -54,9 +54,9 @@ jobs:
     - name: Test Python (Docker)
     # not all features are supported by docker yet, so we only run some of the tests
       run: sudo ./scripts/test.py --worker_type=docker --test_filter=ping_test,numpy
-    # - name: Test Python (SOCK)
-    #   run: ./scripts/test.py --worker_type=sock
-    #   timeout-minutes: 20
+     - name: Test Python (SOCK)
+       run: sudo ./scripts/test.py --worker_type=sock
+       timeout-minutes: 20
     - name: Test Binaries (WebAssembly)
       timeout-minutes: 10
       run: |
@@ -64,7 +64,7 @@ jobs:
         env RUST_LOG=info ./scripts/bin_test.py --worker_type=wasm
     - name: Test Binaries (SOCK)
       timeout-minutes: 20
-      run: ./scripts/bin_test.py --worker_type=sock
+      run: sudo ./scripts/bin_test.py --worker_type=sock
     - name: Test SOCK
       timeout-minutes: 20
       run: ./scripts/sock_test.py
