@@ -11,7 +11,7 @@ Our research agenda is described in more detail in a [HotCloud '16 paper](https:
 
 OpenLambda relies heavily on operations that require root privilege.
 To simplify this, we suggest that you run all commands as the root user.
-OpenLambda is only actively tested on Ubuntu 20.04 LTS (AWS AMI `ami-0fb653ca2d3203ac1`, in particular).
+OpenLambda is only actively tested on Ubuntu 22.04 LTS.
 
 ### Build and Test
 Make sure you have all basic dependencies installed:
@@ -46,7 +46,9 @@ Then make sure it passes the tests:
 make test-all
 ```
 
+<!-- Currently broken.
 We recommend syncing to a commit that passes our [daily tests](https://s3.us-east-2.amazonaws.com/open-lambda-public/tests.html).
+-->
 
 ### Getting Started
 
