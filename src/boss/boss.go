@@ -11,10 +11,12 @@ import (
 )
 
 const (
-	RUN_PATH    = "/run/"
+	RUN_PATH         = "/run/"
 	BOSS_STATUS_PATH = "/status"
 	SCALING_PATH     = "/scaling/worker_count"
 	STORAGE_PATH     = "/registry/upload"
+	DOWNLOAD_PATH    = "/registry/download"
+	DELETE_PATH      = "registry/delete"
 )
 
 type Boss struct {
@@ -127,7 +129,33 @@ func (b *Boss) StorageLambda(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	AzureMain(string(contents))
+	Create(string(contents))
+}
+
+func (b *Boss) DownloadLambda(w http.ResponseWriter, r *http.Request) {
+	// contents, err := io.ReadAll(r.Body)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, err := w.Write([]byte("could not read body of web request\n"))
+		if err != nil {
+			log.Printf("(2) could not write web response: %s\n", err.Error())
+		}
+		return
+	}
+	Download()
+}
+
+func (b *Boss) DeleteLambda(w http.ResponseWriter, r *http.Request) {
+	// contents, err := io.ReadAll(r.Body)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, err := w.Write([]byte("could not read body of web request\n"))
+		if err != nil {
+			log.Printf("(2) could not write web response: %s\n", err.Error())
+		}
+		return
+	}
+	Delete()
 }
 
 func BossMain() (err error) {
@@ -154,6 +182,8 @@ func BossMain() (err error) {
 	http.HandleFunc(SCALING_PATH, boss.ScalingWorker)
 	http.HandleFunc(RUN_PATH, boss.RunLambda)
 	http.HandleFunc(STORAGE_PATH, boss.StorageLambda)
+	http.HandleFunc(DOWNLOAD_PATH, boss.DownloadLambda)
+	http.HandleFunc(DELETE_PATH, boss.DeleteLambda)
 
 	port := fmt.Sprintf(":%s", Conf.Boss_port)
 	fmt.Printf("Listen on port %s\n", port)

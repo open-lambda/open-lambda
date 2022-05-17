@@ -1,0 +1,8 @@
+{
+	"platform": "mock",
+	"scaling": "manual",
+	"api_key": "abc",
+	"boss_port": "5000",
+	"azure": {},
+	"gcp": {}
+}
