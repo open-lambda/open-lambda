@@ -242,8 +242,8 @@ def run_tests():
         stress_one_lambda(procs=8, seconds=15)
 
     with TestConfContext(features={"reuse_cgroups": True}):
-        call_each_once(lambda_count=100, alloc_mb=1)
-        call_each_once(lambda_count=1000, alloc_mb=10)
+        call_each_once(lambda_count=10, alloc_mb=1)
+        call_each_once(lambda_count=100, alloc_mb=10)
 
 def main():
     global OL_DIR

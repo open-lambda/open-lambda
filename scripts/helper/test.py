@@ -10,7 +10,7 @@ import sys
 import json
 import traceback
 
-from . import OL_DIR, ol_oom_killer, mounts, get_ol_stats, get_current_config, get_worker_output
+from . import ol_oom_killer, mounts, get_ol_stats, get_current_config, get_worker_output
 
 TEST_FILTER = []
 WORKER_TYPE = []
@@ -132,13 +132,11 @@ def test(func):
         result["total_seconds"] = total_t1-total_t0
         result["stats"] = return_val
 
-        # The WebAssembly worker does not create an output currently
-        if OL_DIR is not None:
+        if result["pass"]:
+            # truncate because we probably won't use it for debugging
+            result["worker_tail"] = get_worker_output()[-10:]
+        else:
             result["worker_tail"] = get_worker_output()
-
-            if result["pass"]:
-                # truncate because we probably won't use it for debugging
-                result["worker_tail"] = result["worker_tail"][-10:]
 
         RESULTS["runs"].append(result)
         print(json.dumps(result, indent=2))
