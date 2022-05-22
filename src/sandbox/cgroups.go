@@ -83,7 +83,6 @@ func (cg *Cgroup) printf(format string, args ...interface{}) {
 		log.Printf("%s [CGROUP %s: %s]", strings.TrimRight(msg, "\n"), cg.pool.Name, cg.Name)
 	}
 }
-
 func (cg *Cgroup) Release() {
 	pids, err := cg.GetPIDs()
 	if err != nil {
@@ -103,14 +102,16 @@ func (cg *Cgroup) Release() {
 		}
 	}
 
-	cg.printf("release and destroy")
-	cg.destroy()
+	cg.printf("release and Destroy")
+	cg.Destroy()
 }
 
-func (cg *Cgroup) destroy() {
-	path := cg.GroupPath()
-	if err := syscall.Rmdir(path); err != nil {
-		panic(fmt.Errorf("Rmdir %s: %s", path, err))
+// Destroy this cgroup
+func (cg *Cgroup) Destroy() {
+	gpath := cg.GroupPath()
+    cg.printf("Destroying cgroup with path \"%s\"", gpath)
+	if err := syscall.Rmdir(gpath); err != nil {
+		panic(fmt.Errorf("Rmdir %s: %s", gpath, err))
 	}
 }
 
@@ -158,7 +159,7 @@ Loop:
 		case pool.ready <- cg:
 		case done = <-pool.quit:
 			pool.printf("received shutdown request")
-			cg.destroy()
+			cg.Destroy()
 			break Loop
 		}
 	}
@@ -169,9 +170,9 @@ Empty:
 	for {
 		select {
 		case cg := <-pool.ready:
-			cg.destroy()
+			cg.Destroy()
 		case cg := <-pool.recycled:
-			cg.destroy()
+			cg.Destroy()
 		default:
 			break Empty
 		}
@@ -180,15 +181,16 @@ Empty:
 	done <- true
 }
 
+/// Destroy this entire cgroup pool
 func (pool *CgroupPool) Destroy() {
 	// signal cgTask, then wait for it to finish
 	ch := make(chan bool)
 	pool.quit <- ch
 	<-ch
 
-	// delete cgroup category
+    // Destroy cgroup for this entire pool
 	gpath := pool.GroupPath()
-	pool.printf("remove %s", gpath)
+    pool.printf("Destroying cgroup pool with path \"%s\"", gpath)
 	if err := syscall.Rmdir(gpath); err != nil {
 		panic(fmt.Errorf("Rmdir %s: %s", gpath, err))
 	}
@@ -309,7 +311,7 @@ func (cg *Cgroup) setFreezeState(state int64) error {
 		}
 
 		if time.Since(start) > timeout {
-			return fmt.Errorf("cgroup stuck on %s after %v (should be %s)", freezerState, timeout, state)
+			return fmt.Errorf("cgroup stuck on %v after %v (should be %v)", freezerState, timeout, state)
 		}
 
 		time.Sleep(1 * time.Millisecond)
@@ -387,7 +389,8 @@ func (cg *Cgroup) GetPIDs() ([]string, error) {
 	return strings.Split(pidStr, "\n"), nil
 }
 
-// CG most be paused beforehand
+// KillAllProcs stops all processes inside the cgroup
+// Note, the CG most be paused beforehand
 func (cg *Cgroup) KillAllProcs() []string {
 	pids, err := cg.GetPIDs()
 	if err != nil {
@@ -410,6 +413,9 @@ func (cg *Cgroup) KillAllProcs() []string {
 		if err != nil {
 			panic(fmt.Errorf("failed to send kill signal to process with pid: %d :: %v", pid, err))
 		}
+
+        // Wait for the process to terminate
+        proc.Wait()
 	}
 
 	if err := cg.Unpause(); err != nil {
