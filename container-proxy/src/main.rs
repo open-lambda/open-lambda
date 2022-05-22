@@ -9,6 +9,8 @@ use futures_util::sink::SinkExt;
 use tokio_util::codec::{FramedRead, FramedWrite};
 use tokio_util::codec::length_delimited::LengthDelimitedCodec;
 
+use serde_bytes::ByteBuf;
+
 use open_lambda_proxy_protocol::ProxyMessage;
 
 #[ tokio::main ]
@@ -55,34 +57,34 @@ async fn main() {
     }
 }
 
-async fn call_function(func_name: String, arg_string: String) -> Result<String, String> {
+async fn call_function(func_name: String, args: Vec<u8>) -> Result<Vec<u8>, String> {
     log::debug!("Issuing internal call to {}", func_name);
     let server_addr = "localhost:5000";
     let url = format!("http://{}/run/{}", server_addr, func_name);
     let client = reqwest::Client::new();
 
-    let request = client.post(url).body(arg_string);
+    let request = client.post(url).body(args);
 
     let result = match request.send().await {
         Ok(result) => result,
         Err(err) => {
-            return Err(format!("Failed to send call request: {}", err));
+            return Err(format!("Failed to send call request: {err}"));
         }
     };
 
-    let success = result.status().is_success();
-
-    match result.text().await {
-        Ok(result_string) => {
-            if success {
-                Ok(result_string)
-            } else {
-                Err(result_string)
+    if result.status().is_success() {
+        match result.bytes().await {
+            Ok(bytes) => {
+                let mut data = vec![];
+                data.extend_from_slice(&bytes[..]);
+                Ok(data)
+            },
+            Err(err) => {
+                Err(format!("Failed to process call result: {err}"))
             }
         }
-        Err(err) => {
-            Err(format!("Failed to parse call result: {}", err))
-        }
+    } else {
+        Err(format!("Call Request failed with error code: {}", result.status()))
     }
 }
 
@@ -108,9 +110,9 @@ async fn handle_connection(stream: UnixStream) {
         let msg = bincode::deserialize(&data).unwrap();
 
         let response = match msg {
-            ProxyMessage::CallRequest{ func_name, arg_string } => {
-                let result = call_function(func_name, arg_string).await;
-                ProxyMessage::CallResult(result)
+            ProxyMessage::CallRequest(call_data) => {
+                let result = call_function(call_data.fn_name, call_data.args.into_vec()).await;
+                ProxyMessage::CallResult(result.map(ByteBuf::from))
             },
             _ => {
                 panic!("Got unexpected message");

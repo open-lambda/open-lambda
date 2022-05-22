@@ -145,6 +145,10 @@ func (container *SOCKContainer) launchContainerProxy() (err error) {
 
 	proc, err := os.StartProcess("./ol-container-proxy", args, &procAttr)
 
+	if err != nil {
+		return fmt.Errorf("Failed to start database proxy")
+	}
+
 	died := make(chan error)
 	go func() {
 		_, err := proc.Wait()
