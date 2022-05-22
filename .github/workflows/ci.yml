@@ -10,8 +10,8 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  continuous-integration:
+    runs-on: ubuntu-22.04
     defaults:
       run:
         shell: bash
@@ -19,10 +19,14 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v2
     - name: Install Docker and Prereqs
+      # This uses a workaround for a known issue with docker. See here: https://github.com/actions/virtual-environments/issues/5490#issuecomment-1118328567
       run: |
          sudo apt-get update
          sudo apt-get install build-essential python3 libclang-common-12-dev llvm-12-dev zlib1g-dev -y
-         sudo apt-get install runc containerd docker.io curl python3 python-is-python3 python3-setuptools python3-pip -y
+         sudo apt-get install curl python3 python-is-python3 python3-setuptools python3-pip -y
+         sudo apt-get install runc containerd docker.io -y || true
+         sudo rm /etc/docker/daemon.json
+         sudo systemctl restart docker
          sudo gpasswd -a $USER docker
          pip3 install pylint
     - name: Install rustc and clippy nightly
@@ -40,28 +44,29 @@ jobs:
     - name: Install golang
       uses: actions/setup-go@v3
       with:
-         go-version: '>=1.17.0'
+         go-version: '>=1.18.0'
     - name: Install cross
       run: cargo install cross
     - name: Build OpenLambda
       run: |
-        make ol imgs/lambda wasm-worker wasm-functions native-functions
+        make ol imgs/lambda wasm-worker wasm-functions native-functions container-proxy
         sudo make install-python-bindings
     - name: Test Python (Docker)
     # not all features are supported by docker yet, so we only run some of the tests
       run: sudo ./scripts/test.py --worker_type=docker --test_filter=ping_test,numpy
-    # - name: Test Python (SOCK)
-    #   run: ./scripts/test.py --worker_type=sock
-    #   timeout-minutes: 20
+    - name: Test Python (SOCK)
+      run: sudo ./scripts/test.py --worker_type=sock --test_filter=ping_test,recursive_kill,fork_bomb,max_alloc,stress_one_lambda,call_each_once_exec,install_tests
+      timeout-minutes: 20
     - name: Test Binaries (WebAssembly)
+      timeout-minutes: 10
       run: |
         sudo rm -f test.json
         env RUST_LOG=info ./scripts/bin_test.py --worker_type=wasm
-      timeout-minutes: 10
-    # - name: Test Binaries (SOCK)
-    #   run: ./scripts/bin_test.py --worker_type=sock
-    # - name: Test SOCK
-    #   run: ./scripts/sock_test.py
-    #   timeout-minutes: 20
+    - name: Test Binaries (SOCK)
+      timeout-minutes: 20
+      run: sudo ./scripts/bin_test.py --worker_type=sock
+    - name: Test SOCK
+      timeout-minutes: 20
+      run: sudo ./scripts/sock_test.py
     - name: Linting
       run: make lint

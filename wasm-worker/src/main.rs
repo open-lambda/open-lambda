@@ -1,6 +1,4 @@
-#![feature(async_closure)]
-
-use std::fs::{File, remove_file, read_dir};
+use std::fs::{read_dir, remove_file, File};
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::path::PathBuf;
 
@@ -25,8 +23,6 @@ use std::sync::Arc;
 use clap::Parser;
 
 use async_wormhole::stack::Stack;
-
-static mut FUNCTION_MGR: Option<Arc<FunctionManager>> = None;
 
 #[derive(
     Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, derive_more::Display, clap::ArgEnum,
@@ -112,49 +108,52 @@ async fn main() {
 
     load_functions(&function_mgr).await;
 
-    unsafe {
-        FUNCTION_MGR = Some(function_mgr);
-    }
+    let make_service = make_service_fn(move |_| {
+        let function_mgr = function_mgr.clone();
 
-    let make_service = make_service_fn(async move |_| {
-        Ok::<_, hyper::Error>(service_fn(async move |req: Request<Body>| {
-            log::trace!("Got new request: {req:?}");
+        async move {
+            Ok::<_, hyper::Error>(service_fn(move |req: Request<Body>| {
+                let function_mgr = function_mgr.clone();
 
-            let mut path = req
-                .uri()
-                .path()
-                .split('/')
-                .filter(|x| !x.is_empty())
-                .map(String::from)
-                .collect::<Vec<String>>();
+                async move {
+                    log::trace!("Got new request: {req:?}");
 
-            let mut args = Vec::new();
-            let method = req.method().clone();
+                    let mut path = req
+                        .uri()
+                        .path()
+                        .split('/')
+                        .filter(|x| !x.is_empty())
+                        .map(String::from)
+                        .collect::<Vec<String>>();
 
-            let mut body = req.into_body();
+                    let mut args = Vec::new();
+                    let method = req.method().clone();
 
-            while let Some(chunk) = body.next().await {
-                match chunk {
-                    Ok(c) => {
-                        let mut chunk = c.to_vec();
-                        args.append(&mut chunk);
+                    let mut body = req.into_body();
+
+                    while let Some(chunk) = body.next().await {
+                        match chunk {
+                            Ok(c) => {
+                                let mut chunk = c.to_vec();
+                                args.append(&mut chunk);
+                            }
+                            Err(err) => {
+                                panic!("Got error: {err:?}");
+                            }
+                        }
                     }
-                    Err(err) => {
-                        panic!("Got error: {err:?}");
+
+                    if method == Method::POST && path.len() == 2 && path[0] == "run" {
+                        execute_function(worker_addr, &path.pop().unwrap(), args, function_mgr)
+                            .await
+                    } else if method == Method::GET && path.len() == 1 && path[0] == "status" {
+                        get_status().await
+                    } else {
+                        panic!("Got unexpected request to {path:?} (Method: {method:?})");
                     }
                 }
-            }
-
-            let function_mgr = unsafe { FUNCTION_MGR.as_ref().unwrap().clone() };
-
-            if method == Method::POST && path.len() == 2 && path[0] == "run" {
-                execute_function(worker_addr, &path.pop().unwrap(), args, function_mgr).await
-            } else if method == Method::GET && path.len() == 1 && path[0] == "status" {
-                get_status().await
-            } else {
-                panic!("Got unexpected request to {path:?} (Method: {method:?})");
-            }
-        }))
+            }))
+        }
     });
 
     let server = Server::bind(&worker_addr).serve(make_service);

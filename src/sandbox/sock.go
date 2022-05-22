@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+    "sync/atomic"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -33,7 +34,7 @@ type SOCKContainer struct {
 	// until all descendants are dead, because they share the
 	// pages of this Container, but this is the only container
 	// charged)
-	cgRefCount int
+	cgRefCount int32
 
 	parent   Sandbox
 	children map[string]Sandbox
@@ -143,6 +144,10 @@ func (container *SOCKContainer) launchContainerProxy() (err error) {
 	procAttr.Files = []*os.File{os.Stdin, os.Stdout, os.Stderr}
 
 	proc, err := os.StartProcess("./ol-container-proxy", args, &procAttr)
+
+	if err != nil {
+		return fmt.Errorf("Failed to start database proxy")
+	}
 
 	died := make(chan error)
 	go func() {
@@ -291,14 +296,15 @@ func (container *SOCKContainer) Destroy() {
 // all it's descendants are destroyed. Thus, it's safe to release it's
 // cgroups, and return the memory allocation to the memPool
 func (container *SOCKContainer) decCgRefCount() {
-	container.cgRefCount--
-	container.printf("CG ref count decremented to %d", container.cgRefCount)
-	if container.cgRefCount < 0 {
+    newCount := atomic.AddInt32(&container.cgRefCount, -1)
+
+	container.printf("CG ref count decremented to %d", newCount)
+	if newCount < 0 {
 		panic("cgRefCount should not be able to go negative")
 	}
 
 	// release all resources when we have no more dependents...
-	if container.cgRefCount == 0 {
+	if newCount == 0 {
 		// Stop proxy before unmounting (because it might write to a logfile)
 		if container.containerProxy != nil {
 			container.containerProxy.Kill()
@@ -339,11 +345,19 @@ func (container *SOCKContainer) childExit(child Sandbox) {
 	container.decCgRefCount()
 }
 
-// fork a new process from the Zygote in c, relocate it to be the server in dst
+// fork a new process from the Zygote in container, relocate it to be the server in dst
 func (container *SOCKContainer) fork(dst Sandbox) (err error) {
 	spareMB := container.cg.getMemLimitMB() - container.cg.getMemUsageMB()
 	if spareMB < 3 {
 		return fmt.Errorf("only %vMB of spare memory in parent, rejecting fork request (need at least 3MB)", spareMB)
+	}
+
+    // increment reference count before we start any processes
+	container.children[dst.ID()] = dst
+    newCount := atomic.AddInt32(&container.cgRefCount, 1)
+
+	if newCount == 0 {
+		panic("cgRefCount was already 0")
 	}
 
 	dstSock := dst.(*safeSandbox).Sandbox.(*SOCKContainer)
@@ -411,8 +425,6 @@ func (container *SOCKContainer) fork(dst Sandbox) (err error) {
 	}
 	t.T1()
 
-	container.children[dst.ID()] = dst
-	container.cgRefCount++
 	return nil
 }
 

@@ -13,3 +13,4 @@ log = "0.4"
 bincode = "1"
 open-lambda-proxy-protocol = { path="../bin-functions/proxy-protocol" }
 simple-logging = "2"
+serde_bytes = "0.11"

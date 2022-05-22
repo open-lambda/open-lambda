@@ -349,6 +349,7 @@ dependencies = [
  "log",
  "open-lambda-proxy-protocol",
  "reqwest",
+ "serde_bytes",
  "simple-logging",
  "tokio",
  "tokio-util 0.6.9",

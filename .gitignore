@@ -68,6 +68,7 @@ bench-dir
 
 test-registry.wasm/
 bin-functions/target/
+bin-functions/wasm-target/
 wasm-worker/target/
 container-proxy/target
 

@@ -1,3 +1,5 @@
+# This uses two different target dirs, one for native and one for wasm, to avoid recompiles
+
 .PHONY: lint cargo-clean update-dependencies cargo-clean udeps wasm-functions native-functions
 
 CLIPPY_FLAGS=-- --deny "warnings"
@@ -20,7 +22,7 @@ udeps:
 	cargo udeps --target=${WASM_TARGET}
 
 wasm-functions:
-	cargo build --target=${WASM_TARGET} --release
+	env CARGO_TARGET_DIR=wasm-target cargo build --target=${WASM_TARGET} --release
 
 native-functions:
 	cargo build --release

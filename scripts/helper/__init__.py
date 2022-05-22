@@ -15,44 +15,49 @@ import os
 import json
 import requests
 
-OL_DIR = None
-CURR_CONF = None
+_OL_DIR = None
+_CURR_CONF = None
 
 def setup_config(ol_dir):
-    global OL_DIR
-    OL_DIR = ol_dir
+    global _OL_DIR
+    _OL_DIR = ol_dir
 
 def get_ol_stats():
-    if os.path.exists(f"{OL_DIR}/worker/stats.json"):
-        with open(f"{OL_DIR}/worker/stats.json", "r", encoding='utf-8') as statsfile:
+    if os.path.exists(f"{_OL_DIR}/worker/stats.json"):
+        with open(f"{_OL_DIR}/worker/stats.json", "r", encoding='utf-8') as statsfile:
             olstats = json.load(statsfile)
         return OrderedDict(sorted(list(olstats.items())))
 
     return None
 
 def get_worker_output():
-    with open(os.path.join(OL_DIR, "worker.out"), "r", encoding='utf-8') as workerfile:
-        return workerfile.read().splitlines()
+    if _OL_DIR is not None:
+        with open(os.path.join(_OL_DIR, "worker.out"), "r", encoding='utf-8') as workerfile:
+            return workerfile.read().splitlines()
+    else:
+        # The WebAssembly worker does not create an output currently
+        # TODO we should capture it somehow
+        return ["_OL_DIR not set"]
 
 def get_current_config():
-    return CURR_CONF
+    return _CURR_CONF
 
 def post(path, data=None):
     ''' Issues a post request to the OL worker '''
     return requests.post(f'http://localhost:5000/{path}', json.dumps(data))
 
 def put_conf(conf):
-    global CURR_CONF
-    with open(os.path.join(OL_DIR, "config.json"), 'w', encoding='utf-8') as cfile:
+    global _CURR_CONF
+    with open(os.path.join(_OL_DIR, "config.json"), 'w', encoding='utf-8') as cfile:
         json.dump(conf, cfile, indent=2)
-    CURR_CONF = conf
+    _CURR_CONF = conf
 
 class TestConf:
     ''' Loads a config and overwrites certain fields with what is set in **keywords '''
     def __init__(self, **keywords):
         self.orig = None
 
-        with open(os.path.join(OL_DIR, "config.json"), "r", encoding='utf-8') as cfile:
+        with open(os.path.join(_OL_DIR, "config.json"), "r", encoding='utf-8') as cfile:
             try:
                 self.orig = json.load(cfile)
             except json.JSONDecodeError as err:
@@ -113,7 +118,7 @@ class DockerWorker():
 
         try:
             print("Starting Docker container worker")
-            run(['./ol', 'worker', f'-p={OL_DIR}', '--detach'])
+            run(['./ol', 'worker', f'-p={_OL_DIR}', '--detach'])
         except Exception as err:
             raise RuntimeError(f"failed to start worker: {err}") from err
 
@@ -137,7 +142,7 @@ class DockerWorker():
 
         try:
             print("Stopping Docker container worker")
-            run(['./ol', 'kill', '-p='+OL_DIR])
+            run(['./ol', 'kill', '-p='+_OL_DIR])
         except Exception as err:
             raise RuntimeError("Failed to start worker") from err
 
@@ -148,7 +153,7 @@ class SockWorker():
 
         try:
             print("Starting SOCK container worker")
-            run(['./ol', 'worker', '-p='+OL_DIR, '--detach'])
+            run(['./ol', 'worker', '-p='+_OL_DIR, '--detach'])
         except Exception as err:
             raise RuntimeError(f"failed to start worker: {err}") from err
 
@@ -172,7 +177,7 @@ class SockWorker():
 
         try:
             print("Stopping SOCK container worker")
-            run(['./ol', 'kill', '-p='+OL_DIR])
+            run(['./ol', 'kill', '-p='+_OL_DIR])
         except Exception as err:
             raise RuntimeError("Failed to start worker") from err
 
@@ -225,7 +230,7 @@ def prepare_open_lambda(ol_dir, reuse_config=False):
     Sets up the working director for open lambda,
     and stops currently running worker processes (if any)
     '''
-    if os.path.exists(OL_DIR):
+    if os.path.exists(_OL_DIR):
         try:
             run(['./ol', 'kill', f'-p={ol_dir}'])
             print("stopped existing worker")
@@ -239,7 +244,7 @@ def prepare_open_lambda(ol_dir, reuse_config=False):
 
         run(['./ol', 'new', f'-p={ol_dir}'])
     else:
-        if os.path.exists(OL_DIR):
+        if os.path.exists(_OL_DIR):
             # Make sure the pid file is gone even if the previous worker crashed
             try:
                 run(['rm', '-rf', f'{ol_dir}/worker'])
