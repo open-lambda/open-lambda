@@ -366,14 +366,17 @@ func (cg *Cgroup) setMemLimitMB(mb int) {
 	cg.memLimitMB = mb
 }
 
+// Freeze processes in the cgroup
 func (cg *Cgroup) Pause() error {
 	return cg.setFreezeState(1)
 }
 
+// Unfreeze processes in the cgroup
 func (cg *Cgroup) Unpause() error {
 	return cg.setFreezeState(0)
 }
 
+// Get the IDs of all processes running in this cgroup
 func (cg *Cgroup) GetPIDs() ([]string, error) {
 	procsPath := cg.ResourcePath("cgroup.procs")
 	pids, err := ioutil.ReadFile(procsPath)
@@ -397,8 +400,10 @@ func (cg *Cgroup) KillAllProcs() []string {
 		panic(err)
 	}
 
+    // Send KILL signal to all processes
 	for _, pidStr := range pids {
 		pid, err := strconv.Atoi(pidStr)
+
 		if err != nil {
 			panic(fmt.Errorf("bad pid string: %s :: %v", pidStr, err))
 		}
@@ -413,27 +418,23 @@ func (cg *Cgroup) KillAllProcs() []string {
 		if err != nil {
 			panic(fmt.Errorf("failed to send kill signal to process with pid: %d :: %v", pid, err))
 		}
-
-        // Wait for the process to terminate
-        proc.Wait()
 	}
 
+    // Resume execution so processes can shut down
 	if err := cg.Unpause(); err != nil {
 		panic(err)
 	}
 
-Loop:
+    // Wait for all processes to terminate
 	for i := 0; ; i++ {
 		pids, err := cg.GetPIDs()
 		if err != nil {
 			panic(err)
 		} else if len(pids) == 0 {
-			break Loop
+	        return pids
 		} else if i%1000 == 0 {
 			cg.pool.printf("waiting for %d procs in %s to die", len(pids), cg.Name)
 		}
 		time.Sleep(1 * time.Millisecond)
 	}
-
-	return pids
 }
