@@ -311,10 +311,12 @@ func (container *SOCKContainer) decCgRefCount() {
 			container.containerProxy.Wait()
 		}
 
-		t := common.T0("Destroy()/kill-procs")
+		t := common.T0("Destroy()/cleanup-cgroup")
 		if container.cg != nil {
-			pids := container.cg.KillAllProcs()
-			container.printf("killed PIDs %v in CG\n", pids)
+			container.cg.KillAllProcs()
+			container.printf("killed PIDs in CG\n")
+			container.cg.Release()
+			container.pool.mem.adjustAvailableMB(container.cg.getMemLimitMB())
 		}
 		t.T1()
 
@@ -330,9 +332,6 @@ func (container *SOCKContainer) decCgRefCount() {
 			container.printf("remove root dir %s failed :: %v\n", container.containerRootDir, err)
 		}
 		t.T1()
-
-		container.cg.Release()
-		container.pool.mem.adjustAvailableMB(container.cg.getMemLimitMB())
 
 		if container.parent != nil {
 			container.parent.childExit(container)

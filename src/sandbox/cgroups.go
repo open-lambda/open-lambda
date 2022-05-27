@@ -84,16 +84,17 @@ func (cg *Cgroup) printf(format string, args ...interface{}) {
 	}
 }
 func (cg *Cgroup) Release() {
-	pids, err := cg.GetPIDs()
-	if err != nil {
-		panic(err)
-	} else if len(pids) != 0 {
-		panic(fmt.Errorf("Cannot release cgroup that contains processes: %v", pids))
-	}
-
 	// if there's room in the recycled channel, add it there.
 	// Otherwise, just delete it.
 	if common.Conf.Features.Reuse_cgroups {
+		// TODO: why are there still some cgroups on a process that has been killed?
+		pids, err := cg.GetPIDs()
+		if err != nil {
+			panic(err)
+		} else if len(pids) != 0 {
+			panic(fmt.Errorf("Cannot release cgroup that contains processes: %v", pids))
+		}
+
 		select {
 		case cg.pool.recycled <- cg:
 			cg.printf("release and recycle")
@@ -109,9 +110,20 @@ func (cg *Cgroup) Release() {
 // Destroy this cgroup
 func (cg *Cgroup) Destroy() {
 	gpath := cg.GroupPath()
-    cg.printf("Destroying cgroup with path \"%s\"", gpath)
-	if err := syscall.Rmdir(gpath); err != nil {
-		panic(fmt.Errorf("Rmdir %s: %s", gpath, err))
+	cg.printf("Destroying cgroup with path \"%s\"", gpath)
+
+	for i := 9; i>=0; i-- {
+		if err := syscall.Rmdir(gpath); err != nil {
+			if i == 0 {
+				cg.printf("TEST TEST TEST")
+				panic(fmt.Errorf("Rmdir(2) %s: %s", gpath, err))
+			} else {
+				cg.printf("cgroup Rmdir failed, trying again in 5ms")
+				time.Sleep(5 * time.Millisecond)
+			}
+		} else {
+			break
+		}
 	}
 }
 
@@ -188,11 +200,20 @@ func (pool *CgroupPool) Destroy() {
 	pool.quit <- ch
 	<-ch
 
-    // Destroy cgroup for this entire pool
+	// Destroy cgroup for this entire pool
 	gpath := pool.GroupPath()
-    pool.printf("Destroying cgroup pool with path \"%s\"", gpath)
-	if err := syscall.Rmdir(gpath); err != nil {
-		panic(fmt.Errorf("Rmdir %s: %s", gpath, err))
+	pool.printf("Destroying cgroup pool with path \"%s\"", gpath)
+	for i := 9; i>=0; i-- {
+		if err := syscall.Rmdir(gpath); err != nil {
+			if i == 0 {
+				panic(fmt.Errorf("Rmdir %s: %s", gpath, err))
+			} else {
+				pool.printf("cgroup pool Rmdir failed, trying again in 1ms")
+				time.Sleep(1 * time.Millisecond)
+			}
+		} else {
+			break
+		}
 	}
 }
 
@@ -394,47 +415,6 @@ func (cg *Cgroup) GetPIDs() ([]string, error) {
 
 // KillAllProcs stops all processes inside the cgroup
 // Note, the CG most be paused beforehand
-func (cg *Cgroup) KillAllProcs() []string {
-	pids, err := cg.GetPIDs()
-	if err != nil {
-		panic(err)
-	}
-
-    // Send KILL signal to all processes
-	for _, pidStr := range pids {
-		pid, err := strconv.Atoi(pidStr)
-
-		if err != nil {
-			panic(fmt.Errorf("bad pid string: %s :: %v", pidStr, err))
-		}
-
-		proc, err := os.FindProcess(pid)
-		if err != nil {
-			panic(fmt.Errorf("failed to find process with pid: %d :: %v", pid, err))
-		}
-
-		// forced termination (not trappable)
-		err = proc.Signal(syscall.SIGKILL)
-		if err != nil {
-			panic(fmt.Errorf("failed to send kill signal to process with pid: %d :: %v", pid, err))
-		}
-	}
-
-    // Resume execution so processes can shut down
-	if err := cg.Unpause(); err != nil {
-		panic(err)
-	}
-
-    // Wait for all processes to terminate
-	for i := 0; ; i++ {
-		pids, err := cg.GetPIDs()
-		if err != nil {
-			panic(err)
-		} else if len(pids) == 0 {
-	        return pids
-		} else if i%1000 == 0 {
-			cg.pool.printf("waiting for %d procs in %s to die", len(pids), cg.Name)
-		}
-		time.Sleep(1 * time.Millisecond)
-	}
+func (cg *Cgroup) KillAllProcs() {
+	cg.WriteInt("cgroup.kill", 1)
 }
