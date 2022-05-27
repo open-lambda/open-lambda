@@ -382,7 +382,7 @@ func kill(ctx *cli.Context) error {
 	for i := 0; i < 300; i++ {
 		err := p.Signal(syscall.Signal(0))
 		if err != nil {
-			fmt.Printf("OL worker process stopped successfully")
+			fmt.Printf("OL worker process stopped successfully\n")
 			return nil // good, process must have stopped
 		}
 		time.Sleep(100 * time.Millisecond)

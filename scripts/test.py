@@ -227,7 +227,7 @@ def run_tests():
     max_mem_alloc()
 
     # numpy pip install needs a larger mem cap
-    with TestConfContext(mem_pool_mb=1000):
+    with TestConfContext(mem_pool_mb=1000, trace={"cgroups": True}):
         numpy_test()
 
     # make sure code updates get pulled within the cache time
