@@ -391,6 +391,70 @@ func kill(ctx *cli.Context) error {
 	return fmt.Errorf("worker didn't stop after 30s")
 }
 
+// cleanup corresponds to the "force-cleanup" command of the admin tool.
+func cleanup(ctx *cli.Context) error {
+	olPath, err := getOlPath(ctx)
+	if err != nil {
+		return err
+	}
+	
+	cgRoot := filepath.Join("/sys", "fs", "cgroup", filepath.Base(olPath) + "-sandboxes")
+	fmt.Printf("ATTEMPT to cleanup cgroups at %s\n", cgRoot)
+	
+	if files, err := ioutil.ReadDir(cgRoot); err != nil {
+		fmt.Printf("could not find cgroup root: %s\n", err.Error())
+	} else {
+		kill := filepath.Join(cgRoot, "cgroup.kill")
+		if err := ioutil.WriteFile(kill, []byte(fmt.Sprintf("%d", 1)), os.ModeAppend); err != nil {
+			fmt.Printf("could kill processes in cgroup: %s\n", err.Error())
+		}
+
+		for _, file := range files {
+			if strings.HasPrefix(file.Name(), "cg-") {
+				cg := filepath.Join(cgRoot, file.Name())
+				fmt.Printf("try removing %s\n", cg)
+				if err := syscall.Rmdir(cg); err != nil {
+					fmt.Printf("could remove cgroup: %s\n", err.Error())
+				}
+			}
+		}
+
+		if err := syscall.Rmdir(cgRoot); err != nil {
+			fmt.Printf("could remove cgroup root: %s\n", err.Error())
+		}
+	}
+
+	dirName := filepath.Join(olPath, "worker", "root-sandboxes")
+	fmt.Printf("ATTEMPT to cleanup mounts at %s\n", dirName)
+
+	if files, err := ioutil.ReadDir(dirName); err != nil {
+		fmt.Printf("could not find mount root: %s\n", err.Error())
+	} else {
+		for _, file := range files {
+			path := filepath.Join(dirName, file.Name())
+			fmt.Printf("try unmounting %s\n", path)
+			if err := syscall.Unmount(path, syscall.MNT_DETACH); err != nil {
+				fmt.Printf("could not unmount: %s\n", err.Error())
+			}
+
+			if err := syscall.Rmdir(path); err != nil {
+				fmt.Printf("could remove mount dir: %s\n", err.Error())
+			}
+		}
+	}
+
+	if err := syscall.Unmount(dirName, syscall.MNT_DETACH); err != nil {
+		fmt.Printf("could not unmount %s: %s\n", dirName, err.Error())
+	}
+
+	fmt.Printf("ATTEMPT to cleanup OL dir at %s\n", olPath)
+	if err := os.RemoveAll(olPath); err != nil {
+		fmt.Printf("could not remove all at %s: %s\n", olPath, err.Error())
+	}
+
+	return nil
+}
+
 // main runs the admin tool
 func main() {
 	if c, err := docker.NewClientFromEnv(); err != nil {
@@ -462,6 +526,13 @@ OPTIONS:
 			UsageText: "ol kill [--path=NAME]",
 			Flags:     []cli.Flag{pathFlag},
 			Action:    kill,
+		},
+		cli.Command{
+			Name:      "force-cleanup",
+			Usage:     "Developer use only.  Cleanup cgroups and mount points (only needed when OL halted unexpectedly or there's a bug)",
+			UsageText: "ol force-cleanup [--path=NAME]",
+			Flags:     []cli.Flag{pathFlag},
+			Action:    cleanup,
 		},
 	}
 	err := app.Run(os.Args)
