@@ -160,6 +160,12 @@ func LoadDefaults(olPath string) error {
 			Import_cache:        true,
 			Downsize_paused_mem: true,
 		},
+		Trace: TraceConfig{
+			Cgroups: false,
+			Memory: false,
+			Evictor: false,
+			Package: false,
+		},
 		Storage: StorageConfig{
 			Root:    "private",
 			Scratch: "",

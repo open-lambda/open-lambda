@@ -263,7 +263,13 @@ def main():
     setup_config(args.ol_dir)
     prepare_open_lambda(args.ol_dir)
 
-    with TestConfContext(registry=os.path.abspath(args.registry)):
+    trace_config = {
+        "cgroups": True,
+        "memory": True,
+        "evictor": True,
+        "package": True,
+    }
+    with TestConfContext(registry=os.path.abspath(args.registry), trace=trace_config):
         if args.worker_type == 'docker':
             set_worker_type(DockerWorker)
         elif args.worker_type == 'sock':

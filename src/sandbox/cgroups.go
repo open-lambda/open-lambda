@@ -83,16 +83,25 @@ func (cg *Cgroup) printf(format string, args ...interface{}) {
 		log.Printf("%s [CGROUP %s: %s]", strings.TrimRight(msg, "\n"), cg.pool.Name, cg.Name)
 	}
 }
+
 func (cg *Cgroup) Release() {
 	// if there's room in the recycled channel, add it there.
 	// Otherwise, just delete it.
 	if common.Conf.Features.Reuse_cgroups {
-		// TODO: why are there still some cgroups on a process that has been killed?
-		pids, err := cg.GetPIDs()
-		if err != nil {
-			panic(err)
-		} else if len(pids) != 0 {
-			panic(fmt.Errorf("Cannot release cgroup that contains processes: %v", pids))
+		for i := 100; i >= 0; i-- {
+			pids, err := cg.GetPIDs()
+			if err != nil {
+				panic(err)
+			} else if len(pids) > 0 {
+				if i == 0 {
+					panic(fmt.Errorf("Cannot release cgroup that contains processes: %v", pids))
+				} else {
+					cg.printf("cgroup Rmdir failed, trying again in 5ms")
+					time.Sleep(5 * time.Millisecond)
+				}
+			} else {
+				break
+			}
 		}
 
 		select {
@@ -112,7 +121,7 @@ func (cg *Cgroup) Destroy() {
 	gpath := cg.GroupPath()
 	cg.printf("Destroying cgroup with path \"%s\"", gpath)
 
-	for i := 9; i>=0; i-- {
+	for i := 100; i>=0; i-- {
 		if err := syscall.Rmdir(gpath); err != nil {
 			if i == 0 {
 				cg.printf("TEST TEST TEST")
@@ -203,13 +212,13 @@ func (pool *CgroupPool) Destroy() {
 	// Destroy cgroup for this entire pool
 	gpath := pool.GroupPath()
 	pool.printf("Destroying cgroup pool with path \"%s\"", gpath)
-	for i := 9; i>=0; i-- {
+	for i := 100; i>=0; i-- {
 		if err := syscall.Rmdir(gpath); err != nil {
 			if i == 0 {
 				panic(fmt.Errorf("Rmdir %s: %s", gpath, err))
 			} else {
-				pool.printf("cgroup pool Rmdir failed, trying again in 1ms")
-				time.Sleep(1 * time.Millisecond)
+				pool.printf("cgroup pool Rmdir failed, trying again in 5ms")
+				time.Sleep(5 * time.Millisecond)
 			}
 		} else {
 			break
