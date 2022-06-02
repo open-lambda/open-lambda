@@ -55,7 +55,7 @@ jobs:
     # not all features are supported by docker yet, so we only run some of the tests
       run: sudo ./scripts/test.py --worker_type=docker --test_filter=ping_test,numpy
     - name: Test Python (SOCK)
-      run: sudo ./scripts/test.py --worker_type=sock --test_filter=ping_test,recursive_kill,fork_bomb,max_alloc,stress_one_lambda,call_each_once_exec,install_tests
+      run: sudo ./scripts/test.py --worker_type=sock
       timeout-minutes: 20
     - name: Test Binaries (WebAssembly)
       timeout-minutes: 10
