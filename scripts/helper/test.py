@@ -100,21 +100,23 @@ def test(func):
         try:
             worker = WORKER_TYPE()
             print("Worker started")
-
-            # run test/benchmark
-            test_t0 = time()
-            return_val = func(**kwargs)
-            test_t1 = time()
-            result["seconds"] = test_t1 - test_t0
-
-            result["pass"] = True
         except Exception as err:
             print(f"Failed to start worker: {err}")
-            return_val = None
-            result["pass"] = False
-            result["errors"].append(traceback.format_exc().split("\n"))
 
         if worker:
+            try:
+                # run test/benchmark
+                test_t0 = time()
+                return_val = func(**kwargs)
+                test_t1 = time()
+                result["seconds"] = test_t1 - test_t0
+                result["pass"] = True
+            except Exception as err:
+                print(f"Failed to run test: {err}")
+                return_val = None
+                result["pass"] = False
+                result["errors"].append(traceback.format_exc().split("\n"))
+
             worker.stop()
 
         mounts1 = mounts()
