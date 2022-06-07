@@ -113,18 +113,24 @@ func Main() (err error) {
 
 		statsPath := filepath.Join(common.Conf.Worker_dir, "stats.json")
 		snapshot := common.SnapshotStats()
+		rc := 0
 		log.Printf("save stats to %s", statsPath)
 		if s, err := json.MarshalIndent(snapshot, "", "\t"); err != nil {
 			log.Printf("error: %s", err)
+			rc = 1
 		} else if err := ioutil.WriteFile(statsPath, s, 0644); err != nil {
 			log.Printf("error: %s", err)
+			rc = 1
 		}
 
 		log.Printf("remove worker.pid")
-		os.Remove(pidPath)
+		if err := os.Remove(pidPath); err != nil {
+			log.Printf("error: %s", err)
+			rc = 1
+		}
 
-		log.Printf("exiting")
-		os.Exit(1)
+		log.Printf("exiting worker, PID=%d", os.Getpid())
+		os.Exit(rc);
 	}()
 
 	port := fmt.Sprintf("%s:%s", common.Conf.Worker_url, common.Conf.Worker_port)
