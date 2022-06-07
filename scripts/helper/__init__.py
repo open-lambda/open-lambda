@@ -110,6 +110,7 @@ def run(cmd):
 
     if fail:
         raise Exception(f"command ({' '.join(cmd)}) failed: {out}")
+    print(out)
 
 class DockerWorker():
     def __init__(self):
