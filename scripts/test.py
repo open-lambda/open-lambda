@@ -129,6 +129,8 @@ def call_each_once(lambda_count, alloc_mb=0):
                 code.write(f"    s = '*' * {alloc_mb} * 1024**2\n")
                 code.write(f"    return {pos}\n")
 
+        print(f"call_each_once: lambdas in {reg_dir} are {os.listdir(reg_dir)}")
+
         with TestConfContext(registry=reg_dir):
             call_each_once_exec(lambda_count=lambda_count, alloc_mb=alloc_mb)
 
