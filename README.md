@@ -16,13 +16,13 @@ OpenLambda is only actively tested on Ubuntu 22.04 LTS.
 ### Build and Test
 Make sure you have all basic dependencies installed:
 ```
-apt install docker.io llvm-11-dev libclang-common-11-dev build-essential python3
+apt install docker.io llvm-12-dev libclang-common-12-dev build-essential python3
 ```
 
 For a recent version of go, run the following:
 ```
-wget -q -O /tmp/go1.17.6.linux-amd64.tar.gz https://dl.google.com/go/go1.17.6.linux-amd64.tar.gz
-tar -C /usr/local -xzf /tmp/go1.17.6.linux-amd64.tar.gz
+wget -q -O /tmp/go.tar.gz https://go.dev/dl/go1.18.3.linux-amd64.tar.gz
+tar -C /usr/local -xzf /tmp/go.tar.gz
 ln -s /usr/local/go/bin/go /usr/bin/go
 ```
 
