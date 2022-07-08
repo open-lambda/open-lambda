@@ -159,6 +159,8 @@ func (b *Boss) DeleteLambda(w http.ResponseWriter, r *http.Request) {
 }
 
 func BossMain() (err error) {
+	fmt.Printf("WARNING!  Boss incomplete (only use this as part of development process).")
+
 	var pool WorkerPool
 	if Conf.Platform == "gcp" {
 		pool, err = NewGcpWorkerPool()

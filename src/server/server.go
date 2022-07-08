@@ -45,11 +45,7 @@ func Status(w http.ResponseWriter, r *http.Request) {
 func Stats(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Received request to %s\n", r.URL.Path)
 	snapshot := common.SnapshotStats()
-	log.Printf("snapshot = %T\n", snapshot)
-	m := make(map[string]int)
-	m["k1"] = 7
-	m["k2"] = 13
-	if b, err := json.MarshalIndent(m, "", "\t"); err != nil {
+	if b, err := json.MarshalIndent(snapshot, "", "\t"); err != nil {
 		panic(err)
 	} else {
 		w.Write(b)
@@ -134,7 +130,7 @@ func Main() (err error) {
 		}
 
 		log.Printf("exiting worker, PID=%d", os.Getpid())
-		os.Exit(rc);
+		os.Exit(rc)
 	}()
 
 	port := fmt.Sprintf("%s:%s", common.Conf.Worker_url, common.Conf.Worker_port)

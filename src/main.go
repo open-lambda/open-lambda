@@ -18,9 +18,9 @@ import (
 	docker "github.com/fsouza/go-dockerclient"
 	dutil "github.com/open-lambda/open-lambda/ol/sandbox/dockerutil"
 
+	"github.com/open-lambda/open-lambda/ol/boss"
 	"github.com/open-lambda/open-lambda/ol/common"
 	"github.com/open-lambda/open-lambda/ol/server"
-	"github.com/open-lambda/open-lambda/ol/boss"
 
 	"github.com/urfave/cli"
 )
@@ -254,7 +254,7 @@ func newBossConf() error {
 	if err := boss.LoadDefaults(); err != nil {
 		return err
 	}
-	
+
 	if err := boss.SaveConf("boss.json"); err != nil {
 		return err
 	}
@@ -273,7 +273,7 @@ func runBoss(ctx *cli.Context) error {
 	if _, err := os.Stat("boss.json"); os.IsNotExist(err) {
 		newBossConf()
 	}
-	
+
 	if err := boss.LoadConf("boss.json"); err != nil {
 		return err
 	}
@@ -490,17 +490,17 @@ func azure_test(ctx *cli.Context) error {
 	boss.AzureMain("default contents")
 	return nil
 }
-	
+
 // cleanup corresponds to the "force-cleanup" command of the admin tool.
 func cleanup(ctx *cli.Context) error {
 	olPath, err := getOlPath(ctx)
 	if err != nil {
 		return err
 	}
-	
-	cgRoot := filepath.Join("/sys", "fs", "cgroup", filepath.Base(olPath) + "-sandboxes")
+
+	cgRoot := filepath.Join("/sys", "fs", "cgroup", filepath.Base(olPath)+"-sandboxes")
 	fmt.Printf("ATTEMPT to cleanup cgroups at %s\n", cgRoot)
-	
+
 	if files, err := ioutil.ReadDir(cgRoot); err != nil {
 		fmt.Printf("could not find cgroup root: %s\n", err.Error())
 	} else {
@@ -590,7 +590,7 @@ OPTIONS:
 	app.Commands = []cli.Command{
 		cli.Command{
 			Name:        "new",
-			Usage:       "Create a OpenLambda environment",
+			Usage:       "Create an OL worker environment, including default config and dump of base image",
 			UsageText:   "ol new [--path=PATH]",
 			Description: "A cluster directory of the given name will be created with internal structure initialized.",
 			Flags:       []cli.Flag{pathFlag},
@@ -598,7 +598,7 @@ OPTIONS:
 		},
 		cli.Command{
 			Name:        "worker",
-			Usage:       "Start one OL server",
+			Usage:       "Start an OL worker process (automatically calls 'new' and uses default if that wasn't already done)",
 			UsageText:   "ol worker [--path=NAME] [--detach]",
 			Description: "Start a lambda server.",
 			Flags: []cli.Flag{
@@ -616,15 +616,15 @@ OPTIONS:
 		},
 		cli.Command{
 			Name:        "new-boss",
-			Usage:       "Create a new Boss",
+			Usage:       "Create an OL Boss config (boss.json)",
 			UsageText:   "ol new-boss [--path=PATH] [--detach]",
 			Description: "Create config for new boss",
-			Action: newBoss,
+			Action:      newBoss,
 		},
 		cli.Command{
-		 	Name:  "boss",
-		 	Usage: "Start one Boss server",
-		 	UsageText:   "ol boss [--path=PATH] [--detach]",
+			Name:        "boss",
+			Usage:       "Start an OL Boss process",
+			UsageText:   "ol boss [--path=PATH] [--detach]",
 			Description: "Start a boss server.",
 			Flags: []cli.Flag{
 				cli.BoolFlag{
@@ -636,7 +636,7 @@ OPTIONS:
 		},
 		cli.Command{
 			Name:        "status",
-			Usage:       "get worker status",
+			Usage:       "check status of an OL worker process",
 			UsageText:   "ol status [--path=NAME]",
 			Description: "If no cluster name is specified, number of containers of each cluster is printed; otherwise the connection information for all containers in the given cluster will be displayed.",
 			Flags:       []cli.Flag{pathFlag},
