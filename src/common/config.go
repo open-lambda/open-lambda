@@ -10,6 +10,7 @@ import (
 	"syscall"
 )
 
+// Configuration is stored globally here
 var Conf *Config
 
 // Config represents the configuration for a worker server.
@@ -17,8 +18,14 @@ type Config struct {
 	// worker directory, which contains handler code, pid file, logs, etc.
 	Worker_dir string `json:"worker_dir"`
 
+	// Url/ip the worker server listens to
+	Worker_url string `json:"worker_url"`
+
 	// port the worker server listens to
 	Worker_port string `json:"worker_port"`
+
+	// log output of the runtime and proxy?
+	Log_output bool `json:"log_output"`
 
 	// sandbox type: "docker" or "sock"
 	// currently ignored as cgroup sandbox is not fully integrated
@@ -47,7 +54,7 @@ type Config struct {
 	Import_cache_tree interface{} `json:"import_cache_tree"`
 
 	// base image path for sock containers
-	SOCK_base_path string `json: "sock_base_path"`
+	SOCK_base_path string `json:"sock_base_path"`
 
 	// pass through to sandbox envirenment variable
 	Sandbox_config interface{} `json:"sandbox_config"`
@@ -111,7 +118,7 @@ type LimitsConfig struct {
 	// how many seconds can Lambdas run?  (maybe be overridden on per-lambda basis)
 	Max_runtime_default int `json:"max_runtime_default"`
 
-	// how aggresively will the mem of the Sandbox be swapped?
+	// how aggressively will the mem of the Sandbox be swapped?
 	Swappiness int `json:"swappiness"`
 
 	// how much memory do we use for an admin lambda that is used
@@ -139,9 +146,11 @@ func LoadDefaults(olPath string) error {
 	Conf = &Config{
 		Worker_dir:        workerDir,
 		Server_mode:       "lambda",
+		Worker_url:        "localhost",
 		Worker_port:       "5000",
 		Registry:          registryDir,
 		Sandbox:           "sock",
+		Log_output:        true,
 		Pkgs_dir:          packagesDir,
 		Sandbox_config:    map[string]interface{}{},
 		SOCK_base_path:    baseImgDir,
@@ -159,6 +168,12 @@ func LoadDefaults(olPath string) error {
 		Features: FeaturesConfig{
 			Import_cache:        true,
 			Downsize_paused_mem: true,
+		},
+		Trace: TraceConfig{
+			Cgroups: false,
+			Memory: false,
+			Evictor: false,
+			Package: false,
 		},
 		Storage: StorageConfig{
 			Root:    "private",
@@ -179,7 +194,7 @@ func LoadConf(path string) error {
 	}
 
 	if err := json.Unmarshal(config_raw, &Conf); err != nil {
-		log.Printf("FILE: %v\n", config_raw)
+		log.Printf("FILE: %v\n", string(config_raw))
 		return fmt.Errorf("could not parse config (%v): %v\n", path, err.Error())
 	}
 

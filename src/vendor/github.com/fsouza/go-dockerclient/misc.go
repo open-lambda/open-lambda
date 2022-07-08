@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"net"
+	"net/http"
 	"strings"
 
 	"github.com/docker/docker/api/types/swarm"
@@ -22,7 +23,7 @@ func (c *Client) Version() (*Env, error) {
 
 // VersionWithContext returns version information about the docker server.
 func (c *Client) VersionWithContext(ctx context.Context) (*Env, error) {
-	resp, err := c.do("GET", "/version", doOptions{context: ctx})
+	resp, err := c.do(http.MethodGet, "/version", doOptions{context: ctx})
 	if err != nil {
 		return nil, err
 	}
@@ -48,19 +49,6 @@ type DockerInfo struct {
 	DriverStatus       [][2]string
 	SystemStatus       [][2]string
 	Plugins            PluginsInfo
-	MemoryLimit        bool
-	SwapLimit          bool
-	KernelMemory       bool
-	CPUCfsPeriod       bool `json:"CpuCfsPeriod"`
-	CPUCfsQuota        bool `json:"CpuCfsQuota"`
-	CPUShares          bool
-	CPUSet             bool
-	IPv4Forwarding     bool
-	BridgeNfIptables   bool
-	BridgeNfIP6tables  bool `json:"BridgeNfIp6tables"`
-	Debug              bool
-	OomKillDisable     bool
-	ExperimentalBuild  bool
 	NFd                int
 	NGoroutines        int
 	SystemTime         string
@@ -90,8 +78,21 @@ type DockerInfo struct {
 	Isolation          string
 	InitBinary         string
 	DefaultRuntime     string
-	LiveRestoreEnabled bool
 	Swarm              swarm.Info
+	LiveRestoreEnabled bool
+	MemoryLimit        bool
+	SwapLimit          bool
+	KernelMemory       bool
+	CPUCfsPeriod       bool `json:"CpuCfsPeriod"`
+	CPUCfsQuota        bool `json:"CpuCfsQuota"`
+	CPUShares          bool
+	CPUSet             bool
+	IPv4Forwarding     bool
+	BridgeNfIptables   bool
+	BridgeNfIP6tables  bool `json:"BridgeNfIp6tables"`
+	Debug              bool
+	OomKillDisable     bool
+	ExperimentalBuild  bool
 }
 
 // Runtime describes an OCI runtime
@@ -162,7 +163,7 @@ type IndexInfo struct {
 //
 // See https://goo.gl/ElTHi2 for more details.
 func (c *Client) Info() (*DockerInfo, error) {
-	resp, err := c.do("GET", "/info", doOptions{})
+	resp, err := c.do(http.MethodGet, "/info", doOptions{})
 	if err != nil {
 		return nil, err
 	}

@@ -60,7 +60,7 @@ func initOLDir(olPath string) (err error) {
 
 	// create a base directory to run sock handlers
 	base := common.Conf.SOCK_base_path
-	fmt.Printf("Create lambda base at %v (may take several minutes)\n", base)
+	fmt.Printf("Creating lambda base at %v (may take several minutes)\n", base)
 	err = dutil.DumpDockerImage(client, "lambda", base)
 	if err != nil {
 		return err
@@ -297,12 +297,12 @@ func status(ctx *cli.Context) error {
 	url := fmt.Sprintf("http://localhost:%s/status", common.Conf.Worker_port)
 	response, err := http.Get(url)
 	if err != nil {
-		return fmt.Errorf("  Could not send GET to %s\n", url)
+		return fmt.Errorf("  could not send GET to %s", url)
 	}
 	defer response.Body.Close()
 	body, err := ioutil.ReadAll(response.Body)
 	if err != nil {
-		return fmt.Errorf("  Failed to read body from GET to %s\n", url)
+		return fmt.Errorf("  failed to read body from GET to %s", url)
 	}
 	fmt.Printf("  %s => %s [%s]\n", url, body, response.Status)
 	fmt.Printf("\n")
@@ -344,7 +344,6 @@ func overrideOpts(confPath, overridePath, optsStr string) error {
 			default:
 				return fmt.Errorf("%s refers to a %T, not a map", keys[i], c[keys[i]])
 			}
-
 		}
 
 		key := keys[len(keys)-1]
@@ -387,6 +386,7 @@ func overrideOpts(confPath, overridePath, optsStr string) error {
 func boss_start(ctx *cli.Context) error {
 	detach := ctx.Bool("detach")
 
+	// If detach is specified, we start another ol-process with the worker argument
 	if detach {
 		// stdout+stderr both go to log
 		logPath := "boss.out"
@@ -405,7 +405,8 @@ func boss_start(ctx *cli.Context) error {
 				cmd = append(cmd, arg)
 			}
 		}
-		// looks for ./ol path
+
+		// Get the path of this binary
 		binPath, err := exec.LookPath(os.Args[0])
 		if err != nil {
 			return err
@@ -432,8 +433,7 @@ func boss_start(ctx *cli.Context) error {
 		}
 	}
 
-	return fmt.Errorf("this code should not be reachable!")
-
+	return fmt.Errorf("this code should not be reachable")
 }
 
 // kill corresponds to the "kill" command of the admin tool.
@@ -458,7 +458,7 @@ func kill(ctx *cli.Context) error {
 		return err
 	}
 
-	fmt.Printf("Kill worker process with PID %d\n", pid)
+	fmt.Printf("Killing worker process with PID %d\n", pid)
 	p, err := os.FindProcess(pid)
 	if err != nil {
 		fmt.Printf("%s\n", err.Error())
@@ -472,6 +472,7 @@ func kill(ctx *cli.Context) error {
 	for i := 0; i < 300; i++ {
 		err := p.Signal(syscall.Signal(0))
 		if err != nil {
+			fmt.Printf("OL worker process stopped successfully\n")
 			return nil // good, process must have stopped
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -487,6 +488,70 @@ func gcp_test(ctx *cli.Context) error {
 
 func azure_test(ctx *cli.Context) error {
 	boss.AzureMain("default contents")
+	return nil
+}
+	
+// cleanup corresponds to the "force-cleanup" command of the admin tool.
+func cleanup(ctx *cli.Context) error {
+	olPath, err := getOlPath(ctx)
+	if err != nil {
+		return err
+	}
+	
+	cgRoot := filepath.Join("/sys", "fs", "cgroup", filepath.Base(olPath) + "-sandboxes")
+	fmt.Printf("ATTEMPT to cleanup cgroups at %s\n", cgRoot)
+	
+	if files, err := ioutil.ReadDir(cgRoot); err != nil {
+		fmt.Printf("could not find cgroup root: %s\n", err.Error())
+	} else {
+		kill := filepath.Join(cgRoot, "cgroup.kill")
+		if err := ioutil.WriteFile(kill, []byte(fmt.Sprintf("%d", 1)), os.ModeAppend); err != nil {
+			fmt.Printf("could kill processes in cgroup: %s\n", err.Error())
+		}
+
+		for _, file := range files {
+			if strings.HasPrefix(file.Name(), "cg-") {
+				cg := filepath.Join(cgRoot, file.Name())
+				fmt.Printf("try removing %s\n", cg)
+				if err := syscall.Rmdir(cg); err != nil {
+					fmt.Printf("could remove cgroup: %s\n", err.Error())
+				}
+			}
+		}
+
+		if err := syscall.Rmdir(cgRoot); err != nil {
+			fmt.Printf("could remove cgroup root: %s\n", err.Error())
+		}
+	}
+
+	dirName := filepath.Join(olPath, "worker", "root-sandboxes")
+	fmt.Printf("ATTEMPT to cleanup mounts at %s\n", dirName)
+
+	if files, err := ioutil.ReadDir(dirName); err != nil {
+		fmt.Printf("could not find mount root: %s\n", err.Error())
+	} else {
+		for _, file := range files {
+			path := filepath.Join(dirName, file.Name())
+			fmt.Printf("try unmounting %s\n", path)
+			if err := syscall.Unmount(path, syscall.MNT_DETACH); err != nil {
+				fmt.Printf("could not unmount: %s\n", err.Error())
+			}
+
+			if err := syscall.Rmdir(path); err != nil {
+				fmt.Printf("could remove mount dir: %s\n", err.Error())
+			}
+		}
+	}
+
+	if err := syscall.Unmount(dirName, syscall.MNT_DETACH); err != nil {
+		fmt.Printf("could not unmount %s: %s\n", dirName, err.Error())
+	}
+
+	fmt.Printf("ATTEMPT to cleanup OL dir at %s\n", olPath)
+	if err := os.RemoveAll(olPath); err != nil {
+		fmt.Printf("could not remove all at %s: %s\n", olPath, err.Error())
+	}
+
 	return nil
 }
 
@@ -586,17 +651,24 @@ OPTIONS:
 		},
 		cli.Command{
 			Name:      "gcp-test",
-			Usage:     "Start a GCP VM running the OL worker",
+			Usage:     "Developer use only.  Start a GCP VM running the OL worker",
 			UsageText: "ol gcp-test",
 			Flags:     []cli.Flag{},
 			Action:    gcp_test,
 		},
 		cli.Command{
 			Name:      "azure-test",
-			Usage:     "Start an Azure Blob ",
+			Usage:     "Developer use only.  Start an Azure Blob ",
 			UsageText: "ol zure-test",
 			Flags:     []cli.Flag{},
 			Action:    azure_test,
+		},
+		cli.Command{
+			Name:      "force-cleanup",
+			Usage:     "Developer use only.  Cleanup cgroups and mount points (only needed when OL halted unexpectedly or there's a bug)",
+			UsageText: "ol force-cleanup [--path=NAME]",
+			Flags:     []cli.Flag{pathFlag},
+			Action:    cleanup,
 		},
 	}
 	err := app.Run(os.Args)

@@ -1,42 +1,54 @@
 # OpenLambda
 
-OpenLambda is an Apache-licensed serverless computing project, written
-in Go and based on Linux containers.  The primary goal of OpenLambda
-is to enable exploration of new approaches to serverless computing.
-Our research agenda is described in more detail in a [HotCloud '16
-paper](https://www.usenix.org/system/files/conference/hotcloud16/hotcloud16_hendrickson.pdf).
+[![CI](https://github.com/open-lambda/open-lambda/actions/workflows/ci.yml/badge.svg)](https://github.com/open-lambda/open-lambda/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
+OpenLambda is an Apache-licensed serverless computing project, written (mostly) in Go and based on Linux containers.
+The primary goal of OpenLambda is to enable exploration of new approaches to serverless computing.
+Our research agenda is described in more detail in a [HotCloud '16 paper](https://www.usenix.org/system/files/conference/hotcloud16/hotcloud16_hendrickson.pdf).
 
 ## Build and Test
 
-OpenLambda relies heavily on operations that require root
-privilege. To simplify this, we suggest that you run all commands as
-the root user.  OpenLambda is only actively tested on Ubuntu 20.04 LTS
-(AWS AMI `ami-0fb653ca2d3203ac1`, in particular).  On Ubuntu 20.04
-LTS, you can install the following.
+OpenLambda relies heavily on operations that require root privilege.
+To simplify this, we suggest that you run all commands as the root user.
+OpenLambda is only actively tested on Ubuntu 22.04 LTS.
 
+### Build and Test
+Make sure you have all basic dependencies installed:
 ```
-apt update
-apt upgrade -y
-apt update
-apt remove -y unattended-upgrades
+apt install docker.io llvm-11-dev libclang-common-11-dev build-essential python3
+```
 
-apt install -y python3-pip make gcc docker.io curl
-pip3 install boto3
-
-wget -q -O /tmp/go1.12.5.linux-amd64.tar.gz https://dl.google.com/go/go1.12.5.linux-amd64.tar.gz
-tar -C /usr/local -xzf /tmp/go1.12.5.linux-amd64.tar.gz
+For a recent version of go, run the following:
+```
+wget -q -O /tmp/go1.17.6.linux-amd64.tar.gz https://dl.google.com/go/go1.17.6.linux-amd64.tar.gz
+tar -C /usr/local -xzf /tmp/go1.17.6.linux-amd64.tar.gz
 ln -s /usr/local/go/bin/go /usr/bin/go
 ```
 
-We recommend syncing to a commit that passes our daily tests:
-https://s3.us-east-2.amazonaws.com/open-lambda-public/tests.html.
+Further, you need to have a recent nightly version of Rust, the wasm32 toolchain, and the `cross` tool installed. The easiest way to do this is.
+```
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain=nightly
+source $HOME/.cargo/env
+rustup target add wasm32-unknown-unknown
+cargo install cross
+```
 
-You can build the `ol` and other resources with just `make`.  Then
-make sure it passes the tests:
+Finally, add your user to the docker group to enable cross-compilation of native binaries to open-lambda's environment. Do not forget to restart your shell/session afterwards!
+```
+sudo gpasswd -a $USER docker
+```
+
+You can build the `ol` and other resources with just `make`.
+Then make sure it passes the tests:
 
 ```
 make test-all
 ```
+
+<!-- Currently broken.
+We recommend syncing to a commit that passes our [daily tests](https://s3.us-east-2.amazonaws.com/open-lambda-public/tests.html).
+-->
 
 ### Getting Started
 
@@ -47,12 +59,10 @@ You can create a new OL environment with the following comment:
 ```
 
 This creates a directory named `default-ol` with various OL resources.
-You can create an OL environment at another location by passing a
-`-path=DIRNAME` to the `new` command.
+You can create an OL environment at another location by passing a `-path=DIRNAME` to the `new` command.
 
-Default config settings were saved to `./default-ol/config.json`.  Modify
-them if you wish, then start an OL worker (if you used `-path` above,
-use it again with the `worker` command):
+Default config settings were saved to `./default-ol/config.json`.
+Modify them if you wish, then start an OL worker (if you used `-path` above, use it again with the `worker` command):
 
 ```
 ./ol worker
@@ -74,9 +84,8 @@ Now invoke your lambda (the result should be the same as the POST body):
 curl -X POST localhost:5000/run/echo -d '{"hello": "world"}'
 ```
 
-When you're done, just kill the worker with `ctrl-C`.  If you want to
-run the worker in detached mode (i.e., in the background), just start
-it again with the `-d` flag:
+When you're done, just kill the worker with `ctrl-C`.
+If you want to run the worker in detached mode (i.e., in the background), just start it again with the `-d` flag:
 
 ```
 ./ol worker -d

@@ -93,7 +93,7 @@ def f(event):
     pkg = event["pkg"]
     alreadyInstalled = event["alreadyInstalled"]
     if not alreadyInstalled:
-        rc = os.system('pip3 install --no-deps %s -t /host/files' % pkg)
+        rc = os.system('pip3 install --no-deps %s --cache-dir /tmp/.cache -t /host/files' % pkg)
         print('pip install returned code %d' % rc)
         assert(rc == 0)
     name = pkg.split("==")[0]
@@ -203,7 +203,7 @@ func (pp *PackagePuller) InstallRecursive(installs []string) ([]string, error) {
 	return installs, nil
 }
 
-// does the pip install in a Sandbox, taking care to never install the
+// GetPkg does the pip install in a Sandbox, taking care to never install the
 // same Sandbox more than once.
 //
 // the fast/slow path code is tweaked from the sync.Once code, the
@@ -226,17 +226,17 @@ func (pp *PackagePuller) GetPkg(pkg string) (*Package, error) {
 	if p.installed == 0 {
 		if err := pp.sandboxInstall(p); err != nil {
 			return p, err
-		} else {
-			atomic.StoreUint32(&p.installed, 1)
-			pp.depTracer.TracePackage(p)
-			return p, nil
 		}
+
+		atomic.StoreUint32(&p.installed, 1)
+		pp.depTracer.TracePackage(p)
+		return p, nil
 	}
 
 	return p, nil
 }
 
-// do the pip install within a new Sandbox, to a directory mapped from
+// sandboxInstall does the pip install within a new Sandbox, to a directory mapped from
 // the host.  We want the package on the host to share with all, but
 // want to run the install in the Sandbox because we don't trust it.
 func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
@@ -251,7 +251,7 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 
 	alreadyInstalled := false
 	if _, err := os.Stat(scratchDir); err == nil {
-		// assume dir exististence means it is installed already
+		// assume dir existence means it is installed already
 		log.Printf("%s appears already installed from previous run of OL", p.name)
 		alreadyInstalled = true
 	} else {
@@ -270,13 +270,13 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 	meta := &sandbox.SandboxMeta{
 		MemLimitMB: common.Conf.Limits.Installer_mem_mb,
 	}
-	sb, err := pp.sbPool.Create(nil, true, pp.pipLambda, scratchDir, meta)
+	sb, err := pp.sbPool.Create(nil, true, pp.pipLambda, scratchDir, meta, common.RT_PYTHON)
 	if err != nil {
 		return err
 	}
 	defer sb.Destroy()
 
-	proxy, err := sb.HttpProxy()
+	proxy, err := sb.HTTPProxy()
 	if err != nil {
 		return err
 	}
@@ -284,6 +284,7 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 	// we still need to run a Sandbox to parse the dependencies, even if it is already installed
 	msg := fmt.Sprintf(`{"pkg": "%s", "alreadyInstalled": %v}`, p.name, alreadyInstalled)
 	reqBody := bytes.NewReader([]byte(msg))
+
 	// the URL doesn't matter, since it is local anyway
 	req, err := http.NewRequest("POST", "http://container/run/pip-install", reqBody)
 	if err != nil {

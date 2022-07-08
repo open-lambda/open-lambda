@@ -25,7 +25,7 @@ const (
 
 // GetPid returns process ID, useful for making sure we're talking to the expected server
 func GetPid(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Receive request to %s\n", r.URL.Path)
+	log.Printf("Received request to %s\n", r.URL.Path)
 
 	wbody := []byte(strconv.Itoa(os.Getpid()) + "\n")
 	if _, err := w.Write(wbody); err != nil {
@@ -35,22 +35,15 @@ func GetPid(w http.ResponseWriter, r *http.Request) {
 
 // Status writes "ready" to the response.
 func Status(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Receive request to %s\n", r.URL.Path)
-	m := make(map[string][]int)
-	m["workers"] = []int{}
-	log.Printf("get to m map")
-	if b, err := json.MarshalIndent(m, "", "\t"); err != nil {
-		panic(err)
-	} else {
-		w.Write(b)
+	log.Printf("Received request to %s\n", r.URL.Path)
+
+	if _, err := w.Write([]byte("ready\n")); err != nil {
+		log.Printf("error in Status: %v", err)
 	}
-	//if _, err := w.Write([]byte("ready\n")); err != nil {
-	//	log.Printf("error in Status: %v", err)
-	//}
 }
 
 func Stats(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Receive request to %s\n", r.URL.Path)
+	log.Printf("Received request to %s\n", r.URL.Path)
 	snapshot := common.SnapshotStats()
 	log.Printf("snapshot = %T\n", snapshot)
 	m := make(map[string]int)
@@ -70,7 +63,7 @@ func Main() (err error) {
 
 	pidPath := filepath.Join(common.Conf.Worker_dir, "worker.pid")
 	if _, err := os.Stat(pidPath); err == nil {
-		return fmt.Errorf("previous worker may be running, %s already exists", pidPath)
+		return fmt.Errorf("Previous worker may be running, %s already exists", pidPath)
 	} else if !os.IsNotExist(err) {
 		// we were hoping to get the not-exist error, but got something else unexpected
 		return err
@@ -83,14 +76,14 @@ func Main() (err error) {
 		return err
 	}
 
-	log.Printf("save PID %d to file %s", os.Getpid(), pidPath)
+	log.Printf("Saved PID %d to file %s", os.Getpid(), pidPath)
 	if err := ioutil.WriteFile(pidPath, []byte(fmt.Sprintf("%d", os.Getpid())), 0644); err != nil {
 		return err
 	}
 
 	defer func() {
 		if err != nil {
-			log.Printf("remove PID file %s", pidPath)
+			log.Printf("Remvoing PID file %s", pidPath)
 			os.Remove(pidPath)
 		}
 	}()
@@ -138,7 +131,7 @@ func Main() (err error) {
 		os.Exit(1)
 	}()
 
-	port := fmt.Sprintf(":%s", common.Conf.Worker_port)
+	port := fmt.Sprintf("%s:%s", common.Conf.Worker_url, common.Conf.Worker_port)
 	log.Fatal(http.ListenAndServe(port, nil))
 	panic("ListenAndServe should never return")
 }

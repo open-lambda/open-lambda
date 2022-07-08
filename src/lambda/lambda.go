@@ -17,7 +17,7 @@ import (
 	"github.com/open-lambda/open-lambda/ol/sandbox"
 )
 
-// provides thread-safe getting of lambda functions and collects all
+// LambdaMgr provides thread-safe getting of lambda functions and collects all
 // lambda subsystems (resource pullers and sandbox pools) in one place
 type LambdaMgr struct {
 	// subsystems (these are thread safe)
@@ -36,10 +36,12 @@ type LambdaMgr struct {
 	lfuncMap map[string]*LambdaFunc
 }
 
-// Represents a single lambda function (the code)
+// LambdaFunc represents a single lambda function (the code)
 type LambdaFunc struct {
 	lmgr *LambdaMgr
 	name string
+
+	rtType common.RuntimeType
 
 	// lambda code
 	lastPull *time.Time
@@ -105,33 +107,33 @@ func NewLambdaMgr() (res *LambdaMgr, err error) {
 		return nil, err
 	}
 
-	log.Printf("Create SandboxPool")
+	log.Printf("Creating SandboxPool")
 	mgr.sbPool, err = sandbox.SandboxPoolFromConfig("sandboxes", common.Conf.Mem_pool_mb)
 	if err != nil {
 		return nil, err
 	}
 
-	log.Printf("Create DepTracer")
+	log.Printf("Creating DepTracer")
 	mgr.DepTracer, err = NewDepTracer(filepath.Join(common.Conf.Worker_dir, "dep-trace.json"))
 	if err != nil {
 		return nil, err
 	}
 
-	log.Printf("Create PackagePuller")
+	log.Printf("Creating PackagePuller")
 	mgr.PackagePuller, err = NewPackagePuller(mgr.sbPool, mgr.DepTracer)
 	if err != nil {
 		return nil, err
 	}
 
 	if common.Conf.Features.Import_cache {
-		log.Printf("Create ImportCache")
+		log.Printf("Creating ImportCache")
 		mgr.ImportCache, err = NewImportCache(mgr.codeDirs, mgr.scratchDirs, mgr.sbPool, mgr.PackagePuller)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	log.Printf("Create HandlerPuller")
+	log.Printf("Creating HandlerPuller")
 	mgr.HandlerPuller, err = NewHandlerPuller(mgr.codeDirs)
 	if err != nil {
 		return nil, err
@@ -330,15 +332,15 @@ func parseMeta(codeDir string) (meta *sandbox.SandboxMeta, err error) {
 func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 	// check if there is newer code, download it if necessary
 	now := time.Now()
-	cache_ns := int64(common.Conf.Registry_cache_ms) * 1000000
+	cacheNs := int64(common.Conf.Registry_cache_ms) * 1000000
 
 	// should we check for new code?
-	if f.lastPull != nil && int64(now.Sub(*f.lastPull)) < cache_ns {
+	if f.lastPull != nil && int64(now.Sub(*f.lastPull)) < cacheNs {
 		return nil
 	}
 
 	// is there new code?
-	codeDir, err := f.lmgr.HandlerPuller.Pull(f.name)
+	rtType, codeDir, err := f.lmgr.HandlerPuller.Pull(f.name)
 	if err != nil {
 		return err
 	}
@@ -347,34 +349,43 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 		return nil
 	}
 
+	f.rtType = rtType
+
 	defer func() {
 		if err != nil {
 			if err := os.RemoveAll(codeDir); err != nil {
 				log.Printf("could not cleanup %s after failed pull", codeDir)
 			}
 
-			// we may dirty this dir, so we want the
-			// HandlerPuller to give us a new one next
-			// time, even if the code hasn't changed
-			f.lmgr.HandlerPuller.Reset(f.name)
+			if rtType == common.RT_PYTHON {
+				// we dirty this dir (e.g., by setting up
+				// symlinks to packages, so we want the
+				// HandlerPuller to give us a new one next
+				// time, even if the code hasn't changed
+				f.lmgr.HandlerPuller.Reset(f.name)
+			}
 		}
 	}()
 
-	// inspect new code for dependencies; if we can install
-	// everything necessary, start using new code
-	meta, err := parseMeta(codeDir)
-	if err != nil {
-		return err
-	}
+	if rtType == common.RT_PYTHON {
+		// inspect new code for dependencies; if we can install
+		// everything necessary, start using new code
+		meta, err := parseMeta(codeDir)
+		if err != nil {
+			return err
+		}
 
-	meta.Installs, err = f.lmgr.PackagePuller.InstallRecursive(meta.Installs)
-	if err != nil {
-		return err
+		meta.Installs, err = f.lmgr.PackagePuller.InstallRecursive(meta.Installs)
+		if err != nil {
+			return err
+		}
+		f.lmgr.DepTracer.TraceFunction(codeDir, meta.Installs)
+		f.meta = meta
+	} else if rtType == common.RT_NATIVE {
+		log.Printf("Got native function")
 	}
-	f.lmgr.DepTracer.TraceFunction(codeDir, meta.Installs)
 
 	f.codeDir = codeDir
-	f.meta = meta
 	f.lastPull = &now
 	return nil
 }
@@ -402,7 +413,7 @@ func (f *LambdaFunc) Task() {
 
 	// we want to perform various cleanup actions, such as killing
 	// instances and deleting old code.  We want to do these
-	// asyncronously, but in order.  Thus, we use a chan to get
+	// asynchronously, but in order.  Thus, we use a chan to get
 	// FIFO behavior and a single cleanup task to get async.
 	//
 	// two types can be sent to this chan:
@@ -453,7 +464,7 @@ func (f *LambdaFunc) Task() {
 			// (and instances that use it) if necessary
 			oldCodeDir := f.codeDir
 			if err := f.pullHandlerIfStale(); err != nil {
-				f.printf("Error checking for new lambda code: %v", err)
+				f.printf("Error checking for new lambda code at `%s`: %v", f.codeDir, err)
 				req.w.WriteHeader(http.StatusInternalServerError)
 				req.w.Write([]byte(err.Error() + "\n"))
 				req.done <- true
@@ -480,7 +491,7 @@ func (f *LambdaFunc) Task() {
 			select {
 			case f.instChan <- req:
 				// msg: function -> instance
-				outstandingReqs += 1
+				outstandingReqs++
 			default:
 				// queue cannot accept more, so reply with backoff
 				req.w.WriteHeader(http.StatusTooManyRequests)
@@ -491,7 +502,7 @@ func (f *LambdaFunc) Task() {
 			// msg: instance -> function
 
 			execMs.Add(req.execMs)
-			outstandingReqs -= 1
+			outstandingReqs--
 
 			// msg: function -> client
 			req.done <- true
@@ -604,7 +615,7 @@ func (f *LambdaFunc) Kill() {
 //
 // 1. Sandbox.Pause/Unpause: discard Sandbox, create new one to handle request
 // 2. Sandbox.Create/Channel: discard Sandbox, propagate HTTP 500 to client
-// 3. Error inside Sandbox: simply propagate whatever occured to client (TODO: restart Sandbox)
+// 3. Error inside Sandbox: simply propagate whatever occurred to the client (TODO: restart Sandbox)
 func (linst *LambdaInstance) Task() {
 	f := linst.lfunc
 
@@ -622,7 +633,29 @@ func (linst *LambdaInstance) Task() {
 		case req = <-f.instChan:
 		case killed := <-linst.killChan:
 			if sb != nil {
+				rtLog := sb.GetRuntimeLog()
+				proxyLog := sb.GetProxyLog()
 				sb.Destroy()
+
+				log.Printf("Stopped sandbox")
+
+				if common.Conf.Log_output {
+					if rtLog != "" {
+						log.Printf("Runtime output is:")
+
+						for _, line := range strings.Split(rtLog, "\n") {
+							log.Printf("   %s", line)
+						}
+					}
+
+					if proxyLog != "" {
+						log.Printf("Proxy output is:")
+
+						for _, line := range strings.Split(proxyLog, "\n") {
+							log.Printf("   %s", line)
+						}
+					}
+				}
 			}
 			killed <- true
 			return
@@ -648,22 +681,25 @@ func (linst *LambdaInstance) Task() {
 		// if we don't already have a Sandbox, create one, and
 		// HTTP proxy over the channel
 		if sb == nil {
-			if f.lmgr.ImportCache != nil {
+			sb = nil
+			if f.lmgr.ImportCache != nil && f.rtType == common.RT_PYTHON {
 				scratchDir := f.lmgr.scratchDirs.Make(f.name)
 
 				// we don't specify parent SB, because ImportCache.Create chooses it for us
-				sb, err = f.lmgr.ImportCache.Create(f.lmgr.sbPool, true, linst.codeDir, scratchDir, linst.meta)
+				sb, err = f.lmgr.ImportCache.Create(f.lmgr.sbPool, true, linst.codeDir, scratchDir, linst.meta, f.rtType)
 				if err != nil {
 					f.printf("failed to get Sandbox from import cache")
 					sb = nil
 				}
 			}
 
+			log.Printf("Creating new sandbox")
+
 			// import cache is either disabled or it failed
 			if sb == nil {
 				t2 := common.T0("LambdaInstance-WaitSandbox-NoImportCache")
 				scratchDir := f.lmgr.scratchDirs.Make(f.name)
-				sb, err = f.lmgr.sbPool.Create(nil, true, linst.codeDir, scratchDir, linst.meta)
+				sb, err = f.lmgr.sbPool.Create(nil, true, linst.codeDir, scratchDir, linst.meta, f.rtType)
 				t2.T1()
 			}
 
@@ -674,7 +710,9 @@ func (linst *LambdaInstance) Task() {
 				continue // wait for another request before retrying
 			}
 
-			proxy, err = sb.HttpProxy()
+			log.Printf("Connecting to sandbox")
+
+			proxy, err = sb.HTTPProxy()
 			if err != nil {
 				req.w.WriteHeader(http.StatusInternalServerError)
 				req.w.Write([]byte("could not connect to Sandbox: " + err.Error() + "\n"))
@@ -693,6 +731,8 @@ func (linst *LambdaInstance) Task() {
 		for req != nil {
 			servehttp_complete := make(chan bool)
 			go func() {
+				log.Printf("Forwarding request to sandbox")
+				
 				t2 := common.T0("ServeHTTP")
 				proxy.ServeHTTP(req.w, req.r)
 				t2.T1()
@@ -713,7 +753,21 @@ func (linst *LambdaInstance) Task() {
 			// check whether we should shutdown (non-blocking)
 			select {
 			case killed := <-linst.killChan:
+				rtLog := sb.GetRuntimeLog()
 				sb.Destroy()
+
+				log.Printf("Stopped sandbox")
+
+				if common.Conf.Log_output {
+					if rtLog != "" {
+						log.Printf("Runtime output is:")
+
+						for _, line := range strings.Split(rtLog, "\n") {
+							log.Printf("   %s", line)
+						}
+					}
+				}
+
 				killed <- true
 				return
 			default:
@@ -738,7 +792,7 @@ func (linst *LambdaInstance) Task() {
 	}
 }
 
-// signal the instance to die, return chan that can be used to block
+// AsyncKill signals the instance to die, return chan that can be used to block
 // until it's done
 func (linst *LambdaInstance) AsyncKill() chan bool {
 	done := make(chan bool)

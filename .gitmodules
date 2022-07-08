@@ -1,0 +1,3 @@
+[submodule "programs"]
+	path = programs
+	url = ssh://git@github.com/kaimast/open-lambda-wasm-programs.git
