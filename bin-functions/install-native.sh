@@ -7,7 +7,8 @@ NATIVE_PREFIX=./bin-functions/target/release/
 
 mkdir -p ${REGISTRY_PATH}
 
-echo "Searching for functions ins ${NATIVE_PREFIX}"
+echo "Searching for functions in ${NATIVE_PREFIX}"
+find ${NATIVE_PREFIX}
 
 for f in ${NATIVE_PREFIX}/*; do
     name=${f/${NATIVE_PREFIX}/}
