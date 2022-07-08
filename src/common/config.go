@@ -174,6 +174,7 @@ func LoadDefaults(olPath string) error {
 			Memory: false,
 			Evictor: false,
 			Package: false,
+			Latency: false,
 		},
 		Storage: StorageConfig{
 			Root:    "private",
