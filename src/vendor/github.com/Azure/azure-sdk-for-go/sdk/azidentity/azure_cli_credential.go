@@ -1,3 +1,6 @@
+//go:build go1.18
+// +build go1.18
+
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
@@ -20,16 +23,18 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 )
 
+const credNameAzureCLI = "AzureCLICredential"
+
 // used by tests to fake invoking the CLI
 type azureCLITokenProvider func(ctx context.Context, resource string, tenantID string) ([]byte, error)
 
-// AzureCLICredentialOptions contains options used to configure the AzureCLICredential
-// All zero-value fields will be initialized with their default values.
+// AzureCLICredentialOptions contains optional parameters for AzureCLICredential.
 type AzureCLICredentialOptions struct {
-	tokenProvider azureCLITokenProvider
 	// TenantID identifies the tenant the credential should authenticate in.
-	// Defaults to the CLI's default tenant, which is typically the home tenant of the user logged in to the CLI.
+	// Defaults to the CLI's default tenant, which is typically the home tenant of the logged in user.
 	TenantID string
+
+	tokenProvider azureCLITokenProvider
 }
 
 // init returns an instance of AzureCLICredentialOptions initialized with default values.
@@ -39,14 +44,13 @@ func (o *AzureCLICredentialOptions) init() {
 	}
 }
 
-// AzureCLICredential enables authentication to Azure Active Directory using the Azure CLI command "az account get-access-token".
+// AzureCLICredential authenticates as the identity logged in to the Azure CLI.
 type AzureCLICredential struct {
 	tokenProvider azureCLITokenProvider
 	tenantID      string
 }
 
-// NewAzureCLICredential constructs a new AzureCLICredential with the details needed to authenticate against Azure Active Directory
-// options: configure the management of the requests sent to Azure Active Directory.
+// NewAzureCLICredential constructs an AzureCLICredential. Pass nil to accept default options.
 func NewAzureCLICredential(options *AzureCLICredentialOptions) (*AzureCLICredential, error) {
 	cp := AzureCLICredentialOptions{}
 	if options != nil {
@@ -59,20 +63,17 @@ func NewAzureCLICredential(options *AzureCLICredentialOptions) (*AzureCLICredent
 	}, nil
 }
 
-// GetToken obtains a token from Azure Active Directory, using the Azure CLI command to authenticate.
-// ctx: Context used to control the request lifetime.
-// opts: TokenRequestOptions contains the list of scopes for which the token will have access.
-// Returns an AccessToken which can be used to authenticate service client calls.
-func (c *AzureCLICredential) GetToken(ctx context.Context, opts policy.TokenRequestOptions) (*azcore.AccessToken, error) {
+// GetToken requests a token from the Azure CLI. This credential doesn't cache tokens, so every call invokes the CLI.
+// This method is called automatically by Azure SDK clients.
+func (c *AzureCLICredential) GetToken(ctx context.Context, opts policy.TokenRequestOptions) (azcore.AccessToken, error) {
 	if len(opts.Scopes) != 1 {
-		return nil, errors.New("this credential requires exactly one scope per token request")
+		return azcore.AccessToken{}, errors.New(credNameAzureCLI + ": GetToken() requires exactly one scope")
 	}
 	// CLI expects an AAD v1 resource, not a v2 scope
 	scope := strings.TrimSuffix(opts.Scopes[0], defaultSuffix)
 	at, err := c.authenticate(ctx, scope)
 	if err != nil {
-		addGetTokenFailureLogs("Azure CLI Credential", err, true)
-		return nil, err
+		return azcore.AccessToken{}, err
 	}
 	logGetTokenSuccess(c, opts)
 	return at, nil
@@ -80,14 +81,10 @@ func (c *AzureCLICredential) GetToken(ctx context.Context, opts policy.TokenRequ
 
 const timeoutCLIRequest = 10 * time.Second
 
-// authenticate creates a client secret authentication request and returns the resulting Access Token or
-// an error in case of authentication failure.
-// ctx: The current request context
-// scopes: The scopes for which the token has access
-func (c *AzureCLICredential) authenticate(ctx context.Context, resource string) (*azcore.AccessToken, error) {
+func (c *AzureCLICredential) authenticate(ctx context.Context, resource string) (azcore.AccessToken, error) {
 	output, err := c.tokenProvider(ctx, resource, c.tenantID)
 	if err != nil {
-		return nil, err
+		return azcore.AccessToken{}, err
 	}
 
 	return c.createAccessToken(output)
@@ -100,7 +97,7 @@ func defaultTokenProvider() func(ctx context.Context, resource string, tenantID 
 			return nil, err
 		}
 		if !match {
-			return nil, fmt.Errorf(`unexpected scope "%s". Only alphanumeric characters and ".", ";", "-", and "/" are allowed`, resource)
+			return nil, fmt.Errorf(`%s: unexpected scope "%s". Only alphanumeric characters and ".", ";", "-", and "/" are allowed`, credNameAzureCLI, resource)
 		}
 
 		ctx, cancel := context.WithTimeout(ctx, timeoutCLIRequest)
@@ -114,7 +111,7 @@ func defaultTokenProvider() func(ctx context.Context, resource string, tenantID 
 		if runtime.GOOS == "windows" {
 			dir := os.Getenv("SYSTEMROOT")
 			if dir == "" {
-				return nil, errors.New("environment variable 'SYSTEMROOT' has no value")
+				return nil, newCredentialUnavailableError(credNameAzureCLI, "environment variable 'SYSTEMROOT' has no value")
 			}
 			cliCmd = exec.CommandContext(ctx, "cmd.exe", "/c", commandLine)
 			cliCmd.Dir = dir
@@ -129,18 +126,21 @@ func defaultTokenProvider() func(ctx context.Context, resource string, tenantID 
 		output, err := cliCmd.Output()
 		if err != nil {
 			msg := stderr.String()
+			var exErr *exec.ExitError
+			if errors.As(err, &exErr) && exErr.ExitCode() == 127 || strings.HasPrefix(msg, "'az' is not recognized") {
+				msg = "Azure CLI not found on path"
+			}
 			if msg == "" {
-				// if there's no output in stderr report the error message instead
 				msg = err.Error()
 			}
-			return nil, newCredentialUnavailableError("Azure CLI Credential", msg)
+			return nil, newCredentialUnavailableError(credNameAzureCLI, msg)
 		}
 
 		return output, nil
 	}
 }
 
-func (c *AzureCLICredential) createAccessToken(tk []byte) (*azcore.AccessToken, error) {
+func (c *AzureCLICredential) createAccessToken(tk []byte) (azcore.AccessToken, error) {
 	t := struct {
 		AccessToken      string `json:"accessToken"`
 		Authority        string `json:"_authority"`
@@ -155,15 +155,15 @@ func (c *AzureCLICredential) createAccessToken(tk []byte) (*azcore.AccessToken, 
 	}{}
 	err := json.Unmarshal(tk, &t)
 	if err != nil {
-		return nil, err
+		return azcore.AccessToken{}, err
 	}
 
 	tokenExpirationDate, err := parseExpirationDate(t.ExpiresOn)
 	if err != nil {
-		return nil, fmt.Errorf("Error parsing Token Expiration Date %q: %+v", t.ExpiresOn, err)
+		return azcore.AccessToken{}, fmt.Errorf("Error parsing Token Expiration Date %q: %+v", t.ExpiresOn, err)
 	}
 
-	converted := &azcore.AccessToken{
+	converted := azcore.AccessToken{
 		Token:     t.AccessToken,
 		ExpiresOn: *tokenExpirationDate,
 	}

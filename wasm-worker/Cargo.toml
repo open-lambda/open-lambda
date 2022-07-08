@@ -23,7 +23,7 @@ lazy_static = "1"
 pretty_env_logger = { version="0.4" }
 log = "0.4"
 parking_lot = "0.11"
-dashmap = "4"
+dashmap = "5"
 cfg-if = "1"
 bincode = "1"
 serde = "1"

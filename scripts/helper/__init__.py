@@ -80,8 +80,7 @@ class TestConf:
         # setup
         put_conf(new)
 
-    def __del__(self):
-        # cleanup
+    def cleanup(self):
         put_conf(self.orig)
 
 class TestConfContext:
@@ -93,7 +92,7 @@ class TestConfContext:
         self._conf = TestConf(**self._keywords)
 
     def __exit__(self, _exc_type, _exc_value, _exc_traceback):
-        self._conf = None
+        self._conf.cleanup()
 
 def run(cmd):
     print("RUN", " ".join(cmd))
@@ -110,6 +109,7 @@ def run(cmd):
 
     if fail:
         raise Exception(f"command ({' '.join(cmd)}) failed: {out}")
+    print(out)
 
 class DockerWorker():
     def __init__(self):

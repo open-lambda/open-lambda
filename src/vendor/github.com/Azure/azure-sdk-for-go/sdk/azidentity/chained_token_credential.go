@@ -1,3 +1,6 @@
+//go:build go1.18
+// +build go1.18
+
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
@@ -7,23 +10,34 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+	"sync"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
+	"github.com/Azure/azure-sdk-for-go/sdk/internal/log"
 )
 
-// ChainedTokenCredentialOptions contains optional parameters for ChainedTokenCredential
+// ChainedTokenCredentialOptions contains optional parameters for ChainedTokenCredential.
 type ChainedTokenCredentialOptions struct {
-	// placeholder for future options
+	// RetrySources configures how the credential uses its sources. When true, the credential always attempts to
+	// authenticate through each source in turn, stopping when one succeeds. When false, the credential authenticates
+	// only through this first successful source--it never again tries the sources which failed.
+	RetrySources bool
 }
 
-// ChainedTokenCredential provides a TokenCredential implementation that chains multiple TokenCredential sources to be tried in order
-// and returns the token from the first successful call to GetToken().
+// ChainedTokenCredential links together multiple credentials and tries them sequentially when authenticating. By default,
+// it tries all the credentials until one authenticates, after which it always uses that credential.
 type ChainedTokenCredential struct {
-	sources []azcore.TokenCredential
+	cond                 *sync.Cond
+	iterating            bool
+	name                 string
+	retrySources         bool
+	sources              []azcore.TokenCredential
+	successfulCredential azcore.TokenCredential
 }
 
-// NewChainedTokenCredential creates an instance of ChainedTokenCredential with the specified TokenCredential sources.
+// NewChainedTokenCredential creates a ChainedTokenCredential. Pass nil for options to accept defaults.
 func NewChainedTokenCredential(sources []azcore.TokenCredential, options *ChainedTokenCredentialOptions) (*ChainedTokenCredential, error) {
 	if len(sources) == 0 {
 		return nil, errors.New("sources must contain at least one TokenCredential")
@@ -35,53 +49,85 @@ func NewChainedTokenCredential(sources []azcore.TokenCredential, options *Chaine
 	}
 	cp := make([]azcore.TokenCredential, len(sources))
 	copy(cp, sources)
-	return &ChainedTokenCredential{sources: cp}, nil
+	if options == nil {
+		options = &ChainedTokenCredentialOptions{}
+	}
+	return &ChainedTokenCredential{
+		cond:         sync.NewCond(&sync.Mutex{}),
+		name:         "ChainedTokenCredential",
+		retrySources: options.RetrySources,
+		sources:      cp,
+	}, nil
 }
 
-// GetToken sequentially calls TokenCredential.GetToken on all the specified sources, returning the token from the first successful call to GetToken().
-func (c *ChainedTokenCredential) GetToken(ctx context.Context, opts policy.TokenRequestOptions) (token *azcore.AccessToken, err error) {
-	var errList []CredentialUnavailableError
-	// loop through all of the credentials provided in sources
-	for _, cred := range c.sources {
-		// make a GetToken request for the current credential in the loop
-		token, err = cred.GetToken(ctx, opts)
-		// check if we received a CredentialUnavailableError
-		var credErr CredentialUnavailableError
-		if errors.As(err, &credErr) {
-			// if we did receive a CredentialUnavailableError then we append it to our error slice and continue looping for a good credential
-			errList = append(errList, credErr)
-		} else if err != nil {
-			// if we receive some other type of error then we must stop looping and process the error accordingly
-			var authFailed AuthenticationFailedError
-			if errors.As(err, &authFailed) {
-				// if the error is an AuthenticationFailedError we return the error related to the invalid credential and append all of the other error messages received prior to this point
-				err = fmt.Errorf("Authentication failed:\n%s\n%s"+createChainedErrorMessage(errList), err)
-				authErr := newAuthenticationFailedError(err, authFailed.RawResponse())
-				return nil, authErr
+// GetToken calls GetToken on the chained credentials in turn, stopping when one returns a token.
+// This method is called automatically by Azure SDK clients.
+func (c *ChainedTokenCredential) GetToken(ctx context.Context, opts policy.TokenRequestOptions) (azcore.AccessToken, error) {
+	if !c.retrySources {
+		// ensure only one goroutine at a time iterates the sources and perhaps sets c.successfulCredential
+		c.cond.L.Lock()
+		for {
+			if c.successfulCredential != nil {
+				c.cond.L.Unlock()
+				return c.successfulCredential.GetToken(ctx, opts)
 			}
-			// if we receive some other error type this is unexpected and we simple return the unexpected error
-			return nil, err
-		} else {
-			logGetTokenSuccess(c, opts)
-			// if we did not receive an error then we return the token
-			return token, nil
+			if !c.iterating {
+				c.iterating = true
+				// allow other goroutines to wait while this one iterates
+				c.cond.L.Unlock()
+				break
+			}
+			c.cond.Wait()
 		}
 	}
-	// if we reach this point it means that all of the credentials in the chain returned CredentialUnavailableErrors
-	credErr := newCredentialUnavailableError("Chained Token Credential", createChainedErrorMessage(errList))
-	// skip adding the stack trace here as it was already logged by other calls to GetToken()
-	addGetTokenFailureLogs("Chained Token Credential", credErr, false)
-	return nil, credErr
+
+	var err error
+	var errs []error
+	var token azcore.AccessToken
+	var successfulCredential azcore.TokenCredential
+	for _, cred := range c.sources {
+		token, err = cred.GetToken(ctx, opts)
+		if err == nil {
+			log.Writef(EventAuthentication, "%s authenticated with %s", c.name, extractCredentialName(cred))
+			successfulCredential = cred
+			break
+		}
+		errs = append(errs, err)
+		if _, ok := err.(*credentialUnavailableError); !ok {
+			break
+		}
+	}
+	if c.iterating {
+		c.cond.L.Lock()
+		c.successfulCredential = successfulCredential
+		c.iterating = false
+		c.cond.L.Unlock()
+		c.cond.Broadcast()
+	}
+	// err is the error returned by the last GetToken call. It will be nil when that call succeeds
+	if err != nil {
+		// return credentialUnavailableError iff all sources did so; return AuthenticationFailedError otherwise
+		msg := createChainedErrorMessage(errs)
+		if _, ok := err.(*credentialUnavailableError); ok {
+			err = newCredentialUnavailableError(c.name, msg)
+		} else {
+			res := getResponseFromError(err)
+			err = newAuthenticationFailedError(c.name, msg, res)
+		}
+	}
+	return token, err
 }
 
-// helper function used to chain the error messages of the CredentialUnavailableError slice
-func createChainedErrorMessage(errList []CredentialUnavailableError) string {
-	msg := ""
-	for _, err := range errList {
-		msg += err.Error()
+func createChainedErrorMessage(errs []error) string {
+	msg := "failed to acquire a token.\nAttempted credentials:"
+	for _, err := range errs {
+		msg += fmt.Sprintf("\n\t%s", err.Error())
 	}
-
 	return msg
+}
+
+func extractCredentialName(credential azcore.TokenCredential) string {
+	return strings.TrimPrefix(fmt.Sprintf("%T", credential), "*azidentity.")
 }
 
 var _ azcore.TokenCredential = (*ChainedTokenCredential)(nil)

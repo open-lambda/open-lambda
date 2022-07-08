@@ -1,3 +1,6 @@
+//go:build go1.18
+// +build go1.18
+
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
@@ -9,68 +12,68 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
+	"github.com/AzureAD/microsoft-authentication-library-for-go/apps/public"
 )
 
-// UsernamePasswordCredentialOptions can be used to provide additional information to configure the UsernamePasswordCredential.
-// Use these options to modify the default pipeline behavior through the TokenCredentialcp.
-// All zero-value fields will be initialized with their default values.
+const credNameUserPassword = "UsernamePasswordCredential"
+
+// UsernamePasswordCredentialOptions contains optional parameters for UsernamePasswordCredential.
 type UsernamePasswordCredentialOptions struct {
 	azcore.ClientOptions
-
-	// The host of the Azure Active Directory authority. The default is AzurePublicCloud.
-	// Leave empty to allow overriding the value from the AZURE_AUTHORITY_HOST environment variable.
-	AuthorityHost AuthorityHost
 }
 
-// UsernamePasswordCredential enables authentication to Azure Active Directory using a user's  username and password. If the user has MFA enabled this
-// credential will fail to get a token returning an AuthenticationFailureError. Also, this credential requires a high degree of trust and is not
-// recommended outside of prototyping when more secure credentials can be used.
+// UsernamePasswordCredential authenticates a user with a password. Microsoft doesn't recommend this kind of authentication,
+// because it's less secure than other authentication flows. This credential is not interactive, so it isn't compatible
+// with any form of multi-factor authentication, and the application must already have user or admin consent.
+// This credential can only authenticate work and school accounts; it can't authenticate Microsoft accounts.
 type UsernamePasswordCredential struct {
-	client   *aadIdentityClient
-	tenantID string // Gets the Azure Active Directory tenant (directory) ID of the service principal
-	clientID string // Gets the client (application) ID of the service principal
-	username string // Gets the user account's user name
-	password string // Gets the user account's password
+	client   publicClient
+	username string
+	password string
+	account  public.Account
 }
 
-// NewUsernamePasswordCredential constructs a new UsernamePasswordCredential with the details needed to authenticate against Azure Active Directory with
-// a simple username and password.
-// tenantID: The Azure Active Directory tenant (directory) ID of the service principal.
-// clientID: The client (application) ID of the service principal.
-// username: A user's account username
-// password: A user's account password
-// options: UsernamePasswordCredentialOptions used to configure the pipeline for the requests sent to Azure Active Directory.
+// NewUsernamePasswordCredential creates a UsernamePasswordCredential. clientID is the ID of the application the user
+// will authenticate to. Pass nil for options to accept defaults.
 func NewUsernamePasswordCredential(tenantID string, clientID string, username string, password string, options *UsernamePasswordCredentialOptions) (*UsernamePasswordCredential, error) {
 	if !validTenantID(tenantID) {
 		return nil, errors.New(tenantIDValidationErr)
 	}
-	cp := UsernamePasswordCredentialOptions{}
-	if options != nil {
-		cp = *options
+	if options == nil {
+		options = &UsernamePasswordCredentialOptions{}
 	}
-	authorityHost, err := setAuthorityHost(cp.AuthorityHost)
+	authorityHost, err := setAuthorityHost(options.Cloud)
 	if err != nil {
 		return nil, err
 	}
-	c, err := newAADIdentityClient(authorityHost, &cp.ClientOptions)
+	c, err := public.New(clientID,
+		public.WithAuthority(runtime.JoinPaths(authorityHost, tenantID)),
+		public.WithHTTPClient(newPipelineAdapter(&options.ClientOptions)),
+	)
 	if err != nil {
 		return nil, err
 	}
-	return &UsernamePasswordCredential{tenantID: tenantID, clientID: clientID, username: username, password: password, client: c}, nil
+	return &UsernamePasswordCredential{username: username, password: password, client: c}, nil
 }
 
-// GetToken obtains a token from Azure Active Directory using the specified username and password.
-// scopes: The list of scopes for which the token will have access.
-// ctx: The context used to control the request lifetime.
-// Returns an AccessToken which can be used to authenticate service client calls.
-func (c *UsernamePasswordCredential) GetToken(ctx context.Context, opts policy.TokenRequestOptions) (*azcore.AccessToken, error) {
-	tk, err := c.client.authenticateUsernamePassword(ctx, c.tenantID, c.clientID, c.username, c.password, opts.Scopes)
-	if err != nil {
-		addGetTokenFailureLogs("Username Password Credential", err, true)
-		return nil, err
+// GetToken requests an access token from Azure Active Directory. This method is called automatically by Azure SDK clients.
+func (c *UsernamePasswordCredential) GetToken(ctx context.Context, opts policy.TokenRequestOptions) (azcore.AccessToken, error) {
+	if len(opts.Scopes) == 0 {
+		return azcore.AccessToken{}, errors.New(credNameUserPassword + ": GetToken() requires at least one scope")
 	}
+	ar, err := c.client.AcquireTokenSilent(ctx, opts.Scopes, public.WithSilentAccount(c.account))
+	if err == nil {
+		logGetTokenSuccess(c, opts)
+		return azcore.AccessToken{Token: ar.AccessToken, ExpiresOn: ar.ExpiresOn.UTC()}, err
+	}
+	ar, err = c.client.AcquireTokenByUsernamePassword(ctx, opts.Scopes, c.username, c.password)
+	if err != nil {
+		return azcore.AccessToken{}, newAuthenticationFailedErrorFromMSALError(credNameUserPassword, err)
+	}
+	c.account = ar.Account
 	logGetTokenSuccess(c, opts)
-	return tk, err
+	return azcore.AccessToken{Token: ar.AccessToken, ExpiresOn: ar.ExpiresOn.UTC()}, err
 }
 
 var _ azcore.TokenCredential = (*UsernamePasswordCredential)(nil)

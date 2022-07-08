@@ -10,7 +10,7 @@ hyper = { version="0.14", features=["server", "http1", "runtime", "stream"] }
 tokio-stream = { version="0.1", features=["net"] }
 simple-logging = "2"
 log = "0.4"
-dashmap = "4"
+dashmap = "5"
 nix = "0.20"
 futures-util = "0.3"
 

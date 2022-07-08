@@ -1,5 +1,5 @@
-//go:build go1.16
-// +build go1.16
+//go:build go1.18
+// +build go1.18
 
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
@@ -7,28 +7,29 @@
 package policy
 
 import (
-	"context"
-	"net/http"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/internal/pipeline"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/internal/shared"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/internal/exported"
 )
 
 // Policy represents an extensibility point for the Pipeline that can mutate the specified
 // Request and react to the received Response.
-type Policy = pipeline.Policy
+type Policy = exported.Policy
 
 // Transporter represents an HTTP pipeline transport used to send HTTP requests and receive responses.
-type Transporter = pipeline.Transporter
+type Transporter = exported.Transporter
 
 // Request is an abstraction over the creation of an HTTP request as it passes through the pipeline.
 // Don't use this type directly, use runtime.NewRequest() instead.
-type Request = pipeline.Request
+type Request = exported.Request
 
 // ClientOptions contains optional settings for a client's pipeline.
 // All zero-value fields will be initialized with default values.
 type ClientOptions struct {
+	// Cloud specifies a cloud for the client. The default is Azure Public Cloud.
+	Cloud cloud.Configuration
+
 	// Logging configures the built-in logging policy.
 	Logging LogOptions
 
@@ -56,6 +57,15 @@ type LogOptions struct {
 	// The default value is false.
 	// NOTE: enabling this can lead to disclosure of sensitive information, use with care.
 	IncludeBody bool
+
+	// AllowedHeaders is the slice of headers to log with their values intact.
+	// All headers not in the slice will have their values REDACTED.
+	// Applies to request and response headers.
+	AllowedHeaders []string
+
+	// AllowedQueryParams is the slice of query parameters to log with their values intact.
+	// All query parameters not in the slice will have their values REDACTED.
+	AllowedQueryParams []string
 }
 
 // RetryOptions configures the retry policy's behavior.
@@ -89,7 +99,7 @@ type RetryOptions struct {
 
 // TelemetryOptions configures the telemetry policy's behavior.
 type TelemetryOptions struct {
-	// ApplicationID is an application-specific identification string used in telemetry.
+	// ApplicationID is an application-specific identification string to add to the User-Agent.
 	// It has a maximum length of 24 characters and must not contain any spaces.
 	ApplicationID string
 
@@ -101,25 +111,9 @@ type TelemetryOptions struct {
 type TokenRequestOptions struct {
 	// Scopes contains the list of permission scopes required for the token.
 	Scopes []string
-	// TenantID contains the tenant ID to use in a multi-tenant authentication scenario, if TenantID is set
-	// it will override the tenant ID that was added at credential creation time.
-	TenantID string
 }
 
 // BearerTokenOptions configures the bearer token policy's behavior.
 type BearerTokenOptions struct {
 	// placeholder for future options
-}
-
-// WithHTTPHeader adds the specified http.Header to the parent context.
-// Use this to specify custom HTTP headers at the API-call level.
-// Any overlapping headers will have their values replaced with the values specified here.
-func WithHTTPHeader(parent context.Context, header http.Header) context.Context {
-	return context.WithValue(parent, shared.CtxWithHTTPHeaderKey{}, header)
-}
-
-// WithRetryOptions adds the specified RetryOptions to the parent context.
-// Use this to specify custom RetryOptions at the API-call level.
-func WithRetryOptions(parent context.Context, options RetryOptions) context.Context {
-	return context.WithValue(parent, shared.CtxWithRetryOptionsKey{}, options)
 }

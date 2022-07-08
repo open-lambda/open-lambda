@@ -46,7 +46,7 @@ native-functions: imgs/lambda
 	bash ./bin-functions/install-native.sh test-registry
 
 update-dependencies:
-	cd lambda/runtimes/rust && ${CARGO} update
+	cd lambda/runtimes/native && ${CARGO} update
 	cd wasm-worker && ${CARGO} update
 	cd bin-functions && ${CARGO} update
 	cd container-proxy && ${CARGO} update

@@ -38,7 +38,10 @@ func Create(contents string) {
 	}
 	containerName := fmt.Sprintf("quickstart-%s", randomString())
 	fmt.Printf("Creating a container named %s\n", containerName)
-	containerClient := serviceClient.NewContainerClient(containerName)
+	containerClient, err := serviceClient.NewContainerClient(containerName)
+	if err != nil {
+		log.Fatal(err)
+	}
 	_, err = containerClient.Create(ctx, nil)
 	if err != nil {
 		log.Fatal(err)
@@ -54,7 +57,7 @@ func Create(contents string) {
 		log.Fatal(err)
 	}
 	// Upload to data to blob storage
-	_, err = blobClient.UploadBufferToBlockBlob(ctx, data, azblob.HighLevelUploadToBlockBlobOption{})
+	_, err = blobClient.UploadBuffer(ctx, data, azblob.UploadOption{})
 
 	if err != nil {
 		log.Fatalf("Failure to upload to blob: %+v", err)
@@ -69,7 +72,7 @@ func Download() {
 	}
 
 	downloadedData := &bytes.Buffer{}
-	reader := get.Body(azblob.RetryReaderOptions{})
+	reader := get.Body(&azblob.RetryReaderOptions{})
 	_, err = downloadedData.ReadFrom(reader)
 	if err != nil {
 		log.Fatal(err)
@@ -129,7 +132,10 @@ func AzureMain(contents string) {
 	// Create the container
 	containerName := fmt.Sprintf("quickstart-%s", randomString())
 	fmt.Printf("Creating a container named %s\n", containerName)
-	containerClient := serviceClient.NewContainerClient(containerName)
+	containerClient, err := serviceClient.NewContainerClient(containerName)
+	if err != nil {
+		log.Fatal(err)
+	}
 	_, err = containerClient.Create(ctx, nil)
 	if err != nil {
 		log.Fatal(err)
@@ -146,7 +152,7 @@ func AzureMain(contents string) {
 	}
 
 	// Upload to data to blob storage
-	_, err = blobClient.UploadBufferToBlockBlob(ctx, data, azblob.HighLevelUploadToBlockBlobOption{})
+	_, err = blobClient.UploadBuffer(ctx, data, azblob.UploadOption{})
 
 	if err != nil {
 		log.Fatalf("Failure to upload to blob: %+v", err)
@@ -160,7 +166,7 @@ func AzureMain(contents string) {
 	for pager.NextPage(ctx) {
 		resp := pager.PageResponse()
 
-		for _, v := range resp.ContainerListBlobFlatSegmentResult.Segment.BlobItems {
+		for _, v := range resp.Segment.BlobItems {
 			fmt.Println(*v.Name)
 		}
 	}
@@ -176,7 +182,7 @@ func AzureMain(contents string) {
 	}
 
 	downloadedData := &bytes.Buffer{}
-	reader := get.Body(azblob.RetryReaderOptions{})
+	reader := get.Body(&azblob.RetryReaderOptions{})
 	_, err = downloadedData.ReadFrom(reader)
 	if err != nil {
 		log.Fatal(err)
