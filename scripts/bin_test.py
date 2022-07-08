@@ -84,7 +84,10 @@ def _main():
 
         start_tests()
 
-        with TestConfContext(registry=os.path.abspath(args.registry)):
+        registry = os.path.abspath(args.registry)
+        with TestConfContext(registry=registry):
+            print(f"Using registry: {registry}")
+            print(f"Contents: {os.listdir(registry)}")
             run_tests()
 
     check_test_results()
