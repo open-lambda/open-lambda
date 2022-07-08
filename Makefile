@@ -36,11 +36,11 @@ all: ol imgs/lambda wasm-worker wasm-functions native-functions
 wasm-worker:
 	cd wasm-worker && ${CARGO} build ${BUILD_FLAGS} ${WASM_WORKER_FLAGS}
 	cp wasm-worker/target/${BUILDTYPE}/wasm-worker ./ol-wasm
-	ls test-registry.wasm/hashing.wasm test-registry.wasm/noop.wasm
 
 wasm-functions:
 	cd bin-functions && make wasm-functions
 	bash ./bin-functions/install-wasm.sh test-registry.wasm ${WASM_TARGET}
+	ls test-registry.wasm/hashing.wasm test-registry.wasm/noop.wasm
 
 native-functions: imgs/lambda
 	cd bin-functions && cross build --release
