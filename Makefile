@@ -38,7 +38,7 @@ wasm-worker:
 	cp wasm-worker/target/${BUILDTYPE}/wasm-worker ./ol-wasm
 
 wasm-functions:
-	cd bin-functions && make wasm-functions
+	cd bin-functions && ${MAKE} wasm-functions
 	bash ./bin-functions/install-wasm.sh test-registry.wasm ${WASM_TARGET}
 
 native-functions: imgs/lambda

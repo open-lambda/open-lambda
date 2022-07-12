@@ -7,7 +7,7 @@ NATIVE_PREFIX=./bin-functions/target/release/
 
 mkdir -p ${REGISTRY_PATH}
 
-echo "Searching for functions ins ${NATIVE_PREFIX}"
+echo "Searching for functions in ${NATIVE_PREFIX}"
 
 for f in ${NATIVE_PREFIX}/*; do
     name=${f/${NATIVE_PREFIX}/}
@@ -16,5 +16,7 @@ for f in ${NATIVE_PREFIX}/*; do
     if [[ $name != *".so" && -f "$f" && -x "$f" ]]; then
         echo "Installing native function '$name.bin' from '$f' to ${REGISTRY_PATH}/${name}.bin"
         rsync -c $f ${REGISTRY_PATH}/$name.bin
+    else
+        echo "Skipping non-binary '$f'"
     fi
 done
