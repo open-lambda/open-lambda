@@ -9,7 +9,7 @@ WASM_PREFIX=./bin-functions/wasm-target/${WASM_TARGET}/release/
 
 mkdir -p ${REGISTRY_PATH_WASM}
 
-echo "Searching for function ins ${WASM_PREFIX}"
+echo "Searching for function in ${WASM_PREFIX}"
 
 for f in ${WASM_PREFIX}*.wasm; do
     name=${f/${WASM_PREFIX}/}
