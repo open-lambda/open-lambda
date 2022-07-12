@@ -3,7 +3,7 @@
 shopt -s nullglob
 
 REGISTRY_PATH=$1
-NATIVE_PREFIX=./bin-functions/target/release/
+NATIVE_PREFIX=./bin-functions/target/x86_64-unknown-linux-gnu/release
 
 mkdir -p ${REGISTRY_PATH}
 
@@ -16,7 +16,5 @@ for f in ${NATIVE_PREFIX}/*; do
     if [[ $name != *".so" && -f "$f" && -x "$f" ]]; then
         echo "Installing native function '$name.bin' from '$f' to ${REGISTRY_PATH}/${name}.bin"
         rsync -c $f ${REGISTRY_PATH}/$name.bin
-    else
-        echo "Skipping non-binary '$f'"
     fi
 done
