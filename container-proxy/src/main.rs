@@ -3,24 +3,28 @@ use std::io::Write;
 
 use tokio::net::{UnixListener, UnixStream};
 
-use futures_util::stream::StreamExt;
 use futures_util::sink::SinkExt;
+use futures_util::stream::StreamExt;
 
-use tokio_util::codec::{FramedRead, FramedWrite};
 use tokio_util::codec::length_delimited::LengthDelimitedCodec;
+use tokio_util::codec::{FramedRead, FramedWrite};
 
 use serde_bytes::ByteBuf;
 
 use open_lambda_proxy_protocol::ProxyMessage;
 
-#[ tokio::main ]
+#[tokio::main]
 async fn main() {
     let mut argv = std::env::args();
     argv.next().unwrap();
 
     let container_dir = argv.next().expect("No container directory given");
 
-    simple_logging::log_to_file(format!("{}/db-proxy.log", container_dir), log::LevelFilter::Info).unwrap();
+    simple_logging::log_to_file(
+        format!("{}/db-proxy.log", container_dir),
+        log::LevelFilter::Info,
+    )
+    .unwrap();
 
     let path = format!("{}/db-proxy.sock", container_dir);
     let listener = UnixListener::bind(path).unwrap();
@@ -78,13 +82,14 @@ async fn call_function(func_name: String, args: Vec<u8>) -> Result<Vec<u8>, Stri
                 let mut data = vec![];
                 data.extend_from_slice(&bytes[..]);
                 Ok(data)
-            },
-            Err(err) => {
-                Err(format!("Failed to process call result: {err}"))
             }
+            Err(err) => Err(format!("Failed to process call result: {err}")),
         }
     } else {
-        Err(format!("Call Request failed with error code: {}", result.status()))
+        Err(format!(
+            "Call Request failed with error code: {}",
+            result.status()
+        ))
     }
 }
 
@@ -113,13 +118,16 @@ async fn handle_connection(stream: UnixStream) {
             ProxyMessage::CallRequest(call_data) => {
                 let result = call_function(call_data.fn_name, call_data.args.into_vec()).await;
                 ProxyMessage::CallResult(result.map(ByteBuf::from))
-            },
+            }
             _ => {
                 panic!("Got unexpected message");
             }
         };
 
         let out_data = bincode::serialize(&response).unwrap();
-        writer.send(out_data.into()).await.expect("Failed to send response");
+        writer
+            .send(out_data.into())
+            .await
+            .expect("Failed to send response");
     }
 }

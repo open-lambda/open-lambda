@@ -12,13 +12,13 @@ ron = "0"
 derive_more = "0.99"
 clap = { version = "3", default-features=false, features=["suggestions", "color", "std", "cargo", "derive"]}
 futures-util = { version="0.3" }
-wasmer = { git="https://github.com/kaimast/wasmer.git", branch="zygote", default-features=false, features=["compiler", "async"] }
-wasmer-compiler-singlepass = { git="https://github.com/kaimast/wasmer.git", branch="zygote" }
-wasmer-compiler-cranelift = { git="https://github.com/kaimast/wasmer.git", branch="zygote" }
-wasmer-compiler-llvm = { git="https://github.com/kaimast/wasmer.git", branch="zygote", optional=true }
-wasmer-engine-dylib = { git="https://github.com/kaimast/wasmer.git", branch="zygote" }
-wasmer-engine = { git="https://github.com/kaimast/wasmer.git", branch="zygote" }
-wasmer-vm = { git="https://github.com/kaimast/wasmer.git", branch="zygote" }
+wasmer = { git="https://github.com/kaimast/wasmer.git", rev="c288794b9a7f1a23d6ed565a3c80486ab776f805", default-features=false, features=["compiler", "async"] }
+wasmer-compiler-singlepass = { git="https://github.com/kaimast/wasmer.git", rev="c288794b9a7f1a23d6ed565a3c80486ab776f805" }
+wasmer-compiler-cranelift = { git="https://github.com/kaimast/wasmer.git", rev="c288794b9a7f1a23d6ed565a3c80486ab776f805" }
+wasmer-compiler-llvm = { git="https://github.com/kaimast/wasmer.git", rev="c288794b9a7f1a23d6ed565a3c80486ab776f805", optional=true }
+wasmer-engine-dylib = { git="https://github.com/kaimast/wasmer.git", rev="c288794b9a7f1a23d6ed565a3c80486ab776f805" }
+wasmer-engine = { git="https://github.com/kaimast/wasmer.git", rev="c288794b9a7f1a23d6ed565a3c80486ab776f805" }
+wasmer-vm = { git="https://github.com/kaimast/wasmer.git", rev="c288794b9a7f1a23d6ed565a3c80486ab776f805" }
 lazy_static = "1"
 pretty_env_logger = { version="0.4" }
 log = "0.4"
