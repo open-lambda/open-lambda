@@ -51,7 +51,7 @@ func NewCgroupPool(name string) (*CgroupPool, error) {
 
 	// Make controllers available to child groups
 	rpath := fmt.Sprintf("%s/cgroup.subtree_control", path)
-	if err := ioutil.WriteFile(rpath, []byte("+pids +io +memory"), os.ModeAppend); err != nil {
+	if err := ioutil.WriteFile(rpath, []byte("+pids +io +memory +cpu"), os.ModeAppend); err != nil {
 		panic(fmt.Sprintf("Error writing to %s: %v", rpath, err))
 	}
 
@@ -226,15 +226,18 @@ func (pool *CgroupPool) Destroy() {
 	}
 }
 
-func (pool *CgroupPool) GetCg(memLimitMB int, moveMemCharge bool) *Cgroup {
+func (pool *CgroupPool) GetCg(memLimitMB int, moveMemCharge bool, cpuPercent int) *Cgroup {
 	cg := <-pool.ready
 	cg.setMemLimitMB(memLimitMB)
+	cg.setCPUPercent(cpuPercent)
+
 	/* FIXME not supported in CG2?
 	   if moveMemCharge {
 	       cg.WriteInt("memory.move_charge_at_immigrate", 1)
 	   } else {
 	       cg.WriteInt("memory.move_charge_at_immigrate", 0)
 	   }*/
+
 	return cg
 }
 
@@ -394,6 +397,13 @@ func (cg *Cgroup) setMemLimitMB(mb int) {
 	}
 
 	cg.memLimitMB = mb
+}
+
+// percent of a core
+func (cg *Cgroup) setCPUPercent(percent int) {
+	period := 100000 // 100 ms
+	quota := period * percent / 100
+	cg.WriteString("cpu.max", fmt.Sprintf("%d %d", quota, period))
 }
 
 // Freeze processes in the cgroup

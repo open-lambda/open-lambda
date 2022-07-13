@@ -61,7 +61,7 @@ type Config struct {
 
 	// which OCI implementation to use for the docker sandbox (e.g., runc or runsc)
 	Docker_runtime string `json:"docker_runtime"`
-
+     
 	Limits   LimitsConfig   `json:"limits"`
 	Features FeaturesConfig `json:"features"`
 	Trace    TraceConfig    `json:"trace"`
@@ -79,6 +79,7 @@ type TraceConfig struct {
 	Memory  bool `json:"memory"`
 	Evictor bool `json:"evictor"`
 	Package bool `json:"package"`
+	Latency bool `json:"latency"`
 }
 
 type StoreString string
@@ -110,6 +111,12 @@ type LimitsConfig struct {
 	// how much memory can a regular lambda use?  The lambda can
 	// always set a lower limit for itself.
 	Mem_mb int `json:"mem_mb"`
+
+	// what percent of a core can it use per period?  (0-100, or more for multiple cores)
+	CPU_percent int `json:"cpu_percent"`
+
+	// how many seconds can Lambdas run?  (maybe be overridden on per-lambda basis)
+	Max_runtime_default int `json:"max_runtime_default"`
 
 	// how aggressively will the mem of the Sandbox be swapped?
 	Swappiness int `json:"swappiness"`
@@ -153,6 +160,8 @@ func LoadDefaults(olPath string) error {
 		Limits: LimitsConfig{
 			Procs:            10,
 			Mem_mb:           50,
+			CPU_percent:      100,
+			Max_runtime_default: 30,
 			Installer_mem_mb: Max(250, Min(500, mem_pool_mb/2)),
 			Swappiness:       0,
 		},
@@ -165,6 +174,7 @@ func LoadDefaults(olPath string) error {
 			Memory: false,
 			Evictor: false,
 			Package: false,
+			Latency: false,
 		},
 		Storage: StorageConfig{
 			Root:    "private",
@@ -185,7 +195,7 @@ func LoadConf(path string) error {
 	}
 
 	if err := json.Unmarshal(config_raw, &Conf); err != nil {
-		log.Printf("FILE: %v\n", config_raw)
+		log.Printf("FILE: %v\n", string(config_raw))
 		return fmt.Errorf("could not parse config (%v): %v\n", path, err.Error())
 	}
 

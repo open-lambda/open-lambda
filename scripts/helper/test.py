@@ -49,6 +49,9 @@ def check_test_results():
     results["failed"] = failed
     results["seconds"] = elapsed
 
+    if failed:
+        failed_names = ", ".join([t["test"] for t in results["runs"] if not t["pass"]])
+        print("Failing tests: " + failed_names)
     print(f"PASSED: {passed}, FAILED: {failed}, ELAPSED: {elapsed}")
 
     with open("test.json", "w", encoding='utf-8') as resultsfile:

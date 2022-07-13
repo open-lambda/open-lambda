@@ -266,6 +266,7 @@ func (container *SOCKContainer) Pause() (err error) {
 			container.pool.mem.adjustAvailableMB(oldLimit - newLimit)
 		}
 	}
+
 	return nil
 }
 

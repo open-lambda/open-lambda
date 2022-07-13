@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"log"
 )
 
 type RollingAvg struct {
@@ -120,6 +121,10 @@ func (l *Latency) T1() {
 		panic("double counted stat for " + l.name)
 	}
 	l.t0 = zero
+
+	if Conf.Trace.Latency {
+		log.Printf("%s=%d ms", l.name, l.Milliseconds)
+	}
 }
 
 // start measuring a sub latency

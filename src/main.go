@@ -18,8 +18,10 @@ import (
 	docker "github.com/fsouza/go-dockerclient"
 	dutil "github.com/open-lambda/open-lambda/ol/sandbox/dockerutil"
 
+	"github.com/open-lambda/open-lambda/ol/boss"
 	"github.com/open-lambda/open-lambda/ol/common"
 	"github.com/open-lambda/open-lambda/ol/server"
+
 	"github.com/urfave/cli"
 )
 
@@ -113,6 +115,170 @@ func newOL(ctx *cli.Context) error {
 	}
 
 	return initOLDir(olPath)
+}
+
+// workers corresponds to the "workers" command of the admin tool.
+//
+// The JSON config in the cluster template directory will be populated for each
+// worker, and their pid will be written to the log directory. worker_exec will
+// be called to run the worker processes.
+func worker(ctx *cli.Context) error {
+	// get path of worker files
+	olPath, err := getOlPath(ctx)
+	if err != nil {
+		return err
+	}
+
+	// if `./ol new` not previously run, do that init now
+	if _, err := os.Stat(olPath); os.IsNotExist(err) {
+		fmt.Printf("no OL directory found at %s\n", olPath)
+		if err := initOLDir(olPath); err != nil {
+			return err
+		}
+	} else {
+		fmt.Printf("using existing OL directory at %s\n", olPath)
+	}
+
+	confPath := filepath.Join(olPath, "config.json")
+	overrides := ctx.String("options")
+	if overrides != "" {
+		overridesPath := confPath + ".overrides"
+		err = overrideOpts(confPath, overridesPath, overrides)
+		if err != nil {
+			return err
+		}
+		confPath = overridesPath
+	}
+
+	if err := common.LoadConf(confPath); err != nil {
+		return err
+	}
+
+	// should we run as a background process?
+	detach := ctx.Bool("detach")
+
+	if detach {
+		// stdout+stderr both go to log
+		logPath := filepath.Join(olPath, "worker.out")
+		// creates a worker.out file
+		f, err := os.Create(logPath)
+		if err != nil {
+			return err
+		}
+		// holds attributes that will be used when os.StartProcess
+		attr := os.ProcAttr{
+			Files: []*os.File{nil, f, f},
+		}
+		cmd := []string{}
+		for _, arg := range os.Args {
+			if arg != "-d" && arg != "--detach" {
+				cmd = append(cmd, arg)
+			}
+		}
+		// looks for ./ol path
+		binPath, err := exec.LookPath(os.Args[0])
+		if err != nil {
+			return err
+		}
+		// start the worker process
+		fmt.Printf("starting process: binpath= %s, cmd=%s\n", binPath, cmd)
+		proc, err := os.StartProcess(binPath, cmd, &attr)
+		if err != nil {
+			return err
+		}
+
+		// died is error message
+		died := make(chan error)
+		go func() {
+			_, err := proc.Wait()
+			died <- err
+		}()
+
+		fmt.Printf("Starting worker: pid=%d, port=%s, log=%s\n", proc.Pid, common.Conf.Worker_port, logPath)
+
+		var ping_err error
+
+		for i := 0; i < 300; i++ {
+			// check if it has died
+			select {
+			case err := <-died:
+				if err != nil {
+					return err
+				}
+				return fmt.Errorf("worker process %d does not a appear to be running, check worker.out", proc.Pid)
+			default:
+			}
+
+			// is the worker still alive?
+			err := proc.Signal(syscall.Signal(0))
+			if err != nil {
+
+			}
+
+			// is it reachable?
+			url := fmt.Sprintf("http://localhost:%s/pid", common.Conf.Worker_port)
+			response, err := http.Get(url)
+			if err != nil {
+				ping_err = err
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+			defer response.Body.Close()
+
+			// are we talking with the expected PID?
+			body, err := ioutil.ReadAll(response.Body)
+			pid, err := strconv.Atoi(strings.TrimSpace(string(body)))
+			if err != nil {
+				return fmt.Errorf("/pid did not return an int :: %s", err)
+			}
+
+			if pid == proc.Pid {
+				fmt.Printf("ready\n")
+				return nil // server is started and ready for requests
+			} else {
+				return fmt.Errorf("expected PID %v but found %v (port conflict?)", proc.Pid, pid)
+			}
+		}
+
+		return fmt.Errorf("worker still not reachable after 30 seconds :: %s", ping_err)
+	} else {
+		if err := server.Main(); err != nil {
+			return err
+		}
+	}
+
+	return fmt.Errorf("this code should not be reachable!")
+}
+
+func newBossConf() error {
+	if err := boss.LoadDefaults(); err != nil {
+		return err
+	}
+
+	if err := boss.SaveConf("boss.json"); err != nil {
+		return err
+	}
+
+	fmt.Printf("populated boss.json with default settings\n")
+	return nil
+}
+
+// newBoss corresponses to the "new-boss" command of the admin tool.
+func newBoss(ctx *cli.Context) error {
+	return newBossConf()
+}
+
+// runBoss corresponses to the "boss" command of the admin tool.
+func runBoss(ctx *cli.Context) error {
+	if _, err := os.Stat("boss.json"); os.IsNotExist(err) {
+		newBossConf()
+	}
+
+	if err := boss.LoadConf("boss.json"); err != nil {
+		return err
+	}
+
+	return boss_start(ctx)
 }
 
 // status corresponds to the "status" command of the admin tool.
@@ -217,53 +383,19 @@ func overrideOpts(confPath, overridePath, optsStr string) error {
 	return nil
 }
 
-// workers corresponds to the "workers" command of the admin tool.
-//
-// The JSON config in the cluster template directory will be populated for each
-// worker, and their pid will be written to the log directory. worker_exec will
-// be called to run the worker processes.
-func worker(ctx *cli.Context) error {
-	olPath, err := getOlPath(ctx)
-	if err != nil {
-		return err
-	}
-
-	// if `./ol new` not previously run, do that init now
-	if _, err := os.Stat(olPath); os.IsNotExist(err) {
-		fmt.Printf("no OL directory found at %s\n", olPath)
-		if err := initOLDir(olPath); err != nil {
-			return err
-		}
-	} else {
-		fmt.Printf("using existing OL directory at %s\n", olPath)
-	}
-
-	confPath := filepath.Join(olPath, "config.json")
-	overrides := ctx.String("options")
-	if overrides != "" {
-		overridesPath := confPath + ".overrides"
-		err = overrideOpts(confPath, overridesPath, overrides)
-		if err != nil {
-			return err
-		}
-		confPath = overridesPath
-	}
-
-	if err := common.LoadConf(confPath); err != nil {
-		return err
-	}
-
-	// should we run as a background process?
+func boss_start(ctx *cli.Context) error {
 	detach := ctx.Bool("detach")
 
 	// If detach is specified, we start another ol-process with the worker argument
 	if detach {
 		// stdout+stderr both go to log
-		logPath := filepath.Join(olPath, "worker.out")
+		logPath := "boss.out"
+		// creates a worker.out file
 		f, err := os.Create(logPath)
 		if err != nil {
 			return err
 		}
+		// holds attributes that will be used when os.StartProcess
 		attr := os.ProcAttr{
 			Files: []*os.File{nil, f, f},
 		}
@@ -279,69 +411,27 @@ func worker(ctx *cli.Context) error {
 		if err != nil {
 			return err
 		}
+		// start the worker process
+		fmt.Printf("starting process: binpath= %s, cmd=%s\n", binPath, cmd)
 		proc, err := os.StartProcess(binPath, cmd, &attr)
 		if err != nil {
 			return err
 		}
 
+		// died is error message
 		died := make(chan error)
 		go func() {
 			_, err := proc.Wait()
 			died <- err
 		}()
 
-		fmt.Printf("Starting worker: pid=%d, port=%s, log=%s\n", proc.Pid, common.Conf.Worker_port, logPath)
-
-		var pingErr error
-
-		for i := 0; i < 300; i++ {
-			// check if it has died
-			select {
-			case err := <-died:
-				if err != nil {
-					return err
-				}
-				return fmt.Errorf("worker process %d does not a appear to be running, check worker.out", proc.Pid)
-			default:
-			}
-
-			// is the worker still alive?
-			err := proc.Signal(syscall.Signal(0))
-			if err != nil {
-
-			}
-
-			// is it reachable?
-			url := fmt.Sprintf("http://localhost:%s/pid", common.Conf.Worker_port)
-			response, err := http.Get(url)
-			if err != nil {
-				pingErr = err
-				time.Sleep(100 * time.Millisecond)
-				continue
-			}
-			defer response.Body.Close()
-
-			// are we talking with the expected PID?
-			body, err := ioutil.ReadAll(response.Body)
-			pid, err := strconv.Atoi(strings.TrimSpace(string(body)))
-			if err != nil {
-				return fmt.Errorf("/pid did not return an int :: %s", err)
-			}
-
-			if pid != proc.Pid {
-			    return fmt.Errorf("expected PID %v but found %v (port conflict?)", proc.Pid, pid)
-            }
-
-			fmt.Printf("ready\n")
-			return nil // server is started and ready for requests
+		fmt.Printf("Starting boss: pid=%d, port=%s, log=%s\n", proc.Pid, boss.Conf.Boss_port, logPath)
+		return nil // TODO: ping status to make sure it is actually running?
+	} else {
+		if err := boss.BossMain(); err != nil {
+			return err
 		}
-
-		return fmt.Errorf("worker still not reachable after 30 seconds :: %s", pingErr)
 	}
-	
-    if err := server.Main(); err != nil {
-        return err
-    }
 
 	return fmt.Errorf("this code should not be reachable")
 }
@@ -391,16 +481,26 @@ func kill(ctx *cli.Context) error {
 	return fmt.Errorf("worker didn't stop after 30s")
 }
 
+func gcp_test(ctx *cli.Context) error {
+	boss.GCPBossTest()
+	return nil
+}
+
+func azure_test(ctx *cli.Context) error {
+	boss.AzureMain("default contents")
+	return nil
+}
+
 // cleanup corresponds to the "force-cleanup" command of the admin tool.
 func cleanup(ctx *cli.Context) error {
 	olPath, err := getOlPath(ctx)
 	if err != nil {
 		return err
 	}
-	
-	cgRoot := filepath.Join("/sys", "fs", "cgroup", filepath.Base(olPath) + "-sandboxes")
+
+	cgRoot := filepath.Join("/sys", "fs", "cgroup", filepath.Base(olPath)+"-sandboxes")
 	fmt.Printf("ATTEMPT to cleanup cgroups at %s\n", cgRoot)
-	
+
 	if files, err := ioutil.ReadDir(cgRoot); err != nil {
 		fmt.Printf("could not find cgroup root: %s\n", err.Error())
 	} else {
@@ -457,6 +557,8 @@ func cleanup(ctx *cli.Context) error {
 
 // main runs the admin tool
 func main() {
+	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
+
 	if c, err := docker.NewClientFromEnv(); err != nil {
 		log.Fatal("failed to get docker client: ", err)
 	} else {
@@ -488,7 +590,7 @@ OPTIONS:
 	app.Commands = []cli.Command{
 		cli.Command{
 			Name:        "new",
-			Usage:       "Create a OpenLambda environment",
+			Usage:       "Create an OL worker environment, including default config and dump of base image",
 			UsageText:   "ol new [--path=PATH]",
 			Description: "A cluster directory of the given name will be created with internal structure initialized.",
 			Flags:       []cli.Flag{pathFlag},
@@ -496,7 +598,7 @@ OPTIONS:
 		},
 		cli.Command{
 			Name:        "worker",
-			Usage:       "Start one OL server",
+			Usage:       "Start an OL worker process (automatically calls 'new' and uses default if that wasn't already done)",
 			UsageText:   "ol worker [--path=NAME] [--detach]",
 			Description: "Start a lambda server.",
 			Flags: []cli.Flag{
@@ -513,8 +615,28 @@ OPTIONS:
 			Action: worker,
 		},
 		cli.Command{
+			Name:        "new-boss",
+			Usage:       "Create an OL Boss config (boss.json)",
+			UsageText:   "ol new-boss [--path=PATH] [--detach]",
+			Description: "Create config for new boss",
+			Action:      newBoss,
+		},
+		cli.Command{
+			Name:        "boss",
+			Usage:       "Start an OL Boss process",
+			UsageText:   "ol boss [--path=PATH] [--detach]",
+			Description: "Start a boss server.",
+			Flags: []cli.Flag{
+				cli.BoolFlag{
+					Name:  "detach, d",
+					Usage: "Run worker in background",
+				},
+			},
+			Action: runBoss,
+		},
+		cli.Command{
 			Name:        "status",
-			Usage:       "get worker status",
+			Usage:       "check status of an OL worker process",
 			UsageText:   "ol status [--path=NAME]",
 			Description: "If no cluster name is specified, number of containers of each cluster is printed; otherwise the connection information for all containers in the given cluster will be displayed.",
 			Flags:       []cli.Flag{pathFlag},
@@ -526,6 +648,20 @@ OPTIONS:
 			UsageText: "ol kill [--path=NAME]",
 			Flags:     []cli.Flag{pathFlag},
 			Action:    kill,
+		},
+		cli.Command{
+			Name:      "gcp-test",
+			Usage:     "Developer use only.  Start a GCP VM running the OL worker",
+			UsageText: "ol gcp-test",
+			Flags:     []cli.Flag{},
+			Action:    gcp_test,
+		},
+		cli.Command{
+			Name:      "azure-test",
+			Usage:     "Developer use only.  Start an Azure Blob ",
+			UsageText: "ol zure-test",
+			Flags:     []cli.Flag{},
+			Action:    azure_test,
 		},
 		cli.Command{
 			Name:      "force-cleanup",

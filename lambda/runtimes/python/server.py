@@ -2,19 +2,14 @@
 
 ''' Python runtime for sock '''
 
-import os
-import sys
-import json
-import traceback
-import array
-import socket
-import struct
+import os, sys, json, argparse, importlib, traceback, time, fcntl, array, socket, struct
 
 sys.path.append("/usr/local/lib/python3.8/dist-packages")
 
 import tornado.ioloop
 import tornado.web
 import tornado.httpserver
+import tornado.wsgi
 import tornado.netutil
 
 import ol
@@ -40,14 +35,13 @@ def web_server():
     print(f"server.py: start web server on fd: {file_sock.fileno()}")
     sys.path.append('/handler')
 
+    # TODO: as a safeguard, we should add a mechanism so that the
+    # import doesn't happen until the cgroup move completes, so that a
+    # malicious child cannot eat up Zygote resources
+    import f
+
     class SockFileHandler(tornado.web.RequestHandler):
         def post(self):
-            # we don't import this until we get a request; this is a
-            # safeguard in case f is malicious (we don't
-            # want it to interfere with ongoing setup, such as the
-            # move to the new cgroups)
-            import f
-
             try:
                 data = self.request.body
                 try :
@@ -61,10 +55,15 @@ def web_server():
                 self.set_status(500) # internal error
                 self.write(traceback.format_exc())
 
-    tornado_app = tornado.web.Application([
-        (".*", SockFileHandler),
-    ])
-    server = tornado.httpserver.HTTPServer(tornado_app)
+    if hasattr(f, "app"):
+        # use WSGI entry
+        app = tornado.wsgi.WSGIContainer(f.app)
+    else:
+        # use function entry
+        app = tornado.web.Application([
+            (".*", SockFileHandler),
+        ])
+    server = tornado.httpserver.HTTPServer(app)
     server.add_socket(file_sock)
     tornado.ioloop.IOLoop.instance().start()
     server.start()

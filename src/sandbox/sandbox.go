@@ -30,6 +30,9 @@ func fillMetaDefaults(meta *SandboxMeta) *SandboxMeta {
 	if meta.MemLimitMB == 0 {
 		meta.MemLimitMB = common.Conf.Limits.Mem_mb
 	}
+	if meta.CPUPercent == 0 {
+		meta.CPUPercent = common.Conf.Limits.CPU_percent
+	}
 	return meta
 }
 

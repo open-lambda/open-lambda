@@ -40,10 +40,12 @@ wasm-worker:
 wasm-functions:
 	cd bin-functions && ${MAKE} wasm-functions
 	bash ./bin-functions/install-wasm.sh test-registry.wasm ${WASM_TARGET}
+	ls test-registry.wasm/hashing.wasm test-registry.wasm/noop.wasm
 
 native-functions: imgs/lambda
 	cd bin-functions && cross build --release
 	bash ./bin-functions/install-native.sh test-registry
+	ls test-registry/hashing.bin test-registry/noop.bin # guarantee they were created
 
 update-dependencies:
 	cd lambda/runtimes/native && ${CARGO} update
@@ -89,9 +91,9 @@ check-fmt:
 	cd bin-functions && cargo fmt --check
 
 lint:
+	pylint scripts --ignore=build --disable=missing-docstring,multiple-imports,global-statement,invalid-name,W0511,W1510
 	cd wasm-worker && cargo clippy
 	cd bin-functions && cargo clippy
-	pylint scripts --ignore build
 
 clean:
 	rm -f ol

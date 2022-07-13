@@ -130,7 +130,7 @@ func Main() (err error) {
 		}
 
 		log.Printf("exiting worker, PID=%d", os.Getpid())
-		os.Exit(rc);
+		os.Exit(rc)
 	}()
 
 	port := fmt.Sprintf("%s:%s", common.Conf.Worker_url, common.Conf.Worker_port)
