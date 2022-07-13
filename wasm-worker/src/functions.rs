@@ -77,9 +77,9 @@ impl Function {
 
         let mut import_object = ImportObject::new();
 
-        let (args_imports, args_env) = bindings::args::get_imports(&*self.store, args, result_hdl);
-        let log_imports = bindings::log::get_imports(&*self.store);
-        let (ipc_imports, ipc_env) = bindings::ipc::get_imports(&*self.store, addr);
+        let (args_imports, args_env) = bindings::args::get_imports(&self.store, args, result_hdl);
+        let log_imports = bindings::log::get_imports(&self.store);
+        let (ipc_imports, ipc_env) = bindings::ipc::get_imports(&self.store, addr);
 
         import_object.register("ol_args", args_imports);
         import_object.register("ol_log", log_imports);
@@ -224,13 +224,13 @@ impl FunctionManager {
 
             log::info!("Loaded cached version of program \"{name}\"");
 
-            unsafe { Module::deserialize(&*store, &binary).expect("Failed to deserialize module") }
+            unsafe { Module::deserialize(&store, &binary).expect("Failed to deserialize module") }
         } else {
             let mut code = Vec::new();
             file.read_to_end(&mut code).unwrap();
 
             // Load and compile
-            let module = match Module::new(&*self.store, code) {
+            let module = match Module::new(&self.store, code) {
                 Ok(module) => {
                     log::info!("Compiled program \"{name}\"");
                     module
