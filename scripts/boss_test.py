@@ -1,25 +1,25 @@
-import requests
 import os, sys
-from subprocess import run
-import time
 import json
+import time
+from subprocess import run
+import requests
 
 api_key = None
 boss_port = 5000
 
 def read_json(path):
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 def write_json(path, data):
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8") as f:
         return json.dump(data, f, indent=2)
 
 def boss_get(resource, check=True):
     url = f"http://localhost:{boss_port}/{resource}"
     resp = requests.get(url)
     if check:
-       resp.raise_for_status()
+        resp.raise_for_status()
     return resp.text
 
 def boss_post(resource, data, check=True):
@@ -41,7 +41,8 @@ def tester(platform):
     print(f"Testing {platform}")
 
     # PART 0: clear existing config
-    run(["rm", "boss.json"])
+    if os.path.exists("boss.json"):
+        run(["rm", "boss.json"]).check_returncode()
 
     # PART 1: config and launch
 
