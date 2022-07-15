@@ -91,7 +91,7 @@ check-fmt:
 	cd bin-functions && cargo fmt --check
 
 lint:
-	pylint scripts --ignore=build --disable=missing-docstring,multiple-imports,global-statement,invalid-name,W0511,W1510
+	pylint scripts --ignore=build --disable=missing-docstring,multiple-imports,global-statement,invalid-name,W0511,W1510,R0801
 	cd wasm-worker && cargo clippy
 	cd bin-functions && cargo clippy
 
