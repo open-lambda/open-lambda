@@ -100,11 +100,9 @@ def test(func):
         mounts0 = mounts()
         worker = None
 
-        try:
-            worker = WORKER_TYPE()
-            print("Worker started")
-        except Exception as err:
-            print(f"Failed to start worker: {err}")
+        worker = WORKER_TYPE()
+        assert worker
+        print("Worker started")
 
         if worker:
             try:
