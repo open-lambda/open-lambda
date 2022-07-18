@@ -18,22 +18,15 @@ import (
 	docker "github.com/fsouza/go-dockerclient"
 	dutil "github.com/open-lambda/open-lambda/ol/sandbox/dockerutil"
 
+	"github.com/open-lambda/open-lambda/ol/bench"
 	"github.com/open-lambda/open-lambda/ol/boss"
 	"github.com/open-lambda/open-lambda/ol/common"
 	"github.com/open-lambda/open-lambda/ol/server"
 
-	"github.com/urfave/cli"
+	"github.com/urfave/cli"	
 )
 
 var client *docker.Client
-
-func getOlPath(ctx *cli.Context) (string, error) {
-	olPath := ctx.String("path")
-	if olPath == "" {
-		olPath = "default-ol"
-	}
-	return filepath.Abs(olPath)
-}
 
 func initOLDir(olPath string) (err error) {
 	fmt.Printf("Init OL dir at %v\n", olPath)
@@ -109,7 +102,7 @@ func initOLDir(olPath string) (err error) {
 
 // newOL corresponds to the "new" command of the admin tool.
 func newOL(ctx *cli.Context) error {
-	olPath, err := getOlPath(ctx)
+	olPath, err := common.GetOlPath(ctx)
 	if err != nil {
 		return err
 	}
@@ -124,7 +117,7 @@ func newOL(ctx *cli.Context) error {
 // be called to run the worker processes.
 func worker(ctx *cli.Context) error {
 	// get path of worker files
-	olPath, err := getOlPath(ctx)
+	olPath, err := common.GetOlPath(ctx)
 	if err != nil {
 		return err
 	}
@@ -283,7 +276,7 @@ func runBoss(ctx *cli.Context) error {
 
 // status corresponds to the "status" command of the admin tool.
 func status(ctx *cli.Context) error {
-	olPath, err := getOlPath(ctx)
+	olPath, err := common.GetOlPath(ctx)
 	if err != nil {
 		return err
 	}
@@ -438,7 +431,7 @@ func boss_start(ctx *cli.Context) error {
 
 // kill corresponds to the "kill" command of the admin tool.
 func kill(ctx *cli.Context) error {
-	olPath, err := getOlPath(ctx)
+	olPath, err := common.GetOlPath(ctx)
 	if err != nil {
 		return err
 	}
@@ -493,7 +486,7 @@ func azure_test(ctx *cli.Context) error {
 
 // cleanup corresponds to the "force-cleanup" command of the admin tool.
 func cleanup(ctx *cli.Context) error {
-	olPath, err := getOlPath(ctx)
+	olPath, err := common.GetOlPath(ctx)
 	if err != nil {
 		return err
 	}
@@ -669,6 +662,12 @@ OPTIONS:
 			UsageText: "ol force-cleanup [--path=NAME]",
 			Flags:     []cli.Flag{pathFlag},
 			Action:    cleanup,
+		},
+		cli.Command{
+			Name: "bench",
+			Usage: "Run benchmarks against an OL worker.",
+			UsageText: "ol bench",
+			Subcommands: bench.BenchCommands(),
 		},
 	}
 	err := app.Run(os.Args)
