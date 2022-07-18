@@ -8,6 +8,8 @@ import (
 	"path"
 	"path/filepath"
 	"syscall"
+
+	"github.com/urfave/cli"	
 )
 
 // Configuration is stored globally here
@@ -280,4 +282,12 @@ func SaveConf(path string) error {
 		return err
 	}
 	return ioutil.WriteFile(path, s, 0644)
+}
+
+func GetOlPath(ctx *cli.Context) (string, error) {
+	olPath := ctx.String("path")
+	if olPath == "" {
+		olPath = "default-ol"
+	}
+	return filepath.Abs(olPath)
 }
