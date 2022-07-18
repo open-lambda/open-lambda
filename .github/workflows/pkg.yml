@@ -50,5 +50,5 @@ jobs:
         make ol imgs/lambda wasm-worker wasm-functions native-functions container-proxy
         sudo make install-python-bindings
     - name: Test PyPI Packages
-      run: sudo scripts/package_tests.py
+      run: sudo ./scripts/package_tests.py
       timeout-minutes: 90
