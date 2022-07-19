@@ -95,7 +95,7 @@ func run_benchmark(ctx *cli.Context, name string, seconds float64, tasks int, fu
                 case err := <- errQ:
 			if err != nil {
 				errors += 1
-				fmt.Printf(err.Error())
+				fmt.Printf("%s\n", err.Error())
 			} else {
 				successes += 1
 			}
@@ -180,7 +180,7 @@ func BenchCommands() []cli.Command {
 				parseq = "par"
 			}
 			amt := fmt.Sprintf("%d", functions)
-			if functions > 1024 {
+			if functions >= 1024 {
 				amt = fmt.Sprintf("%dk", functions / 1024)
 			}
 			name := fmt.Sprintf("py%s-%s", amt, parseq)

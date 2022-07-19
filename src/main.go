@@ -158,9 +158,16 @@ func worker(ctx *cli.Context) error {
 		if err != nil {
 			return err
 		}
-		// holds attributes that will be used when os.StartProcess
+		// holds attributes that will be used when os.StartProcess.
+		// we use CLONE_NEWNS because ol creates many mount points.
+		// we don't want them to show up in /proc/self/mountinfo
+		// for systemd because systemd creates a service for each
+		// mount point, which is a major overhead.
 		attr := os.ProcAttr{
 			Files: []*os.File{nil, f, f},
+			Sys: &syscall.SysProcAttr{
+				Unshareflags: syscall.CLONE_NEWNS,
+			},
 		}
 		cmd := []string{}
 		for _, arg := range os.Args {
