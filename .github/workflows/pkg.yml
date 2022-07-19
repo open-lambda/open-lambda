@@ -2,7 +2,7 @@ name: PKG
 
 on:
   schedule:
-    - cron: '15 14 * * 6' # 2:15pm every Saturday
+    - cron: '30 16 * * *' # 4:30pm every day
 
 env:
   CARGO_TERM_COLOR: always
