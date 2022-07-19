@@ -96,7 +96,7 @@ func run_benchmark(ctx *cli.Context, name string, seconds float64, tasks int, fu
                 case err := <- errQ:
 			if err != nil {
 				errors += 1
-				fmt.Printf(err.Error())
+				fmt.Printf("%s\n", err.Error())
 			} else {
 				successes += 1
 			}
