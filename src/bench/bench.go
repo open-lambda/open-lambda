@@ -68,6 +68,7 @@ func run_benchmark(ctx *cli.Context, name string, seconds float64, tasks int, fu
         }
 
 	// warmup: call lambda each once
+	// TODO: make warming optional
 	fmt.Printf("warming up (calling each lambda once sequentially)\n")
         for i := 0; i<functions; i++ {
 		name := fmt.Sprintf(func_template, i)
@@ -120,7 +121,7 @@ func run_benchmark(ctx *cli.Context, name string, seconds float64, tasks int, fu
 		panic(fmt.Sprintf(">1% of requests failed (%d/%d)", errors, errors + successes))
 	}
 
-        fmt.Printf("{\"benchmark\": %s,\"seconds\": %.3f, \"successes\": %d, \"errors\": %d, \"ops/s\": %.3f}",
+        fmt.Printf("{\"benchmark\": \"%s\",\"seconds\": %.3f, \"successes\": %d, \"errors\": %d, \"ops/s\": %.3f}\n",
 		name, seconds, successes, errors, float64(successes)/seconds)
 
 	return nil
@@ -139,8 +140,31 @@ func create_lambdas(ctx *cli.Context) error {
 	}
 
 	for i := 0; i < 64*1024; i++ {
+		// noop
 		path := filepath.Join(common.Conf.Registry, fmt.Sprintf("bench-py-%d.py", i))
 		code := fmt.Sprintf("def f(event):\n\treturn %d", i)
+
+		fmt.Printf("%s\n", path)
+		if err := ioutil.WriteFile(path, []byte(code), 0644); err != nil {
+			return err
+		}
+
+		// simple pandas operation (correlation between two columns in 1000x10 DataFrame)
+		path = filepath.Join(common.Conf.Registry, fmt.Sprintf("bench-pd-%d.py", i))
+		code = `# ol-install: numpy,pandas
+import numpy as np
+import pandas as pd
+
+df = None
+
+def f(event):
+    global df
+    if df is None:
+        df = pd.DataFrame(np.random.random((1000,10)))
+    col0 = np.random.randint(len(df.columns))
+    col1 = np.random.randint(len(df.columns))
+    return df[col0].corr(df[col1])
+`
 
 		fmt.Printf("%s\n", path)
 		if err := ioutil.WriteFile(path, []byte(code), 0644); err != nil {
@@ -164,44 +188,58 @@ func BenchCommands() []cli.Command {
                         Usage: "creates lambdas for benchmarking",
 			UsageText: "ol bench init [--path=NAME]",
                         Action: create_lambdas,
+			// TODO: add param to decide how many to create
 		},
 	}
 
 	seconds := 60.0 // TODO: add param
 
-	// TODO: add one that uses pandas (pd) instead of just the .py option
+	for _, kind := range []string{"py", "pd"} {
+		for _, functions := range []int{64, 1024, 64*1024} {
+			for _, tasks := range []int{1, 32} {
+				var parseq string
+				var par_usage string
+				var usage string
+				amt := fmt.Sprintf("%d", functions)
 
-	for _, functions := range []int{64, 1024, 64*1024} {
-		for _, tasks := range []int{1, 32} {
-			var parseq string
-			if tasks == 1 {
-				parseq = "seq"
-			} else {
-				parseq = "par"
-			}
-			amt := fmt.Sprintf("%d", functions)
-			if functions > 1024 {
-				amt = fmt.Sprintf("%dk", functions / 1024)
-			}
-			name := fmt.Sprintf("py%s-%s", amt, parseq)
-			action := make_action(name, seconds, tasks, functions, "bench-py-%d")
-			usage := fmt.Sprintf(("invoke noop Python lambdas sequentially for %d seconds, " +
-				"randomly+uniformaly selecting 1 of %d lambdas for each request"), int(seconds), functions)
-			cmd := cli.Command{
-				Name:  name,
-				Usage: usage,
-				UsageText: fmt.Sprintf("ol bench init [--path=NAME]"),
-				Action: action,
-				Flags: []cli.Flag{
-					cli.StringFlag{
-						Name:  "path, p",
-						Usage: "Path location for OL environment",
+				if tasks == 1 {
+					parseq = "seq"
+					par_usage = "sequentially"
+				} else {
+					parseq = "par"
+					par_usage = fmt.Sprintf("in parallel (%d clients)", tasks)
+				}
+				if functions >= 1024 {
+					amt = fmt.Sprintf("%dk", functions / 1024)
+				}
+				if kind == "py" {
+					usage = fmt.Sprintf(("invoke noop Python lambdas %s for %d seconds, " +
+						"randomly+uniformaly selecting 1 of %d lambdas for each request"), par_usage, int(seconds), functions)
+				} else if kind == "pd" {
+					usage = fmt.Sprintf(("invoke Pandas lambdas that do correlations %s for %d seconds, " +
+						"randomly+uniformaly selecting 1 of %d lambdas for each request"), par_usage, int(seconds), functions)
+				}
+
+				name := fmt.Sprintf("%s%s-%s", kind, amt, parseq)
+				action := make_action(name, seconds, tasks, functions, "bench-"+kind+"-%d")
+				cmd := cli.Command{
+					Name:  name,
+					Usage: usage,
+					UsageText: fmt.Sprintf("ol bench init [--path=NAME]"),
+					Action: action,
+					Flags: []cli.Flag{
+						cli.StringFlag{
+							Name:  "path, p",
+							Usage: "Path location for OL environment",
+						},
 					},
-				},
+				}
+				cmds = append(cmds, cmd)
 			}
-			cmds = append(cmds, cmd)
 		}
 	}
+
+	// TODO: add command that runs them all
 
 	return cmds
 }
