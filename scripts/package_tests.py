@@ -1,4 +1,4 @@
-#! /bin/env python3
+#!/usr/bin/env python3
 
 '''Many popular PyPI packages (e.g., pandas, scikit-learn, etc) have
 extensive tests.  We want those packages to work on OL, so we run
