@@ -35,7 +35,7 @@ jobs:
       uses: actions-rs/toolchain@v1
       with:
          profile: minimal
-         toolchain: nightly-2022-7-25 #make sure this matches the version in the rust-toolchain files
+         toolchain: nightly-2022-07-25 #make sure this matches the version in the rust-toolchain files
          override: true
          components: cargo, rustc, clippy, rustfmt
          target: wasm32-unknown-unknown
