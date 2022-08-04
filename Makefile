@@ -1,6 +1,5 @@
 PWD=$(shell pwd)
 WASM_TARGET=wasm32-unknown-unknown
-CARGO=cargo +nightly
 GO=go
 OL_DIR=$(abspath ./src)
 OL_GO_FILES=$(shell find src/ -name '*.go')
@@ -34,7 +33,7 @@ endif
 all: ol imgs/lambda wasm-worker wasm-functions native-functions
 
 wasm-worker:
-	cd wasm-worker && ${CARGO} build ${BUILD_FLAGS} ${WASM_WORKER_FLAGS}
+	cd wasm-worker && cargo build ${BUILD_FLAGS} ${WASM_WORKER_FLAGS}
 	cp wasm-worker/target/${BUILDTYPE}/wasm-worker ./ol-wasm
 
 wasm-functions:
@@ -48,10 +47,10 @@ native-functions: imgs/lambda
 	ls test-registry/hashing.bin test-registry/noop.bin # guarantee they were created
 
 update-dependencies:
-	cd lambda/runtimes/native && ${CARGO} update
-	cd wasm-worker && ${CARGO} update
-	cd bin-functions && ${CARGO} update
-	cd container-proxy && ${CARGO} update
+	cd lambda/runtimes/native && cargo update
+	cd wasm-worker && cargo update
+	cd bin-functions && cargo update
+	cd container-proxy && cargo update
 
 imgs/lambda: $(LAMBDA_FILES)
 	${MAKE} -C lambda
@@ -62,10 +61,10 @@ install-python-bindings:
 	cd scripts && python setup.py install
 
 check-runtime:
-	cd lambda/runtimes/rust && ${CARGO} check
+	cd lambda/runtimes/rust && cargo check
 
 container-proxy:
-	cd container-proxy && ${CARGO} build ${BUILD_FLAGS}
+	cd container-proxy && cargo build ${BUILD_FLAGS}
 	cp ./container-proxy/target/${BUILDTYPE}/open-lambda-container-proxy ./ol-container-proxy
 
 ol: $(OL_GO_FILES)
