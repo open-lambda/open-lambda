@@ -28,7 +28,7 @@ ln -s /usr/local/go/bin/go /usr/bin/go
 
 Further, you need to have a recent nightly version of Rust, the wasm32 toolchain, and the `cross` tool installed. The easiest way to do this is.
 ```
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain=nightly
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain=nightly-2022-07-25
 source $HOME/.cargo/env
 rustup target add wasm32-unknown-unknown
 cargo install cross
