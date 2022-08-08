@@ -7,11 +7,12 @@
 import argparse
 import os
 import tempfile
-import requests
 
 from time import time
 from subprocess import call
 from multiprocessing import Pool
+
+import requests
 
 from helper import DockerWorker, SockWorker, prepare_open_lambda, setup_config
 from helper import get_current_config, TestConfContext, assert_eq
@@ -217,8 +218,7 @@ def recursive_kill(depth):
 
 @test
 def flask_test():
-    open_lambda = OpenLambda()
-    url = f'http://{open_lambda._address}/run/flask-test'
+    url = 'http://localhost:5000/run/flask-test'
     print(url)
     r = requests.get(url)
 
