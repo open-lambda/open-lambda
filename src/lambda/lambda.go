@@ -732,7 +732,7 @@ func (linst *LambdaInstance) Task() {
 		for req != nil {
 			servehttp_complete := make(chan bool)
 			go func() {
-				log.Printf("Forwarding request to sandbox")
+				f.printf("Forwarding request to sandbox")
 
 				t2 := common.T0("LambdaInstance-RoundTrip")
 
@@ -742,21 +742,35 @@ func (linst *LambdaInstance) Task() {
 				if err != nil {
 					req.w.WriteHeader(http.StatusInternalServerError)
 					req.w.Write([]byte("Could not create NewRequest: "+err.Error()+"\n"))
-				}
-				resp, err := proxy.Transport.RoundTrip(httpReq)
-
-				// copy response out
-				if err != nil {
-					req.w.WriteHeader(http.StatusInternalServerError)
-					req.w.Write([]byte("RoundTrip failed: "+err.Error()+"\n"))
 				} else {
-					defer resp.Body.Close()
-					if _, err := io.Copy(req.w, resp.Body); err != nil {
-						req.w.WriteHeader(http.StatusInternalServerError)
-						req.w.Write([]byte("reading lambda response failed: "+err.Error()+"\n"))
-					}
+					resp, err := proxy.Transport.RoundTrip(httpReq)
 
-					// TODO: copy all of resp to req.w (including headers)
+					// copy response out
+					if err != nil {
+						// TODO: maybe "502 Bad Gateway" is better than 500?
+						req.w.WriteHeader(http.StatusInternalServerError)
+						req.w.Write([]byte("RoundTrip failed: "+err.Error()+"\n"))
+					} else {
+						// copy headers
+						// (adapted from copyHeaders: https://go.dev/src/net/http/httputil/reverseproxy.go)
+						for k, vv := range resp.Header {
+							for _, v := range vv {
+								req.w.Header().Add(k, v)
+							}
+						}
+						req.w.WriteHeader(resp.StatusCode)
+
+						// copy body
+						defer resp.Body.Close()
+						if _, err := io.Copy(req.w, resp.Body); err != nil {
+							// already used WriteHeader, so can't use that to surface on error anymore
+							msg := "reading lambda response failed: "+err.Error()+"\n"
+							f.printf("error: "+msg)
+							req.w.Write([]byte("\n"+msg))
+						} else {
+							// TODO: fix "http: superfluous response.WriteHeader"
+						}
+					}
 				}
 
 				// notify instance that we're done
@@ -769,9 +783,9 @@ func (linst *LambdaInstance) Task() {
 			case <- servehttp_complete:
 			case <- time.After(time.Duration(common.Conf.Limits.Max_runtime_default) * time.Second):
 				// TODO: have per-lambda config
-				log.Println("ServeHTTP timeout")
+				// TODO: send error response (maybe 504 Gateway Timeout)
+				f.printf("ServeHTTP timeout, killing sandbox")
 				sb.Destroy()
-				sb = nil
 				break
 			}
 

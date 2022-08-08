@@ -7,6 +7,7 @@
 import argparse
 import os
 import tempfile
+import requests
 
 from time import time
 from subprocess import call
@@ -47,7 +48,7 @@ def install_tests():
         assert_eq(result, "imported")
 
         result = open_lambda.get_statistics()
-        print("DEBUG", result)
+
         installs = result['pull-package.cnt']
         if pos < 2:
             # with deps, requests should give us these:
@@ -214,6 +215,19 @@ def recursive_kill(depth):
     destroys = stats['Destroy():ms.cnt']
     assert_eq(destroys, depth)
 
+@test
+def flask_test():
+    open_lambda = OpenLambda()
+    url = f'http://{open_lambda._address}/run/flask-test'
+    print(url)
+    r = requests.get(url)
+
+    # flask apps should have control of status code, headers, and response body
+    assert r.status_code == 418
+    assert "A" in r.headers
+    assert r.headers["A"] == "B"
+    assert r.text == "hi\n"
+
 def run_tests():
     ping_test()
 
@@ -230,6 +244,9 @@ def run_tests():
     # numpy pip install needs a larger mem cap
     with TestConfContext(mem_pool_mb=1000, trace={"cgroups": True}):
         numpy_test()
+
+    # make sure we can use WSGI apps based on frameworks like Flask
+    flask_test()
 
     # make sure code updates get pulled within the cache time
     with tempfile.TemporaryDirectory() as reg_dir:
