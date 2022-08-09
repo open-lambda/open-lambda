@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"container/list"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -205,7 +206,7 @@ func (mgr *LambdaMgr) DumpStatsToLog() {
 	time(5, "ImportCache.putSandboxInNode:Lock", "ImportCache.putSandboxInNode")
 	time(5, "ImportCache.putSandboxInNode:Pause", "ImportCache.putSandboxInNode")
 	time(1, "LambdaInstance-ServeRequests", "LambdaFunc.Invoke")
-	time(2, "ServeHTTP", "LambdaInstance-ServeRequests")
+	time(2, "LambdaInstance-RoundTrip", "LambdaInstance-ServeRequests")
 }
 
 func (mgr *LambdaMgr) Cleanup() {
@@ -260,7 +261,7 @@ func (f *LambdaFunc) Invoke(w http.ResponseWriter, r *http.Request) {
 	default:
 		// queue cannot accept more, so reply with backoff
 		req.w.WriteHeader(http.StatusTooManyRequests)
-		req.w.Write([]byte("lambda function queue is full"))
+		req.w.Write([]byte("lambda function queue is full\n"))
 	}
 }
 
@@ -354,7 +355,7 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 	defer func() {
 		if err != nil {
 			if err := os.RemoveAll(codeDir); err != nil {
-				log.Printf("could not cleanup %s after failed pull", codeDir)
+				log.Printf("could not cleanup %s after failed pull\n", codeDir)
 			}
 
 			if rtType == common.RT_PYTHON {
@@ -495,7 +496,7 @@ func (f *LambdaFunc) Task() {
 			default:
 				// queue cannot accept more, so reply with backoff
 				req.w.WriteHeader(http.StatusTooManyRequests)
-				req.w.Write([]byte("lambda instance queue is full"))
+				req.w.Write([]byte("lambda instance queue is full\n"))
 				req.done <- true
 			}
 		case req := <-f.doneChan:
@@ -731,10 +732,48 @@ func (linst *LambdaInstance) Task() {
 		for req != nil {
 			servehttp_complete := make(chan bool)
 			go func() {
-				log.Printf("Forwarding request to sandbox")
-				
-				t2 := common.T0("ServeHTTP")
-				proxy.ServeHTTP(req.w, req.r)
+				f.printf("Forwarding request to sandbox")
+
+				t2 := common.T0("LambdaInstance-RoundTrip")
+
+				// get response from sandbox
+				url := "http://root" + req.r.RequestURI
+				httpReq, err := http.NewRequest(req.r.Method, url, req.r.Body)
+				if err != nil {
+					req.w.WriteHeader(http.StatusInternalServerError)
+					req.w.Write([]byte("Could not create NewRequest: "+err.Error()+"\n"))
+				} else {
+					resp, err := proxy.Transport.RoundTrip(httpReq)
+
+					// copy response out
+					if err != nil {
+						// TODO: maybe "502 Bad Gateway" is better than 500?
+						req.w.WriteHeader(http.StatusInternalServerError)
+						req.w.Write([]byte("RoundTrip failed: "+err.Error()+"\n"))
+					} else {
+						// copy headers
+						// (adapted from copyHeaders: https://go.dev/src/net/http/httputil/reverseproxy.go)
+						for k, vv := range resp.Header {
+							for _, v := range vv {
+								req.w.Header().Add(k, v)
+							}
+						}
+						req.w.WriteHeader(resp.StatusCode)
+
+						// copy body
+						defer resp.Body.Close()
+						if _, err := io.Copy(req.w, resp.Body); err != nil {
+							// already used WriteHeader, so can't use that to surface on error anymore
+							msg := "reading lambda response failed: "+err.Error()+"\n"
+							f.printf("error: "+msg)
+							req.w.Write([]byte("\n"+msg))
+						} else {
+							// TODO: fix "http: superfluous response.WriteHeader"
+						}
+					}
+				}
+
+				// notify instance that we're done
 				t2.T1()
 				req.execMs = int(t2.Milliseconds)
 				f.doneChan <- req
@@ -744,9 +783,9 @@ func (linst *LambdaInstance) Task() {
 			case <- servehttp_complete:
 			case <- time.After(time.Duration(common.Conf.Limits.Max_runtime_default) * time.Second):
 				// TODO: have per-lambda config
-				log.Println("ServeHTTP timeout")
+				// TODO: send error response (maybe 504 Gateway Timeout)
+				f.printf("ServeHTTP timeout, killing sandbox")
 				sb.Destroy()
-				sb = nil
 				break
 			}
 
