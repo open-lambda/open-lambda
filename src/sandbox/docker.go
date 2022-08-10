@@ -186,7 +186,7 @@ func (c *DockerContainer) Unpause() error {
 }
 
 // Destroy shuts down this container
-func (c *DockerContainer) Destroy() {
+func (c *DockerContainer) Destroy(reason string) {
 	if err := c.internalDestroy(); err != nil {
 		panic(fmt.Sprintf("Failed to cleanup container %v: %v", c.container.ID, err))
 	}

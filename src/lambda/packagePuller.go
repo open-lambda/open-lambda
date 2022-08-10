@@ -274,7 +274,7 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 	if err != nil {
 		return err
 	}
-	defer sb.Destroy()
+	defer sb.Destroy("package installation complete")
 
 	proxy, err := sb.HTTPProxy()
 	if err != nil {

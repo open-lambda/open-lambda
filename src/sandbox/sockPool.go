@@ -103,7 +103,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 
 	defer func() {
 		if err != nil {
-			c.Destroy()
+			c.Destroy(fmt.Sprintf("error %s occured before Create completed", err.Error()))
 		}
 	}()
 

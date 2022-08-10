@@ -121,17 +121,17 @@ func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir 
 	}
 
 	if err := c.start(); err != nil {
-		c.Destroy()
+		c.Destroy("c.start() failed")
 		return nil, err
 	}
 
 	if err := c.runServer(); err != nil {
-		c.Destroy()
+		c.Destroy("c.runServer() failed")
 		return nil, err
 	}
 
 	if err := waitForServerPipeReady(c.HostDir()); err != nil {
-		c.Destroy()
+		c.Destroy("waitForServerPipeReady failed")
 		return nil, err
 	}
 

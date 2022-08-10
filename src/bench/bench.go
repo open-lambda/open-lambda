@@ -73,13 +73,10 @@ func run_benchmark(ctx *cli.Context, name string, seconds float64, tasks int, fu
         for i := 0; i<functions; i++ {
 		name := fmt.Sprintf(func_template, i)
 		fmt.Printf("warmup %s (%d/%d)\n", name, i, functions)
-                select {
-                case reqQ <- Call{name: name}:
-                case err := <- errQ:
-			if err != nil {
-				return err
-			}
-                }
+		reqQ <- Call{name: name}
+		if err := <- errQ; err != nil {
+			return err
+		}
         }
 
 	// issue requests for specified number of seconds
@@ -112,7 +109,7 @@ func run_benchmark(ctx *cli.Context, name string, seconds float64, tasks int, fu
         for waiting > 0 {
 		if err := <- errQ; err != nil {
 			errors += 1
-			fmt.Printf(err.Error())
+			fmt.Printf("%s\n", err.Error())
 		}
 		waiting -= 1
 	}

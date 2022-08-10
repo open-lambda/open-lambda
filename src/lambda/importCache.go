@@ -136,7 +136,7 @@ func (cache *ImportCache) recursiveKill(node *ImportCacheNode) {
 
 	node.mutex.Lock()
 	if node.sb != nil {
-		node.sb.Destroy()
+		node.sb.Destroy("ImportCache recursiveKill")
 		node.sb = nil
 	}
 	node.mutex.Unlock()
@@ -221,7 +221,7 @@ func (cache *ImportCache) getSandboxInNode(node *ImportCacheNode, forceNew bool,
 	if forceNew && node.sb != nil {
 		old := node.sb
 		node.sb = nil
-		go old.Destroy()
+		go old.Destroy("ImportCache forceNew used")
 	}
 
 	if node.sb != nil {
