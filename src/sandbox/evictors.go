@@ -143,7 +143,7 @@ func (evictor *SOCKEvictor) updateState() {
 		switch event.EvType {
 		case EvCreate:
 			if prio != 0 {
-				panic("Sandboxes should be at prio 0 upon EvCreate event")
+				panic(fmt.Sprintf("Sandboxes should be at prio 0 upon EvCreate event but it was %d for %d", prio, sb.ID()))
 			}
 			prio += 1
 		case EvUnpause:
@@ -161,6 +161,7 @@ func (evictor *SOCKEvictor) updateState() {
 
 		evictor.printf("Evictor: Sandbox %v priority goes to %d", sb.ID(), prio)
 		if prio < 0 {
+			panic(fmt.Sprintf("priority should never go negative, but it went to %d for sandbox %d", prio, sb.ID()))
 			panic("priority should never go negative")
 		}
 
@@ -192,7 +193,7 @@ func (evictor *SOCKEvictor) evictFront(queue *list.List) {
 	// we'll see a evDestroy event later on our chan)
 	go func() {
 		t := common.T0("evict")
-		sb.Destroy()
+		sb.Destroy("evicted")
 		t.T1()
 	}()
 	evictor.move(sb, evictor.evicting)

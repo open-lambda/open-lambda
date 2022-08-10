@@ -286,7 +286,7 @@ func (container *SOCKContainer) Unpause() (err error) {
 }
 
 // Destroy shuts down the container
-func (container *SOCKContainer) Destroy() {
+func (container *SOCKContainer) Destroy(reason string) {
 	if err := container.cg.Pause(); err != nil {
 		panic(err)
 	}

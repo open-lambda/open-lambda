@@ -40,8 +40,12 @@ type Sandbox interface {
 	// There is no harm in calling any function on the Sandbox
 	// after Destroy.  Functions like ID() will still work, and
 	// those that are able to return errors will be no-ops,
-	// returning DEAD_SANDBOX.
-	Destroy()
+	// returning an error indicating the sandbox is dead.
+	//
+	// "reason" is just for providing a human-readable description
+	// of why the sandbox was killed, which is useful in later
+	// error messages
+	Destroy(reason string)
 
 	// Make processes in the container non-schedulable
 	Pause() error
@@ -84,12 +88,12 @@ type SandboxMeta struct {
 	CPUPercent int
 }
 
-type SockError string
+type SandboxError string
+type SandboxDeadError SandboxError
 
 const (
-	DEAD_SANDBOX       = SockError("Sandbox has died")
-	FORK_FAILED        = SockError("Fork from parent Sandbox failed")
-	STATUS_UNSUPPORTED = SockError("Argument to Status(...) unsupported by this Sandbox")
+	FORK_FAILED        = SandboxError("Fork from parent Sandbox failed")
+	STATUS_UNSUPPORTED = SandboxError("Argument to Status(...) unsupported by this Sandbox")
 )
 
 // reference to function that will be called by sandbox pool upon key

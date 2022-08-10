@@ -41,6 +41,10 @@ func (meta *SandboxMeta) String() string {
 		strings.Join(meta.Installs, ","), strings.Join(meta.Imports, ","), meta.MemLimitMB)
 }
 
-func (e SockError) Error() string {
+func (e SandboxError) Error() string {
+	return string(e)
+}
+
+func (e SandboxDeadError) Error() string {
 	return string(e)
 }

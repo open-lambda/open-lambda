@@ -106,7 +106,7 @@ func (s *SOCKServer) Destroy(w http.ResponseWriter, rsrc []string, args map[stri
 		return fmt.Errorf("no sandbox found with ID '%s'", rsrc[0])
 	}
 
-	c.Destroy()
+	c.Destroy("manually destroyed by SOCKServer")
 
 	return nil
 }
@@ -191,7 +191,7 @@ func (s *SOCKServer) Handle(w http.ResponseWriter, r *http.Request) {
 
 func (s *SOCKServer) cleanup() {
 	s.sandboxes.Range(func(key, val interface{}) bool {
-		val.(sandbox.Sandbox).Destroy()
+		val.(sandbox.Sandbox).Destroy("SOCKServer cleanup")
 		return true
 	})
 	s.sbPool.Cleanup()

@@ -636,7 +636,7 @@ func (linst *LambdaInstance) Task() {
 			if sb != nil {
 				rtLog := sb.GetRuntimeLog()
 				proxyLog := sb.GetProxyLog()
-				sb.Destroy()
+				sb.Destroy("Lambda instance kill signal received")
 
 				log.Printf("Stopped sandbox")
 
@@ -683,6 +683,7 @@ func (linst *LambdaInstance) Task() {
 		// HTTP proxy over the channel
 		if sb == nil {
 			sb = nil
+
 			if f.lmgr.ImportCache != nil && f.rtType == common.RT_PYTHON {
 				scratchDir := f.lmgr.scratchDirs.Make(f.name)
 
@@ -705,8 +706,7 @@ func (linst *LambdaInstance) Task() {
 			}
 
 			if err != nil {
-				req.w.WriteHeader(http.StatusInternalServerError)
-				req.w.Write([]byte("could not create Sandbox: " + err.Error() + "\n"))
+				linst.TrySendError(req, http.StatusInternalServerError, "could not create Sandbox: "+err.Error()+"\n", nil)
 				f.doneChan <- req
 				continue // wait for another request before retrying
 			}
@@ -715,8 +715,7 @@ func (linst *LambdaInstance) Task() {
 
 			proxy, err = sb.HTTPProxy()
 			if err != nil {
-				req.w.WriteHeader(http.StatusInternalServerError)
-				req.w.Write([]byte("could not connect to Sandbox: " + err.Error() + "\n"))
+				linst.TrySendError(req, http.StatusBadGateway, "could not connect to Sandbox: "+err.Error()+"\n", sb)
 				f.doneChan <- req
 				f.printf("discard sandbox %s due to Channel error: %v", sb.ID(), err)
 				sb = nil
@@ -740,16 +739,13 @@ func (linst *LambdaInstance) Task() {
 				url := "http://root" + req.r.RequestURI
 				httpReq, err := http.NewRequest(req.r.Method, url, req.r.Body)
 				if err != nil {
-					req.w.WriteHeader(http.StatusInternalServerError)
-					req.w.Write([]byte("Could not create NewRequest: "+err.Error()+"\n"))
+					linst.TrySendError(req, http.StatusInternalServerError, "Could not create NewRequest: "+err.Error(), sb)
 				} else {
 					resp, err := proxy.Transport.RoundTrip(httpReq)
 
 					// copy response out
 					if err != nil {
-						// TODO: maybe "502 Bad Gateway" is better than 500?
-						req.w.WriteHeader(http.StatusInternalServerError)
-						req.w.Write([]byte("RoundTrip failed: "+err.Error()+"\n"))
+						linst.TrySendError(req, http.StatusBadGateway, "RoundTrip failed: "+err.Error()+"\n", sb)
 					} else {
 						// copy headers
 						// (adapted from copyHeaders: https://go.dev/src/net/http/httputil/reverseproxy.go)
@@ -766,9 +762,7 @@ func (linst *LambdaInstance) Task() {
 							// already used WriteHeader, so can't use that to surface on error anymore
 							msg := "reading lambda response failed: "+err.Error()+"\n"
 							f.printf("error: "+msg)
-							req.w.Write([]byte("\n"+msg))
-						} else {
-							// TODO: fix "http: superfluous response.WriteHeader"
+							linst.TrySendError(req, 0, msg, sb)
 						}
 					}
 				}
@@ -785,7 +779,7 @@ func (linst *LambdaInstance) Task() {
 				// TODO: have per-lambda config
 				// TODO: send error response (maybe 504 Gateway Timeout)
 				f.printf("ServeHTTP timeout, killing sandbox")
-				sb.Destroy()
+				sb.Destroy("lambda instance experienced HTTP timeout")
 				break
 			}
 
@@ -793,7 +787,7 @@ func (linst *LambdaInstance) Task() {
 			select {
 			case killed := <-linst.killChan:
 				rtLog := sb.GetRuntimeLog()
-				sb.Destroy()
+				sb.Destroy("Lambda instance kill signal received")
 
 				log.Printf("Stopped sandbox")
 
@@ -837,4 +831,21 @@ func (linst *LambdaInstance) AsyncKill() chan bool {
 	done := make(chan bool)
 	linst.killChan <- done
 	return done
+}
+
+func (linst *LambdaInstance) TrySendError(req *Invocation, statusCode int, msg string, sb sandbox.Sandbox) {
+	if statusCode > 0 {
+		req.w.WriteHeader(statusCode)
+	}
+
+	var err error
+	if sb != nil {
+		_, err = req.w.Write([]byte(msg+"\nSandbox State:"+sb.DebugString()+"\n"))
+	} else {
+		_, err = req.w.Write([]byte(msg+"\n"))
+	}
+
+	if err != nil {
+		linst.lfunc.printf("TrySendError failed: %s\n", err.Error())
+	}
 }
