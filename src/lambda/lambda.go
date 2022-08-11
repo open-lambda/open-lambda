@@ -840,7 +840,7 @@ func (linst *LambdaInstance) TrySendError(req *Invocation, statusCode int, msg s
 
 	var err error
 	if sb != nil {
-		_, err = req.w.Write([]byte(msg+"\nSandbox State:"+sb.DebugString()+"\n"))
+		_, err = req.w.Write([]byte(msg+"\nSandbox State: "+sb.DebugString()+"\n"))
 	} else {
 		_, err = req.w.Write([]byte(msg+"\n"))
 	}

@@ -192,6 +192,10 @@ func (c *DockerContainer) Destroy(reason string) {
 	}
 }
 
+func (c *DockerContainer) DestroyIfPaused(reason string) {
+	c.Destroy(reason) // we're allowed to implement this by uncondationally destroying
+}
+
 // frees all resources associated with the lambda
 func (c *DockerContainer) internalDestroy() error {
 	c.Unpause()
@@ -351,10 +355,6 @@ func waitForServerPipeReady(hostDir string) error {
 	case <-timeout.C:
 		return fmt.Errorf("instance server failed to initialize after 20s")
 	}
-}
-
-func (c *DockerContainer) Status(key SandboxStatus) (string, error) {
-	return "", STATUS_UNSUPPORTED
 }
 
 func (c *DockerContainer) Meta() *SandboxMeta {
