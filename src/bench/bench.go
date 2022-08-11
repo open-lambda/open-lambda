@@ -50,7 +50,8 @@ func task(task int, reqQ chan Call, errQ chan error) {
         }
 }
 
-func run_benchmark(ctx *cli.Context, name string, seconds float64, tasks int, functions int, func_template string) error {
+func run_benchmark(ctx *cli.Context, name string, tasks int, functions int, func_template string) error {
+	// config
 	olPath, err := common.GetOlPath(ctx)
 	if err != nil {
 		return err
@@ -58,6 +59,11 @@ func run_benchmark(ctx *cli.Context, name string, seconds float64, tasks int, fu
 	configPath := filepath.Join(olPath, "config.json")
 	if err := common.LoadConf(configPath); err != nil {
 		return err
+	}
+
+	seconds := ctx.Float64("seconds")
+	if seconds == 0 {
+		seconds = 60.0
 	}
 
 	// launch request threads
@@ -80,7 +86,7 @@ func run_benchmark(ctx *cli.Context, name string, seconds float64, tasks int, fu
         }
 
 	// issue requests for specified number of seconds
-	fmt.Printf("start benchmark\n")
+	fmt.Printf("start benchmark (%.1f seconds)\n", seconds)
 	errors := 0
 	successes := 0
 	waiting := 0
@@ -172,9 +178,9 @@ def f(event):
 	return nil
 }
 
-func make_action(name string, seconds float64, tasks int, functions int, func_template string) (func (ctx *cli.Context) error) {
+func make_action(name string, tasks int, functions int, func_template string) (func (ctx *cli.Context) error) {
 	return func (ctx *cli.Context) error {
-		return run_benchmark(ctx, name, seconds, tasks, functions, func_template)
+		return run_benchmark(ctx, name, tasks, functions, func_template)
 	}
 }
 
@@ -188,8 +194,6 @@ func BenchCommands() []cli.Command {
 			// TODO: add param to decide how many to create
 		},
 	}
-
-	seconds := 60.0 // TODO: add param
 
 	for _, kind := range []string{"py", "pd"} {
 		for _, functions := range []int{64, 1024, 64*1024} {
@@ -210,24 +214,28 @@ func BenchCommands() []cli.Command {
 					amt = fmt.Sprintf("%dk", functions / 1024)
 				}
 				if kind == "py" {
-					usage = fmt.Sprintf(("invoke noop Python lambdas %s for %d seconds, " +
-						"randomly+uniformaly selecting 1 of %d lambdas for each request"), par_usage, int(seconds), functions)
+					usage = fmt.Sprintf(("invoke noop Python lambdas %s for S seconds (default 60), " +
+						"randomly+uniformaly selecting 1 of %d lambdas for each request"), par_usage, functions)
 				} else if kind == "pd" {
-					usage = fmt.Sprintf(("invoke Pandas lambdas that do correlations %s for %d seconds, " +
-						"randomly+uniformaly selecting 1 of %d lambdas for each request"), par_usage, int(seconds), functions)
+					usage = fmt.Sprintf(("invoke Pandas lambdas that do correlations %s for S seconds (default 60), " +
+						"randomly+uniformaly selecting 1 of %d lambdas for each request"), par_usage, functions)
 				}
 
 				name := fmt.Sprintf("%s%s-%s", kind, amt, parseq)
-				action := make_action(name, seconds, tasks, functions, "bench-"+kind+"-%d")
+				action := make_action(name, tasks, functions, "bench-"+kind+"-%d")
 				cmd := cli.Command{
 					Name:  name,
 					Usage: usage,
-					UsageText: fmt.Sprintf("ol bench init [--path=NAME]"),
+					UsageText: fmt.Sprintf("ol bench %s [--path=NAME] [--seconds=SECONDS]", name),
 					Action: action,
 					Flags: []cli.Flag{
 						cli.StringFlag{
 							Name:  "path, p",
 							Usage: "Path location for OL environment",
+						},
+						cli.Float64Flag{
+							Name:  "seconds, s",
+							Usage: "Seconds to run (after warmup)",
 						},
 					},
 				}
