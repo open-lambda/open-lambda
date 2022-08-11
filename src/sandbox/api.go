@@ -47,6 +47,12 @@ type Sandbox interface {
 	// error messages
 	Destroy(reason string)
 
+	// The Sandbox may choose to ignore the Destroy request if the
+	// state is unpaused.  Some simple Sandbox implementations may
+	// also respond to this by always killing the sandbox,
+	// regardless of current state.
+	DestroyIfPaused(reason string)
+
 	// Make processes in the container non-schedulable
 	Pause() error
 
@@ -58,9 +64,6 @@ type Sandbox interface {
 
 	// Lookup metadata that Sandbox was initialized with (static over time)
 	Meta() *SandboxMeta
-
-	// Lookup a particular stat (changes over time)
-	Status(SandboxStatus) (string, error)
 
 	// Get output of the runtime; if any
 	GetRuntimeLog() string
@@ -114,6 +117,7 @@ type SandboxEventType int
 const (
 	EvCreate    SandboxEventType = iota
 	EvDestroy                    = iota
+	EvDestroyIgnored             = iota
 	EvPause                      = iota
 	EvUnpause                    = iota
 	EvFork                       = iota
@@ -124,9 +128,3 @@ type SandboxEvent struct {
 	EvType SandboxEventType
 	SB     Sandbox
 }
-
-type SandboxStatus int
-
-const (
-	StatusMemFailures SandboxStatus = iota // boolean
-)

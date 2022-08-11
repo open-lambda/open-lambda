@@ -80,27 +80,17 @@ func (evictor *SOCKEvictor) Event(evType SandboxEventType, sb Sandbox) {
 
 // move Sandbox to a given queue, removing from previous (if necessary).
 // a move to nil is just a delete.
-//
-// a Sandbox cannot be moved from evicting to another queue (only to nil);
-// requests attempting to do so are quietly ignored
 func (evictor *SOCKEvictor) move(sb Sandbox, target *list.List) {
 	// remove from previous queue if necessary
 	prev := evictor.stateMap[sb.ID()]
 	if prev != nil {
-		// you cannot move off evicting to a live queue
-		if prev.List == evictor.evicting && target != nil {
-			return
-		}
-
 		prev.List.Remove(prev.Element)
 	}
 
 	// add to new queue
 	if target != nil {
-		if target != nil {
-			element := target.PushBack(sb)
-			evictor.stateMap[sb.ID()] = &ListLocation{target, element}
-		}
+		element := target.PushBack(sb)
+		evictor.stateMap[sb.ID()] = &ListLocation{target, element}
 	} else {
 		delete(evictor.stateMap, sb.ID())
 	}
@@ -154,7 +144,7 @@ func (evictor *SOCKEvictor) updateState() {
 			prio += 2
 		case EvChildExit:
 			prio -= 2
-		case EvDestroy:
+		case EvDestroy, EvDestroyIgnored:
 		default:
 			evictor.printf("Unknown event: %v", event.EvType)
 		}
@@ -174,6 +164,7 @@ func (evictor *SOCKEvictor) updateState() {
 			if prio >= len(evictor.prioQueues) {
 				prio = len(evictor.prioQueues) - 1
 			}
+
 			evictor.move(sb, evictor.prioQueues[prio])
 		}
 
@@ -183,20 +174,24 @@ func (evictor *SOCKEvictor) updateState() {
 
 // evict whatever SB is at the front of the queue, assumes
 // queue is not empty
-func (evictor *SOCKEvictor) evictFront(queue *list.List) {
+func (evictor *SOCKEvictor) evictFront(queue *list.List, force bool) {
 	front := queue.Front()
 	sb := front.Value.(Sandbox)
 
 	evictor.printf("Evict Sandbox %v", sb.ID())
+	evictor.move(sb, evictor.evicting)
 
 	// destroy async (we'll know when it's done, because
 	// we'll see a evDestroy event later on our chan)
 	go func() {
 		t := common.T0("evict")
-		sb.Destroy("evicted")
+		if force {
+			sb.Destroy("forced eviction")
+		} else {
+			sb.DestroyIfPaused("idle eviction")
+		}
 		t.T1()
 	}()
-	evictor.move(sb, evictor.evicting)
 }
 
 // POLICY: how should we select a victim?
@@ -224,7 +219,7 @@ func (evictor *SOCKEvictor) doEvictions() {
 
 	// try evicting the desired number, starting with the paused queue
 	for evictCount > 0 && evictor.prioQueues[0].Len() > 0 {
-		evictor.evictFront(evictor.prioQueues[0])
+		evictor.evictFront(evictor.prioQueues[0], false)
 		evictCount -= 1
 	}
 
@@ -237,12 +232,13 @@ func (evictor *SOCKEvictor) doEvictions() {
 	if freeSandboxes <= 0 && evictor.evicting.Len() == 0 {
 		evictor.printf("WARNING!  Critically low on memory, so evicting an active Sandbox")
 		if evictor.prioQueues[1].Len() > 0 {
-			evictor.evictFront(evictor.prioQueues[1])
+			evictor.evictFront(evictor.prioQueues[1], true)
 		}
 	}
 
-	// we never evict from prioQueues[2], because have descendents
-	// with lower priority that should be evicted first
+	// we never evict from prioQueues[2+], because those have
+	// descendents with lower priority that should be evicted
+	// first
 }
 
 func (evictor *SOCKEvictor) Run() {

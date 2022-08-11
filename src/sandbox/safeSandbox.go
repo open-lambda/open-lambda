@@ -3,9 +3,9 @@ package sandbox
 // this layer can wrap any sandbox, and provides several (mostly) safety features:
 // 1. it prevents concurrent calls to Sandbox functions that modify the Sandbox
 // 2. it automatically destroys unhealthy sandboxes (it is considered unhealthy after returnning any error)
-// 3. calls on a destroyed sandbox just return a DEAD_SANDBOX error (no harm is done)
+// 3. calls on a destroyed sandbox just return a dead sandbox error (no harm is done)
 // 4. suppresses Pause calls to already paused Sandboxes, and similar for Unpause calls.
-// 5. it traces all calls
+// 5. it asyncronously notifies event listeners of state changes
 
 import (
 	"fmt"
@@ -87,11 +87,34 @@ func (sb *safeSandbox) Destroy(reason string) {
 	}
 
 	sb.Sandbox.Destroy(reason)
-	// TODO: allow message to be passed in (so we can blame cache eviction, for example)
-	sb.dead = SandboxDeadError(fmt.Sprintf("Sandbox previously killed exlicitly by Destroy(reason=%s) call", reason))
+	state := "unpaused"
+	if sb.paused {
+		state = "paused"
+	}
+	sb.dead = SandboxDeadError(fmt.Sprintf("Sandbox previously killed exlicitly by Destroy(reason=%s) call while %s", reason, state))
 
 	// let anybody interested know this died
 	sb.event(EvDestroy)
+}
+
+func (sb *safeSandbox) DestroyIfPaused(reason string) {
+	sb.printf("DestroyIfPaused()")
+	t := common.T0("DestroyIfPaused()")
+	defer t.T1()
+	sb.Mutex.Lock()
+	defer sb.Mutex.Unlock()
+
+	if sb.dead != nil {
+		return
+	}
+
+	if sb.paused {
+		sb.Sandbox.Destroy(reason)
+		sb.dead = SandboxDeadError(fmt.Sprintf("Sandbox previously killed exlicitly by DestroyIfPaused(reason=%s) call", reason))
+		sb.event(EvDestroy)
+	} else {
+		sb.event(EvDestroyIgnored)
+	}
 }
 
 func (sb *safeSandbox) Pause() (err error) {
@@ -111,8 +134,8 @@ func (sb *safeSandbox) Pause() (err error) {
 		sb.destroyOnErr("Pause", err)
 		return err
 	}
-
 	sb.event(EvPause)
+
 	sb.paused = true
 	return nil
 }
@@ -130,12 +153,16 @@ func (sb *safeSandbox) Unpause() (err error) {
 		return nil
 	}
 
+	// we want watchers (e.g., the evictor) to overestimate when
+	// we're active so that we're less likely to be evicted at a
+	// bad time, so the Unpause event is sent before the actual op
+	// and the Pause event is sent after the actual op
+	sb.event(EvUnpause)
 	if err := sb.Sandbox.Unpause(); err != nil {
 		sb.destroyOnErr("Unpause", err)
 		return err
 	}
 
-	sb.event(EvUnpause)
 	sb.paused = false
 	return nil
 }
@@ -197,30 +224,12 @@ func (sb *safeSandbox) childExit(child Sandbox) {
 	}
 }
 
-func (sb *safeSandbox) Status(key SandboxStatus) (stat string, err error) {
-	sb.printf("Status(%d)", key)
-	t := common.T0("Status()")
-	defer t.T1()
-	sb.Mutex.Lock()
-	defer sb.Mutex.Unlock()
-
-	if sb.dead != nil {
-		return "", sb.dead
-	}
-
-	stat, err = sb.Sandbox.Status(key)
-	if err != nil && err != STATUS_UNSUPPORTED {
-		sb.destroyOnErr("Status", err)
-	}
-	return stat, err
-}
-
 func (sb *safeSandbox) DebugString() string {
 	sb.Mutex.Lock()
 	defer sb.Mutex.Unlock()
 
 	if sb.dead != nil {
-		return fmt.Sprintf("SANDBOX %s: DEAD (%s)\n", sb.Sandbox.ID(), sb.dead.Error())
+		return fmt.Sprintf("SANDBOX %s is DEAD: %s\n", sb.Sandbox.ID(), sb.dead.Error())
 	}
 
 	return sb.Sandbox.DebugString()

@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -301,14 +300,8 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		// did we run out of memory?
-		if stat, err := sb.Status(sandbox.StatusMemFailures); err == nil {
-			if b, err := strconv.ParseBool(stat); err == nil && b {
-				return fmt.Errorf("ran out of memory while installing %s", p.name)
-			}
-		}
-
-		return fmt.Errorf("install lambda returned status %d, body '%s'", resp.StatusCode, string(body))
+		return fmt.Errorf("install lambda returned status %d, Body: '%s', Installer Sandbox State: %s",
+			resp.StatusCode, string(body), sb.DebugString())
 	}
 
 	if err := json.Unmarshal(body, &p.meta); err != nil {

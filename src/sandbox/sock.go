@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-    "sync/atomic"
+	"sync/atomic"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -294,11 +294,15 @@ func (container *SOCKContainer) Destroy(reason string) {
 	container.decCgRefCount()
 }
 
+func (c *SOCKContainer) DestroyIfPaused(reason string) {
+	c.Destroy(reason) // we're allowed to implement this by uncondationally destroying
+}
+
 // when the count goes to zero, it means (a) this container and (b)
 // all it's descendants are destroyed. Thus, it's safe to release it's
 // cgroups, and return the memory allocation to the memPool
 func (container *SOCKContainer) decCgRefCount() {
-    newCount := atomic.AddInt32(&container.cgRefCount, -1)
+	newCount := atomic.AddInt32(&container.cgRefCount, -1)
 
 	container.printf("CG ref count decremented to %d", newCount)
 	if newCount < 0 {
@@ -429,17 +433,6 @@ func (container *SOCKContainer) fork(dst Sandbox) (err error) {
 	return nil
 }
 
-func (container *SOCKContainer) Status(key SandboxStatus) (string, error) {
-	switch key {
-	case StatusMemFailures:
-		// TODO should we only count max memory or also out of bounds?
-		status := container.cg.MemoryEvents()
-		return strconv.FormatBool(status["max"] > 0), nil
-	default:
-		return "", STATUS_UNSUPPORTED
-	}
-}
-
 func (container *SOCKContainer) Meta() *SandboxMeta {
 	return container.meta
 }
@@ -490,8 +483,11 @@ func (container *SOCKContainer) DebugString() string {
 	s += fmt.Sprintf("MEMORY USED: %d of %d MB\n",
 		container.cg.getMemUsageMB(), container.cg.getMemLimitMB())
 
-	s += fmt.Sprintf("MEMORY FAILURES: %d\n",
-		container.cg.ReadInt("memory.failcnt"))
+	if kills, err := container.cg.TryReadIntKV("memory.events", "oom_kill"); err == nil {
+		s += fmt.Sprintf("OOM KILLS: %d\n", kills)
+	} else {
+		s += fmt.Sprintf("OOM KILLS: could not read because %d\n", err.Error())
+	}
 
 	return s
 }
