@@ -726,62 +726,55 @@ func (linst *LambdaInstance) Task() {
 
 		// below here, we're guaranteed (1) sb != nil, (2) proxy != nil, (3) sb is unpaused
 
+		client := http.Client{
+			Transport: proxy.Transport,
+			Timeout: time.Second * time.Duration(common.Conf.Limits.Max_runtime_default),
+		}
+
 		// serve until we incoming queue is empty
 		t = common.T0("LambdaInstance-ServeRequests")
 		for req != nil {
-			servehttp_complete := make(chan bool)
-			go func() {
-				f.printf("Forwarding request to sandbox")
+			f.printf("Forwarding request to sandbox")
 
-				t2 := common.T0("LambdaInstance-RoundTrip")
+			t2 := common.T0("LambdaInstance-RoundTrip")
 
-				// get response from sandbox
-				url := "http://root" + req.r.RequestURI
-				httpReq, err := http.NewRequest(req.r.Method, url, req.r.Body)
+			// get response from sandbox
+			url := "http://root" + req.r.RequestURI
+			httpReq, err := http.NewRequest(req.r.Method, url, req.r.Body)
+			if err != nil {
+				linst.TrySendError(req, http.StatusInternalServerError, "Could not create NewRequest: "+err.Error(), sb)
+			} else {
+				resp, err := client.Do(httpReq)
+
+				// copy response out
 				if err != nil {
-					linst.TrySendError(req, http.StatusInternalServerError, "Could not create NewRequest: "+err.Error(), sb)
+					linst.TrySendError(req, http.StatusBadGateway, "RoundTrip failed: "+err.Error()+"\n", sb)
 				} else {
-					resp, err := proxy.Transport.RoundTrip(httpReq)
-
-					// copy response out
-					if err != nil {
-						linst.TrySendError(req, http.StatusBadGateway, "RoundTrip failed: "+err.Error()+"\n", sb)
-					} else {
-						// copy headers
-						// (adapted from copyHeaders: https://go.dev/src/net/http/httputil/reverseproxy.go)
-						for k, vv := range resp.Header {
-							for _, v := range vv {
-								req.w.Header().Add(k, v)
-							}
-						}
-						req.w.WriteHeader(resp.StatusCode)
-
-						// copy body
-						defer resp.Body.Close()
-						if _, err := io.Copy(req.w, resp.Body); err != nil {
-							// already used WriteHeader, so can't use that to surface on error anymore
-							msg := "reading lambda response failed: "+err.Error()+"\n"
-							f.printf("error: "+msg)
-							linst.TrySendError(req, 0, msg, sb)
+					// copy headers
+					// (adapted from copyHeaders: https://go.dev/src/net/http/httputil/reverseproxy.go)
+					for k, vv := range resp.Header {
+						for _, v := range vv {
+							req.w.Header().Add(k, v)
 						}
 					}
-				}
+					req.w.WriteHeader(resp.StatusCode)
 
-				// notify instance that we're done
-				t2.T1()
-				req.execMs = int(t2.Milliseconds)
-				f.doneChan <- req
-				servehttp_complete <- true
-			}()
-			select {
-			case <- servehttp_complete:
-			case <- time.After(time.Duration(common.Conf.Limits.Max_runtime_default) * time.Second):
-				// TODO: have per-lambda config
-				// TODO: send error response (maybe 504 Gateway Timeout)
-				f.printf("ServeHTTP timeout, killing sandbox")
-				sb.Destroy("lambda instance experienced HTTP timeout")
-				break
+					// copy body
+					defer resp.Body.Close()
+					if _, err := io.Copy(req.w, resp.Body); err != nil {
+						// already used WriteHeader, so can't use that to surface on error anymore
+						msg := "reading lambda response failed: "+err.Error()+"\n"
+						f.printf("error: "+msg)
+						linst.TrySendError(req, 0, msg, sb)
+					}
+				}
 			}
+
+			// notify instance that we're done
+			t2.T1()
+			v := int(t2.Milliseconds)
+			req.execMs = v
+			f.doneChan <- req
 
 			// check whether we should shutdown (non-blocking)
 			select {

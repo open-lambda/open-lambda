@@ -547,9 +547,8 @@ func cleanup(ctx *cli.Context) error {
 		fmt.Printf("could not unmount %s: %s\n", dirName, err.Error())
 	}
 
-	fmt.Printf("ATTEMPT to cleanup OL dir at %s\n", olPath)
-	if err := os.RemoveAll(olPath); err != nil {
-		fmt.Printf("could not remove all at %s: %s\n", olPath, err.Error())
+	if err := os.Remove(filepath.Join(olPath, "worker", "worker.pid")); err != nil {
+		fmt.Printf("could not remove worker.pid: %s\n", err.Error())
 	}
 
 	return nil
