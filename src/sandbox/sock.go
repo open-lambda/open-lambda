@@ -73,7 +73,6 @@ func (container *SOCKContainer) HTTPProxy() (p *httputil.ReverseProxy, err error
 		return net.Dial("unix", sockPath)
 	}
 
-	// TODO: use ResponseHeaderTimeout and/or IdleConnTimeout
 	tr := &http.Transport{Dial: dial}
 	u, err := url.Parse("http://sock-container")
 	if err != nil {
