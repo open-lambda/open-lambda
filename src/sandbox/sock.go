@@ -5,10 +5,7 @@ import (
 	"io/ioutil"
 	"log"
 	"sync/atomic"
-	"net"
 	"net/http"
-	"net/http/httputil"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -29,6 +26,7 @@ type SOCKContainer struct {
 	scratchDir       string
 	cg               *Cgroup
 	rtType           common.RuntimeType
+	client *http.Client
 
 	// 1 for self, plus 1 for each child (we can't release memory
 	// until all descendants are dead, because they share the
@@ -56,32 +54,6 @@ func (container *SOCKContainer) ID() string {
 
 func (c *SOCKContainer) GetRuntimeType() common.RuntimeType {
 	return c.rtType
-}
-
-func (container *SOCKContainer) HTTPProxy() (p *httputil.ReverseProxy, err error) {
-	// note, for debugging, you can directly contact the sock file like this:
-	// curl -XPOST --unix-socket ./ol.sock http:/test -d '{"some": "data"}'
-
-	sockPath := filepath.Join(container.scratchDir, "ol.sock")
-	if len(sockPath) > 108 {
-		return nil, fmt.Errorf("socket path length cannot exceed 108 characters (try moving cluster closer to the root directory")
-	}
-
-	log.Printf("Connecting to container at '%s'", sockPath)
-
-	dial := func(proto, addr string) (net.Conn, error) {
-		return net.Dial("unix", sockPath)
-	}
-
-	tr := &http.Transport{Dial: dial}
-	u, err := url.Parse("http://sock-container")
-	if err != nil {
-		panic(err)
-	}
-
-	proxy := httputil.NewSingleHostReverseProxy(u)
-	proxy.Transport = tr
-	return proxy, nil
 }
 
 func (container *SOCKContainer) freshProc() (err error) {
@@ -267,6 +239,9 @@ func (container *SOCKContainer) Pause() (err error) {
 		}
 	}
 
+	// save a little memory
+	container.client.CloseIdleConnections()
+
 	return nil
 }
 
@@ -434,6 +409,10 @@ func (container *SOCKContainer) fork(dst Sandbox) (err error) {
 
 func (container *SOCKContainer) Meta() *SandboxMeta {
 	return container.meta
+}
+
+func (c *SOCKContainer) Client() (*http.Client) {
+	return c.client
 }
 
 // GetRuntimeLog returns the log of the runtime

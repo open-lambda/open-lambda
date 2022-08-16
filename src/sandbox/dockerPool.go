@@ -6,6 +6,9 @@ import (
 	"strings"
 	"sync/atomic"
 	"syscall"
+	"net"
+	"net/http"
+	"time"
 
 	docker "github.com/fsouza/go-dockerclient"
 
@@ -133,6 +136,21 @@ func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir 
 	if err := waitForServerPipeReady(c.HostDir()); err != nil {
 		c.Destroy("waitForServerPipeReady failed")
 		return nil, err
+	}
+
+	// start HTTP client
+	sockPath := filepath.Join(c.hostDir, "ol.sock")
+	if len(sockPath) > 108 {
+		return nil, fmt.Errorf("socket path length cannot exceed 108 characters (try moving cluster closer to the root directory")
+	}
+
+	dial := func(proto, addr string) (net.Conn, error) {
+		return net.Dial("unix", sockPath)
+	}
+
+	c.httpClient = &http.Client{
+		Transport: &http.Transport{Dial: dial},
+		Timeout: time.Second * time.Duration(common.Conf.Limits.Max_runtime_default),
 	}
 
 	// wrap to make thread-safe and handle container death

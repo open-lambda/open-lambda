@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 	"sync/atomic"
+	"net"
+	"net/http"
+	"time"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 )
@@ -170,6 +173,23 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 		t2.T1()
 	}
 
+	// start HTTP client
+	sockPath := filepath.Join(cSock.scratchDir, "ol.sock")
+	if len(sockPath) > 108 {
+		return nil, fmt.Errorf("socket path length cannot exceed 108 characters (try moving cluster closer to the root directory")
+	}
+
+	log.Printf("Connecting to container at '%s'", sockPath)
+	dial := func(proto, addr string) (net.Conn, error) {
+		return net.Dial("unix", sockPath)
+	}
+
+	cSock.client = &http.Client{
+		Transport: &http.Transport{Dial: dial},
+		Timeout: time.Second * time.Duration(common.Conf.Limits.Max_runtime_default),
+	}
+
+	// event handling
 	safe.startNotifyingListeners(pool.eventHandlers)
 	return c, nil
 }

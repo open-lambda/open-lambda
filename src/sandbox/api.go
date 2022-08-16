@@ -2,7 +2,7 @@ package sandbox
 
 import (
 	"github.com/open-lambda/open-lambda/ol/common"
-	"net/http/httputil"
+	"net/http"
 )
 
 type SandboxPool interface {
@@ -60,7 +60,7 @@ type Sandbox interface {
 	Unpause() error
 
 	// Communication channel to forward requests.
-	HTTPProxy() (*httputil.ReverseProxy, error)
+	Client() (*http.Client)
 
 	// Lookup metadata that Sandbox was initialized with (static over time)
 	Meta() *SandboxMeta
@@ -81,7 +81,7 @@ type Sandbox interface {
 	// Child calls this on parent to notify of child Destroy
 	childExit(child Sandbox)
 
-	GetRuntimeType() common.RuntimeType
+	GetRuntimeType() common.RuntimeType // TODO: make it part of SandboxMeta?
 }
 
 type SandboxMeta struct {

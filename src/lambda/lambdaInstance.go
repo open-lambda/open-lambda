@@ -4,9 +4,7 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"net/http/httputil"
 	"strings"
-	"time"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 	"github.com/open-lambda/open-lambda/ol/sandbox"
@@ -40,8 +38,6 @@ func (linst *LambdaInstance) Task() {
 	f := linst.lfunc
 
 	var sb sandbox.Sandbox = nil
-	//var client *http.Client = nil // whenever we create a Sandbox, we init this too
-	var proxy *httputil.ReverseProxy = nil // whenever we create a Sandbox, we init this too
 	var err error
 
 	for {
@@ -129,26 +125,10 @@ func (linst *LambdaInstance) Task() {
 				f.doneChan <- req
 				continue // wait for another request before retrying
 			}
-
-			log.Printf("Connecting to sandbox")
-
-			proxy, err = sb.HTTPProxy()
-			if err != nil {
-				linst.TrySendError(req, http.StatusBadGateway, "could not connect to Sandbox: "+err.Error()+"\n", sb)
-				f.doneChan <- req
-				f.printf("discard sandbox %s due to Channel error: %v", sb.ID(), err)
-				sb = nil
-				continue // wait for another request before retrying
-			}
 		}
 		t.T1()
 
 		// below here, we're guaranteed (1) sb != nil, (2) proxy != nil, (3) sb is unpaused
-
-		client := http.Client{
-			Transport: proxy.Transport,
-			Timeout: time.Second * time.Duration(common.Conf.Limits.Max_runtime_default),
-		}
 
 		// serve until we incoming queue is empty
 		t = common.T0("LambdaInstance-ServeRequests")
@@ -163,7 +143,7 @@ func (linst *LambdaInstance) Task() {
 			if err != nil {
 				linst.TrySendError(req, http.StatusInternalServerError, "Could not create NewRequest: "+err.Error(), sb)
 			} else {
-				resp, err := client.Do(httpReq)
+				resp, err := sb.Client().Do(httpReq)
 
 				// copy response out
 				if err != nil {
@@ -179,13 +159,14 @@ func (linst *LambdaInstance) Task() {
 					req.w.WriteHeader(resp.StatusCode)
 
 					// copy body
-					defer resp.Body.Close()
 					if _, err := io.Copy(req.w, resp.Body); err != nil {
 						// already used WriteHeader, so can't use that to surface on error anymore
 						msg := "reading lambda response failed: "+err.Error()+"\n"
 						f.printf("error: "+msg)
 						linst.TrySendError(req, 0, msg, sb)
 					}
+
+					resp.Body.Close()
 				}
 			}
 

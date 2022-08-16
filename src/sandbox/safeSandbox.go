@@ -10,7 +10,7 @@ package sandbox
 import (
 	"fmt"
 	"log"
-	"net/http/httputil"
+	"net/http"
 	"strings"
 	"sync"
 
@@ -167,22 +167,16 @@ func (sb *safeSandbox) Unpause() (err error) {
 	return nil
 }
 
-func (sb *safeSandbox) HttpProxy() (p *httputil.ReverseProxy, err error) {
-	sb.printf("Channel()")
-	t := common.T0("Channel()")
-	defer t.T1()
-	sb.Mutex.Lock()
-	defer sb.Mutex.Unlock()
-
-	if sb.dead != nil {
-		return nil, sb.dead
-	}
-
-	p, err = sb.Sandbox.HTTPProxy()
-	if err != nil {
-		sb.destroyOnErr("HttpProxy", err) // TODO: rename if/when HttpProxy is replaced
-	}
-	return p, err
+func (sb *safeSandbox) Client() (*http.Client) {
+	// According to the docs, "Clients and Transports are safe for
+	// concurrent use by multiple goroutines and for efficiency
+	// should only be created once and re-used."
+	//
+	// So we don't use any locking around this one.  This also
+	// can't fail because the client should have been created
+	// during sandbox initialization (and if there were any error,
+	// it should have occured then).
+	return sb.Sandbox.Client()
 }
 
 // fork (as a private method) doesn't cleanup parent sb if fork fails
