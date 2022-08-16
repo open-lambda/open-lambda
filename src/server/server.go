@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"syscall"
+	"runtime"
+	"runtime/pprof"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 )
@@ -21,6 +23,7 @@ const (
 	STATUS_PATH = "/status"
 	STATS_PATH  = "/stats"
 	DEBUG_PATH  = "/debug"
+	PPROF_MEM_PATH  = "/pprof/mem"
 )
 
 // GetPid returns process ID, useful for making sure we're talking to the expected server
@@ -50,6 +53,14 @@ func Stats(w http.ResponseWriter, r *http.Request) {
 	} else {
 		w.Write(b)
 	}
+}
+
+func PprofMem(w http.ResponseWriter, r *http.Request) {
+        runtime.GC()
+	w.Header().Add("Content-Type", "application/octet-stream")
+        if err := pprof.WriteHeapProfile(w); err != nil {
+            log.Fatal("could not write memory profile: ", err)
+        }
 }
 
 func Main() (err error) {
@@ -88,6 +99,7 @@ func Main() (err error) {
 	http.HandleFunc(PID_PATH, GetPid)
 	http.HandleFunc(STATUS_PATH, Status)
 	http.HandleFunc(STATS_PATH, Stats)
+	http.HandleFunc(PPROF_MEM_PATH, PprofMem)
 
 	switch common.Conf.Server_mode {
 	case "lambda":

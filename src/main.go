@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -297,15 +298,53 @@ func status(ctx *cli.Context) error {
 	url := fmt.Sprintf("http://localhost:%s/status", common.Conf.Worker_port)
 	response, err := http.Get(url)
 	if err != nil {
-		return fmt.Errorf("  could not send GET to %s", url)
+		return fmt.Errorf("could not send GET to %s", url)
 	}
 	defer response.Body.Close()
 	body, err := ioutil.ReadAll(response.Body)
 	if err != nil {
-		return fmt.Errorf("  failed to read body from GET to %s", url)
+		return fmt.Errorf("failed to read body from GET to %s", url)
 	}
 	fmt.Printf("  %s => %s [%s]\n", url, body, response.Status)
 	fmt.Printf("\n")
+
+	return nil
+}
+
+// corresponds to the "pprof mem" command of the admin tool.
+func pprofMem(ctx *cli.Context) error {
+	olPath, err := common.GetOlPath(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = common.LoadConf(filepath.Join(olPath, "config.json"))
+	if err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf("http://localhost:%s/pprof/mem", common.Conf.Worker_port)
+	response, err := http.Get(url)
+	if err != nil {
+		return fmt.Errorf("could not send GET to %s", url)
+	}
+	defer response.Body.Close()
+
+	path := ctx.String("out")
+	if path == "" {
+		path = "mem.prof"
+	}
+	out, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	if _, err := io.Copy(out, response.Body); err != nil {
+		return err
+	}
+	fmt.Printf("output saved to %s.  Use the following to explore:\n", path)
+	fmt.Printf("go tool pprof -http=localhost:8888 %s\n", path)
 
 	return nil
 }
@@ -672,8 +711,26 @@ OPTIONS:
 		cli.Command{
 			Name: "bench",
 			Usage: "Run benchmarks against an OL worker.",
-			UsageText: "ol bench",
+			UsageText: "ol bench <cmd>",
 			Subcommands: bench.BenchCommands(),
+		},
+		cli.Command{
+			Name: "pprof",
+			Usage: "Profile OL worker",
+			UsageText: "ol pprof <cmd>",
+			Subcommands: []cli.Command{
+				{
+					Name:  "mem",
+					Usage: "creates lambdas for benchmarking",
+					UsageText: "ol pprof mem [--out=NAME]",
+					Action: pprofMem,
+					Flags: []cli.Flag{
+						cli.StringFlag{
+							Name:  "out, o",
+						},
+					},
+				},
+			},
 		},
 	}
 	err := app.Run(os.Args)
