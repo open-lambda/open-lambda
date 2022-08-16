@@ -15,11 +15,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"net"
-	"net/http"
-	"net/http/httputil"
-	"net/url"
 	"os"
+	"net/http"
 	"path/filepath"
 	"time"
 
@@ -37,6 +34,7 @@ type DockerContainer struct {
 	installed map[string]bool
 	meta	  *SandboxMeta
 	rtType   common.RuntimeType
+	httpClient *http.Client
 }
 
 type HandlerState int
@@ -111,26 +109,8 @@ func (c *DockerContainer) State() (hstate HandlerState, err error) {
 	return hstate, nil
 }
 
-// HTTPProxy returns a file socket channel for direct communication with the sandbox.
-func (c *DockerContainer) HTTPProxy() (p *httputil.ReverseProxy, err error) {
-	sockPath := filepath.Join(c.hostDir, "ol.sock")
-	if len(sockPath) > 108 {
-		return nil, fmt.Errorf("socket path length cannot exceed 108 characters (try moving cluster closer to the root directory")
-	}
-
-	dial := func(proto, addr string) (net.Conn, error) {
-		return net.Dial("unix", sockPath)
-	}
-
-	tr := &http.Transport{Dial: dial}
-	u, err := url.Parse("http://sock-container")
-	if err != nil {
-		panic(err)
-	}
-
-	proxy := httputil.NewSingleHostReverseProxy(u)
-	proxy.Transport = tr
-	return proxy, nil
+func (c *DockerContainer) Client() (*http.Client) {
+	return c.httpClient
 }
 
 // Start starts the container.
@@ -164,6 +144,9 @@ func (c *DockerContainer) Pause() error {
 		log.Printf("failed to pause container with error %v\n", err)
 		return c.dockerError(err)
 	}
+
+	// idle connections use a LOT of memory in the OL process
+	c.httpClient.CloseIdleConnections()
 
 	return nil
 }
