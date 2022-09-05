@@ -30,7 +30,7 @@ jobs:
          sudo rm /etc/docker/daemon.json
          sudo systemctl restart docker
          sudo gpasswd -a $USER docker
-         pip3 install pylint
+         pip3 install pylint==2.15.0
     - name: Install rustc and clippy nightly
       uses: actions-rs/toolchain@v1
       with:
