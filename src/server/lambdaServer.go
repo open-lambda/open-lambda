@@ -36,10 +36,10 @@ func getUrlComponents(r *http.Request) []string {
 
 // RunLambda expects POST requests like this:
 //
-// curl localhost:8080/run/<lambda-name>
-// curl -X POST localhost:8080/run/<lambda-name> -d '{}'
+// curl localhost:PORT/run/<lambda-name>
+// curl -X POST localhost:PORT/run/<lambda-name> -d '{}'
 // ...
-func (s *LambdaServer) RunLambda(w http.ResponseWriter, r *http.Request) {
+func (s *LambdaServer) Invoke(w http.ResponseWriter, r *http.Request) {
 	t := common.T0("web-request")
 	defer t.T1()
 
@@ -49,21 +49,13 @@ func (s *LambdaServer) RunLambda(w http.ResponseWriter, r *http.Request) {
 	// ergo we want [1] for name of sandbox
 	urlParts := getUrlComponents(r)
 	if len(urlParts) < 2 {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("expected invocation format: /run/<lambda-name>"))
-	} else {
-		// components represent run[0]/<name_of_sandbox>[1]/<extra_things>...
-		// ergo we want [1] for name of sandbox
-		urlParts := getUrlComponents(r)
-		if len(urlParts) == 2 {
-			img := urlParts[1]
-			s.lambdaMgr.Get(img).Invoke(w, r)
-		} else {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("expected invocation format: /run/<lambda-name>"))
-		}
+		return
 	}
+
+	img := urlParts[1]
+	s.lambdaMgr.Get(img).Invoke(w, r)
 }
 
 func (s *LambdaServer) Debug(w http.ResponseWriter, r *http.Request) {
@@ -89,7 +81,7 @@ func NewLambdaServer() (*LambdaServer, error) {
 
 	log.Printf("Setups Handlers")
 	port := fmt.Sprintf(":%s", common.Conf.Worker_port)
-	http.HandleFunc(RUN_PATH, server.RunLambda)
+	http.HandleFunc(RUN_PATH, server.Invoke)
 	http.HandleFunc(DEBUG_PATH, server.Debug)
 
 	log.Printf("Execute handler by POSTing to localhost%s%s%s\n", port, RUN_PATH, "<lambda>")

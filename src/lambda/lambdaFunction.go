@@ -4,9 +4,11 @@ import (
 	"bufio"
 	"container/list"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
+	"sync"
 	"path/filepath"
 	"strings"
 	"time"
@@ -17,9 +19,10 @@ import (
 
 // LambdaFunc represents a single lambda function (the code)
 type LambdaFunc struct {
+	sync.Mutex
+
 	lmgr *LambdaMgr
 	name string
-
 	rtType common.RuntimeType
 
 	// lambda code
@@ -27,34 +30,159 @@ type LambdaFunc struct {
 	codeDir  string
 	meta     *sandbox.SandboxMeta
 
-	// lambda execution
-	funcChan  chan *Invocation // server to func
-	instChan  chan *Invocation // func to instances
-	doneChan  chan *Invocation // instances to func
-	instances *list.List
+	// sandbox instances (first in, last out)
+	idle *list.List
+	version int
+}
 
-	// send chan to the kill chan to destroy the instance, then
-	// wait for msg on sent chan to block until it is done
-	killChan chan chan bool
+type InvokeError struct {
+	httpStatus int
+	msg string
+	sbMsg string
+}
+
+func newInvokeError(httpStatus int, err error, sb sandbox.Sandbox) *InvokeError {
+	sbMsg := ""
+	if sb != nil {
+		sbMsg = sb.DebugString()
+	}
+	return &InvokeError{
+		httpStatus: httpStatus,
+		msg: err.Error(),
+		sbMsg: sbMsg,
+	}
 }
 
 func (f *LambdaFunc) Invoke(w http.ResponseWriter, r *http.Request) {
+	resp, err := f.InvokeInSandbox(r)
+	if err != nil {
+		w.WriteHeader(err.httpStatus)
+		if _, err := w.Write([]byte(err.msg+"\n")); err != nil {
+			f.printf("writing err to http failed: %s\n", err.Error())
+		}
+		if err.sbMsg != "" {
+			if _, err := w.Write([]byte("\nSandbox State: "+err.sbMsg+"\n")); err != nil {
+				f.printf("writing err to http failed: %s\n", err.Error())
+			}
+		}
+		return
+	}
+	defer resp.Body.Close()
+
+	// copy headers (adapted from copyHeaders: https://go.dev/src/net/http/httputil/reverseproxy.go)
+	for k, vv := range resp.Header {
+		for _, v := range vv {
+			w.Header().Add(k, v)
+		}
+	}
+	w.WriteHeader(resp.StatusCode)
+
+	// copy body
+	if _, err := io.Copy(w, resp.Body); err != nil {
+		f.printf("reading lambda response failed: "+err.Error()+"\n")
+	}
+}
+
+func (f *LambdaFunc) InvokeInSandbox(r *http.Request) (*http.Response, *InvokeError) {
 	t := common.T0("LambdaFunc.Invoke")
 	defer t.T1()
 
-	done := make(chan bool)
-	req := &Invocation{w: w, r: r, done: done}
-
-	// send invocation to lambda func task, if room in queue
-	select {
-	case f.funcChan <- req:
-		// block until it's done
-		<-done
-	default:
-		// queue cannot accept more, so reply with backoff
-		req.w.WriteHeader(http.StatusTooManyRequests)
-		req.w.Write([]byte("lambda function queue is full\n"))
+	f.Mutex.Lock()
+	defer f.Mutex.Unlock()
+	
+	// PHASE 1: pre-exec (locked)
+	err := f.checkForUpdates()
+	if err != nil {
+		return nil, newInvokeError(http.StatusInternalServerError, err, nil)
 	}
+	sb, err := f.getUnpausedSandbox()
+	if err != nil {
+		return nil, newInvokeError(http.StatusInternalServerError, err, nil)
+	}
+	version := f.version
+
+	// PHASE 2: exec (concurrent)
+	f.Mutex.Unlock()
+	resp, err := f.forwardToSandbox(r, sb)
+	f.Mutex.Lock()
+
+	// PHASE 3: post exec (locked)
+	f.releaseSandbox(sb, version)
+
+	if err != nil {
+		return nil, newInvokeError(http.StatusBadGateway, err, sb)
+	}
+	return resp, nil
+}
+
+func (f *LambdaFunc) checkForUpdates() (err error) {
+	oldCodeDir := f.codeDir
+	if err := f.pullHandlerIfStale(); err != nil {
+		return fmt.Errorf("Error checking for new lambda code at `%s`: %v", f.codeDir, err)
+	}
+
+	if oldCodeDir != "" && oldCodeDir != f.codeDir {
+		f.version++
+	}
+	return nil
+}
+
+func (f *LambdaFunc) forwardToSandbox(r *http.Request, sb sandbox.Sandbox) (*http.Response, error) {
+	f.printf("Forwarding request to sandbox")
+
+	// get response from sandbox
+	url := "http://root" + r.RequestURI
+	httpReq, err := http.NewRequest(r.Method, url, r.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	return sb.Client().Do(httpReq)
+}
+
+func (f *LambdaFunc) getUnpausedSandbox() (sb sandbox.Sandbox, err error) {
+	// CHOICE 1: try to find an idle sandbox if we can
+	for {
+		el := f.idle.Front()
+		if el == nil {
+			break
+		}
+
+		f.idle.Remove(el)
+		sb := el.Value.(sandbox.Sandbox)
+		if err := sb.Unpause(); err == nil {
+			return sb, nil
+		}
+	}
+
+	// CHOICE 2: TODO: should we every wait for a sandbox if requests are pretty short?
+
+	// CHOICE 3: try to create a sandbox from the import cache if we can
+	if f.lmgr.ImportCache != nil && f.rtType == common.RT_PYTHON {
+		scratchDir := f.lmgr.scratchDirs.Make(f.name)
+
+		// we don't specify parent SB, because ImportCache.Create chooses it for us
+		sb, err := f.lmgr.ImportCache.Create(f.lmgr.sbPool, true, f.codeDir, scratchDir, f.meta, f.rtType)
+		if err != nil {
+			f.printf("failed to get Sandbox from import cache: %s", err.Error())
+		} else {
+			return sb, err
+		}
+	}
+
+	// CHOICE 4: create new, parentless sandbox
+	f.printf("Creating new sandbox")
+	scratchDir := f.lmgr.scratchDirs.Make(f.name)
+	return f.lmgr.sbPool.Create(nil, true, f.codeDir, scratchDir, f.meta, f.rtType)
+}
+
+func (f *LambdaFunc) releaseSandbox(sb sandbox.Sandbox, version int) {
+	if version == f.version {
+		f.idle.PushFront(sb)
+	} else {
+		sb.Destroy("code version outdated")
+	}	
+	// TODO: can we delete the old code dir?  only after last sandbox delete
 }
 
 // add function name to each log message so we know which logs
@@ -181,221 +309,4 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 	f.codeDir = codeDir
 	f.lastPull = &now
 	return nil
-}
-
-// this Task receives lambda requests, fetches new lambda code as
-// needed, and dispatches to a set of lambda instances.  Task also
-// monitors outstanding requests, and scales the number of instances
-// up or down as needed.
-//
-// communication for a given request is as follows (each of the four
-// transfers are commented within the function):
-//
-// client -> function -> instance -> function -> client
-//
-// each of the 4 handoffs above is over a chan.  In order, those chans are:
-// 1. LambdaFunc.funcChan
-// 2. LambdaFunc.instChan
-// 3. LambdaFunc.doneChan
-// 4. Invocation.done
-//
-// If either LambdaFunc.funcChan or LambdaFunc.instChan is full, we
-// respond to the client with a backoff message: StatusTooManyRequests
-func (f *LambdaFunc) Task() {
-	f.printf("debug: LambdaFunc.Task() runs on goroutine %d", common.GetGoroutineID())
-
-	// we want to perform various cleanup actions, such as killing
-	// instances and deleting old code.  We want to do these
-	// asynchronously, but in order.  Thus, we use a chan to get
-	// FIFO behavior and a single cleanup task to get async.
-	//
-	// two types can be sent to this chan:
-	//
-	// 1. string: this is a path to be deleted
-	//
-	// 2. chan: this is a signal chan that corresponds to
-	// previously initiated cleanup work.  We block until we
-	// receive the complete signal, before proceeding to
-	// subsequent cleanup tasks in the FIFO.
-	cleanupChan := make(chan interface{}, 32)
-	cleanupTaskDone := make(chan bool)
-	go func() {
-		for {
-			msg, ok := <-cleanupChan
-			if !ok {
-				cleanupTaskDone <- true
-				return
-			}
-
-			switch op := msg.(type) {
-			case string:
-				if err := os.RemoveAll(op); err != nil {
-					f.printf("Async code cleanup could not delete %s, even after all instances using it killed: %v", op, err)
-				}
-			case chan bool:
-				<-op
-			}
-		}
-	}()
-
-	// stats for autoscaling
-	outstandingReqs := 0
-	execMs := common.NewRollingAvg(10)
-	var lastScaling *time.Time = nil
-	timeout := time.NewTimer(0)
-
-	for {
-		select {
-		case <-timeout.C:
-			if f.codeDir == "" {
-				continue
-			}
-		case req := <-f.funcChan:
-			// msg: client -> function
-
-			// check for new code, and cleanup old code
-			// (and instances that use it) if necessary
-			oldCodeDir := f.codeDir
-			if err := f.pullHandlerIfStale(); err != nil {
-				f.printf("Error checking for new lambda code at `%s`: %v", f.codeDir, err)
-				req.w.WriteHeader(http.StatusInternalServerError)
-				req.w.Write([]byte(err.Error() + "\n"))
-				req.done <- true
-				continue
-			}
-
-			if oldCodeDir != "" && oldCodeDir != f.codeDir {
-				el := f.instances.Front()
-				for el != nil {
-					waitChan := el.Value.(*LambdaInstance).AsyncKill()
-					cleanupChan <- waitChan
-					el = el.Next()
-				}
-				f.instances = list.New()
-
-				// cleanupChan is a FIFO, so this will
-				// happen after the cleanup task waits
-				// for all instance kills to finish
-				cleanupChan <- oldCodeDir
-			}
-
-			f.lmgr.DepTracer.TraceInvocation(f.codeDir)
-
-			select {
-			case f.instChan <- req:
-				// msg: function -> instance
-				outstandingReqs++
-			default:
-				// queue cannot accept more, so reply with backoff
-				req.w.WriteHeader(http.StatusTooManyRequests)
-				req.w.Write([]byte("lambda instance queue is full\n"))
-				req.done <- true
-			}
-		case req := <-f.doneChan:
-			// msg: instance -> function
-
-			execMs.Add(req.execMs)
-			outstandingReqs--
-
-			// msg: function -> client
-			req.done <- true
-
-		case done := <-f.killChan:
-			// signal all instances to die, then wait for
-			// cleanup task to finish and exit
-			el := f.instances.Front()
-			for el != nil {
-				waitChan := el.Value.(*LambdaInstance).AsyncKill()
-				cleanupChan <- waitChan
-				el = el.Next()
-			}
-			if f.codeDir != "" {
-				//cleanupChan <- f.codeDir
-			}
-			close(cleanupChan)
-			<-cleanupTaskDone
-			done <- true
-			return
-		}
-
-		// POLICY: how many instances (i.e., virtual sandboxes) should we allocate?
-
-		// AUTOSCALING STEP 1: decide how many instances we want
-
-		// let's aim to have 1 sandbox per second of outstanding work
-		inProgressWorkMs := outstandingReqs * execMs.Avg
-		desiredInstances := inProgressWorkMs / 1000
-
-		// if we have, say, one job that will take 100
-		// seconds, spinning up 100 instances won't do any
-		// good, so cap by number of outstanding reqs
-		if outstandingReqs < desiredInstances {
-			desiredInstances = outstandingReqs
-		}
-
-		// always try to have one instance
-		if desiredInstances < 1 {
-			desiredInstances = 1
-		}
-
-		// AUTOSCALING STEP 2: tweak how many instances we have, to get closer to our goal
-
-		// make at most one scaling adjustment per second
-		adjustFreq := time.Second
-		now := time.Now()
-		if lastScaling != nil {
-			elapsed := now.Sub(*lastScaling)
-			if elapsed < adjustFreq {
-				if desiredInstances != f.instances.Len() {
-					timeout = time.NewTimer(adjustFreq - elapsed)
-				}
-				continue
-			}
-		}
-
-		// kill or start at most one instance to get closer to
-		// desired number
-		if f.instances.Len() < desiredInstances {
-			f.printf("increase instances to %d", f.instances.Len()+1)
-			f.newInstance()
-			lastScaling = &now
-		} else if f.instances.Len() > desiredInstances {
-			f.printf("reduce instances to %d", f.instances.Len()-1)
-			waitChan := f.instances.Back().Value.(*LambdaInstance).AsyncKill()
-			f.instances.Remove(f.instances.Back())
-			cleanupChan <- waitChan
-			lastScaling = &now
-		}
-
-		if f.instances.Len() != desiredInstances {
-			// we can only adjust quickly, so we want to
-			// run through this loop again as soon as
-			// possible, even if there are no requests to
-			// service.
-			timeout = time.NewTimer(adjustFreq)
-		}
-	}
-}
-
-func (f *LambdaFunc) newInstance() {
-	if f.codeDir == "" {
-		panic("cannot start instance until code has been fetched")
-	}
-
-	linst := &LambdaInstance{
-		lfunc:    f,
-		codeDir:  f.codeDir,
-		meta:     f.meta,
-		killChan: make(chan chan bool, 1),
-	}
-
-	f.instances.PushBack(linst)
-
-	go linst.Task()
-}
-
-func (f *LambdaFunc) Kill() {
-	done := make(chan bool)
-	f.killChan <- done
-	<-done
 }

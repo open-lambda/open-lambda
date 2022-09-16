@@ -3,7 +3,6 @@ package lambda
 import (
 	"container/list"
 	"log"
-	"net/http"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -29,19 +28,6 @@ type LambdaMgr struct {
 	// thread-safe map from a lambda's name to its LambdaFunc
 	mapMutex sync.Mutex
 	lfuncMap map[string]*LambdaFunc
-}
-
-// represents an HTTP request to be handled by a lambda instance
-type Invocation struct {
-	w http.ResponseWriter
-	r *http.Request
-
-	// signal to client that response has been written to w
-	done chan bool
-
-	// how many milliseconds did ServeHTTP take?  (doesn't count
-	// queue time or Sandbox init)
-	execMs int
 }
 
 func NewLambdaMgr() (res *LambdaMgr, err error) {
@@ -110,14 +96,8 @@ func (mgr *LambdaMgr) Get(name string) (f *LambdaFunc) {
 		f = &LambdaFunc{
 			lmgr:      mgr,
 			name:      name,
-			funcChan:  make(chan *Invocation, 32),
-			instChan:  make(chan *Invocation, 32),
-			doneChan:  make(chan *Invocation, 32),
-			instances: list.New(),
-			killChan:  make(chan chan bool, 1),
+			idle: list.New(),
 		}
-
-		go f.Task()
 		mgr.lfuncMap[name] = f
 	}
 
@@ -177,7 +157,7 @@ func (mgr *LambdaMgr) Cleanup() {
 	// 3. cleanup SandboxPool underlying both of above
 	for _, f := range mgr.lfuncMap {
 		log.Printf("Kill function: %s", f.name)
-		f.Kill()
+		// TODO: kill the function
 	}
 
 	if mgr.ImportCache != nil {
@@ -188,7 +168,6 @@ func (mgr *LambdaMgr) Cleanup() {
 		mgr.sbPool.Cleanup() // assumes all Sandboxes are gone
 	}
 
-	// cleanup DepTracer
 	if mgr.DepTracer != nil {
 		mgr.DepTracer.Cleanup()
 	}
