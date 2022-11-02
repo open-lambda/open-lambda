@@ -166,15 +166,18 @@ def main():
     global bootstrap_path
 
     if len(sys.argv) < 2:
-        print("Expected execution: chroot <path_to_root_fs> python3 server.py <path_to_bootstrap.py> [cgroup-count]")
+        print("Expected execution: chroot <path_to_root_fs> python3 server.py <path_to_bootstrap.py> [cgroup-count] [enable-seccomp]")
         print("    cgroup-count: number of FDs (starting at 3) that refer to /sys/fs/cgroup/..../cgroup.procs files")
+        print("    enable-seccomp: true/false to enable or disables seccomp filtering")
         sys.exit(1)
 
     print('server.py: started new process with args: ' + " ".join(sys.argv))
 
-    return_code = ol.enable_seccomp()
-    assert return_code >= 0
-    print('seccomp enabled')
+    #enable_seccomp if enable-seccomp is not passed
+    if len(sys.argv) < 3 or sys.argv[3] == 'true':
+        return_code = ol.enable_seccomp()
+        assert return_code >= 0
+        print('seccomp enabled')
 
     bootstrap_path = sys.argv[1]
     cgroup_fds = 0
