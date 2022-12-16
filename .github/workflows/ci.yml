@@ -32,11 +32,9 @@ jobs:
          sudo gpasswd -a $USER docker
          pip3 install pylint==2.15.0
     - name: Install rustc and clippy nightly
-      uses: actions-rs/toolchain@v1
+      uses: dtolnay/rust-toolchain@stable
       with:
-         profile: minimal
-         toolchain: nightly-2022-07-25 #make sure this matches the version in the rust-toolchain files
-         override: true
+         toolchain: nightly-2022-12-16 #make sure this matches the version in the rust-toolchain files
          components: cargo, rustc, clippy, rustfmt
          target: wasm32-unknown-unknown
     - name: Setup rust dependency caching

@@ -25,7 +25,7 @@ use clap::Parser;
 use async_wormhole::stack::Stack;
 
 #[derive(
-    Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, derive_more::Display, clap::ArgEnum,
+    Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, derive_more::Display, clap::ValueEnum,
 )]
 #[clap(rename_all = "snake-case")]
 pub enum WasmCompilerType {
@@ -38,7 +38,7 @@ pub enum WasmCompilerType {
 #[clap(rename_all = "snake-case")]
 #[clap(author, version, about, long_about = None)]
 struct Args {
-    #[clap(long, arg_enum, default_value = "llvm")]
+    #[clap(long, value_enum, default_value = "llvm")]
     #[clap(help = "Which compiler should be used to compile WebAssembly to native code?")]
     wasm_compiler: WasmCompilerType,
 
@@ -52,7 +52,7 @@ async fn load_functions(function_mgr: &Arc<FunctionManager>) {
     let compiler_name = format!("{}", function_mgr.get_compiler_type()).to_lowercase();
     let cache_path: PathBuf = format!("{registry_path}.worker.{compiler_name}.cache").into();
 
-    let directory = match read_dir(&registry_path) {
+    let directory = match read_dir(registry_path) {
         Ok(dir) => dir,
         Err(err) => {
             panic!("Failed to open registry at {registry_path:?}: {err}");
