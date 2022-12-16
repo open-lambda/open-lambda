@@ -38,9 +38,9 @@ jobs:
          components: cargo, rustc, clippy, rustfmt
          target: wasm32-unknown-unknown
     - name: Setup rust dependency caching
-      uses: Swatinem/rust-cache@v1
+      uses: Swatinem/rust-cache@v2
       with:
-         working-directory: wasm-worker
+         workspaces: "wasm-worker-> target"
     - name: Install golang
       uses: actions/setup-go@v3
       with:
