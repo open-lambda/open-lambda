@@ -19,7 +19,7 @@ jobs:
         shell: bash
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
     - name: Install Docker and Prereqs
       # This uses a workaround for a known issue with docker. See here: https://github.com/actions/virtual-environments/issues/5490#issuecomment-1118328567
       run: |
