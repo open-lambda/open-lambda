@@ -49,7 +49,7 @@ type Config struct {
 	Pip_index string `json:"pip_mirror"`
 
 	// CACHE OPTIONS
-	Mem_pool_mb int `json:"memPoolMb"`
+	Mem_pool_mb int `json:"mem_pool_mb"`
 
 	// can be empty (use root zygote only), a JSON obj (specifying
 	// the tree), or a path (to a file specifying the tree)
