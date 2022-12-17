@@ -10,19 +10,19 @@ hyper = { version="0.14", features=["server", "client", "http1", "runtime", "str
 serde_bytes = "0.11"
 ron = "0"
 derive_more = "0.99"
-clap = { version = "3", default-features=false, features=["suggestions", "color", "std", "cargo", "derive"]}
+clap = { version = "4", default-features=false, features=["suggestions", "color", "std", "cargo", "derive"]}
 futures-util = { version="0.3" }
-wasmer = { git="https://github.com/kaimast/wasmer.git", rev="c288794b9a7f1a23d6ed565a3c80486ab776f805", default-features=false, features=["compiler", "async"] }
-wasmer-compiler-singlepass = { git="https://github.com/kaimast/wasmer.git", rev="c288794b9a7f1a23d6ed565a3c80486ab776f805" }
-wasmer-compiler-cranelift = { git="https://github.com/kaimast/wasmer.git", rev="c288794b9a7f1a23d6ed565a3c80486ab776f805" }
-wasmer-compiler-llvm = { git="https://github.com/kaimast/wasmer.git", rev="c288794b9a7f1a23d6ed565a3c80486ab776f805", optional=true }
-wasmer-engine-dylib = { git="https://github.com/kaimast/wasmer.git", rev="c288794b9a7f1a23d6ed565a3c80486ab776f805" }
-wasmer-engine = { git="https://github.com/kaimast/wasmer.git", rev="c288794b9a7f1a23d6ed565a3c80486ab776f805" }
-wasmer-vm = { git="https://github.com/kaimast/wasmer.git", rev="c288794b9a7f1a23d6ed565a3c80486ab776f805" }
+wasmer = { git="https://github.com/kaimast/wasmer.git", branch="zygote-stable", default-features=false, features=["compiler", "async"] }
+wasmer-compiler-singlepass = { git="https://github.com/kaimast/wasmer.git", branch="zygote-stable" }
+wasmer-compiler-cranelift = { git="https://github.com/kaimast/wasmer.git", branch="zygote-stable" }
+wasmer-compiler-llvm = { git="https://github.com/kaimast/wasmer.git", branch="zygote-stable", optional=true }
+wasmer-engine-dylib = { git="https://github.com/kaimast/wasmer.git", branch="zygote-stable" }
+wasmer-engine = { git="https://github.com/kaimast/wasmer.git", branch="zygote-stable" }
+wasmer-vm = { git="https://github.com/kaimast/wasmer.git", branch="zygote-stable" }
 lazy_static = "1"
-pretty_env_logger = { version="0.4" }
+pretty_env_logger = "0.4"
 log = "0.4"
-parking_lot = "0.11"
+parking_lot = "0.12"
 dashmap = "5"
 cfg-if = "1"
 bincode = "1"

@@ -19,7 +19,7 @@ jobs:
         shell: bash
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
     - name: Install Docker and Prereqs
       # This uses a workaround for a known issue with docker. See here: https://github.com/actions/virtual-environments/issues/5490#issuecomment-1118328567
       run: |
@@ -32,17 +32,15 @@ jobs:
          sudo gpasswd -a $USER docker
          pip3 install pylint==2.15.0
     - name: Install rustc and clippy nightly
-      uses: actions-rs/toolchain@v1
+      uses: dtolnay/rust-toolchain@stable
       with:
-         profile: minimal
-         toolchain: nightly-2022-07-25 #make sure this matches the version in the rust-toolchain files
-         override: true
+         toolchain: nightly-2022-12-16 #make sure this matches the version in the rust-toolchain files
          components: cargo, rustc, clippy, rustfmt
          target: wasm32-unknown-unknown
     - name: Setup rust dependency caching
-      uses: Swatinem/rust-cache@v1
+      uses: Swatinem/rust-cache@v2
       with:
-         working-directory: wasm-worker
+         workspaces: "wasm-worker-> target"
     - name: Install golang
       uses: actions/setup-go@v3
       with:
