@@ -132,7 +132,7 @@ func (b *Boss) StorageLambda(w http.ResponseWriter, r *http.Request) {
 	Create(string(contents))
 }
 
-func (b *Boss) DownloadLambda(w http.ResponseWriter, r *http.Request) {
+func (*Boss) DownloadLambda(w http.ResponseWriter, r *http.Request) {
 	// contents, err := io.ReadAll(r.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -145,7 +145,7 @@ func (b *Boss) DownloadLambda(w http.ResponseWriter, r *http.Request) {
 	Download()
 }
 
-func (b *Boss) DeleteLambda(w http.ResponseWriter, r *http.Request) {
+func (*Boss) DeleteLambda(w http.ResponseWriter, r *http.Request) {
 	// contents, err := io.ReadAll(r.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)

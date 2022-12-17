@@ -42,7 +42,7 @@ type SOCKContainer struct {
 
 // add ID to each log message so we know which logs correspond to
 // which containers
-func (container *SOCKContainer) printf(format string, args ...interface{}) {
+func (container *SOCKContainer) printf(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	log.Printf("%s [SOCK %s]", strings.TrimRight(msg, "\n"), container.id)
 }
@@ -52,8 +52,8 @@ func (container *SOCKContainer) ID() string {
 	return container.id
 }
 
-func (c *SOCKContainer) GetRuntimeType() common.RuntimeType {
-	return c.rtType
+func (container *SOCKContainer) GetRuntimeType() common.RuntimeType {
+	return container.rtType
 }
 
 func (container *SOCKContainer) freshProc() (err error) {
@@ -268,8 +268,9 @@ func (container *SOCKContainer) Destroy(reason string) {
 	container.decCgRefCount()
 }
 
-func (c *SOCKContainer) DestroyIfPaused(reason string) {
-	c.Destroy(reason) // we're allowed to implement this by uncondationally destroying
+func (container *SOCKContainer) DestroyIfPaused(reason string) {
+	// we're allowed to implement this by unconditionally destroying
+	container.Destroy(reason)
 }
 
 // when the count goes to zero, it means (a) this container and (b)
@@ -411,8 +412,8 @@ func (container *SOCKContainer) Meta() *SandboxMeta {
 	return container.meta
 }
 
-func (c *SOCKContainer) Client() (*http.Client) {
-	return c.client
+func (container *SOCKContainer) Client() (*http.Client) {
+	return container.client
 }
 
 // GetRuntimeLog returns the log of the runtime
@@ -438,7 +439,7 @@ func (container *SOCKContainer) GetProxyLog() string {
 }
 
 func (container *SOCKContainer) DebugString() string {
-	var s string = fmt.Sprintf("SOCK %s\n", container.ID())
+	var s = fmt.Sprintf("SOCK %s\n", container.ID())
 
 	s += fmt.Sprintf("ROOT DIR: %s\n", container.containerRootDir)
 

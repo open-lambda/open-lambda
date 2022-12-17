@@ -16,8 +16,8 @@ type LambdaServer struct {
 	lambdaMgr *lambda.LambdaMgr
 }
 
-// getUrlComponents parses request URL into its "/" delimated components
-func getUrlComponents(r *http.Request) []string {
+// getURLComponents parses request URL into its "/" delimated components
+func getURLComponents(r *http.Request) []string {
 	path := r.URL.Path
 
 	// trim prefix
@@ -47,7 +47,7 @@ func (s *LambdaServer) RunLambda(w http.ResponseWriter, r *http.Request) {
 
 	// components represent run[0]/<name_of_sandbox>[1]/<extra_things>...
 	// ergo we want [1] for name of sandbox
-	urlParts := getUrlComponents(r)
+	urlParts := getURLComponents(r)
 	if len(urlParts) < 2 {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -55,7 +55,7 @@ func (s *LambdaServer) RunLambda(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// components represent run[0]/<name_of_sandbox>[1]/<extra_things>...
 		// ergo we want [1] for name of sandbox
-		urlParts := getUrlComponents(r)
+		urlParts := getURLComponents(r)
 		if len(urlParts) == 2 {
 			img := urlParts[1]
 			s.lambdaMgr.Get(img).Invoke(w, r)

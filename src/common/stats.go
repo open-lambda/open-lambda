@@ -50,7 +50,7 @@ type snapshotMsg struct {
 }
 
 var initOnce sync.Once
-var statsChan chan interface{} = make(chan interface{}, 256)
+var statsChan chan any = make(chan any, 256)
 
 func initTaskOnce() {
 	initOnce.Do(func() {
@@ -148,15 +148,15 @@ func GetGoroutineID() uint64 {
 func Max(x int, y int) int {
 	if x > y {
 		return x
-	} else {
-		return y
 	}
+
+	return y
 }
 
 func Min(x int, y int) int {
 	if x < y {
 		return x
-	} else {
-		return y
 	}
+
+	return y
 }

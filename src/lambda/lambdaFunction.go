@@ -59,7 +59,7 @@ func (f *LambdaFunc) Invoke(w http.ResponseWriter, r *http.Request) {
 
 // add function name to each log message so we know which logs
 // correspond to which LambdaFuncs
-func (f *LambdaFunc) printf(format string, args ...interface{}) {
+func (f *LambdaFunc) printf(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	log.Printf("%s [FUNC %s]", strings.TrimRight(msg, "\n"), f.name)
 }
@@ -217,7 +217,7 @@ func (f *LambdaFunc) Task() {
 	// previously initiated cleanup work.  We block until we
 	// receive the complete signal, before proceeding to
 	// subsequent cleanup tasks in the FIFO.
-	cleanupChan := make(chan interface{}, 32)
+	cleanupChan := make(chan any, 32)
 	cleanupTaskDone := make(chan bool)
 	go func() {
 		for {

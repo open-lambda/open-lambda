@@ -20,7 +20,7 @@ import (
 )
 
 type GCPClient struct {
-	service_account map[string]interface{} // from .json key exported from GCP service account
+	service_account map[string]any // from .json key exported from GCP service account
 	access_token    string
 }
 
@@ -195,7 +195,7 @@ func (c *GCPClient) GetAccessToken() (string, error) {
 		return "", err
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.Unmarshal([]byte(body), &result); err != nil {
 		return "", err
 	}
@@ -204,8 +204,8 @@ func (c *GCPClient) GetAccessToken() (string, error) {
 	return c.access_token, nil
 }
 
-func (c *GCPClient) get(url string) (rv map[string]interface{}, err error) {
-	var result map[string]interface{}
+func (c *GCPClient) get(url string) (rv map[string]any, err error) {
+	var result map[string]any
 
 	defer func() {
 		if err != nil {
@@ -236,8 +236,8 @@ func (c *GCPClient) get(url string) (rv map[string]interface{}, err error) {
 	return result, nil
 }
 
-func (c *GCPClient) post(url string, payload bytes.Buffer) (rv map[string]interface{}, err error) {
-	var result map[string]interface{}
+func (c *GCPClient) post(url string, payload bytes.Buffer) (rv map[string]any, err error) {
+	var result map[string]any
 
 	defer func() {
 		if err != nil {
@@ -268,7 +268,7 @@ func (c *GCPClient) post(url string, payload bytes.Buffer) (rv map[string]interf
 	return result, nil
 }
 
-func (c *GCPClient) GcpListInstances() (map[string]interface{}, error) {
+func (c *GCPClient) GcpListInstances() (map[string]any, error) {
 	return c.get("https://www.googleapis.com/compute/v1/projects/cs320-f21/zones/us-central1-a/instances")
 }
 
@@ -280,16 +280,16 @@ func (c *GCPClient) GcpIPtoInstance() (map[string]string, error) {
 
 	lookup := map[string]string{}
 
-	for _, item := range resp["items"].([]interface{}) {
-		instance_name := item.(map[string]interface{})["name"].(string)
-		interfaces := item.(map[string]interface{})["networkInterfaces"]
-		for _, netif := range interfaces.([]interface{}) {
-			ip := netif.(map[string]interface{})["networkIP"].(string)
+	for _, item := range resp["items"].([]any) {
+		instance_name := item.(map[string]any)["name"].(string)
+		interfaces := item.(map[string]any)["networkInterfaces"]
+		for _, netif := range interfaces.([]any) {
+			ip := netif.(map[string]any)["networkIP"].(string)
 			lookup[ip] = instance_name
 
-			confs := netif.(map[string]interface{})["accessConfigs"]
-			for _, conf := range confs.([]interface{}) {
-				iptmp := conf.(map[string]interface{})["natIP"]
+			confs := netif.(map[string]any)["accessConfigs"]
+			for _, conf := range confs.([]any) {
+				iptmp := conf.(map[string]any)["natIP"]
 				switch ip := iptmp.(type) {
 				case string:
 					lookup[ip] = instance_name
@@ -345,7 +345,7 @@ func (c *GCPClient) GcpInstanceName() (string, error) {
 	return instance, nil
 }
 
-func (c *GCPClient) Wait(resp1 map[string]interface{}, err1 error) (resp2 map[string]interface{}, err2 error) {
+func (c *GCPClient) Wait(resp1 map[string]any, err1 error) (resp2 map[string]any, err2 error) {
 	if err1 != nil {
 		return nil, fmt.Errorf("cannot Wait on on failed call: %s", err1.Error())
 	}
@@ -376,7 +376,7 @@ func (c *GCPClient) Wait(resp1 map[string]interface{}, err1 error) (resp2 map[st
 	return resp2, fmt.Errorf("Wait: operation timed out")
 }
 
-func (c *GCPClient) GcpSnapshot(disk string) (map[string]interface{}, error) {
+func (c *GCPClient) GcpSnapshot(disk string) (map[string]any, error) {
 	// TODO: take args from config (or better, read from service account somehow)
 	args := GcpSnapshotArgs{
 		Project:      "cs320-f21",
@@ -398,7 +398,7 @@ func (c *GCPClient) GcpSnapshot(disk string) (map[string]interface{}, error) {
 	return c.post(url, payload)
 }
 
-func (c *GCPClient) LaunchGCP(SnapshotName string, VMName string) (map[string]interface{}, error) {
+func (c *GCPClient) LaunchGCP(SnapshotName string, VMName string) (map[string]any, error) {
 	// TODO: take args from config (or better, read from service account somehow)
 	args := GcpLaunchVmArgs{
 		ServiceAccountEmail: c.service_account["client_email"].(string),

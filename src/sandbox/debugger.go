@@ -7,10 +7,10 @@ import (
 
 // the debugger just watches Sandboxes as they are created, and is
 // able to provide a snapshot of the pool at any time
-type debugger chan interface{}
+type debugger chan any
 
 func newDebugger(sbPool SandboxPool) debugger {
-	var d debugger = make(chan interface{}, 64)
+	var d debugger = make(chan any, 64)
 	sbPool.AddListener(func(EvType SandboxEventType, sb Sandbox) {
 		d <- SandboxEvent{EvType, sb}
 	})

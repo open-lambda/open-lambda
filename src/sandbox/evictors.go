@@ -110,7 +110,7 @@ func (evictor *SOCKEvictor) nextEvent(block bool) *SandboxEvent {
 	}
 }
 
-func (evictor *SOCKEvictor) printf(format string, args ...interface{}) {
+func (evictor *SOCKEvictor) printf(format string, args ...any) {
 	if common.Conf.Trace.Evictor {
 		msg := fmt.Sprintf(format, args...)
 		log.Printf("%s [EVICTOR]", strings.TrimRight(msg, "\n"))

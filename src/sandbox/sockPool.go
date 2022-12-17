@@ -194,7 +194,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 	return c, nil
 }
 
-func (pool *SOCKPool) printf(format string, args ...interface{}) {
+func (pool *SOCKPool) printf(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	log.Printf("%s [SOCK POOL %s]", strings.TrimRight(msg, "\n"), pool.name)
 }

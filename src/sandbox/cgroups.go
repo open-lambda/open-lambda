@@ -43,14 +43,14 @@ func NewCgroupPool(name string) (*CgroupPool, error) {
 	}
 
 	// create cgroup
-	path := pool.GroupPath()
-	pool.printf("create %s", path)
-	if err := syscall.Mkdir(path, 0700); err != nil {
-		return nil, fmt.Errorf("Mkdir %s: %s", path, err)
+	groupPath := pool.GroupPath()
+	pool.printf("create %s", groupPath)
+	if err := syscall.Mkdir(groupPath, 0700); err != nil {
+		return nil, fmt.Errorf("Mkdir %s: %s", groupPath, err)
 	}
 
 	// Make controllers available to child groups
-	rpath := fmt.Sprintf("%s/cgroup.subtree_control", path)
+	rpath := fmt.Sprintf("%s/cgroup.subtree_control", groupPath)
 	if err := ioutil.WriteFile(rpath, []byte("+pids +io +memory +cpu"), os.ModeAppend); err != nil {
 		panic(fmt.Sprintf("Error writing to %s: %v", rpath, err))
 	}
@@ -68,16 +68,16 @@ func (pool *CgroupPool) NewCgroup() *Cgroup {
 		pool: pool,
 	}
 
-	path := cg.GroupPath()
-	if err := syscall.Mkdir(path, 0700); err != nil {
-		panic(fmt.Errorf("Mkdir %s: %s", path, err))
+	groupPath := cg.GroupPath()
+	if err := syscall.Mkdir(groupPath, 0700); err != nil {
+		panic(fmt.Errorf("Mkdir %s: %s", groupPath, err))
 	}
 
 	cg.printf("created")
 	return cg
 }
 
-func (cg *Cgroup) printf(format string, args ...interface{}) {
+func (cg *Cgroup) printf(format string, args ...any) {
 	if common.Conf.Trace.Cgroups {
 		msg := fmt.Sprintf(format, args...)
 		log.Printf("%s [CGROUP %s: %s]", strings.TrimRight(msg, "\n"), cg.pool.Name, cg.Name)
@@ -138,7 +138,7 @@ func (cg *Cgroup) Destroy() {
 
 // add ID to each log message so we know which logs correspond to
 // which containers
-func (pool *CgroupPool) printf(format string, args ...interface{}) {
+func (pool *CgroupPool) printf(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	log.Printf("%s [CGROUP POOL %s]", strings.TrimRight(msg, "\n"), pool.Name)
 }
@@ -253,8 +253,8 @@ func (cg *Cgroup) GroupPath() string {
 
 func (cg *Cgroup) MemoryEvents() map[string]int64 {
 	result := map[string]int64{}
-	path := cg.ResourcePath("memory.events")
-	f, err := os.Open(path)
+	groupPath := cg.ResourcePath("memory.events")
+	f, err := os.Open(groupPath)
 	if err != nil {
 		panic(err)
 	}
