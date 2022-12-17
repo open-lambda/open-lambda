@@ -16,7 +16,7 @@ import (
 	"github.com/open-lambda/open-lambda/ol/sandbox"
 )
 
-type Handler func(http.ResponseWriter, []string, map[string]interface{}) error
+type Handler func(http.ResponseWriter, []string, map[string]any) error
 
 var nextScratchId int64 = 1000
 
@@ -35,7 +35,7 @@ func (server *SOCKServer) GetSandbox(id string) sandbox.Sandbox {
 	return val.(sandbox.Sandbox)
 }
 
-func (server *SOCKServer) Create(w http.ResponseWriter, rsrc []string, args map[string]interface{}) error {
+func (server *SOCKServer) Create(w http.ResponseWriter, rsrc []string, args map[string]any) error {
 	var leaf bool
 	if b, ok := args["leaf"]; !ok || b.(bool) {
 		leaf = true
@@ -56,31 +56,31 @@ func (server *SOCKServer) Create(w http.ResponseWriter, rsrc []string, args map[
 
 	packages := []string{}
 	if pkgs, ok := args["pkgs"]; ok {
-		for _, p := range pkgs.([]interface{}) {
+		for _, p := range pkgs.([]any) {
 			packages = append(packages, p.(string))
 		}
 	}
 
 	// spin it up
-	scratchId := fmt.Sprintf("dir-%d", atomic.AddInt64(&nextScratchId, 1))
-	scratchDir := filepath.Join(common.Conf.Worker_dir, "scratch", scratchId)
+	scratchID := fmt.Sprintf("dir-%d", atomic.AddInt64(&nextScratchId, 1))
+	scratchDir := filepath.Join(common.Conf.Worker_dir, "scratch", scratchID)
 	if err := os.MkdirAll(scratchDir, 0777); err != nil {
 		panic(err)
 	}
 
-	rt_type := common.RT_PYTHON
+	rtType := common.RT_PYTHON
 
-	if rt_name, ok := args["runtime"]; ok {
-		if rt_name == "python" {
-			rt_type = common.RT_PYTHON
-		} else if rt_name == "native" {
-			rt_type = common.RT_NATIVE
+	if rtName, ok := args["runtime"]; ok {
+		if rtName == "python" {
+			rtType = common.RT_PYTHON
+		} else if rtName == "native" {
+			rtType = common.RT_NATIVE
 		} else {
-			return fmt.Errorf("No such runtime `%s`", rt_name)
+			return fmt.Errorf("No such runtime `%s`", rtName)
 		}
 	}
 
-	if parent != nil && parent.GetRuntimeType() != rt_type {
+	if parent != nil && parent.GetRuntimeType() != rtType {
 		return fmt.Errorf("Parent and child have different runtimes")
 	}
 
@@ -88,7 +88,7 @@ func (server *SOCKServer) Create(w http.ResponseWriter, rsrc []string, args map[
 		Installs: packages,
 	}
 
-	c, err := server.sbPool.Create(parent, leaf, codeDir, scratchDir, meta, rt_type)
+	c, err := server.sbPool.Create(parent, leaf, codeDir, scratchDir, meta, rtType)
 	if err != nil {
 		return err
 	}
@@ -100,8 +100,8 @@ func (server *SOCKServer) Create(w http.ResponseWriter, rsrc []string, args map[
 	return nil
 }
 
-func (s *SOCKServer) Destroy(w http.ResponseWriter, rsrc []string, args map[string]interface{}) error {
-	c := s.GetSandbox(rsrc[0])
+func (server *SOCKServer) Destroy(w http.ResponseWriter, rsrc []string, args map[string]any) error {
+	c := server.GetSandbox(rsrc[0])
 	if c == nil {
 		return fmt.Errorf("no sandbox found with ID '%s'", rsrc[0])
 	}
@@ -111,8 +111,8 @@ func (s *SOCKServer) Destroy(w http.ResponseWriter, rsrc []string, args map[stri
 	return nil
 }
 
-func (s *SOCKServer) Pause(w http.ResponseWriter, rsrc []string, args map[string]interface{}) error {
-	c := s.GetSandbox(rsrc[0])
+func (server *SOCKServer) Pause(w http.ResponseWriter, rsrc []string, args map[string]any) error {
+	c := server.GetSandbox(rsrc[0])
 	if c == nil {
 		return fmt.Errorf("no sandbox found with ID '%s'", rsrc[0])
 	}
@@ -120,8 +120,8 @@ func (s *SOCKServer) Pause(w http.ResponseWriter, rsrc []string, args map[string
 	return c.Pause()
 }
 
-func (s *SOCKServer) Unpause(w http.ResponseWriter, rsrc []string, args map[string]interface{}) error {
-	c := s.GetSandbox(rsrc[0])
+func (server *SOCKServer) Unpause(w http.ResponseWriter, rsrc []string, args map[string]any) error {
+	c := server.GetSandbox(rsrc[0])
 	if c == nil {
 		return fmt.Errorf("no sandbox found with ID '%s'", rsrc[0])
 	}
@@ -129,14 +129,14 @@ func (s *SOCKServer) Unpause(w http.ResponseWriter, rsrc []string, args map[stri
 	return c.Unpause()
 }
 
-func (s *SOCKServer) Debug(w http.ResponseWriter, rsrc []string, args map[string]interface{}) error {
-	str := s.sbPool.DebugString()
+func (server *SOCKServer) Debug(w http.ResponseWriter, rsrc []string, args map[string]any) error {
+	str := server.sbPool.DebugString()
 	fmt.Printf("%s\n", str)
 	w.Write([]byte(str))
 	return nil
 }
 
-func (s *SOCKServer) HandleInternal(w http.ResponseWriter, r *http.Request) error {
+func (server *SOCKServer) HandleInternal(w http.ResponseWriter, r *http.Request) error {
 	log.Printf("%s %s", r.Method, r.URL.Path)
 
 	defer r.Body.Close()
@@ -150,7 +150,7 @@ func (s *SOCKServer) HandleInternal(w http.ResponseWriter, r *http.Request) erro
 		return err
 	}
 
-	var args map[string]interface{}
+	var args map[string]any
 
 	if len(rbody) > 0 {
 		if err := json.Unmarshal(rbody, &args); err != nil {
@@ -166,35 +166,35 @@ func (s *SOCKServer) HandleInternal(w http.ResponseWriter, r *http.Request) erro
 	}
 
 	routes := map[string]Handler{
-		"create":  s.Create,
-		"destroy": s.Destroy,
-		"pause":   s.Pause,
-		"unpause": s.Unpause,
-		"debug":   s.Debug,
+		"create":  server.Create,
+		"destroy": server.Destroy,
+		"pause":   server.Pause,
+		"unpause": server.Unpause,
+		"debug":   server.Debug,
 	}
 
 	if h, ok := routes[rsrc[1]]; ok {
 		log.Printf("Got %s", rsrc[1])
 		return h(w, rsrc[2:], args)
-	} else {
-		return fmt.Errorf("unknown op %s", rsrc[1])
 	}
+
+	return fmt.Errorf("unknown op %s", rsrc[1])
 }
 
-func (s *SOCKServer) Handle(w http.ResponseWriter, r *http.Request) {
-	if err := s.HandleInternal(w, r); err != nil {
+func (server *SOCKServer) Handle(w http.ResponseWriter, r *http.Request) {
+	if err := server.HandleInternal(w, r); err != nil {
 		log.Printf("Request Handler Failed: %v", err)
 		w.WriteHeader(500)
 		w.Write([]byte(fmt.Sprintf("%v\n", err)))
 	}
 }
 
-func (s *SOCKServer) cleanup() {
-	s.sandboxes.Range(func(key, val interface{}) bool {
+func (server *SOCKServer) cleanup() {
+	server.sandboxes.Range(func(key, val any) bool {
 		val.(sandbox.Sandbox).Destroy("SOCKServer cleanup")
 		return true
 	})
-	s.sbPool.Cleanup()
+	server.sbPool.Cleanup()
 }
 
 // NewSOCKServer creates a server based on the passed config."

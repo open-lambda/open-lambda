@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/urfave/cli"	
+	"github.com/urfave/cli"
 )
 
 // Configuration is stored globally here
@@ -49,17 +49,17 @@ type Config struct {
 	Pip_index string `json:"pip_mirror"`
 
 	// CACHE OPTIONS
-	Mem_pool_mb int `json:"mem_pool_mb"`
+	Mem_pool_mb int `json:"memPoolMb"`
 
 	// can be empty (use root zygote only), a JSON obj (specifying
 	// the tree), or a path (to a file specifying the tree)
-	Import_cache_tree interface{} `json:"import_cache_tree"`
+	Import_cache_tree any `json:"import_cache_tree"`
 
 	// base image path for sock containers
 	SOCK_base_path string `json:"sock_base_path"`
 
 	// pass through to sandbox envirenment variable
-	Sandbox_config interface{} `json:"sandbox_config"`
+	Sandbox_config any `json:"sandbox_config"`
 
 	// which OCI implementation to use for the docker sandbox (e.g., runc or runsc)
 	Docker_runtime string `json:"docker_runtime"`
@@ -142,8 +142,8 @@ func LoadDefaults(olPath string) error {
 	if err != nil {
 		return err
 	}
-	total_mb := uint64(in.Totalram) * uint64(in.Unit) / 1024 / 1024
-	mem_pool_mb := Max(int(total_mb-500), 500)
+	totalMb := uint64(in.Totalram) * uint64(in.Unit) / 1024 / 1024
+	memPoolMb := Max(int(totalMb-500), 500)
 
 	Conf = &Config{
 		Worker_dir:        workerDir,
@@ -154,17 +154,17 @@ func LoadDefaults(olPath string) error {
 		Sandbox:           "sock",
 		Log_output:        true,
 		Pkgs_dir:          packagesDir,
-		Sandbox_config:    map[string]interface{}{},
+		Sandbox_config:    map[string]any{},
 		SOCK_base_path:    baseImgDir,
 		Registry_cache_ms: 5000, // 5 seconds
-		Mem_pool_mb:       mem_pool_mb,
+		Mem_pool_mb:       memPoolMb,
 		Import_cache_tree: "",
 		Limits: LimitsConfig{
 			Procs:            10,
 			Mem_mb:           50,
 			CPU_percent:      100,
 			Max_runtime_default: 30,
-			Installer_mem_mb: Max(250, Min(500, mem_pool_mb/2)),
+			Installer_mem_mb: Max(250, Min(500, memPoolMb/2)),
 			Swappiness:       0,
 		},
 		Features: FeaturesConfig{
@@ -191,14 +191,14 @@ func LoadDefaults(olPath string) error {
 // ParseConfig reads a file and tries to parse it as a JSON string to a Config
 // instance.
 func LoadConf(path string) error {
-	config_raw, err := ioutil.ReadFile(path)
+	configRaw, err := ioutil.ReadFile(path)
 	if err != nil {
-		return fmt.Errorf("could not open config (%v): %v\n", path, err.Error())
+		return fmt.Errorf("could not open config (%v): %v", path, err.Error())
 	}
 
-	if err := json.Unmarshal(config_raw, &Conf); err != nil {
-		log.Printf("FILE: %v\n", string(config_raw))
-		return fmt.Errorf("could not parse config (%v): %v\n", path, err.Error())
+	if err := json.Unmarshal(configRaw, &Conf); err != nil {
+		log.Printf("FILE: %v\n", string(configRaw))
+		return fmt.Errorf("could not parse config (%v): %v", path, err.Error())
 	}
 
 	return checkConf()
@@ -225,9 +225,9 @@ func checkConf() error {
 		// evicted.
 		//
 		// TODO: revise evictor and relax this
-		min_mem := 2 * Max(Conf.Limits.Installer_mem_mb, Conf.Limits.Mem_mb)
-		if min_mem > Conf.Mem_pool_mb {
-			return fmt.Errorf("mem_pool_mb must be at least %d", min_mem)
+		minMem := 2 * Max(Conf.Limits.Installer_mem_mb, Conf.Limits.Mem_mb)
+		if minMem > Conf.Mem_pool_mb {
+			return fmt.Errorf("memPoolMb must be at least %d", minMem)
 		}
 	} else if Conf.Sandbox == "docker" {
 		if Conf.Pkgs_dir == "" {

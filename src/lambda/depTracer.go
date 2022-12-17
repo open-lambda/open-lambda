@@ -9,7 +9,7 @@ import (
 type DepTracer struct {
 	file   *os.File
 	writer *bufio.Writer
-	events chan map[string]interface{}
+	events chan map[string]any
 	done   chan bool
 }
 
@@ -22,7 +22,7 @@ func NewDepTracer(logPath string) (*DepTracer, error) {
 	t := &DepTracer{
 		file:   file,
 		writer: bufio.NewWriter(file),
-		events: make(chan map[string]interface{}, 128),
+		events: make(chan map[string]any, 128),
 		done:   make(chan bool),
 	}
 	go t.run()
@@ -56,7 +56,7 @@ func (t *DepTracer) Cleanup() {
 }
 
 func (t *DepTracer) TracePackage(p *Package) {
-	t.events <- map[string]interface{}{
+	t.events <- map[string]any{
 		"type": "package",
 		"name": p.name,
 		"deps": p.meta.Deps,
@@ -65,7 +65,7 @@ func (t *DepTracer) TracePackage(p *Package) {
 }
 
 func (t *DepTracer) TraceFunction(codeDir string, directDeps []string) {
-	t.events <- map[string]interface{}{
+	t.events <- map[string]any{
 		"type": "function",
 		"name": codeDir,
 		"deps": directDeps,
@@ -73,7 +73,7 @@ func (t *DepTracer) TraceFunction(codeDir string, directDeps []string) {
 }
 
 func (t *DepTracer) TraceInvocation(codeDir string) {
-	t.events <- map[string]interface{}{
+	t.events <- map[string]any{
 		"type": "invocation",
 		"name": codeDir,
 	}

@@ -197,7 +197,7 @@ func worker(ctx *cli.Context) error {
 
 		fmt.Printf("Starting worker: pid=%d, port=%s, log=%s\n", proc.Pid, common.Conf.Worker_port, logPath)
 
-		var ping_err error
+		var pingErr error
 
 		for i := 0; i < 300; i++ {
 			// check if it has died
@@ -220,7 +220,7 @@ func worker(ctx *cli.Context) error {
 			url := fmt.Sprintf("http://localhost:%s/pid", common.Conf.Worker_port)
 			response, err := http.Get(url)
 			if err != nil {
-				ping_err = err
+				pingErr = err
 				time.Sleep(100 * time.Millisecond)
 				continue
 			}
@@ -236,19 +236,19 @@ func worker(ctx *cli.Context) error {
 			if pid == proc.Pid {
 				fmt.Printf("ready\n")
 				return nil // server is started and ready for requests
-			} else {
-				return fmt.Errorf("expected PID %v but found %v (port conflict?)", proc.Pid, pid)
 			}
+
+			return fmt.Errorf("expected PID %v but found %v (port conflict?)", proc.Pid, pid)
 		}
 
-		return fmt.Errorf("worker still not reachable after 30 seconds :: %s", ping_err)
-	} else {
-		if err := server.Main(); err != nil {
-			return err
-		}
+		return fmt.Errorf("worker still not reachable after 30 seconds :: %s", pingErr)
 	}
 
-	return fmt.Errorf("this code should not be reachable!")
+	if err := server.Main(); err != nil {
+		return err
+	}
+
+	return fmt.Errorf("this code should not be reachable")
 }
 
 func newBossConf() error {
@@ -279,7 +279,7 @@ func runBoss(ctx *cli.Context) error {
 		return err
 	}
 
-	return boss_start(ctx)
+	return bossStart(ctx)
 }
 
 // status corresponds to the "status" command of the admin tool.
@@ -357,7 +357,7 @@ func overrideOpts(confPath, overridePath, optsStr string) error {
 	if err != nil {
 		return err
 	}
-	conf := make(map[string]interface{})
+	conf := make(map[string]any)
 	if err := json.Unmarshal(b, &conf); err != nil {
 		return err
 	}
@@ -378,7 +378,7 @@ func overrideOpts(confPath, overridePath, optsStr string) error {
 				return fmt.Errorf("key '%s' not found", keys[i])
 			}
 			switch v := sub.(type) {
-			case map[string]interface{}:
+			case map[string]any:
 				c = v
 			default:
 				return fmt.Errorf("%s refers to a %T, not a map", keys[i], c[keys[i]])
@@ -422,7 +422,7 @@ func overrideOpts(confPath, overridePath, optsStr string) error {
 	return nil
 }
 
-func boss_start(ctx *cli.Context) error {
+func bossStart(ctx *cli.Context) error {
 	detach := ctx.Bool("detach")
 
 	// If detach is specified, we start another ol-process with the worker argument
@@ -466,10 +466,10 @@ func boss_start(ctx *cli.Context) error {
 
 		fmt.Printf("Starting boss: pid=%d, port=%s, log=%s\n", proc.Pid, boss.Conf.Boss_port, logPath)
 		return nil // TODO: ping status to make sure it is actually running?
-	} else {
-		if err := boss.BossMain(); err != nil {
-			return err
-		}
+    }
+
+	if err := boss.BossMain(); err != nil {
+		return err
 	}
 
 	return fmt.Errorf("this code should not be reachable")
@@ -520,12 +520,12 @@ func kill(ctx *cli.Context) error {
 	return fmt.Errorf("worker didn't stop after 30s")
 }
 
-func gcp_test(ctx *cli.Context) error {
+func gcpTest(ctx *cli.Context) error {
 	boss.GCPBossTest()
 	return nil
 }
 
-func azure_test(ctx *cli.Context) error {
+func azureTest(ctx *cli.Context) error {
 	boss.AzureMain("default contents")
 	return nil
 }
@@ -692,14 +692,14 @@ OPTIONS:
 			Usage:     "Developer use only.  Start a GCP VM running the OL worker",
 			UsageText: "ol gcp-test",
 			Flags:     []cli.Flag{},
-			Action:    gcp_test,
+			Action:    gcpTest,
 		},
 		cli.Command{
 			Name:      "azure-test",
 			Usage:     "Developer use only.  Start an Azure Blob ",
 			UsageText: "ol zure-test",
 			Flags:     []cli.Flag{},
-			Action:    azure_test,
+			Action:    azureTest,
 		},
 		cli.Command{
 			Name:      "force-cleanup",

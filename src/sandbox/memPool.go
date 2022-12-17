@@ -47,7 +47,7 @@ func NewMemPool(name string, totalMB int) *MemPool {
 	return pool
 }
 
-func (pool *MemPool) printf(format string, args ...interface{}) {
+func (pool *MemPool) printf(format string, args ...any) {
 	if common.Conf.Trace.Memory {
 		msg := fmt.Sprintf(format, args...)
 		log.Printf("%s [MEM POOL %s]", strings.TrimRight(msg, "\n"), pool.name)

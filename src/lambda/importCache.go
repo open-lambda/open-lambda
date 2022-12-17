@@ -90,7 +90,7 @@ func NewImportCache(codeDirs *common.DirMaker, scratchDirs *common.DirMaker, sbP
 				return nil, fmt.Errorf("could parse import tree file (%v): %v\n", treeConf, err.Error())
 			}
 		}
-	case map[string]interface{}:
+	case map[string]any:
 		b, err := json.Marshal(treeConf)
 		if err != nil {
 			return nil, err
@@ -245,7 +245,7 @@ func (cache *ImportCache) getSandboxInNode(node *ImportCacheNode, forceNew bool,
 }
 
 // decrease refs to SB, pausing if nobody else is still using it
-func (cache *ImportCache) putSandboxInNode(node *ImportCacheNode, sb sandbox.Sandbox) {
+func (*ImportCache) putSandboxInNode(node *ImportCacheNode, sb sandbox.Sandbox) {
 	t := common.T0("ImportCache.putSandboxInNode")
 	defer t.T1()
 
