@@ -6,6 +6,7 @@ OL_GO_FILES=$(shell find src/ -name '*.go')
 LAMBDA_FILES = lambda/Dockerfile lambda/Makefile lambda/spin.c lambda/runtimes/python/server.py lambda/runtimes/python/setup.py lambda/runtimes/python/ol.c
 USE_LLVM?=1
 BUILDTYPE?=debug
+INSTALL_PREFIX?=/usr/local
 
 ifeq (${USE_LLVM}, 1)
 	WASM_WORKER_FLAGS=--features=llvm-backend
@@ -52,7 +53,7 @@ update-dependencies:
 	cd bin-functions && cargo update
 	cd container-proxy && cargo update
 
-imgs/lambda: $(LAMBDA_FILES)
+imgs/lambda: ${LAMBDA_FILES}
 	${MAKE} -C lambda
 	docker build -t lambda lambda
 	touch imgs/lambda
@@ -67,11 +68,12 @@ container-proxy:
 	cd container-proxy && cargo build ${BUILD_FLAGS}
 	cp ./container-proxy/target/${BUILDTYPE}/open-lambda-container-proxy ./ol-container-proxy
 
-ol: $(OL_GO_FILES)
-	cd $(OL_DIR) && $(GO) build -o ../ol
+ol: ${OL_GO_FILES}
+	cd ${OL_DIR} && ${GO} build -o ../ol
 
-install: ol
-	cp ol /usr/local/bin
+install: ol wasm-worker
+	cp ol ${INSTALL_PREFIX}/bin/
+	cp ol-wasm ${INSTALL_PREFIX}/bin/
 
 test-all:
 	sudo python3 -u ./scripts/test.py --worker_type=sock
