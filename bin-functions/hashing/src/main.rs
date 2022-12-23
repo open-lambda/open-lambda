@@ -1,5 +1,8 @@
 use open_lambda::get_args;
 
+use rand::rngs::SmallRng;
+use rand::{Fill, SeedableRng};
+
 use sha2::{Digest, Sha512};
 
 #[open_lambda_macros::main_func]
@@ -21,9 +24,8 @@ fn main() {
     let mut input_vec = Vec::<u8>::new();
     input_vec.resize(input_len, 0);
 
-    /* rand not supported on WASM
-    let mut rng = rand::thread_rng();
-    input_vec.try_fill(&mut rng).unwrap();*/
+    let mut rng = SmallRng::from_entropy();
+    input_vec.try_fill(&mut rng).unwrap();
 
     for _ in 0..num_hashes {
         let mut hasher = Sha512::new();

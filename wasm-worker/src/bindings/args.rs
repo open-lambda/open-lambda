@@ -2,6 +2,8 @@ use wasmer::{Array, Exports, Function, LazyInit, Memory, NativeFunc, Store, Wasm
 
 use std::sync::Arc;
 
+use rand::Fill;
+
 use parking_lot::Mutex;
 
 pub type ResultHandle = Arc<Mutex<Option<Vec<u8>>>>;
@@ -85,8 +87,20 @@ fn set_result(env: &ArgsEnv, buf_ptr: WasmPtr<u8, Array>, buf_len: u32) {
     *result = Some(vec);
 }
 
-fn get_random_value() -> u64 {
-    rand::random()
+fn get_random_value(env: &ArgsEnv, buf_ptr: WasmPtr<u8, Array>, buf_len: u32) {
+    log::trace!("Got \"get_random_value\" call with buffer size {buf_len}");
+
+    let memory = env.memory.get_ref().unwrap();
+
+    let buf_slice = unsafe {
+        let buf_ptr = memory.view::<u8>().as_ptr().add(buf_ptr.offset() as usize) as *mut u8;
+        std::slice::from_raw_parts_mut(buf_ptr, buf_len as usize)
+    };
+
+    let mut rng = rand::thread_rng();
+    buf_slice
+        .try_fill(&mut rng)
+        .expect("Failed to fill buffer with random data");
 }
 
 pub fn get_imports(store: &Store, args: Arc<Vec<u8>>, result: ResultHandle) -> (Exports, ArgsEnv) {
@@ -108,7 +122,7 @@ pub fn get_imports(store: &Store, args: Arc<Vec<u8>>, result: ResultHandle) -> (
     );
     ns.insert(
         "get_random_value",
-        Function::new_native(store, get_random_value),
+        Function::new_native_with_env(store, args_env.clone(), get_random_value),
     );
 
     (ns, args_env)

@@ -27,7 +27,6 @@ use async_wormhole::stack::Stack;
 #[derive(
     Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, derive_more::Display, clap::ValueEnum,
 )]
-#[clap(rename_all = "snake-case")]
 pub enum WasmCompilerType {
     LLVM,
     Cranelift,
@@ -35,7 +34,6 @@ pub enum WasmCompilerType {
 }
 
 #[derive(Parser)]
-#[clap(rename_all = "snake-case")]
 #[clap(author, version, about, long_about = None)]
 struct Args {
     #[clap(long, value_enum, default_value = "llvm")]
@@ -45,10 +43,13 @@ struct Args {
     #[clap(long, short = 'l', default_value = "localhost:5000")]
     #[clap(help = "What is the address to listen on for client requests?")]
     listen_address: String,
+
+    #[clap(long, short = 'p', default_value = "./test-registry.wasm")]
+    #[clap(help = "Where are the WASM functions stored?")]
+    registry_path: String,
 }
 
-async fn load_functions(function_mgr: &Arc<FunctionManager>) {
-    let registry_path = "test-registry.wasm";
+async fn load_functions(registry_path: &str, function_mgr: &Arc<FunctionManager>) {
     let compiler_name = format!("{}", function_mgr.get_compiler_type()).to_lowercase();
     let cache_path: PathBuf = format!("{registry_path}.worker.{compiler_name}.cache").into();
 
@@ -106,7 +107,7 @@ async fn main() {
 
     let function_mgr = Arc::new(FunctionManager::new(args.wasm_compiler).await);
 
-    load_functions(&function_mgr).await;
+    load_functions(&args.registry_path, &function_mgr).await;
 
     let make_service = make_service_fn(move |_| {
         let function_mgr = function_mgr.clone();

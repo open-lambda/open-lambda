@@ -2,7 +2,7 @@
 
 ''' Integration test for open lambda's native and WebAssembly runtimes '''
 
-# pylint: disable=global-statement, missing-function-docstring, broad-except, invalid-name, consider-using-with, too-many-statements
+# pylint: disable=missing-function-docstring, consider-using-with
 
 import argparse
 import os
