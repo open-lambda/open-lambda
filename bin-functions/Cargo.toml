@@ -10,3 +10,6 @@ members = [
 debug = true
 opt-level = 3
 lto = true
+
+[patch.crates-io]
+getrandom = { git="https://github.com/kaimast/getrandom", branch="open-lambda" }
