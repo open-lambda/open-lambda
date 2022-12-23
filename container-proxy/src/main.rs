@@ -26,7 +26,7 @@ async fn main() {
     )
     .unwrap();
 
-    let path = format!("{}/db-proxy.sock", container_dir);
+    let path = format!("{container_dir}/db-proxy.sock");
     let listener = UnixListener::bind(path).unwrap();
 
     // Create pid file to notify others that the socket is bound
@@ -62,9 +62,10 @@ async fn main() {
 }
 
 async fn call_function(func_name: String, args: Vec<u8>) -> Result<Vec<u8>, String> {
-    log::debug!("Issuing internal call to {}", func_name);
+    log::debug!("Issuing internal call to {func_name}");
+
     let server_addr = "localhost:5000";
-    let url = format!("http://{}/run/{}", server_addr, func_name);
+    let url = format!("http://{server_addr}/run/{func_name}");
     let client = reqwest::Client::new();
 
     let request = client.post(url).body(args);
@@ -106,8 +107,8 @@ async fn handle_connection(stream: UnixStream) {
     while let Some(res) = reader.next().await {
         let data = match res {
             Ok(data) => data,
-            Err(e) => {
-                log::error!("Failed to receive data from runtime: {}", e);
+            Err(err) => {
+                log::error!("Failed to receive data from runtime: {err}");
                 break;
             }
         };
@@ -115,12 +116,15 @@ async fn handle_connection(stream: UnixStream) {
         let msg = bincode::deserialize(&data).unwrap();
 
         let response = match msg {
-            ProxyMessage::CallRequest(call_data) => {
+            ProxyMessage::FuncCallRequest(call_data) => {
                 let result = call_function(call_data.fn_name, call_data.args.into_vec()).await;
-                ProxyMessage::CallResult(result.map(ByteBuf::from))
+                ProxyMessage::FuncCallResult(result.map(ByteBuf::from))
+            }
+            ProxyMessage::HostCallRequest(call_data) => {
+                todo!();
             }
             _ => {
-                panic!("Got unexpected message");
+                panic!("Got unexpected message: {msg:?}");
             }
         };
 

@@ -98,6 +98,7 @@ lint: #go-lint
 	pylint scripts --ignore=build --disable=missing-docstring,multiple-imports,global-statement,invalid-name,W0511,W1510,R0801,W3101
 	cd wasm-worker && cargo clippy
 	cd bin-functions && cargo clippy
+	cd container-proxy && cargo clippy
 
 clean:
 	rm -f ol
