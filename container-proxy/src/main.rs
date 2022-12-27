@@ -121,7 +121,11 @@ async fn handle_connection(stream: UnixStream) {
                 ProxyMessage::FuncCallResult(result.map(ByteBuf::from))
             }
             ProxyMessage::HostCallRequest(call_data) => {
-                todo!();
+                if call_data.namespace == "lambdastore" {
+                    todo!();
+                } else {
+                    panic!("Unknown host call namespace: {}", call_data.namespace);
+                }
             }
             _ => {
                 panic!("Got unexpected message: {msg:?}");

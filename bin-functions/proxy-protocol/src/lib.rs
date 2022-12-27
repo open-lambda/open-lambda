@@ -21,5 +21,5 @@ pub enum ProxyMessage {
     FuncCallRequest(FuncCallData),
     FuncCallResult(CallResult),
     HostCallRequest(HostCallData),
-    HostCallResult(HostCallData),
+    HostCallResult(CallResult),
 }

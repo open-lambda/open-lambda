@@ -10,7 +10,7 @@ use hyper::client::connect::HttpConnector;
 use hyper::client::Client as HttpClient;
 use hyper::{Body, Request};
 
-use open_lambda_proxy_protocol::{CallData, CallResult};
+use open_lambda_proxy_protocol::{HostCallData, CallResult};
 
 #[derive(Clone, WasmerEnv)]
 pub struct IpcEnv {
@@ -23,13 +23,13 @@ pub struct IpcEnv {
     addr: SocketAddr,
 }
 
-fn call(
+fn host_call(
     env: &IpcEnv,
     call_data_ptr: WasmPtr<u8, Array>,
     call_data_len: u32,
     len_out: WasmPtr<u64>,
 ) -> i64 {
-    log::trace!("Got `batch_call` call");
+    log::trace!("Got `host_call` call");
 
     let memory = env.memory.get_ref().unwrap();
     let yielder = env.yielder.get_ref().unwrap().get();
@@ -39,7 +39,7 @@ fn call(
         static ref HTTP_CLIENT: HttpClient<HttpConnector, Body> = HttpClient::new();
     };
 
-    let call_data: CallData = unsafe {
+    let call_data: HostCallData = unsafe {
         let ptr = memory
             .view::<u8>()
             .as_ptr()
@@ -123,8 +123,8 @@ pub fn get_imports(store: &Store, addr: SocketAddr) -> (Exports, IpcEnv) {
     };
 
     ns.insert(
-        "call",
-        Function::new_native_with_env(store, env.clone(), call),
+        "host_call",
+        Function::new_native_with_env(store, env.clone(), host_call),
     );
 
     (ns, env)
