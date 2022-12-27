@@ -75,7 +75,7 @@ pub fn host_call(namespace: &str, func_name: &str, args: &json::Value) -> Result
     let len_ptr = (&mut len) as *mut u64;
 
     let data_ptr = unsafe {
-        internal::func_call(
+        internal::host_call(
             namespace.as_bytes().as_ptr(),
             namespace.len() as u32,
             func_name.as_bytes().as_ptr(),

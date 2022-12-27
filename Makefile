@@ -94,11 +94,15 @@ check-fmt:
 lint-go:
 	revive -exclude src/vendor/... -config golint.toml src/...
 
-lint: #go-lint
+lint-python:
 	pylint scripts --ignore=build --disable=missing-docstring,multiple-imports,global-statement,invalid-name,W0511,W1510,R0801,W3101
-	cd wasm-worker && cargo clippy
-	cd bin-functions && cargo clippy
+
+lint-functions:
+	cd bin-functions && make lint
 	cd container-proxy && cargo clippy
+
+lint: lint-functions lint-python #lint-go
+	cd wasm-worker && cargo clippy
 
 clean:
 	rm -f ol

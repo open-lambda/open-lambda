@@ -6,6 +6,10 @@ pub use args::*;
 mod ipc;
 pub use crate::ipc::*;
 
+pub mod log;
+
+pub mod internal;
+
 #[cfg(not(target_arch = "wasm32"))]
 mod proxy_connection;
 
@@ -13,6 +17,7 @@ mod proxy_connection;
 pub fn internal_init() {
     env_logger::init();
 }
+
 
 #[cfg(target_arch = "wasm32")]
 #[no_mangle]
