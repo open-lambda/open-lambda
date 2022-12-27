@@ -18,7 +18,6 @@ pub fn internal_init() {
     env_logger::init();
 }
 
-
 #[cfg(target_arch = "wasm32")]
 #[no_mangle]
 fn internal_alloc_buffer(size: u32) -> i64 {
