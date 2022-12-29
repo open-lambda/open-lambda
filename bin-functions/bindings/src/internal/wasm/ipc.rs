@@ -1,7 +1,5 @@
 use open_lambda_proxy_protocol::CallResult;
 
-use serde_bytes::ByteBuf;
-
 mod internal {
     #[link(wasm_import_module = "ol_ipc")]
     extern "C" {
@@ -15,7 +13,7 @@ mod internal {
             result_len_ptr: *mut u64,
         ) -> i64;
 
-        pub fn func_call(
+        pub fn function_call(
             func_name_ptr: *const u8,
             func_name_len: u32,
             arg_data: *const u8,
@@ -25,12 +23,12 @@ mod internal {
     }
 }
 
-pub fn func_call(func_name: &str, args: Vec<u8>) -> CallResult {
+pub fn function_call(func_name: &str, args: Vec<u8>) -> CallResult {
     let mut len = 0u64;
     let len_ptr = (&mut len) as *mut u64;
 
     let data_ptr = unsafe {
-        internal::func_call(
+        internal::function_call(
             func_name.as_bytes().as_ptr(),
             func_name.len() as u32,
             args.as_ptr(),
@@ -45,9 +43,10 @@ pub fn func_call(func_name: &str, args: Vec<u8>) -> CallResult {
 
     let len = len as usize;
 
-    Ok(ByteBuf::from(
-        unsafe { Vec::<u8>::from_raw_parts(data_ptr as *mut u8, len, len) }
-    ))
+    let call_result_data = 
+        unsafe { Vec::<u8>::from_raw_parts(data_ptr as *mut u8, len, len) };
+
+    bincode::deserialize(&call_result_data).unwrap()
 }
 
 pub fn host_call(namespace: &str, func_name: &str, args: Vec<u8>) -> CallResult {
@@ -72,7 +71,8 @@ pub fn host_call(namespace: &str, func_name: &str, args: Vec<u8>) -> CallResult 
 
     let len = len as usize;
 
-    Ok(ByteBuf::from(
-        unsafe { Vec::<u8>::from_raw_parts(data_ptr as *mut u8, len, len) }
-    ))
+    let call_result_data = 
+        unsafe { Vec::<u8>::from_raw_parts(data_ptr as *mut u8, len, len) };
+
+    bincode::deserialize(&call_result_data).unwrap()
 }

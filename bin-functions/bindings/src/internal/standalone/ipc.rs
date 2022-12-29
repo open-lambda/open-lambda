@@ -1,6 +1,6 @@
 use open_lambda_proxy_protocol::CallResult;
 
-pub fn func_call<S: ToString>(func_name: S, args: Vec<u8>) -> CallResult {
+pub fn function_call<S: ToString>(func_name: S, args: Vec<u8>) -> CallResult {
     let func_name = func_name.to_string();
     log::debug!("Got func_call request for \"{func_name}\"");
 

@@ -4,6 +4,7 @@ members = [
     "macros",
     "noop",
     "hashing",
+    "internal-call",
 ]
 
 [profile.release]

@@ -11,6 +11,14 @@ pub fn host_call(namespace: &str, func_name: &str, args: &json::Value) -> Result
     parse_json_result(result)
 }
 
+pub fn function_call(func_name: &str, args: &json::Value) -> Result<Option<json::Value>, String> {
+    let arg_string = serde_json::to_string(args).unwrap();
+    let arg_data = arg_string.into_bytes();
+
+    let result = internal_ipc::function_call(func_name, arg_data);
+    parse_json_result(result)
+}
+
 fn parse_json_result(result: CallResult) -> Result<Option<json::Value>, String> {
     match result {
         Ok(result_data) => {

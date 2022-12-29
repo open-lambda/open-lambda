@@ -42,6 +42,11 @@ def noop():
     open_lambda.run("noop", args=[], json=False)
 
 @test
+def internal_call():
+    open_lambda = OpenLambda()
+    open_lambda.run("internal-call", args=[], json=False)
+
+@test
 def hashing():
     open_lambda = OpenLambda()
     open_lambda.run("hashing", args={"num_hashes": 100, "input_len": 1024}, json=False)
@@ -52,6 +57,7 @@ def run_tests():
     ping()
     noop()
     hashing()
+    internal_call()
 
 def _main():
     parser = argparse.ArgumentParser(description='Run tests for OpenLambda')
