@@ -47,6 +47,10 @@ struct Args {
     #[clap(long, short = 'p', default_value = "./test-registry.wasm")]
     #[clap(help = "Where are the WASM functions stored?")]
     registry_path: String,
+
+    #[clap(long, default_value = "localhost:5000")]
+    #[clap(help = "Address of the lambdastore coordinator")]
+    lambdastore_coord: String,
 }
 
 async fn load_functions(registry_path: &str, function_mgr: &Arc<FunctionManager>) {

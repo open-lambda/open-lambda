@@ -150,7 +150,13 @@ fn host_call(
 
     let result: CallResult = yielder.async_suspend(async move {
         if namespace == "lambdastore" {
-            todo!();
+            cfg_if::cfg_if! {
+                if #[ cfg(feature="lambdastore") ] {
+                    bindings::lambdastore::call(func_name, arg_slice);
+                } else {
+                    panic!("Feature `lambdastore` not enabled");
+                }
+            }
         } else {
             panic!("Unknown namespace {namespace}");
         }
