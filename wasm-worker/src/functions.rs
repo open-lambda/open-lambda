@@ -88,6 +88,13 @@ impl Function {
         let instance =
             Instance::new(&self.module, &import_object).expect("failed to create instance");
 
+        instance
+            .exports
+            .get_function("_initialize_instance")
+            .unwrap()
+            .call(&[])
+            .expect("initializing instance failed");
+
         let data = InstanceData {
             identifier,
             instance,

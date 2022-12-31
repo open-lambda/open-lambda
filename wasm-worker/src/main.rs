@@ -55,7 +55,7 @@ struct Args {
 
 async fn load_functions(registry_path: &str, function_mgr: &Arc<FunctionManager>) {
     let compiler_name = format!("{}", function_mgr.get_compiler_type()).to_lowercase();
-    let cache_path: PathBuf = format!("{registry_path}.worker.{compiler_name}.cache").into();
+    let cache_path: PathBuf = format!("{registry_path}.{compiler_name}.cache").into();
 
     let directory = match read_dir(registry_path) {
         Ok(dir) => dir,
