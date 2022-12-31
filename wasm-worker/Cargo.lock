@@ -819,7 +819,7 @@ dependencies = [
 [[package]]
 name = "lambda-store-client"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git#7cd373f322324a455b8cefa2b20634a7d47efbc4"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git#6c0bbb0fa43d9e542d0bad97f47793d89a9eb2e1"
 dependencies = [
  "async-trait",
  "bincode",
@@ -843,7 +843,7 @@ dependencies = [
 [[package]]
 name = "lambda-store-protocol"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git#7cd373f322324a455b8cefa2b20634a7d47efbc4"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git#6c0bbb0fa43d9e542d0bad97f47793d89a9eb2e1"
 dependencies = [
  "bincode",
  "derive_more",
@@ -856,7 +856,7 @@ dependencies = [
 [[package]]
 name = "lambda-store-utils"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git#7cd373f322324a455b8cefa2b20634a7d47efbc4"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git#6c0bbb0fa43d9e542d0bad97f47793d89a9eb2e1"
 dependencies = [
  "async-trait",
  "bincode",

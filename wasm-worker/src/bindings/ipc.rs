@@ -12,6 +12,8 @@ use hyper::{Body, Request};
 
 use open_lambda_proxy_protocol::CallResult;
 
+use crate::bindings;
+
 #[derive(Clone, WasmerEnv)]
 pub struct IpcEnv {
     #[wasmer(export)]
@@ -114,6 +116,7 @@ fn function_call(
     offset
 }
 
+#[allow(clippy::too_many_arguments)]
 fn host_call(
     env: &IpcEnv,
     ns_name_ptr: WasmPtr<u8, Array>,
@@ -152,7 +155,7 @@ fn host_call(
         if namespace == "lambdastore" {
             cfg_if::cfg_if! {
                 if #[ cfg(feature="lambdastore") ] {
-                    bindings::lambdastore::call(func_name, arg_slice);
+                    bindings::extra::lambdastore::call(&func_name, arg_slice).await
                 } else {
                     panic!("Feature `lambdastore` not enabled");
                 }
@@ -206,7 +209,7 @@ pub fn get_imports(store: &Store, addr: SocketAddr) -> (Exports, IpcEnv) {
     );
 
     ns.insert(
-        "host_name",
+        "host_call",
         Function::new_native_with_env(store, env.clone(), host_call),
     );
 

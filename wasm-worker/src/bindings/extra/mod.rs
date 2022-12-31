@@ -1,2 +1,2 @@
 #[cfg(feature="lambdastore")]
-mod lambdastore;
+pub mod lambdastore;

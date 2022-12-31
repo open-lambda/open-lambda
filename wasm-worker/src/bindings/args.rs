@@ -63,7 +63,7 @@ fn get_args(env: &ArgsEnv, len_out: WasmPtr<u64>) -> i64 {
 }
 
 fn set_result(env: &ArgsEnv, buf_ptr: WasmPtr<u8, Array>, buf_len: u32) {
-    log::debug!("Got result of size {}", buf_len);
+    log::debug!("Got result of size {buf_len}");
 
     let result_outer_lock = env.result.lock();
     let result_outer = &*result_outer_lock;

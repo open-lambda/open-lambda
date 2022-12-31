@@ -12,7 +12,7 @@ from time import time
 from open_lambda import OpenLambda
 
 from helper import DockerWorker, WasmWorker, SockWorker, TestConfContext
-from helper import prepare_open_lambda, setup_config
+from helper import prepare_open_lambda, setup_config, assert_eq
 
 from helper.test import set_test_filter, start_tests, check_test_results, set_worker_type, test
 
@@ -51,6 +51,12 @@ def hashing():
     open_lambda = OpenLambda()
     open_lambda.run("hashing", args={"num_hashes": 100, "input_len": 1024}, json=False)
 
+@test
+def multiply():
+    open_lambda = OpenLambda()
+    result = open_lambda.run("multiply", args={"left": 25, "right": 8}, json=True)
+    assert_eq(result["result"], 200)
+
 def run_tests():
     ''' Runs all tests '''
 
@@ -58,6 +64,7 @@ def run_tests():
     noop()
     hashing()
     internal_call()
+    multiply()
 
 def _main():
     parser = argparse.ArgumentParser(description='Run tests for OpenLambda')

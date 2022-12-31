@@ -48,9 +48,9 @@ struct Args {
     #[clap(help = "Where are the WASM functions stored?")]
     registry_path: String,
 
-    #[clap(long, default_value = "localhost:5000")]
+    #[clap(long)]
     #[clap(help = "Address of the lambdastore coordinator")]
-    lambdastore_coord: String,
+    lambdastore_coord: Option<String>,
 }
 
 async fn load_functions(registry_path: &str, function_mgr: &Arc<FunctionManager>) {
@@ -112,6 +112,23 @@ async fn main() {
     let function_mgr = Arc::new(FunctionManager::new(args.wasm_compiler).await);
 
     load_functions(&args.registry_path, &function_mgr).await;
+
+    if let Some(coord_address) = args.lambdastore_coord {
+        cfg_if::cfg_if!{
+            if #[cfg(feature="lambdastore")] {
+                let result = unsafe {
+                    bindings::extra::lambdastore::create_client(&coord_address).await
+                };
+
+                if let Err(err) = result {
+                    log::error!("Failed to setup lambdastore module: {err}");
+                    return;
+                }
+            } else {
+                panic!("`lambdastore`-feature not enabled");
+            }
+        }
+    }
 
     let make_service = make_service_fn(move |_| {
         let function_mgr = function_mgr.clone();

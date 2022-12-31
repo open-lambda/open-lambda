@@ -1,0 +1,10 @@
+[package]
+name = "multiply"
+version = "0.1.0"
+authors = ["Kai Mast <kaimast@cs.wisc.edu>"]
+edition = "2021"
+
+[dependencies]
+open-lambda = { path="../bindings" }
+open-lambda-macros = { path="../macros" }
+serde = "1"

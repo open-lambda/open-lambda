@@ -101,8 +101,10 @@ lint-functions:
 	cd bin-functions && make lint
 	cd container-proxy && cargo clippy
 
-lint: lint-functions lint-python #lint-go
+lint-wasm-worker:
 	cd wasm-worker && cargo clippy
+
+lint: lint-wasm-worker lint-functions lint-python #lint-go
 
 clean:
 	rm -f ol

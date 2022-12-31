@@ -31,3 +31,9 @@ fn internal_alloc_buffer(size: u32) -> i64 {
 
     ptr as i64
 }
+
+pub fn set_panic_handler() {
+    std::panic::set_hook(Box::new(|err| {
+        crate::log::fatal!("Got panic: {err}");
+    }));
+}

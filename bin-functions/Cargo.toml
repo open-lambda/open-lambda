@@ -5,6 +5,7 @@ members = [
     "noop",
     "hashing",
     "internal-call",
+    "multiply",
 ]
 
 [profile.release]
