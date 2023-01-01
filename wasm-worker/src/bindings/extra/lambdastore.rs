@@ -1,4 +1,4 @@
-use lambda_store_client::Client;
+use lambda_store_client::{ObjectTypeId, ObjectType, Client};
 use open_lambda_proxy_protocol::CallResult;
 
 use serde_bytes::ByteBuf;
@@ -38,6 +38,15 @@ pub async fn call(func_name: &str, args: &[u8]) -> CallResult {
         };
 
         result.map_err(|err| format!("{err}"))
+    } else if func_name == "get_configuration" {
+        let object_types: Vec<(ObjectTypeId, String, ObjectType)> = client
+            .get_object_types()
+            .into_iter()
+            .map(|(id, name, info)| (id, name, (*info).clone()))
+            .collect();
+
+        let data = bincode::serialize(&object_types).unwrap();
+        Ok(ByteBuf::from(data))
     } else {
         panic!("Got unexpected lambdastore function call: {func_name}");
     }
