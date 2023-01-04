@@ -35,11 +35,14 @@ fn function_call(
 
     // TODO sanity check the function name
     let func_name = func_name_ptr
-        .get_utf8_string(memory, func_name_len).unwrap();
+        .get_utf8_string(memory, func_name_len)
+        .unwrap();
 
     let args = unsafe {
-        let arg_ptr = memory.view::<u8>()
-            .as_ptr().add(arg_data_ptr.offset() as usize) as *mut u8;
+        let arg_ptr = memory
+            .view::<u8>()
+            .as_ptr()
+            .add(arg_data_ptr.offset() as usize) as *mut u8;
         let slice = std::slice::from_raw_parts(arg_ptr, arg_data_len as usize);
         let mut args = vec![];
         args.extend_from_slice(slice);
@@ -106,16 +109,18 @@ fn host_call(
     let yielder = env.yielder.get_ref().unwrap().get();
 
     // TODO sanity check the namespace name
-    let namespace = ns_name_ptr
-        .get_utf8_string(memory, ns_name_len).unwrap();
+    let namespace = ns_name_ptr.get_utf8_string(memory, ns_name_len).unwrap();
 
     // TODO sanity check the function name
     let func_name = func_name_ptr
-        .get_utf8_string(memory, func_name_len).unwrap();
+        .get_utf8_string(memory, func_name_len)
+        .unwrap();
 
     let arg_slice = unsafe {
-        let arg_ptr = memory.view::<u8>()
-            .as_ptr().add(arg_data_ptr.offset() as usize) as *mut u8;
+        let arg_ptr = memory
+            .view::<u8>()
+            .as_ptr()
+            .add(arg_data_ptr.offset() as usize) as *mut u8;
         std::slice::from_raw_parts(arg_ptr, arg_data_len as usize)
     };
 
@@ -162,6 +167,7 @@ fn host_call(
 
     offset
 }
+
 pub fn get_imports(store: &Store, addr: SocketAddr) -> (Exports, IpcEnv) {
     let mut ns = Exports::new();
     let env = IpcEnv {

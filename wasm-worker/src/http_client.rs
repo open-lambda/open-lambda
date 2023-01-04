@@ -30,7 +30,7 @@ impl HttpClient {
         Self { request_sender }
     }
 
-    #[ allow(dead_code) ]
+    #[allow(dead_code)]
     pub async fn get(&mut self, path: String) -> Result<Vec<u8>, hyper::Error> {
         let request = Request::builder()
             .method("GET")
@@ -43,11 +43,7 @@ impl HttpClient {
         Ok(response.collect().await?.to_bytes().to_vec())
     }
 
-    pub async fn post(
-        &mut self,
-        path: String,
-        content: Vec<u8>,
-    ) -> Result<Vec<u8>, hyper::Error> {
+    pub async fn post(&mut self, path: String, content: Vec<u8>) -> Result<Vec<u8>, hyper::Error> {
         let request = Request::builder()
             .method("POST")
             .uri(path)

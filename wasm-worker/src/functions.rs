@@ -28,10 +28,10 @@ use wasmer_compiler_llvm::LLVM;
 
 const MAX_IDLE_INSTANCES: usize = 100;
 
-type IdleInstancesList = Mutex<Vec<InstanceData>>;
+type IdleInstancesList = crossbeam::queue::SegQueue<InstanceData>;
 
 pub struct Function {
-    module: Module,
+    zygote: Instance,
     next_instance_id: Arc<AtomicU64>,
     store: Arc<Store>,
     idle_list: Arc<IdleInstancesList>,
@@ -53,22 +53,20 @@ pub struct InstanceHandle {
 impl Function {
     pub fn get_idle_instance(
         &self,
-        args: Arc<Vec<u8>>,
+        args: Vec<u8>,
         addr: SocketAddr,
         result_hdl: ResultHandle,
     ) -> InstanceHandle {
-        {
-            if let Some(data) = self.idle_list.lock().pop() {
-                log::trace!("Reusing WASM instance with id={}", data.identifier);
+        if let Some(data) = self.idle_list.pop() {
+            log::trace!("Reusing WASM instance with id={}", data.identifier);
 
-                data.args_env.set_args(args);
-                data.args_env.set_result_handle(result_hdl);
+            data.args_env.set_args(args);
+            data.args_env.set_result_handle(result_hdl);
 
-                return InstanceHandle {
-                    idle_list: self.idle_list.clone(),
-                    data,
-                };
-            }
+            return InstanceHandle {
+                idle_list: self.idle_list.clone(),
+                data,
+            };
         }
 
         let identifier = self.next_instance_id.fetch_add(1, Ordering::SeqCst);
@@ -85,8 +83,11 @@ impl Function {
         import_object.register("ol_log", log_imports);
         import_object.register("ol_ipc", ipc_imports);
 
-        let instance =
-            Instance::new(&self.module, &import_object).expect("failed to create instance");
+        let instance = unsafe {
+            self.zygote
+                .duplicate(&import_object)
+                .expect("Failed to create instance from Zygote")
+        };
 
         instance
             .exports
@@ -115,14 +116,12 @@ impl InstanceHandle {
     }
 
     pub fn mark_idle(self) {
-        let mut idle_list = self.idle_list.lock();
-
-        if idle_list.len() < MAX_IDLE_INSTANCES {
+        if self.idle_list.len() < MAX_IDLE_INSTANCES {
             log::trace!(
                 "Putting instance with id={} back into idle list",
                 self.data.identifier
             );
-            idle_list.push(self.data);
+            self.idle_list.push(self.data);
         } else {
             log::trace!(
                 "Discarding instance with id={}; idle list is already full",
@@ -191,7 +190,7 @@ impl FunctionManager {
         self.functions.get(name).map(|entry| entry.value().clone())
     }
 
-    pub async fn load_function(&self, path: PathBuf, cache_path: PathBuf) {
+    pub async fn load_function(&self, path: PathBuf, cache_path: PathBuf, worker_addr: SocketAddr) {
         let store = self.store.clone();
         let os_name = path.file_stem().unwrap();
         let name = String::from(os_name.to_str().unwrap());
@@ -229,7 +228,7 @@ impl FunctionManager {
             let mut binary = Vec::new();
             file.read_to_end(&mut binary).unwrap();
 
-            log::info!("Loaded cached version of program \"{name}\"");
+            log::info!("Loaded cached version of fucntion \"{name}\"");
 
             unsafe { Module::deserialize(&store, &binary).expect("Failed to deserialize module") }
         } else {
@@ -239,7 +238,7 @@ impl FunctionManager {
             // Load and compile
             let module = match Module::new(&self.store, code) {
                 Ok(module) => {
-                    log::info!("Compiled program \"{name}\"");
+                    log::info!("Compiled fucntion \"{name}\"");
                     module
                 }
                 Err(err) => panic!("Failed to compile wasm file \"{name}\": {err:?}"),
@@ -270,12 +269,41 @@ impl FunctionManager {
             module
         };
 
+        let zygote = self.create_zygote(&module, &store, worker_addr);
+
         let function = Arc::new(Function {
             next_instance_id: Arc::new(AtomicU64::new(1)),
             idle_list: Default::default(),
             store,
-            module,
+            zygote,
         });
         self.functions.insert(name, function);
+    }
+
+    fn create_zygote(&self, module: &Module, store: &Store, worker_addr: SocketAddr) -> Instance {
+        let args = vec![];
+        let result_hdl = Arc::new(Mutex::new(None));
+
+        let mut import_object = ImportObject::new();
+
+        let (args_imports, _args_env) = bindings::args::get_imports(store, args, result_hdl);
+        let (ipc_imports, _ipc_env) = bindings::ipc::get_imports(
+            store,
+            worker_addr,
+        );
+
+        import_object.register("ol_args", args_imports);
+        import_object.register("ol_log", bindings::log::get_imports(store));
+        import_object.register("ol_ipc", ipc_imports);
+
+        match Instance::new(module, &import_object) {
+            Ok(instance) => {
+                log::trace!("Created new WASM zygote");
+                instance
+            }
+            Err(err) => {
+                panic!("Failed to create WASM zygote: {err}");
+            }
+        }
     }
 }

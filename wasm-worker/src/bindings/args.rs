@@ -14,12 +14,12 @@ pub struct ArgsEnv {
     memory: LazyInit<Memory>,
     #[wasmer(export(name = "internal_alloc_buffer"))]
     allocate: LazyInit<NativeFunc<u32, i64>>,
-    args: Arc<Mutex<Arc<Vec<u8>>>>,
+    args: Arc<Mutex<Vec<u8>>>,
     result: Arc<Mutex<ResultHandle>>,
 }
 
 impl ArgsEnv {
-    pub fn set_args(&self, args: Arc<Vec<u8>>) {
+    pub fn set_args(&self, args: Vec<u8>) {
         let mut lock = self.args.lock();
         *lock = args;
     }
@@ -103,7 +103,7 @@ fn get_random_value(env: &ArgsEnv, buf_ptr: WasmPtr<u8, Array>, buf_len: u32) {
         .expect("Failed to fill buffer with random data");
 }
 
-pub fn get_imports(store: &Store, args: Arc<Vec<u8>>, result: ResultHandle) -> (Exports, ArgsEnv) {
+pub fn get_imports(store: &Store, args: Vec<u8>, result: ResultHandle) -> (Exports, ArgsEnv) {
     let args_env = ArgsEnv {
         args: Arc::new(Mutex::new(args)),
         result: Arc::new(Mutex::new(result)),

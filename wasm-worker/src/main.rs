@@ -9,12 +9,14 @@ use serde::{Deserialize, Serialize};
 
 use http_body_util::{BodyExt, Full};
 
-use hyper::server::conn::http1;
 use hyper::body::{Bytes, Incoming};
+use hyper::server::conn::http1;
 use hyper::{http, Method, Request, Response, StatusCode};
 
 use tokio::runtime;
 use tokio::signal::unix::{signal, SignalKind};
+
+use lazy_static::lazy_static;
 
 mod functions;
 use functions::FunctionManager;
@@ -25,11 +27,12 @@ mod bindings;
 
 mod http_client;
 
+mod stack;
+use stack::StackPool;
+
 use std::sync::Arc;
 
 use clap::Parser;
-
-use async_wormhole::stack::Stack;
 
 #[derive(
     Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, derive_more::Display, clap::ValueEnum,
@@ -58,9 +61,12 @@ struct Args {
     #[clap(long)]
     #[clap(help = "Address of the lambdastore coordinator")]
     lambdastore_coord: Option<String>,
+
+    #[clap(long)]
+    enable_cpu_profiler: bool,
 }
 
-async fn load_functions(registry_path: &str, function_mgr: &Arc<FunctionManager>) {
+async fn load_functions(registry_path: &str, function_mgr: &Arc<FunctionManager>, worker_addr: SocketAddr) {
     let compiler_name = format!("{}", function_mgr.get_compiler_type()).to_lowercase();
     let cache_path: PathBuf = format!("{registry_path}.{compiler_name}.cache").into();
 
@@ -94,7 +100,7 @@ async fn load_functions(registry_path: &str, function_mgr: &Arc<FunctionManager>
         }
 
         function_mgr
-            .load_function(file_path, cache_path.clone())
+            .load_function(file_path, cache_path.clone(), worker_addr)
             .await;
     }
 }
@@ -115,7 +121,11 @@ impl hyper::service::Service<Request<Incoming>> for Service {
 }
 
 impl Service {
-    async fn handle_request(req: Request<Incoming>, worker_addr: SocketAddr, function_mgr: Arc<FunctionManager>) -> http::Result<Response<Full<Bytes>>> {
+    async fn handle_request(
+        req: Request<Incoming>,
+        worker_addr: SocketAddr,
+        function_mgr: Arc<FunctionManager>,
+    ) -> http::Result<Response<Full<Bytes>>> {
         log::trace!("Got new request: {req:?}");
 
         let mut path = req
@@ -130,8 +140,7 @@ impl Service {
         let args = req.collect().await.unwrap().to_bytes().to_vec();
 
         if method == Method::POST && path.len() == 2 && path[0] == "run" {
-            Self::execute_function(worker_addr, &path.pop().unwrap(), args, function_mgr)
-                .await
+            Self::execute_function(worker_addr, &path.pop().unwrap(), args, function_mgr).await
         } else if method == Method::GET && path.len() == 1 && path[0] == "status" {
             Self::get_status().await
         } else {
@@ -145,8 +154,6 @@ impl Service {
         args: Vec<u8>,
         function_mgr: Arc<FunctionManager>,
     ) -> http::Result<Response<Full<Bytes>>> {
-        let args = Arc::new(args);
-
         let result = Arc::new(Mutex::new(None));
 
         let function = match function_mgr.get_function(name).await {
@@ -154,19 +161,28 @@ impl Service {
             None => panic!("No such function \"{name}\""),
         };
 
-        let instance = function.get_idle_instance(args.clone(), worker_addr, result.clone());
+        log::trace!("Starting function call for \"{name}\"");
+
+        lazy_static! {
+            static ref STACK_POOL: StackPool = StackPool::new();
+        }
+
+        let instance = function.get_idle_instance(args, worker_addr, result.clone());
 
         let func_args: Vec<u32> = vec![];
 
-        let stack = async_wormhole::stack::EightMbStack::new().unwrap();
-        if let (Err(e), _) = instance.get().call_with_stack("f", stack, func_args).await {
-            if let Some(wasmer_vm::TrapCode::StackOverflow) = e.clone().to_trap() {
+        let stack = STACK_POOL.get_stack();
+
+        let (call_result, stack) = instance.get().call_with_stack("f", stack, func_args).await;
+
+        if let Err(err) = call_result {
+            if let Some(wasmer_vm::TrapCode::StackOverflow) = err.clone().to_trap() {
                 log::error!("Function failed due to stack overflow");
             } else {
-                log::error!("Function failed with message \"{}\"", e.message());
+                log::error!("Function failed with message \"{}\"", err.message());
                 log::error!("Stack trace:");
 
-                for frame in e.trace() {
+                for frame in err.trace() {
                     log::error!(
                         "   {}::{}",
                         frame.module_name(),
@@ -184,11 +200,12 @@ impl Service {
             vec![].into()
         };
 
-        let response = Response::builder()
-            .status(StatusCode::OK)
-            .body(body)?;
+        let response = Response::builder().status(StatusCode::OK).body(body)?;
 
         instance.mark_idle();
+        STACK_POOL.store_stack(stack);
+
+        log::trace!("Done with function call for \"{name}\"");
         Ok(response)
     }
 
@@ -213,10 +230,10 @@ async fn main_func(args: Args) {
 
     let function_mgr = Arc::new(FunctionManager::new(args.wasm_compiler).await);
 
-    load_functions(&args.registry_path, &function_mgr).await;
+    load_functions(&args.registry_path, &function_mgr, worker_addr).await;
 
     if let Some(coord_address) = args.lambdastore_coord {
-        cfg_if::cfg_if!{
+        cfg_if::cfg_if! {
             if #[cfg(feature="lambdastore")] {
                 let result = unsafe {
                     bindings::extra::lambdastore::create_client(&coord_address).await
@@ -236,6 +253,20 @@ async fn main_func(args: Args) {
         .await
         .expect("Failed to bind socket for frontend");
 
+    #[cfg(feature = "cpuprofiler")]
+    let enable_cpu_profiler = args.enable_cpu_profiler;
+
+    #[cfg(feature = "cpuprofiler")]
+    if enable_cpu_profiler {
+        let mut profiler = cpuprofiler::PROFILER.lock().unwrap();
+        let fname = format!("ol-wasm_{}.profile", std::process::id());
+        profiler
+            .start(fname.clone())
+            .expect("Failed to start profiler");
+
+        log::info!("CPU profiler enabled. Writing output to '{fname}'");
+    }
+
     let fut = tokio::spawn(async move {
         while let Ok((conn, addr)) = listener.accept().await {
             log::debug!("Got new connection from {addr}");
@@ -244,7 +275,10 @@ async fn main_func(args: Args) {
 
             tokio::spawn(async move {
                 conn.set_nodelay(true).unwrap();
-                let service = Service { worker_addr, function_mgr };
+                let service = Service {
+                    worker_addr,
+                    function_mgr,
+                };
 
                 if let Err(http_err) = http1::Builder::new()
                     .keep_alive(true)
@@ -284,6 +318,12 @@ async fn main_func(args: Args) {
                 log::info!("Received SIGINT. Shutting down gracefully...");
             }
         }
+    }
+
+    #[cfg(feature = "cpuprofiler")]
+    if enable_cpu_profiler {
+        let mut profiler = cpuprofiler::PROFILER.lock().unwrap();
+        profiler.stop().expect("Failed to stop profiler");
     }
 
     remove_file("./ol-wasm.ready").unwrap();

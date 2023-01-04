@@ -1,4 +1,4 @@
-use lambda_store_client::{ObjectTypeId, ObjectType, Client};
+use lambda_store_client::{Client, ObjectType, ObjectTypeId};
 use open_lambda_proxy_protocol::CallResult;
 
 use serde_bytes::ByteBuf;
@@ -14,9 +14,7 @@ pub async unsafe fn create_client(address: &str) -> Result<(), String> {
 pub async fn call(func_name: &str, args: &[u8]) -> CallResult {
     // SAFETY: lambdastore is always initialized at this point
     // otherwise the wasm-worker will not start successfully
-    let client = unsafe {
-        CLIENT.as_ref().expect("lambdastore not initialized")
-    };
+    let client = unsafe { CLIENT.as_ref().expect("lambdastore not initialized") };
 
     if func_name == "create_object" {
         let typename = bincode::deserialize(args).unwrap();

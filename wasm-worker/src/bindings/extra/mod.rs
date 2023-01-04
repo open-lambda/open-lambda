@@ -1,2 +1,2 @@
-#[cfg(feature="lambdastore")]
+#[cfg(feature = "lambdastore")]
 pub mod lambdastore;

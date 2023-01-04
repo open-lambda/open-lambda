@@ -13,6 +13,7 @@ serde_bytes = "0.11"
 derive_more = "0.99"
 clap = { version = "4", default-features=false, features=["help", "suggestions", "color", "std", "cargo", "derive"]}
 futures-util = { version="0.3" }
+crossbeam = "0.8"
 wasmer = { git="https://github.com/kaimast/wasmer.git", branch="zygote-stable", default-features=false, features=["compiler", "async"] }
 wasmer-compiler-singlepass = { git="https://github.com/kaimast/wasmer.git", branch="zygote-stable" }
 wasmer-compiler-cranelift = { git="https://github.com/kaimast/wasmer.git", branch="zygote-stable" }
@@ -26,6 +27,7 @@ log = "0.4"
 parking_lot = "0.12"
 dashmap = "5"
 cfg-if = "1"
+cpuprofiler = { version="0", optional=true }
 bincode = "1"
 async-wormhole = { git="https://github.com/lunatic-solutions/async-wormhole.git" }
 rand = "0.8"
@@ -33,14 +35,14 @@ open-lambda-proxy-protocol = { path="../bin-functions/proxy-protocol" }
 lambda-store-client=  { git="ssh://git@github.com/kaimast/lambda-store.git", optional=true }
 
 [features]
-default = ["lambdastore"]
+default = ["lambdastore", "cpuprofiler"]
 llvm-backend = ["wasmer-compiler-llvm"]
 lambdastore = ["lambda-store-client"]
 
 [profile.release]
 debug = true
 opt-level = 3
-lto = true
+lto = false # takes way too long
 
 [patch.'https://github.com/lunatic-solutions/async-wormhole.git']
 async-wormhole = { git="https://github.com/kaimast/async-wormhole.git", branch="std-asm" }
