@@ -10,7 +10,6 @@ hyper = { git="https://github.com/hyperium/hyper.git" , features=["server", "cli
 http-body-util = "0.1.0-rc.1"
 serde = "1"
 serde_bytes = "0.11"
-ron = "0"
 derive_more = "0.99"
 clap = { version = "4", default-features=false, features=["help", "suggestions", "color", "std", "cargo", "derive"]}
 futures-util = { version="0.3" }
@@ -22,7 +21,7 @@ wasmer-engine-dylib = { git="https://github.com/kaimast/wasmer.git", branch="zyg
 wasmer-engine = { git="https://github.com/kaimast/wasmer.git", branch="zygote-stable" }
 wasmer-vm = { git="https://github.com/kaimast/wasmer.git", branch="zygote-stable" }
 lazy_static = "1"
-pretty_env_logger = "0.4"
+env_logger = "0.10"
 log = "0.4"
 parking_lot = "0.12"
 dashmap = "5"

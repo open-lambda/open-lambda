@@ -3,6 +3,7 @@
 use std::fs::{read_dir, remove_file, File};
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::path::PathBuf;
+use std::thread::available_parallelism;
 
 use serde::{Deserialize, Serialize};
 
@@ -12,6 +13,7 @@ use hyper::server::conn::http1;
 use hyper::body::{Bytes, Incoming};
 use hyper::{http, Method, Request, Response, StatusCode};
 
+use tokio::runtime;
 use tokio::signal::unix::{signal, SignalKind};
 
 mod functions;
@@ -197,12 +199,7 @@ impl Service {
     }
 }
 
-#[tokio::main]
-async fn main() {
-    pretty_env_logger::init();
-
-    let args = Args::parse();
-
+async fn main_func(args: Args) {
     let worker_addr: SocketAddr = match args.listen_address.to_socket_addrs() {
         Ok(mut addrs) => addrs.next().unwrap(),
         Err(err) => {
@@ -292,4 +289,20 @@ async fn main() {
     remove_file("./ol-wasm.ready").unwrap();
 }
 
+fn main() {
+    env_logger::init();
 
+    let args = Args::parse();
+
+    let num_threads = 2 * available_parallelism().unwrap().get();
+
+    let rt = runtime::Builder::new_multi_thread()
+        .enable_io()
+        .worker_threads(num_threads)
+        .build()
+        .unwrap();
+
+    rt.block_on(async move {
+        main_func(args).await;
+    });
+}
