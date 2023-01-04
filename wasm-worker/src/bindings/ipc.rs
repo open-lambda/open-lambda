@@ -4,15 +4,10 @@ use wasmer::{
 
 use std::net::SocketAddr;
 
-use serde_bytes::ByteBuf;
-
-use hyper::client::connect::HttpConnector;
-use hyper::client::Client as HttpClient;
-use hyper::{Body, Request};
-
 use open_lambda_proxy_protocol::CallResult;
 
 use crate::bindings;
+use crate::http_client::HttpClient;
 
 #[derive(Clone, WasmerEnv)]
 pub struct IpcEnv {
@@ -38,52 +33,30 @@ fn function_call(
     let memory = env.memory.get_ref().unwrap();
     let yielder = env.yielder.get_ref().unwrap().get();
 
-    // This sets up a connection pool that will be reused
-    lazy_static::lazy_static! {
-        static ref HTTP_CLIENT: HttpClient<HttpConnector, Body> = HttpClient::new();
-    };
-
     // TODO sanity check the function name
     let func_name = func_name_ptr
         .get_utf8_string(memory, func_name_len).unwrap();
 
-    let arg_slice = unsafe {
+    let args = unsafe {
         let arg_ptr = memory.view::<u8>()
             .as_ptr().add(arg_data_ptr.offset() as usize) as *mut u8;
-        std::slice::from_raw_parts(arg_ptr, arg_data_len as usize)
+        let slice = std::slice::from_raw_parts(arg_ptr, arg_data_len as usize);
+        let mut args = vec![];
+        args.extend_from_slice(slice);
+        args
     };
 
     let result: CallResult = yielder.async_suspend(async move {
-        let uri = hyper::Uri::builder()
-            .scheme("http")
-            .authority(format!("{}", env.addr))
-            .path_and_query(format!("/run/{func_name}"))
-            .build()
-            .unwrap();
+        let mut client = HttpClient::new(env.addr).await;
 
-        let request = Request::builder()
-            .header("User-Agent", "open-lambda-wasm/1.0")
-            .method("POST")
-            .uri(uri)
-            .body(arg_slice.into())
-            .unwrap();
-
-        let response = match HTTP_CLIENT.request(request).await {
+        let response = match client.post(format!("/run/{func_name}"), args).await {
             Ok(resp) => resp,
             Err(err) => {
                 panic!("Internal call to {} failed: {err}", env.addr);
             }
         };
 
-        if !response.status().is_success() {
-            panic!(
-                "Request was unsuccessful. Go status code: {}",
-                response.status()
-            );
-        }
-
-        let buf = hyper::body::to_bytes(response).await.unwrap();
-        Ok(ByteBuf::from(buf.to_vec()))
+        Ok(bincode::deserialize(&response).unwrap())
     });
 
     let result_data = bincode::serialize(&result).unwrap();
@@ -131,11 +104,6 @@ fn host_call(
 
     let memory = env.memory.get_ref().unwrap();
     let yielder = env.yielder.get_ref().unwrap().get();
-
-    // This sets up a connection pool that will be reused
-    lazy_static::lazy_static! {
-        static ref HTTP_CLIENT: HttpClient<HttpConnector, Body> = HttpClient::new();
-    };
 
     // TODO sanity check the namespace name
     let namespace = ns_name_ptr

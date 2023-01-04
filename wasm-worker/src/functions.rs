@@ -26,7 +26,7 @@ use crate::bindings::{
 #[cfg(feature = "llvm-backend")]
 use wasmer_compiler_llvm::LLVM;
 
-const MAX_IDLE_INSTANCES: usize = 20;
+const MAX_IDLE_INSTANCES: usize = 100;
 
 type IdleInstancesList = Mutex<Vec<InstanceData>>;
 

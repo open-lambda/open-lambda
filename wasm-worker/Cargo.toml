@@ -6,7 +6,9 @@ edition = "2021"
 
 [dependencies]
 tokio = { version="1", features=["net", "rt-multi-thread", "signal", "macros"] }
-hyper = { version="0.14", features=["server", "client", "http1", "runtime", "stream"] }
+hyper = { git="https://github.com/hyperium/hyper.git" , features=["server", "client", "http1"] }
+http-body-util = "0.1.0-rc.1"
+serde = "1"
 serde_bytes = "0.11"
 ron = "0"
 derive_more = "0.99"
@@ -26,7 +28,6 @@ parking_lot = "0.12"
 dashmap = "5"
 cfg-if = "1"
 bincode = "1"
-serde = "1"
 async-wormhole = { git="https://github.com/lunatic-solutions/async-wormhole.git" }
 rand = "0.8"
 open-lambda-proxy-protocol = { path="../bin-functions/proxy-protocol" }
