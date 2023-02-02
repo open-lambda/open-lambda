@@ -61,6 +61,13 @@ func GCPBossTest() {
 		panic(err)
 	}
 
+	fmt.Printf("STEP 1a: lookup project's region and zone\n")
+	region, zone, err := client.GcpProjectZone()
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Region: %s\nZone: %s\n", region, zone)
+
 	fmt.Printf("STEP 2: lookup instance from IP address\n")
 	instance, err := client.GcpInstanceName()
 	if err != nil {
@@ -268,8 +275,27 @@ func (c *GCPClient) post(url string, payload bytes.Buffer) (rv map[string]any, e
 	return result, nil
 }
 
+func (c *GCPClient) GcpProjectZone() (string, string, error) {
+	url := fmt.Sprintf("http://metadata.google.internal/computeMetadata/v1/instance/zone")
+
+	resp, err := exec.Command("curl", url, "-H", "Metadata-Flavor: Google").Output()
+	if err != nil {
+		return "", "", err
+	}
+
+	subs := strings.Split(string(resp), "/")
+	zone := subs[len(subs)-1]
+	region := zone[:len(zone)-2]
+
+	c.service_account["region"] = region
+	c.service_account["zone"] = zone
+
+	return region, zone, nil
+}
+
 func (c *GCPClient) GcpListInstances() (map[string]any, error) {
-	return c.get("https://www.googleapis.com/compute/v1/projects/cs320-f21/zones/us-central1-a/instances")
+	url := fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/zones/%s/instances", c.service_account["project_id"], c.service_account["zone"])
+	return c.get(url)
 }
 
 func (c *GCPClient) GcpIPtoInstance() (map[string]string, error) {
@@ -379,9 +405,9 @@ func (c *GCPClient) Wait(resp1 map[string]any, err1 error) (resp2 map[string]any
 func (c *GCPClient) GcpSnapshot(disk string) (map[string]any, error) {
 	// TODO: take args from config (or better, read from service account somehow)
 	args := GcpSnapshotArgs{
-		Project:      "cs320-f21",
-		Region:       "us-central1",
-		Zone:         "us-central1-a",
+		Project:      c.service_account["project_id"].(string),
+		Region:       c.service_account["region"].(string),
+		Zone:         c.service_account["zone"].(string),
 		Disk:         disk,
 		SnapshotName: "test-snap",
 	}
@@ -402,7 +428,7 @@ func (c *GCPClient) LaunchGCP(SnapshotName string, VMName string) (map[string]an
 	// TODO: take args from config (or better, read from service account somehow)
 	args := GcpLaunchVmArgs{
 		ServiceAccountEmail: c.service_account["client_email"].(string),
-		Project:             "cs320-f21",
+		Project:             c.service_account["project_id"].(string),
 		Region:              "us-central1",
 		Zone:                "us-central1-a",
 		InstanceName:        VMName,
