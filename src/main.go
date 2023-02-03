@@ -24,7 +24,7 @@ import (
 	"github.com/open-lambda/open-lambda/ol/common"
 	"github.com/open-lambda/open-lambda/ol/server"
 
-	"github.com/urfave/cli"	
+	"github.com/urfave/cli"
 )
 
 var client *docker.Client
@@ -466,7 +466,7 @@ func bossStart(ctx *cli.Context) error {
 
 		fmt.Printf("Starting boss: pid=%d, port=%s, log=%s\n", proc.Pid, boss.Conf.Boss_port, logPath)
 		return nil // TODO: ping status to make sure it is actually running?
-    }
+	}
 
 	if err := boss.BossMain(); err != nil {
 		return err
@@ -593,6 +593,20 @@ func cleanup(ctx *cli.Context) error {
 	return nil
 }
 
+func newVM(ctx *cli.Context) error {
+	platform := ctx.String("platform")
+
+	if platform == "gcp" {
+		// TODO: complete the gcp part
+	} else if platform == "azure" {
+		boss.AzureCreateVM()
+	} else {
+		fmt.Printf("platform not recognized, pleaze try again.\n")
+	}
+
+	return nil
+}
+
 // main runs the admin tool
 func main() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
@@ -673,6 +687,19 @@ OPTIONS:
 			Action: runBoss,
 		},
 		cli.Command{
+			Name:        "new-vm",
+			Usage:       "Create a new VM",
+			UsageText:   "ol new-vm [--platform=NAME]",
+			Description: "Create a new VM that replicates the boss",
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:  "platform, p",
+					Usage: "Select a platform",
+				},
+			},
+			Action: newVM,
+		},
+		cli.Command{
 			Name:        "status",
 			Usage:       "check status of an OL worker process",
 			UsageText:   "ol status [--path=NAME]",
@@ -709,24 +736,24 @@ OPTIONS:
 			Action:    cleanup,
 		},
 		cli.Command{
-			Name: "bench",
-			Usage: "Run benchmarks against an OL worker.",
-			UsageText: "ol bench <cmd>",
+			Name:        "bench",
+			Usage:       "Run benchmarks against an OL worker.",
+			UsageText:   "ol bench <cmd>",
 			Subcommands: bench.BenchCommands(),
 		},
 		cli.Command{
-			Name: "pprof",
-			Usage: "Profile OL worker",
+			Name:      "pprof",
+			Usage:     "Profile OL worker",
 			UsageText: "ol pprof <cmd>",
 			Subcommands: []cli.Command{
 				{
-					Name:  "mem",
-					Usage: "creates lambdas for benchmarking",
+					Name:      "mem",
+					Usage:     "creates lambdas for benchmarking",
 					UsageText: "ol pprof mem [--out=NAME]",
-					Action: pprofMem,
+					Action:    pprofMem,
 					Flags: []cli.Flag{
 						cli.StringFlag{
-							Name:  "out, o",
+							Name: "out, o",
 						},
 					},
 				},
