@@ -82,3 +82,6 @@ scripts/dist
 scripts/open_lambda.egg-info
 
 *.lsm
+
+#json
+azure.json

@@ -2,7 +2,6 @@ package boss
 
 import (
 	"context"
-	"fmt"
 	"log"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
@@ -13,18 +12,25 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 )
 
+var vmName string
+var diskName string
+var vnetName string
+var subnetName string
+var nsgName string
+var nicName string
+var publicIPName string
+
 const (
-	resourceGroupName = "olvm-resource-group"
-	vnetName          = "olvm-vnet"
-	subnetName        = "olvm-subnet"
-	nsgName           = "olvm-nsg"
-	nicName           = "olvm-nic"
-	diskName          = "olvm-disk"
-	publicIPName      = "olvm-public-ip"
-	location          = "eastus1"
+	resourceGroupName = "olvm-pool"
+	location          = "eastus"
 )
 
 func createVM() {
+	var conf *AzureConfig
+	if conf, err = ReadAzureConfig(); err != nil {
+		log.Fatalf("Read to azure.json file failed\n")
+	}
+
 	conn, err := connectionAzure()
 	if err != nil {
 		log.Fatalf("cannot connect to Azure:%+v", err)
@@ -37,24 +43,28 @@ func createVM() {
 		log.Fatalf("cannot create resource group:%+v", err)
 	}
 	log.Printf("Created resource group: %s", *resourceGroup.ID)
+	conf.Resource_groups.Rgroup[0].Resource = *resourceGroup
 
 	virtualNetwork, err := createVirtualNetwork(ctx, conn)
 	if err != nil {
 		log.Fatalf("cannot create virtual network:%+v", err)
 	}
 	log.Printf("Created virtual network: %s", *virtualNetwork.ID)
+	conf.Resource_groups.Rgroup[0].Virtual_net = *virtualNetwork
 
 	subnet, err := createSubnets(ctx, conn)
 	if err != nil {
 		log.Fatalf("cannot create subnet:%+v", err)
 	}
 	log.Printf("Created subnet: %s", *subnet.ID)
+	conf.Resource_groups.Rgroup[0].Subnet = *subnet
 
 	publicIP, err := createPublicIP(ctx, conn)
 	if err != nil {
 		log.Fatalf("cannot create public IP address:%+v", err)
 	}
 	log.Printf("Created public IP address: %s", *publicIP.ID)
+	conf.Resource_groups.Rgroup[0].Public_ip = *publicIP
 
 	// network security group
 	nsg, err := createNetworkSecurityGroup(ctx, conn)
@@ -62,14 +72,17 @@ func createVM() {
 		log.Fatalf("cannot create network security group:%+v", err)
 	}
 	log.Printf("Created network security group: %s", *nsg.ID)
+	conf.Resource_groups.Rgroup[0].Security_group = *nsg
 
 	netWorkInterface, err := createNetWorkInterface(ctx, conn, *subnet.ID, *publicIP.ID, *nsg.ID)
 	if err != nil {
 		log.Fatalf("cannot create network interface:%+v", err)
 	}
 	log.Printf("Created network interface: %s", *netWorkInterface.ID)
+	conf.Resource_groups.Rgroup[0].Net_ifc = *netWorkInterface
 
-	networkInterfaceID := netWorkInterface.ID
+	networkInterfaceID := conf.Resource_groups.Rgroup[0].Net_ifc.ID
+
 	virtualMachine, err := createVirtualMachine(ctx, conn, *networkInterfaceID)
 	if err != nil {
 		log.Fatalf("cannot create virual machine:%+v", err)
@@ -77,6 +90,19 @@ func createVM() {
 	log.Printf("Created network virual machine: %s", *virtualMachine.ID)
 
 	log.Println("Virtual machine created successfully")
+
+	rg := &conf.Resource_groups.Rgroup[0]
+	rg.Vms = append(rg.Vms, *virtualMachine)
+	conf.Resource_groups.Numrgroup = 1
+	if conf.Resource_groups.Rgroup[0].Numvm == -1 {
+		conf.Resource_groups.Rgroup[0].Numvm = 1
+	} else {
+		conf.Resource_groups.Rgroup[0].Numvm += 1
+	}
+
+	if err := WriteAzureConfig(conf); err != nil {
+		log.Fatalf("write to azure.json file failed:%s", err)
+	}
 }
 
 func cleanup() {
@@ -158,11 +184,8 @@ func createResourceGroup(ctx context.Context, cred azcore.TokenCredential) (*arm
 
 	resp, err := resourceGroupClient.CreateOrUpdate(ctx, resourceGroupName, parameters, nil)
 	if err != nil {
-		fmt.Printf("debug here\n")
 		return nil, err
 	}
-
-	fmt.Printf("debug\n")
 
 	return &resp.ResourceGroup, nil
 }
@@ -494,15 +517,15 @@ func createVirtualMachine(ctx context.Context, cred azcore.TokenCredential, netw
 				ImageReference: &armcompute.ImageReference{
 					// search image reference
 					// az vm image list --output table
-					Offer:     to.Ptr("WindowsServer"),
-					Publisher: to.Ptr("MicrosoftWindowsServer"),
-					SKU:       to.Ptr("2019-Datacenter"),
-					Version:   to.Ptr("latest"),
+					// Offer:     to.Ptr("WindowsServer"),
+					// Publisher: to.Ptr("MicrosoftWindowsServer"),
+					// SKU:       to.Ptr("2019-Datacenter"),
+					// Version:   to.Ptr("latest"),
 					//require ssh key for authentication on linux
-					//Offer:     to.Ptr("UbuntuServer"),
-					//Publisher: to.Ptr("Canonical"),
-					//SKU:       to.Ptr("18.04-LTS"),
-					//Version:   to.Ptr("latest"),
+					Offer:     to.Ptr("UbuntuServer"),
+					Publisher: to.Ptr("Canonical"),
+					SKU:       to.Ptr("18.04-LTS"),
+					Version:   to.Ptr("latest"),
 				},
 				OSDisk: &armcompute.OSDisk{
 					Name:         to.Ptr(diskName),
@@ -515,7 +538,8 @@ func createVirtualMachine(ctx context.Context, cred azcore.TokenCredential, netw
 				},
 			},
 			HardwareProfile: &armcompute.HardwareProfile{
-				VMSize: to.Ptr(armcompute.VirtualMachineSizeTypes("Standard_F2s")), // VM size include vCPUs,RAM,Data Disks,Temp storage.
+				// TODO: make it user's choice
+				VMSize: to.Ptr(armcompute.VirtualMachineSizeTypes("Standard_B1ms")), // VM size include vCPUs,RAM,Data Disks,Temp storage.
 			},
 			OSProfile: &armcompute.OSProfile{ //
 				ComputerName:  to.Ptr("sample-compute"),
