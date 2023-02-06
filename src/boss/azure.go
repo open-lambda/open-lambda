@@ -23,6 +23,7 @@ var blobName string
 var containerName string
 var err error
 var containerClient azblob.ContainerClient
+var subscriptionId string
 
 func Create(contents string) {
 	url := "https://openlambda.blob.core.windows.net/" //replace <StorageAccountName> with your Azure storage account name
@@ -110,6 +111,27 @@ func Delete() {
 func randomString() string {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	return strconv.Itoa(r.Int())
+}
+
+func AzureCreateVM() {
+	subscriptionId = os.Getenv("AZURE_SUBSCRIPTION_ID")
+	if len(subscriptionId) == 0 {
+		log.Fatal("AZURE_SUBSCRIPTION_ID is not set.")
+	}
+
+	fmt.Printf("Please enter your desired new VM name: ")
+	fmt.Scanln(&vmName)
+	diskName = vmName + "-disk"
+	vnetName = vmName + "-vnet"
+	subnetName = vmName + "-subnet"
+	nsgName = vmName + "-nsg"
+	nicName = vmName + "-nic"
+	publicIPName = vmName + "-public-ip"
+	imageName = "boss-img"
+	snapshotName = "boss-snapshot"
+	//createVM()
+	// TODO: copy the snapshot to the new VM
+	createSnapshotImage()
 }
 
 func AzureMain(contents string) {
