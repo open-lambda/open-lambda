@@ -83,7 +83,6 @@ scripts/open_lambda.egg-info
 
 *.lsm
 
-<<<<<<< HEAD
 #gcp key
 key.json
 
