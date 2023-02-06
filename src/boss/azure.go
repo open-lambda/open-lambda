@@ -127,8 +127,11 @@ func AzureCreateVM() {
 	nsgName = vmName + "-nsg"
 	nicName = vmName + "-nic"
 	publicIPName = vmName + "-public-ip"
-	createVM()
+	imageName = "boss-img"
+	snapshotName = "boss-snapshot"
+	//createVM()
 	// TODO: copy the snapshot to the new VM
+	createSnapshotImage()
 }
 
 func AzureMain(contents string) {
