@@ -121,17 +121,18 @@ func AzureCreateVM() {
 
 	fmt.Printf("Please enter your desired new VM name: ")
 	fmt.Scanln(&vmName)
-	diskName = vmName + "-disk"
+	diskName = "ol-boss_OsDisk_1_9bdd3afe24b845f9973f3f066209bddf"
+	newDiskName = vmName + "-disk"
 	vnetName = vmName + "-vnet"
 	subnetName = vmName + "-subnet"
 	nsgName = vmName + "-nsg"
 	nicName = vmName + "-nic"
 	publicIPName = vmName + "-public-ip"
-	imageName = "boss-img"
-	snapshotName = "boss-snapshot"
-	//createVM()
+	imageName = "ol-boss-img"
+	snapshotName = "ol-boss-snapshot"
+	createVM()
 	// TODO: copy the snapshot to the new VM
-	createSnapshotImage()
+	//createSnapshotImage()
 }
 
 func AzureMain(contents string) {

@@ -15,6 +15,7 @@ import (
 
 var vmName string
 var diskName string
+var newDiskName string
 var vnetName string
 var subnetName string
 var nsgName string
@@ -48,6 +49,27 @@ func createVM() {
 	log.Printf("Created resource group: %s", *resourceGroup.ID)
 	conf.Resource_groups.Rgroup[0].Resource = *resourceGroup
 
+	log.Println("resources group:", *resourceGroup.ID)
+
+	// create snapshot
+	disk, err := getDisk(ctx, conn)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	snapshot, err := createSnapshot(ctx, conn, *disk.ID)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("snapshot:", *snapshot.ID)
+
+	new_disk, err := createDisk(ctx, conn, *snapshot.ID)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("disk:", *new_disk.ID)
+
+	// create network
 	virtualNetwork, err := createVirtualNetwork(ctx, conn)
 	if err != nil {
 		log.Fatalf("cannot create virtual network:%+v", err)
@@ -86,7 +108,8 @@ func createVM() {
 
 	networkInterfaceID := conf.Resource_groups.Rgroup[0].Net_ifc.ID
 
-	virtualMachine, err := createVirtualMachine(ctx, conn, *networkInterfaceID)
+	// create virtual machine
+	virtualMachine, err := createVirtualMachine(ctx, conn, *networkInterfaceID, *new_disk.ID)
 	if err != nil {
 		log.Fatalf("cannot create virual machine:%+v", err)
 	}
@@ -493,7 +516,7 @@ func deleteNetWorkInterface(ctx context.Context, cred azcore.TokenCredential) er
 	return nil
 }
 
-func createVirtualMachine(ctx context.Context, cred azcore.TokenCredential, networkInterfaceID string) (*armcompute.VirtualMachine, error) {
+func createVirtualMachine(ctx context.Context, cred azcore.TokenCredential, networkInterfaceID string, new_diskID string) (*armcompute.VirtualMachine, error) {
 	vmClient, err := armcompute.NewVirtualMachinesClient(subscriptionId, cred, nil)
 	if err != nil {
 		return nil, err
@@ -517,26 +540,28 @@ func createVirtualMachine(ctx context.Context, cred azcore.TokenCredential, netw
 		},
 		Properties: &armcompute.VirtualMachineProperties{
 			StorageProfile: &armcompute.StorageProfile{
-				ImageReference: &armcompute.ImageReference{
-					// search image reference
-					// az vm image list --output table
-					// Offer:     to.Ptr("WindowsServer"),
-					// Publisher: to.Ptr("MicrosoftWindowsServer"),
-					// SKU:       to.Ptr("2019-Datacenter"),
-					// Version:   to.Ptr("latest"),
-					//require ssh key for authentication on linux
-					Offer:     to.Ptr("UbuntuServer"),
-					Publisher: to.Ptr("Canonical"),
-					SKU:       to.Ptr("18.04-LTS"),
-					Version:   to.Ptr("latest"),
-				},
+				// ImageReference: &armcompute.ImageReference{
+				// 	// search image reference
+				// 	// az vm image list --output table
+				// 	// Offer:     to.Ptr("WindowsServer"),
+				// 	// Publisher: to.Ptr("MicrosoftWindowsServer"),
+				// 	// SKU:       to.Ptr("2019-Datacenter"),
+				// 	// Version:   to.Ptr("latest"),
+				// 	//require ssh key for authentication on linux
+				// 	Offer:     to.Ptr("UbuntuServer"),
+				// 	Publisher: to.Ptr("Canonical"),
+				// 	SKU:       to.Ptr("18.04-LTS"),
+				// 	Version:   to.Ptr("latest"),
+				// },
 				OSDisk: &armcompute.OSDisk{
-					Name:         to.Ptr(diskName),
-					CreateOption: to.Ptr(armcompute.DiskCreateOptionTypesFromImage),
+					Name:         to.Ptr(newDiskName),
+					CreateOption: to.Ptr(armcompute.DiskCreateOptionTypesAttach),
 					Caching:      to.Ptr(armcompute.CachingTypesReadWrite),
 					ManagedDisk: &armcompute.ManagedDiskParameters{
-						StorageAccountType: to.Ptr(armcompute.StorageAccountTypesStandardLRS), // OSDisk type Standard/Premium HDD/SSD
+						StorageAccountType: to.Ptr(armcompute.StorageAccountTypesStandardSSDLRS), // OSDisk type Standard/Premium HDD/SSD
+						ID:                 to.Ptr(new_diskID),
 					},
+					OSType: to.Ptr(armcompute.OperatingSystemTypesLinux),
 					//DiskSizeGB: to.Ptr[int32](100), // default 127G
 				},
 			},
@@ -544,23 +569,23 @@ func createVirtualMachine(ctx context.Context, cred azcore.TokenCredential, netw
 				// TODO: make it user's choice
 				VMSize: to.Ptr(armcompute.VirtualMachineSizeTypes("Standard_B1ms")), // VM size include vCPUs,RAM,Data Disks,Temp storage.
 			},
-			OSProfile: &armcompute.OSProfile{ //
-				ComputerName:  to.Ptr("sample-compute"),
-				AdminUsername: to.Ptr("sample-user"),
-				AdminPassword: to.Ptr("Password01!@#"),
-				//require ssh key for authentication on linux
-				//LinuxConfiguration: &armcompute.LinuxConfiguration{
-				//	DisablePasswordAuthentication: to.Ptr(true),
-				//	SSH: &armcompute.SSHConfiguration{
-				//		PublicKeys: []*armcompute.SSHPublicKey{
-				//			{
-				//				Path:    to.Ptr(fmt.Sprintf("/home/%s/.ssh/authorized_keys", "sample-user")),
-				//				KeyData: to.Ptr(string(sshBytes)),
-				//			},
-				//		},
-				//	},
-				//},
-			},
+			// OSProfile: &armcompute.OSProfile{ //
+			// 	ComputerName:  to.Ptr(vmName),
+			// 	AdminUsername: to.Ptr("ol-user"),
+			// 	AdminPassword: to.Ptr("123456"),
+			// 	//require ssh key for authentication on linux
+			// 	//LinuxConfiguration: &armcompute.LinuxConfiguration{
+			// 	//	DisablePasswordAuthentication: to.Ptr(true),
+			// 	//	SSH: &armcompute.SSHConfiguration{
+			// 	//		PublicKeys: []*armcompute.SSHPublicKey{
+			// 	//			{
+			// 	//				Path:    to.Ptr(fmt.Sprintf("/home/%s/.ssh/authorized_keys", "sample-user")),
+			// 	//				KeyData: to.Ptr(string(sshBytes)),
+			// 	//			},
+			// 	//		},
+			// 	//	},
+			// 	//},
+			// },
 			NetworkProfile: &armcompute.NetworkProfile{
 				NetworkInterfaces: []*armcompute.NetworkInterfaceReference{
 					{
@@ -626,23 +651,73 @@ func createSnapshotImage() {
 	}
 	log.Println("resources group:", *resourceGroup.ID)
 
-	disk, err := createDisk(ctx, cred)
+	disk, err := getDisk(ctx, cred)
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Println("virtual disk:", *disk.ID)
 
 	snapshot, err := createSnapshot(ctx, cred, *disk.ID)
 	if err != nil {
 		log.Fatal(err)
 	}
 	log.Println("snapshot:", *snapshot.ID)
+}
 
-	image, err := createImage(ctx, cred, *snapshot.ID)
+func getDisk(ctx context.Context, cred azcore.TokenCredential) (*armcompute.Disk, error) {
+	diskClient, err := armcompute.NewDisksClient(subscriptionId, cred, nil)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
-	log.Println("image:", *image.ID)
+
+	resp, err := diskClient.Get(
+		ctx,
+		resourceGroupName,
+		diskName,
+		nil,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &resp.Disk, nil
+}
+
+func createDisk(ctx context.Context, cred azcore.TokenCredential, source_disk string) (*armcompute.Disk, error) {
+	disksClient, err := armcompute.NewDisksClient(subscriptionId, cred, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	pollerResp, err := disksClient.BeginCreateOrUpdate(
+		ctx,
+		resourceGroupName,
+		newDiskName,
+		armcompute.Disk{
+			Location: to.Ptr(location),
+			SKU: &armcompute.DiskSKU{
+				Name: to.Ptr(armcompute.DiskStorageAccountTypesStandardSSDLRS),
+			},
+			Properties: &armcompute.DiskProperties{
+				CreationData: &armcompute.CreationData{
+					CreateOption:     to.Ptr(armcompute.DiskCreateOptionCopy),
+					SourceResourceID: to.Ptr(source_disk),
+				},
+				DiskSizeGB: to.Ptr[int32](64),
+			},
+		},
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := pollerResp.PollUntilDone(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return &resp.Disk, nil
 }
 
 func deleteDisk(ctx context.Context, cred azcore.TokenCredential) error {
@@ -661,42 +736,6 @@ func deleteDisk(ctx context.Context, cred azcore.TokenCredential) error {
 		return err
 	}
 	return nil
-}
-
-func createDisk(ctx context.Context, cred azcore.TokenCredential) (*armcompute.Disk, error) {
-	disksClient, err := armcompute.NewDisksClient(subscriptionId, cred, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	pollerResp, err := disksClient.BeginCreateOrUpdate(
-		ctx,
-		resourceGroupName,
-		diskName,
-		armcompute.Disk{
-			Location: to.Ptr(location),
-			SKU: &armcompute.DiskSKU{
-				Name: to.Ptr(armcompute.DiskStorageAccountTypesStandardLRS),
-			},
-			Properties: &armcompute.DiskProperties{
-				CreationData: &armcompute.CreationData{
-					CreateOption: to.Ptr(armcompute.DiskCreateOptionEmpty),
-				},
-				DiskSizeGB: to.Ptr[int32](64),
-			},
-		},
-		nil,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := pollerResp.PollUntilDone(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return &resp.Disk, nil
 }
 
 func createSnapshot(ctx context.Context, cred azcore.TokenCredential, diskID string) (*armcompute.Snapshot, error) {
@@ -730,46 +769,6 @@ func createSnapshot(ctx context.Context, cred azcore.TokenCredential, diskID str
 	}
 
 	return &resp.Snapshot, nil
-}
-
-func createImage(ctx context.Context, cred azcore.TokenCredential, snapshotID string) (*armcompute.Image, error) {
-	snapshotClient, err := armcompute.NewImagesClient(subscriptionId, cred, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	pollerResp, err := snapshotClient.BeginCreateOrUpdate(
-		ctx,
-		resourceGroupName,
-		imageName,
-		armcompute.Image{
-			Location: to.Ptr(location),
-			Properties: &armcompute.ImageProperties{
-				StorageProfile: &armcompute.ImageStorageProfile{
-					OSDisk: &armcompute.ImageOSDisk{
-						OSType: to.Ptr(armcompute.OperatingSystemTypesWindows),
-						Snapshot: &armcompute.SubResource{
-							ID: to.Ptr(snapshotID),
-						},
-						OSState: to.Ptr(armcompute.OperatingSystemStateTypesGeneralized),
-					},
-					ZoneResilient: to.Ptr(false),
-				},
-				HyperVGeneration: to.Ptr(armcompute.HyperVGenerationTypesV1),
-			},
-		},
-		nil,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := pollerResp.PollUntilDone(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return &resp.Image, nil
 }
 
 func cleanupSnapshot(ctx context.Context, cred azcore.TokenCredential) error {
