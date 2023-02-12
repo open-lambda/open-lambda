@@ -49,25 +49,24 @@ func createVM() {
 	log.Printf("Created resource group: %s", *resourceGroup.ID)
 	conf.Resource_groups.Rgroup[0].Resource = *resourceGroup
 
-	log.Println("resources group:", *resourceGroup.ID)
-
 	// create snapshot
 	disk, err := getDisk(ctx, conn)
 	if err != nil {
 		log.Fatal(err)
 	}
+	log.Println("Fetched disk:", *disk.ID)
 
 	snapshot, err := createSnapshot(ctx, conn, *disk.ID)
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Println("snapshot:", *snapshot.ID)
+	log.Println("Created snapshot:", *snapshot.ID)
 
 	new_disk, err := createDisk(ctx, conn, *snapshot.ID)
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Println("disk:", *new_disk.ID)
+	log.Println("Created disk:", *new_disk.ID)
 
 	// create network
 	virtualNetwork, err := createVirtualNetwork(ctx, conn)
