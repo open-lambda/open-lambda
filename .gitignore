@@ -83,5 +83,8 @@ scripts/open_lambda.egg-info
 
 *.lsm
 
-#json
+#gcp key
+key.json
+
+#azure key
 azure.json

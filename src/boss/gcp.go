@@ -61,6 +61,13 @@ func GCPBossTest() {
 		panic(err)
 	}
 
+	fmt.Printf("STEP 1a: lookup region and zone from metadata server\n")
+	region, zone, err := client.GcpProjectZone()
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Region: %s\nZone: %s\n", region, zone)
+
 	fmt.Printf("STEP 2: lookup instance from IP address\n")
 	instance, err := client.GcpInstanceName()
 	if err != nil {
@@ -78,7 +85,7 @@ func GCPBossTest() {
 	}
 
 	fmt.Printf("STEP 4: create new VM from snapshot\n")
-	resp, err = client.Wait(client.LaunchGCP("test-snap", "test-vm"))
+	resp, err = client.Wait(client.LaunchGcp("test-snap", "test-vm"))
 	fmt.Println(resp)
 	if err != nil {
 		panic(err)
@@ -89,6 +96,19 @@ func GCPBossTest() {
 	if err != nil {
 		panic(err)
 	}
+
+	fmt.Printf("STEP 6: stop instance\n")
+	resp, err = client.Wait(client.stopGcpInstance("test-vm"))
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Printf("STEP 7: delete instance\n")
+	resp, err = client.deleteGcpInstance("test-vm")
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Test Succeeded!\n")
 }
 
 func NewGCPClient(service_account_json string) (*GCPClient, error) {
@@ -130,7 +150,8 @@ func (c *GCPClient) StartRemoteWorker() error {
 	if err != nil {
 		panic(err)
 	}
-	ip, ok := lookup["instance-4"] // TODO
+	
+	ip, ok := lookup["test-vm"] // TODO
 	if !ok {
 		fmt.Println(lookup)
 		panic(fmt.Errorf("could not find IP for instance"))
@@ -209,7 +230,7 @@ func (c *GCPClient) get(url string) (rv map[string]any, err error) {
 
 	defer func() {
 		if err != nil {
-			err = fmt.Errorf("POST to %s failed: %s", url, err.Error())
+			err = fmt.Errorf("GET to %s failed: %s", url, err.Error())
 		}
 	}()
 
@@ -268,8 +289,79 @@ func (c *GCPClient) post(url string, payload bytes.Buffer) (rv map[string]any, e
 	return result, nil
 }
 
+func (c *GCPClient) delete(url string) (rv map[string]any, err error) {
+	var result map[string]any
+
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("DELETE to %s failed: %s", url, err.Error())
+		}
+	}()
+	
+	token, err := c.GetAccessToken()
+	if err != nil {
+		return result, err
+	}
+
+	url = fmt.Sprintf("%s?access_token=%s", url, token)
+	req, err := http.NewRequest("DELETE", url, nil)
+	if err != nil {
+		return result, err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	client := http.Client{}
+	resp, err :=  client.Do(req)
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return result, err
+	}
+
+	if err := json.Unmarshal([]byte(body), &result); err != nil {
+		return result, err
+	}
+
+	return result, nil
+}
+
+func (c *GCPClient) GcpProjectZone() (string, string, error) {
+	url := fmt.Sprintf("http://metadata.google.internal/computeMetadata/v1/instance/zone")
+
+	token, err := c.GetAccessToken()
+	if err != nil {
+		return "", "", err
+	}
+
+	url = fmt.Sprintf("%s?access_token=%s", url, token)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return "", "", err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Metadata-Flavor", "Google")
+	client := http.Client{}
+	resp, err :=  client.Do(req)
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", "", err
+	}
+
+	subs := strings.Split(string(body), "/")
+	zone := subs[len(subs)-1]
+	region := zone[:len(zone)-2]
+
+	c.service_account["region"] = region
+	c.service_account["zone"] = zone
+
+	return region, zone, nil
+}
+
 func (c *GCPClient) GcpListInstances() (map[string]any, error) {
-	return c.get("https://www.googleapis.com/compute/v1/projects/cs320-f21/zones/us-central1-a/instances")
+	url := fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/zones/%s/instances", c.service_account["project_id"], c.service_account["zone"])
+	return c.get(url)
 }
 
 func (c *GCPClient) GcpIPtoInstance() (map[string]string, error) {
@@ -379,9 +471,9 @@ func (c *GCPClient) Wait(resp1 map[string]any, err1 error) (resp2 map[string]any
 func (c *GCPClient) GcpSnapshot(disk string) (map[string]any, error) {
 	// TODO: take args from config (or better, read from service account somehow)
 	args := GcpSnapshotArgs{
-		Project:      "cs320-f21",
-		Region:       "us-central1",
-		Zone:         "us-central1-a",
+		Project:      c.service_account["project_id"].(string),
+		Region:       c.service_account["region"].(string),
+		Zone:         c.service_account["zone"].(string),
 		Disk:         disk,
 		SnapshotName: "test-snap",
 	}
@@ -398,13 +490,13 @@ func (c *GCPClient) GcpSnapshot(disk string) (map[string]any, error) {
 	return c.post(url, payload)
 }
 
-func (c *GCPClient) LaunchGCP(SnapshotName string, VMName string) (map[string]any, error) {
+func (c *GCPClient) LaunchGcp(SnapshotName string, VMName string) (map[string]any, error) {
 	// TODO: take args from config (or better, read from service account somehow)
 	args := GcpLaunchVmArgs{
 		ServiceAccountEmail: c.service_account["client_email"].(string),
-		Project:             "cs320-f21",
-		Region:              "us-central1",
-		Zone:                "us-central1-a",
+		Project:             c.service_account["project_id"].(string),
+		Region:              c.service_account["region"].(string),
+		Zone:                c.service_account["zone"].(string),
 		InstanceName:        VMName,
 		//SourceImage: "projects/ubuntu-os-cloud/global/images/ubuntu-2004-focal-v20220204",
 		SnapshotName: SnapshotName,
@@ -421,3 +513,25 @@ func (c *GCPClient) LaunchGCP(SnapshotName string, VMName string) (map[string]an
 
 	return c.post(url, payload)
 }
+
+func (c *GCPClient) stopGcpInstance(VMName string) (map[string]any, error) {
+	url := fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/zones/%s/instances/%s/stop",
+		c.service_account["project_id"].(string), 
+		c.service_account["zone"].(string),
+		VMName)
+
+	var payload bytes.Buffer
+
+	return c.post(url, payload)
+}
+
+func (c *GCPClient) deleteGcpInstance(VMName string) (map[string]any, error) {
+	url := fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/zones/%s/instances/%s",
+		c.service_account["project_id"].(string), 
+		c.service_account["zone"].(string), 
+		VMName)
+
+	return c.delete(url)
+}
+
+

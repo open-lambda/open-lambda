@@ -171,7 +171,7 @@ func (worker *GcpWorker) launch() {
 	client := worker.pool.client
 	fmt.Printf("STEP 4: create new VM from snapshot\n")
 	VMName := fmt.Sprintf("ol-worker-%d", worker.workerId)
-	resp, err := client.Wait(client.LaunchGCP("test-snap", VMName))
+	resp, err := client.Wait(client.LaunchGcp("test-snap", VMName))
 	fmt.Println(resp)
 	if err != nil {
 		panic(err)
