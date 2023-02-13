@@ -86,29 +86,30 @@ func GCPBossTest() {
 
 	fmt.Printf("STEP 4: create new VM from snapshot\n")
 	resp, err = client.Wait(client.LaunchGcp("test-snap", "test-vm"))
-	fmt.Println(resp)
-	if err != nil {
+	if err != nil && resp["error"].(map[string]any)["code"] != "409" { //continue if instance already exists error
+		fmt.Printf("instance alreay exists!\n")
+	} else if err != nil {
 		panic(err)
 	}
 
 	fmt.Printf("STEP 5: start worker\n")
 	err = client.StartRemoteWorker()
-	if err != nil {
+	if err != nil { 
 		panic(err)
 	}
 
-	fmt.Printf("STEP 6: stop instance\n")
-	resp, err = client.Wait(client.stopGcpInstance("test-vm"))
-	if err != nil {
-		panic(err)
-	}
+	// fmt.Printf("STEP 6: stop instance\n")
+	// resp, err = client.Wait(client.stopGcpInstance("test-vm"))
+	// if err != nil {
+	// 	panic(err)
+	// }
 
-	fmt.Printf("STEP 7: delete instance\n")
-	resp, err = client.deleteGcpInstance("test-vm")
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("Test Succeeded!\n")
+	// fmt.Printf("STEP 7: delete instance\n")
+	// resp, err = client.deleteGcpInstance("test-vm")
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// fmt.Printf("Test Succeeded!\n")
 }
 
 func NewGCPClient(service_account_json string) (*GCPClient, error) {

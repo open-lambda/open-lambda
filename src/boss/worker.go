@@ -133,6 +133,13 @@ func NewGcpWorkerPool() (*GcpWorkerPool, error) {
 		return nil, err
 	}
 
+	fmt.Printf("STEP 1a: lookup region and zone from metadata server\n")
+	region, zone, err := client.GcpProjectZone()
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Region: %s\nZone: %s\n", region, zone)
+
 	fmt.Printf("STEP 2: lookup instance from IP address\n")
 	instance, err := client.GcpInstanceName()
 	if err != nil {
@@ -173,7 +180,9 @@ func (worker *GcpWorker) launch() {
 	VMName := fmt.Sprintf("ol-worker-%d", worker.workerId)
 	resp, err := client.Wait(client.LaunchGcp("test-snap", VMName))
 	fmt.Println(resp)
-	if err != nil {
+	if err != nil && resp["error"].(map[string]any)["code"] != "409" { //continue if instance already exists error
+		fmt.Printf("instance alreay exists!\n")
+	} else if err != nil {
 		panic(err)
 	}
 
