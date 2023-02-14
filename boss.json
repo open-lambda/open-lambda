@@ -1,8 +1,13 @@
 {
-	"platform": "mock",
+	"platform": "gcp",
 	"scaling": "manual",
 	"api_key": "abc",
 	"boss_port": "5000",
-	"azure": {},
+	"azure": {
+		"azure_config": {
+			"resource_groups": null,
+			"resource_groups_number": 0
+		}
+	},
 	"gcp": {}
 }

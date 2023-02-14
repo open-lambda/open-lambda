@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 	"net/http"
+	"io"
+	"io/ioutil"
+	"bytes"
 )
 
 type Invocation struct {
@@ -187,7 +190,7 @@ func (worker *GcpWorker) launch() {
 	}
 
 	fmt.Printf("STEP 5: start worker\n")
-	err = client.StartRemoteWorker()
+	err = client.StartRemoteWorker(VMName)
 	if err != nil {
 		panic(err)
 	}
@@ -205,14 +208,11 @@ func (worker *GcpWorker) task() {
 			return
 		}
 
-		// respond with dummy message
-		// (a real Worker will forward it to the OL worker on a different VM)
-		s := fmt.Sprintf("hello from GcpWorker %d\n", worker.workerId)
-		req.w.WriteHeader(http.StatusOK)
-		_, err := req.w.Write([]byte(s))
+		err = worker.forwardTask(req.w, req.r)
 		if err != nil {
 			panic(err)
 		}
+
 		req.Done <- true
 	}
 }
@@ -220,5 +220,54 @@ func (worker *GcpWorker) task() {
 func (worker *GcpWorker) Cleanup() {
 	worker.reqChan <- nil
 }
+
+func (worker *GcpWorker) forwardTask(w http.ResponseWriter, req *http.Request) (error) {
+	c := worker.pool.client
+	lookup, err := c.GcpInstancetoIP()
+	if err != nil {
+		return err
+	}
+	
+	VMName := fmt.Sprintf("ol-worker-%d", worker.workerId)
+	workerIp, ok := lookup[VMName] // TODO
+	if !ok {
+		fmt.Println(lookup)
+		panic(fmt.Errorf("could not find IP for instance"))
+	}
+
+    body, err := ioutil.ReadAll(req.Body)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return err
+    }
+
+    req.Body = ioutil.NopCloser(bytes.NewReader(body))
+    url := fmt.Sprintf("http://%s:%s%s", workerIp, "5000", req.RequestURI) //TODO: load from config
+
+    proxyReq, err := http.NewRequest(req.Method, url, bytes.NewReader(body))
+	if err != nil {
+		panic(err)
+	}
+	
+    proxyReq.Header = make(http.Header)
+    for h, val := range req.Header {
+        proxyReq.Header[h] = val
+    }
+
+	client := http.Client{}
+    resp, err := client.Do(proxyReq)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusBadGateway)
+        return err
+    }
+    defer resp.Body.Close()
+
+	fmt.Printf("%s",resp.Header)
+    io.Copy(w, resp.Body)
+
+	return nil
+}
+
+
 
 // WORKER IMPLEMENTATION: AzureWorker (TODO)
