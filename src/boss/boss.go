@@ -17,7 +17,6 @@ const (
 	STORAGE_PATH     = "/registry/upload"
 	DOWNLOAD_PATH    = "/registry/download"
 	DELETE_PATH      = "registry/delete"
-	WORKER_CAP		 = 3
 )
 
 type Boss struct {
@@ -76,15 +75,14 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if worker_count > WORKER_CAP {
-		worker_count = WORKER_CAP
-		// TODO: config cap
+	if worker_count > Conf.Worker_Cap {
+		worker_count = Conf.Worker_Cap
 		log.Printf("capping workers at %d to avoid big bills during debugging\n", worker_count)
 	}
 
 	// STEP 2: adjust worker count (TODO)
 	for len(b.workers) < worker_count {
-		worker := b.workerPool.Create(b.reqChan)
+		worker := b.workerPool.CreateWorker(b.reqChan)
 		b.workers = append(b.workers, worker)
 	}
 

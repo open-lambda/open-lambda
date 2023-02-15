@@ -93,7 +93,7 @@ func GCPBossTest() {
 	}
 
 	fmt.Printf("STEP 5: start worker\n")
-	err = client.StartRemoteWorker()
+	err = client.StartRemoteWorker("test-vm")
 	if err != nil { 
 		panic(err)
 	}
@@ -136,7 +136,7 @@ func NewGCPClient(service_account_json string) (*GCPClient, error) {
 	return client, nil
 }
 
-func (c *GCPClient) StartRemoteWorker() error {
+func (c *GCPClient) StartRemoteWorker(VMName string) error {
 	cwd, err := os.Getwd()
 	if err != nil {
 		panic(err)
@@ -152,7 +152,7 @@ func (c *GCPClient) StartRemoteWorker() error {
 		panic(err)
 	}
 	
-	ip, ok := lookup["test-vm"] // TODO
+	ip, ok := lookup[VMName] // TODO
 	if !ok {
 		fmt.Println(lookup)
 		panic(fmt.Errorf("could not find IP for instance"))
@@ -534,5 +534,3 @@ func (c *GCPClient) deleteGcpInstance(VMName string) (map[string]any, error) {
 
 	return c.delete(url)
 }
-
-
