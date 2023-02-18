@@ -35,7 +35,7 @@ open-lambda-proxy-protocol = { path="../bin-functions/proxy-protocol" }
 lambda-store-client=  { git="ssh://git@github.com/kaimast/lambda-store.git", optional=true }
 
 [features]
-default = ["lambdastore", "cpuprofiler"]
+default = ["lambdastore"]
 llvm-backend = ["wasmer-compiler-llvm"]
 lambdastore = ["lambda-store-client"]
 
