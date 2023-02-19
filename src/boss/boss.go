@@ -75,15 +75,14 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if worker_count > 3 {
-		worker_count = 3
-		// TODO: config cap
+	if worker_count > Conf.Worker_Cap {
+		worker_count = Conf.Worker_Cap
 		log.Printf("capping workers at %d to avoid big bills during debugging\n", worker_count)
 	}
 
 	// STEP 2: adjust worker count (TODO)
 	for len(b.workers) < worker_count {
-		worker := b.workerPool.Create(b.reqChan)
+		worker := b.workerPool.CreateWorker(b.reqChan)
 		b.workers = append(b.workers, worker)
 	}
 

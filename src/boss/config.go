@@ -19,6 +19,7 @@ type Config struct {
 	Scaling   string      `json:"scaling"`
 	API_key   string      `json:"api_key"`
 	Boss_port string      `json:"boss_port"`
+	Worker_Cap int        `json:"worker_cap"`
 	Azure     AzureConfig `json:"azure"`
 	Gcp       GcpConfig   `json:"gcp"`
 }
@@ -131,7 +132,6 @@ func isFile(path string) (os.FileInfo, bool) {
 }
 
 type GcpConfig struct {
-	// TODO
 }
 
 func LoadDefaults() error {
@@ -140,6 +140,7 @@ func LoadDefaults() error {
 		Scaling:   "manual",
 		API_key:   "abc", // TODO
 		Boss_port: "5000",
+		Worker_Cap: 4,
 	}
 
 	return checkConf()
