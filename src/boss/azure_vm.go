@@ -68,12 +68,12 @@ func createVM() {
 	}
 	log.Println("Created disk:", *new_disk.ID)
 
-	// create network
-	virtualNetwork, err := createVirtualNetwork(ctx, conn)
+	// get network
+	virtualNetwork, err := getVirtualNetwork(ctx, conn)
 	if err != nil {
-		log.Fatalf("cannot create virtual network:%+v", err)
+		log.Fatalf("cannot get virtual network:%+v", err)
 	}
-	log.Printf("Created virtual network: %s", *virtualNetwork.ID)
+	log.Printf("Fetched virtual network: %s", *virtualNetwork.ID)
 	conf.Resource_groups.Rgroup[0].Virtual_net = *virtualNetwork
 
 	subnet, err := createSubnets(ctx, conn)
@@ -83,12 +83,12 @@ func createVM() {
 	log.Printf("Created subnet: %s", *subnet.ID)
 	conf.Resource_groups.Rgroup[0].Subnet = *subnet
 
-	publicIP, err := createPublicIP(ctx, conn)
-	if err != nil {
-		log.Fatalf("cannot create public IP address:%+v", err)
-	}
-	log.Printf("Created public IP address: %s", *publicIP.ID)
-	conf.Resource_groups.Rgroup[0].Public_ip = *publicIP
+	// publicIP, err := createPublicIP(ctx, conn)
+	// if err != nil {
+	// 	log.Fatalf("cannot create public IP address:%+v", err)
+	// }
+	// log.Printf("Created public IP address: %s", *publicIP.ID)
+	// conf.Resource_groups.Rgroup[0].Public_ip = *publicIP
 
 	// network security group
 	nsg, err := createNetworkSecurityGroup(ctx, conn)
@@ -98,7 +98,7 @@ func createVM() {
 	log.Printf("Created network security group: %s", *nsg.ID)
 	conf.Resource_groups.Rgroup[0].Security_group = *nsg
 
-	netWorkInterface, err := createNetWorkInterface(ctx, conn, *subnet.ID, *publicIP.ID, *nsg.ID)
+	netWorkInterface, err := createNetWorkInterfaceWithoutIp(ctx, conn, *subnet.ID, *nsg.ID)
 	if err != nil {
 		log.Fatalf("cannot create network interface:%+v", err)
 	}
@@ -128,6 +128,9 @@ func createVM() {
 	if err := WriteAzureConfig(conf); err != nil {
 		log.Fatalf("write to azure.json file failed:%s", err)
 	}
+}
+
+func startWorker() {
 }
 
 func cleanupVM() {
@@ -234,6 +237,20 @@ func deleteResourceGroup(ctx context.Context, cred azcore.TokenCredential) error
 	return nil
 }
 
+func getVirtualNetwork(ctx context.Context, cred azcore.TokenCredential) (*armnetwork.VirtualNetwork, error) {
+	vnetClient, err := armnetwork.NewVirtualNetworksClient(subscriptionId, cred, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := vnetClient.Get(ctx, resourceGroupName, vnetName, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return &resp.VirtualNetwork, nil
+}
+
 func createVirtualNetwork(ctx context.Context, cred azcore.TokenCredential) (*armnetwork.VirtualNetwork, error) {
 	vnetClient, err := armnetwork.NewVirtualNetworksClient(subscriptionId, cred, nil)
 	if err != nil {
@@ -299,7 +316,7 @@ func createSubnets(ctx context.Context, cred azcore.TokenCredential) (*armnetwor
 
 	parameters := armnetwork.Subnet{
 		Properties: &armnetwork.SubnetPropertiesFormat{
-			AddressPrefix: to.Ptr("10.1.10.0/24"),
+			AddressPrefix: to.Ptr("10.1.11.0/24"),
 		},
 	}
 
@@ -451,6 +468,46 @@ func deletePublicIP(ctx context.Context, cred azcore.TokenCredential) error {
 		return err
 	}
 	return nil
+}
+
+func createNetWorkInterfaceWithoutIp(ctx context.Context, cred azcore.TokenCredential, subnetID string, networkSecurityGroupID string) (*armnetwork.Interface, error) {
+	nicClient, err := armnetwork.NewInterfacesClient(subscriptionId, cred, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	parameters := armnetwork.Interface{
+		Location: to.Ptr(location),
+		Properties: &armnetwork.InterfacePropertiesFormat{
+			//NetworkSecurityGroup:
+			IPConfigurations: []*armnetwork.InterfaceIPConfiguration{
+				{
+					Name: to.Ptr("ipConfig"),
+					Properties: &armnetwork.InterfaceIPConfigurationPropertiesFormat{
+						PrivateIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodDynamic),
+						Subnet: &armnetwork.Subnet{
+							ID: to.Ptr(subnetID),
+						},
+					},
+				},
+			},
+			NetworkSecurityGroup: &armnetwork.SecurityGroup{
+				ID: to.Ptr(networkSecurityGroupID),
+			},
+		},
+	}
+
+	pollerResponse, err := nicClient.BeginCreateOrUpdate(ctx, resourceGroupName, nicName, parameters, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := pollerResponse.PollUntilDone(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return &resp.Interface, err
 }
 
 func createNetWorkInterface(ctx context.Context, cred azcore.TokenCredential, subnetID string, publicIPID string, networkSecurityGroupID string) (*armnetwork.Interface, error) {

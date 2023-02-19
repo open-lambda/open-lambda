@@ -121,9 +121,10 @@ func AzureCreateVM() {
 
 	fmt.Printf("Please enter your desired new VM name: ")
 	fmt.Scanln(&vmName)
+
 	diskName = "ol-boss_OsDisk_1_9bdd3afe24b845f9973f3f066209bddf"
 	newDiskName = vmName + "-disk"
-	vnetName = vmName + "-vnet"
+	vnetName = "olvm-pool-vnet"
 	subnetName = vmName + "-subnet"
 	nsgName = vmName + "-nsg"
 	nicName = vmName + "-nic"
