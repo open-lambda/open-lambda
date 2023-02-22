@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
+	"os"
 )
 
 const (
@@ -17,28 +18,34 @@ const (
 	STORAGE_PATH     = "/registry/upload"
 	DOWNLOAD_PATH    = "/registry/download"
 	DELETE_PATH      = "registry/delete"
+	SHUTDOWN_PATH    = "/shutdown"
 )
 
 type Boss struct {
 	reqChan chan *Invocation
-
 	mutex      sync.Mutex
 	workerPool WorkerPool
-	workers    []Worker
 }
 
-var m = map[string][]int{"workers": []int{}}
+var m = map[string][]string{"workers": []string{}}
 
 func (b *Boss) BossStatus(w http.ResponseWriter, r *http.Request) {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
 
 	log.Printf("Receive request to %s\n", r.URL.Path)
+	m["workers"] = b.workerPool.Status()
 	if b, err := json.MarshalIndent(m, "", "\t"); err != nil {
 		panic(err)
 	} else {
 		w.Write(b)
 	}
+}
+
+func (b *Boss) Close(w http.ResponseWriter, r *http.Request) {
+	log.Printf("closing all worker")
+	b.workerPool.CloseAll()
+	os.Exit(0)
 }
 
 func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
@@ -79,22 +86,23 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 		worker_count = Conf.Worker_Cap
 		log.Printf("capping workers at %d to avoid big bills during debugging\n", worker_count)
 	}
+	log.Printf("Receive request to %s, worker_count of %d requested\n", r.URL.Path, worker_count)
 
 	// STEP 2: adjust worker count (TODO)
-	for len(b.workers) < worker_count {
-		worker := b.workerPool.CreateWorker(b.reqChan)
-		b.workers = append(b.workers, worker)
+	size := b.workerPool.Size()
+	for size < worker_count  {
+		b.workerPool.CreateWorker(b.reqChan)
+		size += 1
 	}
 
-	// TODO: cleanup workers if necessary
-
-	// TODO: respond based on number of workers
-	log.Printf("Receive request to %s, worker_count of %d requested\n", r.URL.Path, worker_count)
-	var s []int
-	m["workers"] = append(s, 1)
-	for k, v := range m {
-		fmt.Println(k, "value is", v)
+	// scale down if len(b.workers) < worker_count
+	for size > worker_count {
+		b.reqChan <- nil //remove idle worker
+		size -= 1
 	}
+
+	//respond with list of active workers
+	m["workers"] = b.workerPool.Status()
 	if b, err := json.MarshalIndent(m, "", "\t"); err != nil {
 		panic(err)
 	} else {
@@ -175,7 +183,7 @@ func BossMain() (err error) {
 
 	boss := Boss{
 		workerPool: pool,
-		reqChan:    make(chan *Invocation),
+		reqChan:    make(chan *Invocation), //TODO: buffer for request queue (what size?)
 	}
 
 	// things shared by all servers
@@ -185,6 +193,7 @@ func BossMain() (err error) {
 	http.HandleFunc(STORAGE_PATH, boss.StorageLambda)
 	http.HandleFunc(DOWNLOAD_PATH, boss.DownloadLambda)
 	http.HandleFunc(DELETE_PATH, boss.DeleteLambda)
+	http.HandleFunc(SHUTDOWN_PATH, boss.Close)
 
 	port := fmt.Sprintf(":%s", Conf.Boss_port)
 	fmt.Printf("Listen on port %s\n", port)
