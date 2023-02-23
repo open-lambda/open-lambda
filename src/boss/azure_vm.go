@@ -29,11 +29,12 @@ const (
 	location          = "eastus"
 )
 
-func createVM() {
+func createVM() *AzureConfig {
 	var conf *AzureConfig
 	if conf, err = ReadAzureConfig(); err != nil {
 		log.Fatalf("Read to azure.json file failed\n")
 	}
+	vmNum := conf.Resource_groups.Rgroup[0].Numvm
 
 	conn, err := connectionAzure()
 	if err != nil {
@@ -81,14 +82,14 @@ func createVM() {
 		log.Fatalf("cannot create subnet:%+v", err)
 	}
 	log.Printf("Created subnet: %s", *subnet.ID)
-	conf.Resource_groups.Rgroup[0].Subnet = *subnet
+	conf.Resource_groups.Rgroup[0].Subnet[vmNum] = *subnet
 
 	// publicIP, err := createPublicIP(ctx, conn)
 	// if err != nil {
 	// 	log.Fatalf("cannot create public IP address:%+v", err)
 	// }
 	// log.Printf("Created public IP address: %s", *publicIP.ID)
-	// conf.Resource_groups.Rgroup[0].Public_ip = *publicIP
+	// conf.Resource_groups.Rgroup[0].Public_ip[vmNum] = *publicIP
 
 	// network security group
 	nsg, err := createNetworkSecurityGroup(ctx, conn)
@@ -96,16 +97,16 @@ func createVM() {
 		log.Fatalf("cannot create network security group:%+v", err)
 	}
 	log.Printf("Created network security group: %s", *nsg.ID)
-	conf.Resource_groups.Rgroup[0].Security_group = *nsg
+	conf.Resource_groups.Rgroup[0].Security_group[vmNum] = *nsg
 
 	netWorkInterface, err := createNetWorkInterfaceWithoutIp(ctx, conn, *subnet.ID, *nsg.ID)
 	if err != nil {
 		log.Fatalf("cannot create network interface:%+v", err)
 	}
 	log.Printf("Created network interface: %s", *netWorkInterface.ID)
-	conf.Resource_groups.Rgroup[0].Net_ifc = *netWorkInterface
+	conf.Resource_groups.Rgroup[0].Net_ifc[vmNum] = *netWorkInterface
 
-	networkInterfaceID := conf.Resource_groups.Rgroup[0].Net_ifc.ID
+	networkInterfaceID := conf.Resource_groups.Rgroup[0].Net_ifc[vmNum].ID
 
 	// create virtual machine
 	virtualMachine, err := createVirtualMachine(ctx, conn, *networkInterfaceID, *new_disk.ID)
@@ -128,9 +129,8 @@ func createVM() {
 	if err := WriteAzureConfig(conf); err != nil {
 		log.Fatalf("write to azure.json file failed:%s", err)
 	}
-}
 
-func startWorker() {
+	return conf
 }
 
 func cleanupVM() {
@@ -265,14 +265,14 @@ func createVirtualNetwork(ctx context.Context, cred azcore.TokenCredential) (*ar
 					to.Ptr("10.1.0.0/16"), // example 10.1.0.0/16
 				},
 			},
-			//Subnets: []*armnetwork.Subnet{
-			//	{
-			//		Name: to.Ptr(subnetName+"3"),
-			//		Properties: &armnetwork.SubnetPropertiesFormat{
-			//			AddressPrefix: to.Ptr("10.1.0.0/24"),
-			//		},
-			//	},
-			//},
+			Subnets: []*armnetwork.Subnet{
+				{
+					Name: to.Ptr(subnetName + "3"),
+					Properties: &armnetwork.SubnetPropertiesFormat{
+						AddressPrefix: to.Ptr("10.1.0.0/24"),
+					},
+				},
+			},
 		},
 	}
 

@@ -1,12 +1,12 @@
 package boss
 
 import (
+	"bytes"
 	"fmt"
-	"log"
-	"net/http"
 	"io"
 	"io/ioutil"
-	"bytes"
+	"log"
+	"net/http"
 )
 
 // Non-platform specific functions mockWorker implementation
@@ -45,18 +45,6 @@ type MockWorker struct {
 
 func (worker *MockWorker) Cleanup() {
 	worker.reqChan <- nil
-}
-
-// TODO: AzureWorker
-
-type AzureWorkerPool struct {
-	nextId int
-}
-
-type AzureWorker struct {
-	pool *AzureWorkerPool
-	workerId int
-	reqChan  chan *Invocation
 }
 
 func NewMockWorkerPool() (*MockWorkerPool, error) {
@@ -102,41 +90,41 @@ func (worker *MockWorker) task() {
 
 func (worker *MockWorker) Close() {
 	worker.exitChan <- true //end task() go rountine
-	
+
 	//shutdown or remove VM
 	fmt.Printf("closing ol-worker-%d\n", worker.workerId)
 }
 
 // forward request to worker
-func forwardTask(w http.ResponseWriter, req *http.Request, workerIp string) (error) {
-    body, err := ioutil.ReadAll(req.Body)
-    if err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-        return err
-    }
+func forwardTask(w http.ResponseWriter, req *http.Request, workerIp string) error {
+	body, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return err
+	}
 
-    req.Body = ioutil.NopCloser(bytes.NewReader(body))
-    url := fmt.Sprintf("http://%s:%d%s", workerIp, 5000, req.RequestURI) //TODO: read from Config..?
+	req.Body = ioutil.NopCloser(bytes.NewReader(body))
+	url := fmt.Sprintf("http://%s:%d%s", workerIp, 5000, req.RequestURI) //TODO: read from Config..?
 
-    workerReq, err := http.NewRequest(req.Method, url, bytes.NewReader(body))
+	workerReq, err := http.NewRequest(req.Method, url, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
-	
-    workerReq.Header = make(http.Header)
-    for h, val := range req.Header {
-        workerReq.Header[h] = val
-    }
+
+	workerReq.Header = make(http.Header)
+	for h, val := range req.Header {
+		workerReq.Header[h] = val
+	}
 
 	client := http.Client{}
-    resp, err := client.Do(workerReq)
-    if err != nil {
-        http.Error(w, err.Error(), http.StatusBadGateway)
-        return err
-    }
-    defer resp.Body.Close()
+	resp, err := client.Do(workerReq)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return err
+	}
+	defer resp.Body.Close()
 
-    io.Copy(w, resp.Body)
+	io.Copy(w, resp.Body)
 
 	return nil
 }

@@ -15,34 +15,34 @@ import (
 var Conf *Config
 
 type Config struct {
-	Platform  string      `json:"platform"`
-	Scaling   string      `json:"scaling"`
-	API_key   string      `json:"api_key"`
-	Boss_port string      `json:"boss_port"`
-	Worker_Cap int        `json:"worker_cap"`
-	Azure     AzureConfig `json:"azure"`
-	Gcp       GcpConfig   `json:"gcp"`
+	Platform   string      `json:"platform"`
+	Scaling    string      `json:"scaling"`
+	API_key    string      `json:"api_key"`
+	Boss_port  string      `json:"boss_port"`
+	Worker_Cap int         `json:"worker_cap"`
+	Azure      AzureConfig `json:"azure"`
+	Gcp        GcpConfig   `json:"gcp"`
 }
 
 type AzureConfig struct {
 	Resource_groups rgroups `json:"azure_config"`
 }
 
-// Rightnow we default to have only one resource group
+// TODO: Rightnow we default to have only one resource group
 type rgroups struct {
 	Rgroup    []rgroup `json:"resource_groups"`
 	Numrgroup int      `json:"resource_groups_number"`
 }
 
 type rgroup struct {
-	Resource       armresources.ResourceGroup  `json:"resource_group"`
-	Virtual_net    armnetwork.VirtualNetwork   `json:"virtual_network"`
-	Subnet         armnetwork.Subnet           `json:"subnet"`
-	Public_ip      armnetwork.PublicIPAddress  `json:"public_ip"`
-	Security_group armnetwork.SecurityGroup    `json:"security_group"`
-	Net_ifc        armnetwork.Interface        `json:"network_interface"`
-	Vms            []armcompute.VirtualMachine `json:"virtual_machine"`
-	Numvm          int                         `json:"vm_number"`
+	Resource       armresources.ResourceGroup   `json:"resource_group"`
+	Virtual_net    armnetwork.VirtualNetwork    `json:"virtual_network"`
+	Subnet         []armnetwork.Subnet          `json:"subnet"`
+	Public_ip      []armnetwork.PublicIPAddress `json:"public_ip"`
+	Security_group []armnetwork.SecurityGroup   `json:"security_group"`
+	Net_ifc        []armnetwork.Interface       `json:"network_interface"`
+	Vms            []armcompute.VirtualMachine  `json:"virtual_machine"`
+	Numvm          int                          `json:"vm_number"`
 }
 
 func InitAzureConfig() (*AzureConfig, error) {
@@ -136,10 +136,10 @@ type GcpConfig struct {
 
 func LoadDefaults() error {
 	Conf = &Config{
-		Platform:  "mock",
-		Scaling:   "manual",
-		API_key:   "abc", // TODO
-		Boss_port: "5000",
+		Platform:   "mock",
+		Scaling:    "manual",
+		API_key:    "abc", // TODO
+		Boss_port:  "5000",
 		Worker_Cap: 4,
 	}
 

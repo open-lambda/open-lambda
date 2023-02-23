@@ -163,6 +163,8 @@ func BossMain() (err error) {
 	var pool WorkerPool
 	if Conf.Platform == "gcp" {
 		pool, err = NewGcpWorkerPool()
+	} else if Conf.Platform == "azure" {
+		pool, err = NewAzureWorkerPool()
 	} else if Conf.Platform == "mock" {
 		pool, err = NewMockWorkerPool()
 	} else {
