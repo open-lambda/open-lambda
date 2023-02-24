@@ -145,7 +145,7 @@ func (worker *GcpWorker) launch() {
 
 	fmt.Printf("STEP 5: start worker\n")
 	var ip string
-	ip, err = client.StartRemoteWorker(worker.workerId)
+	ip, err = client.RunComandWorker(worker.workerId, "./ol worker --detach")
 	if err != nil {
 		panic(err)
 	}
@@ -184,7 +184,15 @@ func (worker *GcpWorker) Close() {
     case worker.exitChan <- true:
     }
 	client := worker.pool.client
+
+
+
 	log.Printf("stopping %s\n", worker.workerId)
+
+	_, err = client.RunComandWorker(worker.workerId, "./ol kill")
+	if err != nil {
+		panic(err)
+	}
 	client.stopGcpInstance(worker.workerId)
 	// or instances can be kept running but stop worker...?
 	//err := StopRemoteWorker(VMName)

@@ -1,5 +1,10 @@
 package boss
 
+import (
+	"fmt"
+	"log"
+)
+
 type AzureWorkerPool struct {
 	nextId int
 	//TODO: add additional field if needed for Azure
@@ -8,7 +13,7 @@ type AzureWorkerPool struct {
 
 type AzureWorker struct {
 	pool *AzureWorkerPool
-	workerId int
+	workerId string
 	workerIp string
 	//TODO: add additional field if needed for Azure Worker
 	reqChan  chan *Invocation
@@ -17,7 +22,7 @@ type AzureWorker struct {
 
 // WORKER IMPLEMENTATION: AzureWorker
 
-func NewGcpWorkerPool() (*AzureWorkerPool, error) {
+func NewAzureWorkerPool() (*AzureWorkerPool, error) {
 	//TODO: prepare for creating new vm:
 	// - configure authentication, take snapshot of boss, etc
 
@@ -51,12 +56,12 @@ func (pool *AzureWorkerPool) CreateWorker(reqChan chan *Invocation) {
 
 //delete worker with given workerId
 //not used for current scaling down logic in boss
-func (pool *GcpWorkerPool) DeleteWorker(workerId string) {
+func (pool *AzureWorkerPool) DeleteWorker(workerId string) {
 	pool.workers[workerId].Close()
 }
 
 //return list of active workers' ids
-func (pool *GcpWorkerPool) Status() []string {
+func (pool *AzureWorkerPool) Status() []string {
 	var w = []string{}
 	for k, _ := range pool.workers {
 		w = append(w, k)
@@ -65,13 +70,13 @@ func (pool *GcpWorkerPool) Status() []string {
 }
 
 //return number of active workers
-func (pool *GcpWorkerPool) Size() int {
+func (pool *AzureWorkerPool) Size() int {
 	return len(pool.workers)
 }
 
 //close all workers
 //curl -X POST {boss ip}:5000/shutdown
-func (pool *GcpWorkerPool) CloseAll() {
+func (pool *AzureWorkerPool) CloseAll() {
 	for _, w := range pool.workers {
 		w.Close() 
 	}
@@ -116,5 +121,5 @@ func (worker *AzureWorker) Close() {
 	
 	//TODO: stop or delete azure instance
 
-	delete(worker.pool.workers, worker.workerId)
+	//delete(worker.pool.workers, worker.workerId)
 }

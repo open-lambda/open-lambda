@@ -94,7 +94,7 @@ func GCPBossTest() {
 	}
 
 	fmt.Printf("STEP 5: start worker\n")
-	_, err = client.StartRemoteWorker("test-vm")
+	_, err = client.RunComandWorker("test-vm", "./ol worker --detach")
 	if err != nil { 
 		panic(err)
 	}
@@ -137,7 +137,7 @@ func NewGCPClient(service_account_json string) (*GCPClient, error) {
 	return client, nil
 }
 
-func (c *GCPClient) StartRemoteWorker(VMName string) (string, error) {
+func (c *GCPClient) RunComandWorker(VMName string, command string) (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		panic(err)
@@ -159,7 +159,7 @@ func (c *GCPClient) StartRemoteWorker(VMName string) (string, error) {
 		panic(fmt.Errorf("could not find IP for instance"))
 	}
 
-	cmd := fmt.Sprintf("cd %s; %s", cwd, "./ol worker --detach")
+	cmd := fmt.Sprintf("cd %s; %s", cwd, command)
 
 	tries := 10
 	for tries > 0 {
@@ -421,17 +421,17 @@ func (c *GCPClient) GcpIPtoInstance() (map[string]string, error) {
 		instance_name := item.(map[string]any)["name"].(string)
 		interfaces := item.(map[string]any)["networkInterfaces"]
 		for _, netif := range interfaces.([]any) {
-			ip := netif.(map[string]any)["networkIP"].(string)
+			ip := netif.(map[string]any)["networkIP"].(string) //internal ip
 			lookup[ip] = instance_name
 
-			confs := netif.(map[string]any)["accessConfigs"]
-			for _, conf := range confs.([]any) {
-				iptmp := conf.(map[string]any)["natIP"]
-				switch ip := iptmp.(type) {
-				case string:
-					lookup[ip] = instance_name
-				}
-			}
+			// confs := netif.(map[string]any)["accessConfigs"]
+			// for _, conf := range confs.([]any) {
+			// 	iptmp := conf.(map[string]any)["natIP"] //external ip
+			// 	switch ip := iptmp.(type) {
+			// 	case string:
+			// 		lookup[ip] = instance_name
+			// 	}
+			// }
 		}
 	}
 
