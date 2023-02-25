@@ -89,14 +89,23 @@ func (worker *AzureWorker) launch(privateIP string) {
 
 func (worker *AzureWorker) task() {
 	for {
-		req := <-worker.reqChan
-		if <-worker.exitChan {
+		var req *Invocation
+		select {
+		case <-worker.exitChan:
+			return
+		case req = <-worker.reqChan:
+		}
+
+		if req == nil {
+			worker.Close()
 			return
 		}
+
 		err = forwardTask(req.w, req.r, worker.privateAddr)
 		if err != nil {
 			panic(err)
 		}
+
 		req.Done <- true
 	}
 }
