@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"sync"
 	"os"
+	"os/signal"
+	"syscall"
 )
 
 const (
@@ -194,6 +196,17 @@ func BossMain() (err error) {
 	http.HandleFunc(DOWNLOAD_PATH, boss.DownloadLambda)
 	http.HandleFunc(DELETE_PATH, boss.DeleteLambda)
 	http.HandleFunc(SHUTDOWN_PATH, boss.Close)
+
+	// clean up if signal hits us
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	signal.Notify(c, os.Interrupt, syscall.SIGINT)
+	go func() {
+		<-c
+		log.Printf("received kill signal, cleaning up")
+		boss.Close(nil, nil)
+		os.Exit(0)
+	}()
 
 	port := fmt.Sprintf(":%s", Conf.Boss_port)
 	fmt.Printf("Listen on port %s\n", port)
