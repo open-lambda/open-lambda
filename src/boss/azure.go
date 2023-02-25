@@ -122,12 +122,7 @@ func AzureCreateVM() *AzureConfig {
 	// TODO: generate vmName and subnet Addr automatically
 	vmName = "ol-worker-"
 	diskName = "ol-boss_OsDisk_1_58ab03cfbf114ad58532c893535a70ec"
-	newDiskName = vmName + "-disk"
 	vnetName = "ol-boss-vnet"
-	subnetName = vmName + "-subnet"
-	nsgName = vmName + "-nsg"
-	nicName = vmName + "-nic"
-	publicIPName = vmName + "-public-ip"
 	imageName = "ol-boss-img"
 	snapshotName = "ol-boss-snapshot"
 	return createVM()
