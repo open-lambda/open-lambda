@@ -113,25 +113,24 @@ func randomString() string {
 	return strconv.Itoa(r.Int())
 }
 
-func AzureCreateVM() {
+func AzureCreateVM() *AzureConfig {
 	subscriptionId = os.Getenv("AZURE_SUBSCRIPTION_ID")
 	if len(subscriptionId) == 0 {
 		log.Fatal("AZURE_SUBSCRIPTION_ID is not set.")
 	}
 
-	fmt.Printf("Please enter your desired new VM name: ")
-	fmt.Scanln(&vmName)
-
-	diskName = "ol-boss_OsDisk_1_9bdd3afe24b845f9973f3f066209bddf"
+	// TODO: generate vmName and subnet Addr automatically
+	vmName = "ol-worker-"
+	diskName = "ol-boss_OsDisk_1_58ab03cfbf114ad58532c893535a70ec"
 	newDiskName = vmName + "-disk"
-	vnetName = "olvm-pool-vnet"
+	vnetName = "ol-boss-vnet"
 	subnetName = vmName + "-subnet"
 	nsgName = vmName + "-nsg"
 	nicName = vmName + "-nic"
 	publicIPName = vmName + "-public-ip"
 	imageName = "ol-boss-img"
 	snapshotName = "ol-boss-snapshot"
-	createVM()
+	return createVM()
 	// TODO: copy the snapshot to the new VM
 	//createSnapshotImage()
 }

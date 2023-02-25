@@ -1,9 +1,13 @@
 package boss
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"log"
+	"net"
 	"os"
+	"strconv"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
@@ -29,11 +33,29 @@ const (
 	location          = "eastus"
 )
 
-func createVM() {
+func iptoInt(ip string) uint32 {
+	var long uint32
+	ip = ip[:len(ip)-3] // xxxx.xxxx.xxxx.xxxx/24
+	binary.Read(bytes.NewBuffer(net.ParseIP(ip).To4()), binary.BigEndian, &long)
+	return long
+}
+
+func backtoIP4(ipInt int64) string {
+	// need to do two bit shifting and “0xff” masking
+	b0 := strconv.FormatInt((ipInt>>24)&0xff, 10)
+	b1 := strconv.FormatInt((ipInt>>16)&0xff, 10)
+	b2 := strconv.FormatInt((ipInt>>8)&0xff, 10)
+	b3 := strconv.FormatInt((ipInt & 0xff), 10)
+	b3 += "/24"
+	return b0 + "." + b1 + "." + b2 + "." + b3
+}
+
+func createVM() *AzureConfig {
 	var conf *AzureConfig
 	if conf, err = ReadAzureConfig(); err != nil {
 		log.Fatalf("Read to azure.json file failed\n")
 	}
+	vmNum := conf.Resource_groups.Rgroup[0].Numvm
 
 	conn, err := connectionAzure()
 	if err != nil {
@@ -48,6 +70,14 @@ func createVM() {
 	}
 	log.Printf("Created resource group: %s", *resourceGroup.ID)
 	conf.Resource_groups.Rgroup[0].Resource = *resourceGroup
+
+	num_vm := conf.Resource_groups.Rgroup[0].Numvm
+	vmName += strconv.Itoa(num_vm)
+	newDiskName = vmName + "-disk"
+	subnetName = vmName + "-subnet"
+	nsgName = vmName + "-nsg"
+	nicName = vmName + "-nic"
+	publicIPName = vmName + "-public-ip"
 
 	// create snapshot
 	disk, err := getDisk(ctx, conn)
@@ -76,19 +106,26 @@ func createVM() {
 	log.Printf("Fetched virtual network: %s", *virtualNetwork.ID)
 	conf.Resource_groups.Rgroup[0].Virtual_net = *virtualNetwork
 
-	subnet, err := createSubnets(ctx, conn)
+	// get subnets
+	subnets := virtualNetwork.Properties.Subnets
+	// last subnet addr
+	lastSubnet64 := int64(iptoInt(*subnets[len(subnets)-1].Properties.AddressPrefix))
+	lastSubnet64 += 256
+	newSubnetIP := backtoIP4(lastSubnet64)
+
+	subnet, err := createSubnets(ctx, conn, newSubnetIP)
 	if err != nil {
 		log.Fatalf("cannot create subnet:%+v", err)
 	}
 	log.Printf("Created subnet: %s", *subnet.ID)
-	conf.Resource_groups.Rgroup[0].Subnet = *subnet
+	conf.Resource_groups.Rgroup[0].Subnet = append(conf.Resource_groups.Rgroup[0].Subnet, *subnet)
 
 	// publicIP, err := createPublicIP(ctx, conn)
 	// if err != nil {
 	// 	log.Fatalf("cannot create public IP address:%+v", err)
 	// }
 	// log.Printf("Created public IP address: %s", *publicIP.ID)
-	// conf.Resource_groups.Rgroup[0].Public_ip = *publicIP
+	// conf.Resource_groups.Rgroup[0].Public_ip[vmNum] = *publicIP
 
 	// network security group
 	nsg, err := createNetworkSecurityGroup(ctx, conn)
@@ -96,18 +133,19 @@ func createVM() {
 		log.Fatalf("cannot create network security group:%+v", err)
 	}
 	log.Printf("Created network security group: %s", *nsg.ID)
-	conf.Resource_groups.Rgroup[0].Security_group = *nsg
+	conf.Resource_groups.Rgroup[0].Security_group = append(conf.Resource_groups.Rgroup[0].Security_group, *nsg)
 
 	netWorkInterface, err := createNetWorkInterfaceWithoutIp(ctx, conn, *subnet.ID, *nsg.ID)
 	if err != nil {
 		log.Fatalf("cannot create network interface:%+v", err)
 	}
 	log.Printf("Created network interface: %s", *netWorkInterface.ID)
-	conf.Resource_groups.Rgroup[0].Net_ifc = *netWorkInterface
+	conf.Resource_groups.Rgroup[0].Net_ifc = append(conf.Resource_groups.Rgroup[0].Net_ifc, *netWorkInterface)
 
-	networkInterfaceID := conf.Resource_groups.Rgroup[0].Net_ifc.ID
+	networkInterfaceID := conf.Resource_groups.Rgroup[0].Net_ifc[vmNum].ID
 
 	// create virtual machine
+
 	virtualMachine, err := createVirtualMachine(ctx, conn, *networkInterfaceID, *new_disk.ID)
 	if err != nil {
 		log.Fatalf("cannot create virual machine:%+v", err)
@@ -128,9 +166,8 @@ func createVM() {
 	if err := WriteAzureConfig(conf); err != nil {
 		log.Fatalf("write to azure.json file failed:%s", err)
 	}
-}
 
-func startWorker() {
+	return conf
 }
 
 func cleanupVM() {
@@ -265,14 +302,14 @@ func createVirtualNetwork(ctx context.Context, cred azcore.TokenCredential) (*ar
 					to.Ptr("10.1.0.0/16"), // example 10.1.0.0/16
 				},
 			},
-			//Subnets: []*armnetwork.Subnet{
-			//	{
-			//		Name: to.Ptr(subnetName+"3"),
-			//		Properties: &armnetwork.SubnetPropertiesFormat{
-			//			AddressPrefix: to.Ptr("10.1.0.0/24"),
-			//		},
-			//	},
-			//},
+			Subnets: []*armnetwork.Subnet{
+				{
+					Name: to.Ptr(subnetName + "3"),
+					Properties: &armnetwork.SubnetPropertiesFormat{
+						AddressPrefix: to.Ptr("10.1.0.0/24"),
+					},
+				},
+			},
 		},
 	}
 
@@ -308,7 +345,7 @@ func deleteVirtualNetWork(ctx context.Context, cred azcore.TokenCredential) erro
 	return nil
 }
 
-func createSubnets(ctx context.Context, cred azcore.TokenCredential) (*armnetwork.Subnet, error) {
+func createSubnets(ctx context.Context, cred azcore.TokenCredential, addr string) (*armnetwork.Subnet, error) {
 	subnetClient, err := armnetwork.NewSubnetsClient(subscriptionId, cred, nil)
 	if err != nil {
 		return nil, err
@@ -316,7 +353,7 @@ func createSubnets(ctx context.Context, cred azcore.TokenCredential) (*armnetwor
 
 	parameters := armnetwork.Subnet{
 		Properties: &armnetwork.SubnetPropertiesFormat{
-			AddressPrefix: to.Ptr("10.1.11.0/24"),
+			AddressPrefix: to.Ptr(addr),
 		},
 	}
 

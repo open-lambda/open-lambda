@@ -1,120 +1,119 @@
 package boss
 
+import (
+	"fmt"
+	"log"
+	"os"
+	"os/exec"
+	"os/user"
+	"time"
+)
+
 type AzureWorkerPool struct {
-	nextId int
-	//TODO: add additional field if needed for Azure
-	workers map[string]Worker
+	workerNum int
+	workers   map[string]*AzureWorker
+	nextId    int
 }
 
 type AzureWorker struct {
-	pool *AzureWorkerPool
-	workerId int
-	workerIp string
-	//TODO: add additional field if needed for Azure Worker
-	reqChan  chan *Invocation
-	exitChan chan bool
+	pool        *AzureWorkerPool
+	workerId    string
+	privateAddr string
+	publicAddr  string
+	reqChan     chan *Invocation
+	exitChan    chan bool
 }
 
-// WORKER IMPLEMENTATION: AzureWorker
+func (pool *AzureWorkerPool) CreateWorker(reqChan chan *Invocation) {
+	log.Printf("creating an azure worker\n")
+	conf := AzureCreateVM()
+	var private string
+	var public string
 
-func NewGcpWorkerPool() (*AzureWorkerPool, error) {
-	//TODO: prepare for creating new vm:
-	// - configure authentication, take snapshot of boss, etc
+	vmNum := conf.Resource_groups.Rgroup[0].Numvm
+	private = *conf.Resource_groups.Rgroup[0].Subnet[vmNum-1].Properties.AddressPrefix
+	public = *conf.Resource_groups.Rgroup[0].Vms[vmNum-1].Properties.NetworkProfile.NetworkInterfaceConfigurations[0].
+		Properties.IPConfigurations[0].Properties.PublicIPAddressConfiguration.Properties.PublicIPPrefix.ID
 
-	pool := &AzureWorkerPool {
-		nextId:		1,
-		// add additional field if needed for Azure
-		workers: map[string]Worker{},
+	worker := new(AzureWorker)
+	worker.pool = pool
+	worker.workerId = fmt.Sprintf("ol-worker-%d", pool.nextId)
+	worker.privateAddr = private
+	worker.publicAddr = public // If newly created one, this is ""
+	worker.reqChan = reqChan
+	worker.exitChan = make(chan bool)
+
+	go worker.launch(private)
+	go worker.task()
+
+	pool.workerNum += 1
+	pool.nextId += 1
+	pool.workers[worker.workerId] = worker
+}
+
+func NewAzureWorkerPool() (*AzureWorkerPool, error) {
+	pool := &AzureWorkerPool{
+		workerNum: 0,
+		workers:   make(map[string]*AzureWorker),
+		nextId:    1,
 	}
 	return pool, nil
 }
 
-func (pool *AzureWorkerPool) CreateWorker(reqChan chan *Invocation) {
-	log.Printf("creating azure worker")
-	workerId := fmt.Sprintf("ol-worker-%d", pool.nextId) //TODO: give worker an id
-	worker := &AzureWorker{
-		pool: pool,
-		workerId: workerId,
-		//TODO: add additional field if needed for Azure Worker
-		reqChan:  reqChan,
-		exitChan: make(chan bool),
+func (worker *AzureWorker) launch(privateIP string) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		panic(err)
 	}
-	pool.nextId += 1
-
-	go worker.launch() //Create new VM instance and Start Worker
-	
-	
-	go worker.task() //go routine that forwards requests to worker VMs
-	
-	pool.workers[workerId] = worker
-}
-
-//delete worker with given workerId
-//not used for current scaling down logic in boss
-func (pool *GcpWorkerPool) DeleteWorker(workerId string) {
-	pool.workers[workerId].Close()
-}
-
-//return list of active workers' ids
-func (pool *GcpWorkerPool) Status() []string {
-	var w = []string{}
-	for k, _ := range pool.workers {
-		w = append(w, k)
+	user, err := user.Current()
+	if err != nil {
+		panic(err)
 	}
-	return w
-}
-
-//return number of active workers
-func (pool *GcpWorkerPool) Size() int {
-	return len(pool.workers)
-}
-
-//close all workers
-//curl -X POST {boss ip}:5000/shutdown
-func (pool *GcpWorkerPool) CloseAll() {
-	for _, w := range pool.workers {
-		w.Close() 
+	cmd := fmt.Sprintf("cd %s; %s", cwd, "./ol worker --detach")
+	tries := 10
+	for tries > 0 {
+		sshcmd := exec.Command("ssh", user.Username+"@"+privateIP, "-o", "StrictHostKeyChecking=no", "-C", cmd)
+		stdoutStderr, err := sshcmd.CombinedOutput()
+		fmt.Printf("%s\n", stdoutStderr)
+		if err == nil {
+			break
+		}
+		tries -= 1
+		if tries == 0 {
+			fmt.Println(sshcmd.String())
+			panic(err)
+		}
+		time.Sleep(5 * time.Second)
 	}
-}
-
-func (worker *AzureWorker) launch() {
-	//TODO: Create new VM instance and Start Worker
-	//store vm instance's ip in worker.workerIp
 }
 
 func (worker *AzureWorker) task() {
 	for {
-
-		var req *Invocation
-		select {
-		case <-worker.exitChan: //not used for current scaling down logic
-			return
-		case req = <-worker.reqChan:
-		}
-
-		if req == nil { //when boss passes nil through request channel
-						//any idle worker will receive this and closes itself
-			worker.Close()
+		req := <-worker.reqChan
+		if <-worker.exitChan {
 			return
 		}
-
-		err = forwardTask(req.w, req.r, worker.workerIp) //forward request to worker VM
+		err = forwardTask(req.w, req.r, worker.privateAddr)
 		if err != nil {
 			panic(err)
 		}
-
 		req.Done <- true
 	}
 }
 
 func (worker *AzureWorker) Close() {
-	select {
-    case worker.exitChan <- true: //not used for current scaling down logic
-    }
+	worker.exitChan <- true
+}
 
-	log.Printf("stopping %s\n", worker.workerId)
-	
-	//TODO: stop or delete azure instance
+func (pool *AzureWorkerPool) CloseAll() {}
 
-	delete(worker.pool.workers, worker.workerId)
+func (pool *AzureWorkerPool) DeleteWorker(worderId string) {}
+
+func (pool *AzureWorkerPool) Size() int {
+	return 0
+}
+
+func (pool *AzureWorkerPool) Status() []string {
+	b := []string{"abc", "def"}
+	return b
 }

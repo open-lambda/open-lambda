@@ -6,9 +6,9 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"sync"
-	"os"
 )
 
 const (
@@ -22,7 +22,7 @@ const (
 )
 
 type Boss struct {
-	reqChan chan *Invocation
+	reqChan    chan *Invocation
 	mutex      sync.Mutex
 	workerPool WorkerPool
 }
@@ -90,7 +90,7 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 
 	// STEP 2: adjust worker count (TODO)
 	size := b.workerPool.Size()
-	for size < worker_count  {
+	for size < worker_count {
 		b.workerPool.CreateWorker(b.reqChan)
 		size += 1
 	}
@@ -171,6 +171,8 @@ func BossMain() (err error) {
 	var pool WorkerPool
 	if Conf.Platform == "gcp" {
 		pool, err = NewGcpWorkerPool()
+	} else if Conf.Platform == "azure" {
+		pool, err = NewAzureWorkerPool()
 	} else if Conf.Platform == "mock" {
 		pool, err = NewMockWorkerPool()
 	} else {
