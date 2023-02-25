@@ -144,13 +144,16 @@ func (worker *GcpWorker) launch() {
 	}
 
 	fmt.Printf("STEP 5: start worker\n")
-	var ip string
-	ip, err = client.RunComandWorker(worker.workerId, "./ol worker --detach")
+	err = client.RunComandWorker(worker.workerId, "./ol worker --detach")
 	if err != nil {
 		panic(err)
 	}
 
-	worker.workerIp = ip
+	lookup, err := client.GcpInstancetoIP()
+	if err != nil {
+		panic(err)
+	}
+	worker.workerIp = lookup[worker.workerId]
 	
 	go worker.task()
 }
@@ -189,7 +192,7 @@ func (worker *GcpWorker) Close() {
 
 	log.Printf("stopping %s\n", worker.workerId)
 
-	_, err = client.RunComandWorker(worker.workerId, "./ol kill")
+	err = client.RunComandWorker(worker.workerId, "./ol kill")
 	if err != nil {
 		panic(err)
 	}

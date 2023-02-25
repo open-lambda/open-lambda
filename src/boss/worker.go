@@ -5,8 +5,6 @@ import (
 	"log"
 	"net/http"
 	"io"
-	"io/ioutil"
-	"bytes"
 )
 
 // Non-platform specific functions mockWorker implementation
@@ -136,27 +134,14 @@ func (worker *MockWorker) Close() {
 
 // forward request to worker
 func forwardTask(w http.ResponseWriter, req *http.Request, workerIp string) (error) {
-    body, err := ioutil.ReadAll(req.Body)
-    if err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-        return err
-    }
-
-    req.Body = ioutil.NopCloser(bytes.NewReader(body))
-    url := fmt.Sprintf("http://%s:%d%s", workerIp, 5000, req.RequestURI) //TODO: read worker port from Config
-
-    workerReq, err := http.NewRequest(req.Method, url, bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-	
-    workerReq.Header = make(http.Header)
-    for h, val := range req.Header {
-        workerReq.Header[h] = val
-    }
+	host := fmt.Sprintf("%s:%d", workerIp, 5000) //TODO: read from config
+	req.URL.Scheme = "http"
+	req.URL.Host = host
+	req.Host = host
+	req.RequestURI = ""
 
 	client := http.Client{}
-    resp, err := client.Do(workerReq)
+    resp, err := client.Do(req)
     if err != nil {
         http.Error(w, err.Error(), http.StatusBadGateway)
         return err

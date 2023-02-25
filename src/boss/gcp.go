@@ -94,7 +94,7 @@ func GCPBossTest() {
 	}
 
 	fmt.Printf("STEP 5: start worker\n")
-	_, err = client.RunComandWorker("test-vm", "./ol worker --detach")
+	err = client.RunComandWorker("test-vm", "./ol worker --detach")
 	if err != nil { 
 		panic(err)
 	}
@@ -137,7 +137,7 @@ func NewGCPClient(service_account_json string) (*GCPClient, error) {
 	return client, nil
 }
 
-func (c *GCPClient) RunComandWorker(VMName string, command string) (string, error) {
+func (c *GCPClient) RunComandWorker(VMName string, command string) error {
 	cwd, err := os.Getwd()
 	if err != nil {
 		panic(err)
@@ -177,7 +177,7 @@ func (c *GCPClient) RunComandWorker(VMName string, command string) (string, erro
 		time.Sleep(5 * time.Second)
 	}
 
-	return ip, nil
+	return nil
 }
 
 func (c *GCPClient) StopRemoteWorker(VMName string) error {
