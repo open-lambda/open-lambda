@@ -692,12 +692,16 @@ OPTIONS:
 		cli.Command{
 			Name:        "boss",
 			Usage:       "Start an OL Boss process",
-			UsageText:   "ol boss [--path=PATH] [--detach]",
+			UsageText:   "ol boss [--path=PATH] [--detach] [--platform]",
 			Description: "Start a boss server.",
 			Flags: []cli.Flag{
 				cli.BoolFlag{
 					Name:  "detach, d",
 					Usage: "Run worker in background",
+				},
+				cli.StringFlag{
+					Name:  "platform, p",
+					Usage: "Select a platform",
 				},
 			},
 			Action: runBoss,
