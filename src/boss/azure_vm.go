@@ -55,7 +55,7 @@ func createVM() *AzureConfig {
 	if conf, err = ReadAzureConfig(); err != nil {
 		log.Fatalf("Read to azure.json file failed\n")
 	}
-	vmNum := conf.Resource_groups.Rgroup[0].Numvm
+	//vmNum := conf.Resource_groups.Rgroup[0].Numvm
 
 	conn, err := connectionAzure()
 	if err != nil {
@@ -72,7 +72,7 @@ func createVM() *AzureConfig {
 	conf.Resource_groups.Rgroup[0].Resource = *resourceGroup
 
 	num_vm := conf.Resource_groups.Rgroup[0].Numvm
-	vmName += strconv.Itoa(num_vm)
+	vmName += strconv.Itoa(num_vm + 1)
 	newDiskName = vmName + "-disk"
 	subnetName = vmName + "-subnet"
 	nsgName = vmName + "-nsg"
@@ -142,7 +142,7 @@ func createVM() *AzureConfig {
 	log.Printf("Created network interface: %s", *netWorkInterface.ID)
 	conf.Resource_groups.Rgroup[0].Net_ifc = append(conf.Resource_groups.Rgroup[0].Net_ifc, *netWorkInterface)
 
-	networkInterfaceID := conf.Resource_groups.Rgroup[0].Net_ifc[vmNum].ID
+	networkInterfaceID := netWorkInterface.ID
 
 	// create virtual machine
 

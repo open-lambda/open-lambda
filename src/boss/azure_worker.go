@@ -11,7 +11,7 @@ import (
 
 type AzureWorkerPool struct {
 	workerNum int
-	workers   map[string]*AzureWorker
+	workers   *map[string]*AzureWorker
 	nextId    int
 }
 
@@ -31,9 +31,13 @@ func (pool *AzureWorkerPool) CreateWorker(reqChan chan *Invocation) {
 	var public string
 
 	vmNum := conf.Resource_groups.Rgroup[0].Numvm
-	private = *conf.Resource_groups.Rgroup[0].Subnet[vmNum-1].Properties.AddressPrefix
-	public = *conf.Resource_groups.Rgroup[0].Vms[vmNum-1].Properties.NetworkProfile.NetworkInterfaceConfigurations[0].
-		Properties.IPConfigurations[0].Properties.PublicIPAddressConfiguration.Properties.PublicIPPrefix.ID
+	private = *conf.Resource_groups.Rgroup[0].Net_ifc[vmNum-1].Properties.IPConfigurations[0].Properties.PrivateIPAddress
+	publicWrap := conf.Resource_groups.Rgroup[0].Net_ifc[vmNum-1].Properties.IPConfigurations[0].Properties.PublicIPAddress
+	if publicWrap == nil {
+		public = ""
+	} else {
+		public = *publicWrap.Properties.IPAddress
+	}
 
 	worker := new(AzureWorker)
 	worker.pool = pool
@@ -48,14 +52,31 @@ func (pool *AzureWorkerPool) CreateWorker(reqChan chan *Invocation) {
 
 	pool.workerNum += 1
 	pool.nextId += 1
-	pool.workers[worker.workerId] = worker
+	(*pool.workers)[worker.workerId] = worker
 }
 
 func NewAzureWorkerPool() (*AzureWorkerPool, error) {
-	pool := &AzureWorkerPool{
-		workerNum: 0,
-		workers:   make(map[string]*AzureWorker),
-		nextId:    1,
+	conf, err := ReadAzureConfig()
+	if err != nil {
+		log.Fatalln(err)
+	}
+	num := conf.Resource_groups.Rgroup[0].Numvm
+	workers := make(map[string]*AzureWorker, num)
+	pool := new(AzureWorkerPool)
+	pool.workerNum = num
+	pool.workers = &workers
+	pool.nextId = num + 1
+	for i := 0; i < num; i++ {
+		worker_i := new(AzureWorker)
+		worker_i.pool = pool
+		worker_i.privateAddr = *conf.Resource_groups.Rgroup[0].Net_ifc[i].Properties.IPConfigurations[0].Properties.PrivateIPAddress
+		publicWrap := conf.Resource_groups.Rgroup[0].Net_ifc[i].Properties.IPConfigurations[0].Properties.PublicIPAddress
+		if publicWrap == nil {
+			worker_i.publicAddr = ""
+		} else {
+			worker_i.publicAddr = *publicWrap.Properties.IPAddress
+		}
+		worker_i.workerId = *conf.Resource_groups.Rgroup[0].Vms[i].Name
 	}
 	return pool, nil
 }
@@ -72,7 +93,7 @@ func (worker *AzureWorker) launch(privateIP string) {
 	cmd := fmt.Sprintf("cd %s; %s", cwd, "./ol worker --detach")
 	tries := 10
 	for tries > 0 {
-		sshcmd := exec.Command("ssh", user.Username+"@"+privateIP, "-o", "StrictHostKeyChecking=no", "-C", cmd)
+		sshcmd := exec.Command("ssh", "-i", "~/.ssh/ol-boss_key.pem", user.Username+"@"+privateIP, "-o", "StrictHostKeyChecking=no", "-C", cmd)
 		stdoutStderr, err := sshcmd.CombinedOutput()
 		fmt.Printf("%s\n", stdoutStderr)
 		if err == nil {
