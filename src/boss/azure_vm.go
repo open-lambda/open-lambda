@@ -98,13 +98,14 @@ func createVM() *AzureConfig {
 	}
 	log.Println("Created disk:", *new_disk.ID)
 
+	new_vm := new(vmStatus)
 	// get network
 	virtualNetwork, err := getVirtualNetwork(ctx, conn)
 	if err != nil {
 		log.Fatalf("cannot get virtual network:%+v", err)
 	}
 	log.Printf("Fetched virtual network: %s", *virtualNetwork.ID)
-	conf.Resource_groups.Rgroup[0].Virtual_net = *virtualNetwork
+	new_vm.Virtual_net = *virtualNetwork
 
 	// get subnets
 	subnets := virtualNetwork.Properties.Subnets
@@ -118,7 +119,7 @@ func createVM() *AzureConfig {
 		log.Fatalf("cannot create subnet:%+v", err)
 	}
 	log.Printf("Created subnet: %s", *subnet.ID)
-	conf.Resource_groups.Rgroup[0].Subnet = append(conf.Resource_groups.Rgroup[0].Subnet, *subnet)
+	new_vm.Subnet = *subnet
 
 	// publicIP, err := createPublicIP(ctx, conn)
 	// if err != nil {
@@ -133,14 +134,14 @@ func createVM() *AzureConfig {
 		log.Fatalf("cannot create network security group:%+v", err)
 	}
 	log.Printf("Created network security group: %s", *nsg.ID)
-	conf.Resource_groups.Rgroup[0].Security_group = append(conf.Resource_groups.Rgroup[0].Security_group, *nsg)
+	new_vm.Security_group = *nsg
 
 	netWorkInterface, err := createNetWorkInterfaceWithoutIp(ctx, conn, *subnet.ID, *nsg.ID)
 	if err != nil {
 		log.Fatalf("cannot create network interface:%+v", err)
 	}
 	log.Printf("Created network interface: %s", *netWorkInterface.ID)
-	conf.Resource_groups.Rgroup[0].Net_ifc = append(conf.Resource_groups.Rgroup[0].Net_ifc, *netWorkInterface)
+	new_vm.Net_ifc = *netWorkInterface
 
 	networkInterfaceID := netWorkInterface.ID
 
@@ -153,15 +154,13 @@ func createVM() *AzureConfig {
 	log.Printf("Created network virual machine: %s", *virtualMachine.ID)
 
 	log.Println("Virtual machine created successfully")
+	new_vm.Vm = *virtualMachine
+	new_vm.Status = "Running"
 
 	rg := &conf.Resource_groups.Rgroup[0]
-	rg.Vms = append(rg.Vms, *virtualMachine)
+	rg.Vms = append(rg.Vms, *new_vm)
 	conf.Resource_groups.Numrgroup = 1
-	if conf.Resource_groups.Rgroup[0].Numvm == -1 {
-		conf.Resource_groups.Rgroup[0].Numvm = 1
-	} else {
-		conf.Resource_groups.Rgroup[0].Numvm += 1
-	}
+	conf.Resource_groups.Rgroup[0].Numvm += 1
 
 	if err := WriteAzureConfig(conf); err != nil {
 		log.Fatalf("write to azure.json file failed:%s", err)
@@ -170,7 +169,7 @@ func createVM() *AzureConfig {
 	return conf
 }
 
-func cleanupVM() {
+func cleanupVM(worker *AzureWorker) {
 	conn, err := connectionAzure()
 	if err != nil {
 		log.Fatalf("cannot connection Azure:%+v", err)
@@ -178,53 +177,55 @@ func cleanupVM() {
 	ctx := context.Background()
 
 	log.Println("start deleting virtual machine...")
-	err = deleteVirtualMachine(ctx, conn)
+	err = deleteVirtualMachine(ctx, conn, worker.vmName)
 	if err != nil {
 		log.Fatalf("cannot delete virtual machine:%+v", err)
 	}
 	log.Println("deleted virtual machine")
 
-	err = deleteDisk(ctx, conn)
+	err = deleteDisk(ctx, conn, worker.diskName)
 	if err != nil {
 		log.Fatalf("cannot delete disk:%+v", err)
 	}
 	log.Println("deleted disk")
 
-	err = deleteNetWorkInterface(ctx, conn)
+	err = deleteNetWorkInterface(ctx, conn, worker.nicName)
 	if err != nil {
 		log.Fatalf("cannot delete network interface:%+v", err)
 	}
 	log.Println("deleted network interface")
 
-	err = deleteNetworkSecurityGroup(ctx, conn)
+	err = deleteNetworkSecurityGroup(ctx, conn, worker.nsgName)
 	if err != nil {
 		log.Fatalf("cannot delete network security group:%+v", err)
 	}
 	log.Println("deleted network security group")
 
-	err = deletePublicIP(ctx, conn)
-	if err != nil {
-		log.Fatalf("cannot delete public IP address:%+v", err)
+	if worker.publicIPName != "" {
+		err = deletePublicIP(ctx, conn, worker.publicIPName)
+		if err != nil {
+			log.Fatalf("cannot delete public IP address:%+v", err)
+		}
+		log.Println("deleted public IP address")
 	}
-	log.Println("deleted public IP address")
 
-	err = deleteSubnets(ctx, conn)
+	err = deleteSubnets(ctx, conn, worker.vnetName, worker.subnetName)
 	if err != nil {
 		log.Fatalf("cannot delete subnet:%+v", err)
 	}
 	log.Println("deleted subnet")
 
-	err = deleteVirtualNetWork(ctx, conn)
+	err = deleteVirtualNetWork(ctx, conn, worker.vnetName)
 	if err != nil {
 		log.Fatalf("cannot delete virtual network:%+v", err)
 	}
 	log.Println("deleted virtual network")
 
-	err = deleteResourceGroup(ctx, conn)
-	if err != nil {
-		log.Fatalf("cannot delete resource group:%+v", err)
-	}
-	log.Println("deleted resource group")
+	// err = deleteResourceGroup(ctx, conn)
+	// if err != nil {
+	// 	log.Fatalf("cannot delete resource group:%+v", err)
+	// }
+	// log.Println("deleted resource group")
 	log.Println("success deleted virtual machine.")
 }
 
@@ -326,13 +327,13 @@ func createVirtualNetwork(ctx context.Context, cred azcore.TokenCredential) (*ar
 	return &resp.VirtualNetwork, nil
 }
 
-func deleteVirtualNetWork(ctx context.Context, cred azcore.TokenCredential) error {
+func deleteVirtualNetWork(ctx context.Context, cred azcore.TokenCredential, vnet string) error {
 	vnetClient, err := armnetwork.NewVirtualNetworksClient(subscriptionId, cred, nil)
 	if err != nil {
 		return err
 	}
 
-	pollerResponse, err := vnetClient.BeginDelete(ctx, resourceGroupName, vnetName, nil)
+	pollerResponse, err := vnetClient.BeginDelete(ctx, resourceGroupName, vnet, nil)
 	if err != nil {
 		return err
 	}
@@ -370,13 +371,13 @@ func createSubnets(ctx context.Context, cred azcore.TokenCredential, addr string
 	return &resp.Subnet, nil
 }
 
-func deleteSubnets(ctx context.Context, cred azcore.TokenCredential) error {
+func deleteSubnets(ctx context.Context, cred azcore.TokenCredential, vnet string, subnet string) error {
 	subnetClient, err := armnetwork.NewSubnetsClient(subscriptionId, cred, nil)
 	if err != nil {
 		return err
 	}
 
-	pollerResponse, err := subnetClient.BeginDelete(ctx, resourceGroupName, vnetName, subnetName, nil)
+	pollerResponse, err := subnetClient.BeginDelete(ctx, resourceGroupName, vnet, subnet, nil)
 	if err != nil {
 		return err
 	}
@@ -446,13 +447,13 @@ func createNetworkSecurityGroup(ctx context.Context, cred azcore.TokenCredential
 	return &resp.SecurityGroup, nil
 }
 
-func deleteNetworkSecurityGroup(ctx context.Context, cred azcore.TokenCredential) error {
+func deleteNetworkSecurityGroup(ctx context.Context, cred azcore.TokenCredential, nsg string) error {
 	nsgClient, err := armnetwork.NewSecurityGroupsClient(subscriptionId, cred, nil)
 	if err != nil {
 		return err
 	}
 
-	pollerResponse, err := nsgClient.BeginDelete(ctx, resourceGroupName, nsgName, nil)
+	pollerResponse, err := nsgClient.BeginDelete(ctx, resourceGroupName, nsg, nil)
 	if err != nil {
 		return err
 	}
@@ -489,13 +490,13 @@ func createPublicIP(ctx context.Context, cred azcore.TokenCredential) (*armnetwo
 	return &resp.PublicIPAddress, err
 }
 
-func deletePublicIP(ctx context.Context, cred azcore.TokenCredential) error {
+func deletePublicIP(ctx context.Context, cred azcore.TokenCredential, ipName string) error {
 	publicIPAddressClient, err := armnetwork.NewPublicIPAddressesClient(subscriptionId, cred, nil)
 	if err != nil {
 		return err
 	}
 
-	pollerResponse, err := publicIPAddressClient.BeginDelete(ctx, resourceGroupName, publicIPName, nil)
+	pollerResponse, err := publicIPAddressClient.BeginDelete(ctx, resourceGroupName, ipName, nil)
 	if err != nil {
 		return err
 	}
@@ -590,13 +591,13 @@ func createNetWorkInterface(ctx context.Context, cred azcore.TokenCredential, su
 	return &resp.Interface, err
 }
 
-func deleteNetWorkInterface(ctx context.Context, cred azcore.TokenCredential) error {
+func deleteNetWorkInterface(ctx context.Context, cred azcore.TokenCredential, nic string) error {
 	nicClient, err := armnetwork.NewInterfacesClient(subscriptionId, cred, nil)
 	if err != nil {
 		return err
 	}
 
-	pollerResponse, err := nicClient.BeginDelete(ctx, resourceGroupName, nicName, nil)
+	pollerResponse, err := nicClient.BeginDelete(ctx, resourceGroupName, nic, nil)
 	if err != nil {
 		return err
 	}
@@ -702,13 +703,13 @@ func createVirtualMachine(ctx context.Context, cred azcore.TokenCredential, netw
 	return &resp.VirtualMachine, nil
 }
 
-func deleteVirtualMachine(ctx context.Context, cred azcore.TokenCredential) error {
+func deleteVirtualMachine(ctx context.Context, cred azcore.TokenCredential, name string) error {
 	vmClient, err := armcompute.NewVirtualMachinesClient(subscriptionId, cred, nil)
 	if err != nil {
 		return err
 	}
 
-	pollerResponse, err := vmClient.BeginDelete(ctx, resourceGroupName, vmName, nil)
+	pollerResponse, err := vmClient.BeginDelete(ctx, resourceGroupName, name, nil)
 	if err != nil {
 		return err
 	}
@@ -813,13 +814,13 @@ func createDisk(ctx context.Context, cred azcore.TokenCredential, source_disk st
 	return &resp.Disk, nil
 }
 
-func deleteDisk(ctx context.Context, cred azcore.TokenCredential) error {
+func deleteDisk(ctx context.Context, cred azcore.TokenCredential, disk string) error {
 	diskClient, err := armcompute.NewDisksClient(subscriptionId, cred, nil)
 	if err != nil {
 		return err
 	}
 
-	pollerResponse, err := diskClient.BeginDelete(ctx, resourceGroupName, diskName, nil)
+	pollerResponse, err := diskClient.BeginDelete(ctx, resourceGroupName, disk, nil)
 	if err != nil {
 		return err
 	}

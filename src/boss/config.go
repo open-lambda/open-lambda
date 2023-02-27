@@ -35,14 +35,19 @@ type rgroups struct {
 }
 
 type rgroup struct {
-	Resource       armresources.ResourceGroup   `json:"resource_group"`
-	Virtual_net    armnetwork.VirtualNetwork    `json:"virtual_network"`
-	Subnet         []armnetwork.Subnet          `json:"subnet"`
-	Public_ip      []armnetwork.PublicIPAddress `json:"public_ip"`
-	Security_group []armnetwork.SecurityGroup   `json:"security_group"`
-	Net_ifc        []armnetwork.Interface       `json:"network_interface"`
-	Vms            []armcompute.VirtualMachine  `json:"virtual_machine"`
-	Numvm          int                          `json:"vm_number"`
+	Resource armresources.ResourceGroup `json:"resource_group"`
+	Vms      []vmStatus                 `json:"virtual_machine_status"`
+	Numvm    int                        `json:"vm_number"`
+}
+
+type vmStatus struct {
+	Status         string                     `json:"virtual_machine_status"`
+	Vm             armcompute.VirtualMachine  `json:"virtual_machine"`
+	Virtual_net    armnetwork.VirtualNetwork  `json:"virtual_network"`
+	Subnet         armnetwork.Subnet          `json:"subnet"`
+	Public_ip      armnetwork.PublicIPAddress `json:"public_ip"`
+	Security_group armnetwork.SecurityGroup   `json:"security_group"`
+	Net_ifc        armnetwork.Interface       `json:"network_interface"`
 }
 
 func InitAzureConfig() (*AzureConfig, error) {
@@ -52,8 +57,8 @@ func InitAzureConfig() (*AzureConfig, error) {
 	path := "azure.json"
 	var content []byte
 
-	rg.Numvm = -1 // this means this rg isn't set up yet
-	rgs.Numrgroup = 0
+	rg.Numvm = 0
+	rgs.Numrgroup = 1
 	rgs.Rgroup = append(rgs.Rgroup, *rg)
 	conf.Resource_groups = *rgs
 

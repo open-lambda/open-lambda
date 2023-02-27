@@ -92,6 +92,7 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 
 	// STEP 2: adjust worker count (TODO)
 	size := b.workerPool.Size()
+	log.Printf("size: %d, worker_count: %d\n", size, worker_count)
 	for size < worker_count {
 		b.workerPool.CreateWorker(b.reqChan)
 		size += 1
