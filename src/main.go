@@ -536,7 +536,7 @@ func gcpTest(ctx *cli.Context) error {
 }
 
 func azureTest(ctx *cli.Context) error {
-	boss.AzureMain("default contents")
+	//boss.AzureMain("default contents")
 	return nil
 }
 
@@ -609,7 +609,7 @@ func newVM(ctx *cli.Context) error {
 	if platform == "gcp" {
 		// TODO: complete the gcp part
 	} else if platform == "azure" {
-		boss.AzureCreateVM()
+		//boss.AzureCreateVM()
 	} else {
 		fmt.Printf("platform not recognized, pleaze try again.\n")
 	}

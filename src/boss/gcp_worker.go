@@ -8,25 +8,16 @@ import (
 	"strings"
 )
 
-// GcpWorker
-
+// WORKER IMPLEMENTATION: GcpWorker
 type GcpWorkerPool struct {
-	nextId	int
 	client *GcpClient
-	workers map[string]Worker
 }
 
 type GcpWorker struct {
-	pool *GcpWorkerPool
-	workerId string
-	workerIp string
-	reqChan  chan *Invocation
-	exitChan chan bool
+	//no additional attributes yet
 }
 
-// // WORKER IMPLEMENTATION: GcpWorker
-
-func NewGcpWorkerPool() (*GcpWorkerPool, error) {
+func NewGcpWorkerPool() (*WorkerPool, error) {
 	fmt.Printf("STEP 0: check SSH setup\n")
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -85,54 +76,28 @@ func NewGcpWorkerPool() (*GcpWorkerPool, error) {
 		return nil, err
 	}
 
-	pool := &GcpWorkerPool {
-		nextId:		1,
-		client: client,
-		workers: map[string]Worker{},
-	}
-	return pool, nil
+	return &WorkerPool {
+		nextId:	1,
+		workers: map[string]*Worker{},
+		queue: make(chan *Worker, Conf.Worker_Cap),
+		WorkerPoolPlatform: &GcpWorkerPool {
+			client: client,
+		},
+	}, nil
 }
 
-func (pool *GcpWorkerPool) CreateWorker(reqChan chan *Invocation) {
-	log.Printf("creating gcp worker")
-	workerId := fmt.Sprintf("ol-worker-%d", pool.nextId)
-	worker := &GcpWorker{
-		pool: pool,
-		workerId: workerId,
-		reqChan:  reqChan,
-		exitChan: make(chan bool),
-	}
-	pool.nextId += 1
-	go worker.launch()
-	go worker.task()
-	
-	pool.workers[workerId] = worker
+func (pool *GcpWorkerPool) NewWorker(nextId int) *Worker {
+	workerId := fmt.Sprintf("ol-worker-%d", nextId)
+   return &Worker{
+	   workerId: workerId,
+	   workerIp: "",
+	   isIdle: true,
+	   WorkerPlatform: GcpWorker{},
+   }
 }
 
-func (pool *GcpWorkerPool) DeleteWorker(workerId string) {
-	pool.workers[workerId].Close()
-}
-
-func (pool *GcpWorkerPool) Status() []string {
-	var w = []string{}
-	for k, _ := range pool.workers {
-		w = append(w, k)
-	}
-	return w
-}
-
-func (pool *GcpWorkerPool) Size() int {
-	return len(pool.workers)
-}
-
-func (pool *GcpWorkerPool) CloseAll() {
-	for _, w := range pool.workers {
-		w.Close() 
-	}
-}
-
-func (worker *GcpWorker) launch() {
-	client := worker.pool.client
+func (pool *GcpWorkerPool) CreateInstance(worker *Worker) {
+	client := pool.client
 	fmt.Printf("STEP 4: create new VM from snapshot\n")
 	resp, err := client.Wait(client.LaunchGcp("test-snap", worker.workerId)) //TODO: load snapshot name from Config
 	fmt.Println(resp)
@@ -153,52 +118,18 @@ func (worker *GcpWorker) launch() {
 	if err != nil {
 		panic(err)
 	}
+
 	worker.workerIp = lookup[worker.workerId]
-	
-	go worker.task()
 }
 
-func (worker *GcpWorker) task() {
-	for {
+func (pool *GcpWorkerPool) DeleteInstance(worker *Worker) {
+	client := pool.client
 
-		var req *Invocation
-		select {
-		case <-worker.exitChan: 
-			return
-		case req = <-worker.reqChan:
-		}
+	log.Printf("deleting gcp worker: %s\n", worker.workerId)
 
-		if req == nil {
-			worker.Close()
-			return
-		}
-
-		err = forwardTask(req.w, req.r, worker.workerIp)
-		if err != nil {
-			panic(err)
-		}
-
-		req.Done <- true
-	}
-}
-
-func (worker *GcpWorker) Close() {
-	select {
-    case worker.exitChan <- true:
-    }
-	client := worker.pool.client
-
-
-
-	log.Printf("stopping %s\n", worker.workerId)
-
-	err = client.RunComandWorker(worker.workerId, "./ol kill")
+	err := client.RunComandWorker(worker.workerId, "./ol kill")
 	if err != nil {
 		panic(err)
 	}
-	client.stopGcpInstance(worker.workerId)
-	// or instances can be kept running but stop worker...?
-	//err := StopRemoteWorker(VMName)
-
-	delete(worker.pool.workers, worker.workerId)
+	client.deleteGcpInstance(worker.workerId)
 }
