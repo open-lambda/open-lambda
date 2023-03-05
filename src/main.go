@@ -531,7 +531,7 @@ func kill(ctx *cli.Context) error {
 }
 
 func gcpTest(ctx *cli.Context) error {
-	boss.GCPBossTest()
+	boss.GcpBossTest()
 	return nil
 }
 

@@ -12,7 +12,7 @@ import (
 
 type GcpWorkerPool struct {
 	nextId	int
-	client *GCPClient
+	client *GcpClient
 	workers map[string]Worker
 }
 
@@ -58,7 +58,7 @@ func NewGcpWorkerPool() (*GcpWorkerPool, error) {
 	}
 
 	fmt.Printf("STEP 1: get access token\n")
-	client, err := NewGCPClient("key.json")
+	client, err := NewGcpClient("key.json")
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +78,7 @@ func NewGcpWorkerPool() (*GcpWorkerPool, error) {
 	fmt.Printf("Instance: %s\n", instance)
 
 	fmt.Printf("STEP 3: take crash-consistent snapshot of instance\n")
-	disk := instance // assume GCP disk name is same as instance name
+	disk := instance // assume Gcp disk name is same as instance name
 	resp, err := client.Wait(client.GcpSnapshot(disk))
 	fmt.Println(resp)
 	if err != nil {
