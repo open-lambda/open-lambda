@@ -45,7 +45,7 @@ fn get_args(env: &ArgsEnv, len_out: WasmPtr<u64>) -> i64 {
         .call(args.len() as u32)
         .unwrap();
 
-    if args.len() == 0 {
+    if args.is_empty() {
         return 0;
     }
 
