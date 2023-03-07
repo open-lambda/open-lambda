@@ -36,16 +36,6 @@ pub async fn call(func_name: &str, args: &[u8]) -> CallResult {
         };
 
         result.map_err(|err| format!("{err}"))
-    } else if func_name == "execute_range_query" {
-        let result = loop {
-            let range_op = bincode::deserialize(args).unwrap();
-            let mut tx = client.begin_transaction();
-            let result = tx.execute_range_query(range_op).await;
-            if result.is_ok() && tx.commit().await.is_ok() {
-                break result;
-            }
-        };
-        result.map_err(|err| format!("{err}"))
     } else if func_name == "get_configuration" {
         let object_types: Vec<(ObjectTypeId, String, ObjectType)> = client
             .get_object_types()
