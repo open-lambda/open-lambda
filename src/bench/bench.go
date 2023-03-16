@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"time"
 	"math/rand"
+	"os"
 	
 	"github.com/urfave/cli"
 
@@ -50,15 +51,15 @@ func task(task int, reqQ chan Call, errQ chan error) {
         }
 }
 
-func run_benchmark(ctx *cli.Context, name string, tasks int, functions int, func_template string) error {
+func run_benchmark(ctx *cli.Context, name string, tasks int, functions int, func_template string) (string, error) {
 	// config
 	olPath, err := common.GetOlPath(ctx)
 	if err != nil {
-		return err
+		return "", err
 	}
 	configPath := filepath.Join(olPath, "config.json")
 	if err := common.LoadConf(configPath); err != nil {
-		return err
+		return "", err
 	}
 
 	seconds := ctx.Float64("seconds")
@@ -81,7 +82,7 @@ func run_benchmark(ctx *cli.Context, name string, tasks int, functions int, func
 		fmt.Printf("warmup %s (%d/%d)\n", name, i, functions)
 		reqQ <- Call{name: name}
 		if err := <- errQ; err != nil {
-			return err
+			return "", err
 		}
         }
 
@@ -124,10 +125,12 @@ func run_benchmark(ctx *cli.Context, name string, tasks int, functions int, func
 		panic(fmt.Sprintf(">1% of requests failed (%d/%d)", errors, errors + successes))
 	}
 
-        fmt.Printf("{\"benchmark\": \"%s\",\"seconds\": %.3f, \"successes\": %d, \"errors\": %d, \"ops/s\": %.3f}\n",
+    result := fmt.Sprintf("{\"benchmark\": \"%s\",\"seconds\": %.3f, \"successes\": %d, \"errors\": %d, \"ops/s\": %.3f}",
 		name, seconds, successes, errors, float64(successes)/seconds)
-
-	return nil
+	
+	fmt.Printf("%s\n", result)
+	
+	return result, nil
 }
 
 func create_lambdas(ctx *cli.Context) error {	
@@ -180,8 +183,52 @@ def f(event):
 
 func make_action(name string, tasks int, functions int, func_template string) (func (ctx *cli.Context) error) {
 	return func (ctx *cli.Context) error {
-		return run_benchmark(ctx, name, tasks, functions, func_template)
+		_, err := run_benchmark(ctx, name, tasks, functions, func_template)
+		return err
 	}
+}
+
+func run_all(ctx *cli.Context) error {
+	results := "{\n"
+	for _, kind := range []string{"py", "pd"} {
+		for _, functions := range []int{64, 1024, 64*1024} {
+			for _, tasks := range []int{1, 32} {
+				var parseq string
+				amt := fmt.Sprintf("%d", functions)
+
+				if tasks == 1 {
+					parseq = "seq"
+				} else {
+					parseq = "par"
+				}
+				if functions >= 1024 {
+					amt = fmt.Sprintf("%dk", functions / 1024)
+				}
+
+				name := fmt.Sprintf("%s%s-%s", kind, amt, parseq)
+				result, err := run_benchmark(ctx, name, tasks, functions, "bench-"+kind+"-%d")
+				if err != nil {
+					return err
+				}
+				results += fmt.Sprintf("\"%s\": %s,\n",name, result)
+			}
+		}
+	}
+	
+	results = results[:len(results)-2] + "\n}\n"
+	
+	file, err := os.Create("benchmark.json")
+	if err != nil {
+        return err
+    }
+    defer file.Close()
+
+    if _, err := file.WriteString(results); err != nil {
+		return err
+    }
+
+	fmt.Println(results)
+	return nil
 }
 
 func BenchCommands() []cli.Command {
@@ -244,7 +291,23 @@ func BenchCommands() []cli.Command {
 		}
 	}
 
-	// TODO: add command that runs them all
+	cmd := cli.Command{
+		Name:  "all",
+		Usage: "run all benchmarks",
+		UsageText: "ol bench all [--path=NAME] [--seconds=SECONDS]",
+		Action: run_all,
+		Flags: []cli.Flag{
+			cli.StringFlag{
+				Name:  "path, p",
+				Usage: "Path location for OL environment",
+			},
+			cli.Float64Flag{
+				Name:  "seconds, s",
+				Usage: "Seconds to run (after warmup)",
+			},
+		},
+	}
+	cmds = append(cmds, cmd)
 
 	return cmds
 }
