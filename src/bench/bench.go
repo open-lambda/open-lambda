@@ -67,6 +67,8 @@ func run_benchmark(ctx *cli.Context, name string, tasks int, functions int, func
 		seconds = 60.0
 	}
 
+	callWarmup := ctx.Bool("warmup")
+	
 	// launch request threads
         reqQ := make(chan Call, tasks)
         errQ := make(chan error, tasks)
@@ -75,16 +77,17 @@ func run_benchmark(ctx *cli.Context, name string, tasks int, functions int, func
         }
 
 	// warmup: call lambda each once
-	// TODO: make warming optional
-	fmt.Printf("warming up (calling each lambda once sequentially)\n")
-        for i := 0; i<functions; i++ {
-		name := fmt.Sprintf(func_template, i)
-		fmt.Printf("warmup %s (%d/%d)\n", name, i, functions)
-		reqQ <- Call{name: name}
-		if err := <- errQ; err != nil {
-			return "", err
+	if callWarmup {
+		fmt.Printf("warming up (calling each lambda once sequentially)\n")
+		for i := 0; i<functions; i++ {
+			name := fmt.Sprintf(func_template, i)
+			fmt.Printf("warmup %s (%d/%d)\n", name, i, functions)
+			reqQ <- Call{name: name}
+			if err := <- errQ; err != nil {
+				return "", err
+			}
 		}
-        }
+	}
 
 	// issue requests for specified number of seconds
 	fmt.Printf("start benchmark (%.1f seconds)\n", seconds)
@@ -273,7 +276,7 @@ func BenchCommands() []cli.Command {
 				cmd := cli.Command{
 					Name:  name,
 					Usage: usage,
-					UsageText: fmt.Sprintf("ol bench %s [--path=NAME] [--seconds=SECONDS]", name),
+					UsageText: fmt.Sprintf("ol bench %s [--path=NAME] [--seconds=SECONDS] [--warmup=BOOL]", name),
 					Action: action,
 					Flags: []cli.Flag{
 						cli.StringFlag{
@@ -283,6 +286,10 @@ func BenchCommands() []cli.Command {
 						cli.Float64Flag{
 							Name:  "seconds, s",
 							Usage: "Seconds to run (after warmup)",
+						},
+						cli.BoolTFlag{
+							Name:  "warmup, w",
+							Usage: "call lambda each once before benchmark",
 						},
 					},
 				}
@@ -294,7 +301,7 @@ func BenchCommands() []cli.Command {
 	cmd := cli.Command{
 		Name:  "all",
 		Usage: "run all benchmarks",
-		UsageText: "ol bench all [--path=NAME] [--seconds=SECONDS]",
+		UsageText: "ol bench all [--path=NAME] [--seconds=SECONDS] [--warmup=BOOL]",
 		Action: run_all,
 		Flags: []cli.Flag{
 			cli.StringFlag{
@@ -304,6 +311,10 @@ func BenchCommands() []cli.Command {
 			cli.Float64Flag{
 				Name:  "seconds, s",
 				Usage: "Seconds to run (after warmup)",
+			},
+			cli.BoolTFlag{
+				Name:  "warmup, w",
+				Usage: "call lambda each once before benchmark",
 			},
 		},
 	}
