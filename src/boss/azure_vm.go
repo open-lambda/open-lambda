@@ -50,7 +50,7 @@ func backtoIP4(ipInt int64) string {
 	return b0 + "." + b1 + "." + b2 + "." + b3
 }
 
-func createVM() *AzureConfig {
+func createVM(workerId int) *AzureConfig {
 	var conf *AzureConfig
 	if conf, err = ReadAzureConfig(); err != nil {
 		log.Fatalf("Read to azure.json file failed\n")
@@ -72,7 +72,13 @@ func createVM() *AzureConfig {
 	conf.Resource_groups.Rgroup[0].Resource = *resourceGroup
 
 	num_vm := conf.Resource_groups.Rgroup[0].Numvm
-	vmName += strconv.Itoa(num_vm + 1)
+	if workerId == -1 {
+		// the default setting
+		// the vm name will just add one to the number of vms
+		vmName += strconv.Itoa(num_vm + 1)
+	} else {
+		vmName += strconv.Itoa(workerId)
+	}
 	newDiskName = vmName + "-disk"
 	subnetName = vmName + "-subnet"
 	nsgName = vmName + "-nsg"
@@ -214,12 +220,6 @@ func cleanupVM(worker *AzureWorker) {
 		log.Fatalf("cannot delete subnet:%+v", err)
 	}
 	log.Println("deleted subnet")
-
-	err = deleteVirtualNetWork(ctx, conn, worker.vnetName)
-	if err != nil {
-		log.Fatalf("cannot delete virtual network:%+v", err)
-	}
-	log.Println("deleted virtual network")
 
 	// err = deleteResourceGroup(ctx, conn)
 	// if err != nil {

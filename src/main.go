@@ -609,7 +609,7 @@ func newVM(ctx *cli.Context) error {
 	if platform == "gcp" {
 		// TODO: complete the gcp part
 	} else if platform == "azure" {
-		boss.AzureCreateVM()
+		boss.AzureCreateVM(-1)
 	} else {
 		fmt.Printf("platform not recognized, pleaze try again.\n")
 	}

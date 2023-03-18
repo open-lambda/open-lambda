@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
+	"regexp"
+	"strconv"
 	"time"
 )
 
@@ -18,6 +20,7 @@ type AzureWorkerPool struct {
 type AzureWorker struct {
 	pool         *AzureWorkerPool
 	workerId     string
+	configPosit  int
 	vmName       string
 	diskName     string
 	vnetName     string
@@ -33,13 +36,16 @@ type AzureWorker struct {
 
 func (pool *AzureWorkerPool) CreateWorker(reqChan chan *Invocation) {
 	log.Printf("creating an azure worker\n")
-	conf := AzureCreateVM()
+	conf := AzureCreateVM(pool.nextId)
 	var private string
 	var public string
 
 	vmNum := conf.Resource_groups.Rgroup[0].Numvm
 	private = *conf.Resource_groups.Rgroup[0].Vms[vmNum-1].Net_ifc.Properties.IPConfigurations[0].Properties.PrivateIPAddress
-	publicWrap := conf.Resource_groups.Rgroup[0].Vms[vmNum-1.].Net_ifc.Properties.IPConfigurations[0].Properties.PublicIPAddress
+	publicWrap := conf.Resource_groups.Rgroup[0].Vms[vmNum-1].Net_ifc.Properties.IPConfigurations[0].Properties.PublicIPAddress
+	newDiskName = fmt.Sprintf("ol-worker-%d-disk", pool.nextId)
+	newNicName := fmt.Sprintf("ol-worker-%d-nic", pool.nextId)
+	newNsgName := fmt.Sprintf("ol-worker-%d-nsg", pool.nextId)
 	if publicWrap == nil {
 		public = ""
 	} else {
@@ -48,12 +54,13 @@ func (pool *AzureWorkerPool) CreateWorker(reqChan chan *Invocation) {
 
 	worker := &AzureWorker{
 		pool:         pool,
-		workerId:     fmt.Sprintf("ol-worker-%d", pool.nextId),
+		workerId:     *conf.Resource_groups.Rgroup[0].Vms[vmNum-1].Vm.Name,
+		configPosit:  vmNum - 1,
 		vmName:       vmName,
-		diskName:     diskName,
+		diskName:     newDiskName,
 		vnetName:     vnetName,
-		nicName:      nicName,
-		nsgName:      nsgName,
+		nicName:      newNicName,
+		nsgName:      newNsgName,
 		subnetName:   subnetName,
 		publicIPName: publicIPName,
 		privateAddr:  private,
@@ -63,7 +70,7 @@ func (pool *AzureWorkerPool) CreateWorker(reqChan chan *Invocation) {
 	}
 
 	pool.workerNum += 1
-	pool.nextId += 1
+	pool.nextId = pool.workerNum + 1
 
 	go worker.launch()
 	go worker.task()
@@ -95,6 +102,7 @@ func NewAzureWorkerPool() (*AzureWorkerPool, error) {
 			worker_i.publicAddr = *publicWrap.Properties.IPAddress
 		}
 		worker_i.workerId = *conf.Resource_groups.Rgroup[0].Vms[i].Vm.Name
+		worker_i.configPosit = num
 	}
 	return pool, nil
 }
@@ -154,7 +162,7 @@ func (worker *AzureWorker) Close() {
 	select {
 	case worker.exitChan <- true:
 	default:
-		log.Printf("%t", <-worker.exitChan)
+		// 	log.Printf("%t", <-worker.exitChan)
 	}
 	log.Printf("Closing worker: %s; vm: %s\n", worker.workerId, worker.vmName)
 	cwd, err := os.Getwd()
@@ -187,19 +195,40 @@ func (worker *AzureWorker) Close() {
 	log.Printf("Try to delete the vm")
 	cleanupVM(worker)
 	// remove the deleted vm information from the config file
-	log.Printf("Try to remove the vm information from the config file")
+	// log.Printf("Try to remove the vm information from the config file")
+	// conf, _ := ReadAzureConfig()
+	// for i, value := range conf.Resource_groups.Rgroup[0].Vms {
+	// 	vm := value.Vm.Name
+	// 	if *vm == worker.vmName {
+	// 		// delete this one
+	// 		for j := i; j < len(conf.Resource_groups.Rgroup[0].Vms)-1; j++ {
+	// 			conf.Resource_groups.Rgroup[0].Vms[j] = conf.Resource_groups.Rgroup[0].Vms[j+1]
+	// 		}
+	// 		break
+	// 	}
+	// }
+	// evict the specified worker in the pool
+	delete(*worker.pool.workers, worker.workerId)
+	// shrink length
 	conf, _ := ReadAzureConfig()
-	for i, value := range conf.Resource_groups.Rgroup[0].Vms {
-		vm := value.Vm.Name
-		if *vm == worker.vmName {
-			// delete this one
-			for j := i; j < len(conf.Resource_groups.Rgroup[0].Vms)-1; j++ {
-				conf.Resource_groups.Rgroup[0].Vms[j] = conf.Resource_groups.Rgroup[0].Vms[j+1]
-			}
-			break
-		}
-	}
 	conf.Resource_groups.Rgroup[0].Numvm -= 1
+	// shrink slice
+	conf.Resource_groups.Rgroup[0].Vms[worker.configPosit] = conf.Resource_groups.Rgroup[0].Vms[len(conf.Resource_groups.Rgroup[0].Vms)-1]
+	conf.Resource_groups.Rgroup[0].Vms = conf.Resource_groups.Rgroup[0].Vms[:conf.Resource_groups.Rgroup[0].Numvm]
+	//fmt.Println(*conf.Resource_groups.Rgroup[0].Vms[worker.configPosit].Vm.Name)
+	if len(conf.Resource_groups.Rgroup[0].Vms) > 0 {
+		// if all workers has been deleted, don't do this
+		(*worker.pool.workers)[*conf.Resource_groups.Rgroup[0].Vms[worker.configPosit].Vm.Name].configPosit = worker.configPosit
+	}
+	// for next create worker's name
+	re := regexp.MustCompile("[0-9]+")
+	intId := re.FindAllString(worker.workerId, -1)
+	nextId, err := strconv.Atoi(intId[0])
+	if err != nil {
+		panic(err)
+	}
+	worker.pool.nextId = nextId
+	worker.pool.workerNum -= 1
 	WriteAzureConfig(conf)
 	log.Printf("Deleted the worker and worker VM successfully\n")
 }

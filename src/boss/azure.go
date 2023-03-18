@@ -113,7 +113,7 @@ func randomString() string {
 	return strconv.Itoa(r.Int())
 }
 
-func AzureCreateVM() *AzureConfig {
+func AzureCreateVM(workerId int) *AzureConfig {
 	subscriptionId = os.Getenv("AZURE_SUBSCRIPTION_ID")
 	if len(subscriptionId) == 0 {
 		log.Fatal("AZURE_SUBSCRIPTION_ID is not set.")
@@ -125,7 +125,7 @@ func AzureCreateVM() *AzureConfig {
 	vnetName = "ol-boss-vnet"
 	imageName = "ol-boss-img"
 	snapshotName = "ol-boss-snapshot"
-	return createVM()
+	return createVM(workerId)
 	// TODO: copy the snapshot to the new VM
 	//createSnapshotImage()
 }
