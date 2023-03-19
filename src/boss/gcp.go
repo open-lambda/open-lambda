@@ -95,7 +95,7 @@ func GcpBossTest() {
 
 	fmt.Printf("STEP 5: start worker\n")
 	err = client.RunComandWorker("test-vm", "./ol worker --detach")
-	if err != nil { 
+	if err != nil {
 		panic(err)
 	}
 
@@ -152,7 +152,7 @@ func (c *GcpClient) RunComandWorker(VMName string, command string) error {
 	if err != nil {
 		panic(err)
 	}
-	
+
 	ip, ok := lookup[VMName]
 	if !ok {
 		fmt.Println(lookup)
@@ -195,7 +195,7 @@ func (c *GcpClient) StopRemoteWorker(VMName string) error {
 	if err != nil {
 		panic(err)
 	}
-	
+
 	ip, ok := lookup[VMName]
 	if !ok {
 		fmt.Println(lookup)
@@ -342,7 +342,7 @@ func (c *GcpClient) delete(url string) (rv map[string]any, err error) {
 			err = fmt.Errorf("DELETE to %s failed: %s", url, err.Error())
 		}
 	}()
-	
+
 	token, err := c.GetAccessToken()
 	if err != nil {
 		return result, err
@@ -356,7 +356,7 @@ func (c *GcpClient) delete(url string) (rv map[string]any, err error) {
 
 	req.Header.Set("Content-Type", "application/json")
 	client := http.Client{}
-	resp, err :=  client.Do(req)
+	resp, err := client.Do(req)
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -387,7 +387,7 @@ func (c *GcpClient) GcpProjectZone() (string, string, error) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Metadata-Flavor", "Google")
 	client := http.Client{}
-	resp, err :=  client.Do(req)
+	resp, err := client.Do(req)
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -555,15 +555,12 @@ func (c *GcpClient) LaunchGcp(SnapshotName string, VMName string) (map[string]an
 		panic(err)
 	}
 
-	
-
 	return c.post(url, payload)
 }
 
-
 func (c *GcpClient) startGcpInstance(VMName string) (map[string]any, error) { //start existing instance
 	url := fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/zones/%s/instances/%s/start",
-		c.service_account["project_id"].(string), 
+		c.service_account["project_id"].(string),
 		c.service_account["zone"].(string),
 		VMName)
 
@@ -574,7 +571,7 @@ func (c *GcpClient) startGcpInstance(VMName string) (map[string]any, error) { //
 
 func (c *GcpClient) stopGcpInstance(VMName string) (map[string]any, error) {
 	url := fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/zones/%s/instances/%s/stop",
-		c.service_account["project_id"].(string), 
+		c.service_account["project_id"].(string),
 		c.service_account["zone"].(string),
 		VMName)
 
@@ -585,8 +582,8 @@ func (c *GcpClient) stopGcpInstance(VMName string) (map[string]any, error) {
 
 func (c *GcpClient) deleteGcpInstance(VMName string) (map[string]any, error) {
 	url := fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/zones/%s/instances/%s",
-		c.service_account["project_id"].(string), 
-		c.service_account["zone"].(string), 
+		c.service_account["project_id"].(string),
+		c.service_account["zone"].(string),
 		VMName)
 
 	return c.delete(url)

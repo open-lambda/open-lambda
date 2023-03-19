@@ -15,11 +15,11 @@ type MockWorker struct {
 }
 
 func NewMockWorkerPool() (*WorkerPool, error) {
-	return &WorkerPool {
-		nextId:	1, //this should be similar among all platform
-		workers: map[string]*Worker{}, //this should be similar among all platform
-		queue: make(chan *Worker, Conf.Worker_Cap), //this should be similar among all platform
-		WorkerPoolPlatform: &MockWorkerPool {},
+	return &WorkerPool{
+		nextId:             1,                                   //this should be similar among all platform
+		workers:            map[string]*Worker{},                //this should be similar among all platform
+		queue:              make(chan *Worker, Conf.Worker_Cap), //this should be similar among all platform
+		WorkerPoolPlatform: &MockWorkerPool{},
 	}, nil
 
 	//WorkerPoolPlatform should be platform specific workerpool struct (MockWorkerPool, GcpWorkerPool, AzureWorkerPool)
@@ -27,17 +27,17 @@ func NewMockWorkerPool() (*WorkerPool, error) {
 
 func (pool *MockWorkerPool) NewWorker(nextId int) *Worker {
 	workerId := fmt.Sprintf("worker-%d", nextId)
-   return &Worker{
-	   workerId: workerId, //this should be similar among all platform
-	   workerIp: "", //initialize this to empty string and modify ip after new vm instance has been created
-	   isIdle: true, //this should be similar among all platform
-	   WorkerPlatform: MockWorker{},
-   }
+	return &Worker{
+		workerId:       workerId, //this should be similar among all platform
+		workerIp:       "",       //initialize this to empty string and modify ip after new vm instance has been created
+		isIdle:         true,     //this should be similar among all platform
+		WorkerPlatform: MockWorker{},
+	}
 
-   //Equivalent to CreateWorker() function in previous design with slightly different Worker struct
-   //WorkerPlatform should be platform specific worker struct (MockWorker, GcpWorker, AzureWorker)
-   //But, do not call go worker.launch() and go worker.task()
-   //you don't have to add worker to pool.workers or pool.queue
+	//Equivalent to CreateWorker() function in previous design with slightly different Worker struct
+	//WorkerPlatform should be platform specific worker struct (MockWorker, GcpWorker, AzureWorker)
+	//But, do not call go worker.launch() and go worker.task()
+	//you don't have to add worker to pool.workers or pool.queue
 }
 
 func (pool *MockWorkerPool) CreateInstance(worker *Worker) {

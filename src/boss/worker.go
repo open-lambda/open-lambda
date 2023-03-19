@@ -1,16 +1,16 @@
 package boss
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"errors"
 )
 
-type WorkerPool struct  {
-	nextId int
-	workers map[string]*Worker   //list of all workers
-	queue chan 	*Worker //this queue will only hold idle workers
+type WorkerPool struct {
+	nextId  int
+	workers map[string]*Worker //list of all workers
+	queue   chan *Worker       //this queue will only hold idle workers
 	//each thread of request will pick up any idle worker from this queue
 	//when the task is done worker will be enqueue back to this queue
 
@@ -18,15 +18,15 @@ type WorkerPool struct  {
 }
 
 type WorkerPoolPlatform interface {
-	NewWorker(nextId int) *Worker //return new worker struct
-	CreateInstance(worker *Worker)  //create new instance in the cloud platform
+	NewWorker(nextId int) *Worker  //return new worker struct
+	CreateInstance(worker *Worker) //create new instance in the cloud platform
 	DeleteInstance(worker *Worker) //delete cloud platform instance associated with give worker struct
 }
 
 type Worker struct {
-	workerId string
-	workerIp string
-	isIdle	 bool
+	workerId       string
+	workerIp       string
+	isIdle         bool
 	WorkerPlatform //platform specific attributes and functions
 }
 
@@ -41,8 +41,15 @@ func (pool *WorkerPool) Size() int {
 }
 
 //add a new worker to the pool
+
+// TODO: should we first create worker then push the worker to the idle queue?
+// If the creation isn't finished yet and the boss send requests to that worker, it might cause problems.
+// Maybe there's no need to have a "NewWorker" function? Just one "CreateInstance" might help.
+
+// FIXEME: sometimes the azure part might fail due to cannot use the snapshot at the same time. But mostly it won't fail.
+
 func (pool *WorkerPool) ScaleUp() error {
-	if pool.Size() > Conf.Worker_Cap {//if pool is full
+	if pool.Size() > Conf.Worker_Cap { //if pool is full
 		panic(errors.New("Exceeded Maximum Number of Worker"))
 	}
 
@@ -53,8 +60,8 @@ func (pool *WorkerPool) ScaleUp() error {
 
 	pool.workers[worker.workerId] = worker
 	pool.queue <- worker
-	
-	go pool.CreateInstance(worker)
+
+	pool.CreateInstance(worker)
 
 	return nil
 }
@@ -71,7 +78,7 @@ func (pool *WorkerPool) ScaleDown() {
 }
 
 //run lambda function
-func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request)  {
+func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 	worker := <-pool.queue
 	worker.isIdle = false
 	if Conf.Platform == "mock" {
@@ -102,7 +109,7 @@ func (pool *WorkerPool) Status() []map[string]string {
 			output = map[string]string{workerId: "busy"}
 		}
 		w = append(w, output)
-	} 
+	}
 	return w
 }
 

@@ -76,11 +76,11 @@ func NewGcpWorkerPool() (*WorkerPool, error) {
 		return nil, err
 	}
 
-	return &WorkerPool {
-		nextId:	1,
+	return &WorkerPool{
+		nextId:  1,
 		workers: map[string]*Worker{},
-		queue: make(chan *Worker, Conf.Worker_Cap),
-		WorkerPoolPlatform: &GcpWorkerPool {
+		queue:   make(chan *Worker, Conf.Worker_Cap),
+		WorkerPoolPlatform: &GcpWorkerPool{
 			client: client,
 		},
 	}, nil
@@ -88,12 +88,12 @@ func NewGcpWorkerPool() (*WorkerPool, error) {
 
 func (pool *GcpWorkerPool) NewWorker(nextId int) *Worker {
 	workerId := fmt.Sprintf("ol-worker-%d", nextId)
-   return &Worker{
-	   workerId: workerId,
-	   workerIp: "",
-	   isIdle: true,
-	   WorkerPlatform: GcpWorker{},
-   }
+	return &Worker{
+		workerId:       workerId,
+		workerIp:       "",
+		isIdle:         true,
+		WorkerPlatform: GcpWorker{},
+	}
 }
 
 func (pool *GcpWorkerPool) CreateInstance(worker *Worker) {

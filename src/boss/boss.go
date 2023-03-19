@@ -6,10 +6,10 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"strconv"
-	"sync"
 	"os"
 	"os/signal"
+	"strconv"
+	"sync"
 	"syscall"
 )
 
@@ -89,7 +89,7 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Receive request to %s, worker_count of %d requested\n", r.URL.Path, worker_count)
 
 	// STEP 2: adjust worker count
-	for b.workerPool.Size() < worker_count  {
+	for b.workerPool.Size() < worker_count {
 		b.workerPool.ScaleUp()
 	}
 
@@ -157,7 +157,7 @@ func BossMain() (err error) {
 	if Conf.Platform == "gcp" {
 		pool, err = NewGcpWorkerPool()
 	} else if Conf.Platform == "azure" {
-		//pool, err = NewAzureWorkerPool()
+		pool, err = NewAzureWorkerPool()
 	} else if Conf.Platform == "mock" {
 		pool, err = NewMockWorkerPool()
 	} else {

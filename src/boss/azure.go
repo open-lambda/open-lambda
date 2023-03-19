@@ -1,122 +1,117 @@
 package boss
 
 import (
+	"bufio"
+	"bytes"
+	"context"
+	"fmt"
 	"log"
+	"math/rand"
 	"os"
+	"strconv"
+	"time"
+
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 )
 
-// import (
-// 	"bufio"
-// 	"bytes"
-// 	"context"
-// 	"fmt"
-// 	"log"
-// 	"math/rand"
-// 	"os"
-// 	"strconv"
-// 	"time"
+var url string
+var data []byte
+var ctx context.Context
+var blobClient azblob.BlockBlobClient
+var blobName string
+var containerName string
+var err error
+var containerClient azblob.ContainerClient
+var subscriptionId string
 
-// 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
-// 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
-// )
+func Create(contents string) {
+	url := "https://openlambda.blob.core.windows.net/" //replace <StorageAccountName> with your Azure storage account name
+	ctx := context.Background()
+	// Create a default request pipeline using your storage account name and account key.
+	credential, err := azidentity.NewDefaultAzureCredential(nil)
+	if err != nil {
+		log.Fatal("Invalid credentials with error: " + err.Error())
+	}
+	serviceClient, err := azblob.NewServiceClient(url, credential, nil)
+	if err != nil {
+		log.Fatal("Invalid credentials with error: " + err.Error())
+	}
+	containerName := fmt.Sprintf("quickstart-%s", randomString())
+	fmt.Printf("Creating a container named %s\n", containerName)
+	containerClient, err := serviceClient.NewContainerClient(containerName)
+	if err != nil {
+		log.Fatal(err)
+	}
+	_, err = containerClient.Create(ctx, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-// var url string
-// var data []byte
-// var ctx context.Context
-// var blobClient azblob.BlockBlobClient
-// var blobName string
-// var containerName string
-// var err error
-// var containerClient azblob.ContainerClient
-// var subscriptionId string
+	fmt.Printf("Creating a dummy file to test the upload and download\n")
 
-// func Create(contents string) {
-// 	url := "https://openlambda.blob.core.windows.net/" //replace <StorageAccountName> with your Azure storage account name
-// 	ctx := context.Background()
-// 	// Create a default request pipeline using your storage account name and account key.
-// 	credential, err := azidentity.NewDefaultAzureCredential(nil)
-// 	if err != nil {
-// 		log.Fatal("Invalid credentials with error: " + err.Error())
-// 	}
-// 	serviceClient, err := azblob.NewServiceClient(url, credential, nil)
-// 	if err != nil {
-// 		log.Fatal("Invalid credentials with error: " + err.Error())
-// 	}
-// 	containerName := fmt.Sprintf("quickstart-%s", randomString())
-// 	fmt.Printf("Creating a container named %s\n", containerName)
-// 	containerClient, err := serviceClient.NewContainerClient(containerName)
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
-// 	_, err = containerClient.Create(ctx, nil)
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
+	data := []byte(contents)
+	blobName := "quickstartblob" + "-" + randomString()
 
-// 	fmt.Printf("Creating a dummy file to test the upload and download\n")
+	blobClient, err := azblob.NewBlockBlobClient(url+containerName+"/"+blobName, credential, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	// Upload to data to blob storage
+	_, err = blobClient.UploadBuffer(ctx, data, azblob.UploadOption{})
 
-// 	data := []byte(contents)
-// 	blobName := "quickstartblob" + "-" + randomString()
+	if err != nil {
+		log.Fatalf("Failure to upload to blob: %+v", err)
+	}
+}
 
-// 	blobClient, err := azblob.NewBlockBlobClient(url+containerName+"/"+blobName, credential, nil)
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
-// 	// Upload to data to blob storage
-// 	_, err = blobClient.UploadBuffer(ctx, data, azblob.UploadOption{})
+func Download() {
+	// Download the blob
+	get, err := blobClient.Download(ctx, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-// 	if err != nil {
-// 		log.Fatalf("Failure to upload to blob: %+v", err)
-// 	}
-// }
+	downloadedData := &bytes.Buffer{}
+	reader := get.Body(&azblob.RetryReaderOptions{})
+	_, err = downloadedData.ReadFrom(reader)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = reader.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
 
-// func Download() {
-// 	// Download the blob
-// 	get, err := blobClient.Download(ctx, nil)
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
+	fmt.Println(downloadedData.String())
 
-// 	downloadedData := &bytes.Buffer{}
-// 	reader := get.Body(&azblob.RetryReaderOptions{})
-// 	_, err = downloadedData.ReadFrom(reader)
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
-// 	err = reader.Close()
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
+	fmt.Printf("Press enter key to delete the blob fils, example container, and exit the application.\n")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
+	fmt.Printf("Cleaning up.\n")
+}
 
-// 	fmt.Println(downloadedData.String())
+func Delete() {
+	// Delete the blob
+	fmt.Printf("Deleting the blob " + blobName + "\n")
 
-// 	fmt.Printf("Press enter key to delete the blob fils, example container, and exit the application.\n")
-// 	bufio.NewReader(os.Stdin).ReadBytes('\n')
-// 	fmt.Printf("Cleaning up.\n")
-// }
+	_, err = blobClient.Delete(ctx, nil)
+	if err != nil {
+		log.Fatalf("Failure: %+v", err)
+	}
 
-// func Delete() {
-// 	// Delete the blob
-// 	fmt.Printf("Deleting the blob " + blobName + "\n")
+	// Delete the container
+	fmt.Printf("Deleting the blob " + containerName + "\n")
+	_, err = containerClient.Delete(ctx, nil)
 
-// 	_, err = blobClient.Delete(ctx, nil)
-// 	if err != nil {
-// 		log.Fatalf("Failure: %+v", err)
-// 	}
+	if err != nil {
+		log.Fatalf("Failure: %+v", err)
+	}
+}
 
-// 	// Delete the container
-// 	fmt.Printf("Deleting the blob " + containerName + "\n")
-// 	_, err = containerClient.Delete(ctx, nil)
-
-// 	if err != nil {
-// 		log.Fatalf("Failure: %+v", err)
-// 	}
-// }
-
-// func randomString() string {
-// 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-// 	return strconv.Itoa(r.Int())
-// }
+func randomString() string {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	return strconv.Itoa(r.Int())
+}
 
 func AzureCreateVM(workerId int) *AzureConfig {
 	subscriptionId = os.Getenv("AZURE_SUBSCRIPTION_ID")
@@ -135,105 +130,105 @@ func AzureCreateVM(workerId int) *AzureConfig {
 	//createSnapshotImage()
 }
 
-// func AzureMain(contents string) {
-// 	fmt.Printf("Azure Blob storage quick start sample\n")
+func AzureMain(contents string) {
+	fmt.Printf("Azure Blob storage quick start sample\n")
 
-// 	url := "https://<StorageAccountName>.blob.core.windows.net/" //replace <StorageAccountName> with your Azure storage account name
-// 	ctx := context.Background()
+	url := "https://<StorageAccountName>.blob.core.windows.net/" //replace <StorageAccountName> with your Azure storage account name
+	ctx := context.Background()
 
-// 	// Create a default request pipeline using your storage account name and account key.
-// 	credential, err := azidentity.NewDefaultAzureCredential(nil)
-// 	if err != nil {
-// 		log.Fatal("Invalid credentials with error: " + err.Error())
-// 	}
+	// Create a default request pipeline using your storage account name and account key.
+	credential, err := azidentity.NewDefaultAzureCredential(nil)
+	if err != nil {
+		log.Fatal("Invalid credentials with error: " + err.Error())
+	}
 
-// 	serviceClient, err := azblob.NewServiceClient(url, credential, nil)
-// 	if err != nil {
-// 		log.Fatal("Invalid credentials with error: " + err.Error())
-// 	}
+	serviceClient, err := azblob.NewServiceClient(url, credential, nil)
+	if err != nil {
+		log.Fatal("Invalid credentials with error: " + err.Error())
+	}
 
-// 	// Create the container
-// 	containerName := fmt.Sprintf("quickstart-%s", randomString())
-// 	fmt.Printf("Creating a container named %s\n", containerName)
-// 	containerClient, err := serviceClient.NewContainerClient(containerName)
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
-// 	_, err = containerClient.Create(ctx, nil)
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
+	// Create the container
+	containerName := fmt.Sprintf("quickstart-%s", randomString())
+	fmt.Printf("Creating a container named %s\n", containerName)
+	containerClient, err := serviceClient.NewContainerClient(containerName)
+	if err != nil {
+		log.Fatal(err)
+	}
+	_, err = containerClient.Create(ctx, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-// 	fmt.Printf("Creating a dummy file to test the upload and download\n")
+	fmt.Printf("Creating a dummy file to test the upload and download\n")
 
-// 	data := []byte(contents)
-// 	blobName := "quickstartblob" + "-" + randomString()
+	data := []byte(contents)
+	blobName := "quickstartblob" + "-" + randomString()
 
-// 	blobClient, err := azblob.NewBlockBlobClient(url+containerName+"/"+blobName, credential, nil)
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
+	blobClient, err := azblob.NewBlockBlobClient(url+containerName+"/"+blobName, credential, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-// 	// Upload to data to blob storage
-// 	_, err = blobClient.UploadBuffer(ctx, data, azblob.UploadOption{})
+	// Upload to data to blob storage
+	_, err = blobClient.UploadBuffer(ctx, data, azblob.UploadOption{})
 
-// 	if err != nil {
-// 		log.Fatalf("Failure to upload to blob: %+v", err)
-// 	}
+	if err != nil {
+		log.Fatalf("Failure to upload to blob: %+v", err)
+	}
 
-// 	// List the blobs in the container
-// 	fmt.Println("Listing the blobs in the container:")
+	// List the blobs in the container
+	fmt.Println("Listing the blobs in the container:")
 
-// 	pager := containerClient.ListBlobsFlat(nil)
+	pager := containerClient.ListBlobsFlat(nil)
 
-// 	for pager.NextPage(ctx) {
-// 		resp := pager.PageResponse()
+	for pager.NextPage(ctx) {
+		resp := pager.PageResponse()
 
-// 		for _, v := range resp.Segment.BlobItems {
-// 			fmt.Println(*v.Name)
-// 		}
-// 	}
+		for _, v := range resp.Segment.BlobItems {
+			fmt.Println(*v.Name)
+		}
+	}
 
-// 	if err = pager.Err(); err != nil {
-// 		log.Fatalf("Failure to list blobs: %+v", err)
-// 	}
+	if err = pager.Err(); err != nil {
+		log.Fatalf("Failure to list blobs: %+v", err)
+	}
 
-// 	// Download the blob
-// 	get, err := blobClient.Download(ctx, nil)
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
+	// Download the blob
+	get, err := blobClient.Download(ctx, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-// 	downloadedData := &bytes.Buffer{}
-// 	reader := get.Body(&azblob.RetryReaderOptions{})
-// 	_, err = downloadedData.ReadFrom(reader)
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
-// 	err = reader.Close()
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
+	downloadedData := &bytes.Buffer{}
+	reader := get.Body(&azblob.RetryReaderOptions{})
+	_, err = downloadedData.ReadFrom(reader)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = reader.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
 
-// 	fmt.Println(downloadedData.String())
+	fmt.Println(downloadedData.String())
 
-// 	fmt.Printf("Press enter key to delete the blob fils, example container, and exit the application.\n")
-// 	bufio.NewReader(os.Stdin).ReadBytes('\n')
-// 	fmt.Printf("Cleaning up.\n")
+	fmt.Printf("Press enter key to delete the blob fils, example container, and exit the application.\n")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
+	fmt.Printf("Cleaning up.\n")
 
-// 	// Delete the blob
-// 	fmt.Printf("Deleting the blob " + blobName + "\n")
+	// Delete the blob
+	fmt.Printf("Deleting the blob " + blobName + "\n")
 
-// 	_, err = blobClient.Delete(ctx, nil)
-// 	if err != nil {
-// 		log.Fatalf("Failure: %+v", err)
-// 	}
+	_, err = blobClient.Delete(ctx, nil)
+	if err != nil {
+		log.Fatalf("Failure: %+v", err)
+	}
 
-// 	// Delete the container
-// 	fmt.Printf("Deleting the blob " + containerName + "\n")
-// 	_, err = containerClient.Delete(ctx, nil)
+	// Delete the container
+	fmt.Printf("Deleting the blob " + containerName + "\n")
+	_, err = containerClient.Delete(ctx, nil)
 
-// 	if err != nil {
-// 		log.Fatalf("Failure: %+v", err)
-// 	}
-// }
+	if err != nil {
+		log.Fatalf("Failure: %+v", err)
+	}
+}
