@@ -3,133 +3,115 @@ package boss
 import (
 	"fmt"
 	"io"
-	"log"
 	"net/http"
+	"errors"
 )
 
-// Non-platform specific functions mockWorker implementation
+type WorkerPool struct  {
+	nextId int
+	workers map[string]*Worker   //list of all workers
+	queue chan 	*Worker //this queue will only hold idle workers
+	//each thread of request will pick up any idle worker from this queue
+	//when the task is done worker will be enqueue back to this queue
 
-type Invocation struct {
-	w    http.ResponseWriter
-	r    *http.Request
-	Done chan bool
+	WorkerPoolPlatform //platform specific attributes and functions
 }
 
-func NewInvocation(w http.ResponseWriter, r *http.Request) *Invocation {
-	return &Invocation{w: w, r: r, Done: make(chan bool)}
+type WorkerPoolPlatform interface {
+	NewWorker(nextId int) *Worker //return new worker struct
+	CreateInstance(worker *Worker)  //create new instance in the cloud platform
+	DeleteInstance(worker *Worker) //delete cloud platform instance associated with give worker struct
 }
 
-type WorkerPool interface {
-	CreateWorker(reqChan chan *Invocation) //create new worker
-	DeleteWorker(workerId string)          //delete worker with worker id
-	Status() []string                      //return list of active workers
-	Size() int                             //return number of active workers
-	CloseAll()                             //Close all workers
-}
-
-type Worker interface {
-	task()
-	Close()
-}
-
-// WORKER IMPLEMENTATION: MockWorker
-
-type MockWorkerPool struct {
-	nextId  int
-	workers map[string]Worker
-}
-
-type MockWorker struct {
-	pool     *MockWorkerPool
+type Worker struct {
 	workerId string
-	reqChan  chan *Invocation
-	exitChan chan bool
+	workerIp string
+	isIdle	 bool
+	WorkerPlatform //platform specific attributes and functions
 }
 
-// WORKER IMPLEMENTATION: MockWorker
-
-func NewMockWorkerPool() (*MockWorkerPool, error) {
-	return &MockWorkerPool{
-		nextId:  1,
-		workers: map[string]Worker{},
-	}, nil
+type WorkerPlatform interface {
+	//platform specific attributes and functions
+	//do not require any functions yet
 }
 
-func (pool *MockWorkerPool) CreateWorker(reqChan chan *Invocation) {
-	log.Printf("creating mock worker")
-	workerId := fmt.Sprintf("worker-%d", pool.nextId)
-	worker := &MockWorker{
-		pool:     pool,
-		workerId: workerId,
-		reqChan:  reqChan,
-		exitChan: make(chan bool), //for exiting task() go routine
-	}
-	pool.nextId += 1
-	go worker.task()
-
-	pool.workers[workerId] = worker
-}
-
-func (pool *MockWorkerPool) DeleteWorker(workerId string) {
-	pool.workers[workerId].Close()
-}
-
-func (pool *MockWorkerPool) Status() []string {
-	var w = []string{}
-	for k, _ := range pool.workers {
-		w = append(w, k)
-	}
-	return w
-}
-
-func (pool *MockWorkerPool) Size() int {
+//return number of workers in the pool
+func (pool *WorkerPool) Size() int {
 	return len(pool.workers)
 }
 
-func (pool *MockWorkerPool) CloseAll() {
-	for _, w := range pool.workers {
-		w.Close()
+//add a new worker to the pool
+func (pool *WorkerPool) ScaleUp() error {
+	if pool.Size() > Conf.Worker_Cap {//if pool is full
+		panic(errors.New("Exceeded Maximum Number of Worker"))
 	}
+
+	nextId := pool.nextId
+	pool.nextId += 1
+
+	worker := pool.NewWorker(nextId)
+
+	pool.workers[worker.workerId] = worker
+	pool.queue <- worker
+	
+	go pool.CreateInstance(worker)
+
+	return nil
 }
 
-func (worker *MockWorker) task() {
-	for {
-		var req *Invocation
-		select {
-		case <-worker.exitChan: //end go routine if value sent via exitChan
-			return
-		case req = <-worker.reqChan:
-		}
+//remove a worker from the pool
+func (pool *WorkerPool) ScaleDown() {
+	worker := <-pool.queue
+	for worker.isIdle != true { //wait queue until an idle worker is found
+		pool.queue <- worker
+	}
 
-		if req == nil { //naive version scaling down (delete any idle worker)
-			worker.Close()
-			return
-		}
+	delete(pool.workers, worker.workerId)
+	pool.DeleteInstance(worker)
+}
 
-		// respond with dummy message
-		// (a real Worker will forward it to the OL worker on a different VM)
-		// err = forwardTask(req.w, req.r, "")
+//run lambda function
+func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request)  {
+	worker := <-pool.queue
+	worker.isIdle = false
+	if Conf.Platform == "mock" {
 		s := fmt.Sprintf("hello from %s\n", worker.workerId)
-		req.w.WriteHeader(http.StatusOK)
-		_, err := req.w.Write([]byte(s))
+		w.WriteHeader(http.StatusOK)
+		_, err := w.Write([]byte(s))
 		if err != nil {
 			panic(err)
 		}
-		req.Done <- true
+	} else {
+		forwardTask(w, r, worker.workerIp)
 	}
+
+	worker.isIdle = true
+
+	pool.queue <- worker
 }
 
-func (worker *MockWorker) Close() {
-	select {
-	case worker.exitChan <- true: //end task() go rountine
-	default:
+//return wokers' id and their status (idle/busy)
+func (pool *WorkerPool) Status() []map[string]string {
+	var w = []map[string]string{}
 
+	for workerId, worker := range pool.workers {
+		var output map[string]string
+		if worker.isIdle {
+			output = map[string]string{workerId: "idle"}
+		} else {
+			output = map[string]string{workerId: "busy"}
+		}
+		w = append(w, output)
+	} 
+	return w
+}
+
+//kill and delte all workers
+func (pool *WorkerPool) Close() {
+	for workerId, worker := range pool.workers {
+		delete(pool.workers, workerId)
+		pool.DeleteInstance(worker)
 	}
-
-	//shutdown or remove worker-VM
-	log.Printf("closing %s\n", worker.workerId)
-
-	delete(worker.pool.workers, worker.workerId)
 }
 
 // forward request to worker

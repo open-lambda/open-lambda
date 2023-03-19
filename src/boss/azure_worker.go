@@ -11,11 +11,11 @@ import (
 	"time"
 )
 
-type AzureWorkerPool struct {
-	workerNum int
-	workers   *map[string]*AzureWorker
-	nextId    int
-}
+// type AzureWorkerPool struct {
+// 	workerNum int
+// 	workers   *map[string]*AzureWorker
+// 	nextId    int
+// }
 
 type AzureWorker struct {
 	pool         *AzureWorkerPool
@@ -72,12 +72,12 @@ func (pool *AzureWorkerPool) CreateWorker(reqChan chan *Invocation) {
 	pool.workerNum += 1
 	pool.nextId = pool.workerNum + 1
 
-	go worker.launch()
-	go worker.task()
+// 	go worker.launch()
+// 	go worker.task()
 
-	(*pool.workers)[worker.workerId] = worker
+// 	(*pool.workers)[worker.workerId] = worker
 
-}
+// }
 
 func NewAzureWorkerPool() (*AzureWorkerPool, error) {
 	conf, err := ReadAzureConfig()
@@ -107,56 +107,56 @@ func NewAzureWorkerPool() (*AzureWorkerPool, error) {
 	return pool, nil
 }
 
-func (worker *AzureWorker) launch() {
-	cwd, err := os.Getwd()
-	if err != nil {
-		panic(err)
-	}
-	user, err := user.Current()
-	if err != nil {
-		panic(err)
-	}
-	cmd := fmt.Sprintf("cd %s; %s; %s", cwd, "sudo mount -o rw,remount /sys/fs/cgroup", "sudo ./ol worker --detach")
-	tries := 10
-	for tries > 0 {
-		sshcmd := exec.Command("ssh", "-i", "~/.ssh/ol-boss_key.pem", user.Username+"@"+worker.privateAddr, "-o", "StrictHostKeyChecking=no", "-C", cmd)
-		stdoutStderr, err := sshcmd.CombinedOutput()
-		fmt.Printf("%s\n", stdoutStderr)
-		if err == nil {
-			break
-		}
-		tries -= 1
-		if tries == 0 {
-			fmt.Println(sshcmd.String())
-			panic(err)
-		}
-		time.Sleep(5 * time.Second)
-	}
-}
+// func (worker *AzureWorker) launch() {
+// 	cwd, err := os.Getwd()
+// 	if err != nil {
+// 		panic(err)
+// 	}
+// 	user, err := user.Current()
+// 	if err != nil {
+// 		panic(err)
+// 	}
+// 	cmd := fmt.Sprintf("cd %s; %s; %s", cwd, "sudo mount -o rw,remount /sys/fs/cgroup", "sudo ./ol worker --detach")
+// 	tries := 10
+// 	for tries > 0 {
+// 		sshcmd := exec.Command("ssh", "-i", "~/.ssh/ol-boss_key.pem", user.Username+"@"+worker.privateAddr, "-o", "StrictHostKeyChecking=no", "-C", cmd)
+// 		stdoutStderr, err := sshcmd.CombinedOutput()
+// 		fmt.Printf("%s\n", stdoutStderr)
+// 		if err == nil {
+// 			break
+// 		}
+// 		tries -= 1
+// 		if tries == 0 {
+// 			fmt.Println(sshcmd.String())
+// 			panic(err)
+// 		}
+// 		time.Sleep(5 * time.Second)
+// 	}
+// }
 
-func (worker *AzureWorker) task() {
-	for {
-		var req *Invocation
-		select {
-		case <-worker.exitChan:
-			return
-		case req = <-worker.reqChan:
-		}
+// func (worker *AzureWorker) task() {
+// 	for {
+// 		var req *Invocation
+// 		select {
+// 		case <-worker.exitChan:
+// 			return
+// 		case req = <-worker.reqChan:
+// 		}
 
-		if req == nil {
-			log.Printf("Prepare to close the worker\n")
-			worker.Close()
-			return
-		}
+// 		if req == nil {
+// 			log.Printf("Prepare to close the worker\n")
+// 			worker.Close()
+// 			return
+// 		}
 
-		err = forwardTask(req.w, req.r, worker.privateAddr)
-		if err != nil {
-			panic(err)
-		}
+// 		err = forwardTask(req.w, req.r, worker.privateAddr)
+// 		if err != nil {
+// 			panic(err)
+// 		}
 
-		req.Done <- true
-	}
-}
+// 		req.Done <- true
+// 	}
+// }
 
 func (worker *AzureWorker) Close() {
 	select {
@@ -233,23 +233,23 @@ func (worker *AzureWorker) Close() {
 	log.Printf("Deleted the worker and worker VM successfully\n")
 }
 
-func (pool *AzureWorkerPool) CloseAll() {
-	for _, w := range *pool.workers {
-		w.Close()
-	}
-}
+// func (pool *AzureWorkerPool) CloseAll() {
+// 	for _, w := range *pool.workers {
+// 		w.Close()
+// 	}
+// }
 
-func (pool *AzureWorkerPool) DeleteWorker(worderId string) {}
+// func (pool *AzureWorkerPool) DeleteWorker(worderId string) {}
 
-func (pool *AzureWorkerPool) Size() int {
-	conf, _ := ReadAzureConfig()
-	return conf.Resource_groups.Rgroup[0].Numvm
-}
+// func (pool *AzureWorkerPool) Size() int {
+// 	conf, _ := ReadAzureConfig()
+// 	return conf.Resource_groups.Rgroup[0].Numvm
+// }
 
-func (pool *AzureWorkerPool) Status() []string {
-	var w = []string{}
-	for k, _ := range *pool.workers {
-		w = append(w, k)
-	}
-	return w
-}
+// func (pool *AzureWorkerPool) Status() []string {
+// 	var w = []string{}
+// 	for k, _ := range *pool.workers {
+// 		w = append(w, k)
+// 	}
+// 	return w
+// }

@@ -62,9 +62,11 @@ func InitAzureConfig() (*AzureConfig, error) {
 	rgs.Rgroup = append(rgs.Rgroup, *rg)
 	conf.Resource_groups = *rgs
 
-	if content, err = json.MarshalIndent(conf, "", "\t"); err != nil {
+	content, err := json.MarshalIndent(conf, "", "\t")
+	if err != nil {
 		return nil, err
 	}
+
 	if err = ioutil.WriteFile(path, content, 0666); err != nil {
 		return nil, err
 	}
@@ -110,7 +112,8 @@ func WriteAzureConfig(conf *AzureConfig) error {
 	path := "azure.json"
 	var content []byte
 
-	if content, err = json.MarshalIndent(conf, "", "\t"); err != nil {
+	content, err := json.MarshalIndent(conf, "", "\t")
+	if err != nil {
 		return err
 	}
 	if err = ioutil.WriteFile(path, content, 0666); err != nil {

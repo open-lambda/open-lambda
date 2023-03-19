@@ -6,10 +6,10 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
-	"os/signal"
 	"strconv"
 	"sync"
+	"os"
+	"os/signal"
 	"syscall"
 )
 
@@ -24,12 +24,11 @@ const (
 )
 
 type Boss struct {
-	reqChan    chan *Invocation
 	mutex      sync.Mutex
-	workerPool WorkerPool
+	workerPool *WorkerPool
 }
 
-var m = map[string][]string{"workers": []string{}}
+var m = map[string][]map[string]string{"workers": []map[string]string{}}
 
 func (b *Boss) BossStatus(w http.ResponseWriter, r *http.Request) {
 	b.mutex.Lock()
@@ -45,8 +44,7 @@ func (b *Boss) BossStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (b *Boss) Close(w http.ResponseWriter, r *http.Request) {
-	log.Printf("closing all worker")
-	b.workerPool.CloseAll()
+	b.workerPool.Close()
 	os.Exit(0)
 }
 
@@ -90,18 +88,14 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("Receive request to %s, worker_count of %d requested\n", r.URL.Path, worker_count)
 
-	// STEP 2: adjust worker count (TODO)
-	size := b.workerPool.Size()
-	log.Printf("size: %d, worker_count: %d\n", size, worker_count)
-	for size < worker_count {
-		b.workerPool.CreateWorker(b.reqChan)
-		size += 1
+	// STEP 2: adjust worker count
+	for b.workerPool.Size() < worker_count  {
+		b.workerPool.ScaleUp()
 	}
 
 	// scale down if len(b.workers) < worker_count
-	for size > worker_count {
-		b.reqChan <- nil //remove idle worker
-		size -= 1
+	for b.workerPool.Size() > worker_count {
+		b.workerPool.ScaleDown()
 	}
 
 	//respond with list of active workers
@@ -114,68 +108,56 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 }
 
 func (b *Boss) RunLambda(w http.ResponseWriter, r *http.Request) {
-	invocation := NewInvocation(w, r)
-
-	select {
-	case b.reqChan <- invocation:
-		<-invocation.Done // wait for completion
-	default:
-		// the channel is not taking requests, must be too busy
-		w.WriteHeader(http.StatusTooManyRequests)
-		_, err := w.Write([]byte("request queue is full\n"))
-		if err != nil {
-			log.Printf("(4) could not write web response: %s\n", err.Error())
-		}
-	}
+	b.workerPool.RunLambda(w, r)
 }
 
 func (b *Boss) StorageLambda(w http.ResponseWriter, r *http.Request) {
-	contents, err := io.ReadAll(r.Body)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, err := w.Write([]byte("could not read body of web request\n"))
-		if err != nil {
-			log.Printf("(2) could not write web response: %s\n", err.Error())
-		}
-		return
-	}
-	Create(string(contents))
+	// contents, err := io.ReadAll(r.Body)
+	// if err != nil {
+	// 	w.WriteHeader(http.StatusInternalServerError)
+	// 	_, err := w.Write([]byte("could not read body of web request\n"))
+	// 	if err != nil {
+	// 		log.Printf("(2) could not write web response: %s\n", err.Error())
+	// 	}
+	// 	return
+	// }
+	// Create(string(contents))
 }
 
 func (*Boss) DownloadLambda(w http.ResponseWriter, r *http.Request) {
 	// contents, err := io.ReadAll(r.Body)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, err := w.Write([]byte("could not read body of web request\n"))
-		if err != nil {
-			log.Printf("(2) could not write web response: %s\n", err.Error())
-		}
-		return
-	}
-	Download()
+	// if err != nil {
+	// 	w.WriteHeader(http.StatusInternalServerError)
+	// 	_, err := w.Write([]byte("could not read body of web request\n"))
+	// 	if err != nil {
+	// 		log.Printf("(2) could not write web response: %s\n", err.Error())
+	// 	}
+	// 	return
+	// }
+	// Download()
 }
 
 func (*Boss) DeleteLambda(w http.ResponseWriter, r *http.Request) {
 	// contents, err := io.ReadAll(r.Body)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, err := w.Write([]byte("could not read body of web request\n"))
-		if err != nil {
-			log.Printf("(2) could not write web response: %s\n", err.Error())
-		}
-		return
-	}
-	Delete()
+	// if err != nil {
+	// 	w.WriteHeader(http.StatusInternalServerError)
+	// 	_, err := w.Write([]byte("could not read body of web request\n"))
+	// 	if err != nil {
+	// 		log.Printf("(2) could not write web response: %s\n", err.Error())
+	// 	}
+	// 	return
+	// }
+	// Delete()
 }
 
 func BossMain() (err error) {
 	fmt.Printf("WARNING!  Boss incomplete (only use this as part of development process).")
 
-	var pool WorkerPool
+	var pool *WorkerPool
 	if Conf.Platform == "gcp" {
 		pool, err = NewGcpWorkerPool()
 	} else if Conf.Platform == "azure" {
-		pool, err = NewAzureWorkerPool()
+		//pool, err = NewAzureWorkerPool()
 	} else if Conf.Platform == "mock" {
 		pool, err = NewMockWorkerPool()
 	} else {
@@ -188,7 +170,6 @@ func BossMain() (err error) {
 
 	boss := Boss{
 		workerPool: pool,
-		reqChan:    make(chan *Invocation), //TODO: buffer for request queue (what size?)
 	}
 
 	// things shared by all servers
