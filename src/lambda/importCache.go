@@ -28,7 +28,7 @@ type ImportCache struct {
 // Sandbox death, etc)
 type ImportCacheNode struct {
 	// from config file:
-	Packages []string           `json:"packages""`
+	Packages []string           `json:"packages"`
 	Children []*ImportCacheNode `json:"children"`
 
 	// backpointers based on Children structure
