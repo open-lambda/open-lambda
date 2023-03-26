@@ -89,14 +89,7 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Receive request to %s, worker_count of %d requested\n", r.URL.Path, worker_count)
 
 	// STEP 2: adjust worker count
-	for b.workerPool.Size() < worker_count {
-		b.workerPool.ScaleUp()
-	}
-
-	// scale down if len(b.workers) < worker_count
-	for b.workerPool.Size() > worker_count {
-		b.workerPool.ScaleDown()
-	}
+	b.workerPool.Scale(worker_count)
 
 	//respond with list of active workers
 	m["workers"] = b.workerPool.Status()

@@ -26,7 +26,7 @@ type WorkerPoolPlatform interface {
 type Worker struct {
 	workerId       string
 	workerIp       string
-	isIdle         bool
+	numTask        int //count of outstanding tasks; 0 if the worker is idle
 	WorkerPlatform //platform specific attributes and functions
 }
 
@@ -48,21 +48,27 @@ func (pool *WorkerPool) Size() int {
 
 // FIXEME: sometimes the azure part might fail due to cannot use the snapshot at the same time. But mostly it won't fail.
 
-func (pool *WorkerPool) ScaleUp() error {
-	if pool.Size() > Conf.Worker_Cap { //if pool is full
-		panic(errors.New("Exceeded Maximum Number of Worker"))
+func (pool *WorkerPool) Scale(target int) error {
+	for pool.Size() < worker_count { // scale up
+		nextId := pool.nextId
+		pool.nextId += 1
+		
+		worker := pool.NewWorker(nextId)
+	
+		pool.workers[worker.workerId] = worker
+		pool.queue <- worker
+	
+		pool.CreateInstance(worker)
 	}
+	for b.workerPool.Size() > worker_count { // scale down
+		worker := <-pool.queue
+		for worker.isIdle != true {
+			pool.queue <- worker
+		}
 
-	nextId := pool.nextId
-	pool.nextId += 1
-
-	worker := pool.NewWorker(nextId)
-
-	pool.workers[worker.workerId] = worker
-	pool.queue <- worker
-
-	pool.CreateInstance(worker)
-
+		delete(pool.workers, worker.workerId)
+		pool.DeleteInstance(worker)
+	}
 	return nil
 }
 
