@@ -1,19 +1,16 @@
 package boss
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"sync/atomic"
 )
 
 type WorkerPool struct {
 	nextId  int
 	workers map[string]*Worker //list of all workers
-	queue   chan *Worker       //this queue will only hold idle workers
-	//each thread of request will pick up any idle worker from this queue
-	//when the task is done worker will be enqueue back to this queue
-
+	queue   chan *Worker       //queue of all workers
 	WorkerPoolPlatform //platform specific attributes and functions
 }
 
@@ -26,7 +23,8 @@ type WorkerPoolPlatform interface {
 type Worker struct {
 	workerId       string
 	workerIp       string
-	numTask        int //count of outstanding tasks; 0 if the worker is idle
+	numTask        int32 //count of outstanding tasks
+	isKilled	   bool //true if to be killed
 	WorkerPlatform //platform specific attributes and functions
 }
 
@@ -49,7 +47,7 @@ func (pool *WorkerPool) Size() int {
 // FIXEME: sometimes the azure part might fail due to cannot use the snapshot at the same time. But mostly it won't fail.
 
 func (pool *WorkerPool) Scale(target int) error {
-	for pool.Size() < worker_count { // scale up
+	for pool.Size() < target { // scale up
 		nextId := pool.nextId
 		pool.nextId += 1
 		
@@ -58,35 +56,21 @@ func (pool *WorkerPool) Scale(target int) error {
 		pool.workers[worker.workerId] = worker
 		pool.queue <- worker
 	
-		pool.CreateInstance(worker)
+		go pool.CreateInstance(worker)
 	}
-	for b.workerPool.Size() > worker_count { // scale down
+	for pool.Size() > target { // scale down
 		worker := <-pool.queue
-		for worker.isIdle != true {
-			pool.queue <- worker
-		}
-
+		worker.isKilled = true
 		delete(pool.workers, worker.workerId)
-		pool.DeleteInstance(worker)
 	}
 	return nil
-}
-
-//remove a worker from the pool
-func (pool *WorkerPool) ScaleDown() {
-	worker := <-pool.queue
-	for worker.isIdle != true { //wait queue until an idle worker is found
-		pool.queue <- worker
-	}
-
-	delete(pool.workers, worker.workerId)
-	pool.DeleteInstance(worker)
 }
 
 //run lambda function
 func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 	worker := <-pool.queue
-	worker.isIdle = false
+	worker.numTask += 1
+	pool.queue <- worker
 	if Conf.Platform == "mock" {
 		s := fmt.Sprintf("hello from %s\n", worker.workerId)
 		w.WriteHeader(http.StatusOK)
@@ -98,9 +82,10 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 		forwardTask(w, r, worker.workerIp)
 	}
 
-	worker.isIdle = true
+	if atomic.AddInt32(&worker.numTask, -1) == 0 && worker.isKilled {
+		pool.DeleteInstance(worker)
+	}
 
-	pool.queue <- worker
 }
 
 //return wokers' id and their status (idle/busy)
@@ -108,12 +93,7 @@ func (pool *WorkerPool) Status() []map[string]string {
 	var w = []map[string]string{}
 
 	for workerId, worker := range pool.workers {
-		var output map[string]string
-		if worker.isIdle {
-			output = map[string]string{workerId: "idle"}
-		} else {
-			output = map[string]string{workerId: "busy"}
-		}
+		output := map[string]string{workerId: fmt.Sprintf("%d", worker.numTask)}
 		w = append(w, output)
 	}
 	return w

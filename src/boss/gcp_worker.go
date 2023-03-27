@@ -91,7 +91,6 @@ func (pool *GcpWorkerPool) NewWorker(nextId int) *Worker {
 	return &Worker{
 		workerId:       workerId,
 		workerIp:       "",
-		isIdle:         true,
 		WorkerPlatform: GcpWorker{},
 	}
 }

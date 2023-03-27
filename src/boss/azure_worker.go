@@ -72,7 +72,6 @@ func (pool *AzureWorkerPool) NewWorker(nextId int) *Worker {
 	return &Worker{
 		workerId:       workerId,
 		workerIp:       "",
-		isIdle:         true,
 		WorkerPlatform: AzureWorker{},
 	}
 }

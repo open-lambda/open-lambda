@@ -30,7 +30,6 @@ func (pool *MockWorkerPool) NewWorker(nextId int) *Worker {
 	return &Worker{
 		workerId:       workerId, //this should be similar among all platform
 		workerIp:       "",       //initialize this to empty string and modify ip after new vm instance has been created
-		isIdle:         true,     //this should be similar among all platform
 		WorkerPlatform: MockWorker{},
 	}
 
