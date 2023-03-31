@@ -287,10 +287,7 @@ impl FunctionManager {
         let mut import_object = ImportObject::new();
 
         let (args_imports, _args_env) = bindings::args::get_imports(store, args, result_hdl);
-        let (ipc_imports, _ipc_env) = bindings::ipc::get_imports(
-            store,
-            worker_addr,
-        );
+        let (ipc_imports, _ipc_env) = bindings::ipc::get_imports(store, worker_addr);
 
         import_object.register("ol_args", args_imports);
         import_object.register("ol_log", bindings::log::get_imports(store));

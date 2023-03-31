@@ -1,6 +1,7 @@
-use wasmer::{Array, Exports, Function, LazyInit, Memory, NativeFunc, Store, WasmPtr, WasmerEnv};
-
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use wasmer::{Array, Exports, Function, LazyInit, Memory, NativeFunc, Store, WasmPtr, WasmerEnv};
 
 use rand::Fill;
 
@@ -62,6 +63,29 @@ fn get_args(env: &ArgsEnv, len_out: WasmPtr<u64>) -> i64 {
     offset
 }
 
+fn get_unix_time() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("System time before UNIX epoch")
+        .as_secs()
+}
+
+fn get_random_value(env: &ArgsEnv, buf_ptr: WasmPtr<u8, Array>, buf_len: u32) {
+    log::trace!("Got \"get_random_value\" call with buffer size {buf_len}");
+
+    let memory = env.memory.get_ref().unwrap();
+
+    let buf_slice = unsafe {
+        let buf_ptr = memory.view::<u8>().as_ptr().add(buf_ptr.offset() as usize) as *mut u8;
+        std::slice::from_raw_parts_mut(buf_ptr, buf_len as usize)
+    };
+
+    let mut rng = rand::thread_rng();
+    buf_slice
+        .try_fill(&mut rng)
+        .expect("Failed to fill buffer with random data");
+}
+
 fn set_result(env: &ArgsEnv, buf_ptr: WasmPtr<u8, Array>, buf_len: u32) {
     log::debug!("Got result of size {buf_len}");
 
@@ -87,22 +111,6 @@ fn set_result(env: &ArgsEnv, buf_ptr: WasmPtr<u8, Array>, buf_len: u32) {
     *result = Some(vec);
 }
 
-fn get_random_value(env: &ArgsEnv, buf_ptr: WasmPtr<u8, Array>, buf_len: u32) {
-    log::trace!("Got \"get_random_value\" call with buffer size {buf_len}");
-
-    let memory = env.memory.get_ref().unwrap();
-
-    let buf_slice = unsafe {
-        let buf_ptr = memory.view::<u8>().as_ptr().add(buf_ptr.offset() as usize) as *mut u8;
-        std::slice::from_raw_parts_mut(buf_ptr, buf_len as usize)
-    };
-
-    let mut rng = rand::thread_rng();
-    buf_slice
-        .try_fill(&mut rng)
-        .expect("Failed to fill buffer with random data");
-}
-
 pub fn get_imports(store: &Store, args: Vec<u8>, result: ResultHandle) -> (Exports, ArgsEnv) {
     let args_env = ArgsEnv {
         args: Arc::new(Mutex::new(args)),
@@ -112,6 +120,7 @@ pub fn get_imports(store: &Store, args: Vec<u8>, result: ResultHandle) -> (Expor
     };
 
     let mut ns = Exports::new();
+    ns.insert("get_unix_time", Function::new_native(store, get_unix_time));
     ns.insert(
         "set_result",
         Function::new_native_with_env(store, args_env.clone(), set_result),

@@ -1,4 +1,4 @@
-use open_lambda::{get_args, set_result, json};
+use open_lambda::{get_args, json, set_result};
 
 use serde::Deserialize;
 
@@ -17,5 +17,6 @@ fn main() {
 
     set_result(&json::json!({
         "result": result,
-    })).unwrap();
+    }))
+    .unwrap();
 }

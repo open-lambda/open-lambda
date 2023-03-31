@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2018"
 
 [dependencies]
-syn = { version="1", features=["full"] }
+syn = { version="2", features=["full"] }
 quote = "1"
 
 [lib]

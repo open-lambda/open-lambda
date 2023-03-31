@@ -9,7 +9,7 @@ use tokio_util::codec::{Decoder, Encoder};
 
 use serde_bytes::ByteBuf;
 
-use open_lambda_proxy_protocol::{FuncCallData, HostCallData, CallResult, ProxyMessage};
+use open_lambda_proxy_protocol::{CallResult, FuncCallData, HostCallData, ProxyMessage};
 
 pub(crate) struct ProxyConnection {
     codec: LengthDelimitedCodec,

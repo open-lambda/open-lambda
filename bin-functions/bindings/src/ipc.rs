@@ -1,9 +1,13 @@
 use serde_json as json;
 
-use open_lambda_proxy_protocol::CallResult;
 use crate::internal::ipc as internal_ipc;
+use open_lambda_proxy_protocol::CallResult;
 
-pub fn host_call(namespace: &str, func_name: &str, args: &json::Value) -> Result<Option<json::Value>, String> {
+pub fn host_call(
+    namespace: &str,
+    func_name: &str,
+    args: &json::Value,
+) -> Result<Option<json::Value>, String> {
     let arg_string = serde_json::to_string(args).unwrap();
     let arg_data = arg_string.into_bytes();
 

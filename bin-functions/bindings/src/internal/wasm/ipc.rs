@@ -43,8 +43,7 @@ pub fn function_call(func_name: &str, args: Vec<u8>) -> CallResult {
 
     let len = len as usize;
 
-    let call_result_data = 
-        unsafe { Vec::<u8>::from_raw_parts(data_ptr as *mut u8, len, len) };
+    let call_result_data = unsafe { Vec::<u8>::from_raw_parts(data_ptr as *mut u8, len, len) };
 
     bincode::deserialize(&call_result_data).unwrap()
 }
@@ -71,8 +70,7 @@ pub fn host_call(namespace: &str, func_name: &str, args: Vec<u8>) -> CallResult 
 
     let len = len as usize;
 
-    let call_result_data = 
-        unsafe { Vec::<u8>::from_raw_parts(data_ptr as *mut u8, len, len) };
+    let call_result_data = unsafe { Vec::<u8>::from_raw_parts(data_ptr as *mut u8, len, len) };
 
     bincode::deserialize(&call_result_data).unwrap()
 }

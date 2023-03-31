@@ -66,7 +66,11 @@ struct Args {
     enable_cpu_profiler: bool,
 }
 
-async fn load_functions(registry_path: &str, function_mgr: &Arc<FunctionManager>, worker_addr: SocketAddr) {
+async fn load_functions(
+    registry_path: &str,
+    function_mgr: &Arc<FunctionManager>,
+    worker_addr: SocketAddr,
+) {
     let compiler_name = format!("{}", function_mgr.get_compiler_type()).to_lowercase();
     let cache_path: PathBuf = format!("{registry_path}.{compiler_name}.cache").into();
 

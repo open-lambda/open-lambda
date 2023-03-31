@@ -7,6 +7,6 @@ edition = "2021"
 [dependencies]
 open-lambda = { path="../bindings" }
 open-lambda-macros = { path="../macros" }
-sha2 = "0.9"
+sha2 = "0.10"
 rand = { version="0.8", default-features=false, features=["getrandom", "small_rng"] }
 getrandom = { version="*", features=["open-lambda"] }
