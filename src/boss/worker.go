@@ -3,6 +3,7 @@ package boss
 import (
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -40,6 +41,7 @@ type Worker struct {
 	numTask        int32 //count of outstanding tasks
 	isKilled       bool  //true if to be killed
 	WorkerPlatform       //platform specific attributes and functions
+	pool           *WorkerPool
 }
 
 type WorkerPlatform interface {
@@ -66,32 +68,32 @@ func (pool *WorkerPool) Scale(target int) error {
 	if newNum > 0 {
 		scaleSize := newNum - len(pool.cleaningWorkers) - len(pool.destroyingWorkers)
 		for i := 0; i < scaleSize; i++ { // scale up
-			pool.lock.Lock()
 			nextId := pool.nextId
 			pool.nextId += 1
 			worker := pool.NewWorker(nextId)
 			pool.workers[worker.workerId] = worker
 			pool.queue <- worker
 			pool.startingWorkers[worker.workerId] = worker // add to starting map
-			pool.lock.Unlock()
+			conf, err = ReadAzureConfig()
+			if err != nil {
+				log.Fatalf(err.Error())
+			}
 
 			go pool.CreateInstance(worker)
 		}
 	} else {
 		delNum := 0 - newNum
 		for i := 0; i < delNum; i++ { // scale down
-			pool.lock.Lock()
 			worker := <-pool.queue
 			worker.isKilled = true
 			pool.cleaningWorkers[worker.workerId] = worker // add to cleaning map
-			pool.lock.Unlock()
 			delete(pool.workers, worker.workerId)
 		}
 	}
 	return nil
 }
 
-// a lock should be held here
+// lock is held before and after calling this function
 // called when target has been changed
 func (pool *WorkerPool) updateCluster(worker *Worker, evictedFrom int) bool {
 	if evictedFrom == Cleaning {

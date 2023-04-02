@@ -39,11 +39,10 @@ func backtoIP4(ipInt int64) string {
 }
 
 func createVM(worker *Worker) *AzureConfig {
-	var conf *AzureConfig
-	if conf, err = ReadAzureConfig(); err != nil {
-		log.Fatalf("Read to azure.json file failed\n")
-	}
-
+	vmName := worker.workerId
+	diskName := "ol-boss_OsDisk_1_58ab03cfbf114ad58532c893535a70ec"
+	vnetName := "ol-boss-vnet"
+	snapshotName := "ol-boss-snapshot"
 	conn, err := connectionAzure()
 	if err != nil {
 		log.Fatalf("cannot connect to Azure:%+v", err)
@@ -56,17 +55,12 @@ func createVM(worker *Worker) *AzureConfig {
 		log.Fatalf("cannot create resource group:%+v", err)
 	}
 	log.Printf("Created resource group: %s", *resourceGroup.ID)
-	conf.Resource_groups.Rgroup[0].Resource = *resourceGroup
 
-	vmName := worker.workerId
-	diskName := "ol-boss_OsDisk_1_58ab03cfbf114ad58532c893535a70ec"
-	vnetName := "ol-boss-vnet"
-	snapshotName := "ol-boss-snapshot"
 	newDiskName := vmName + "-disk"
 	subnetName := vmName + "-subnet"
 	nsgName := vmName + "-nsg"
 	nicName := vmName + "-nic"
-	// publicIPName := vmName + "-public-ip"
+	//publicIPName := vmName + "-public-ip"
 
 	// create snapshot
 	disk, err := getDisk(ctx, conn, diskName)
@@ -75,11 +69,13 @@ func createVM(worker *Worker) *AzureConfig {
 	}
 	log.Println("Fetched disk:", *disk.ID)
 
+	worker.pool.lock.Lock()
 	snapshot, err := createSnapshot(ctx, conn, *disk.ID, snapshotName)
 	if err != nil {
 		log.Fatal(err)
 	}
 	log.Println("Created snapshot:", *snapshot.ID)
+	worker.pool.lock.Unlock()
 
 	new_disk, err := createDisk(ctx, conn, *snapshot.ID, newDiskName)
 	if err != nil {
@@ -135,6 +131,7 @@ func createVM(worker *Worker) *AzureConfig {
 	new_vm.Net_ifc = *netWorkInterface
 
 	networkInterfaceID := netWorkInterface.ID
+	worker.workerIp = *netWorkInterface.Properties.IPConfigurations[0].Properties.PrivateIPAddress
 
 	// create virtual machine
 
@@ -142,12 +139,14 @@ func createVM(worker *Worker) *AzureConfig {
 	if err != nil {
 		log.Fatalf("cannot create virual machine:%+v", err)
 	}
-	log.Printf("Created network virual machine: %s", *virtualMachine.ID)
+	log.Printf("Created new virual machine: %s", *virtualMachine.ID)
 
 	log.Println("Virtual machine created successfully")
 	new_vm.Vm = *virtualMachine
 	new_vm.Status = "Running"
 
+	worker.pool.lock.Lock()
+	conf.Resource_groups.Rgroup[0].Resource = *resourceGroup
 	rg := &conf.Resource_groups.Rgroup[0]
 	rg.Vms = append(rg.Vms, *new_vm)
 	conf.Resource_groups.Numrgroup = 1
@@ -156,6 +155,7 @@ func createVM(worker *Worker) *AzureConfig {
 	if err := WriteAzureConfig(conf); err != nil {
 		log.Fatalf("write to azure.json file failed:%s", err)
 	}
+	worker.pool.lock.Unlock()
 
 	return conf
 }
@@ -168,7 +168,7 @@ func cleanupVM(worker *AzureWorker) {
 	ctx := context.Background()
 
 	log.Println("start deleting virtual machine...")
-	err = deleteVirtualMachine(ctx, conn, worker.vmName)
+	err = deleteVirtualMachine(ctx, conn, worker.workerId)
 	if err != nil {
 		log.Fatalf("cannot delete virtual machine:%+v", err)
 	}
@@ -269,7 +269,7 @@ func getVirtualNetwork(ctx context.Context, cred azcore.TokenCredential, vnetNam
 	return &resp.VirtualNetwork, nil
 }
 
-func createVirtualNetwork(ctx context.Context, cred azcore.TokenCredential, vnetName string, subnetName string) (*armnetwork.VirtualNetwork, error) {
+func createVirtualNetwork(ctx context.Context, cred azcore.TokenCredential, subnetName string, vnetName string) (*armnetwork.VirtualNetwork, error) {
 	vnetClient, err := armnetwork.NewVirtualNetworksClient(subscriptionId, cred, nil)
 	if err != nil {
 		return nil, err

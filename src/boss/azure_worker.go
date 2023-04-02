@@ -21,7 +21,6 @@ type AzureWorker struct {
 	parentWorker *Worker
 	workerId     string
 	configPosit  int
-	vmName       string
 	diskName     string
 	vnetName     string
 	subnetName   string
@@ -79,6 +78,7 @@ func (pool *AzureWorkerPool) NewWorker(nextId int) *Worker {
 		workerId:       workerId,
 		workerIp:       "",
 		WorkerPlatform: AzureWorker{},
+		pool:           pool.parentPool,
 	}
 }
 
@@ -87,30 +87,23 @@ func (pool *AzureWorkerPool) CreateInstance(worker *Worker) {
 	log.Printf("creating an azure worker\n")
 	conf := AzureCreateVM(worker)
 	var private string
-	var public string
 
+	pool.parentPool.lock.Lock()
 	vmNum := conf.Resource_groups.Rgroup[0].Numvm
-	private = *conf.Resource_groups.Rgroup[0].Vms[vmNum-1].Net_ifc.Properties.IPConfigurations[0].Properties.PrivateIPAddress
-	publicWrap := conf.Resource_groups.Rgroup[0].Vms[vmNum-1].Net_ifc.Properties.IPConfigurations[0].Properties.PublicIPAddress
+	private = worker.workerIp
 	newDiskName := worker.workerId + "-disk"
 	newNicName := worker.workerId + "-nic"
 	newNsgName := worker.workerId + "nsg"
 	subnetName := worker.workerId + "subnet"
 	vnetName := "ol-boss-vnet"
 	publicIPName := ""
-
-	if publicWrap == nil {
-		public = ""
-	} else {
-		public = *publicWrap.Properties.IPAddress
-	}
+	public := ""
 
 	azworker := &AzureWorker{
 		pool:         pool,
 		parentWorker: worker,
-		workerId:     *conf.Resource_groups.Rgroup[0].Vms[vmNum-1].Vm.Name,
+		workerId:     worker.workerId,
 		configPosit:  vmNum - 1,
-		vmName:       worker.workerId,
 		diskName:     newDiskName,
 		vnetName:     vnetName,
 		nicName:      newNicName,
@@ -128,12 +121,15 @@ func (pool *AzureWorkerPool) CreateInstance(worker *Worker) {
 	worker.workerId = azworker.workerId
 	worker.workerIp = azworker.publicAddr
 	worker.WorkerPlatform = azworker
+	pool.parentPool.lock.Unlock()
 
 	// start worker
 	azworker.startWorker()
 
+	pool.parentPool.lock.Lock()
 	delete(pool.parentPool.startingWorkers, worker.workerId)
 	pool.parentPool.runningWorkers[worker.workerId] = worker
+	pool.parentPool.lock.Unlock()
 }
 
 func (worker *AzureWorker) startWorker() {
@@ -163,10 +159,7 @@ func (worker *AzureWorker) startWorker() {
 	}
 }
 
-func (pool *AzureWorkerPool) DeleteInstance(generalworker *Worker) {
-	worker := (*pool.workers)[generalworker.workerId]
-
-	log.Printf("Closing worker: %s; vm: %s\n", worker.workerId, worker.vmName)
+func (worker *AzureWorker) killWorker() {
 	cwd, err := os.Getwd()
 	if err != nil {
 		panic(err)
@@ -193,9 +186,19 @@ func (pool *AzureWorkerPool) DeleteInstance(generalworker *Worker) {
 		}
 		time.Sleep(5 * time.Second)
 	}
+}
+
+func (pool *AzureWorkerPool) DeleteInstance(generalworker *Worker) {
+	worker := (*pool.workers)[generalworker.workerId]
+	log.Printf("Killing worker: %s", worker.workerId)
+
+	worker.killWorker()
+
+	pool.parentPool.lock.Lock()
 	delete(pool.parentPool.cleaningWorkers, generalworker.workerId)
-	// call updateCluster() here
 	needRestart := pool.parentPool.updateCluster(generalworker, Cleaning)
+	pool.parentPool.lock.Unlock()
+
 	if needRestart {
 		worker.startWorker()
 		return
@@ -204,6 +207,8 @@ func (pool *AzureWorkerPool) DeleteInstance(generalworker *Worker) {
 	// delete the vm
 	log.Printf("Try to delete the vm")
 	cleanupVM(worker)
+
+	pool.parentPool.lock.Lock()
 	// shrink length
 	conf, _ := ReadAzureConfig()
 	conf.Resource_groups.Rgroup[0].Numvm -= 1
@@ -229,6 +234,7 @@ func (pool *AzureWorkerPool) DeleteInstance(generalworker *Worker) {
 	delete(pool.parentPool.destroyingWorkers, generalworker.workerId) // delete from the map
 	// call updateCluster here
 	pool.parentPool.updateCluster(generalworker, Destroying)
+	pool.parentPool.lock.Unlock()
 }
 
 func (pool *AzureWorkerPool) Size() int {

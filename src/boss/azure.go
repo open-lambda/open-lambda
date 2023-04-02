@@ -24,6 +24,7 @@ var containerName string
 var err error
 var containerClient azblob.ContainerClient
 var subscriptionId string
+var conf *AzureConfig
 
 func Create(contents string) {
 	url := "https://openlambda.blob.core.windows.net/" //replace <StorageAccountName> with your Azure storage account name
@@ -118,11 +119,7 @@ func AzureCreateVM(worker *Worker) *AzureConfig {
 	if len(subscriptionId) == 0 {
 		log.Fatal("AZURE_SUBSCRIPTION_ID is not set.")
 	}
-
-	// TODO: generate vmName and subnet Addr automatically
 	return createVM(worker)
-	// TODO: copy the snapshot to the new VM
-	//createSnapshotImage()
 }
 
 func AzureMain(contents string) {
