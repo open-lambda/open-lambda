@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"log"
 	"net"
-	"os"
 	"strconv"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
@@ -16,17 +15,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 )
-
-var vmName string
-var diskName string
-var newDiskName string
-var vnetName string
-var subnetName string
-var nsgName string
-var nicName string
-var publicIPName string
-var imageName string
-var snapshotName string
 
 const (
 	resourceGroupName = "olvm-pool"
@@ -50,7 +38,7 @@ func backtoIP4(ipInt int64) string {
 	return b0 + "." + b1 + "." + b2 + "." + b3
 }
 
-func createVM(workerId int) *AzureConfig {
+func createVM(worker *Worker) *AzureConfig {
 	var conf *AzureConfig
 	if conf, err = ReadAzureConfig(); err != nil {
 		log.Fatalf("Read to azure.json file failed\n")
@@ -70,34 +58,30 @@ func createVM(workerId int) *AzureConfig {
 	log.Printf("Created resource group: %s", *resourceGroup.ID)
 	conf.Resource_groups.Rgroup[0].Resource = *resourceGroup
 
-	num_vm := conf.Resource_groups.Rgroup[0].Numvm
-	if workerId == -1 {
-		// the default setting
-		// the vm name will just add one to the number of vms
-		vmName += strconv.Itoa(num_vm + 1)
-	} else {
-		vmName += strconv.Itoa(workerId)
-	}
-	newDiskName = vmName + "-disk"
-	subnetName = vmName + "-subnet"
-	nsgName = vmName + "-nsg"
-	nicName = vmName + "-nic"
-	publicIPName = vmName + "-public-ip"
+	vmName := worker.workerId
+	diskName := "ol-boss_OsDisk_1_58ab03cfbf114ad58532c893535a70ec"
+	vnetName := "ol-boss-vnet"
+	snapshotName := "ol-boss-snapshot"
+	newDiskName := vmName + "-disk"
+	subnetName := vmName + "-subnet"
+	nsgName := vmName + "-nsg"
+	nicName := vmName + "-nic"
+	// publicIPName := vmName + "-public-ip"
 
 	// create snapshot
-	disk, err := getDisk(ctx, conn)
+	disk, err := getDisk(ctx, conn, diskName)
 	if err != nil {
 		log.Fatal(err)
 	}
 	log.Println("Fetched disk:", *disk.ID)
 
-	snapshot, err := createSnapshot(ctx, conn, *disk.ID)
+	snapshot, err := createSnapshot(ctx, conn, *disk.ID, snapshotName)
 	if err != nil {
 		log.Fatal(err)
 	}
 	log.Println("Created snapshot:", *snapshot.ID)
 
-	new_disk, err := createDisk(ctx, conn, *snapshot.ID)
+	new_disk, err := createDisk(ctx, conn, *snapshot.ID, newDiskName)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -105,7 +89,7 @@ func createVM(workerId int) *AzureConfig {
 
 	new_vm := new(vmStatus)
 	// get network
-	virtualNetwork, err := getVirtualNetwork(ctx, conn)
+	virtualNetwork, err := getVirtualNetwork(ctx, conn, vnetName)
 	if err != nil {
 		log.Fatalf("cannot get virtual network:%+v", err)
 	}
@@ -119,7 +103,7 @@ func createVM(workerId int) *AzureConfig {
 	lastSubnet64 += 256
 	newSubnetIP := backtoIP4(lastSubnet64)
 
-	subnet, err := createSubnets(ctx, conn, newSubnetIP)
+	subnet, err := createSubnets(ctx, conn, newSubnetIP, vnetName, subnetName)
 	if err != nil {
 		log.Fatalf("cannot create subnet:%+v", err)
 	}
@@ -136,14 +120,14 @@ func createVM(workerId int) *AzureConfig {
 	*/
 
 	// network security group
-	nsg, err := createNetworkSecurityGroup(ctx, conn)
+	nsg, err := createNetworkSecurityGroup(ctx, conn, nsgName)
 	if err != nil {
 		log.Fatalf("cannot create network security group:%+v", err)
 	}
 	log.Printf("Created network security group: %s", *nsg.ID)
 	new_vm.Security_group = *nsg
 
-	netWorkInterface, err := createNetWorkInterfaceWithoutIp(ctx, conn, *subnet.ID, *nsg.ID)
+	netWorkInterface, err := createNetWorkInterfaceWithoutIp(ctx, conn, *subnet.ID, *nsg.ID, nicName)
 	if err != nil {
 		log.Fatalf("cannot create network interface:%+v", err)
 	}
@@ -154,7 +138,7 @@ func createVM(workerId int) *AzureConfig {
 
 	// create virtual machine
 
-	virtualMachine, err := createVirtualMachine(ctx, conn, *networkInterfaceID, *new_disk.ID)
+	virtualMachine, err := createVirtualMachine(ctx, conn, *networkInterfaceID, *new_disk.ID, newDiskName, vmName)
 	if err != nil {
 		log.Fatalf("cannot create virual machine:%+v", err)
 	}
@@ -271,7 +255,7 @@ func deleteResourceGroup(ctx context.Context, cred azcore.TokenCredential) error
 	return nil
 }
 
-func getVirtualNetwork(ctx context.Context, cred azcore.TokenCredential) (*armnetwork.VirtualNetwork, error) {
+func getVirtualNetwork(ctx context.Context, cred azcore.TokenCredential, vnetName string) (*armnetwork.VirtualNetwork, error) {
 	vnetClient, err := armnetwork.NewVirtualNetworksClient(subscriptionId, cred, nil)
 	if err != nil {
 		return nil, err
@@ -285,7 +269,7 @@ func getVirtualNetwork(ctx context.Context, cred azcore.TokenCredential) (*armne
 	return &resp.VirtualNetwork, nil
 }
 
-func createVirtualNetwork(ctx context.Context, cred azcore.TokenCredential) (*armnetwork.VirtualNetwork, error) {
+func createVirtualNetwork(ctx context.Context, cred azcore.TokenCredential, vnetName string, subnetName string) (*armnetwork.VirtualNetwork, error) {
 	vnetClient, err := armnetwork.NewVirtualNetworksClient(subscriptionId, cred, nil)
 	if err != nil {
 		return nil, err
@@ -342,7 +326,7 @@ func deleteVirtualNetWork(ctx context.Context, cred azcore.TokenCredential, vnet
 	return nil
 }
 
-func createSubnets(ctx context.Context, cred azcore.TokenCredential, addr string) (*armnetwork.Subnet, error) {
+func createSubnets(ctx context.Context, cred azcore.TokenCredential, addr string, vnetName string, subnetName string) (*armnetwork.Subnet, error) {
 	subnetClient, err := armnetwork.NewSubnetsClient(subscriptionId, cred, nil)
 	if err != nil {
 		return nil, err
@@ -386,7 +370,7 @@ func deleteSubnets(ctx context.Context, cred azcore.TokenCredential, vnet string
 	return nil
 }
 
-func createNetworkSecurityGroup(ctx context.Context, cred azcore.TokenCredential) (*armnetwork.SecurityGroup, error) {
+func createNetworkSecurityGroup(ctx context.Context, cred azcore.TokenCredential, nsgName string) (*armnetwork.SecurityGroup, error) {
 	nsgClient, err := armnetwork.NewSecurityGroupsClient(subscriptionId, cred, nil)
 	if err != nil {
 		return nil, err
@@ -461,7 +445,7 @@ func deleteNetworkSecurityGroup(ctx context.Context, cred azcore.TokenCredential
 	return nil
 }
 
-func createPublicIP(ctx context.Context, cred azcore.TokenCredential) (*armnetwork.PublicIPAddress, error) {
+func createPublicIP(ctx context.Context, cred azcore.TokenCredential, publicIPName string) (*armnetwork.PublicIPAddress, error) {
 	publicIPAddressClient, err := armnetwork.NewPublicIPAddressesClient(subscriptionId, cred, nil)
 	if err != nil {
 		return nil, err
@@ -504,7 +488,7 @@ func deletePublicIP(ctx context.Context, cred azcore.TokenCredential, ipName str
 	return nil
 }
 
-func createNetWorkInterfaceWithoutIp(ctx context.Context, cred azcore.TokenCredential, subnetID string, networkSecurityGroupID string) (*armnetwork.Interface, error) {
+func createNetWorkInterfaceWithoutIp(ctx context.Context, cred azcore.TokenCredential, subnetID string, networkSecurityGroupID string, nicName string) (*armnetwork.Interface, error) {
 	nicClient, err := armnetwork.NewInterfacesClient(subscriptionId, cred, nil)
 	if err != nil {
 		return nil, err
@@ -544,7 +528,7 @@ func createNetWorkInterfaceWithoutIp(ctx context.Context, cred azcore.TokenCrede
 	return &resp.Interface, err
 }
 
-func createNetWorkInterface(ctx context.Context, cred azcore.TokenCredential, subnetID string, publicIPID string, networkSecurityGroupID string) (*armnetwork.Interface, error) {
+func createNetWorkInterface(ctx context.Context, cred azcore.TokenCredential, subnetID string, publicIPID string, networkSecurityGroupID string, nicName string) (*armnetwork.Interface, error) {
 	nicClient, err := armnetwork.NewInterfacesClient(subscriptionId, cred, nil)
 	if err != nil {
 		return nil, err
@@ -606,7 +590,7 @@ func deleteNetWorkInterface(ctx context.Context, cred azcore.TokenCredential, ni
 	return nil
 }
 
-func createVirtualMachine(ctx context.Context, cred azcore.TokenCredential, networkInterfaceID string, new_diskID string) (*armcompute.VirtualMachine, error) {
+func createVirtualMachine(ctx context.Context, cred azcore.TokenCredential, networkInterfaceID string, new_diskID string, newDiskName string, vmName string) (*armcompute.VirtualMachine, error) {
 	vmClient, err := armcompute.NewVirtualMachinesClient(subscriptionId, cred, nil)
 	if err != nil {
 		return nil, err
@@ -718,42 +702,7 @@ func deleteVirtualMachine(ctx context.Context, cred azcore.TokenCredential, name
 	return nil
 }
 
-func createSnapshotImage() {
-	subscriptionId = os.Getenv("AZURE_SUBSCRIPTION_ID")
-	if len(subscriptionId) == 0 {
-		log.Fatal("AZURE_SUBSCRIPTION_ID is not set.")
-	}
-
-	TenantID := os.Getenv("AZURE_TENANT_ID")
-	if len(TenantID) == 0 {
-		log.Fatal("AZURE_TENANT_ID is not set.")
-	}
-
-	cred, err := azidentity.NewDefaultAzureCredential(nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-	ctx := context.Background()
-
-	resourceGroup, err := createResourceGroup(ctx, cred)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Println("resources group:", *resourceGroup.ID)
-
-	disk, err := getDisk(ctx, cred)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	snapshot, err := createSnapshot(ctx, cred, *disk.ID)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Println("snapshot:", *snapshot.ID)
-}
-
-func getDisk(ctx context.Context, cred azcore.TokenCredential) (*armcompute.Disk, error) {
+func getDisk(ctx context.Context, cred azcore.TokenCredential, diskName string) (*armcompute.Disk, error) {
 	diskClient, err := armcompute.NewDisksClient(subscriptionId, cred, nil)
 	if err != nil {
 		return nil, err
@@ -773,7 +722,7 @@ func getDisk(ctx context.Context, cred azcore.TokenCredential) (*armcompute.Disk
 	return &resp.Disk, nil
 }
 
-func createDisk(ctx context.Context, cred azcore.TokenCredential, source_disk string) (*armcompute.Disk, error) {
+func createDisk(ctx context.Context, cred azcore.TokenCredential, source_disk string, newDiskName string) (*armcompute.Disk, error) {
 	disksClient, err := armcompute.NewDisksClient(subscriptionId, cred, nil)
 	if err != nil {
 		return nil, err
@@ -828,7 +777,7 @@ func deleteDisk(ctx context.Context, cred azcore.TokenCredential, disk string) e
 	return nil
 }
 
-func createSnapshot(ctx context.Context, cred azcore.TokenCredential, diskID string) (*armcompute.Snapshot, error) {
+func createSnapshot(ctx context.Context, cred azcore.TokenCredential, diskID string, snapshotName string) (*armcompute.Snapshot, error) {
 	snapshotClient, err := armcompute.NewSnapshotsClient(subscriptionId, cred, nil)
 	if err != nil {
 		return nil, err

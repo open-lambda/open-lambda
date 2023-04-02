@@ -6,19 +6,19 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
-	"regexp"
-	"strconv"
 	"time"
 )
 
 type AzureWorkerPool struct {
-	workerNum int
-	workers   *map[string]*AzureWorker
-	nextId    int
+	workerNum  int
+	workers    *map[string]*AzureWorker
+	nextId     int
+	parentPool *WorkerPool
 }
 
 type AzureWorker struct {
 	pool         *AzureWorkerPool
+	parentWorker *Worker
 	workerId     string
 	configPosit  int
 	vmName       string
@@ -57,12 +57,18 @@ func NewAzureWorkerPool() (*WorkerPool, error) {
 		worker_i.workerId = *conf.Resource_groups.Rgroup[0].Vms[i].Vm.Name
 		worker_i.configPosit = num
 	}
-	return &WorkerPool{
+	parent := &WorkerPool{
 		nextId:             1,
 		workers:            map[string]*Worker{},
 		queue:              make(chan *Worker, Conf.Worker_Cap),
 		WorkerPoolPlatform: pool,
-	}, nil
+		startingWorkers:    make(map[string]*Worker),
+		runningWorkers:     make(map[string]*Worker),
+		cleaningWorkers:    make(map[string]*Worker),
+		destroyingWorkers:  make(map[string]*Worker),
+	}
+	pool.parentPool = parent
+	return parent, nil
 }
 
 // Is nextId here useful? I store nextId in the pool
@@ -79,16 +85,20 @@ func (pool *AzureWorkerPool) NewWorker(nextId int) *Worker {
 // TODO: make AzureCreateVM multiple-threaded
 func (pool *AzureWorkerPool) CreateInstance(worker *Worker) {
 	log.Printf("creating an azure worker\n")
-	conf := AzureCreateVM(pool.nextId)
+	conf := AzureCreateVM(worker)
 	var private string
 	var public string
 
 	vmNum := conf.Resource_groups.Rgroup[0].Numvm
 	private = *conf.Resource_groups.Rgroup[0].Vms[vmNum-1].Net_ifc.Properties.IPConfigurations[0].Properties.PrivateIPAddress
 	publicWrap := conf.Resource_groups.Rgroup[0].Vms[vmNum-1].Net_ifc.Properties.IPConfigurations[0].Properties.PublicIPAddress
-	newDiskName = fmt.Sprintf("ol-worker-%d-disk", pool.nextId)
-	newNicName := fmt.Sprintf("ol-worker-%d-nic", pool.nextId)
-	newNsgName := fmt.Sprintf("ol-worker-%d-nsg", pool.nextId)
+	newDiskName := worker.workerId + "-disk"
+	newNicName := worker.workerId + "-nic"
+	newNsgName := worker.workerId + "nsg"
+	subnetName := worker.workerId + "subnet"
+	vnetName := "ol-boss-vnet"
+	publicIPName := ""
+
 	if publicWrap == nil {
 		public = ""
 	} else {
@@ -97,9 +107,10 @@ func (pool *AzureWorkerPool) CreateInstance(worker *Worker) {
 
 	azworker := &AzureWorker{
 		pool:         pool,
+		parentWorker: worker,
 		workerId:     *conf.Resource_groups.Rgroup[0].Vms[vmNum-1].Vm.Name,
 		configPosit:  vmNum - 1,
-		vmName:       vmName,
+		vmName:       worker.workerId,
 		diskName:     newDiskName,
 		vnetName:     vnetName,
 		nicName:      newNicName,
@@ -120,6 +131,9 @@ func (pool *AzureWorkerPool) CreateInstance(worker *Worker) {
 
 	// start worker
 	azworker.startWorker()
+
+	delete(pool.parentPool.startingWorkers, worker.workerId)
+	pool.parentPool.runningWorkers[worker.workerId] = worker
 }
 
 func (worker *AzureWorker) startWorker() {
@@ -179,11 +193,17 @@ func (pool *AzureWorkerPool) DeleteInstance(generalworker *Worker) {
 		}
 		time.Sleep(5 * time.Second)
 	}
+	delete(pool.parentPool.cleaningWorkers, generalworker.workerId)
+	// call updateCluster() here
+	needRestart := pool.parentPool.updateCluster(generalworker, Cleaning)
+	if needRestart {
+		worker.startWorker()
+		return
+	}
+
 	// delete the vm
 	log.Printf("Try to delete the vm")
 	cleanupVM(worker)
-	// evict the specified worker in the pool
-	//delete(*worker.pool.workers, worker.workerId)
 	// shrink length
 	conf, _ := ReadAzureConfig()
 	conf.Resource_groups.Rgroup[0].Numvm -= 1
@@ -196,21 +216,23 @@ func (pool *AzureWorkerPool) DeleteInstance(generalworker *Worker) {
 		(*worker.pool.workers)[*conf.Resource_groups.Rgroup[0].Vms[worker.configPosit].Vm.Name].configPosit = worker.configPosit
 	}
 	// for next create worker's name
-	re := regexp.MustCompile("[0-9]+")
-	intId := re.FindAllString(worker.workerId, -1)
-	nextId, err := strconv.Atoi(intId[0])
-	if err != nil {
-		panic(err)
-	}
-	worker.pool.nextId = nextId
+	// re := regexp.MustCompile("[0-9]+")
+	// intId := re.FindAllString(worker.workerId, -1)
+	// nextId, err := strconv.Atoi(intId[0])
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// worker.pool.nextId = nextId
 	worker.pool.workerNum -= 1
 	WriteAzureConfig(conf)
 	log.Printf("Deleted the worker and worker VM successfully\n")
+	delete(pool.parentPool.destroyingWorkers, generalworker.workerId) // delete from the map
+	// call updateCluster here
+	pool.parentPool.updateCluster(generalworker, Destroying)
 }
 
 func (pool *AzureWorkerPool) Size() int {
-	conf, _ := ReadAzureConfig()
-	return conf.Resource_groups.Rgroup[0].Numvm
+	return len(pool.parentPool.startingWorkers) + len(pool.parentPool.runningWorkers)
 }
 
 func (pool *AzureWorkerPool) Status() []string {

@@ -4,14 +4,28 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 	"sync/atomic"
 )
 
+const (
+	Starting = iota
+	Running
+	Cleaning
+	Destroying
+)
+
 type WorkerPool struct {
-	nextId  int
-	workers map[string]*Worker //list of all workers
-	queue   chan *Worker       //queue of all workers
-	WorkerPoolPlatform //platform specific attributes and functions
+	nextId             int
+	workers            map[string]*Worker //list of all workers
+	queue              chan *Worker       //queue of all workers
+	WorkerPoolPlatform                    //platform specific attributes and functions
+	startingWorkers    map[string]*Worker
+	runningWorkers     map[string]*Worker
+	cleaningWorkers    map[string]*Worker
+	destroyingWorkers  map[string]*Worker
+	lock               sync.Mutex
+	target             int
 }
 
 type WorkerPoolPlatform interface {
@@ -24,8 +38,8 @@ type Worker struct {
 	workerId       string
 	workerIp       string
 	numTask        int32 //count of outstanding tasks
-	isKilled	   bool //true if to be killed
-	WorkerPlatform //platform specific attributes and functions
+	isKilled       bool  //true if to be killed
+	WorkerPlatform       //platform specific attributes and functions
 }
 
 type WorkerPlatform interface {
@@ -47,23 +61,61 @@ func (pool *WorkerPool) Size() int {
 // FIXEME: sometimes the azure part might fail due to cannot use the snapshot at the same time. But mostly it won't fail.
 
 func (pool *WorkerPool) Scale(target int) error {
-	for pool.Size() < target { // scale up
-		nextId := pool.nextId
-		pool.nextId += 1
-		
-		worker := pool.NewWorker(nextId)
-	
-		pool.workers[worker.workerId] = worker
-		pool.queue <- worker
-	
-		go pool.CreateInstance(worker)
-	}
-	for pool.Size() > target { // scale down
-		worker := <-pool.queue
-		worker.isKilled = true
-		delete(pool.workers, worker.workerId)
+	newNum := target - pool.Size()
+	pool.target = target
+	if newNum > 0 {
+		scaleSize := newNum - len(pool.cleaningWorkers) - len(pool.destroyingWorkers)
+		for i := 0; i < scaleSize; i++ { // scale up
+			pool.lock.Lock()
+			nextId := pool.nextId
+			pool.nextId += 1
+			worker := pool.NewWorker(nextId)
+			pool.workers[worker.workerId] = worker
+			pool.queue <- worker
+			pool.startingWorkers[worker.workerId] = worker // add to starting map
+			pool.lock.Unlock()
+
+			go pool.CreateInstance(worker)
+		}
+	} else {
+		delNum := 0 - newNum
+		for i := 0; i < delNum; i++ { // scale down
+			pool.lock.Lock()
+			worker := <-pool.queue
+			worker.isKilled = true
+			pool.cleaningWorkers[worker.workerId] = worker // add to cleaning map
+			pool.lock.Unlock()
+			delete(pool.workers, worker.workerId)
+		}
 	}
 	return nil
+}
+
+// a lock should be held here
+// called when target has been changed
+func (pool *WorkerPool) updateCluster(worker *Worker, evictedFrom int) bool {
+	if evictedFrom == Cleaning {
+		// check the target and running/starting
+		if pool.Size() < pool.target {
+			pool.startingWorkers[worker.workerId] = worker
+			return true
+		}
+		return false
+	}
+	if evictedFrom == Destroying {
+		if pool.Size() < pool.target {
+			// start a new worker
+			nextId := pool.nextId
+			pool.nextId += 1
+			worker := pool.NewWorker(nextId)
+			pool.workers[worker.workerId] = worker
+			pool.queue <- worker
+			pool.startingWorkers[worker.workerId] = worker
+			return true
+		}
+		return false
+	}
+	return false
 }
 
 //run lambda function

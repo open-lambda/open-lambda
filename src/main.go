@@ -603,20 +603,6 @@ func cleanup(ctx *cli.Context) error {
 	return nil
 }
 
-func newVM(ctx *cli.Context) error {
-	platform := ctx.String("platform")
-
-	if platform == "gcp" {
-		// TODO: complete the gcp part
-	} else if platform == "azure" {
-		boss.AzureCreateVM(-1)
-	} else {
-		fmt.Printf("platform not recognized, pleaze try again.\n")
-	}
-
-	return nil
-}
-
 // main runs the admin tool
 func main() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
@@ -705,19 +691,6 @@ OPTIONS:
 				},
 			},
 			Action: runBoss,
-		},
-		cli.Command{
-			Name:        "new-vm",
-			Usage:       "Create a new VM",
-			UsageText:   "ol new-vm [--platform=NAME]",
-			Description: "Create a new VM that replicates the boss",
-			Flags: []cli.Flag{
-				cli.StringFlag{
-					Name:  "platform, p",
-					Usage: "Select a platform",
-				},
-			},
-			Action: newVM,
 		},
 		cli.Command{
 			Name:        "status",
