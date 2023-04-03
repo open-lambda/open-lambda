@@ -89,12 +89,13 @@ func (pool *AzureWorkerPool) CreateInstance(worker *Worker) {
 	var private string
 
 	pool.parentPool.lock.Lock()
+	worker.numTask = 1
 	vmNum := conf.Resource_groups.Rgroup[0].Numvm
 	private = worker.workerIp
 	newDiskName := worker.workerId + "-disk"
 	newNicName := worker.workerId + "-nic"
-	newNsgName := worker.workerId + "nsg"
-	subnetName := worker.workerId + "subnet"
+	newNsgName := worker.workerId + "-nsg"
+	subnetName := worker.workerId + "-subnet"
 	vnetName := "ol-boss-vnet"
 	publicIPName := ""
 	public := ""
@@ -133,6 +134,7 @@ func (pool *AzureWorkerPool) CreateInstance(worker *Worker) {
 }
 
 func (worker *AzureWorker) startWorker() {
+	worker.parentWorker.numTask = 1
 	cwd, err := os.Getwd()
 	if err != nil {
 		panic(err)
@@ -157,6 +159,7 @@ func (worker *AzureWorker) startWorker() {
 		}
 		time.Sleep(5 * time.Second)
 	}
+	worker.parentWorker.numTask = 0
 }
 
 func (worker *AzureWorker) killWorker() {
@@ -216,18 +219,11 @@ func (pool *AzureWorkerPool) DeleteInstance(generalworker *Worker) {
 	conf.Resource_groups.Rgroup[0].Vms[worker.configPosit] = conf.Resource_groups.Rgroup[0].Vms[len(conf.Resource_groups.Rgroup[0].Vms)-1]
 	conf.Resource_groups.Rgroup[0].Vms = conf.Resource_groups.Rgroup[0].Vms[:conf.Resource_groups.Rgroup[0].Numvm]
 	//fmt.Println(*conf.Resource_groups.Rgroup[0].Vms[worker.configPosit].Vm.Name)
-	if len(conf.Resource_groups.Rgroup[0].Vms) > 0 {
+	if len(conf.Resource_groups.Rgroup[0].Vms) > 0 && worker.configPosit < conf.Resource_groups.Rgroup[0].Numvm {
 		// if all workers has been deleted, don't do this
+		// if the worker to be deleted is at the end of the list, don't do this
 		(*worker.pool.workers)[*conf.Resource_groups.Rgroup[0].Vms[worker.configPosit].Vm.Name].configPosit = worker.configPosit
 	}
-	// for next create worker's name
-	// re := regexp.MustCompile("[0-9]+")
-	// intId := re.FindAllString(worker.workerId, -1)
-	// nextId, err := strconv.Atoi(intId[0])
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// worker.pool.nextId = nextId
 	worker.pool.workerNum -= 1
 	WriteAzureConfig(conf)
 	log.Printf("Deleted the worker and worker VM successfully\n")

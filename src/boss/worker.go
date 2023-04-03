@@ -1,3 +1,4 @@
+// BUG: cannot restart the worker, worker process xxxx does not a appear to be running, check worker.out
 package boss
 
 import (
@@ -7,6 +8,7 @@ import (
 	"net/http"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 const (
@@ -51,7 +53,7 @@ type WorkerPlatform interface {
 
 //return number of workers in the pool
 func (pool *WorkerPool) Size() int {
-	return len(pool.workers)
+	return len(pool.runningWorkers) + len(pool.startingWorkers)
 }
 
 //add a new worker to the pool
@@ -85,16 +87,23 @@ func (pool *WorkerPool) Scale(target int) error {
 		delNum := 0 - newNum
 		for i := 0; i < delNum; i++ { // scale down
 			worker := <-pool.queue
-			worker.isKilled = true
-			pool.cleaningWorkers[worker.workerId] = worker // add to cleaning map
-			delete(pool.workers, worker.workerId)
+			if worker.numTask == 0 {
+				worker.isKilled = true
+				pool.cleaningWorkers[worker.workerId] = worker // add to cleaning map
+				delete(pool.workers, worker.workerId)
+				go pool.DeleteInstance(worker)
+			} else {
+				pool.queue <- worker // put back to the queue
+				i -= 1               // not deleted, i should not change
+				time.Sleep(5 * time.Second)
+			}
 		}
 	}
 	return nil
 }
 
 // lock is held before and after calling this function
-// called when target has been changed
+// called when worker is been evicted from cleaning or destroying map
 func (pool *WorkerPool) updateCluster(worker *Worker, evictedFrom int) bool {
 	if evictedFrom == Cleaning {
 		// check the target and running/starting
@@ -123,7 +132,7 @@ func (pool *WorkerPool) updateCluster(worker *Worker, evictedFrom int) bool {
 //run lambda function
 func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 	worker := <-pool.queue
-	worker.numTask += 1
+	atomic.AddInt32(&worker.numTask, 1)
 	pool.queue <- worker
 	if Conf.Platform == "mock" {
 		s := fmt.Sprintf("hello from %s\n", worker.workerId)
@@ -135,11 +144,7 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 	} else {
 		forwardTask(w, r, worker.workerIp)
 	}
-
-	if atomic.AddInt32(&worker.numTask, -1) == 0 && worker.isKilled {
-		pool.DeleteInstance(worker)
-	}
-
+	atomic.AddInt32(&worker.numTask, -1)
 }
 
 //return wokers' id and their status (idle/busy)
@@ -153,8 +158,9 @@ func (pool *WorkerPool) Status() []map[string]string {
 	return w
 }
 
-//kill and delte all workers
+//kill and delete all workers
 func (pool *WorkerPool) Close() {
+	pool.target = 0
 	for workerId, worker := range pool.workers {
 		delete(pool.workers, workerId)
 		pool.DeleteInstance(worker)
