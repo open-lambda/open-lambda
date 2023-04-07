@@ -10,7 +10,7 @@ RUN pip3 install virtualenv requests tornado==6.1.0
 RUN mkdir /runtimes
 
 # Setup rust environment (prereq for native runtime)
-RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain nightly-2022-12-16
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain nightly-2023-04-06
 
 # Build Native Runtime in the Container
 RUN mkdir /runtimes/native

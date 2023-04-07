@@ -102,8 +102,6 @@ async fn handle_connection(stream: UnixStream) {
     let mut reader = FramedRead::new(reader, LengthDelimitedCodec::new());
     let mut writer = FramedWrite::new(writer, LengthDelimitedCodec::new());
 
-    log::debug!("Setup database connection");
-
     while let Some(res) = reader.next().await {
         let data = match res {
             Ok(data) => data,
