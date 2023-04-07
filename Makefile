@@ -20,7 +20,7 @@ else
 	BUILD_FLAGS=
 endif
 
-.PHONY: install
+.PHONY: install build
 .PHONY: test-all
 .PHONY: clean
 .PHONY: update-dependencies
@@ -71,7 +71,9 @@ container-proxy:
 ol: ${OL_GO_FILES}
 	cd ${OL_DIR} && ${GO} build -o ../ol
 
-install: ol wasm-worker
+build: ol wasm-worker container-proxy
+
+install: build
 	cp ol ${INSTALL_PREFIX}/bin/
 	cp ol-wasm ${INSTALL_PREFIX}/bin/
 
