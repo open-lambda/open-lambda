@@ -26,7 +26,7 @@ macro_rules! info {
     ($($args:tt)*) => {
         let s = format!($($args)*);
         unsafe{
-            use open_lambda::internal::log::wasm_calls;
+            use $crate::internal::log::wasm_calls;
             wasm_calls::log_info(s.as_str().as_ptr(), s.len() as u32);
         }
     }
@@ -37,7 +37,7 @@ macro_rules! debug {
     ($($args:tt)*) => {
         let s = std::format!("{}", std::format_args!($($args)*) );
         unsafe{
-            use open_lambda::internal::log::wasm_calls;
+            use $crate::internal::log::wasm_calls;
             wasm_calls::log_debug(s.as_str().as_ptr(), s.len() as u32);
         }
     }

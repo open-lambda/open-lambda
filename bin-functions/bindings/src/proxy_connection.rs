@@ -23,7 +23,7 @@ impl ProxyConnection {
         let inner = if let Some(inner) = unsafe { CONNECTION.take() } {
             inner
         } else {
-            log::debug!("Establishing connection to database proxy");
+            log::debug!("Establishing connection to container proxy");
             let stream = UnixStream::connect("/host/proxy.sock")
                 .expect("Failed to connect to container proxy");
             let codec = LengthDelimitedCodec::new();

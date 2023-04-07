@@ -21,12 +21,12 @@ async fn main() {
     let container_dir = argv.next().expect("No container directory given");
 
     simple_logging::log_to_file(
-        format!("{}/db-proxy.log", container_dir),
+        format!("{container_dir}/container-proxy.log"),
         log::LevelFilter::Info,
     )
     .unwrap();
 
-    let path = format!("{container_dir}/db-proxy.sock");
+    let path = format!("{container_dir}/proxy.sock");
     let listener = UnixListener::bind(path).unwrap();
 
     // Create pid file to notify others that the socket is bound

@@ -1,6 +1,7 @@
 use serde_json as json;
 
 use crate::internal::ipc as internal_ipc;
+use crate::log;
 use open_lambda_proxy_protocol::CallResult;
 
 pub fn host_call(
@@ -16,6 +17,8 @@ pub fn host_call(
 }
 
 pub fn function_call(func_name: &str, args: &json::Value) -> Result<Option<json::Value>, String> {
+    log::debug!("Issuing function call to '{func_name}'");
+
     let arg_string = serde_json::to_string(args).unwrap();
     let arg_data = arg_string.into_bytes();
 

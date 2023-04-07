@@ -71,8 +71,7 @@ bin-functions/target/
 bin-functions/wasm-target/
 wasm-worker/target/
 container-proxy/target
-
-lambda/runtimes/rust/target
+lambda/runtimes/native/target
 
 bench-results.csv
 bench-results.pdf
