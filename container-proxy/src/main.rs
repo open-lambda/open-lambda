@@ -61,8 +61,8 @@ async fn main() {
     }
 }
 
-async fn call_function(func_name: String, args: Vec<u8>) -> Result<Vec<u8>, String> {
-    log::debug!("Issuing internal call to {func_name}");
+async fn function_call(func_name: String, args: Vec<u8>) -> Result<Vec<u8>, String> {
+    log::debug!("Issuing function call to {func_name}");
 
     let server_addr = "localhost:5000";
     let url = format!("http://{server_addr}/run/{func_name}");
@@ -117,7 +117,7 @@ async fn handle_connection(stream: UnixStream) {
 
         let response = match msg {
             ProxyMessage::FuncCallRequest(call_data) => {
-                let result = call_function(call_data.fn_name, call_data.args.into_vec()).await;
+                let result = function_call(call_data.fn_name, call_data.args.into_vec()).await;
                 ProxyMessage::FuncCallResult(result.map(ByteBuf::from))
             }
             ProxyMessage::HostCallRequest(call_data) => {

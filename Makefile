@@ -95,7 +95,7 @@ lint-go:
 	revive -exclude src/vendor/... -config golint.toml src/...
 
 lint-python:
-	pylint scripts --ignore=build --disable=missing-docstring,multiple-imports,global-statement,invalid-name,W0511,W1510,R0801,W3101
+	pylint scripts --ignore=build --disable=missing-docstring,multiple-imports,global-statement,invalid-name,W0511,W1510,R0801,W3101,broad-exception-raised
 
 lint-functions:
 	cd bin-functions && make lint
