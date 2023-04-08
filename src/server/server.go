@@ -28,7 +28,7 @@ const (
 
 // GetPid returns process ID, useful for making sure we're talking to the expected server
 func GetPid(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Received request to %s\n", r.URL.Path)
+	//log.Printf("Received request to %s\n", r.URL.Path)
 
 	wbody := []byte(strconv.Itoa(os.Getpid()) + "\n")
 	if _, err := w.Write(wbody); err != nil {
@@ -38,7 +38,7 @@ func GetPid(w http.ResponseWriter, r *http.Request) {
 
 // Status writes "ready" to the response.
 func Status(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Received request to %s\n", r.URL.Path)
+	//log.Printf("Received request to %s\n", r.URL.Path)
 
 	if _, err := w.Write([]byte("ready\n")); err != nil {
 		log.Printf("error in Status: %v", err)
@@ -46,7 +46,7 @@ func Status(w http.ResponseWriter, r *http.Request) {
 }
 
 func Stats(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Received request to %s\n", r.URL.Path)
+	//log.Printf("Received request to %s\n", r.URL.Path)
 	snapshot := common.SnapshotStats()
 	if b, err := json.MarshalIndent(snapshot, "", "\t"); err != nil {
 		panic(err)
@@ -56,7 +56,7 @@ func Stats(w http.ResponseWriter, r *http.Request) {
 }
 
 func PprofMem(w http.ResponseWriter, r *http.Request) {
-        runtime.GC()
+    runtime.GC()
 	w.Header().Add("Content-Type", "application/octet-stream")
         if err := pprof.WriteHeapProfile(w); err != nil {
             log.Fatal("could not write memory profile: ", err)

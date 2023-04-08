@@ -486,7 +486,7 @@ dependencies = [
 [[package]]
 name = "lambda-store-client"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git?branch=benchmark#64bf68fcf2aa7936d2a406e72648a78714cb650a"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git?branch=benchmark#32782977928728941a2d30cba385f25aa812a073"
 dependencies = [
  "async-trait",
  "bincode",
@@ -510,7 +510,7 @@ dependencies = [
 [[package]]
 name = "lambda-store-protocol"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git?branch=benchmark#64bf68fcf2aa7936d2a406e72648a78714cb650a"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git?branch=benchmark#32782977928728941a2d30cba385f25aa812a073"
 dependencies = [
  "bincode",
  "rand",
@@ -522,7 +522,7 @@ dependencies = [
 [[package]]
 name = "lambda-store-utils"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git?branch=benchmark#64bf68fcf2aa7936d2a406e72648a78714cb650a"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git?branch=benchmark#32782977928728941a2d30cba385f25aa812a073"
 dependencies = [
  "async-trait",
  "bincode",
@@ -823,9 +823,9 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "0.37.9"
+version = "0.37.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3eb76a3b09109e78c52d45979fea3cd8ddaadb223531d0846bedb60e72c3e99"
+checksum = "11c63d26a2a123c50a1630342a7f394e863c02ea57d36accdd8bf10484c78811"
 dependencies = [
  "bitflags",
  "errno",
