@@ -13,12 +13,17 @@ use serde_bytes::ByteBuf;
 
 use open_lambda_proxy_protocol::ProxyMessage;
 
+mod extra;
+
 #[tokio::main]
 async fn main() {
     let mut argv = std::env::args();
     argv.next().unwrap();
 
     let container_dir = argv.next().expect("No container directory given");
+
+    #[cfg(feature="lambdastore")]
+    extra::lambdastore::set_address(argv.next().expect("No lambdastore path given"));
 
     simple_logging::log_to_file(
         format!("{container_dir}/container-proxy.log"),
@@ -119,11 +124,19 @@ async fn handle_connection(stream: UnixStream) {
                 ProxyMessage::FuncCallResult(result.map(ByteBuf::from))
             }
             ProxyMessage::HostCallRequest(call_data) => {
-                if call_data.namespace == "lambdastore" {
-                    todo!();
+                let result = if call_data.namespace == "lambdastore" {
+                    cfg_if::cfg_if! {
+                        if #[ cfg(feature="lambdastore") ] {
+                            crate::extra::lambdastore::call(&call_data.fn_name, &call_data.args).await
+                        } else {
+                            panic!("Feature `lambdastore` not enabled");
+                        }
+                    }
                 } else {
                     panic!("Unknown host call namespace: {}", call_data.namespace);
-                }
+                };
+
+                ProxyMessage::HostCallResult(result)
             }
             _ => {
                 panic!("Got unexpected message: {msg:?}");

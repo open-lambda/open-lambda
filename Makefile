@@ -4,11 +4,11 @@ GO=go
 OL_DIR=$(abspath ./src)
 OL_GO_FILES=$(shell find src/ -name '*.go')
 LAMBDA_FILES = lambda/Dockerfile lambda/Makefile lambda/spin.c lambda/runtimes/python/server.py lambda/runtimes/python/setup.py lambda/runtimes/python/ol.c lambda/runtimes/native/src/main.rs
-USE_LLVM?=1
+ENABLE_LLVM?=1
 BUILDTYPE?=debug
 INSTALL_PREFIX?=/usr/local
 
-ifeq (${USE_LLVM}, 1)
+ifeq (${ENABLE_LLVM}, 1)
 	WASM_WORKER_FLAGS=--features=llvm-backend
 else
 	WASM_WORKER_FLAGS=
@@ -31,7 +31,7 @@ endif
 .PHONY: container-proxy
 .PHONY: fmt check-fmt
 
-all: ol imgs/lambda wasm-worker wasm-functions native-functions
+all: ol imgs/lambda wasm-worker wasm-functions native-functions container-proxy
 
 wasm-worker:
 	cd wasm-worker && cargo build ${BUILD_FLAGS} ${WASM_WORKER_FLAGS}
