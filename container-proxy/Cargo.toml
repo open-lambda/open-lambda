@@ -11,12 +11,14 @@ futures-util = { version="0.3", features=["sink"] }
 reqwest = { version = "0.11", features = ["json"], default-features=false }
 log = "0.4"
 bincode = "1"
+async-once-cell = "0.4"
+lazy_static = "1"
 open-lambda-proxy-protocol = { path="../bin-functions/proxy-protocol" }
 simple-logging = "2"
 serde_bytes = "0.11"
 cfg-if = "1"
 parking_lot = "0.12"
-lambda-store-client=  { git="ssh://git@github.com/kaimast/lambda-store.git", optional=true }
+lambda-store-client=  { git="ssh://git@github.com/kaimast/lambda-store.git", optional=true, branch="benchmark" }
 
 [profile.release]
 debug = true

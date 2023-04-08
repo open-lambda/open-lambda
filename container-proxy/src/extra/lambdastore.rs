@@ -1,29 +1,30 @@
 use lambda_store_client::{Client, ObjectType, ObjectTypeId};
 use open_lambda_proxy_protocol::CallResult;
 
-use std::sync::Arc;
 use parking_lot::Mutex as PMutex;
-
-use tokio::sync::Mutex;
 
 use serde_bytes::ByteBuf;
 
-static CLIENT: Mutex<Option<Arc<Client>>> = Mutex::new(None);
+use async_once_cell::OnceCell;
+
 static ADDRESS: PMutex<Option<String>> = PMutex::new(None);
+static CLIENT: OnceCell<Client> = OnceCell::new();
 
 pub fn set_address(address: String) {
-    ADDRESS.lock().insert(address);
+    log::debug!("Lambdastore address set to `{address}`");
+    let _ = ADDRESS.lock().insert(address);
 }
 
-async fn get_or_create_client<'a>() -> Arc<Client> {
-    let mut client = CLIENT.lock().await;
-    if client.is_none() {
+async fn get_or_create_client<'a>() -> &'a Client {
+    CLIENT.get_or_init(async {
         let address = ADDRESS.lock().as_ref().unwrap().clone();
-        let conn = lambda_store_client::create_client(&address).await
-                      .expect("Failed to connect to lambda store");
-        client.insert(Arc::new(conn));
-    }
-    client.as_ref().unwrap().clone()
+        match  lambda_store_client::create_client(&address).await {
+            Ok(conn) => conn,
+            Err(err) => {
+                panic!("Failed to connect to lambdastore @{address}: {err}");
+            }
+        }
+    }).await
 }
 
 pub async fn call(func_name: &str, args: &[u8]) -> CallResult {

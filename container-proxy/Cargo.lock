@@ -12,6 +12,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-once-cell"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5b49bd4c5b769125ea6323601c39815848972880efd33ffb2d01f9f909adc699"
+
+[[package]]
 name = "async-trait"
 version = "0.1.68"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -480,7 +486,7 @@ dependencies = [
 [[package]]
 name = "lambda-store-client"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git#2ec3cc34a4b761e0f92109ad7ff5f0f1c3e5c825"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git?branch=benchmark#64bf68fcf2aa7936d2a406e72648a78714cb650a"
 dependencies = [
  "async-trait",
  "bincode",
@@ -504,7 +510,7 @@ dependencies = [
 [[package]]
 name = "lambda-store-protocol"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git#2ec3cc34a4b761e0f92109ad7ff5f0f1c3e5c825"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git?branch=benchmark#64bf68fcf2aa7936d2a406e72648a78714cb650a"
 dependencies = [
  "bincode",
  "rand",
@@ -516,7 +522,7 @@ dependencies = [
 [[package]]
 name = "lambda-store-utils"
 version = "0.1.0"
-source = "git+ssh://git@github.com/kaimast/lambda-store.git#2ec3cc34a4b761e0f92109ad7ff5f0f1c3e5c825"
+source = "git+ssh://git@github.com/kaimast/lambda-store.git?branch=benchmark#64bf68fcf2aa7936d2a406e72648a78714cb650a"
 dependencies = [
  "async-trait",
  "bincode",
@@ -621,10 +627,12 @@ checksum = "b7e5500299e16ebb147ae15a00a942af264cf3688f47923b8fc2cd5858f23ad3"
 name = "open-lambda-container-proxy"
 version = "0.1.0"
 dependencies = [
+ "async-once-cell",
  "bincode",
  "cfg-if",
  "futures-util",
  "lambda-store-client",
+ "lazy_static",
  "log",
  "open-lambda-proxy-protocol",
  "parking_lot",

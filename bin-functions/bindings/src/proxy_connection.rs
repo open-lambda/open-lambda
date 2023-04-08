@@ -88,7 +88,7 @@ impl ProxyConnection {
                 Err(err) => panic!("failed to read from socket: {err}"),
             };
 
-            log::info!("Received {len} bytes from proxy");
+            log::trace!("Received {len} bytes from proxy");
 
             if len > 0 {
                 buffer.extend_from_slice(&data[0..len]);
