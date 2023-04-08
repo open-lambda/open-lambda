@@ -67,7 +67,7 @@ async fn main() {
 }
 
 async fn function_call(func_name: String, args: Vec<u8>) -> Result<Vec<u8>, String> {
-    log::debug!("Issuing function call to {func_name}");
+    log::trace!("Issuing function call to {func_name}");
 
     let server_addr = "localhost:5000";
     let url = format!("http://{server_addr}/run/{func_name}");
@@ -100,7 +100,7 @@ async fn function_call(func_name: String, args: Vec<u8>) -> Result<Vec<u8>, Stri
 }
 
 async fn handle_connection(stream: UnixStream) {
-    log::info!("Connected to process");
+    log::debug!("Connected to process");
 
     let (reader, writer) = stream.into_split();
 
