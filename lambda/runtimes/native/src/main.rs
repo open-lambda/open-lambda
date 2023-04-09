@@ -97,7 +97,7 @@ fn main() {
         std::process::exit(0);
     }
 
-    log::info!("Starting server loop...");
+    log::debug!("Starting server loop...");
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(1)
         .enable_io().build().expect("Failed to start tokio");
@@ -112,7 +112,7 @@ fn main() {
         let server = Server::builder(acceptor).serve(make_service)
             .with_graceful_shutdown(async move {
                 sighandler.recv().await;
-                log::info!("Got ctrl+c");
+                log::debug!("Got ctrl+c");
             });
 
         log::info!("Listening on unix:{socket_path}");
@@ -127,7 +127,7 @@ async fn execute_function(args: Vec<u8>) -> Result<Response<Body>> {
     use std::io::Read;
 
     let arg_str = String::from_utf8(args).unwrap();
-    log::info!("Executing function with arg `{arg_str}`");
+    log::debug!("Executing function with arg `{arg_str}`");
 
     let body;
     let status_code;
@@ -172,14 +172,14 @@ async fn execute_function(args: Vec<u8>) -> Result<Response<Body>> {
         log::error!("{}", e_str);
         body = e_str.into();
     } else {
-        log::info!("Function returned successfully");
+        log::debug!("Function returned successfully");
 
         match File::open("/tmp/output") {
             Ok(mut f) => {
                 let mut jstr = String::new();
                 f.read_to_string(&mut jstr).unwrap();
 
-                log::info!("Got response: {jstr}");
+                log::debug!("Got response: {jstr}");
 
                 body = Body::from(jstr);
                 status_code = StatusCode::OK;
@@ -192,7 +192,7 @@ async fn execute_function(args: Vec<u8>) -> Result<Response<Body>> {
                     body = Body::from(err_str);
                     status_code = StatusCode::INTERNAL_SERVER_ERROR;
                 } else {
-                    log::info!("Function did not give a response");
+                    log::debug!("Function did not give a response");
 
                     body = Body::empty();
                     status_code = StatusCode::OK;
@@ -218,7 +218,7 @@ async fn execute_function(args: Vec<u8>) -> Result<Response<Body>> {
             log_line += format!("    {}\n", line).as_str();
         }
 
-        log::info!("{}", log_line);
+        log::trace!("{}", log_line);
     }
 
     if stderr == "" {
@@ -230,7 +230,7 @@ async fn execute_function(args: Vec<u8>) -> Result<Response<Body>> {
             log_line += format!("    {}\n", line).as_str();
         }
 
-        log::info!("{}", log_line);
+        log::trace!("{}", log_line);
     }
 
     let response = Response::builder()
