@@ -66,8 +66,10 @@ func (pool *WorkerPool) Size() int {
 }
 
 func (pool *WorkerPool) Scale(target int) {
+	pool.lock.Lock()
 	pool.target = target
 	pool.updateCluster()
+	pool.lock.Unlock()
 }
 
 // lock is held before and after calling this function

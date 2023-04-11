@@ -203,6 +203,7 @@ func (pool *AzureWorkerPool) DeleteInstance(generalworker *Worker) {
 	pool.parentPool.cleanedWorker = generalworker
 	pool.parentPool.updateCluster()
 	if pool.parentPool.needRestart {
+		pool.parentPool.needRestart = false
 		pool.parentPool.lock.Unlock()
 		worker.startWorker()
 		return
