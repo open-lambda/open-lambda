@@ -13,9 +13,13 @@ import (
 
 const (
 	Starting = iota
+	Started
 	Running
+	Ran
 	Cleaning
+	Cleaned
 	Destroying
+	Destroyed
 )
 
 type WorkerPool struct {
@@ -27,6 +31,11 @@ type WorkerPool struct {
 	runningWorkers     map[string]*Worker
 	cleaningWorkers    map[string]*Worker
 	destroyingWorkers  map[string]*Worker
+	startedWorker      *Worker
+	ranWorker          *Worker
+	cleanedWorker      *Worker
+	needRestart        bool
+	destroyedWorker    *Worker
 	lock               sync.Mutex
 	target             int
 }
@@ -56,17 +65,15 @@ func (pool *WorkerPool) Size() int {
 	return len(pool.runningWorkers) + len(pool.startingWorkers)
 }
 
-//add a new worker to the pool
-
-// TODO: should we first create worker then push the worker to the idle queue?
-// If the creation isn't finished yet and the boss send requests to that worker, it might cause problems.
-// Maybe there's no need to have a "NewWorker" function? Just one "CreateInstance" might help.
-
-// FIXEME: sometimes the azure part might fail due to cannot use the snapshot at the same time. But mostly it won't fail.
-
-func (pool *WorkerPool) Scale(target int) error {
-	newNum := target - pool.Size()
+func (pool *WorkerPool) Scale(target int) {
 	pool.target = target
+	pool.updateCluster()
+}
+
+// lock is held before and after calling this function
+// called when worker is been evicted from cleaning or destroying map
+func (pool *WorkerPool) updateCluster() {
+	newNum := pool.target - pool.Size()
 	if newNum > 0 {
 		scaleSize := newNum - len(pool.cleaningWorkers) - len(pool.destroyingWorkers)
 		for i := 0; i < scaleSize; i++ { // scale up
@@ -99,21 +106,16 @@ func (pool *WorkerPool) Scale(target int) error {
 			}
 		}
 	}
-	return nil
-}
-
-// lock is held before and after calling this function
-// called when worker is been evicted from cleaning or destroying map
-func (pool *WorkerPool) updateCluster(worker *Worker, evictedFrom int) bool {
-	if evictedFrom == Cleaning {
+	if pool.cleanedWorker != nil {
 		// check the target and running/starting
 		if pool.Size() < pool.target {
-			pool.startingWorkers[worker.workerId] = worker
-			return true
+			pool.startingWorkers[pool.cleanedWorker.workerId] = pool.cleanedWorker
+			pool.cleanedWorker = nil
+			pool.needRestart = true
 		}
-		return false
+		pool.cleanedWorker = nil
 	}
-	if evictedFrom == Destroying {
+	if pool.destroyedWorker != nil {
 		if pool.Size() < pool.target {
 			// start a new worker
 			nextId := pool.nextId
@@ -122,11 +124,11 @@ func (pool *WorkerPool) updateCluster(worker *Worker, evictedFrom int) bool {
 			pool.workers[worker.workerId] = worker
 			pool.queue <- worker
 			pool.startingWorkers[worker.workerId] = worker
-			return true
+			pool.destroyedWorker = nil
+			go pool.CreateInstance(worker)
 		}
-		return false
+		pool.destroyedWorker = nil
 	}
-	return false
 }
 
 //run lambda function

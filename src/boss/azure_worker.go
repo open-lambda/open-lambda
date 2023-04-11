@@ -65,6 +65,7 @@ func NewAzureWorkerPool() (*WorkerPool, error) {
 		runningWorkers:     make(map[string]*Worker),
 		cleaningWorkers:    make(map[string]*Worker),
 		destroyingWorkers:  make(map[string]*Worker),
+		needRestart:        false,
 	}
 	pool.parentPool = parent
 	return parent, nil
@@ -199,13 +200,14 @@ func (pool *AzureWorkerPool) DeleteInstance(generalworker *Worker) {
 
 	pool.parentPool.lock.Lock()
 	delete(pool.parentPool.cleaningWorkers, generalworker.workerId)
-	needRestart := pool.parentPool.updateCluster(generalworker, Cleaning)
-	pool.parentPool.lock.Unlock()
-
-	if needRestart {
+	pool.parentPool.cleanedWorker = generalworker
+	pool.parentPool.updateCluster()
+	if pool.parentPool.needRestart {
+		pool.parentPool.lock.Unlock()
 		worker.startWorker()
 		return
 	}
+	pool.parentPool.lock.Unlock()
 
 	// delete the vm
 	log.Printf("Try to delete the vm")
@@ -229,7 +231,8 @@ func (pool *AzureWorkerPool) DeleteInstance(generalworker *Worker) {
 	log.Printf("Deleted the worker and worker VM successfully\n")
 	delete(pool.parentPool.destroyingWorkers, generalworker.workerId) // delete from the map
 	// call updateCluster here
-	pool.parentPool.updateCluster(generalworker, Destroying)
+	pool.parentPool.destroyedWorker = generalworker
+	pool.parentPool.updateCluster()
 	pool.parentPool.lock.Unlock()
 }
 
