@@ -97,7 +97,7 @@ func (cg *Cgroup) Release() {
 					panic(fmt.Errorf("Cannot release cgroup that contains processes: %v", pids))
 				} else {
 					cg.printf("cgroup Rmdir failed, trying again in 5ms")
-					time.Sleep(5 * time.Millisecond)
+					time.Sleep(10 * time.Millisecond)
 				}
 			} else {
 				break
@@ -128,7 +128,7 @@ func (cg *Cgroup) Destroy() {
 				panic(fmt.Errorf("Rmdir(2) %s: %s", gpath, err))
 			} else {
 				cg.printf("cgroup Rmdir failed, trying again in 5ms")
-				time.Sleep(5 * time.Millisecond)
+				time.Sleep(10 * time.Millisecond)
 			}
 		} else {
 			break
@@ -218,7 +218,7 @@ func (pool *CgroupPool) Destroy() {
 				panic(fmt.Errorf("Rmdir %s: %s", gpath, err))
 			} else {
 				pool.printf("cgroup pool Rmdir failed, trying again in 5ms")
-				time.Sleep(5 * time.Millisecond)
+				time.Sleep(10 * time.Millisecond)
 			}
 		} else {
 			break
