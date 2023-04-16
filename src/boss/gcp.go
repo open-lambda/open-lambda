@@ -500,8 +500,8 @@ func (c *GcpClient) Wait(resp1 map[string]any, err1 error) (resp2 map[string]any
 			return nil, err2
 		}
 
-		fmt.Println("POLLING", resp2)
-		fmt.Println()
+		// fmt.Println("POLLING", resp2)
+		// fmt.Println()
 
 		if resp2["status"].(string) != "RUNNING" {
 			return resp2, nil

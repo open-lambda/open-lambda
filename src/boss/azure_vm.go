@@ -69,13 +69,11 @@ func createVM(worker *Worker) *AzureConfig {
 	}
 	log.Println("Fetched disk:", *disk.ID)
 
-	worker.pool.lock.Lock()
 	snapshot, err := createSnapshot(ctx, conn, *disk.ID, snapshotName)
 	if err != nil {
 		log.Fatal(err)
 	}
 	log.Println("Created snapshot:", *snapshot.ID)
-	worker.pool.lock.Unlock()
 
 	new_disk, err := createDisk(ctx, conn, *snapshot.ID, newDiskName)
 	if err != nil {
@@ -145,7 +143,6 @@ func createVM(worker *Worker) *AzureConfig {
 	new_vm.Vm = *virtualMachine
 	new_vm.Status = "Running"
 
-	worker.pool.lock.Lock()
 	conf.Resource_groups.Rgroup[0].Resource = *resourceGroup
 	rg := &conf.Resource_groups.Rgroup[0]
 	rg.Vms = append(rg.Vms, *new_vm)
@@ -155,7 +152,6 @@ func createVM(worker *Worker) *AzureConfig {
 	if err := WriteAzureConfig(conf); err != nil {
 		log.Fatalf("write to azure.json file failed:%s", err)
 	}
-	worker.pool.lock.Unlock()
 
 	return conf
 }

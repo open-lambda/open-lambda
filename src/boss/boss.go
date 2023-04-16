@@ -86,8 +86,8 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("Receive request to %s, worker_count of %d requested\n", r.URL.Path, worker_count)
 
-	// STEP 2: adjust worker count
-	b.workerPool.Scale(worker_count)
+	// STEP 2: adjust target worker count
+	b.workerPool.SetTarget(worker_count)
 
 	//respond with status
 	b.BossStatus(w, r)
@@ -139,23 +139,8 @@ func (*Boss) DeleteLambda(w http.ResponseWriter, r *http.Request) {
 func BossMain() (err error) {
 	fmt.Printf("WARNING!  Boss incomplete (only use this as part of development process).")
 
-	var pool *WorkerPool
-	if Conf.Platform == "gcp" {
-		pool, err = NewGcpWorkerPool()
-	} else if Conf.Platform == "azure" {
-		pool, err = NewAzureWorkerPool()
-	} else if Conf.Platform == "mock" {
-		pool, err = NewMockWorkerPool()
-	} else {
-		return fmt.Errorf("worker pool '%s' not valid", Conf.Platform)
-	}
-	if err != nil {
-		return err
-	}
-	fmt.Printf("READY: worker pool of type %s", Conf.Platform)
-
 	boss := Boss{
-		workerPool: pool,
+		workerPool: NewWorkerPool(),
 	}
 
 	// things shared by all servers

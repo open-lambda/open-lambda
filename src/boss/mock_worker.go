@@ -14,13 +14,10 @@ type MockWorker struct {
 	//no platform specific attributes
 }
 
-func NewMockWorkerPool() (*WorkerPool, error) {
+func NewMockWorkerPool() *WorkerPool {
 	return &WorkerPool{
-		nextId:             1,                                   //this should be similar among all platform
-		workers:            map[string]*Worker{},                //this should be similar among all platform
-		queue:              make(chan *Worker, Conf.Worker_Cap), //this should be similar among all platform
 		WorkerPoolPlatform: &MockWorkerPool{},
-	}, nil
+	}
 
 	//WorkerPoolPlatform should be platform specific workerpool struct (MockWorkerPool, GcpWorkerPool, AzureWorkerPool)
 }

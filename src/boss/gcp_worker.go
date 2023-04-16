@@ -17,22 +17,22 @@ type GcpWorker struct {
 	//no additional attributes yet
 }
 
-func NewGcpWorkerPool() (*WorkerPool, error) {
+func NewGcpWorkerPool() *WorkerPool {
 	fmt.Printf("STEP 0: check SSH setup\n")
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 
 	tmp, err := os.ReadFile(filepath.Join(home, ".ssh", "id_rsa.pub"))
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 	pub := strings.TrimSpace(string(tmp))
 
 	tmp, err = os.ReadFile(filepath.Join(home, ".ssh", "authorized_keys"))
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 	authorized := strings.Split(string(tmp), "\n")
 
@@ -45,13 +45,13 @@ func NewGcpWorkerPool() (*WorkerPool, error) {
 	}
 
 	if !matches {
-		return nil, fmt.Errorf("could not find id_rsa.pub in authorized_keys, consider running: cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys ")
+		panic("could not find id_rsa.pub in authorized_keys, consider running: cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys ")
 	}
 
 	fmt.Printf("STEP 1: get access token\n")
 	client, err := NewGcpClient("key.json")
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 
 	fmt.Printf("STEP 1a: lookup region and zone from metadata server\n")
@@ -64,7 +64,7 @@ func NewGcpWorkerPool() (*WorkerPool, error) {
 	fmt.Printf("STEP 2: lookup instance from IP address\n")
 	instance, err := client.GcpInstanceName()
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 	fmt.Printf("Instance: %s\n", instance)
 
@@ -73,21 +73,14 @@ func NewGcpWorkerPool() (*WorkerPool, error) {
 	resp, err := client.Wait(client.GcpSnapshot(disk))
 	fmt.Println(resp)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 
 	return &WorkerPool{
-		nextId:  1,
-		workers: map[string]*Worker{},
-		queue:   make(chan *Worker, Conf.Worker_Cap),
 		WorkerPoolPlatform: &GcpWorkerPool{
 			client: client,
 		},
-		startingWorkers:    make(map[string]*Worker),
-		runningWorkers:     make(map[string]*Worker),
-		cleaningWorkers:    make(map[string]*Worker),
-		destroyingWorkers:  make(map[string]*Worker),
-	}, nil
+	}
 }
 
 func (pool *GcpWorkerPool) NewWorker(nextId int) *Worker {
@@ -111,11 +104,12 @@ func (pool *GcpWorkerPool) CreateInstance(worker *Worker) {
 		panic(err)
 	}
 
-	fmt.Printf("STEP 5: start worker\n")
-	err = client.RunComandWorker(worker.workerId, "./ol worker --detach")
-	if err != nil {
-		panic(err)
-	}
+	// fmt.Printf("STEP 5: start worker\n")
+	// err = client.RunComandWorker(worker.workerId, "./ol worker --detach")
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// this part is in worker.go now
 
 	lookup, err := client.GcpInstancetoIP()
 	if err != nil {
@@ -125,14 +119,10 @@ func (pool *GcpWorkerPool) CreateInstance(worker *Worker) {
 	worker.workerIp = lookup[worker.workerId]
 }
 
+//this function will only destroy instance from cloud platform
 func (pool *GcpWorkerPool) DeleteInstance(worker *Worker) {
 	client := pool.client
 
 	log.Printf("deleting gcp worker: %s\n", worker.workerId)
-
-	err := client.RunComandWorker(worker.workerId, "./ol kill")
-	if err != nil {
-		panic(err)
-	}
-	client.deleteGcpInstance(worker.workerId)
+	client.Wait(client.deleteGcpInstance(worker.workerId)) //wait until instance is completely deleted
 }
