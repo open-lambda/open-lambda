@@ -186,16 +186,39 @@ def f(event):
 
 func make_action(name string, tasks int, functions int, func_template string) (func (ctx *cli.Context) error) {
 	return func (ctx *cli.Context) error {
-		_, err := run_benchmark(ctx, name, tasks, functions, func_template)
+		result, err := run_benchmark(ctx, name, tasks, functions, func_template)
+		output_file := ctx.String("output")
+		if output_file != "" {
+			file, err := os.Create(output_file)
+			if err != nil {
+        	return err
+    		}
+    		defer file.Close()
+
+    		if _, err := file.WriteString(result); err != nil {
+				return err
+    		}
+		}
 		return err
 	}
 }
 
 func run_all(ctx *cli.Context) error {
+	option := ctx.String("option")
+	
+	var list_tasks []int
+	if option == "seq" {
+		list_tasks = []int{1}
+	} else if option == "par" {
+		list_tasks = []int{32}
+	} else {
+		list_tasks = []int{1, 32}
+	}
+
 	results := "{\n"
 	for _, kind := range []string{"py", "pd"} {
 		for _, functions := range []int{64, 1024, 64*1024} {
-			for _, tasks := range []int{1, 32} {
+			for _, tasks := range list_tasks {
 				var parseq string
 				amt := fmt.Sprintf("%d", functions)
 
@@ -220,15 +243,18 @@ func run_all(ctx *cli.Context) error {
 	
 	results = results[:len(results)-2] + "\n}\n"
 	
-	file, err := os.Create("benchmark.json")
-	if err != nil {
-        return err
-    }
-    defer file.Close()
+	output_file := ctx.String("output")
+	if output_file != "" {
+		file, err := os.Create(output_file)
+		if err != nil {
+			return err
+		}
+		defer file.Close()
 
-    if _, err := file.WriteString(results); err != nil {
-		return err
-    }
+		if _, err := file.WriteString(results); err != nil {
+			return err
+		}
+	}
 
 	fmt.Println(results)
 	return nil
@@ -276,7 +302,7 @@ func BenchCommands() []cli.Command {
 				cmd := cli.Command{
 					Name:  name,
 					Usage: usage,
-					UsageText: fmt.Sprintf("ol bench %s [--path=NAME] [--seconds=SECONDS] [--warmup=BOOL]", name),
+					UsageText: fmt.Sprintf("ol bench %s [--path=NAME] [--seconds=SECONDS] [--warmup=BOOL] [--output=NAME]", name),
 					Action: action,
 					Flags: []cli.Flag{
 						cli.StringFlag{
@@ -291,6 +317,10 @@ func BenchCommands() []cli.Command {
 							Name:  "warmup, w",
 							Usage: "call lambda each once before benchmark",
 						},
+						cli.StringFlag{
+							Name:  "output, o",
+							Usage: "store the result in json to the output file",
+						},
 					},
 				}
 				cmds = append(cmds, cmd)
@@ -301,7 +331,7 @@ func BenchCommands() []cli.Command {
 	cmd := cli.Command{
 		Name:  "all",
 		Usage: "run all benchmarks",
-		UsageText: "ol bench all [--path=NAME] [--seconds=SECONDS] [--warmup=BOOL]",
+		UsageText: "ol bench all [--path=NAME] [--seconds=SECONDS] [--warmup=BOOL] [--output=NAME] [-task=seq/par]",
 		Action: run_all,
 		Flags: []cli.Flag{
 			cli.StringFlag{
@@ -315,6 +345,14 @@ func BenchCommands() []cli.Command {
 			cli.BoolTFlag{
 				Name:  "warmup, w",
 				Usage: "call lambda each once before benchmark",
+			},
+			cli.StringFlag{
+				Name:  "output, o",
+				Usage: "store the result in json to the output file",
+			},
+			cli.StringFlag{
+				Name:  "task, t",
+				Usage: "run only sequential/parallel benchmarks",
 			},
 		},
 	}
