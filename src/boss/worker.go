@@ -151,15 +151,26 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 	atomic.AddInt32(&worker.numTask, -1)
 }
 
-//return wokers' id and their status (idle/busy)
-func (pool *WorkerPool) Status() []map[string]string {
-	var w = []map[string]string{}
+//return wokers' id and number of outstanding tasks
+func (pool *WorkerPool) StatusTasks() map[string]int32 {
+	var output = map[string]int32{}
 
-	for workerId, worker := range pool.workers {
-		output := map[string]string{workerId: fmt.Sprintf("%d", worker.numTask)}
-		w = append(w, output)
+	for workerId, worker := range pool.workers {	
+		output[workerId] = worker.numTask
 	}
-	return w
+	return output
+}
+
+//return status of cluster
+func (pool *WorkerPool) StatusCluster() map[string]int {
+	var output = map[string]int{}
+
+	output["starting"] = len(pool.startingWorkers)
+	output["running"] = len(pool.runningWorkers)
+	output["cleaning"] = len(pool.cleaningWorkers)
+	output["destroying"] = len(pool.destroyingWorkers)
+	
+	return output
 }
 
 //kill and delete all workers
