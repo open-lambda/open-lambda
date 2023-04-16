@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
-	"sync"
 	"syscall"
 )
 
@@ -24,19 +23,21 @@ const (
 )
 
 type Boss struct {
-	mutex      sync.Mutex
 	workerPool *WorkerPool
 }
 
-var m = map[string][]map[string]string{"workers": []map[string]string{}}
-
 func (b *Boss) BossStatus(w http.ResponseWriter, r *http.Request) {
-	b.mutex.Lock()
-	defer b.mutex.Unlock()
-
 	log.Printf("Receive request to %s\n", r.URL.Path)
-	m["workers"] = b.workerPool.Status()
-	if b, err := json.MarshalIndent(m, "", "\t"); err != nil {
+
+	output := struct{
+		State	map[string]int		`json:"state"`
+		Tasks	map[string]int32	`json:"tasks"`
+	}{
+		b.workerPool.StatusCluster(),
+		b.workerPool.StatusTasks(),
+	}
+	
+	if b, err := json.MarshalIndent(output, "", "\t"); err != nil {
 		panic(err)
 	} else {
 		w.Write(b)
@@ -49,9 +50,6 @@ func (b *Boss) Close(w http.ResponseWriter, r *http.Request) {
 }
 
 func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
-	b.mutex.Lock()
-	defer b.mutex.Unlock()
-
 	// STEP 1: get int (worker count) from POST body, or return an error
 	if r.Method != "POST" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -91,13 +89,8 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 	// STEP 2: adjust worker count
 	b.workerPool.Scale(worker_count)
 
-	//respond with list of active workers
-	m["workers"] = b.workerPool.Status()
-	if b, err := json.MarshalIndent(m, "", "\t"); err != nil {
-		panic(err)
-	} else {
-		w.Write(b)
-	}
+	//respond with status
+	b.BossStatus(w, r)
 }
 
 func (b *Boss) RunLambda(w http.ResponseWriter, r *http.Request) {
