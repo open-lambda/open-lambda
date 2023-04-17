@@ -262,8 +262,7 @@ func (pool *WorkerPool) Close() {
 	log.Println("closing worker pool")
 	
 	pool.Lock()
-	defer pool.Unlock()
-
+	
 	pool.target = 0
 	var wg sync.WaitGroup
 	for i:=0; i<3; i++ {
@@ -287,7 +286,7 @@ func (pool *WorkerPool) Close() {
 			pool.Lock()
 		}
 	}
-
+	pool.Unlock()
 	wg.Wait()
 }
 
