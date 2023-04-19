@@ -21,6 +21,14 @@ const (
 	DESTROYING
 )
 
+var (
+	clusterLogFile, _ = os.Create("cluster.log")
+	taskLogFile, _ = os.Create("tasks.log")
+	clusterLog = log.New(clusterLogFile, "", 0)
+	taskLog = log.New(taskLogFile, "", 0)
+	totalTask int32
+)
+
 type WorkerPool struct {
 	nextId             	int
 	target             	int
@@ -53,6 +61,9 @@ type WorkerPlatform interface {
 }
 
 func NewWorkerPool() *WorkerPool {
+	clusterLog.SetFlags(log.LstdFlags)
+	taskLog.SetFlags(log.LstdFlags)
+
 	var pool *WorkerPool
 	if Conf.Platform == "gcp" {
 		pool = NewGcpWorkerPool()
@@ -96,6 +107,7 @@ func (pool *WorkerPool) Size() int {
 func (pool *WorkerPool) SetTarget(target int) {
 	pool.Lock()
 	pool.target = target
+	clusterLog.Printf("set target=%d", pool.target)
 	pool.updateCluster()
 	pool.Unlock()
 }
@@ -109,6 +121,12 @@ func (pool *WorkerPool) startNewWorker() {
 	worker := pool.NewWorker(nextId)
 	worker.state = STARTING
 	pool.workers[STARTING][worker.workerId] = worker
+	clusterLog.Printf("%s: starting [target=%d, starting=%d, running=%d, cleaning=%d, destroying=%d]", 
+		worker.workerId, pool.target,
+		len(pool.workers[STARTING]),
+		len(pool.workers[RUNNING]),
+		len(pool.workers[CLEANING]),
+		len(pool.workers[DESTROYING]))
 
 	pool.Unlock()
 	go func() { // should be able to create multiple instances simultaneously
@@ -127,7 +145,13 @@ func (pool *WorkerPool) startNewWorker() {
 		worker.state = RUNNING
 		delete(pool.workers[STARTING], worker.workerId) 
 		pool.workers[RUNNING][worker.workerId] = worker
-		
+
+		clusterLog.Printf("%s: running [target=%d, starting=%d, running=%d, cleaning=%d, destroying=%d]", 
+		worker.workerId, pool.target,
+		len(pool.workers[STARTING]),
+		len(pool.workers[RUNNING]),
+		len(pool.workers[CLEANING]),
+		len(pool.workers[DESTROYING]))
 		pool.queue <- worker
 		log.Printf("%s ready\n", worker.workerId)
 		
@@ -144,6 +168,13 @@ func (pool *WorkerPool) recoverWorker(worker *Worker) {
 	delete(pool.workers[CLEANING], worker.workerId) 
 	pool.workers[RUNNING][worker.workerId] = worker
 
+	clusterLog.Printf("%s: running [target=%d, starting=%d, running=%d, cleaning=%d, destroying=%d]", 
+		worker.workerId, pool.target,
+		len(pool.workers[STARTING]),
+		len(pool.workers[RUNNING]),
+		len(pool.workers[CLEANING]),
+		len(pool.workers[DESTROYING]))
+
 	pool.updateCluster()
 }
 
@@ -154,6 +185,14 @@ func (pool *WorkerPool) cleanWorker(worker *Worker) {
 	worker.state = CLEANING
 	delete(pool.workers[RUNNING], worker.workerId) 
 	pool.workers[CLEANING][worker.workerId] = worker
+
+	clusterLog.Printf("%s: cleaning", worker.workerId)
+	clusterLog.Printf("cluster status: target=%d, starting=%d, running=%d, cleaning=%d, destroying=%d", 
+		pool.target,
+		len(pool.workers[STARTING]),
+		len(pool.workers[RUNNING]),
+		len(pool.workers[CLEANING]),
+		len(pool.workers[DESTROYING]))
 	
 	pool.updateCluster()
 	
@@ -183,6 +222,13 @@ func (pool *WorkerPool) detroyWorker(worker *Worker) {
 	worker.state = DESTROYING
 	delete(pool.workers[CLEANING], worker.workerId) 
 	pool.workers[DESTROYING][worker.workerId] = worker
+
+	clusterLog.Printf("%s: destroying [target=%d, starting=%d, running=%d, cleaning=%d, destroying=%d]", 
+		worker.workerId, pool.target,
+		len(pool.workers[STARTING]),
+		len(pool.workers[RUNNING]),
+		len(pool.workers[CLEANING]),
+		len(pool.workers[DESTROYING]))
 
 	pool.Unlock()
 	go func() { // should be able to destroy multiple instances simultaneously
@@ -251,6 +297,8 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 	pool.queue <- worker
 
 	atomic.AddInt32(&worker.numTask, 1)
+	atomic.AddInt32(&totalTask, 1)
+	taskLog.Printf("tasks=%d", totalTask)
 	if Conf.Scaling == "auto" {
 		pool.Scale(pool)
 	}
@@ -266,6 +314,8 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 		forwardTask(w, r, worker.workerIp)
 	}
 	atomic.AddInt32(&worker.numTask, -1)
+	atomic.AddInt32(&totalTask, -1)
+	taskLog.Printf("tasks=%d", totalTask)
 }
 
 //force kill workers
@@ -357,6 +407,7 @@ func (w *Worker) runCmd(command string) {
 func (pool *WorkerPool) StatusTasks() map[string]int {
 	var output = map[string]int{}
 
+	output["task/worker"] = 0
 	numWorker := len(pool.workers[RUNNING]) + len(pool.workers[STARTING])
 	if numWorker > 0 {
 		sumTask := 0
