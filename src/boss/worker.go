@@ -27,6 +27,7 @@ type WorkerPool struct {
 	workers			   	[]map[string]*Worker
 	queue				chan *Worker
 	WorkerPoolPlatform
+	Scaling
 	sync.Mutex
 }
 
@@ -71,6 +72,11 @@ func NewWorkerPool() *WorkerPool {
 		make(map[string]*Worker),	//destroying
 	}
 	pool.queue = make(chan *Worker, Conf.Worker_Cap)
+
+	if Conf.Scaling == "auto" {
+		pool.Scaling = &ScalingThreshold{}
+		pool.SetTarget(1)
+	}
 
 	log.Printf("READY: worker pool of type %s", Conf.Platform)
 
@@ -232,17 +238,22 @@ func (pool *WorkerPool) updateCluster() {
 func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 	if len(pool.workers[STARTING]) + len(pool.workers[RUNNING]) == 0 {
 		w.WriteHeader(http.StatusInternalServerError)
-		_, err := w.Write([]byte("no active worker\n"))
-		if err != nil {
-			log.Printf("no active worker: %s\n", err.Error())
+		if Conf.Scaling == "manual" {
+			_, err := w.Write([]byte("no active worker\n"))
+			if err != nil {
+				log.Printf("no active worker: %s\n", err.Error())
+			}
+			return
 		}
-		return
 	}
 	
 	worker := <- pool.queue
 	pool.queue <- worker
 
 	atomic.AddInt32(&worker.numTask, 1)
+	if Conf.Scaling == "auto" {
+		pool.Scale(pool)
+	}
 	
 	if Conf.Platform == "mock" {
 		s := fmt.Sprintf("hello from %s\n", worker.workerId)
@@ -262,7 +273,7 @@ func (pool *WorkerPool) Close() {
 	log.Println("closing worker pool")
 	
 	pool.Lock()
-	
+
 	pool.target = 0
 	var wg sync.WaitGroup
 	for i:=0; i<3; i++ {
@@ -343,12 +354,22 @@ func (w *Worker) runCmd(command string) {
 }
 
 //return wokers' id and number of tasks
-func (pool *WorkerPool) StatusTasks() map[string]int32 {
-	var output = map[string]int32{}
+func (pool *WorkerPool) StatusTasks() map[string]int {
+	var output = map[string]int{}
+
+	numWorker := len(pool.workers[RUNNING]) + len(pool.workers[STARTING])
+	if numWorker > 0 {
+		sumTask := 0
+		for _, worker := range pool.workers[RUNNING] {
+			sumTask += int(worker.numTask)
+		}
+
+		output["task/worker"] = sumTask/numWorker
+	}
 
 	for i:=0; i<len(pool.workers); i++ {
 		for workerId, worker := range pool.workers[i] {	
-			output[workerId] = worker.numTask
+			output[workerId] = int(worker.numTask)
 		}
 	}
 	return output

@@ -31,7 +31,7 @@ func (b *Boss) BossStatus(w http.ResponseWriter, r *http.Request) {
 
 	output := struct{
 		State	map[string]int		`json:"state"`
-		Tasks	map[string]int32	`json:"tasks"`
+		Tasks	map[string]int	`json:"tasks"`
 	}{
 		b.workerPool.StatusCluster(),
 		b.workerPool.StatusTasks(),
