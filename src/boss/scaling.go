@@ -39,7 +39,7 @@ func (s *ScalingThreshold) Scale(pool *WorkerPool) {
 	tasksPerWorker := sumTask/numWorker
 
 	if pool.target < Conf.Worker_Cap && tasksPerWorker > UPPERBOUND {
-		new_target := pool.target + tasksPerWorker/UPPERBOUND+1
+		new_target := pool.target + tasksPerWorker/UPPERBOUND
 		log.Println("scale up (target=%d)\n", new_target)
 		pool.SetTarget(new_target)
 	}

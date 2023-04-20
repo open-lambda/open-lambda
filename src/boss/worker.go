@@ -22,11 +22,11 @@ const (
 )
 
 var (
-	clusterLogFile, _ = os.Create("cluster.log")
-	taskLogFile, _ = os.Create("tasks.log")
-	clusterLog = log.New(clusterLogFile, "", 0)
-	taskLog = log.New(taskLogFile, "", 0)
-	totalTask int32
+	clusterLogFile	*os.File
+	taskLogFile		*os.File
+	clusterLog		*log.Logger
+	taskLog			*log.Logger
+	totalTask		int32
 )
 
 type WorkerPool struct {
@@ -61,6 +61,10 @@ type WorkerPlatform interface {
 }
 
 func NewWorkerPool() *WorkerPool {
+	clusterLogFile, _ = os.Create("cluster.log")
+	taskLogFile, _ = os.Create("tasks.log")
+	clusterLog = log.New(clusterLogFile, "", 0)
+	taskLog = log.New(taskLogFile, "", 0)
 	clusterLog.SetFlags(log.LstdFlags)
 	taskLog.SetFlags(log.LstdFlags)
 
@@ -90,6 +94,14 @@ func NewWorkerPool() *WorkerPool {
 	}
 
 	log.Printf("READY: worker pool of type %s", Conf.Platform)
+
+	//log total outstanding tasks
+	go func() {
+		for true {
+			time.Sleep(time.Second)
+			taskLog.Printf("tasks=%d", totalTask)
+		}
+	}()
 
 	return pool
 }
@@ -298,7 +310,6 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 
 	atomic.AddInt32(&worker.numTask, 1)
 	atomic.AddInt32(&totalTask, 1)
-	taskLog.Printf("tasks=%d", totalTask)
 	if Conf.Scaling == "auto" {
 		pool.Scale(pool)
 	}
@@ -315,7 +326,6 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 	}
 	atomic.AddInt32(&worker.numTask, -1)
 	atomic.AddInt32(&totalTask, -1)
-	taskLog.Printf("tasks=%d", totalTask)
 }
 
 //force kill workers
@@ -408,6 +418,7 @@ func (pool *WorkerPool) StatusTasks() map[string]int {
 	var output = map[string]int{}
 
 	output["task/worker"] = 0
+	output["total tasks"] = int(totalTask)
 	numWorker := len(pool.workers[RUNNING]) + len(pool.workers[STARTING])
 	if numWorker > 0 {
 		sumTask := 0
