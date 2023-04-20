@@ -44,14 +44,20 @@ func (s *ScalingThreshold) Scale(pool *WorkerPool) {
 		pool.SetTarget(new_target)
 	}
 
-	if pool.target > 2 && tasksPerWorker < LOWERBOUND {
-		new_target := pool.target - tasksPerWorker/LOWERBOUND
+	if pool.target > 1 && tasksPerWorker < LOWERBOUND {
+		new_target := pool.target - (LOWERBOUND/tasksPerWorker)
+		if new_target < 1 {
+			new_target = 1
+		}
+
 		log.Println("scale down (target=%d)\n", new_target)
 		pool.SetTarget(new_target)
 	}
 
 	s.timeout = time.AfterFunc(INACTIVITY_TIMEOUT*time.Second, func() {
-		log.Printf("scale down due to inactivity\n")
-		pool.SetTarget(1)
+		if pool.target > 1 {
+			log.Printf("scale down due to inactivity\n")
+			pool.SetTarget(1)
+		}
 	})
 }
