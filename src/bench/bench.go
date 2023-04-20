@@ -52,6 +52,10 @@ func task(task int, reqQ chan Call, errQ chan error) {
 }
 
 func run_benchmark(ctx *cli.Context, name string, tasks int, functions int, func_template string) (string, error) {
+	num_tasks := ctx.Int("tasks")
+	if num_tasks != 0 {
+		tasks = num_tasks
+	}
 	// config
 	olPath, err := common.GetOlPath(ctx)
 	if err != nil {
@@ -312,6 +316,10 @@ func BenchCommands() []cli.Command {
 						cli.Float64Flag{
 							Name:  "seconds, s",
 							Usage: "Seconds to run (after warmup)",
+						},
+						cli.IntFlag{
+							Name:  "tasks, t",
+							Usage: "number of parallel tasks to run (only for parallel bench)",
 						},
 						cli.BoolTFlag{
 							Name:  "warmup, w",
