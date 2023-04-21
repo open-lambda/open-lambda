@@ -27,6 +27,8 @@ var (
 	clusterLog		*log.Logger
 	taskLog			*log.Logger
 	totalTask		int32
+	sumLatency		int64
+	nLatency		int64
 )
 
 type WorkerPool struct {
@@ -99,7 +101,11 @@ func NewWorkerPool() *WorkerPool {
 	go func() {
 		for true {
 			time.Sleep(time.Second)
-			taskLog.Printf("tasks=%d", totalTask)
+			var avgLatency int64 = 0
+			if nLatency > 0 {
+				avgLatency = sumLatency/nLatency
+			}
+			taskLog.Printf("tasks=%d, average_latency(ms)=%d", totalTask, avgLatency)
 		}
 	}()
 
@@ -198,9 +204,8 @@ func (pool *WorkerPool) cleanWorker(worker *Worker) {
 	delete(pool.workers[RUNNING], worker.workerId) 
 	pool.workers[CLEANING][worker.workerId] = worker
 
-	clusterLog.Printf("%s: cleaning", worker.workerId)
-	clusterLog.Printf("cluster status: target=%d, starting=%d, running=%d, cleaning=%d, destroying=%d", 
-		pool.target,
+	clusterLog.Printf("%s: cleaning [target=%d, starting=%d, running=%d, cleaning=%d, destroying=%d]", 
+		worker.workerId, pool.target,
 		len(pool.workers[STARTING]),
 		len(pool.workers[RUNNING]),
 		len(pool.workers[CLEANING]),
@@ -252,6 +257,12 @@ func (pool *WorkerPool) detroyWorker(worker *Worker) {
 		delete(pool.workers[DESTROYING], worker.workerId)
 
 		log.Printf("%s destroyed\n", worker.workerId)
+		clusterLog.Printf("%s: destroyed [target=%d, starting=%d, running=%d, cleaning=%d, destroying=%d]", 
+			worker.workerId, pool.target,
+			len(pool.workers[STARTING]),
+			len(pool.workers[RUNNING]),
+			len(pool.workers[CLEANING]),
+			len(pool.workers[DESTROYING]))
 		pool.updateCluster()
 	}()
 	pool.Lock()
@@ -294,6 +305,7 @@ func (pool *WorkerPool) updateCluster() {
 
 //run lambda function
 func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
+	starttime := time.Now()
 	if len(pool.workers[STARTING]) + len(pool.workers[RUNNING]) == 0 {
 		w.WriteHeader(http.StatusInternalServerError)
 		if Conf.Scaling == "manual" {
@@ -326,6 +338,11 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 	}
 	atomic.AddInt32(&worker.numTask, -1)
 	atomic.AddInt32(&totalTask, -1)
+
+	latency := time.Since(starttime).Milliseconds()
+	
+	atomic.AddInt64(&sumLatency, latency)
+	atomic.AddInt64(&nLatency, 1)
 }
 
 //force kill workers
@@ -345,12 +362,25 @@ func (pool *WorkerPool) Close() {
 			wg.Add(1)
 			go func(w *Worker) {
 				log.Printf("destroying %s\n", worker.workerId)
+				clusterLog.Printf("%s: destroying [target=%d, starting=%d, running=%d, cleaning=%d, destroying=%d]", 
+					worker.workerId, pool.target,
+					len(pool.workers[STARTING]),
+					len(pool.workers[RUNNING]),
+					len(pool.workers[CLEANING]),
+					len(pool.workers[DESTROYING]))
+
 				pool.DeleteInstance(w)
 				
 				pool.Lock()
 				defer pool.Unlock()
 
 				delete(pool.workers[DESTROYING], w.workerId) 
+				clusterLog.Printf("%s: destroyed [target=%d, starting=%d, running=%d, cleaning=%d, destroying=%d]", 
+					worker.workerId, pool.target,
+					len(pool.workers[STARTING]),
+					len(pool.workers[RUNNING]),
+					len(pool.workers[CLEANING]),
+					len(pool.workers[DESTROYING]))
 				log.Printf("%s destroyed\n", worker.workerId)
 				wg.Done()
 			}(worker)
