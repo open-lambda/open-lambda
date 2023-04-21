@@ -193,16 +193,14 @@ func (worker *AzureWorker) killWorker() {
 }
 
 func (pool *AzureWorkerPool) DeleteInstance(generalworker *Worker) {
+	pool.parentPool.lock.Lock()
 	worker := (*pool.workers)[generalworker.workerId]
 	log.Printf("Killing worker: %s", worker.workerId)
-
-	worker.killWorker()
-
-	pool.parentPool.lock.Lock()
 	delete(pool.parentPool.cleaningWorkers, generalworker.workerId)
 	pool.parentPool.cleanedWorker = generalworker
 	pool.parentPool.updateCluster()
 	if pool.parentPool.needRestart {
+		log.Printf("Stop killing, restart it\n")
 		pool.parentPool.needRestart = false
 		pool.parentPool.lock.Unlock()
 		worker.startWorker()
@@ -212,6 +210,7 @@ func (pool *AzureWorkerPool) DeleteInstance(generalworker *Worker) {
 
 	// delete the vm
 	log.Printf("Try to delete the vm")
+	worker.killWorker()
 	cleanupVM(worker)
 
 	pool.parentPool.lock.Lock()
