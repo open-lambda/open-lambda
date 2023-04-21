@@ -69,7 +69,9 @@ func createVM(worker *Worker) *AzureConfig {
 	}
 	log.Println("Fetched disk:", *disk.ID)
 
+	worker.pool.Lock()
 	snapshot, err := createSnapshot(ctx, conn, *disk.ID, snapshotName)
+	worker.pool.Unlock()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -97,11 +99,14 @@ func createVM(worker *Worker) *AzureConfig {
 	lastSubnet64 += 256
 	newSubnetIP := backtoIP4(lastSubnet64)
 
+	worker.pool.Lock()
 	subnet, err := createSubnets(ctx, conn, newSubnetIP, vnetName, subnetName)
 	if err != nil {
 		log.Fatalf("cannot create subnet:%+v", err)
 	}
 	log.Printf("Created subnet: %s", *subnet.ID)
+	worker.pool.Unlock()
+
 	new_vm.Subnet = *subnet
 
 	/*
@@ -143,6 +148,7 @@ func createVM(worker *Worker) *AzureConfig {
 	new_vm.Vm = *virtualMachine
 	new_vm.Status = "Running"
 
+	worker.pool.Lock()
 	conf.Resource_groups.Rgroup[0].Resource = *resourceGroup
 	rg := &conf.Resource_groups.Rgroup[0]
 	rg.Vms = append(rg.Vms, *new_vm)
@@ -152,6 +158,7 @@ func createVM(worker *Worker) *AzureConfig {
 	if err := WriteAzureConfig(conf); err != nil {
 		log.Fatalf("write to azure.json file failed:%s", err)
 	}
+	worker.pool.Unlock()
 
 	return conf
 }
