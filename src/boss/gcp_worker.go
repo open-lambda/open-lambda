@@ -83,6 +83,10 @@ func NewGcpWorkerPool() (*WorkerPool, error) {
 		WorkerPoolPlatform: &GcpWorkerPool{
 			client: client,
 		},
+		startingWorkers:    make(map[string]*Worker),
+		runningWorkers:     make(map[string]*Worker),
+		cleaningWorkers:    make(map[string]*Worker),
+		destroyingWorkers:  make(map[string]*Worker),
 	}, nil
 }
 
