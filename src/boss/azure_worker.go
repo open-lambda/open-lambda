@@ -31,7 +31,7 @@ type AzureWorker struct {
 	publicAddr   string
 }
 
-func NewAzureWorkerPool() (*WorkerPool, error) {
+func NewAzureWorkerPool() *WorkerPool {
 	conf, err := ReadAzureConfig()
 	if err != nil {
 		log.Fatalln(err)
@@ -57,18 +57,18 @@ func NewAzureWorkerPool() (*WorkerPool, error) {
 		worker_i.configPosit = num
 	}
 	parent := &WorkerPool{
-		nextId:             1,
-		workers:            map[string]*Worker{},
-		queue:              make(chan *Worker, Conf.Worker_Cap),
+		// nextId:             1,
+		// workers:            map[string]*Worker{},
+		// queue:              make(chan *Worker, Conf.Worker_Cap),
 		WorkerPoolPlatform: pool,
-		startingWorkers:    make(map[string]*Worker),
-		runningWorkers:     make(map[string]*Worker),
-		cleaningWorkers:    make(map[string]*Worker),
-		destroyingWorkers:  make(map[string]*Worker),
-		needRestart:        false,
+		// startingWorkers:    make(map[string]*Worker),
+		// runningWorkers:     make(map[string]*Worker),
+		// cleaningWorkers:    make(map[string]*Worker),
+		// destroyingWorkers:  make(map[string]*Worker),
+		// needRestart:        false,
 	}
 	pool.parentPool = parent
-	return parent, nil
+	return parent
 }
 
 // Is nextId here useful? I store nextId in the pool
@@ -89,8 +89,8 @@ func (pool *AzureWorkerPool) CreateInstance(worker *Worker) {
 	conf := AzureCreateVM(worker)
 	var private string
 
-	pool.parentPool.lock.Lock()
-	worker.numTask = 1
+	//pool.parentPool.lock.Lock()
+	//worker.numTask = 1
 	vmNum := conf.Resource_groups.Rgroup[0].Numvm
 	private = worker.workerIp
 	newDiskName := worker.workerId + "-disk"
@@ -119,19 +119,19 @@ func (pool *AzureWorkerPool) CreateInstance(worker *Worker) {
 	pool.workerNum += 1
 	pool.nextId = pool.workerNum + 1
 
-	(*pool.workers)[azworker.workerId] = azworker
+	//(*pool.workers)[azworker.workerId] = azworker
 	worker.workerId = azworker.workerId
 	worker.workerIp = azworker.publicAddr
 	worker.WorkerPlatform = azworker
-	pool.parentPool.lock.Unlock()
+	//pool.parentPool.lock.Unlock()
 
 	// start worker
-	azworker.startWorker()
+	// azworker.startWorker()
 
-	pool.parentPool.lock.Lock()
-	delete(pool.parentPool.startingWorkers, worker.workerId)
-	pool.parentPool.runningWorkers[worker.workerId] = worker
-	pool.parentPool.lock.Unlock()
+	// pool.parentPool.lock.Lock()
+	// delete(pool.parentPool.startingWorkers, worker.workerId)
+	// pool.parentPool.runningWorkers[worker.workerId] = worker
+	// pool.parentPool.lock.Unlock()
 }
 
 func (worker *AzureWorker) startWorker() {
@@ -195,25 +195,28 @@ func (worker *AzureWorker) killWorker() {
 func (pool *AzureWorkerPool) DeleteInstance(generalworker *Worker) {
 	pool.parentPool.lock.Lock()
 	worker := (*pool.workers)[generalworker.workerId]
-	log.Printf("Killing worker: %s", worker.workerId)
-	delete(pool.parentPool.cleaningWorkers, generalworker.workerId)
-	pool.parentPool.cleanedWorker = generalworker
-	pool.parentPool.updateCluster()
-	if pool.parentPool.needRestart {
-		log.Printf("Stop killing, restart it\n")
-		pool.parentPool.needRestart = false
-		pool.parentPool.lock.Unlock()
-		worker.startWorker()
-		return
-	}
-	pool.parentPool.lock.Unlock()
+	// log.Printf("Killing worker: %s", worker.workerId)
+
+	// worker.killWorker()
+
+	// pool.parentPool.lock.Lock()
+	// delete(pool.parentPool.cleaningWorkers, generalworker.workerId)
+	// pool.parentPool.cleanedWorker = generalworker
+	// pool.parentPool.updateCluster()
+	// if pool.parentPool.needRestart {
+	// 	pool.parentPool.needRestart = false
+	// 	pool.parentPool.lock.Unlock()
+	// 	worker.startWorker()
+	// 	return
+	// }
+	// pool.parentPool.lock.Unlock()
 
 	// delete the vm
 	log.Printf("Try to delete the vm")
 	worker.killWorker()
 	cleanupVM(worker)
 
-	pool.parentPool.lock.Lock()
+	//pool.parentPool.lock.Lock()
 	// shrink length
 	conf, _ := ReadAzureConfig()
 	conf.Resource_groups.Rgroup[0].Numvm -= 1
@@ -224,26 +227,28 @@ func (pool *AzureWorkerPool) DeleteInstance(generalworker *Worker) {
 	if len(conf.Resource_groups.Rgroup[0].Vms) > 0 && worker.configPosit < conf.Resource_groups.Rgroup[0].Numvm {
 		// if all workers has been deleted, don't do this
 		// if the worker to be deleted is at the end of the list, don't do this
+
+		//TODO: fix this..?
 		(*worker.pool.workers)[*conf.Resource_groups.Rgroup[0].Vms[worker.configPosit].Vm.Name].configPosit = worker.configPosit
 	}
 	worker.pool.workerNum -= 1
 	WriteAzureConfig(conf)
 	log.Printf("Deleted the worker and worker VM successfully\n")
-	delete(pool.parentPool.destroyingWorkers, generalworker.workerId) // delete from the map
+	//delete(pool.parentPool.destroyingWorkers, generalworker.workerId) // delete from the map
 	// call updateCluster here
-	pool.parentPool.destroyedWorker = generalworker
-	pool.parentPool.updateCluster()
-	pool.parentPool.lock.Unlock()
+	//pool.parentPool.destroyedWorker = generalworker
+	//pool.parentPool.updateCluster()
+	//pool.parentPool.lock.Unlock()
 }
 
-func (pool *AzureWorkerPool) Size() int {
-	return len(pool.parentPool.startingWorkers) + len(pool.parentPool.runningWorkers)
-}
+// func (pool *AzureWorkerPool) Size() int {
+// 	return len(pool.parentPool.startingWorkers) + len(pool.parentPool.runningWorkers)
+// }
 
-func (pool *AzureWorkerPool) Status() []string {
-	var w = []string{}
-	for k, _ := range *pool.workers {
-		w = append(w, k)
-	}
-	return w
-}
+// func (pool *AzureWorkerPool) Status() []string {
+// 	var w = []string{}
+// 	for k, _ := range *pool.workers {
+// 		w = append(w, k)
+// 	}
+// 	return w
+// }

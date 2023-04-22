@@ -15,15 +15,14 @@ import (
 var Conf *Config
 
 type Config struct {
-	Platform   string      `json:"platform"`
-	Scaling    string      `json:"scaling"`
-	API_key    string      `json:"api_key"`
-	Boss_port  string      `json:"boss_port"`
-	Worker_Cap int         `json:"worker_cap"`
-	Azure      AzureConfig `json:"azure"`
-	Gcp        GcpConfig   `json:"gcp"`
+	Platform   string      		`json:"platform"`
+	Scaling    string      		`json:"scaling"`
+	API_key    string      		`json:"api_key"`
+	Boss_port  string      		`json:"boss_port"`
+	Worker_Cap int         		`json:"worker_cap"`
+	Azure      AzureConfig 		`json:"azure"`
+	Gcp        GcpConfig   		`json:"gcp"`
 }
-
 type AzureConfig struct {
 	Resource_groups rgroups `json:"azure_config"`
 }
@@ -183,7 +182,7 @@ func LoadConf(path string) error {
 }
 
 func checkConf() error {
-	if Conf.Scaling != "manual" {
+	if Conf.Scaling != "manual" && Conf.Scaling != "auto" {
 		return fmt.Errorf("Scaling type '%s' not implemented", Conf.Scaling)
 	}
 

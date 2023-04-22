@@ -93,3 +93,5 @@ azure.json
 
 #boss
 boss.json
+cluster.log
+tasks.log
