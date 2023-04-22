@@ -1,0 +1,17 @@
+Ran program with no snapshots and no worker VMs
+
+ran: go run . false
+
+Ouput: 
+
+No snapshots found! Click new snapshot of boss
+Clicked Snapshot. Waiting for request to complete...
+Wait complete. Returning...
+New snapshot 'boss snap' successfully clicked.
+
+Created Droplet tony. Waiting for request to complete...
+Wait complete. tony was created successfully
+Droplet (DROPLET ID: 351845040) was preserved.
+
+SNAPSHOT_DROP: 6m43.098602946s
+CREATE_DROP: 1m27.647018772s
