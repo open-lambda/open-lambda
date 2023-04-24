@@ -54,9 +54,9 @@ func click_snap(client *godo.Client, droplet_id int, snap_name string) ([]godo.S
 		}
 		status = action.Status // Keep looping
 	}
-	SNAPSHOT_DROP = time.Since(t0)
+	SNAPSHOT_DROP := time.Since(t0)
 	/////////////////////// STOP
-	fmt.Println("Wait complete. Returning...")
+	fmt.Println("Wait complete. Returning... Snapshot_time: %d", SNAPSHOT_DROP)
 
 	// Make GET: Snapshot Info
 	opt := &godo.ListOptions{
@@ -75,8 +75,8 @@ func NewDOWorkerPool() (*WorkerPool) {
 	// Check API Token
 	token := os.Getenv("DIGITALOCEAN_TOKEN")
 	if len(token) == 0 {
-		fmt.Println("ERROR: Unable to find a DigitalOcean personal access token.\n Generate token and export as environment variable named 'DIGITALOCEAN_TOKEN'\n(src: https://docs.digitalocean.com/reference/api/create-personal-access-token/)")
-		panic()
+		err_msg := "ERROR: Unable to find a DigitalOcean personal access token.\n Generate token and export as environment variable named 'DIGITALOCEAN_TOKEN'\n(src: https://docs.digitalocean.com/reference/api/create-personal-access-token/)"
+		panic(err_msg)
 	}
 	
 	// Establishing auth information
@@ -93,11 +93,11 @@ func NewDOWorkerPool() (*WorkerPool) {
 	// Make GET: SSH information
 	keys, _, err := client.Keys.List(ctx, opt)
 	if err != nil {
-		fmt.Println("ERROR: An error was encountered while listing SSH information. Aborting...\n")
-		panic(err)
-	} if len(keys) == 0 {
-		fmt.Println("ERROR: Unable to find SSH Key setup.\n Setup SSH keys by visiting https://docs.digitalocean.com/products/droplets/how-to/add-ssh-keys/")
-		panic()
+		err_msg := "ERROR: An error was encountered while listing SSH information. Aborting...\n"
+		panic(err_msg)
+	} else if len(keys) == 0 {
+		err_msg := "ERROR: Unable to find SSH Key setup.\n Setup SSH keys by visiting https://docs.digitalocean.com/products/droplets/how-to/add-ssh-keys/"
+		panic(err_msg)
 	}
 	boss_key := keys[BOSS_IDX]
 
@@ -106,9 +106,9 @@ func NewDOWorkerPool() (*WorkerPool) {
 	if err != nil {
 		fmt.Println("ERROR: An error was encountered while listing droplets. Aborting...")
 		panic(err)
-	} if len(droplets) == 0 {
-		fmt.Println("ERROR: Unable to find boss. Make sure there is at least ONE VM in active state on your cloud dashboard.\n")
-		panic()
+	} else if len(droplets) == 0 {
+		err_msg := "ERROR: Unable to find boss. Make sure there is at least ONE VM in active state on your cloud dashboard.\n"
+		panic(err_msg)
 	}
 	boss_drop := droplets[BOSS_IDX]
 
@@ -117,7 +117,7 @@ func NewDOWorkerPool() (*WorkerPool) {
 	if err != nil {
 		fmt.Println("ERROR: An error was encountered while listing Snapshot information. Aborting...\n")
 		panic(err)
-	} if len(snapshots) == 0 {
+	} else if len(snapshots) == 0 {
 		// If snapshot DNE, click new snapshot: ETA 6.5 min
 		fmt.Println("No snapshots found! Click new snapshot of boss")
 		snapshots, err = click_snap(client, boss_drop.ID, SNAPSHOT_NAME)
@@ -162,17 +162,21 @@ func (pool *DOWorkerPool) CreateInstance(worker *Worker) {
 	ctx := context.TODO()
 
 	fmt.Printf("Creating Droplet from: %v\n", SNAPSHOT_NAME)
+	snap_id, err := strconv.Atoi(pool.BossSnap.ID)
+	if err != nil {
+		panic(err)
+	}
 	// Make POST: create Droplet
 	create_request := &godo.DropletCreateRequest{
 		Name:   CHILD_NAME,
-		Region: BossSnap.Regions[BOSS_IDX],
-		Size:   BossVM.Size.Slug,
+		Region: pool.BossSnap.Regions[BOSS_IDX],
+		Size:   pool.BossVM.Size.Slug,
 		Image: godo.DropletCreateImage{
-			ID: strconv.Atoi(BossSnap.ID),
+			ID: snap_id,
 		},
 		SSHKeys: []godo.DropletCreateSSHKey{
-			{ID: BossKey.ID},
-			{Fingerprint: BossKey.Fingerprint},
+			{ID: pool.BossKey.ID},
+			{Fingerprint: pool.BossKey.Fingerprint},
 		},
 	}
 	/////////////////////// START
