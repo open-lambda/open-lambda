@@ -206,7 +206,7 @@ func (pool *DOWorkerPool) CreateInstance(worker *Worker) {
 	fmt.Printf("Wait complete. %v was created successfully\n", child_drop.Name)
 
 	// Set workerID
-	worker.workerIp = child_drop.ID.Networks.V4[0].IPAddress
+	worker.workerIp = child_drop.Networks.V4[0].IPAddress
 }
 
 // Destroys instance from DO Dashboard
@@ -219,12 +219,14 @@ func (pool *DOWorkerPool) DeleteInstance(worker *Worker) {
 
 	// Wait until deletion completes
 	// Make POST: destroy Droplet -- based on input flag
-	_, err := client.Droplets.Delete(ctx, worker.workerId)
+	// type casting
+	worker_int, _ := strconv.Atoi(worker.workerId)
+	_, err := client.Droplets.Delete(ctx, worker_int)
 	if err != nil {
 		fmt.Printf("ERROR: An error was encountered while destroying %v Droplet. Aborting...\n", worker.workerId)
 		panic(err)
 	}
 
-	fmt.Printf("Deleted DO worker %v\n", worker.worker.Id)
+	fmt.Printf("Deleted DO worker %v\n", worker_int)
 }
 
