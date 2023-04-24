@@ -1,11 +1,11 @@
 package boss
 
 import (
-	"os"
-	"fmt"
-	"time"
 	"context"
+	"fmt"
+	"os"
 	"strconv"
+	"time"
 
 	"github.com/digitalocean/godo"
 )
@@ -13,13 +13,12 @@ import (
 // Globals
 const BOSS_IDX int = 0 // ASSUME: Boss is the first VM created
 const SNAPSHOT_NAME string = "boss snap"
-const CHILD_NAME string = "tony"
 
 type DOWorkerPool struct {
-	Client *godo.Client
-	BossVM godo.Droplet
-	BossKey godo.Key
-	BossSnap godo.Snapshot
+	Client     *godo.Client
+	BossVM     godo.Droplet
+	BossKey    godo.Key
+	BossSnap   godo.Snapshot
 	ParentPool *WorkerPool
 }
 
@@ -27,9 +26,9 @@ type DOWorker struct {
 	pool *DOWorkerPool
 }
 
-// Helper function to click snapshots 
+// Helper function to click snapshots
 func click_snap(client *godo.Client, droplet_id int, snap_name string) ([]godo.Snapshot, error) {
-	
+
 	// Etablishing auth info
 	ctx := context.TODO()
 
@@ -40,10 +39,10 @@ func click_snap(client *godo.Client, droplet_id int, snap_name string) ([]godo.S
 	snap_act_id := action.ID
 	status := action.Status
 	fmt.Println("Clicked Snapshot. Waiting for request to complete...")
-	
-	// Polling 
+
+	// Polling
 	for status != "completed" {
-		
+
 		// Sleep
 		time.Sleep(1 * time.Second)
 
@@ -63,22 +62,22 @@ func click_snap(client *godo.Client, droplet_id int, snap_name string) ([]godo.S
 		Page:    1,
 		PerPage: 200,
 	}
-	snapshots, _, err:=client.Snapshots.List(ctx, opt)
+	snapshots, _, err := client.Snapshots.List(ctx, opt)
 
 	// Return most recent snapshot slice
 	return snapshots, err
 }
 
 // Creates new worker pool
-func NewDOWorkerPool() (*WorkerPool) {
-	
+func NewDOWorkerPool() *WorkerPool {
+
 	// Check API Token
 	token := os.Getenv("DIGITALOCEAN_TOKEN")
 	if len(token) == 0 {
 		err_msg := "ERROR: Unable to find a DigitalOcean personal access token.\n Generate token and export as environment variable named 'DIGITALOCEAN_TOKEN'\n(src: https://docs.digitalocean.com/reference/api/create-personal-access-token/)"
 		panic(err_msg)
 	}
-	
+
 	// Establishing auth information
 	client := godo.NewFromToken(token)
 	ctx := context.TODO()
@@ -113,7 +112,7 @@ func NewDOWorkerPool() (*WorkerPool) {
 	boss_drop := droplets[BOSS_IDX]
 
 	// Make GET: Snapshot Info
-	snapshots, _, err:=client.Snapshots.List(ctx, opt)
+	snapshots, _, err := client.Snapshots.List(ctx, opt)
 	if err != nil {
 		fmt.Println("ERROR: An error was encountered while listing Snapshot information. Aborting...\n")
 		panic(err)
@@ -127,16 +126,16 @@ func NewDOWorkerPool() (*WorkerPool) {
 		}
 		fmt.Printf("New snapshot '%v' successfully clicked.\n", SNAPSHOT_NAME)
 	} // Otherwise, use existing snapshot
-	boss_snap:=snapshots[BOSS_IDX]
+	boss_snap := snapshots[BOSS_IDX]
 
 	// Fill out DO Worker Pool
-	DOpool := &DOWorkerPool {
-		Client: client,
-		BossVM: boss_drop,
-		BossKey: boss_key,
+	DOpool := &DOWorkerPool{
+		Client:   client,
+		BossVM:   boss_drop,
+		BossKey:  boss_key,
 		BossSnap: boss_snap,
 	}
-	parent := &WorkerPool {
+	parent := &WorkerPool{
 		WorkerPoolPlatform: DOpool,
 	}
 	DOpool.ParentPool = parent
@@ -156,7 +155,7 @@ func (pool *DOWorkerPool) NewWorker(nextId int) *Worker {
 
 // Creates new VM instance
 func (pool *DOWorkerPool) CreateInstance(worker *Worker) {
-	
+
 	// Authenticate
 	client := pool.Client
 	ctx := context.TODO()
@@ -166,9 +165,10 @@ func (pool *DOWorkerPool) CreateInstance(worker *Worker) {
 	if err != nil {
 		panic(err)
 	}
+	
 	// Make POST: create Droplet
 	create_request := &godo.DropletCreateRequest{
-		Name:   CHILD_NAME,
+		Name:   worker.workerId,
 		Region: pool.BossSnap.Regions[BOSS_IDX],
 		Size:   pool.BossVM.Size.Slug,
 		Image: godo.DropletCreateImage{
@@ -181,11 +181,11 @@ func (pool *DOWorkerPool) CreateInstance(worker *Worker) {
 	}
 	/////////////////////// START
 	// t0 := time.Now()
-	child_drop, _, err:=client.Droplets.Create(ctx, create_request)
+	child_drop, _, err := client.Droplets.Create(ctx, create_request)
 	if err != nil {
 		fmt.Println("ERROR: An error was encountered while creating new Droplet. Aborting...\n")
 		panic(err)
-	} 
+	}
 	fmt.Printf("Created Droplet %v. Waiting for request to complete...\n", child_drop.Name)
 	status := child_drop.Status // status: 'new' after creation
 	// Polling
@@ -194,7 +194,7 @@ func (pool *DOWorkerPool) CreateInstance(worker *Worker) {
 		time.Sleep(1 * time.Second)
 
 		// Make GET: Droplet information
-		child_drop, _, err := client.Droplets.Get(ctx, child_drop.ID)
+		child_drop, _, err = client.Droplets.Get(ctx, child_drop.ID)
 		if err != nil {
 			fmt.Println("ERROR: An error was encountered while retrieving Droplet information. Aborting...\n")
 			panic(err)
@@ -203,10 +203,33 @@ func (pool *DOWorkerPool) CreateInstance(worker *Worker) {
 	}
 	// CREATE_DROP = time.Since(t0)
 	/////////////////////// END
-	fmt.Printf("Wait complete. %v was created successfully\n", child_drop.Name)
+	// TODO: Fix network Ip
+	// Give more time for network
+	count := 100
+	for count > 0 {
+		if len(child_drop.Networks.V4) > 0 {break}
+		fmt.Println("Size: ", len(child_drop.Networks.V4))
+		time.Sleep(1 * time.Second)
+		count = count -1
+	}
 
+	fmt.Printf("Wait complete. %v was created successfully\n", child_drop.Name)
+	fmt.Println("Networks: ", child_drop.Networks, "Droplet: ", child_drop, "Make new API call")
+	child_drop, _, err = client.Droplets.Get(ctx, child_drop.ID)
+	if err != nil {
+		fmt.Println("ERROR: An error was encountered while retrieving Droplet information. Aborting...\n")
+		panic(err)
+	}
+	fmt.Println("Networks: ", child_drop.Networks, "Droplet: ", child_drop)
+
+	// FUNC CALL
+	pvt_ip, err := child_drop.PrivateIPv4()
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Pvt ip: %v\n", pvt_ip)
 	// Set workerID
-	worker.workerIp = child_drop.Networks.V4[0].IPAddress
+	worker.workerIp = pvt_ip
 }
 
 // Destroys instance from DO Dashboard
@@ -229,4 +252,3 @@ func (pool *DOWorkerPool) DeleteInstance(worker *Worker) {
 
 	fmt.Printf("Deleted DO worker %v\n", worker_int)
 }
-

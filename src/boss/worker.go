@@ -77,8 +77,8 @@ func NewWorkerPool() *WorkerPool {
 	} else if Conf.Platform == "azure" {
 		pool = NewAzureWorkerPool()
 		conf, err = ReadAzureConfig()
-		// } else if Conf.Platform == "do" {
-		// 	pool = NewDoWorkerPool()
+	} else if Conf.Platform == "DO" {
+		pool = NewDOWorkerPool()
 	} else if Conf.Platform == "mock" {
 		pool = NewMockWorkerPool()
 	}
