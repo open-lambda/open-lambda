@@ -27,6 +27,48 @@ type DOWorker struct {
 	pool *DOWorkerPool
 }
 
+// Helper function to click snapshots 
+func click_snap(client *godo.Client, droplet_id int, snap_name string) ([]godo.Snapshot, error) {
+	
+	// Etablishing auth info
+	ctx := context.TODO()
+
+	// Make POST: click Snapshot
+	/////////////////////// START
+	t0 := time.Now()
+	action, _, err := client.DropletActions.Snapshot(ctx, droplet_id, snap_name)
+	snap_act_id := action.ID
+	status := action.Status
+	fmt.Println("Clicked Snapshot. Waiting for request to complete...")
+	
+	// Polling 
+	for status != "completed" {
+		
+		// Sleep
+		time.Sleep(1 * time.Second)
+
+		// Make GET: Snapshot information
+		action, _, err := client.DropletActions.Get(ctx, droplet_id, snap_act_id)
+		if err != nil {
+			return nil, err
+		}
+		status = action.Status // Keep looping
+	}
+	SNAPSHOT_DROP = time.Since(t0)
+	/////////////////////// STOP
+	fmt.Println("Wait complete. Returning...")
+
+	// Make GET: Snapshot Info
+	opt := &godo.ListOptions{
+		Page:    1,
+		PerPage: 200,
+	}
+	snapshots, _, err:=client.Snapshots.List(ctx, opt)
+
+	// Return most recent snapshot slice
+	return snapshots, err
+}
+
 // Creates new worker pool
 func NewDOWorkerPool() (*WorkerPool) {
 	
@@ -70,13 +112,29 @@ func NewDOWorkerPool() (*WorkerPool) {
 	}
 	boss_drop := droplets[BOSS_IDX]
 
-	// TODO: Check for snapshot
+	// Make GET: Snapshot Info
+	snapshots, _, err:=client.Snapshots.List(ctx, opt)
+	if err != nil {
+		fmt.Println("ERROR: An error was encountered while listing Snapshot information. Aborting...\n")
+		panic(err)
+	} if len(snapshots) == 0 {
+		// If snapshot DNE, click new snapshot: ETA 6.5 min
+		fmt.Println("No snapshots found! Click new snapshot of boss")
+		snapshots, err = click_snap(client, boss_drop.ID, SNAPSHOT_NAME)
+		if err != nil {
+			fmt.Println("ERROR: An error was encountered while clicking a snapshot. Aborting...\nError Message:", err)
+			panic(err)
+		}
+		fmt.Printf("New snapshot '%v' successfully clicked.\n", SNAPSHOT_NAME)
+	} // Otherwise, use existing snapshot
+	boss_snap:=snapshots[BOSS_IDX]
 
 	// Fill out DO Worker Pool
 	DOpool := &DOWorkerPool {
 		Client: client,
 		BossVM: boss_drop,
 		BossKey: boss_key,
+		BossSnap: boss_snap,
 	}
 	parent := &WorkerPool {
 		WorkerPoolPlatform: DOpool,
@@ -144,6 +202,25 @@ func (pool *DOWorkerPool) CreateInstance(worker *Worker) {
 	fmt.Printf("Wait complete. %v was created successfully\n", child_drop.Name)
 
 	// Set workerID
-	worker.workerIp = child_drop.ID
+	worker.workerIp = child_drop.ID.Networks.V4[0].IPAddress
+}
+
+// Destroys instance from DO Dashboard
+func (pool *DOWorkerPool) DeleteInstance(worker *Worker) {
+	// Authenticate
+	client := pool.Client
+	ctx := context.TODO()
+
+	fmt.Printf("Deleting DO worker: %v\n", worker.workerId)
+
+	// Wait until deletion completes
+	// Make POST: destroy Droplet -- based on input flag
+	_, err := client.Droplets.Delete(ctx, worker.workerId)
+	if err != nil {
+		fmt.Printf("ERROR: An error was encountered while destroying %v Droplet. Aborting...\n", worker.workerId)
+		panic(err)
+	}
+
+	fmt.Printf("Deleted DO worker %v\n", worker.worker.Id)
 }
 
