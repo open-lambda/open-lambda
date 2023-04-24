@@ -193,7 +193,7 @@ func (worker *AzureWorker) killWorker() {
 }
 
 func (pool *AzureWorkerPool) DeleteInstance(generalworker *Worker) {
-	pool.parentPool.lock.Lock()
+	pool.parentPool.Lock()
 	worker := (*pool.workers)[generalworker.workerId]
 	// log.Printf("Killing worker: %s", worker.workerId)
 
