@@ -55,7 +55,7 @@ func click_snap(client *godo.Client, droplet_id int, snap_name string) ([]godo.S
 	}
 	SNAPSHOT_DROP := time.Since(t0)
 	/////////////////////// STOP
-	fmt.Println("Wait complete. Returning... Snapshot_time: %d", SNAPSHOT_DROP)
+	fmt.Printf("Wait complete. Returning... Droplet Size: 4-80GB\nSnapshot_time: %d", SNAPSHOT_DROP)
 
 	// Make GET: Snapshot Info
 	opt := &godo.ListOptions{
