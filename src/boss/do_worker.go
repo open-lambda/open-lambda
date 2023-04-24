@@ -203,33 +203,25 @@ func (pool *DOWorkerPool) CreateInstance(worker *Worker) {
 	}
 	// CREATE_DROP = time.Since(t0)
 	/////////////////////// END
-	// TODO: Fix network Ip
-	// Give more time for network
-	count := 100
-	for count > 0 {
-		if len(child_drop.Networks.V4) > 0 {break}
-		fmt.Println("Size: ", len(child_drop.Networks.V4))
-		time.Sleep(1 * time.Second)
-		count = count -1
-	}
-
+	// // Uncomment for debugging
+	// // Give more time for network
+	// count := 100
+	// for count > 0 {
+	// 	if len(child_drop.Networks.V4) > 0 {break}
+	// 	fmt.Println("Size: ", len(child_drop.Networks.V4))
+	// 	time.Sleep(1 * time.Second)
+	// 	count = count -1
+	// }
+	// fmt.Println("Networks: ", child_drop.Networks, "Droplet: ", child_drop)
 	fmt.Printf("Wait complete. %v was created successfully\n", child_drop.Name)
-	fmt.Println("Networks: ", child_drop.Networks, "Droplet: ", child_drop, "Make new API call")
-	child_drop, _, err = client.Droplets.Get(ctx, child_drop.ID)
-	if err != nil {
-		fmt.Println("ERROR: An error was encountered while retrieving Droplet information. Aborting...\n")
-		panic(err)
-	}
-	fmt.Println("Networks: ", child_drop.Networks, "Droplet: ", child_drop)
-
-	// FUNC CALL
+	// Accessing private Ip
 	pvt_ip, err := child_drop.PrivateIPv4()
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("Pvt ip: %v\n", pvt_ip)
 	// Set workerID
 	worker.workerIp = pvt_ip
+	fmt.Printf("ip set successfully. ip: %v\n", pvt_ip)
 }
 
 // Destroys instance from DO Dashboard
