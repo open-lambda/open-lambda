@@ -180,7 +180,7 @@ func (pool *DOWorkerPool) CreateInstance(worker *Worker) {
 		},
 	}
 	/////////////////////// START
-	// t0 := time.Now()
+	t0 := time.Now()
 	child_drop, _, err := client.Droplets.Create(ctx, create_request)
 	if err != nil {
 		fmt.Println("ERROR: An error was encountered while creating new Droplet. Aborting...\n")
@@ -201,7 +201,7 @@ func (pool *DOWorkerPool) CreateInstance(worker *Worker) {
 		}
 		status = child_drop.Status // Keep looping
 	}
-	// CREATE_DROP = time.Since(t0)
+	create := time.Since(t0)
 	/////////////////////// END
 	// // Uncomment for debugging
 	// // Give more time for network
@@ -222,6 +222,7 @@ func (pool *DOWorkerPool) CreateInstance(worker *Worker) {
 	// Set workerID
 	worker.workerIp = pvt_ip
 	fmt.Printf("ip set successfully. ip: %v\n", pvt_ip)
+	fmt.Printf("\nPerf Stats\nDroplet Size: 4GB,80GB\nCreation Time: %v", create)
 }
 
 // Destroys instance from DO Dashboard
