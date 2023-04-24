@@ -19,10 +19,12 @@ type DOWorkerPool struct {
 	Client *godo.Client
 	BossVM godo.Droplet
 	BossKey godo.Key
+	BossSnap godo.Snapshot
+	ParentPool *WorkerPool
 }
 
 type DOWorker struct {
-	//TODO: Fill out
+	pool *DOWorkerPool
 }
 
 // Creates new worker pool
@@ -68,13 +70,80 @@ func NewDOWorkerPool() (*WorkerPool) {
 	}
 	boss_drop := droplets[BOSS_IDX]
 
+	// TODO: Check for snapshot
+
 	// Fill out DO Worker Pool
-	return &WorkerPool {
-		WorkerPoolPlatform: &DOWorkerPool {
-			Client: client,
-			BossVM: boss_drop,
-			BossKey: boss_key,
-		}
+	DOpool := &DOWorkerPool {
+		Client: client,
+		BossVM: boss_drop,
+		BossKey: boss_key,
+	}
+	parent := &WorkerPool {
+		WorkerPoolPlatform: DOpool,
+	}
+	DOpool.ParentPool = parent
+	return parent
+}
+
+// Defines new DO Worker
+func (pool *DOWorkerPool) NewWorker(nextId int) *Worker {
+	workerId := fmt.Sprintf("ol-worker-%d", nextId)
+	return &Worker{
+		workerId:       workerId,
+		workerIp:       "",
+		WorkerPlatform: DOWorker{},
+		pool:           pool.ParentPool,
 	}
 }
+
+// Creates new VM instance
+func (pool *DOWorkerPool) CreateInstance(worker *Worker) {
+	
+	// Authenticate
+	client := pool.Client
+	ctx := context.TODO()
+
+	fmt.Printf("Creating Droplet from: %v\n", SNAPSHOT_NAME)
+	// Make POST: create Droplet
+	create_request := &godo.DropletCreateRequest{
+		Name:   CHILD_NAME,
+		Region: BossSnap.Regions[BOSS_IDX],
+		Size:   BossVM.Size.Slug,
+		Image: godo.DropletCreateImage{
+			ID: strconv.Atoi(BossSnap.ID),
+		},
+		SSHKeys: []godo.DropletCreateSSHKey{
+			{ID: BossKey.ID},
+			{Fingerprint: BossKey.Fingerprint},
+		},
+	}
+	/////////////////////// START
+	// t0 := time.Now()
+	child_drop, _, err:=client.Droplets.Create(ctx, create_request)
+	if err != nil {
+		fmt.Println("ERROR: An error was encountered while creating new Droplet. Aborting...\n")
+		panic(err)
+	} 
+	fmt.Printf("Created Droplet %v. Waiting for request to complete...\n", child_drop.Name)
+	status := child_drop.Status // status: 'new' after creation
+	// Polling
+	for status != "active" {
+		// Sleep
+		time.Sleep(1 * time.Second)
+
+		// Make GET: Droplet information
+		child_drop, _, err := client.Droplets.Get(ctx, child_drop.ID)
+		if err != nil {
+			fmt.Println("ERROR: An error was encountered while retrieving Droplet information. Aborting...\n")
+			panic(err)
+		}
+		status = child_drop.Status // Keep looping
+	}
+	// CREATE_DROP = time.Since(t0)
+	/////////////////////// END
+	fmt.Printf("Wait complete. %v was created successfully\n", child_drop.Name)
+
+	// Set workerID
+	worker.workerIp = child_drop.ID
 }
+
