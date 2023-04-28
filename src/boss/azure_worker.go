@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
+	"sync"
 	"time"
 )
 
@@ -86,7 +87,12 @@ func (pool *AzureWorkerPool) NewWorker(nextId int) *Worker {
 // TODO: make AzureCreateVM multiple-threaded
 func (pool *AzureWorkerPool) CreateInstance(worker *Worker) {
 	log.Printf("creating an azure worker\n")
-	conf := AzureCreateVM(worker)
+	conf, err := AzureCreateVM(worker)
+	if err != nil {
+		pool.parentPool.Close()
+		time.Sleep(3 * time.Minute)
+		log.Fatal()
+	}
 	var private string
 
 	//pool.parentPool.lock.Lock()
@@ -119,9 +125,9 @@ func (pool *AzureWorkerPool) CreateInstance(worker *Worker) {
 	pool.workerNum += 1
 	pool.nextId = pool.workerNum + 1
 
-	//(*pool.workers)[azworker.workerId] = azworker
+	(*pool.workers)[azworker.workerId] = azworker
 	worker.workerId = azworker.workerId
-	worker.workerIp = azworker.publicAddr
+	worker.workerIp = azworker.privateAddr
 	worker.WorkerPlatform = azworker
 	//pool.parentPool.lock.Unlock()
 
@@ -192,24 +198,10 @@ func (worker *AzureWorker) killWorker() {
 	}
 }
 
+var conf_lock sync.Mutex
+
 func (pool *AzureWorkerPool) DeleteInstance(generalworker *Worker) {
-	pool.parentPool.Lock()
 	worker := (*pool.workers)[generalworker.workerId]
-	// log.Printf("Killing worker: %s", worker.workerId)
-
-	// worker.killWorker()
-
-	// pool.parentPool.lock.Lock()
-	// delete(pool.parentPool.cleaningWorkers, generalworker.workerId)
-	// pool.parentPool.cleanedWorker = generalworker
-	// pool.parentPool.updateCluster()
-	// if pool.parentPool.needRestart {
-	// 	pool.parentPool.needRestart = false
-	// 	pool.parentPool.lock.Unlock()
-	// 	worker.startWorker()
-	// 	return
-	// }
-	// pool.parentPool.lock.Unlock()
 
 	// delete the vm
 	log.Printf("Try to delete the vm")
@@ -218,6 +210,7 @@ func (pool *AzureWorkerPool) DeleteInstance(generalworker *Worker) {
 
 	//pool.parentPool.lock.Lock()
 	// shrink length
+	conf_lock.Lock()
 	conf, _ := ReadAzureConfig()
 	conf.Resource_groups.Rgroup[0].Numvm -= 1
 	// shrink slice
@@ -234,21 +227,5 @@ func (pool *AzureWorkerPool) DeleteInstance(generalworker *Worker) {
 	worker.pool.workerNum -= 1
 	WriteAzureConfig(conf)
 	log.Printf("Deleted the worker and worker VM successfully\n")
-	//delete(pool.parentPool.destroyingWorkers, generalworker.workerId) // delete from the map
-	// call updateCluster here
-	//pool.parentPool.destroyedWorker = generalworker
-	//pool.parentPool.updateCluster()
-	//pool.parentPool.lock.Unlock()
+	conf_lock.Unlock()
 }
-
-// func (pool *AzureWorkerPool) Size() int {
-// 	return len(pool.parentPool.startingWorkers) + len(pool.parentPool.runningWorkers)
-// }
-
-// func (pool *AzureWorkerPool) Status() []string {
-// 	var w = []string{}
-// 	for k, _ := range *pool.workers {
-// 		w = append(w, k)
-// 	}
-// 	return w
-// }

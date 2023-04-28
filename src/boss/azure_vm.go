@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"strconv"
+	"sync"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
@@ -38,21 +39,25 @@ func backtoIP4(ipInt int64) string {
 	return b0 + "." + b1 + "." + b2 + "." + b3
 }
 
-func createVM(worker *Worker) *AzureConfig {
+var create_lock sync.Mutex
+
+func createVM(worker *Worker) (*AzureConfig, error) {
 	vmName := worker.workerId
 	diskName := "ol-boss_OsDisk_1_58ab03cfbf114ad58532c893535a70ec"
 	vnetName := "ol-boss-vnet"
 	snapshotName := "ol-boss-snapshot"
 	conn, err := connectionAzure()
 	if err != nil {
-		log.Fatalf("cannot connect to Azure:%+v", err)
+		log.Println(err.Error())
+		return conf, err
 	}
 	ctx := context.Background()
 
 	log.Println("start creating virtual machine...")
 	resourceGroup, err := createResourceGroup(ctx, conn)
 	if err != nil {
-		log.Fatalf("cannot create resource group:%+v", err)
+		log.Println(err.Error())
+		return conf, err
 	}
 	log.Printf("Created resource group: %s", *resourceGroup.ID)
 
@@ -65,29 +70,34 @@ func createVM(worker *Worker) *AzureConfig {
 	// create snapshot
 	disk, err := getDisk(ctx, conn, diskName)
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("cannot get disk: %s", err)
+		return conf, err
 	}
 	log.Println("Fetched disk:", *disk.ID)
 
-	worker.pool.Lock()
+	create_lock.Lock()
 	snapshot, err := createSnapshot(ctx, conn, *disk.ID, snapshotName)
-	worker.pool.Unlock()
+	create_lock.Unlock()
 	if err != nil {
-		log.Fatal(err)
+		log.Print(err)
+		return conf, err
 	}
 	log.Println("Created snapshot:", *snapshot.ID)
 
 	new_disk, err := createDisk(ctx, conn, *snapshot.ID, newDiskName)
 	if err != nil {
-		log.Fatal(err)
+		log.Print(err)
+		return conf, err
 	}
 	log.Println("Created disk:", *new_disk.ID)
 
 	new_vm := new(vmStatus)
 	// get network
+	create_lock.Lock()
 	virtualNetwork, err := getVirtualNetwork(ctx, conn, vnetName)
 	if err != nil {
-		log.Fatalf("cannot get virtual network:%+v", err)
+		log.Println(err.Error())
+		return conf, err
 	}
 	log.Printf("Fetched virtual network: %s", *virtualNetwork.ID)
 	new_vm.Virtual_net = *virtualNetwork
@@ -99,20 +109,20 @@ func createVM(worker *Worker) *AzureConfig {
 	lastSubnet64 += 256
 	newSubnetIP := backtoIP4(lastSubnet64)
 
-	worker.pool.Lock()
 	subnet, err := createSubnets(ctx, conn, newSubnetIP, vnetName, subnetName)
 	if err != nil {
-		log.Fatalf("cannot create subnet:%+v", err)
+		log.Println(err.Error())
+		return conf, err
 	}
 	log.Printf("Created subnet: %s", *subnet.ID)
-	worker.pool.Unlock()
+	create_lock.Unlock()
 
 	new_vm.Subnet = *subnet
 
 	/*
 		publicIP, err := createPublicIP(ctx, conn)
 		if err != nil {
-			log.Fatalf("cannot create public IP address:%+v", err)
+			log.Println("cannot create public IP address:%+v", err)
 		}
 		log.Printf("Created public IP address: %s", *publicIP.ID)
 		conf.Resource_groups.Rgroup[0].Public_ip[vmNum] = *publicIP
@@ -121,14 +131,16 @@ func createVM(worker *Worker) *AzureConfig {
 	// network security group
 	nsg, err := createNetworkSecurityGroup(ctx, conn, nsgName)
 	if err != nil {
-		log.Fatalf("cannot create network security group:%+v", err)
+		log.Println(err.Error())
+		return conf, err
 	}
 	log.Printf("Created network security group: %s", *nsg.ID)
 	new_vm.Security_group = *nsg
 
 	netWorkInterface, err := createNetWorkInterfaceWithoutIp(ctx, conn, *subnet.ID, *nsg.ID, nicName)
 	if err != nil {
-		log.Fatalf("cannot create network interface:%+v", err)
+		log.Println(err.Error())
+		return conf, err
 	}
 	log.Printf("Created network interface: %s", *netWorkInterface.ID)
 	new_vm.Net_ifc = *netWorkInterface
@@ -140,7 +152,8 @@ func createVM(worker *Worker) *AzureConfig {
 
 	virtualMachine, err := createVirtualMachine(ctx, conn, *networkInterfaceID, *new_disk.ID, newDiskName, vmName)
 	if err != nil {
-		log.Fatalf("cannot create virual machine:%+v", err)
+		log.Println(err.Error())
+		return conf, err
 	}
 	log.Printf("Created new virual machine: %s", *virtualMachine.ID)
 
@@ -148,7 +161,7 @@ func createVM(worker *Worker) *AzureConfig {
 	new_vm.Vm = *virtualMachine
 	new_vm.Status = "Running"
 
-	worker.pool.Lock()
+	create_lock.Lock()
 	conf.Resource_groups.Rgroup[0].Resource = *resourceGroup
 	rg := &conf.Resource_groups.Rgroup[0]
 	rg.Vms = append(rg.Vms, *new_vm)
@@ -156,11 +169,12 @@ func createVM(worker *Worker) *AzureConfig {
 	conf.Resource_groups.Rgroup[0].Numvm += 1
 
 	if err := WriteAzureConfig(conf); err != nil {
-		log.Fatalf("write to azure.json file failed:%s", err)
+		log.Println(err.Error())
+		return conf, err
 	}
-	worker.pool.Unlock()
+	create_lock.Unlock()
 
-	return conf
+	return conf, nil
 }
 
 func cleanupVM(worker *AzureWorker) {
@@ -203,7 +217,9 @@ func cleanupVM(worker *AzureWorker) {
 		log.Println("deleted public IP address")
 	}
 
+	create_lock.Lock()
 	err = deleteSubnets(ctx, conn, worker.vnetName, worker.subnetName)
+	create_lock.Unlock()
 	if err != nil {
 		log.Fatalf("cannot delete subnet:%+v", err)
 	}
@@ -644,7 +660,7 @@ func createVirtualMachine(ctx context.Context, cred azcore.TokenCredential, netw
 			},
 			HardwareProfile: &armcompute.HardwareProfile{
 				// TODO: make it user's choice
-				VMSize: to.Ptr(armcompute.VirtualMachineSizeTypes("Standard_B1ms")), // VM size include vCPUs,RAM,Data Disks,Temp storage.
+				VMSize: to.Ptr(armcompute.VirtualMachineSizeTypes("Standard_B2s")), // VM size include vCPUs,RAM,Data Disks,Temp storage.
 			},
 			// OSProfile: &armcompute.OSProfile{ //
 			// 	ComputerName:  to.Ptr(vmName),

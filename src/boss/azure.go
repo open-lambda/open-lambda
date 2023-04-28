@@ -114,7 +114,7 @@ func randomString() string {
 	return strconv.Itoa(r.Int())
 }
 
-func AzureCreateVM(worker *Worker) *AzureConfig {
+func AzureCreateVM(worker *Worker) (*AzureConfig, error) {
 	subscriptionId = os.Getenv("AZURE_SUBSCRIPTION_ID")
 	if len(subscriptionId) == 0 {
 		log.Fatal("AZURE_SUBSCRIPTION_ID is not set.")
