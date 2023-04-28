@@ -116,6 +116,8 @@ func NewWorkerPool() *WorkerPool {
 
 //return number of workers in the pool
 func (pool *WorkerPool) Size() int {
+	pool.Lock()
+	defer pool.Unlock()
 	size := 0
 	for i := 0; i < len(pool.workers); i++ {
 		size += len(pool.workers[i])
@@ -126,15 +128,19 @@ func (pool *WorkerPool) Size() int {
 //renamed Scale() -> SetTarget()
 func (pool *WorkerPool) SetTarget(target int) {
 	pool.Lock()
+	
 	pool.target = target
 	clusterLog.Printf("set target=%d", pool.target)
-	pool.updateCluster()
+	
 	pool.Unlock()
+	
+	pool.updateCluster()
 }
 
-// lock should be held before calling this function
 // add a new worker to the cluster
 func (pool *WorkerPool) startNewWorker() {
+	pool.Lock()
+	
 	log.Printf("starting new worker\n")
 	nextId := pool.nextId
 	pool.nextId += 1
@@ -149,6 +155,7 @@ func (pool *WorkerPool) startNewWorker() {
 		len(pool.workers[DESTROYING]))
 
 	pool.Unlock()
+
 	go func() { // should be able to create multiple instances simultaneously
 		pool.CreateInstance(worker) //create new instance
 
@@ -160,7 +167,6 @@ func (pool *WorkerPool) startNewWorker() {
 
 		//change state starting -> running
 		pool.Lock()
-		defer pool.Unlock()
 
 		worker.state = RUNNING
 		delete(pool.workers[STARTING], worker.workerId)
@@ -174,15 +180,17 @@ func (pool *WorkerPool) startNewWorker() {
 			len(pool.workers[DESTROYING]))
 		pool.queue <- worker
 		log.Printf("%s ready\n", worker.workerId)
-
+		
+		pool.Unlock()
+		
 		pool.updateCluster()
 	}()
-	pool.Lock()
 }
 
-// lock should be held before calling this function
 // recover cleaning worker
 func (pool *WorkerPool) recoverWorker(worker *Worker) {
+	pool.Lock()
+
 	log.Printf("recovering %s\n", worker.workerId)
 	worker.state = RUNNING
 	delete(pool.workers[CLEANING], worker.workerId)
@@ -194,13 +202,16 @@ func (pool *WorkerPool) recoverWorker(worker *Worker) {
 		len(pool.workers[RUNNING]),
 		len(pool.workers[CLEANING]),
 		len(pool.workers[DESTROYING]))
+	
+	pool.Unlock()
 
 	pool.updateCluster()
 }
 
-// lock should be held before calling this function
 // clean the worker
 func (pool *WorkerPool) cleanWorker(worker *Worker) {
+	pool.Lock()
+
 	log.Printf("cleaning %s\n", worker.workerId)
 	worker.state = CLEANING
 	delete(pool.workers[RUNNING], worker.workerId)
@@ -212,10 +223,9 @@ func (pool *WorkerPool) cleanWorker(worker *Worker) {
 		len(pool.workers[RUNNING]),
 		len(pool.workers[CLEANING]),
 		len(pool.workers[DESTROYING]))
-
-	pool.updateCluster()
-
+	
 	pool.Unlock()
+
 	go func() {
 		for worker.numTask > 0 { //wait until all task is completed
 			pool.Lock()
@@ -226,17 +236,13 @@ func (pool *WorkerPool) cleanWorker(worker *Worker) {
 			time.Sleep(time.Second)
 		}
 
-		pool.Lock()
-		defer pool.Unlock()
 		pool.detroyWorker(worker)
 	}()
-	pool.Lock()
 }
 
-// lock should be held before calling this function
 // destroy a worker from the cluster
 func (pool *WorkerPool) detroyWorker(worker *Worker) {
-	log.Printf("destroying %s\n", worker.workerId)
+	pool.Lock()
 
 	worker.state = DESTROYING
 	delete(pool.workers[CLEANING], worker.workerId)
@@ -250,12 +256,13 @@ func (pool *WorkerPool) detroyWorker(worker *Worker) {
 		len(pool.workers[DESTROYING]))
 
 	pool.Unlock()
+
 	go func() { // should be able to destroy multiple instances simultaneously
 		pool.DeleteInstance(worker) //delete new instance
 
 		// remove from cluster
 		pool.Lock()
-		defer pool.Unlock()
+
 		delete(pool.workers[DESTROYING], worker.workerId)
 
 		log.Printf("%s destroyed\n", worker.workerId)
@@ -265,48 +272,54 @@ func (pool *WorkerPool) detroyWorker(worker *Worker) {
 			len(pool.workers[RUNNING]),
 			len(pool.workers[CLEANING]),
 			len(pool.workers[DESTROYING]))
+		pool.Unlock()
+		
 		pool.updateCluster()
 	}()
-	pool.Lock()
 }
 
-// lock should be held before calling this function
 // called when worker is been evicted from cleaning or destroying map
 func (pool *WorkerPool) updateCluster() {
 	scaleSize := pool.target - pool.Size() // scaleSize = target - size of cluster
 
-	if scaleSize >= 0 {
-		// create new worker if target is bigger than current cluster size
-		// this cluster size includes workers in destroying state
+	if scaleSize > 0 {
 		for i := 0; i < scaleSize; i++ {
 			pool.startNewWorker()
 		}
-	} else {
-		// clean workers if target is smaller than current cluster size - cleaning worker - destroying worker
-		// ex) if target = 3, and starting, running, cleaning, and destroying  = 1, 2, 1, 1 respectively
-		//     then, scaleSize = 3 - 5 = -2. toBeClean = -1 since 2 workers in cleaning and destroying will eventually be destroyed.
-		//
-		// ex) if target = 1, and 1, 1, 0, 0
-		//     originally we will shut down the running worker, but this will lead a period of time when no worker is available
-		//     so we substract the starting workers also
-		//     in this case, the program will not shut down workers until the starting worker changes to running status
-		toBeClean := -1*scaleSize - len(pool.workers[CLEANING]) - len(pool.workers[DESTROYING]) - len(pool.workers[STARTING])
+		return
+	}
+
+
+	pool.Lock()
+	toBeClean := -1*scaleSize - len(pool.workers[CLEANING]) - len(pool.workers[DESTROYING]) - len(pool.workers[STARTING])
+	pool.Unlock()
+
+	if toBeClean > 0 {
 		for i := 0; i < toBeClean; i++ { //TODO: policy: clean worker with least tasks
 			worker := <-pool.queue
 			pool.cleanWorker(worker)
 		}
+
+		pool.updateCluster()
+		return
 	}
 
-	// recover workers if target - starting worker - running worker > 0
-	// ex) if target = 5, and running, cleaning, and destroying  = 1, 2, 1, 1 respectively
-	//     then, toBeRecover = 5 - 1 - 2 = 2 and recover 1 cleaning worker since destroying worker cannot be recovered
+	pool.Lock()
 	toBeRecover := pool.target - len(pool.workers[STARTING]) - len(pool.workers[RUNNING])
-	for _, worker := range pool.workers[CLEANING] {
-		if toBeRecover <= 0 { //TODO: policy: recover worker with most tasks
-			break
+	pool.Unlock()
+
+	if toBeRecover > 0 {
+		pool.Lock()
+		for _, worker := range pool.workers[CLEANING] {
+			if toBeRecover <= 0 { //TODO: policy: recover worker with most tasks
+				break
+			}
+			pool.Unlock()
+			pool.recoverWorker(worker)
+			pool.Lock()
+			toBeRecover--
 		}
-		pool.recoverWorker(worker)
-		toBeRecover--
+		pool.Unlock()
 	}
 }
 
@@ -355,47 +368,7 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 //force kill workers
 func (pool *WorkerPool) Close() {
 	log.Println("closing worker pool")
-
-	pool.Lock()
-
-	pool.target = 0
-	var wg sync.WaitGroup
-	for i := 0; i < 3; i++ {
-		for _, worker := range pool.workers[i] {
-			delete(pool.workers[i], worker.workerId)
-			pool.workers[DESTROYING][worker.workerId] = worker
-
-			pool.Unlock()
-			wg.Add(1)
-			go func(w *Worker) {
-				log.Printf("destroying %s\n", worker.workerId)
-				clusterLog.Printf("%s: destroying [target=%d, starting=%d, running=%d, cleaning=%d, destroying=%d]",
-					worker.workerId, pool.target,
-					len(pool.workers[STARTING]),
-					len(pool.workers[RUNNING]),
-					len(pool.workers[CLEANING]),
-					len(pool.workers[DESTROYING]))
-
-				pool.DeleteInstance(w)
-
-				pool.Lock()
-				defer pool.Unlock()
-
-				delete(pool.workers[DESTROYING], w.workerId)
-				clusterLog.Printf("%s: destroyed [target=%d, starting=%d, running=%d, cleaning=%d, destroying=%d]",
-					worker.workerId, pool.target,
-					len(pool.workers[STARTING]),
-					len(pool.workers[RUNNING]),
-					len(pool.workers[CLEANING]),
-					len(pool.workers[DESTROYING]))
-				log.Printf("%s destroyed\n", worker.workerId)
-				wg.Done()
-			}(worker)
-			pool.Lock()
-		}
-	}
-	pool.Unlock()
-	wg.Wait()
+	pool.SetTarget(0)
 }
 
 // forward request to worker
