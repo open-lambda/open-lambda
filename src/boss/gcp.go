@@ -77,7 +77,9 @@ func GcpBossTest() {
 
 	fmt.Printf("STEP 3: take crash-consistent snapshot of instance\n")
 	disk := instance // assume Gcp disk name is same as instance name
+	start := time.Now()
 	resp, err := client.Wait(client.GcpSnapshot(disk))
+	snapshot_time := time.Since(start)
 
 	fmt.Println(resp)
 	if err != nil {
@@ -85,7 +87,9 @@ func GcpBossTest() {
 	}
 
 	fmt.Printf("STEP 4: create new VM from snapshot\n")
+	start = time.Now()
 	resp, err = client.Wait(client.LaunchGcp("test-snap", "test-vm"))
+	clone_time := time.Since(start)
 	if err != nil && resp["error"].(map[string]any)["code"] != "409" { //continue if instance already exists error
 		fmt.Printf("instance alreay exists!\n")
 		client.startGcpInstance("test-vm")
@@ -93,11 +97,14 @@ func GcpBossTest() {
 		panic(err)
 	}
 
-	fmt.Printf("STEP 5: start worker\n")
-	err = client.RunComandWorker("test-vm", "./ol worker --detach")
-	if err != nil {
-		panic(err)
-	}
+	fmt.Printf("\nsnapshot time: %d\n", snapshot_time.Milliseconds())
+	fmt.Printf("clone time: %d\n", clone_time.Milliseconds())
+
+	// fmt.Printf("STEP 5: start worker\n")
+	// err = client.RunComandWorker("test-vm", "./ol worker --detach")
+	// if err != nil {
+	// 	panic(err)
+	// }
 
 	// fmt.Printf("STEP 6: stop instance\n")
 	// resp, err = client.Wait(client.stopGcpInstance("test-vm"))
@@ -520,7 +527,7 @@ func (c *GcpClient) GcpSnapshot(disk string) (map[string]any, error) {
 		Region:       c.service_account["region"].(string),
 		Zone:         c.service_account["zone"].(string),
 		Disk:         disk,
-		SnapshotName: "test-snap",
+		SnapshotName: "test-snap-2",
 	}
 
 	url := fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/zones/%s/disks/%s/createSnapshot",
