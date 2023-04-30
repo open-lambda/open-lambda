@@ -30,27 +30,29 @@ func (s *ScalingThreshold) Scale(pool *WorkerPool) {
 	}
 
 	sumTask := 0
-	numWorker := len(pool.workers[RUNNING]) + len(pool.workers[STARTING])
 	
 	for _, worker := range pool.workers[RUNNING] {
 		sumTask += int(worker.numTask)
 	}
 
-	tasksPerWorker := sumTask/numWorker
+	tasksPerWorker := sumTask/pool.target
 
 	if pool.target < Conf.Worker_Cap && tasksPerWorker > UPPERBOUND {
-		new_target := pool.target + tasksPerWorker/UPPERBOUND
-		log.Println("scale up (target=%d)\n", new_target)
+		new_target := (tasksPerWorker * pool.target)/UPPERBOUND + 1
+		if new_target > Conf.Worker_Cap {
+			new_target = Conf.Worker_Cap
+		}
+		log.Printf("scale up (target=%d)\n", new_target)
 		pool.SetTarget(new_target)
 	}
 
 	if pool.target > 1 && tasksPerWorker < LOWERBOUND {
-		new_target := pool.target - (LOWERBOUND/tasksPerWorker)
+		new_target := (tasksPerWorker * pool.target)/LOWERBOUND 
 		if new_target < 1 {
 			new_target = 1
 		}
 
-		log.Println("scale down (target=%d)\n", new_target)
+		log.Printf("scale down (target=%d)\n", new_target)
 		pool.SetTarget(new_target)
 	}
 

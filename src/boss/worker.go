@@ -226,8 +226,9 @@ func (pool *WorkerPool) cleanWorker(worker *Worker) {
 	
 	pool.Unlock()
 
-	go func() {
+	go func(worker *Worker) {
 		for worker.numTask > 0 { //wait until all task is completed
+			fmt.Printf("%s cleaning: %d", worker.workerId, worker.numTask)
 			pool.Lock()
 			if _, ok := pool.workers[CLEANING][worker.workerId]; !ok {
 				return //stop if the worker is recovered
@@ -237,7 +238,7 @@ func (pool *WorkerPool) cleanWorker(worker *Worker) {
 		}
 
 		pool.detroyWorker(worker)
-	}()
+	}(worker)
 }
 
 // destroy a worker from the cluster
@@ -297,6 +298,7 @@ func (pool *WorkerPool) updateCluster() {
 	if toBeClean > 0 {
 		for i := 0; i < toBeClean; i++ { //TODO: policy: clean worker with least tasks
 			worker := <-pool.queue
+			fmt.Printf("cleaning %s\n", worker.workerId)
 			pool.cleanWorker(worker)
 		}
 
@@ -339,7 +341,6 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 
 	worker := <-pool.queue
 	pool.queue <- worker
-
 	atomic.AddInt32(&worker.numTask, 1)
 	atomic.AddInt32(&totalTask, 1)
 	if Conf.Scaling == "auto" {
