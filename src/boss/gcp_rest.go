@@ -57,7 +57,7 @@ const gcpLaunchVmJSON3 = `{
   },
   "guestAccelerators": [],
   "labels": {},
-  "machineType": "projects/{{.Project}}/zones/{{.Zone}}/machineTypes/e2-small",
+  "machineType": "projects/{{.Project}}/zones/{{.Zone}}/machineTypes/e2-medium",
   "metadata": {
     "items": []
   },
@@ -138,7 +138,7 @@ const gcpLaunchVmJSON2 = `{
   },
   "guestAccelerators": [],
   "labels": {},
-  "machineType": "projects/cs320-f21/zones/us-central1-a/machineTypes/e2-small",
+  "machineType": "projects/cs320-f21/zones/us-central1-a/machineTypes/e2-medium",
   "metadata": {
     "items": []
   },
@@ -210,7 +210,7 @@ const gcpLaunchVmJSON = `{
   },
   "guestAccelerators": [],
   "labels": {},
-  "machineType": "projects/{{.Project}}/zones/{{.Zone}}/machineTypes/e2-small",
+  "machineType": "projects/{{.Project}}/zones/{{.Zone}}/machineTypes/e2-medium",
   "metadata": {
     "items": []
   },
