@@ -68,8 +68,8 @@ func NewWorkerPool() *WorkerPool {
 	taskLogFile, _ = os.Create("tasks.log")
 	clusterLog = log.New(clusterLogFile, "", 0)
 	taskLog = log.New(taskLogFile, "", 0)
-	clusterLog.SetFlags(log.LstdFlags)
-	taskLog.SetFlags(log.LstdFlags)
+	clusterLog.SetFlags(log.Lmicroseconds)
+	taskLog.SetFlags(log.Lmicroseconds)
 
 	var pool *WorkerPool
 	if Conf.Platform == "gcp" {
