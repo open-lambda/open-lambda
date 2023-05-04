@@ -24,6 +24,7 @@ const (
 	STATS_PATH  = "/stats"
 	DEBUG_PATH  = "/debug"
 	PPROF_MEM_PATH  = "/pprof/mem"
+	PPROF_CPU_PATH  = "/pprof/cpu"
 )
 
 // GetPid returns process ID, useful for making sure we're talking to the expected server
@@ -63,6 +64,16 @@ func PprofMem(w http.ResponseWriter, r *http.Request) {
         }
 }
 
+// TODO: buggy, not working
+func PprofCpu(w http.ResponseWriter, r *http.Request) {
+	runtime.GC()
+	w.Header().Add("Content-Type", "application/octet-stream")
+	if err := pprof.StartCPUProfile(w); err != nil {
+	    log.Fatal("Could not start CPU profile: ", err)
+	}
+	//defer pprof.StopCPUProfile()
+}
+
 func Main() (err error) {
 	var s interface {
 		cleanup()
@@ -100,6 +111,7 @@ func Main() (err error) {
 	http.HandleFunc(STATUS_PATH, Status)
 	http.HandleFunc(STATS_PATH, Stats)
 	http.HandleFunc(PPROF_MEM_PATH, PprofMem)
+	http.HandleFunc(PPROF_CPU_PATH, PprofCpu)
 
 	switch common.Conf.Server_mode {
 	case "lambda":
@@ -122,6 +134,9 @@ func Main() (err error) {
 		<-c
 		log.Printf("received kill signal, cleaning up")
 		s.cleanup()
+
+		log.Printf("stop CPU profile, if any")
+		defer pprof.StopCPUProfile() // TODO: not working
 
 		statsPath := filepath.Join(common.Conf.Worker_dir, "stats.json")
 		snapshot := common.SnapshotStats()

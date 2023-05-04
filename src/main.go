@@ -349,6 +349,45 @@ func pprofMem(ctx *cli.Context) error {
 	return nil
 }
 
+// TODO: finish pprofCpu
+func pprofCpu(ctx *cli.Context) error {
+	olPath, err := common.GetOlPath(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = common.LoadConf(filepath.Join(olPath, "config.json"))
+	if err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf("http://localhost:%s/pprof/cpu", common.Conf.Worker_port)
+	response, err := http.Get(url)
+	if err != nil {
+		return fmt.Errorf("Could not send GET to %s", url)
+	}
+	defer response.Body.Close()
+
+	path := ctx.String("out")
+	if path == "" {
+		path = "cpu.prof"
+	}
+	out, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	if _, err := io.Copy(out, response.Body); err != nil {
+		return err
+	}
+	fmt.Printf("output saved to %s. Use the following to explore:\n", path)
+	fmt.Printf("go tool pprof -http=localhost:8888 %s\n", path)
+
+	return nil
+}
+
+
 // modify the config.json file based on settings from cmdline: -o opt1=val1,opt2=val2,...
 //
 // apply changes in optsStr to config from confPath, saving result to overridePath
@@ -727,6 +766,17 @@ OPTIONS:
 					Flags: []cli.Flag{
 						cli.StringFlag{
 							Name:  "out, o",
+						},
+					},
+				},
+				{
+					Name: "cpu",
+					Usage: "Creates lambdas for benchmarking",
+					UsageText: "ol pprof cpu [--out=NAME]",
+					Action: pprofCpu,
+					Flags: []cli.Flag{
+						cli.StringFlag{
+							Name: "out, o",
 						},
 					},
 				},
