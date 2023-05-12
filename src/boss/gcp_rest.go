@@ -196,7 +196,7 @@ const gcpLaunchVmJSON = `{
       "deviceName": "{{.InstanceName}}",
       "diskEncryptionKey": {},
       "initializeParams": {
-        "diskSizeGb": "30",
+        "diskSizeGb": "15",
         "diskType": "projects/{{.Project}}/zones/{{.Zone}}/diskTypes/pd-balanced",
         "labels": {},
         "sourceSnapshot": "projects/{{.Project}}/global/snapshots/{{.SnapshotName}}"
