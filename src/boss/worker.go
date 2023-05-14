@@ -152,9 +152,7 @@ func (pool *WorkerPool) startNewWorker() {
 	go func() { // should be able to create multiple instances simultaneously
 		pool.CreateInstance(worker) //create new instance
 
-		if Conf.Platform == "azure" {
-			//worker.WorkerPlatform.(*AzureWorker).startWorker()
-		} else {
+		if Conf.Platform != "mock" {
 			worker.runCmd("./ol worker --detach") // start worker
 		}
 
