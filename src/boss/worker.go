@@ -73,12 +73,12 @@ func NewWorkerPool() *WorkerPool {
 
 	var pool *WorkerPool
 	if Conf.Platform == "gcp" {
-		pool = NewGcpWorkerPool()
+		//pool = NewGcpWorkerPool()
 	} else if Conf.Platform == "azure" {
-		pool = NewAzureWorkerPool()
-		conf, err = ReadAzureConfig()
+		//pool = NewAzureWorkerPool()
+		//conf, err = ReadAzureConfig()
 	} else if Conf.Platform == "DO" {
-		pool = NewDOWorkerPool()
+		//pool = NewDOWorkerPool()
 	} else if Conf.Platform == "mock" {
 		pool = NewMockWorkerPool()
 	}
@@ -153,7 +153,7 @@ func (pool *WorkerPool) startNewWorker() {
 		pool.CreateInstance(worker) //create new instance
 
 		if Conf.Platform == "azure" {
-			worker.WorkerPlatform.(*AzureWorker).startWorker()
+			//worker.WorkerPlatform.(*AzureWorker).startWorker()
 		} else {
 			worker.runCmd("./ol worker --detach") // start worker
 		}
