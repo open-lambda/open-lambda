@@ -6,8 +6,10 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
+	//"os/signal"
 	"strconv"
-	"sync"
+	//"syscall"
 )
 
 const (
@@ -17,34 +19,37 @@ const (
 	STORAGE_PATH     = "/registry/upload"
 	DOWNLOAD_PATH    = "/registry/download"
 	DELETE_PATH      = "registry/delete"
+	SHUTDOWN_PATH    = "/shutdown"
 )
 
 type Boss struct {
-	reqChan chan *Invocation
-
-	mutex      sync.Mutex
-	workerPool WorkerPool
-	workers    []Worker
+	workerPool *WorkerPool
 }
 
-var m = map[string][]int{"workers": []int{}}
-
 func (b *Boss) BossStatus(w http.ResponseWriter, r *http.Request) {
-	b.mutex.Lock()
-	defer b.mutex.Unlock()
-
 	log.Printf("Receive request to %s\n", r.URL.Path)
-	if b, err := json.MarshalIndent(m, "", "\t"); err != nil {
+
+	output := struct{
+		State	map[string]int		`json:"state"`
+		Tasks	map[string]int	`json:"tasks"`
+	}{
+		b.workerPool.StatusCluster(),
+		b.workerPool.StatusTasks(),
+	}
+	
+	if b, err := json.MarshalIndent(output, "", "\t"); err != nil {
 		panic(err)
 	} else {
 		w.Write(b)
 	}
 }
 
-func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
-	b.mutex.Lock()
-	defer b.mutex.Unlock()
+func (b *Boss) Close(w http.ResponseWriter, r *http.Request) {
+	b.workerPool.Close()
+	os.Exit(0)
+}
 
+func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 	// STEP 1: get int (worker count) from POST body, or return an error
 	if r.Method != "POST" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -57,7 +62,7 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 
 	contents, err := io.ReadAll(r.Body)
 	if err != nil {
-		w.WriteHeader(http	.StatusInternalServerError)
+		w.WriteHeader(http.StatusInternalServerError)
 		_, err := w.Write([]byte("could not read body of web request\n"))
 		if err != nil {
 			log.Printf("(2) could not write web response: %s\n", err.Error())
@@ -75,108 +80,67 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if worker_count > 3 {
-		worker_count = 3
-		// TODO: config cap
+	if worker_count > Conf.Worker_Cap {
+		worker_count = Conf.Worker_Cap
 		log.Printf("capping workers at %d to avoid big bills during debugging\n", worker_count)
 	}
-
-	// STEP 2: adjust worker count (TODO)
-	for len(b.workers) < worker_count {
-		worker := b.workerPool.Create(b.reqChan)
-		b.workers = append(b.workers, worker)
-	}
-
-	// TODO: cleanup workers if necessary
-
-	// TODO: respond based on number of workers
 	log.Printf("Receive request to %s, worker_count of %d requested\n", r.URL.Path, worker_count)
-	var s []int
-	m["workers"] = append(s, 1)
-	for k, v := range m {
-		fmt.Println(k, "value is", v)
-	}
-	if b, err := json.MarshalIndent(m, "", "\t"); err != nil {
-		panic(err)
-	} else {
-		w.Write(b)
-	}
+
+	// STEP 2: adjust target worker count
+	b.workerPool.SetTarget(worker_count)
+
+	//respond with status
+	b.BossStatus(w, r)
 }
 
 func (b *Boss) RunLambda(w http.ResponseWriter, r *http.Request) {
-	invocation := NewInvocation(w, r)
-
-	select {
-	case b.reqChan <- invocation:
-		<-invocation.Done // wait for completion
-	default:
-		// the channel is not taking requests, must be too busy
-		w.WriteHeader(http.StatusTooManyRequests)
-		_, err := w.Write([]byte("request queue is full\n"))
-		if err != nil {
-			log.Printf("(4) could not write web response: %s\n", err.Error())
-		}
-	}	
+	b.workerPool.RunLambda(w, r)
 }
 
 func (b *Boss) StorageLambda(w http.ResponseWriter, r *http.Request) {
-	contents, err := io.ReadAll(r.Body)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-	 	_, err := w.Write([]byte("could not read body of web request\n"))
-	 	if err != nil {
-	 		log.Printf("(2) could not write web response: %s\n", err.Error())
-	 	}
-	 	return
-	}
-	Create(string(contents))
+	// contents, err := io.ReadAll(r.Body)
+	// if err != nil {
+	// 	w.WriteHeader(http.StatusInternalServerError)
+	// 	_, err := w.Write([]byte("could not read body of web request\n"))
+	// 	if err != nil {
+	// 		log.Printf("(2) could not write web response: %s\n", err.Error())
+	// 	}
+	// 	return
+	// }
+	// Create(string(contents))
 }
 
 func (*Boss) DownloadLambda(w http.ResponseWriter, r *http.Request) {
 	// contents, err := io.ReadAll(r.Body)
-	if err != nil {
-	 	w.WriteHeader(http.StatusInternalServerError)
-	 	_, err := w.Write([]byte("could not read body of web request\n"))
-	 	if err != nil {
-	 		log.Printf("(2) could not write web response: %s\n", err.Error())
-	 	}
-	 	return
-	}
-	Download()
+	// if err != nil {
+	// 	w.WriteHeader(http.StatusInternalServerError)
+	// 	_, err := w.Write([]byte("could not read body of web request\n"))
+	// 	if err != nil {
+	// 		log.Printf("(2) could not write web response: %s\n", err.Error())
+	// 	}
+	// 	return
+	// }
+	// Download()
 }
 
 func (*Boss) DeleteLambda(w http.ResponseWriter, r *http.Request) {
-	// contents, err := io.ReadAll(r.Body)	
-	if err != nil {
-	 	w.WriteHeader(http.StatusInternalServerError)
-	 	_, err := w.Write([]byte("could not read body of web request\n"))
-	 	if err != nil {
-	 		log.Printf("(2) could not write web response: %s\n", err.Error())
-	 	}
-	 	return
-	}
-	Delete()
+	// contents, err := io.ReadAll(r.Body)
+	// if err != nil {
+	// 	w.WriteHeader(http.StatusInternalServerError)
+	// 	_, err := w.Write([]byte("could not read body of web request\n"))
+	// 	if err != nil {
+	// 		log.Printf("(2) could not write web response: %s\n", err.Error())
+	// 	}
+	// 	return
+	// }
+	// Delete()
 }
 
 func BossMain() (err error) {
 	fmt.Printf("WARNING!  Boss incomplete (only use this as part of development process).")
-	
-	var pool WorkerPool
-	if Conf.Platform == "gcp" {
-		pool, err = NewGcpWorkerPool()
-	} else if Conf.Platform == "mock" {
-		pool, err = NewMockWorkerPool()
-	} else {
-		return fmt.Errorf("worker pool '%s' not valid", Conf.Platform)
-	}
-	if err != nil {
-		return err
-	}
-	fmt.Printf("READY: worker pool of type %s", Conf.Platform)
-	
+
 	boss := Boss{
-		workerPool: pool,
-		reqChan:    make(chan *Invocation),
+		workerPool: NewWorkerPool(),
 	}
 
 	// things shared by all servers
@@ -186,6 +150,18 @@ func BossMain() (err error) {
 	http.HandleFunc(STORAGE_PATH, boss.StorageLambda)
 	http.HandleFunc(DOWNLOAD_PATH, boss.DownloadLambda)
 	http.HandleFunc(DELETE_PATH, boss.DeleteLambda)
+	http.HandleFunc(SHUTDOWN_PATH, boss.Close)
+
+	// clean up if signal hits us
+	// c := make(chan os.Signal, 1)
+	// signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	// signal.Notify(c, os.Interrupt, syscall.SIGINT)
+	// go func() {
+	// 	<-c
+	// 	log.Printf("received kill signal, cleaning up")
+	// 	boss.Close(nil, nil)
+	// 	os.Exit(0)
+	// }()
 
 	port := fmt.Sprintf(":%s", Conf.Boss_port)
 	fmt.Printf("Listen on port %s\n", port)
