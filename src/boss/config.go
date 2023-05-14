@@ -33,6 +33,7 @@ func LoadDefaults() error {
 		Scaling: "manual",
 		API_key: "abc", // TODO
 		Boss_port: "5000",
+		Worker_Cap: 10, // TODO: what should the default worker_cap be?
 	}
 
 	return checkConf()
@@ -55,7 +56,7 @@ func LoadConf(path string) error {
 }
 
 func checkConf() error {
-	if Conf.Scaling != "manual" {
+	if Conf.Scaling != "manual" && Conf.Scaling != "auto" {
 		return fmt.Errorf("Scaling type '%s' not implemented", Conf.Scaling)
 	}
 
