@@ -10,12 +10,13 @@ import (
 var Conf *Config
 
 type Config struct {
-	Platform string `json:"platform"`
-	Scaling string `json:"scaling"`
-        API_key string `json:"api_key"`
-	Boss_port string  `json:"boss_port"`
-	Azure AzureConfig `json:"azure"`
-	Gcp GcpConfig `json:"gcp"`
+	Platform   string      		`json:"platform"`
+ 	Scaling    string      		`json:"scaling"`
+ 	API_key    string      		`json:"api_key"`
+ 	Boss_port  string      		`json:"boss_port"`
+ 	Worker_Cap int         		`json:"worker_cap"`
+ 	Azure      AzureConfig 		`json:"azure"`
+ 	Gcp        GcpConfig   		`json:"gcp"`
 }
 
 type AzureConfig struct {
