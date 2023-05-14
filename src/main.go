@@ -252,16 +252,8 @@ func worker(ctx *cli.Context) error {
 }
 
 func newBossConf(platform string) error {
-	if platform == "azure" {
-		if err := boss.LoadAzure(); err != nil {
-			return err
-		}
-	} else if platform == "gcp" {
-
-	} else {
-		if err := boss.LoadDefaults(); err != nil {
-			return err
-		}
+	if err := boss.LoadDefaults(); err != nil {
+		return err
 	}
 
 	if err := boss.SaveConf("boss.json"); err != nil {
@@ -531,7 +523,7 @@ func kill(ctx *cli.Context) error {
 }
 
 func gcpTest(ctx *cli.Context) error {
-	boss.GcpBossTest()
+	boss.GCPBossTest()
 	return nil
 }
 
