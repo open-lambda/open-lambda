@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"runtime"
 	"runtime/pprof"
+	"time"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 )
@@ -64,14 +65,21 @@ func PprofMem(w http.ResponseWriter, r *http.Request) {
         }
 }
 
-// TODO: buggy, not working
 func PprofCpu(w http.ResponseWriter, r *http.Request) {
 	runtime.GC()
 	w.Header().Add("Content-Type", "application/octet-stream")
-	if err := pprof.StartCPUProfile(w); err != nil {
-	    log.Fatal("Could not start CPU profile: ", err)
+
+        sec, err := strconv.ParseInt(r.FormValue("seconds"), 10, 64)
+	if err != nil || sec <= 0 || sec > 600 {  // same maxDur as in main.go
+	    log.Fatal("invalid CPU profile duration (min:0, max:600)")
 	}
-	//defer pprof.StopCPUProfile()
+
+	if err := pprof.StartCPUProfile(w); err != nil {
+	    log.Fatal("could not start CPU profile: ", err)
+	}
+
+	time.Sleep(time.Duration(sec) * time.Second)
+	pprof.StopCPUProfile()
 }
 
 func Main() (err error) {
@@ -134,9 +142,6 @@ func Main() (err error) {
 		<-c
 		log.Printf("received kill signal, cleaning up")
 		s.cleanup()
-
-		log.Printf("stop CPU profile, if any")
-		defer pprof.StopCPUProfile() // TODO: not working
 
 		statsPath := filepath.Join(common.Conf.Worker_dir, "stats.json")
 		snapshot := common.SnapshotStats()

@@ -349,7 +349,6 @@ func pprofMem(ctx *cli.Context) error {
 	return nil
 }
 
-// TODO: finish pprofCpu
 func pprofCpu(ctx *cli.Context) error {
 	olPath, err := common.GetOlPath(ctx)
 	if err != nil {
@@ -361,7 +360,26 @@ func pprofCpu(ctx *cli.Context) error {
 		return err
 	}
 
-	url := fmt.Sprintf("http://localhost:%s/pprof/cpu", common.Conf.Worker_port)
+	dur := 10  		// default duration (seconds)
+	maxDur := 600		// max duration (configurable)
+
+	if ctx.NArg() > 1 {
+		return fmt.Errorf("Usage error: expected 0 or 1 int argument\n")
+	}
+
+	if ctx.NArg() == 1 {
+		dur, err = strconv.Atoi(ctx.Args().Get(0))
+		if err != nil {
+			return fmt.Errorf("Usage error: expected 0 or 1 int argument\n")
+		}
+		if dur < 0 || dur > maxDur {
+			return fmt.Errorf("Invalid duration: min 0, max %d\n", maxDur)
+		}
+	}
+
+	fmt.Printf("Beginning to profile CPU (duration: %d seconds)\n", dur)
+
+	url := fmt.Sprintf("http://localhost:%s/pprof/cpu?seconds=%d", common.Conf.Worker_port, dur)
 	response, err := http.Get(url)
 	if err != nil {
 		return fmt.Errorf("Could not send GET to %s", url)
@@ -382,7 +400,7 @@ func pprofCpu(ctx *cli.Context) error {
 		return err
 	}
 	fmt.Printf("output saved to %s. Use the following to explore:\n", path)
-	fmt.Printf("go tool pprof -http=localhost:8888 %s\n", path)
+	fmt.Printf("go tool pprof -http=localhost:8889 %s\n", path)  // different port than mem
 
 	return nil
 }
@@ -772,7 +790,7 @@ OPTIONS:
 				{
 					Name: "cpu",
 					Usage: "Creates lambdas for benchmarking",
-					UsageText: "ol pprof cpu [--out=NAME]",
+					UsageText: "ol pprof cpu [--out=NAME] [sec]",
 					Action: pprofCpu,
 					Flags: []cli.Flag{
 						cli.StringFlag{
