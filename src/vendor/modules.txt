@@ -54,13 +54,14 @@ github.com/AzureAD/microsoft-authentication-library-for-go/apps/internal/oauth/o
 github.com/AzureAD/microsoft-authentication-library-for-go/apps/internal/shared
 github.com/AzureAD/microsoft-authentication-library-for-go/apps/internal/version
 github.com/AzureAD/microsoft-authentication-library-for-go/apps/public
-# github.com/Microsoft/go-winio v0.5.2
-## explicit; go 1.13
+# github.com/Microsoft/go-winio v0.6.0
+## explicit; go 1.17
 github.com/Microsoft/go-winio
+github.com/Microsoft/go-winio/internal/socket
 github.com/Microsoft/go-winio/pkg/guid
 github.com/Microsoft/go-winio/pkg/security
 github.com/Microsoft/go-winio/vhd
-# github.com/Microsoft/hcsshim v0.9.3
+# github.com/Microsoft/hcsshim v0.9.7
 ## explicit; go 1.13
 github.com/Microsoft/hcsshim
 github.com/Microsoft/hcsshim/computestorage
@@ -84,17 +85,17 @@ github.com/Microsoft/hcsshim/internal/vmcompute
 github.com/Microsoft/hcsshim/internal/wclayer
 github.com/Microsoft/hcsshim/internal/winapi
 github.com/Microsoft/hcsshim/osversion
-# github.com/containerd/cgroups v1.0.3
-## explicit; go 1.16
+# github.com/containerd/cgroups v1.1.0
+## explicit; go 1.17
 github.com/containerd/cgroups/stats/v1
-# github.com/containerd/containerd v1.6.6
+# github.com/containerd/containerd v1.6.18
 ## explicit; go 1.17
 github.com/containerd/containerd/pkg/userns
 github.com/containerd/containerd/sys
 # github.com/cpuguy83/go-md2man/v2 v2.0.0
 ## explicit; go 1.12
 github.com/cpuguy83/go-md2man/v2/md2man
-# github.com/docker/docker v20.10.17+incompatible
+# github.com/docker/docker v20.10.24+incompatible
 ## explicit
 github.com/docker/docker/api/types/blkiodev
 github.com/docker/docker/api/types/container
@@ -136,7 +137,9 @@ github.com/golang-jwt/jwt
 # github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da
 ## explicit
 github.com/golang/groupcache/lru
-# github.com/google/uuid v1.2.0
+# github.com/google/go-cmp v0.5.9
+## explicit; go 1.13
+# github.com/google/uuid v1.3.0
 ## explicit
 github.com/google/uuid
 # github.com/kylelemons/godebug v1.1.0
@@ -159,11 +162,11 @@ github.com/morikuni/aec
 # github.com/opencontainers/go-digest v1.0.0
 ## explicit; go 1.13
 github.com/opencontainers/go-digest
-# github.com/opencontainers/image-spec v1.0.3-0.20211202183452-c5a74bcca799
-## explicit
+# github.com/opencontainers/image-spec v1.1.0-rc2
+## explicit; go 1.17
 github.com/opencontainers/image-spec/specs-go
 github.com/opencontainers/image-spec/specs-go/v1
-# github.com/opencontainers/runc v1.1.2
+# github.com/opencontainers/runc v1.1.5
 ## explicit; go 1.16
 github.com/opencontainers/runc/libcontainer/user
 # github.com/pkg/browser v0.0.0-20210115035449-ce105d075bb4
@@ -178,13 +181,13 @@ github.com/russross/blackfriday/v2
 # github.com/shurcooL/sanitized_anchor_name v1.0.0
 ## explicit
 github.com/shurcooL/sanitized_anchor_name
-# github.com/sirupsen/logrus v1.8.1
+# github.com/sirupsen/logrus v1.9.0
 ## explicit; go 1.13
 github.com/sirupsen/logrus
 # github.com/urfave/cli v1.22.9
 ## explicit; go 1.11
 github.com/urfave/cli
-# go.opencensus.io v0.23.0
+# go.opencensus.io v0.24.0
 ## explicit; go 1.13
 go.opencensus.io
 go.opencensus.io/internal
@@ -195,19 +198,39 @@ go.opencensus.io/trace/tracestate
 ## explicit; go 1.17
 golang.org/x/crypto/pkcs12
 golang.org/x/crypto/pkcs12/internal/rc2
-# golang.org/x/net v0.0.0-20220425223048-2871e0cb64e4
+# golang.org/x/mod v0.8.0
+## explicit; go 1.17
+golang.org/x/mod/semver
+# golang.org/x/net v0.7.0
 ## explicit; go 1.17
 golang.org/x/net/http/httpguts
 golang.org/x/net/idna
-# golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a
+# golang.org/x/sys v0.5.0
 ## explicit; go 1.17
 golang.org/x/sys/execabs
 golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/unix
 golang.org/x/sys/windows
-# golang.org/x/text v0.3.7
+# golang.org/x/text v0.7.0
 ## explicit; go 1.17
 golang.org/x/text/secure/bidirule
 golang.org/x/text/transform
 golang.org/x/text/unicode/bidi
 golang.org/x/text/unicode/norm
+# golang.org/x/tools v0.6.0
+## explicit; go 1.18
+golang.org/x/tools/cmd/stringer
+golang.org/x/tools/go/gcexportdata
+golang.org/x/tools/go/internal/packagesdriver
+golang.org/x/tools/go/packages
+golang.org/x/tools/internal/event
+golang.org/x/tools/internal/event/core
+golang.org/x/tools/internal/event/keys
+golang.org/x/tools/internal/event/label
+golang.org/x/tools/internal/gcimporter
+golang.org/x/tools/internal/gocommand
+golang.org/x/tools/internal/packagesinternal
+golang.org/x/tools/internal/pkgbits
+golang.org/x/tools/internal/tokeninternal
+golang.org/x/tools/internal/typeparams
+golang.org/x/tools/internal/typesinternal
