@@ -16,7 +16,8 @@ OpenLambda is only actively tested on Ubuntu 22.04 LTS.
 ### Build and Test
 Make sure you have all basic dependencies installed:
 ```
-apt install docker.io llvm-12-dev libclang-common-12-dev build-essential python3
+apt update
+apt install -y docker.io llvm-12-dev libclang-common-12-dev build-essential python3 zlib1g-dev
 ```
 
 For a recent version of go, run the following:
@@ -31,6 +32,7 @@ Further, you need to have a recent nightly version of Rust, the wasm32 toolchain
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain=nightly-2022-07-25
 source $HOME/.cargo/env
 rustup target add wasm32-unknown-unknown
+rustup target add --toolchain=nightly-2023-02-22 wasm32-unknown-unknown
 cargo install cross
 ```
 
