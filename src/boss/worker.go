@@ -18,7 +18,7 @@ type WorkerState int
 const (
 	STARTING WorkerState = iota
 	RUNNING
-	CLEANING
+	CLEANING // waiting for already-started requests to complete (so can kill cleanly)
 	DESTROYING
 )
 
@@ -44,7 +44,7 @@ type WorkerPool struct {
 
 //platform specific attributes and functions
 type WorkerPoolPlatform interface {
-	NewWorker(nextId int) *Worker  //return new worker struct
+	NewWorker(workerId string) *Worker  //return new worker struct
 	CreateInstance(worker *Worker) //create new instance in the cloud platform
 	DeleteInstance(worker *Worker) //delete cloud platform instance associated with give worker struct
 }
@@ -63,7 +63,7 @@ type WorkerPlatform interface {
 	//do not require any functions yet
 }
 
-func NewWorkerPool() *WorkerPool {
+func NewWorkerPool() (*WorkerPool, error) {
 	clusterLogFile, _ = os.Create("cluster.log")
 	taskLogFile, _ = os.Create("tasks.log")
 	clusterLog = log.New(clusterLogFile, "", 0)
@@ -72,15 +72,10 @@ func NewWorkerPool() *WorkerPool {
 	taskLog.SetFlags(log.LstdFlags)
 
 	var pool *WorkerPool
-	if Conf.Platform == "gcp" {
-		//pool = NewGcpWorkerPool()
-	} else if Conf.Platform == "azure" {
-		//pool = NewAzureWorkerPool()
-		//conf, err = ReadAzureConfig()
-	} else if Conf.Platform == "DO" {
-		//pool = NewDOWorkerPool()
-	} else if Conf.Platform == "mock" {
+	if Conf.Platform == "mock" {
 		pool = NewMockWorkerPool()
+	} else {
+		return nil, fmt.Errorf("worker pool '%s' not supported", Conf.Platform)
 	}
 
 	pool.nextId = 1
@@ -111,7 +106,7 @@ func NewWorkerPool() *WorkerPool {
 		}
 	}()
 
-	return pool
+	return pool, nil
 }
 
 //return number of workers in the pool
@@ -126,10 +121,10 @@ func (pool *WorkerPool) Size() int {
 //renamed Scale() -> SetTarget()
 func (pool *WorkerPool) SetTarget(target int) {
 	pool.Lock()
+	defer pool.Unlock()
 	pool.target = target
 	clusterLog.Printf("set target=%d", pool.target)
 	pool.updateCluster()
-	pool.Unlock()
 }
 
 // lock should be held before calling this function
@@ -138,7 +133,7 @@ func (pool *WorkerPool) startNewWorker() {
 	log.Printf("starting new worker\n")
 	nextId := pool.nextId
 	pool.nextId += 1
-	worker := pool.NewWorker(nextId)
+	worker := pool.NewWorker(fmt.Sprintf("worker-%d", nextId))
 	worker.state = STARTING
 	pool.workers[STARTING][worker.workerId] = worker
 	clusterLog.Printf("%s: starting [target=%d, starting=%d, running=%d, cleaning=%d, destroying=%d]",

@@ -88,25 +88,23 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 	b.BossStatus(w, r)
 }
 
-func (b *Boss) RunLambda(w http.ResponseWriter, r *http.Request) {
-	b.workerPool.RunLambda(w, r)
-}
-
 func BossMain() (err error) {
-	fmt.Printf("WARNING!  Boss incomplete (only use this as part of development process).")
+	fmt.Printf("WARNING!  Boss incomplete (only use this as part of development process).\n")
 
-	boss := Boss{
-		workerPool: NewWorkerPool(),
+	pool, err := NewWorkerPool()
+	if err != nil {
+		return err
 	}
 
-	// things shared by all servers
+	boss := Boss{
+		workerPool: pool,
+	}
 	http.HandleFunc(BOSS_STATUS_PATH, boss.BossStatus)
 	http.HandleFunc(SCALING_PATH, boss.ScalingWorker)
-	http.HandleFunc(RUN_PATH, boss.RunLambda)
+	http.HandleFunc(RUN_PATH, boss.workerPool.RunLambda)
 	http.HandleFunc(SHUTDOWN_PATH, boss.Close)
 
 	port := fmt.Sprintf(":%s", Conf.Boss_port)
 	fmt.Printf("Listen on port %s\n", port)
-	log.Fatal(http.ListenAndServe(port, nil))
-	panic("ListenAndServe should never return")
+	return http.ListenAndServe(port, nil) // should never return if successful
 }

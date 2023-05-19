@@ -1,7 +1,6 @@
 package boss
 
 import (
-	"fmt"
 	"log"
 )
 
@@ -20,8 +19,7 @@ func NewMockWorkerPool() *WorkerPool {
 	}
 }
 
-func (pool *MockWorkerPool) NewWorker(nextId int) *Worker {
-	workerId := fmt.Sprintf("worker-%d", nextId)
+func (pool *MockWorkerPool) NewWorker(workerId string) *Worker {
 	return &Worker{
 		workerId:       workerId,
 		workerIp:       "",
