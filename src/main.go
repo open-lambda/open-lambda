@@ -349,7 +349,7 @@ func pprofMem(ctx *cli.Context) error {
 	return nil
 }
 
-func pprofCpu(ctx *cli.Context) error {
+func pprofCpuStart(ctx *cli.Context) error {
 	olPath, err := common.GetOlPath(ctx)
 	if err != nil {
 		return err
@@ -360,31 +360,19 @@ func pprofCpu(ctx *cli.Context) error {
 		return err
 	}
 
-	dur := 10  		// default duration (seconds)
-	maxDur := 600		// max duration (configurable)
+	fmt.Printf("started cpu profiling\n")
+	fmt.Printf("run \"ol pprof cpu-stop\" in another terminal to stop\n")
 
-	if ctx.NArg() > 1 {
-		return fmt.Errorf("Usage error: expected 0 or 1 int argument\n")
-	}
-
-	if ctx.NArg() == 1 {
-		dur, err = strconv.Atoi(ctx.Args().Get(0))
-		if err != nil {
-			return fmt.Errorf("Usage error: expected 0 or 1 int argument\n")
-		}
-		if dur < 0 || dur > maxDur {
-			return fmt.Errorf("Invalid duration: min 0, max %d\n", maxDur)
-		}
-	}
-
-	fmt.Printf("Beginning to profile CPU (duration: %d seconds)\n", dur)
-
-	url := fmt.Sprintf("http://localhost:%s/pprof/cpu?seconds=%d", common.Conf.Worker_port, dur)
+	start := time.Now()
+	url := fmt.Sprintf("http://localhost:%s/pprof/cpu-start", common.Conf.Worker_port)
 	response, err := http.Get(url)
 	if err != nil {
 		return fmt.Errorf("Could not send GET to %s", url)
 	}
 	defer response.Body.Close()
+	duration := time.Since(start)
+
+	fmt.Printf("profiled CPU usage for %d seconds\n", int64(duration / time.Second))
 
 	path := ctx.String("out")
 	if path == "" {
@@ -401,6 +389,30 @@ func pprofCpu(ctx *cli.Context) error {
 	}
 	fmt.Printf("output saved to %s. Use the following to explore:\n", path)
 	fmt.Printf("go tool pprof -http=localhost:8889 %s\n", path)  // different port than mem
+
+	return nil
+}
+
+func pprofCpuStop(ctx *cli.Context) error {
+	olPath, err := common.GetOlPath(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = common.LoadConf(filepath.Join(olPath, "config.json"))
+	if err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf("http://localhost:%s/pprof/cpu-stop", common.Conf.Worker_port)
+	response, err := http.Get(url)
+	if err != nil {
+		return fmt.Errorf("could not send GET to %s", url)
+	}
+	defer response.Body.Close()
+
+	fmt.Printf("stopped\n")
+	fmt.Printf("see output of cpu-start for viewing the profile\n")
 
 	return nil
 }
@@ -788,15 +800,21 @@ OPTIONS:
 					},
 				},
 				{
-					Name: "cpu",
-					Usage: "Creates lambdas for benchmarking",
-					UsageText: "ol pprof cpu [--out=NAME] [sec]",
-					Action: pprofCpu,
+					Name: "cpu-start",
+					Usage: "Starts CPU profiling",
+					UsageText: "ol pprof cpu-start [--out=NAME]",
+					Action: pprofCpuStart,
 					Flags: []cli.Flag{
 						cli.StringFlag{
 							Name: "out, o",
 						},
 					},
+				},
+				{
+					Name: "cpu-stop",
+					Usage: "Stops CPU profiling if started",
+					UsageText: "ol pprof cpu-stop",
+					Action: pprofCpuStop,
 				},
 			},
 		},

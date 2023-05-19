@@ -25,8 +25,12 @@ const (
 	STATS_PATH  = "/stats"
 	DEBUG_PATH  = "/debug"
 	PPROF_MEM_PATH  = "/pprof/mem"
-	PPROF_CPU_PATH  = "/pprof/cpu"
+	PPROF_CPU_START_PATH = "/pprof/cpu-start"
+	PPROF_CPU_STOP_PATH = "/pprof/cpu-stop" 
 )
+
+// a global variable to signal "stop" to cpu profiling
+var cpuProfTimeout chan bool = make(chan bool)  
 
 // GetPid returns process ID, useful for making sure we're talking to the expected server
 func GetPid(w http.ResponseWriter, r *http.Request) {
@@ -65,21 +69,30 @@ func PprofMem(w http.ResponseWriter, r *http.Request) {
         }
 }
 
-func PprofCpu(w http.ResponseWriter, r *http.Request) {
-	runtime.GC()
+func PprofCpuStart(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Starting cpu profiling\n")
 	w.Header().Add("Content-Type", "application/octet-stream")
-
-        sec, err := strconv.ParseInt(r.FormValue("seconds"), 10, 64)
-	if err != nil || sec <= 0 || sec > 600 {  // same maxDur as in main.go
-	    log.Fatal("invalid CPU profile duration (min:0, max:600)")
-	}
 
 	if err := pprof.StartCPUProfile(w); err != nil {
 	    log.Fatal("could not start CPU profile: ", err)
 	}
 
-	time.Sleep(time.Duration(sec) * time.Second)
+	select {
+	case <-cpuProfTimeout:
+		break
+	case <-time.After((1 << 63 - 1) * time.Nanosecond): // max duration
+		break
+	}
+}
+
+func PprofCpuStop(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Stopping cpu profiling\n")
+
 	pprof.StopCPUProfile()
+	cpuProfTimeout <- true
+	if _, err := w.Write([]byte("stopped\n")); err != nil {
+		log.Printf("error in PprofCpuStop: %v", err)
+	}
 }
 
 func Main() (err error) {
@@ -119,7 +132,8 @@ func Main() (err error) {
 	http.HandleFunc(STATUS_PATH, Status)
 	http.HandleFunc(STATS_PATH, Stats)
 	http.HandleFunc(PPROF_MEM_PATH, PprofMem)
-	http.HandleFunc(PPROF_CPU_PATH, PprofCpu)
+	http.HandleFunc(PPROF_CPU_START_PATH, PprofCpuStart)
+	http.HandleFunc(PPROF_CPU_STOP_PATH, PprofCpuStop)
 
 	switch common.Conf.Server_mode {
 	case "lambda":
