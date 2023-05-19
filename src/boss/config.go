@@ -31,9 +31,9 @@ func LoadDefaults() error {
 	Conf = &Config{
 		Platform: "mock",
 		Scaling: "manual",
-		API_key: "abc", // TODO
+		API_key: "abc", // TODO: autogenerate a random key
 		Boss_port: "5000",
-		Worker_Cap: 10, // TODO: what should the default worker_cap be?
+		Worker_Cap: 4,
 	}
 
 	return checkConf()

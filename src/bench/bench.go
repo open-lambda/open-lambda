@@ -207,63 +207,6 @@ func make_action(name string, tasks int, functions int, func_template string) (f
 	}
 }
 
-func run_all(ctx *cli.Context) error {
-	option := ctx.String("option")
-	
-	var list_tasks []int
-	if option == "seq" {
-		list_tasks = []int{1}
-	} else if option == "par" {
-		list_tasks = []int{32}
-	} else {
-		list_tasks = []int{1, 32}
-	}
-
-	results := "{\n"
-	for _, kind := range []string{"py", "pd"} {
-		for _, functions := range []int{64, 1024, 64*1024} {
-			for _, tasks := range list_tasks {
-				var parseq string
-				amt := fmt.Sprintf("%d", functions)
-
-				if tasks == 1 {
-					parseq = "seq"
-				} else {
-					parseq = "par"
-				}
-				if functions >= 1024 {
-					amt = fmt.Sprintf("%dk", functions / 1024)
-				}
-
-				name := fmt.Sprintf("%s%s-%s", kind, amt, parseq)
-				result, err := run_benchmark(ctx, name, tasks, functions, "bench-"+kind+"-%d")
-				if err != nil {
-					return err
-				}
-				results += fmt.Sprintf("\"%s\": %s,\n",name, result)
-			}
-		}
-	}
-	
-	results = results[:len(results)-2] + "\n}\n"
-	
-	output_file := ctx.String("output")
-	if output_file != "" {
-		file, err := os.Create(output_file)
-		if err != nil {
-			return err
-		}
-		defer file.Close()
-
-		if _, err := file.WriteString(results); err != nil {
-			return err
-		}
-	}
-
-	fmt.Println(results)
-	return nil
-}
-
 func BenchCommands() []cli.Command {
 	cmds := []cli.Command{
 		{
@@ -335,36 +278,6 @@ func BenchCommands() []cli.Command {
 			}
 		}
 	}
-
-	cmd := cli.Command{
-		Name:  "all",
-		Usage: "run all benchmarks",
-		UsageText: "ol bench all [--path=NAME] [--seconds=SECONDS] [--warmup=BOOL] [--output=NAME] [-task=seq/par]",
-		Action: run_all,
-		Flags: []cli.Flag{
-			cli.StringFlag{
-				Name:  "path, p",
-				Usage: "Path location for OL environment",
-			},
-			cli.Float64Flag{
-				Name:  "seconds, s",
-				Usage: "Seconds to run (after warmup)",
-			},
-			cli.BoolTFlag{
-				Name:  "warmup, w",
-				Usage: "call lambda each once before benchmark",
-			},
-			cli.StringFlag{
-				Name:  "output, o",
-				Usage: "store the result in json to the output file",
-			},
-			cli.StringFlag{
-				Name:  "task, t",
-				Usage: "run only sequential/parallel benchmarks",
-			},
-		},
-	}
-	cmds = append(cmds, cmd)
 
 	return cmds
 }
