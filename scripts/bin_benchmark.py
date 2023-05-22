@@ -32,7 +32,7 @@ def benchmark(num_threads=1):
     def inner_function(func):
         def wrapper(*args, **_kwargs):
             if len(args) > 0:
-                raise Exception("positional args not supported")
+                raise RuntimeError("positional args not supported")
 
             name = func.__name__
 

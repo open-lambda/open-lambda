@@ -70,7 +70,7 @@ def test(func):
 
     def _wrapper(*args, **kwargs):
         if len(args) > 0:
-            raise Exception("positional args not supported for tests")
+            raise RuntimeError("positional args not supported for tests")
 
         name = func.__name__
 

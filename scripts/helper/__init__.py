@@ -72,7 +72,7 @@ class TestConf:
             try:
                 self.orig = json.load(cfile)
             except json.JSONDecodeError as err:
-                raise Exception(
+                raise ValueError(
                     f"Failed to parse JSON file. Contents are:\n"
                     f"{cfile.read()}"
                 ) from err
@@ -80,7 +80,7 @@ class TestConf:
         new = copy.deepcopy(self.orig)
         for (key, value) in keywords.items():
             if not key in new:
-                raise Exception(f"unknown config param: {key}")
+                raise ValueError(f"unknown config param: {key}")
 
             if isinstance(value, dict):
                 for key2 in value:
@@ -124,7 +124,7 @@ def run(cmd):
         out = out[:500] + "..."
 
     if fail:
-        raise Exception(f"command ({' '.join(cmd)}) failed: {out}")
+        raise RuntimeError(f"command ({' '.join(cmd)}) failed: {out}")
     print(out)
 
 class DockerWorker():
@@ -306,10 +306,10 @@ def get_mem_stat_mb(stat):
                 parts = line.strip().split()
                 assert_eq(parts[-1], 'kB')
                 return int(parts[1]) / 1024
-    raise Exception('could not get stat')
+    raise ValueError('could not get stat')
 
 def assert_eq(actual, expected):
     ''' Test helper. Will fail if actual != expected '''
 
     if expected != actual:
-        raise Exception(f'Expected value "{expected}", but was "{actual}"')
+        raise ValueError(f'Expected value "{expected}", but was "{actual}"')
