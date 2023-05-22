@@ -4,7 +4,7 @@
 
 import os, sys, json, argparse, importlib, traceback, time, fcntl, array, socket, struct
 
-sys.path.append("/usr/local/lib/python3.8/dist-packages")
+sys.path.append("/usr/local/lib/python3.10/dist-packages")
 
 import tornado.ioloop
 import tornado.web
