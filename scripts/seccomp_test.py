@@ -6,13 +6,6 @@
 
 import argparse
 import os
-import tempfile
-
-from time import time
-from subprocess import call
-from multiprocessing import Pool
-
-import requests
 
 from helper import DockerWorker, SockWorker, prepare_open_lambda, setup_config
 from helper import get_current_config, TestConfContext, assert_eq
@@ -39,7 +32,7 @@ def seccomp_tests():
         syslog_test() # syslog should fail
     with TestConfContext(features={"enable_seccomp": False}):
         syslog_test() # syslog should run
-    
+
 
 def main():
     global OL_DIR

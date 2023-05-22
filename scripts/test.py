@@ -37,7 +37,7 @@ def install_tests():
     msg = 'hello world'
     jdata = open_lambda.run("echo", msg)
     if jdata != msg:
-        raise Exception(f"found {jdata} but expected {msg}")
+        raise ValueError(f"found {jdata} but expected {msg}")
 
     jdata = open_lambda.get_statistics()
     installs = jdata.get('pull-package.cnt', 0)
@@ -61,7 +61,7 @@ def install_tests():
 
 def check_status_code(req):
     if req.status_code != 200:
-        raise Exception(f"STATUS {req.status_code}: {req.text}")
+        raise requests.HTTPError(f"STATUS {req.status_code}: {req.text}")
 
 @test
 def numpy_test():
