@@ -1,4 +1,4 @@
-FROM ubuntu:focal
+FROM ubuntu:22.04
 
 RUN apt-get -y --fix-missing update
 RUN apt-get -y install wget apt-transport-https curl clang

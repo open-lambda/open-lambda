@@ -191,6 +191,12 @@ func BenchCommands() []cli.Command {
                         Usage: "creates lambdas for benchmarking",
 			UsageText: "ol bench init [--path=NAME]",
                         Action: create_lambdas,
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:  "path, p",
+					Usage: "Path location for OL environment",
+				},
+			},
 			// TODO: add param to decide how many to create
 		},
 	}
