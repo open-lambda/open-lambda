@@ -29,8 +29,12 @@ import (
 
 var client *docker.Client
 
-func initOLDir(olPath string) (err error) {
-	fmt.Printf("Init OL dir at %v\n", olPath)
+func initOLDir(olPath string, dockerBaseImage string) (err error) {
+	if dockerBaseImage == "" {
+		dockerBaseImage = "ol-wasm"
+	}
+
+	fmt.Printf("Init OL dir at %v, using Docker image %v as base\n", olPath, dockerBaseImage)
 	if err := os.Mkdir(olPath, 0700); err != nil {
 		return err
 	}
@@ -55,7 +59,7 @@ func initOLDir(olPath string) (err error) {
 	// create a base directory to run sock handlers
 	base := common.Conf.SOCK_base_path
 	fmt.Printf("Creating lambda base at %v (may take several minutes)\n", base)
-	err = dutil.DumpDockerImage(client, "lambda", base)
+	err = dutil.DumpDockerImage(client, dockerBaseImage, base)
 	if err != nil {
 		return err
 	}
@@ -108,7 +112,7 @@ func newOL(ctx *cli.Context) error {
 		return err
 	}
 
-	return initOLDir(olPath)
+	return initOLDir(olPath, ctx.String("image"))
 }
 
 // workers corresponds to the "workers" command of the admin tool.
@@ -125,8 +129,8 @@ func worker(ctx *cli.Context) error {
 
 	// if `./ol new` not previously run, do that init now
 	if _, err := os.Stat(olPath); os.IsNotExist(err) {
-		fmt.Printf("no OL directory found at %s\n", olPath)
-		if err := initOLDir(olPath); err != nil {
+		fmt.Printf("No OL directory found at %s\n", olPath)
+		if err := initOLDir(olPath, ctx.String("image")); err != nil {
 			return err
 		}
 	} else {
@@ -625,22 +629,27 @@ OPTIONS:
 		Name:  "path, p",
 		Usage: "Path location for OL environment",
 	}
+	dockerImgFlag := cli.StringFlag{
+		Name:  "image, i",
+		Usage: "Name of Docker image to use for base",
+	}
 	app.Commands = []cli.Command{
 		cli.Command{
 			Name:        "new",
 			Usage:       "Create an OL worker environment, including default config and dump of base image",
-			UsageText:   "ol new [--path=PATH]",
+			UsageText:   "ol new [--path=PATH] [--image=DOCKER-IMAGE]",
 			Description: "A cluster directory of the given name will be created with internal structure initialized.",
-			Flags:       []cli.Flag{pathFlag},
+			Flags:       []cli.Flag{pathFlag, dockerImgFlag},
 			Action:      newOL,
 		},
 		cli.Command{
 			Name:        "worker",
 			Usage:       "Start an OL worker process (automatically calls 'new' and uses default if that wasn't already done)",
-			UsageText:   "ol worker [--path=NAME] [--detach]",
+			UsageText:   "ol worker [--path=NAME] [--image=DOCKER-IMAGE] [--detach]",
 			Description: "Start a lambda server.",
 			Flags: []cli.Flag{
 				pathFlag,
+				dockerImgFlag,
 				cli.StringFlag{
 					Name:  "options, o",
 					Usage: "Override options with: -o opt1=val1,opt2=val2/opt3.subopt31=val3",
