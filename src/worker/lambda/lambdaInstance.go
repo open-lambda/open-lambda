@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/open-lambda/open-lambda/ol/common"
-	"github.com/open-lambda/open-lambda/ol/sandbox"
+	"github.com/open-lambda/open-lambda/ol/worker/sandbox"
 )
 
 // This is essentially a virtual sandbox.  It is backed by a real

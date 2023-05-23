@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 
 	"github.com/open-lambda/open-lambda/ol/common"
-	"github.com/open-lambda/open-lambda/ol/sandbox"
+	"github.com/open-lambda/open-lambda/ol/worker/sandbox"
 )
 
 type ImportCache struct {

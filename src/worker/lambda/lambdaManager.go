@@ -9,7 +9,7 @@ import (
 	"sync"
 
 	"github.com/open-lambda/open-lambda/ol/common"
-	"github.com/open-lambda/open-lambda/ol/sandbox"
+	"github.com/open-lambda/open-lambda/ol/worker/sandbox"
 )
 
 // LambdaMgr provides thread-safe getting of lambda functions and collects all

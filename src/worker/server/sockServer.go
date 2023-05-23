@@ -13,7 +13,7 @@ import (
 	"sync/atomic"
 
 	"github.com/open-lambda/open-lambda/ol/common"
-	"github.com/open-lambda/open-lambda/ol/sandbox"
+	"github.com/open-lambda/open-lambda/ol/worker/sandbox"
 )
 
 type Handler func(http.ResponseWriter, []string, map[string]any) error
