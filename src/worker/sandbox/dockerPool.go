@@ -13,7 +13,7 @@ import (
 	docker "github.com/fsouza/go-dockerclient"
 
 	"github.com/open-lambda/open-lambda/ol/common"
-	"github.com/open-lambda/open-lambda/ol/sandbox/dockerutil"
+	"github.com/open-lambda/open-lambda/ol/worker/sandbox/dockerutil"
 )
 
 // DockerPool is a ContainerFactory that creates docker containers.

@@ -14,7 +14,7 @@ import (
 	"sync/atomic"
 
 	"github.com/open-lambda/open-lambda/ol/common"
-	"github.com/open-lambda/open-lambda/ol/sandbox"
+	"github.com/open-lambda/open-lambda/ol/worker/sandbox"
 )
 
 // we invoke this lambda to do the pip install in a Sandbox.

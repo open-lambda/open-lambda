@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/open-lambda/open-lambda/ol/common"
-	"github.com/open-lambda/open-lambda/ol/sandbox"
+	"github.com/open-lambda/open-lambda/ol/worker/sandbox"
 )
 
 // LambdaFunc represents a single lambda function (the code)

@@ -17,12 +17,12 @@ import (
 	"time"
 
 	docker "github.com/fsouza/go-dockerclient"
-	dutil "github.com/open-lambda/open-lambda/ol/sandbox/dockerutil"
+	dutil "github.com/open-lambda/open-lambda/ol/worker/sandbox/dockerutil"
 
 	"github.com/open-lambda/open-lambda/ol/bench"
 	"github.com/open-lambda/open-lambda/ol/boss"
 	"github.com/open-lambda/open-lambda/ol/common"
-	"github.com/open-lambda/open-lambda/ol/server"
+	"github.com/open-lambda/open-lambda/ol/worker/server"
 
 	"github.com/urfave/cli"	
 )

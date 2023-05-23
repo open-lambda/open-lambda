@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/open-lambda/open-lambda/ol/common"
-	"github.com/open-lambda/open-lambda/ol/lambda"
+	"github.com/open-lambda/open-lambda/ol/worker/lambda"
 )
 
 // LambdaServer is a worker server that listens to run lambda requests and forward
