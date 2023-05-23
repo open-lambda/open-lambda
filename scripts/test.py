@@ -69,25 +69,25 @@ def numpy_test():
 
     # try adding the nums in a few different matrixes.  Also make sure
     # we can have two different numpy versions co-existing.
-    result = open_lambda.run("numpy19", [1, 2])
+    result = open_lambda.run("numpy23", [1, 2])
     assert_eq(result['result'], 3)
-    assert result['version'].startswith('1.19')
+    assert result['numpy-version'].startswith('1.23')
 
-    result = open_lambda.run("numpy20", [[1, 2], [3, 4]])
+    result = open_lambda.run("numpy24", [[1, 2], [3, 4]])
     assert_eq(result['result'], 10)
-    assert result['version'].startswith('1.20')
+    assert result['numpy-version'].startswith('1.24')
 
-    result = open_lambda.run("numpy19", [[[1, 2], [3, 4]], [[1, 2], [3, 4]]])
+    result = open_lambda.run("numpy24", [[[1, 2], [3, 4]], [[1, 2], [3, 4]]])
     assert_eq(result['result'], 20)
-    assert result['version'].startswith('1.19')
+    assert result['numpy-version'].startswith('1.24')
 
     result = open_lambda.run("pandas", [[0, 1, 2], [3, 4, 5]])
     assert_eq(result['result'], 15)
-    assert float(".".join(result['version'].split('.')[:2])) >= 1.19
+    assert float(".".join(result['numpy-version'].split('.')[:2])) >= 1.24
 
-    result = open_lambda.run("pandas18", [[1, 2, 3], [1, 2, 3]])
+    result = open_lambda.run("pandas-v1", [[1, 2, 3], [1, 2, 3]])
     assert_eq(result['result'], 12)
-    assert result['version'].startswith('1.18')
+    assert result['numpy-version'].startswith('1.24')
 
 def stress_one_lambda_task(args):
     open_lambda = OpenLambda()
