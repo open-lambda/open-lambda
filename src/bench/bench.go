@@ -193,7 +193,8 @@ func BenchCommands() []*cli.Command {
                         Action: create_lambdas,
 			Flags: []cli.Flag{
 				&cli.StringFlag{
-					Name:  "path, p",
+					Name:  "path",
+					Aliases: []string{"p"},
 					Usage: "Path location for OL environment",
 				},
 			},
@@ -236,11 +237,13 @@ func BenchCommands() []*cli.Command {
 					Action: action,
 					Flags: []cli.Flag{
 						&cli.StringFlag{
-							Name:  "path, p",
+							Name:  "path",
+							Aliases: []string{"p"},
 							Usage: "Path location for OL environment",
 						},
 						&cli.Float64Flag{
-							Name:  "seconds, s",
+							Name:  "seconds",
+							Aliases: []string{"s"},
 							Usage: "Seconds to run (after warmup)",
 						},
 					},

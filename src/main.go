@@ -186,7 +186,8 @@ OPTIONS:
 			Description: "Start a boss server.",
 			Flags: []cli.Flag{
 				&cli.BoolFlag{
-					Name:  "detach, d",
+					Name:  "detach",
+					Aliases: []string{"d"},
 					Usage: "Run worker in background",
 				},
 			},
@@ -230,7 +231,8 @@ OPTIONS:
 					Action: pprofMem,
 					Flags: []cli.Flag{
 						&cli.StringFlag{
-							Name:  "out, o",
+							Name:  "out",
+							Aliases: []string{"o"},
 						},
 					},
 				},

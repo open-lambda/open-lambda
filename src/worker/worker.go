@@ -468,11 +468,13 @@ func cleanup(ctx *cli.Context) error {
 
 func WorkerCommands() []*cli.Command {
 	pathFlag := cli.StringFlag{
-		Name:  "path, p",
+		Name:  "path",
+		Aliases: []string{"p"},
 		Usage: "Path location for OL environment",
 	}
 	dockerImgFlag := cli.StringFlag{
-		Name:  "image, i",
+		Name:  "image",
+		Aliases: []string{"i"},
 		Usage: "Name of Docker image to use for base",
 	}
 
@@ -494,11 +496,13 @@ func WorkerCommands() []*cli.Command {
 				&pathFlag,
 				&dockerImgFlag,
 				&cli.StringFlag{
-					Name:  "options, o",
+					Name:  "options",
+					Aliases: []string{"o"},
 					Usage: "Override options with: -o opt1=val1,opt2=val2/opt3.subopt31=val3",
 				},
 				&cli.BoolFlag{
-					Name:  "detach, d",
+					Name:  "detach",
+					Aliases: []string{"d"},
 					Usage: "Run worker in background",
 				},
 			},
