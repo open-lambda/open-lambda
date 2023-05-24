@@ -14,7 +14,7 @@ import (
 	"github.com/open-lambda/open-lambda/ol/common"
 	"github.com/open-lambda/open-lambda/ol/worker"
 
-	"github.com/urfave/cli"	
+	"github.com/urfave/cli/v2"
 )
 
 func newBossConf() error {
@@ -171,65 +171,65 @@ OPTIONS:
 	app.ArgsUsage = "ArgsUsage"
 	app.EnableBashCompletion = true
 	app.HideVersion = true
-	app.Commands = []cli.Command{
-		cli.Command{
+	app.Commands = []*cli.Command{
+		&cli.Command{
 			Name:        "new-boss",
 			Usage:       "Create an OL Boss config (boss.json)",
 			UsageText:   "ol new-boss [--path=PATH] [--detach]",
 			Description: "Create config for new boss",
 			Action:      newBoss,
 		},
-		cli.Command{
+		&cli.Command{
 			Name:        "boss",
 			Usage:       "Start an OL Boss process",
 			UsageText:   "ol boss [--path=PATH] [--detach]",
 			Description: "Start a boss server.",
 			Flags: []cli.Flag{
-				cli.BoolFlag{
+				&cli.BoolFlag{
 					Name:  "detach, d",
 					Usage: "Run worker in background",
 				},
 			},
 			Action: runBoss,
 		},
-		cli.Command{
+		&cli.Command{
 			Name:      "gcp-test",
 			Usage:     "Developer use only.  Start a GCP VM running the OL worker",
 			UsageText: "ol gcp-test",
 			Flags:     []cli.Flag{},
 			Action:    gcpTest,
 		},
-		cli.Command{
+		&cli.Command{
 			Name:      "azure-test",
 			Usage:     "Developer use only.  Start an Azure Blob ",
 			UsageText: "ol zure-test",
 			Flags:     []cli.Flag{},
 			Action:    azureTest,
 		},
-		cli.Command{
+		&cli.Command{
 			Name: "worker",
 			Usage: "Run OL worker commands.",
 			UsageText: "ol worker <cmd>",
 			Subcommands: worker.WorkerCommands(),
 		},
-		cli.Command{
+		&cli.Command{
 			Name: "bench",
 			Usage: "Run benchmarks against an OL worker.",
 			UsageText: "ol bench <cmd>",
 			Subcommands: bench.BenchCommands(),
 		},
-		cli.Command{
+		&cli.Command{
 			Name: "pprof",
 			Usage: "Profile OL worker",
 			UsageText: "ol pprof <cmd>",
-			Subcommands: []cli.Command{
+			Subcommands: []*cli.Command{
 				{
 					Name:  "mem",
 					Usage: "creates lambdas for benchmarking",
 					UsageText: "ol pprof mem [--out=NAME]",
 					Action: pprofMem,
 					Flags: []cli.Flag{
-						cli.StringFlag{
+						&cli.StringFlag{
 							Name:  "out, o",
 						},
 					},

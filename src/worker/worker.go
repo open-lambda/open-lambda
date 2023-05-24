@@ -20,7 +20,7 @@ import (
 	"github.com/open-lambda/open-lambda/ol/common"
 	"github.com/open-lambda/open-lambda/ol/worker/server"
 
-	"github.com/urfave/cli"	
+	"github.com/urfave/cli/v2"
 )
 
 // modify the config.json file based on settings from cmdline: -o opt1=val1,opt2=val2,...
@@ -466,7 +466,7 @@ func cleanup(ctx *cli.Context) error {
 	return nil
 }
 
-func WorkerCommands() []cli.Command {
+func WorkerCommands() []*cli.Command {
 	pathFlag := cli.StringFlag{
 		Name:  "path, p",
 		Usage: "Path location for OL environment",
@@ -476,54 +476,54 @@ func WorkerCommands() []cli.Command {
 		Usage: "Name of Docker image to use for base",
 	}
 
-	cmds := []cli.Command{
-		cli.Command{
+	cmds := []*cli.Command{
+		&cli.Command{
 			Name:        "new",
 			Usage:       "Create an OL worker environment, including default config and dump of base image",
-			UsageText:   "ol new [--path=PATH] [--image=DOCKER-IMAGE]",
+			UsageText:   "ol new [OPTIONS...]",
 			Description: "A cluster directory of the given name will be created with internal structure initialized.",
-			Flags:       []cli.Flag{pathFlag, dockerImgFlag},
+			Flags:       []cli.Flag{&pathFlag, &dockerImgFlag},
 			Action:      newOL,
 		},
-		cli.Command{
+		&cli.Command{
 			Name:        "up",
 			Usage:       "Start an OL worker process (automatically calls 'new' and uses default if that wasn't already done)",
-			UsageText:   "ol up [--path=NAME] [--image=DOCKER-IMAGE] [--detach]",
+			UsageText:   "ol up [OPTIONS...] [--detach]",
 			Description: "Start an OL worker.",
 			Flags: []cli.Flag{
-				pathFlag,
-				dockerImgFlag,
-				cli.StringFlag{
+				&pathFlag,
+				&dockerImgFlag,
+				&cli.StringFlag{
 					Name:  "options, o",
 					Usage: "Override options with: -o opt1=val1,opt2=val2/opt3.subopt31=val3",
 				},
-				cli.BoolFlag{
+				&cli.BoolFlag{
 					Name:  "detach, d",
 					Usage: "Run worker in background",
 				},
 			},
 			Action: up,
 		},
-		cli.Command{
+		&cli.Command{
 			Name:      "down",
 			Usage:     "Kill containers and processes of the worker",
-			UsageText: "ol down [--path=NAME]",
-			Flags:     []cli.Flag{pathFlag},
+			UsageText: "ol down [OPTIONS...]",
+			Flags:     []cli.Flag{&pathFlag},
 			Action:    down,
 		},
-		cli.Command{
+		&cli.Command{
 			Name:        "status",
 			Usage:       "check status of an OL worker process",
-			UsageText:   "ol status [--path=NAME]",
+			UsageText:   "ol status [OPTIONS...]",
 			Description: "If no cluster name is specified, number of containers of each cluster is printed; otherwise the connection information for all containers in the given cluster will be displayed.",
-			Flags:       []cli.Flag{pathFlag},
+			Flags:       []cli.Flag{&pathFlag},
 			Action:      status,
 		},
-		cli.Command{
+		&cli.Command{
 			Name:      "force-cleanup",
 			Usage:     "Developer use only.  Cleanup cgroups and mount points (only needed when OL halted unexpectedly or there's a bug)",
-			UsageText: "ol force-cleanup [--path=NAME]",
-			Flags:     []cli.Flag{pathFlag},
+			UsageText: "ol force-cleanup [OPTIONS...]",
+			Flags:     []cli.Flag{&pathFlag},
 			Action:    cleanup,
 		},
 	}
