@@ -136,7 +136,7 @@ class DockerWorker():
 
         try:
             print("Starting Docker container worker")
-            run(['./ol', 'worker', f'-p={_OL_DIR}', '--detach'])
+            run(['./ol', 'worker', 'up', f'-p={_OL_DIR}', '--detach'])
         except Exception as err:
             raise RuntimeError(f"failed to start worker: {err}") from err
 
@@ -164,7 +164,7 @@ class DockerWorker():
 
         try:
             print("Stopping Docker container worker")
-            run(['./ol', 'kill', '-p='+_OL_DIR])
+            run(['./ol', 'worker', 'down', '-p='+_OL_DIR])
         except Exception as err:
             raise RuntimeError("Failed to start worker") from err
 
@@ -177,7 +177,7 @@ class SockWorker():
 
         try:
             print("Starting SOCK container worker")
-            run(['./ol', 'worker', '-p='+_OL_DIR, '--detach'])
+            run(['./ol', 'worker', 'up', '-p='+_OL_DIR, '--detach'])
         except Exception as err:
             raise RuntimeError(f"failed to start worker: {err}") from err
 
@@ -205,7 +205,7 @@ class SockWorker():
 
         try:
             print("Stopping SOCK container worker")
-            run(['./ol', 'kill', '-p='+_OL_DIR])
+            run(['./ol', 'worker', 'down', '-p='+_OL_DIR])
         except Exception as err:
             raise RuntimeError("Failed to start worker") from err
 
@@ -259,7 +259,7 @@ def prepare_open_lambda(ol_dir, reuse_config=False):
     '''
     if os.path.exists(_OL_DIR):
         try:
-            run(['./ol', 'kill', f'-p={ol_dir}'])
+            run(['./ol', 'worker', 'down', f'-p={ol_dir}'])
             print("stopped existing worker")
         except Exception as err:
             print(f"Could not kill existing worker: {err}")
@@ -269,7 +269,7 @@ def prepare_open_lambda(ol_dir, reuse_config=False):
         if os.path.exists(ol_dir):
             run(['rm', '-rf', ol_dir])
 
-        run(['./ol', 'new', f'-p={ol_dir}'])
+        run(['./ol', 'worker', 'new', f'-p={ol_dir}'])
     else:
         if os.path.exists(_OL_DIR):
             # Make sure the pid file is gone even if the previous worker crashed
@@ -279,7 +279,7 @@ def prepare_open_lambda(ol_dir, reuse_config=False):
                 pass
         else:
             # There was never a config in the first place, create one
-            run(['./ol', 'new', f'-p={ol_dir}'])
+            run(['./ol', 'worker', 'new', f'-p={ol_dir}'])
 
 def mounts():
     ''' Returns a list of all mounted directories '''

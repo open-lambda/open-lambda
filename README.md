@@ -57,7 +57,7 @@ We recommend syncing to a commit that passes our [daily tests](https://s3.us-eas
 You can create a new OL environment with the following comment:
 
 ```
-./ol new
+./ol worker new
 ```
 
 This creates a directory named `default-ol` with various OL resources.
@@ -67,11 +67,10 @@ Default config settings were saved to `./default-ol/config.json`.
 Modify them if you wish, then start an OL worker (if you used `-path` above, use it again with the `worker` command):
 
 ```
-./ol worker
+./ol worker up
 ```
 
-In another terminal, make sure the worker is running with `./ol
-status`.
+In another terminal, make sure the worker is running with `./ol worker status`.
 
 Now save the following to `./default-ol/registry/echo.py`:
 
@@ -90,13 +89,13 @@ When you're done, just kill the worker with `ctrl-C`.
 If you want to run the worker in detached mode (i.e., in the background), just start it again with the `-d` flag:
 
 ```
-./ol worker -d
+./ol worker up -d
 ```
 
 You can shutdown a detached worker like this:
 
 ```
-./ol kill
+./ol worker down
 ```
 
 ## License
