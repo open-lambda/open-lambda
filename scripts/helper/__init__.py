@@ -269,7 +269,7 @@ def prepare_open_lambda(ol_dir, reuse_config=False):
         if os.path.exists(ol_dir):
             run(['rm', '-rf', ol_dir])
 
-        run(['./ol', 'worker', 'new', f'-p={ol_dir}'])
+        run(['./ol', 'worker', 'init', f'-p={ol_dir}'])
     else:
         if os.path.exists(_OL_DIR):
             # Make sure the pid file is gone even if the previous worker crashed
@@ -279,7 +279,7 @@ def prepare_open_lambda(ol_dir, reuse_config=False):
                 pass
         else:
             # There was never a config in the first place, create one
-            run(['./ol', 'worker', 'new', f'-p={ol_dir}'])
+            run(['./ol', 'worker', 'init', f'-p={ol_dir}'])
 
 def mounts():
     ''' Returns a list of all mounted directories '''
