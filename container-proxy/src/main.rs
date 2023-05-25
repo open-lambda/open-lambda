@@ -71,7 +71,10 @@ async fn function_call(func_name: String, args: Vec<u8>) -> Result<Vec<u8>, Stri
 
     let server_addr = "localhost:5000";
     let url = format!("http://{server_addr}/run/{func_name}");
-    let client = reqwest::Client::new();
+    let client = reqwest::ClientBuilder::new()
+        .tcp_nodelay(true)
+        .build()
+        .expect("Failed to set up HTTP client");
 
     let request = client.post(url).body(args);
 

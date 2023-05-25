@@ -169,7 +169,7 @@ async fn execute_function(args: Vec<u8>) -> Result<Response<Body>> {
 
     if !success {
         status_code = StatusCode::INTERNAL_SERVER_ERROR;
-        log::error!("{}", e_str);
+        log::error!("{e_str}");
         body = e_str.into();
     } else {
         log::debug!("Function returned successfully");
