@@ -57,11 +57,11 @@ We recommend syncing to a commit that passes our [daily tests](https://s3.us-eas
 You can create a new OL environment with the following comment:
 
 ```
-./ol worker new
+./ol worker init
 ```
 
 This creates a directory named `default-ol` with various OL resources.
-You can create an OL environment at another location by passing a `-path=DIRNAME` to the `new` command.
+You can create an OL environment at another location by passing a `-path=DIRNAME` to the `init` command.
 
 Default config settings were saved to `./default-ol/config.json`.
 Modify them if you wish, then start an OL worker (if you used `-path` above, use it again with the `worker` command):

@@ -129,8 +129,8 @@ type LimitsConfig struct {
 	Installer_mem_mb int `json:"installer_mem_mb"`
 }
 
-// Defaults verifies the fields of Config are correct, and initializes some
-// if they are empty.
+// Choose reasonable defaults for a worker deployment (based on memory capacity).
+// olPath need not exist (it is used to determine default paths for registry, etc).
 func LoadDefaults(olPath string) error {
 	workerDir := filepath.Join(olPath, "worker")
 	registryDir := filepath.Join(olPath, "registry")

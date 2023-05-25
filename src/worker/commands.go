@@ -1,21 +1,16 @@
 package worker
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
-
-	docker "github.com/fsouza/go-dockerclient"
-	dutil "github.com/open-lambda/open-lambda/ol/worker/sandbox/dockerutil"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 	"github.com/open-lambda/open-lambda/ol/worker/server"
@@ -23,86 +18,10 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-// modify the config.json file based on settings from cmdline: -o opt1=val1,opt2=val2,...
-//
-// apply changes in optsStr to config from confPath, saving result to overridePath
-func overrideOpts(confPath, overridePath, optsStr string) error {
-	b, err := ioutil.ReadFile(confPath)
+// initCmd corresponds to the "init" command of the admin tool.
+func initCmd(ctx *cli.Context) error {
+	olPath, err := common.GetOlPath(ctx)
 	if err != nil {
-		return err
-	}
-	conf := make(map[string]any)
-	if err := json.Unmarshal(b, &conf); err != nil {
-		return err
-	}
-
-	opts := strings.Split(optsStr, ",")
-	for _, opt := range opts {
-		parts := strings.Split(opt, "=")
-		if len(parts) != 2 {
-			return fmt.Errorf("Could not parse key=val: '%s'", opt)
-		}
-		keys := strings.Split(parts[0], ".")
-		val := parts[1]
-
-		c := conf
-		for i := 0; i < len(keys)-1; i++ {
-			sub, ok := c[keys[i]]
-			if !ok {
-				return fmt.Errorf("key '%s' not found", keys[i])
-			}
-			switch v := sub.(type) {
-			case map[string]any:
-				c = v
-			default:
-				return fmt.Errorf("%s refers to a %T, not a map", keys[i], c[keys[i]])
-			}
-		}
-
-		key := keys[len(keys)-1]
-		prev, ok := c[key]
-		if !ok {
-			return fmt.Errorf("invalid option: '%s'", key)
-		}
-		switch prev.(type) {
-		case string:
-			c[key] = val
-		case float64:
-			c[key], err = strconv.Atoi(val)
-			if err != nil {
-				return err
-			}
-		case bool:
-			if strings.ToLower(val) == "true" {
-				c[key] = true
-			} else if strings.ToLower(val) == "false" {
-				c[key] = false
-			} else {
-				return fmt.Errorf("'%s' for %s not a valid boolean value", val, key)
-			}
-		default:
-			return fmt.Errorf("config values of type %T (%s) must be edited manually in the config file ", prev, key)
-		}
-	}
-
-	// save back config
-	s, err := json.MarshalIndent(conf, "", "\t")
-	if err != nil {
-		return err
-	}
-	if err := ioutil.WriteFile(overridePath, s, 0644); err != nil {
-		return err
-	}
-	return nil
-}
-
-func initOLDir(olPath string, dockerBaseImage string) (err error) {
-	if dockerBaseImage == "" {
-		dockerBaseImage = "ol-wasm"
-	}
-
-	fmt.Printf("Init OL dir at %v, using Docker image %v as base\n", olPath, dockerBaseImage)
-	if err := os.Mkdir(olPath, 0700); err != nil {
 		return err
 	}
 
@@ -110,136 +29,36 @@ func initOLDir(olPath string, dockerBaseImage string) (err error) {
 		return err
 	}
 
-	confPath := filepath.Join(olPath, "config.json")
-	if err := common.SaveConf(confPath); err != nil {
+	if err := initOLDir(olPath, ctx.String("image")); err != nil {
 		return err
 	}
-
-	if err := os.Mkdir(common.Conf.Worker_dir, 0700); err != nil {
-		return err
-	}
-
-	if err := os.Mkdir(common.Conf.Registry, 0700); err != nil {
-		return err
-	}
-
-	// create a base directory to run sock handlers
-	var dockerClient *docker.Client
-	if c, err := docker.NewClientFromEnv(); err != nil {
-		return err
-	} else {
-		dockerClient = c
-	}
-
-	base := common.Conf.SOCK_base_path
-	fmt.Printf("Creating lambda base at %v (may take several minutes)\n", base)
-	err = dutil.DumpDockerImage(dockerClient, dockerBaseImage, base)
-	if err != nil {
-		return err
-	}
-
-	if err := os.Mkdir(path.Join(base, "handler"), 0700); err != nil {
-		return err
-	}
-
-	if err := os.Mkdir(path.Join(base, "host"), 0700); err != nil {
-		return err
-	}
-
-	if err := os.Mkdir(path.Join(base, "packages"), 0700); err != nil {
-		return err
-	}
-
-	// need this because Docker containers don't have a dns server in /etc/resolv.conf
-	dnsPath := filepath.Join(base, "etc", "resolv.conf")
-	if err := ioutil.WriteFile(dnsPath, []byte("nameserver 8.8.8.8\n"), 0644); err != nil {
-		return err
-	}
-
-	path := filepath.Join(base, "dev", "null")
-	if err := exec.Command("mknod", "-m", "0644", path, "c", "1", "3").Run(); err != nil {
-		return err
-	}
-
-	path = filepath.Join(base, "dev", "random")
-	if err := exec.Command("mknod", "-m", "0644", path, "c", "1", "8").Run(); err != nil {
-		return err
-	}
-
-	path = filepath.Join(base, "dev", "urandom")
-	if err := exec.Command("mknod", "-m", "0644", path, "c", "1", "9").Run(); err != nil {
-		return err
-	}
-
-	fmt.Printf("Working Directory: %s\n\n", olPath)
-	fmt.Printf("Worker Defaults: \n%s\n\n", common.DumpConfStr())
-	fmt.Printf("You may modify the defaults here: %s\n\n", confPath)
-	fmt.Printf("You may now start a server using the \"ol worker\" command\n")
-
+	fmt.Printf("You may now start a worker using the \"ol worker up\" command.\n")
 	return nil
 }
 
-// newOL corresponds to the "new" command of the admin tool.
-func newOL(ctx *cli.Context) error {
-	olPath, err := common.GetOlPath(ctx)
-	if err != nil {
-		return err
-	}
-
-	return initOLDir(olPath, ctx.String("image"))
-}
-
-// status corresponds to the "status" command of the admin tool.
-func status(ctx *cli.Context) error {
-	olPath, err := common.GetOlPath(ctx)
-	if err != nil {
-		return err
-	}
-
-	fmt.Printf("Worker Ping:\n")
-	err = common.LoadConf(filepath.Join(olPath, "config.json"))
-	if err != nil {
-		return err
-	}
-
-	url := fmt.Sprintf("http://localhost:%s/status", common.Conf.Worker_port)
-	response, err := http.Get(url)
-	if err != nil {
-		return fmt.Errorf("could not send GET to %s", url)
-	}
-	defer response.Body.Close()
-	body, err := ioutil.ReadAll(response.Body)
-	if err != nil {
-		return fmt.Errorf("failed to read body from GET to %s", url)
-	}
-	fmt.Printf("  %s => %s [%s]\n", url, body, response.Status)
-	fmt.Printf("\n")
-
-	return nil
-}
-
-// "up" corresponds to the "up" command of the admin tool.
-//
-// The JSON config in the cluster template directory will be populated for each
-// worker, and their pid will be written to the log directory. worker_exec will
-// be called to run the worker processes.
-func up(ctx *cli.Context) error {
+// upCmd corresponds to the "up" command of the admin tool.
+func upCmd(ctx *cli.Context) error {
 	// get path of worker files
 	olPath, err := common.GetOlPath(ctx)
 	if err != nil {
 		return err
 	}
 
-	// if `./ol new` not previously run, do that init now
+	// init worker dir (if not done already)
 	if _, err := os.Stat(olPath); os.IsNotExist(err) {
-		fmt.Printf("No OL directory found at %s\n", olPath)
+		fmt.Printf("Did not find OL directory at %s\n", olPath)
+		if err := common.LoadDefaults(olPath); err != nil {
+			return err
+		}
+
 		if err := initOLDir(olPath, ctx.String("image")); err != nil {
 			return err
 		}
 	} else {
-		fmt.Printf("using existing OL directory at %s\n", olPath)
+		fmt.Printf("Found OL directory at %s\n", olPath)
 	}
 
+	// load config file, apply any command line overrides
 	confPath := filepath.Join(olPath, "config.json")
 	overrides := ctx.String("options")
 	if overrides != "" {
@@ -250,7 +69,6 @@ func up(ctx *cli.Context) error {
 		}
 		confPath = overridesPath
 	}
-
 	if err := common.LoadConf(confPath); err != nil {
 		return err
 	}
@@ -358,53 +176,49 @@ func up(ctx *cli.Context) error {
 	return fmt.Errorf("this code should not be reachable")
 }
 
-// down corresponds to the "down" command of the admin tool.
-func down(ctx *cli.Context) error {
+// status corresponds to the "status" command of the admin tool.
+func statusCmd(ctx *cli.Context) error {
 	olPath, err := common.GetOlPath(ctx)
 	if err != nil {
 		return err
 	}
-
-	// locate worker.pid, use it to get worker's PID
-	configPath := filepath.Join(olPath, "config.json")
-	if err := common.LoadConf(configPath); err != nil {
-		return err
-	}
-	data, err := ioutil.ReadFile(filepath.Join(common.Conf.Worker_dir, "worker.pid"))
-	if err != nil {
-		return err
-	}
-	pidstr := string(data)
-	pid, err := strconv.Atoi(pidstr)
+	err = common.LoadConf(filepath.Join(olPath, "config.json"))
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("Killing worker process with PID %d\n", pid)
-	p, err := os.FindProcess(pid)
+	fmt.Printf("Worker Ping:\n")
+	url := fmt.Sprintf("http://localhost:%s/status", common.Conf.Worker_port)
+	response, err := http.Get(url)
 	if err != nil {
-		fmt.Printf("%s\n", err.Error())
-		fmt.Printf("Failed to find worker process with PID %d.  May require manual cleanup.\n", pid)
+		return fmt.Errorf("could not send GET to %s", url)
 	}
-	if err := p.Signal(syscall.SIGINT); err != nil {
-		fmt.Printf("%s\n", err.Error())
-		fmt.Printf("Failed to kill process with PID %d.  May require manual cleanup.\n", pid)
+	defer response.Body.Close()
+	body, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read body from GET to %s", url)
 	}
+	fmt.Printf("  %s => %s [%s]\n", url, body, response.Status)
+	fmt.Printf("\n")
 
-	for i := 0; i < 300; i++ {
-		err := p.Signal(syscall.Signal(0))
-		if err != nil {
-			fmt.Printf("OL worker process stopped successfully\n")
-			return nil // good, process must have stopped
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
+	return nil
+}
 
-	return fmt.Errorf("worker didn't stop after 30s")
+// down corresponds to the "down" command of the admin tool.
+func downCmd(ctx *cli.Context) error {
+	olPath, err := common.GetOlPath(ctx)
+	if err != nil {
+		return err
+	}
+	err = common.LoadConf(filepath.Join(olPath, "config.json"))
+	if err != nil {
+		return err
+	}
+	return stopOL(olPath)
 }
 
 // cleanup corresponds to the "force-cleanup" command of the admin tool.
-func cleanup(ctx *cli.Context) error {
+func cleanupCmd(ctx *cli.Context) error {
 	olPath, err := common.GetOlPath(ctx)
 	if err != nil {
 		return err
@@ -480,16 +294,16 @@ func WorkerCommands() []*cli.Command {
 
 	cmds := []*cli.Command{
 		&cli.Command{
-			Name:        "new",
+			Name:        "init",
 			Usage:       "Create an OL worker environment, including default config and dump of base image",
-			UsageText:   "ol new [OPTIONS...]",
+			UsageText:   "ol init [OPTIONS...]",
 			Description: "A cluster directory of the given name will be created with internal structure initialized.",
 			Flags:       []cli.Flag{&pathFlag, &dockerImgFlag},
-			Action:      newOL,
+			Action:      initCmd,
 		},
 		&cli.Command{
 			Name:        "up",
-			Usage:       "Start an OL worker process (automatically calls 'new' and uses default if that wasn't already done)",
+			Usage:       "Start an OL worker process (automatically calls 'init' and uses default if that wasn't already done)",
 			UsageText:   "ol up [OPTIONS...] [--detach]",
 			Description: "Start an OL worker.",
 			Flags: []cli.Flag{
@@ -506,14 +320,14 @@ func WorkerCommands() []*cli.Command {
 					Usage: "Run worker in background",
 				},
 			},
-			Action: up,
+			Action: upCmd,
 		},
 		&cli.Command{
 			Name:      "down",
 			Usage:     "Kill containers and processes of the worker",
 			UsageText: "ol down [OPTIONS...]",
 			Flags:     []cli.Flag{&pathFlag},
-			Action:    down,
+			Action:    downCmd,
 		},
 		&cli.Command{
 			Name:        "status",
@@ -521,14 +335,14 @@ func WorkerCommands() []*cli.Command {
 			UsageText:   "ol status [OPTIONS...]",
 			Description: "If no cluster name is specified, number of containers of each cluster is printed; otherwise the connection information for all containers in the given cluster will be displayed.",
 			Flags:       []cli.Flag{&pathFlag},
-			Action:      status,
+			Action:      statusCmd,
 		},
 		&cli.Command{
 			Name:      "force-cleanup",
 			Usage:     "Developer use only.  Cleanup cgroups and mount points (only needed when OL halted unexpectedly or there's a bug)",
 			UsageText: "ol force-cleanup [OPTIONS...]",
 			Flags:     []cli.Flag{&pathFlag},
-			Action:    cleanup,
+			Action:    cleanupCmd,
 		},
 	}
 
