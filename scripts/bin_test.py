@@ -23,7 +23,7 @@ def get_mem_stat_mb(stat):
                 parts = line.strip().split()
                 assert parts[-1] == 'kB'
                 return int(parts[1]) / 1024
-    raise Exception('could not get stat')
+    raise LookupError('could not get stat')
 
 @test
 def ping():

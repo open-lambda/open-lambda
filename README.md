@@ -16,7 +16,8 @@ OpenLambda is only actively tested on Ubuntu 22.04 LTS.
 ### Build and Test
 Make sure you have all basic dependencies installed:
 ```
-apt install docker.io llvm-12-dev libclang-common-12-dev build-essential python3
+apt update
+apt install -y docker.io llvm-12-dev libclang-common-12-dev build-essential python3 zlib1g-dev
 ```
 
 For a recent version of go, run the following:
@@ -31,6 +32,7 @@ Further, you need to have a recent nightly version of Rust, the wasm32 toolchain
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain=nightly-2022-07-25
 source $HOME/.cargo/env
 rustup target add wasm32-unknown-unknown
+rustup target add --toolchain=nightly-2023-02-22 wasm32-unknown-unknown
 cargo install cross
 ```
 
@@ -55,7 +57,7 @@ We recommend syncing to a commit that passes our [daily tests](https://s3.us-eas
 You can create a new OL environment with the following comment:
 
 ```
-./ol new
+./ol worker new
 ```
 
 This creates a directory named `default-ol` with various OL resources.
@@ -65,11 +67,10 @@ Default config settings were saved to `./default-ol/config.json`.
 Modify them if you wish, then start an OL worker (if you used `-path` above, use it again with the `worker` command):
 
 ```
-./ol worker
+./ol worker up
 ```
 
-In another terminal, make sure the worker is running with `./ol
-status`.
+In another terminal, make sure the worker is running with `./ol worker status`.
 
 Now save the following to `./default-ol/registry/echo.py`:
 
@@ -88,13 +89,13 @@ When you're done, just kill the worker with `ctrl-C`.
 If you want to run the worker in detached mode (i.e., in the background), just start it again with the `-d` flag:
 
 ```
-./ol worker -d
+./ol worker up -d
 ```
 
 You can shutdown a detached worker like this:
 
 ```
-./ol kill
+./ol worker down
 ```
 
 ## License

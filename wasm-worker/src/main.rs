@@ -119,7 +119,7 @@ impl hyper::service::Service<Request<Incoming>> for Service {
     type Error = http::Error;
     type Future = impl std::future::Future<Output = http::Result<Response<Full<Bytes>>>>;
 
-    fn call(&mut self, req: Request<Incoming>) -> Self::Future {
+    fn call(&self, req: Request<Incoming>) -> Self::Future {
         Self::handle_request(req, self.worker_addr, self.function_mgr.clone())
     }
 }
