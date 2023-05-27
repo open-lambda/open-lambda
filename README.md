@@ -14,11 +14,12 @@ that can take HTTP requests and invoke lambdas locally to compute
 responses.
 
 You can read more about the **OpenLambda worker** [here](docs/worker/README.md) or just get started
-by [deploying a worker](docs/worker/deployment.md).
+by [deploying a worker](docs/worker/getting-started.md).
 
 We are currently working on a cluster mode, where a pool of VMs
 running the worker service are managed by a centralized **OpenLambda
-boss**.
+boss**.  With a bit of work, you could also manually deploy workers
+yourself and put an HTTP load balancer in front of them.
 
 ## Related Publications
 
