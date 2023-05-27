@@ -2,7 +2,7 @@
 
 ## Deployment
 
-See [quick start](quickstart.md).
+See how to build the code, deploy a worker, and write/run lambdas [here](getting-started.md).
 
 ## Usage
 
