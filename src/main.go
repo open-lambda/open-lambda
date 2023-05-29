@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"time"
+  "time"
 
 	docker "github.com/fsouza/go-dockerclient"
 	dutil "github.com/open-lambda/open-lambda/ol/sandbox/dockerutil"
@@ -360,35 +360,21 @@ func pprofCpuStart(ctx *cli.Context) error {
 		return err
 	}
 
-	fmt.Printf("started cpu profiling\n")
-	fmt.Printf("run \"ol pprof cpu-stop\" in another terminal to stop\n")
-
-	start := time.Now()
 	url := fmt.Sprintf("http://localhost:%s/pprof/cpu-start", common.Conf.Worker_port)
 	response, err := http.Get(url)
 	if err != nil {
 		return fmt.Errorf("Could not send GET to %s", url)
 	}
 	defer response.Body.Close()
-	duration := time.Since(start)
-
-	fmt.Printf("profiled CPU usage for %d seconds\n", int64(duration / time.Second))
-
-	path := ctx.String("out")
-	if path == "" {
-		path = "cpu.prof"
+	if response.StatusCode == 200 {
+		fmt.Printf("started cpu profiling\n")
+		fmt.Printf("use \"ol pprof cpu-stop\" to stop\n")
+	} else if response.StatusCode == 409 {
+		fmt.Printf("already started cpu profiling\n")
+		fmt.Printf("please call \"ol pprof cpu-stop\" first\n")
+	} else {
+		fmt.Printf("unknown error in cpu-start\n")
 	}
-	out, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	if _, err := io.Copy(out, response.Body); err != nil {
-		return err
-	}
-	fmt.Printf("output saved to %s. Use the following to explore:\n", path)
-	fmt.Printf("go tool pprof -http=localhost:8889 %s\n", path)  // different port than mem
 
 	return nil
 }
@@ -410,9 +396,24 @@ func pprofCpuStop(ctx *cli.Context) error {
 		return fmt.Errorf("could not send GET to %s", url)
 	}
 	defer response.Body.Close()
+	if response.StatusCode == 400 {
+		return fmt.Errorf("should call \"ol pprof cpu-start\" first\n")
+	}
 
-	fmt.Printf("stopped\n")
-	fmt.Printf("see output of cpu-start for viewing the profile\n")
+	path := ctx.String("out")
+	if path == "" {
+		path = "cpu.prof"
+	}
+	out, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	if _, err := io.Copy(out, response.Body); err != nil {
+		return err
+	}
+	fmt.Printf("output saved to %s. Use the following to explore:\n", path)
+	fmt.Printf("go tool pprof -http=localhost:8889 %s\n", path)
 
 	return nil
 }
@@ -802,19 +803,19 @@ OPTIONS:
 				{
 					Name: "cpu-start",
 					Usage: "Starts CPU profiling",
-					UsageText: "ol pprof cpu-start [--out=NAME]",
+					UsageText: "ol pprof cpu-start ",
 					Action: pprofCpuStart,
+				},
+				{
+					Name: "cpu-stop",
+					Usage: "Stops CPU profiling if started",
+					UsageText: "ol pprof cpu-stop [--out=NAME]",
+					Action: pprofCpuStop,
 					Flags: []cli.Flag{
 						cli.StringFlag{
 							Name: "out, o",
 						},
 					},
-				},
-				{
-					Name: "cpu-stop",
-					Usage: "Stops CPU profiling if started",
-					UsageText: "ol pprof cpu-stop",
-					Action: pprofCpuStop,
 				},
 			},
 		},
