@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	// "bufio"
 	"log"
 	"net/http"
 	"os"
@@ -97,7 +96,6 @@ func PprofCpuStart(w http.ResponseWriter, r *http.Request) {
 
 // Stops CPU profiling, writes profiled data to response, and does cleanup
 func PprofCpuStop(w http.ResponseWriter, r *http.Request) {
-	/*
 	// user error: should start cpu profiling first
 	if cpuTemp == nil {
 		log.Printf("should start cpu profile before stopping it\n")
@@ -107,30 +105,22 @@ func PprofCpuStop(w http.ResponseWriter, r *http.Request) {
 
 	// flush profile data to file
 	pprof.StopCPUProfile()
-	defer os.Remove(cpuTemp.Name())  // deferred cleanup
+	tempFilename := cpuTemp.Name()
+	cpuTemp.Close()
+	cpuTemp = nil
+	defer os.Remove(tempFilename) // deferred cleanup
 
-	stats, err := cpuTemp.Stat()
+	log.Printf("Reading from %s\n", tempFilename)
+	buffer, err := ioutil.ReadFile(tempFilename)
 	if err != nil {
-		log.Fatal("could not retrieve file stats: ", err)
-	}
-  
-	buffer := make([]byte, stats.Size())
-	reader := bufio.NewReader(cpuTemp)
-	if _, err := reader.Read(buffer); err != nil {
 		log.Fatal("could not read file: ", err)
 	}
-
-	if err := cpuTemp.Close(); err != nil {
-		log.Fatal("could not close file: ", err)
-	}
-
-	cpuTemp = nil
 
 	// write profiled data to response
 	w.Header().Add("Content-Type", "application/octet-stream")
 	if _, err := w.Write(buffer); err != nil {
 		log.Printf("error in PprofCpuStop: %v", err)
-	} */
+	}
 }
 
 func Main() (err error) {
@@ -195,16 +185,30 @@ func Main() (err error) {
 		log.Printf("received kill signal, cleaning up")
 		s.cleanup()
 
-		// "cpu-start"ed but have not "cpu-stop"ped before kill
-		if cpuTemp != nil {
-			pprof.StopCPUProfile()
-			log.Printf("Write buffered profiled data to %s\n", cpuTemp.Name())
-		      	cpuTemp.Close()
-		}
 
 		statsPath := filepath.Join(common.Conf.Worker_dir, "stats.json")
 		snapshot := common.SnapshotStats()
 		rc := 0
+
+		// "cpu-start"ed but have not "cpu-stop"ped before kill
+		log.Printf("save buffered profiled data to cpu.buf.prof\n")
+		if cpuTemp != nil {
+			pprof.StopCPUProfile()
+			filename := cpuTemp.Name()
+			cpuTemp.Close()
+
+			in, err := ioutil.ReadFile(filename)
+			if err != nil {
+				log.Printf("error: %s", err)
+				rc = 1
+			} else if err = ioutil.WriteFile("cpu.buf.prof", in, 0644); err != nil{
+				log.Printf("error: %s", err)
+				rc = 1
+			}
+
+			os.Remove(filename)
+		}
+
 		log.Printf("save stats to %s", statsPath)
 		if s, err := json.MarshalIndent(snapshot, "", "\t"); err != nil {
 			log.Printf("error: %s", err)
