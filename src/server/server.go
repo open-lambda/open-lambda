@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+  "bufio"
 	"log"
 	"net/http"
 	"os"
@@ -13,7 +14,6 @@ import (
 	"syscall"
 	"runtime"
 	"runtime/pprof"
-	"time"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 )
@@ -29,8 +29,9 @@ const (
 	PPROF_CPU_STOP_PATH = "/pprof/cpu-stop" 
 )
 
-// a global variable to signal "stop" to cpu profiling
-var cpuProfTimeout chan bool = make(chan bool)  
+// temporary file storing cpu profiled data
+const CPU_TEMP_PATTERN = ".cpu.*.prof"
+var cpuTemp *os.File = nil
 
 // GetPid returns process ID, useful for making sure we're talking to the expected server
 func GetPid(w http.ResponseWriter, r *http.Request) {
@@ -69,30 +70,73 @@ func PprofMem(w http.ResponseWriter, r *http.Request) {
         }
 }
 
+// Starts CPU profiling
 func PprofCpuStart(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Starting cpu profiling\n")
-	w.Header().Add("Content-Type", "application/octet-stream")
+  var errMsg string
 
-	if err := pprof.StartCPUProfile(w); err != nil {
-	    log.Fatal("could not start CPU profile: ", err)
+  // user error: double start (previous profiling not stopped yet)
+  if cpuTemp != nil {
+    errMsg = "Already started cpu profiling. See \"ol pprof cpu-stop\".\n" 
+    log.Printf(errMsg)
+    if _, err := w.Write([]byte(errMsg)); err != nil {
+      log.Printf("error in PprofCpuStart: %v", err)
+    }
+    return
+  }
+
+  // fresh cpu profiling
+  temp, err := os.CreateTemp("", CPU_TEMP_PATTERN)
+  if err != nil {
+    log.Fatal("could not create cpu temporary file")
+  }
+
+  cpuTemp = temp
+
+	if err := pprof.StartCPUProfile(temp); err != nil {
+	  log.Fatal("could not start CPU profile: ", err)
 	}
 
-	select {
-	case <-cpuProfTimeout:
-		break
-	case <-time.After((1 << 63 - 1) * time.Nanosecond): // max duration
-		break
-	}
+	log.Printf("Started cpu profiling\n")
 }
 
+// Stops CPU profiling, writes profiled data to response, and does cleanup
 func PprofCpuStop(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Stopping cpu profiling\n")
+  // user error: should start cpu profiling first
+  if cpuTemp == nil {
+    msg := "should start cpu profile before stopping it\n"
+    log.Printf(msg)
+    if _, err := w.Write([]byte(msg)); err != nil {
+      log.Printf("error in PprofCpuStop: %v", err)
+    }
+    return
+  }
 
+  // flush profile data to file
 	pprof.StopCPUProfile()
-	cpuProfTimeout <- true
-	if _, err := w.Write([]byte("stopped\n")); err != nil {
-		log.Printf("error in PprofCpuStop: %v", err)
-	}
+  defer os.Remove(cpuTemp.Name())  // deferred cleanup
+ 
+  stats, err := cpuTemp.Stat()
+  if err != nil {
+    log.Fatal("could not retrieve file stats: ", err)
+  }
+  
+  buffer := make([]byte, stats.Size())
+  reader := bufio.NewReader(cpuTemp)
+  if _, err := reader.Read(buffer); err != nil {
+    log.Fatal("could not read file: ", err)
+  }
+  
+  if err := cpuTemp.Close(); err != nil {
+    log.Fatal("could not close file: ", err)
+  }
+
+  cpuTemp = nil
+
+  // write profiled data to response
+	w.Header().Add("Content-Type", "application/octet-stream")
+  if _, err := w.Write(buffer); err != nil {
+    log.Printf("error in PprofCpuStop: %v", err)
+  }
 }
 
 func Main() (err error) {
@@ -156,6 +200,13 @@ func Main() (err error) {
 		<-c
 		log.Printf("received kill signal, cleaning up")
 		s.cleanup()
+
+    // "cpu-start"ed but have not "cpu-stop"ped before kill
+    if cpuTemp != nil {
+      pprof.StopCPUProfile()
+      log.Printf("Write buffered profiled data to %s\n", cpuTemp.Name())
+      cpuTemp.Close()
+    }
 
 		statsPath := filepath.Join(common.Conf.Worker_dir, "stats.json")
 		snapshot := common.SnapshotStats()
