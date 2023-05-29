@@ -396,7 +396,7 @@ func pprofCpuStop(ctx *cli.Context) error {
 		return fmt.Errorf("could not send GET to %s", url)
 	}
 	defer response.Body.Close()
-	if response.status == 400 {
+	if response.StatusCode == 400 {
 		return fmt.Errorf("should call \"ol pprof cpu-start\" first\n")
 	}
 
