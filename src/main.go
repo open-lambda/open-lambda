@@ -366,19 +366,15 @@ func pprofCpuStart(ctx *cli.Context) error {
 		return fmt.Errorf("Could not send GET to %s", url)
 	}
 	defer response.Body.Close()
-
-  body, err := ioutil.ReadAll(response.Body)
-  if err != nil {
-    return err
-  }
-
-  msg := string(body)
-  if msg == "" {
-    return fmt.Errorf("%s\n", msg)
-  }
-
-	fmt.Printf("started cpu profiling\n")
-	fmt.Printf("use \"ol pprof cpu-stop\" to stop\n")
+	if response.StatusCode == 200 {
+		fmt.Printf("started cpu profiling\n")
+		fmt.Printf("use \"ol pprof cpu-stop\" to stop\n")
+	} else if response.StatusCode == 409 {
+		fmt.Printf("already started cpu profiling\n")
+		fmt.Printf("please call \"ol pprof cpu-stop\" first\n")
+	} else {
+		fmt.Printf("unknown error in cpu-start\n")
+	}
 
 	return nil
 }
@@ -400,23 +396,24 @@ func pprofCpuStop(ctx *cli.Context) error {
 		return fmt.Errorf("could not send GET to %s", url)
 	}
 	defer response.Body.Close()
+	if response.status == 400 {
+		return fmt.Errorf("should call \"ol pprof cpu-start\" first\n")
+	}
 
-  path := ctx.String("out")
-  if path == "" {
-    path = "cpu.prof"
-  }
-
-  out, err := os.Create(path)
-  if err != nil {
-    return err
-  }
-  defer out.Close()
-
-  if _, err := io.Copy(out, response.Body); err != nil {
-    return err
-  }
-  fmt.Printf("output saved to %s. Use the following to explore:\n", path)
-  fmt.Printf("go tool pprof -http=localhost:8889 %s\n", path)
+	path := ctx.String("out")
+	if path == "" {
+		path = "cpu.prof"
+	}
+	out, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	if _, err := io.Copy(out, response.Body); err != nil {
+		return err
+	}
+	fmt.Printf("output saved to %s. Use the following to explore:\n", path)
+	fmt.Printf("go tool pprof -http=localhost:8889 %s\n", path)
 
 	return nil
 }

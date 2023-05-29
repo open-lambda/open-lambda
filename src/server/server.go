@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-  "bufio"
+	// "bufio"
 	"log"
 	"net/http"
 	"os"
@@ -66,34 +66,30 @@ func PprofMem(w http.ResponseWriter, r *http.Request) {
         runtime.GC()
 	w.Header().Add("Content-Type", "application/octet-stream")
         if err := pprof.WriteHeapProfile(w); err != nil {
-            log.Fatal("could not write memory profile: ", err)
+	    	log.Fatal("could not write memory profile: ", err)
         }
 }
 
 // Starts CPU profiling
 func PprofCpuStart(w http.ResponseWriter, r *http.Request) {
-  var errMsg string
+	// user error: double start (previous profiling not stopped yet)
+	if cpuTemp != nil {
+		log.Printf("Already started cpu profiling\n")
+		w.WriteHeader(409) // conflict
+		return
+	}
 
-  // user error: double start (previous profiling not stopped yet)
-  if cpuTemp != nil {
-    errMsg = "Already started cpu profiling. See \"ol pprof cpu-stop\".\n" 
-    log.Printf(errMsg)
-    if _, err := w.Write([]byte(errMsg)); err != nil {
-      log.Printf("error in PprofCpuStart: %v", err)
-    }
-    return
-  }
+	// fresh cpu profiling
+	temp, err := os.CreateTemp("", CPU_TEMP_PATTERN)
+	if err != nil {
+		log.Fatal("could not create cpu temporary file")
+	}
 
-  // fresh cpu profiling
-  temp, err := os.CreateTemp("", CPU_TEMP_PATTERN)
-  if err != nil {
-    log.Fatal("could not create cpu temporary file")
-  }
-
-  cpuTemp = temp
+	log.Printf("created a temporary file: %s", temp.Name())
+	cpuTemp = temp
 
 	if err := pprof.StartCPUProfile(temp); err != nil {
-	  log.Fatal("could not start CPU profile: ", err)
+		log.Fatal("could not start CPU profile: ", err)
 	}
 
 	log.Printf("Started cpu profiling\n")
@@ -101,42 +97,40 @@ func PprofCpuStart(w http.ResponseWriter, r *http.Request) {
 
 // Stops CPU profiling, writes profiled data to response, and does cleanup
 func PprofCpuStop(w http.ResponseWriter, r *http.Request) {
-  // user error: should start cpu profiling first
-  if cpuTemp == nil {
-    msg := "should start cpu profile before stopping it\n"
-    log.Printf(msg)
-    if _, err := w.Write([]byte(msg)); err != nil {
-      log.Printf("error in PprofCpuStop: %v", err)
-    }
-    return
-  }
+	/*
+	// user error: should start cpu profiling first
+	if cpuTemp == nil {
+		log.Printf("should start cpu profile before stopping it\n")
+		w.WriteHeader(400) // bad request
+		return
+	}
 
-  // flush profile data to file
+	// flush profile data to file
 	pprof.StopCPUProfile()
-  defer os.Remove(cpuTemp.Name())  // deferred cleanup
- 
-  stats, err := cpuTemp.Stat()
-  if err != nil {
-    log.Fatal("could not retrieve file stats: ", err)
-  }
-  
-  buffer := make([]byte, stats.Size())
-  reader := bufio.NewReader(cpuTemp)
-  if _, err := reader.Read(buffer); err != nil {
-    log.Fatal("could not read file: ", err)
-  }
-  
-  if err := cpuTemp.Close(); err != nil {
-    log.Fatal("could not close file: ", err)
-  }
+	defer os.Remove(cpuTemp.Name())  // deferred cleanup
 
-  cpuTemp = nil
+	stats, err := cpuTemp.Stat()
+	if err != nil {
+		log.Fatal("could not retrieve file stats: ", err)
+	}
+  
+	buffer := make([]byte, stats.Size())
+	reader := bufio.NewReader(cpuTemp)
+	if _, err := reader.Read(buffer); err != nil {
+		log.Fatal("could not read file: ", err)
+	}
 
-  // write profiled data to response
+	if err := cpuTemp.Close(); err != nil {
+		log.Fatal("could not close file: ", err)
+	}
+
+	cpuTemp = nil
+
+	// write profiled data to response
 	w.Header().Add("Content-Type", "application/octet-stream")
-  if _, err := w.Write(buffer); err != nil {
-    log.Printf("error in PprofCpuStop: %v", err)
-  }
+	if _, err := w.Write(buffer); err != nil {
+		log.Printf("error in PprofCpuStop: %v", err)
+	} */
 }
 
 func Main() (err error) {
@@ -201,12 +195,12 @@ func Main() (err error) {
 		log.Printf("received kill signal, cleaning up")
 		s.cleanup()
 
-    // "cpu-start"ed but have not "cpu-stop"ped before kill
-    if cpuTemp != nil {
-      pprof.StopCPUProfile()
-      log.Printf("Write buffered profiled data to %s\n", cpuTemp.Name())
-      cpuTemp.Close()
-    }
+		// "cpu-start"ed but have not "cpu-stop"ped before kill
+		if cpuTemp != nil {
+			pprof.StopCPUProfile()
+			log.Printf("Write buffered profiled data to %s\n", cpuTemp.Name())
+		      	cpuTemp.Close()
+		}
 
 		statsPath := filepath.Join(common.Conf.Worker_dir, "stats.json")
 		snapshot := common.SnapshotStats()
