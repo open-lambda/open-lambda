@@ -179,13 +179,11 @@ func stopOL(olPath string) error {
 	fmt.Printf("Find worker process with PID %d\n", pid)
 	p, err := os.FindProcess(pid)
 	if err != nil {
-		fmt.Printf("%s\n", err.Error())
-		fmt.Printf("Failed to find worker process with PID %d.  May require manual cleanup.\n", pid)
+		return fmt.Errorf("Failed to find worker process with PID %d.  May require manual cleanup.\n", pid)
 	}
 	fmt.Printf("Send SIGINT to %d\n", pid)
 	if err := p.Signal(syscall.SIGINT); err != nil {
-		fmt.Printf("%s\n", err.Error())
-		fmt.Printf("Failed to send SIGINT to PID %d.  May require manual cleanup.\n", pid)
+		return fmt.Errorf("Failed to send SIGINT to PID %d (%s).  May require manual cleanup.\n", err.Error(), pid)
 	}
 
 	fmt.Printf("Wait for PID %d to exit.\n", pid)
