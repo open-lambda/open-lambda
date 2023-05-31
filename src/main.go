@@ -522,16 +522,6 @@ func kill(ctx *cli.Context) error {
 	return fmt.Errorf("worker didn't stop after 30s")
 }
 
-func gcpTest(ctx *cli.Context) error {
-	boss.GCPBossTest()
-	return nil
-}
-
-func azureTest(ctx *cli.Context) error {
-	//boss.AzureMain("default contents")
-	return nil
-}
-
 // cleanup corresponds to the "force-cleanup" command of the admin tool.
 func cleanup(ctx *cli.Context) error {
 	olPath, err := common.GetOlPath(ctx)
@@ -698,20 +688,6 @@ OPTIONS:
 			UsageText: "ol kill [--path=NAME]",
 			Flags:     []cli.Flag{pathFlag},
 			Action:    kill,
-		},
-		cli.Command{
-			Name:      "gcp-test",
-			Usage:     "Developer use only.  Start a GCP VM running the OL worker",
-			UsageText: "ol gcp-test",
-			Flags:     []cli.Flag{},
-			Action:    gcpTest,
-		},
-		cli.Command{
-			Name:      "azure-test",
-			Usage:     "Developer use only.  Start an Azure Blob ",
-			UsageText: "ol zure-test",
-			Flags:     []cli.Flag{},
-			Action:    azureTest,
 		},
 		cli.Command{
 			Name:      "force-cleanup",
