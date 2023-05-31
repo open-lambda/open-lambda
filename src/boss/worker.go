@@ -16,10 +16,10 @@ import (
 type WorkerState int
 
 const (
-	STARTING WorkerState = iota
-	RUNNING
-	CLEANING // waiting for already-started requests to complete (so can kill cleanly)
-	DESTROYING
+	STARTING   WorkerState = 0
+	RUNNING    WorkerState = 1
+	CLEANING   WorkerState = 2 // waiting for already-started requests to complete (so can kill cleanly)
+	DESTROYING WorkerState = 3
 )
 
 type WorkerPool struct {
