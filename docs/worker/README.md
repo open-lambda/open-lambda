@@ -4,17 +4,19 @@
 
 See how to build the code, deploy a worker, and write/run lambdas [here](getting-started.md).
 
-<---
 ## Usage
 
-TODO: package management, registry
--->
+* [base image](base-image.md)
+* [dependency management](pypi-packages.md)
+* registry config (TODO)
+* Zygote tree (TODO)
+* resource limits (TODO)
 
 ## Design
 
 The following shows the major components of an OpenLambda worker:
 
-<img src="imgs/arch.png" width=600>
+<img src="imgs/arch.png" width=800>
 
 The worker consists of three layers (from the bottom up): sandbox,
 lambda, and event.
