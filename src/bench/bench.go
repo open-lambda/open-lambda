@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"time"
 	"math/rand"
+	"os"
 	
 	"github.com/urfave/cli/v2"
 
@@ -252,7 +253,7 @@ func BenchCommands() []*cli.Command {
 
 				name := fmt.Sprintf("%s%s-%s", kind, amt, parseq)
 				action := make_action(name, tasks, functions, "bench-"+kind+"-%d")
-				cmd := cli.Command{
+				cmd := &cli.Command{
 					Name:      name,
 					Usage:     usage,
 					UsageText: fmt.Sprintf("ol bench %s [--path=NAME] [--seconds=SECONDS] [--warmup=BOOL] [--output=NAME]", name),
@@ -268,16 +269,20 @@ func BenchCommands() []*cli.Command {
 							Aliases: []string{"s"},
 							Usage: "Seconds to run (after warmup)",
 						},
-						cli.IntFlag{
-							Name:  "tasks, t",
+						&cli.IntFlag{
+							Name:  "tasks",
+							Aliases: []string{"t"},
 							Usage: "number of parallel tasks to run (only for parallel bench)",
 						},
-						cli.BoolTFlag{
-							Name:  "warmup, w",
+						&cli.BoolFlag{
+							Name:  "warmup",
+							Aliases: []string{"w"},
+							Value: true,
 							Usage: "call lambda each once before benchmark",
 						},
-						cli.StringFlag{
-							Name:  "output, o",
+						&cli.StringFlag{
+							Name:  "output",
+							Aliases: []string{"o"},
 							Usage: "store the result in json to the output file",
 						},
 					},
