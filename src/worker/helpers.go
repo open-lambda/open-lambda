@@ -24,7 +24,7 @@ func initOLBaseDir(baseDir string, dockerBaseImage string) error {
 		dockerBaseImage = "ol-wasm"
 	}
 
-	fmt.Printf("Extract '%s' Docker image to %s (make take several minutes).\n", dockerBaseImage, baseDir)
+	fmt.Printf("\tExtract '%s' Docker image to %s (make take several minutes).\n", dockerBaseImage, baseDir)
 
 	// PART 1: dump Docker image
 	var dockerClient *docker.Client
@@ -40,7 +40,7 @@ func initOLBaseDir(baseDir string, dockerBaseImage string) error {
 	}
 
 	// PART 2: various files/dirs on top of the extracted image
-	fmt.Printf("Create handler/host/packages/resolve.conf over base image\n")
+	fmt.Printf("\tCreate handler/host/packages/resolve.conf over base image.\n")
 	if err := os.Mkdir(path.Join(baseDir, "handler"), 0700); err != nil {
 		return err
 	}
@@ -61,7 +61,7 @@ func initOLBaseDir(baseDir string, dockerBaseImage string) error {
 	}
 
 	// PART 3: make /dev/* devices
-	fmt.Printf("Create /dev/(null,random,urandom) over base image\n")
+	fmt.Printf("\tCreate /dev/(null,random,urandom) over base image.\n")
 	path := filepath.Join(baseDir, "dev", "null")
 	if err := exec.Command("mknod", "-m", "0644", path, "c", "1", "3").Run(); err != nil {
 		return err
@@ -80,17 +80,27 @@ func initOLBaseDir(baseDir string, dockerBaseImage string) error {
 	return nil
 }
 
-func initOLDir(olPath string, dockerBaseImage string) (err error) {
+// initOLDir prepares a directory at olPath with necessary files for a
+// worker.  This includes default configs and a base directory that is
+// used as the root for every lambda instance.
+//
+// dockerBaseImage specifies what image to extract to the directory
+// used as the root FS for lambdas.
+//
+// Init can be called on a previously initialized directory, even if a
+// worker is currently running.  Any worker running will be stopped,
+// prior contents deleted, files re-created.  The base dir is a
+// special case since it takes so long to populate -- that will be
+// reused if it exists (unless newBase is true).
+func initOLDir(olPath string, dockerBaseImage string, newBase bool) (err error) {
 	initTimePath := filepath.Join(olPath, "ol.init")
 	baseDir := common.Conf.SOCK_base_path
-
-	fmt.Printf("Init OL directory at %s\n", olPath)
 
 	// does the olPath dir already exist?
 	if _, err := os.Stat(olPath); !os.IsNotExist(err) {
 		// does it contain a previous OL deployment?
 		if _, err := os.Stat(initTimePath); !os.IsNotExist(err) {
-			fmt.Printf("Previous deployment found, cleaning up.\n")
+			fmt.Printf("Previous deployment found at %s.\n", olPath)
 
 			// kill previous worker (if running)
 			if err := stopOL(olPath); err != nil {
@@ -102,14 +112,16 @@ func initOLDir(olPath string, dockerBaseImage string) (err error) {
 			if err != nil {
 				return err
 			}
+			if len(items) > 0 {
+				fmt.Printf("Clean previous files in %s\n", olPath)
+			}
 			for _, item := range items {
 				path := filepath.Join(olPath, item.Name())
-				if path == baseDir {
-					// TODO: add option for whether to delete base too...
-					fmt.Printf("Keep %s\n", path)
+				if path == baseDir && !newBase {
+					fmt.Printf("\tKeep %s\n", path)
 					continue
 				}
-				fmt.Printf("Remove %s\n", path)
+				fmt.Printf("\tRemove %s\n", path)
 				if err := os.RemoveAll(path); err != nil {
 					return err
 				}
@@ -123,7 +135,9 @@ func initOLDir(olPath string, dockerBaseImage string) (err error) {
 		}
 	}
 
-	if err := ioutil.WriteFile(initTimePath, []byte(time.Now().Local().String() + "\n"), 0400); err != nil {
+	fmt.Printf("Init OL directory at %s\n", olPath)
+
+	if err := ioutil.WriteFile(initTimePath, []byte(time.Now().Local().String()+"\n"), 0400); err != nil {
 		return err
 	}
 
@@ -146,12 +160,8 @@ func initOLDir(olPath string, dockerBaseImage string) (err error) {
 			return err
 		}
 	} else {
-		fmt.Printf("Reusing prior base at %s\n", baseDir)
+		fmt.Printf("\tReusing prior base at %s (pass -b to reconstruct this)\n", baseDir)
 	}
-
-	fmt.Printf("Working Directory: %s\n\n", olPath)
-	fmt.Printf("Worker Defaults: \n%s\n\n", common.DumpConfStr())
-	fmt.Printf("You may modify the defaults here: %s\n\n", confPath)
 
 	return nil
 }
@@ -165,7 +175,7 @@ func stopOL(olPath string) error {
 	pidPath := filepath.Join(common.Conf.Worker_dir, "worker.pid")
 	data, err := ioutil.ReadFile(pidPath)
 	if os.IsNotExist(err) {
-		fmt.Printf("Worker does not appear to be running yet because %s does not exist\n", pidPath)
+		fmt.Printf("No worker appears to be running because %s does not exist.\n", pidPath)
 		return nil
 	} else if err != nil {
 		return err
@@ -176,17 +186,16 @@ func stopOL(olPath string) error {
 		return err
 	}
 
-	fmt.Printf("Find worker process with PID %d\n", pid)
+	fmt.Printf("According to %s, a worker should already be running (PID %d).\n", pidPath, pid)
 	p, err := os.FindProcess(pid)
 	if err != nil {
 		return fmt.Errorf("Failed to find worker process with PID %d.  May require manual cleanup.\n", pid)
 	}
-	fmt.Printf("Send SIGINT to %d\n", pid)
+	fmt.Printf("Send SIGINT and wait for worker to exit cleanly.\n")
 	if err := p.Signal(syscall.SIGINT); err != nil {
-		return fmt.Errorf("Failed to send SIGINT to PID %d (%s).  May require manual cleanup.\n", err.Error(), pid)
+		return fmt.Errorf("Failed to send SIGINT to PID %d (%s).  May require manual cleanup.\n", pid, err.Error())
 	}
 
-	fmt.Printf("Wait for PID %d to exit.\n", pid)
 	for i := 0; i < 600; i++ {
 		err := p.Signal(syscall.Signal(0))
 		if err != nil {

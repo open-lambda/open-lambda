@@ -29,10 +29,12 @@ func initCmd(ctx *cli.Context) error {
 		return err
 	}
 
-	if err := initOLDir(olPath, ctx.String("image")); err != nil {
+	if err := initOLDir(olPath, ctx.String("image"), ctx.Bool("newbase")); err != nil {
 		return err
 	}
-	fmt.Printf("You may now start a worker using the \"ol worker up\" command.\n")
+	fmt.Printf("\nYou may optionally modify the defaults here: %s\n\n",
+		filepath.Join(olPath, "config.json"))
+	fmt.Printf("Next start a worker using the \"ol worker up\" command.\n")
 	return nil
 }
 
@@ -44,21 +46,20 @@ func upCmd(ctx *cli.Context) error {
 		return err
 	}
 
-	// init worker dir (if not done already)
+	// PREP STEP 1: make sure we have a worker directory
 	if _, err := os.Stat(olPath); os.IsNotExist(err) {
+		// need to init worker dir first
 		fmt.Printf("Did not find OL directory at %s\n", olPath)
 		if err := common.LoadDefaults(olPath); err != nil {
 			return err
 		}
 
-		if err := initOLDir(olPath, ctx.String("image")); err != nil {
+		if err := initOLDir(olPath, ctx.String("image"), false); err != nil {
 			return err
 		}
-	} else {
-		fmt.Printf("Found OL directory at %s\n", olPath)
 	}
 
-	// load config file, apply any command line overrides
+	// PREP STEP 2: load config file and apply any command-line overrides
 	confPath := filepath.Join(olPath, "config.json")
 	overrides := ctx.String("options")
 	if overrides != "" {
@@ -70,6 +71,11 @@ func upCmd(ctx *cli.Context) error {
 		confPath = overridesPath
 	}
 	if err := common.LoadConf(confPath); err != nil {
+		return err
+	}
+
+	// PREP STEP 3: stop any prior worker that may be running
+	if err := stopOL(olPath); err != nil {
 		return err
 	}
 
@@ -107,7 +113,7 @@ func upCmd(ctx *cli.Context) error {
 			return err
 		}
 		// start the worker process
-		fmt.Printf("starting process: binpath= %s, cmd=%s\n", binPath, cmd)
+		fmt.Printf("Starting worker in %s and waiting until it's ready.\n", olPath)
 		proc, err := os.StartProcess(binPath, cmd, &attr)
 		if err != nil {
 			return err
@@ -120,7 +126,7 @@ func upCmd(ctx *cli.Context) error {
 			died <- err
 		}()
 
-		fmt.Printf("Starting worker: pid=%d, port=%s, log=%s\n", proc.Pid, common.Conf.Worker_port, logPath)
+		fmt.Printf("\tPID: %d\n\tPort: %s\n\tLog File: %s\n", proc.Pid, common.Conf.Worker_port, logPath)
 
 		var pingErr error
 
@@ -159,7 +165,7 @@ func upCmd(ctx *cli.Context) error {
 			}
 
 			if pid == proc.Pid {
-				fmt.Printf("ready\n")
+				fmt.Printf("Ready!\n")
 				return nil // server is started and ready for requests
 			}
 
@@ -282,14 +288,14 @@ func cleanupCmd(ctx *cli.Context) error {
 
 func WorkerCommands() []*cli.Command {
 	pathFlag := cli.StringFlag{
-		Name:  "path",
+		Name:    "path",
 		Aliases: []string{"p"},
-		Usage: "Path location for OL environment",
+		Usage:   "Path location for OL environment",
 	}
 	dockerImgFlag := cli.StringFlag{
-		Name:  "image",
+		Name:    "image",
 		Aliases: []string{"i"},
-		Usage: "Name of Docker image to use for base",
+		Usage:   "Name of Docker image to use for base",
 	}
 
 	cmds := []*cli.Command{
@@ -298,8 +304,16 @@ func WorkerCommands() []*cli.Command {
 			Usage:       "Create an OL worker environment, including default config and dump of base image",
 			UsageText:   "ol init [OPTIONS...]",
 			Description: "A cluster directory of the given name will be created with internal structure initialized.",
-			Flags:       []cli.Flag{&pathFlag, &dockerImgFlag},
-			Action:      initCmd,
+			Flags: []cli.Flag{
+				&pathFlag,
+				&dockerImgFlag,
+				&cli.BoolFlag{
+					Name:    "newbase",
+					Aliases: []string{"b"},
+					Usage:   "Overwrite base directory if it already exists",
+				},
+			},
+			Action: initCmd,
 		},
 		&cli.Command{
 			Name:        "up",
@@ -310,14 +324,14 @@ func WorkerCommands() []*cli.Command {
 				&pathFlag,
 				&dockerImgFlag,
 				&cli.StringFlag{
-					Name:  "options",
+					Name:    "options",
 					Aliases: []string{"o"},
-					Usage: "Override options with: -o opt1=val1,opt2=val2/opt3.subopt31=val3",
+					Usage:   "Override options with: -o opt1=val1,opt2=val2/opt3.subopt31=val3",
 				},
 				&cli.BoolFlag{
-					Name:  "detach",
+					Name:    "detach",
 					Aliases: []string{"d"},
-					Usage: "Run worker in background",
+					Usage:   "Run worker in background",
 				},
 			},
 			Action: upCmd,
