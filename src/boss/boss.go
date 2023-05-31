@@ -24,14 +24,14 @@ type Boss struct {
 func (b *Boss) BossStatus(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Receive request to %s\n", r.URL.Path)
 
-	output := struct{
-		State	map[string]int	`json:"state"`
-		Tasks	map[string]int	`json:"tasks"`
+	output := struct {
+		State map[string]int `json:"state"`
+		Tasks map[string]int `json:"tasks"`
 	}{
 		b.workerPool.StatusCluster(),
 		b.workerPool.StatusTasks(),
 	}
-	
+
 	if b, err := json.MarshalIndent(output, "", "\t"); err != nil {
 		panic(err)
 	} else {

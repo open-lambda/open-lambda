@@ -28,10 +28,10 @@ type WorkerPool struct {
 	sync.Mutex
 	nextId  int                  // the next new worker's id
 	target  int                  // the target number of running+starting workers
-	workers []map[string]*Worker // a slice of maps 
-								 // Slice: index maps to a const WorkerState
-								 // Map: key=worker id (string), value=pointer to worker
-	queue   chan *Worker         // a queue of running workers
+	workers []map[string]*Worker // a slice of maps
+	// Slice: index maps to a const WorkerState
+	// Map: key=worker id (string), value=pointer to worker
+	queue chan *Worker // a queue of running workers
 
 	clusterLogFile *os.File
 	taskLogFile    *os.File

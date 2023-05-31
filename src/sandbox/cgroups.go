@@ -121,7 +121,7 @@ func (cg *Cgroup) Destroy() {
 	gpath := cg.GroupPath()
 	cg.printf("Destroying cgroup with path \"%s\"", gpath)
 
-	for i := 100; i>=0; i-- {
+	for i := 100; i >= 0; i-- {
 		if err := syscall.Rmdir(gpath); err != nil {
 			if i == 0 {
 				cg.printf("TEST TEST TEST")
@@ -212,7 +212,7 @@ func (pool *CgroupPool) Destroy() {
 	// Destroy cgroup for this entire pool
 	gpath := pool.GroupPath()
 	pool.printf("Destroying cgroup pool with path \"%s\"", gpath)
-	for i := 100; i>=0; i-- {
+	for i := 100; i >= 0; i-- {
 		if err := syscall.Rmdir(gpath); err != nil {
 			if i == 0 {
 				panic(fmt.Errorf("Rmdir %s: %s", gpath, err))

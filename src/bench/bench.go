@@ -1,54 +1,54 @@
 package bench
 
 import (
-	"fmt"
-	"net/http"
-	"io/ioutil"
-	"path/filepath"
 	"bytes"
-	"time"
+	"fmt"
+	"io/ioutil"
 	"math/rand"
+	"net/http"
 	"os"
-	
+	"path/filepath"
+	"time"
+
 	"github.com/urfave/cli"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 )
 
 type Call struct {
-        name string
+	name string
 }
 
 func task(task int, reqQ chan Call, errQ chan error) {
-        for {
-                call, ok := <- reqQ
-                if !ok {
-                        errQ <- nil
-                        break
-                }
+	for {
+		call, ok := <-reqQ
+		if !ok {
+			errQ <- nil
+			break
+		}
 
-                url := fmt.Sprintf("http://localhost:%s/run/%s", common.Conf.Worker_port, call.name)
-                resp, err := http.Post(url, "text/json", bytes.NewBuffer([]byte("null")))
-                if err != nil {
-                        errQ <- fmt.Errorf("failed req to %s: %v", url, err)
-                        continue
-                }
+		url := fmt.Sprintf("http://localhost:%s/run/%s", common.Conf.Worker_port, call.name)
+		resp, err := http.Post(url, "text/json", bytes.NewBuffer([]byte("null")))
+		if err != nil {
+			errQ <- fmt.Errorf("failed req to %s: %v", url, err)
+			continue
+		}
 
-                body, err := ioutil.ReadAll(resp.Body)
-                resp.Body.Close()
+		body, err := ioutil.ReadAll(resp.Body)
+		resp.Body.Close()
 
-                if err != nil {
-                        errQ <- fmt.Errorf("failed to %s, could not read body: %v", url, err)
-                        continue
-                }
+		if err != nil {
+			errQ <- fmt.Errorf("failed to %s, could not read body: %v", url, err)
+			continue
+		}
 
-                if resp.StatusCode != http.StatusOK {
-                        errQ <- fmt.Errorf("failed req to %s: status %d, text '%s'", url, resp.StatusCode, string(body))
-                        continue
-                }
+		if resp.StatusCode != http.StatusOK {
+			errQ <- fmt.Errorf("failed req to %s: status %d, text '%s'", url, resp.StatusCode, string(body))
+			continue
+		}
 
 		errQ <- nil
-        }
+	}
 }
 
 func run_benchmark(ctx *cli.Context, name string, tasks int, functions int, func_template string) (string, error) {
@@ -72,22 +72,22 @@ func run_benchmark(ctx *cli.Context, name string, tasks int, functions int, func
 	}
 
 	callWarmup := ctx.Bool("warmup")
-	
+
 	// launch request threads
-        reqQ := make(chan Call, tasks)
-        errQ := make(chan error, tasks)
-        for i := 0; i < tasks; i++ {
-                go task(i, reqQ, errQ)
-        }
+	reqQ := make(chan Call, tasks)
+	errQ := make(chan error, tasks)
+	for i := 0; i < tasks; i++ {
+		go task(i, reqQ, errQ)
+	}
 
 	// warmup: call lambda each once
 	if callWarmup {
 		fmt.Printf("warming up (calling each lambda once sequentially)\n")
-		for i := 0; i<functions; i++ {
+		for i := 0; i < functions; i++ {
 			name := fmt.Sprintf(func_template, i)
 			fmt.Printf("warmup %s (%d/%d)\n", name, i, functions)
 			reqQ <- Call{name: name}
-			if err := <- errQ; err != nil {
+			if err := <-errQ; err != nil {
 				return "", err
 			}
 		}
@@ -100,11 +100,11 @@ func run_benchmark(ctx *cli.Context, name string, tasks int, functions int, func
 	waiting := 0
 
 	start := time.Now()
-        for time.Since(start).Seconds() < seconds {
-                select {
-                case reqQ <- Call{name: fmt.Sprintf(func_template, rand.Intn(functions))}:
+	for time.Since(start).Seconds() < seconds {
+		select {
+		case reqQ <- Call{name: fmt.Sprintf(func_template, rand.Intn(functions))}:
 			waiting += 1
-                case err := <- errQ:
+		case err := <-errQ:
 			if err != nil {
 				errors += 1
 				fmt.Printf("%s\n", err.Error())
@@ -112,35 +112,35 @@ func run_benchmark(ctx *cli.Context, name string, tasks int, functions int, func
 				successes += 1
 			}
 			waiting -= 1
-                }
-        }
+		}
+	}
 	seconds = time.Since(start).Seconds()
 
 	// cleanup request threads
 	fmt.Printf("cleanup\n")
-        close(reqQ)
+	close(reqQ)
 	waiting += tasks // each needs to send one last nil to indicate it is done
-        for waiting > 0 {
-		if err := <- errQ; err != nil {
+	for waiting > 0 {
+		if err := <-errQ; err != nil {
 			errors += 1
 			fmt.Printf("%s\n", err.Error())
 		}
 		waiting -= 1
 	}
 
-	if errors > (errors + successes) / 100 {
-		panic(fmt.Sprintf(">1%% of requests failed (%d/%d)", errors, errors + successes))
+	if errors > (errors+successes)/100 {
+		panic(fmt.Sprintf(">1%% of requests failed (%d/%d)", errors, errors+successes))
 	}
 
-    result := fmt.Sprintf("{\"benchmark\": \"%s\",\"seconds\": %.3f, \"successes\": %d, \"errors\": %d, \"ops/s\": %.3f}",
+	result := fmt.Sprintf("{\"benchmark\": \"%s\",\"seconds\": %.3f, \"successes\": %d, \"errors\": %d, \"ops/s\": %.3f}",
 		name, seconds, successes, errors, float64(successes)/seconds)
-	
+
 	fmt.Printf("%s\n", result)
-	
+
 	return result, nil
 }
 
-func create_lambdas(ctx *cli.Context) error {	
+func create_lambdas(ctx *cli.Context) error {
 	olPath, err := common.GetOlPath(ctx)
 	if err != nil {
 		return err
@@ -188,20 +188,20 @@ def f(event):
 	return nil
 }
 
-func make_action(name string, tasks int, functions int, func_template string) (func (ctx *cli.Context) error) {
-	return func (ctx *cli.Context) error {
+func make_action(name string, tasks int, functions int, func_template string) func(ctx *cli.Context) error {
+	return func(ctx *cli.Context) error {
 		result, err := run_benchmark(ctx, name, tasks, functions, func_template)
 		output_file := ctx.String("output")
 		if output_file != "" {
 			file, err := os.Create(output_file)
 			if err != nil {
-        	return err
-    		}
-    		defer file.Close()
-
-    		if _, err := file.WriteString(result); err != nil {
 				return err
-    		}
+			}
+			defer file.Close()
+
+			if _, err := file.WriteString(result); err != nil {
+				return err
+			}
 		}
 		return err
 	}
@@ -210,16 +210,16 @@ func make_action(name string, tasks int, functions int, func_template string) (f
 func BenchCommands() []cli.Command {
 	cmds := []cli.Command{
 		{
-                        Name:  "init",
-                        Usage: "creates lambdas for benchmarking",
+			Name:      "init",
+			Usage:     "creates lambdas for benchmarking",
 			UsageText: "ol bench init [--path=NAME]",
-                        Action: create_lambdas,
+			Action:    create_lambdas,
 			// TODO: add param to decide how many to create
 		},
 	}
 
 	for _, kind := range []string{"py", "pd"} {
-		for _, functions := range []int{64, 1024, 64*1024} {
+		for _, functions := range []int{64, 1024, 64 * 1024} {
 			for _, tasks := range []int{1, 32} {
 				var parseq string
 				var par_usage string
@@ -234,7 +234,7 @@ func BenchCommands() []cli.Command {
 					par_usage = fmt.Sprintf("in parallel (%d clients)", tasks)
 				}
 				if functions >= 1024 {
-					amt = fmt.Sprintf("%dk", functions / 1024)
+					amt = fmt.Sprintf("%dk", functions/1024)
 				}
 				if kind == "py" {
 					usage = fmt.Sprintf(("invoke noop Python lambdas %s for S seconds (default 60), " +
@@ -247,10 +247,10 @@ func BenchCommands() []cli.Command {
 				name := fmt.Sprintf("%s%s-%s", kind, amt, parseq)
 				action := make_action(name, tasks, functions, "bench-"+kind+"-%d")
 				cmd := cli.Command{
-					Name:  name,
-					Usage: usage,
+					Name:      name,
+					Usage:     usage,
 					UsageText: fmt.Sprintf("ol bench %s [--path=NAME] [--seconds=SECONDS] [--warmup=BOOL] [--output=NAME]", name),
-					Action: action,
+					Action:    action,
 					Flags: []cli.Flag{
 						cli.StringFlag{
 							Name:  "path, p",
