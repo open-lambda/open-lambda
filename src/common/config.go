@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v2"
 )
 
 // Configuration is stored globally here
@@ -74,6 +74,7 @@ type FeaturesConfig struct {
 	Reuse_cgroups       bool `json:"reuse_cgroups"`
 	Import_cache        bool `json:"import_cache"`
 	Downsize_paused_mem bool `json:"downsize_paused_mem"`
+	Enable_seccomp      bool `json:"enable_seccomp"`
 }
 
 type TraceConfig struct {
@@ -128,8 +129,8 @@ type LimitsConfig struct {
 	Installer_mem_mb int `json:"installer_mem_mb"`
 }
 
-// Defaults verifies the fields of Config are correct, and initializes some
-// if they are empty.
+// Choose reasonable defaults for a worker deployment (based on memory capacity).
+// olPath need not exist (it is used to determine default paths for registry, etc).
 func LoadDefaults(olPath string) error {
 	workerDir := filepath.Join(olPath, "worker")
 	registryDir := filepath.Join(olPath, "registry")
@@ -170,6 +171,7 @@ func LoadDefaults(olPath string) error {
 		Features: FeaturesConfig{
 			Import_cache:        true,
 			Downsize_paused_mem: true,
+			Enable_seccomp:	     true,
 		},
 		Trace: TraceConfig{
 			Cgroups: false,

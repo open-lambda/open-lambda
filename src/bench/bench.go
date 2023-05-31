@@ -1,16 +1,15 @@
 package bench
 
 import (
-	"bytes"
 	"fmt"
-	"io/ioutil"
-	"math/rand"
 	"net/http"
-	"os"
+	"io/ioutil"
 	"path/filepath"
+	"bytes"
 	"time"
-
-	"github.com/urfave/cli"
+	"math/rand"
+	
+	"github.com/urfave/cli/v2"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 )
@@ -207,13 +206,20 @@ func make_action(name string, tasks int, functions int, func_template string) fu
 	}
 }
 
-func BenchCommands() []cli.Command {
-	cmds := []cli.Command{
+func BenchCommands() []*cli.Command {
+	cmds := []*cli.Command{
 		{
 			Name:      "init",
 			Usage:     "creates lambdas for benchmarking",
 			UsageText: "ol bench init [--path=NAME]",
-			Action:    create_lambdas,
+            Action: create_lambdas,
+			Flags: []cli.Flag{
+				&cli.StringFlag{
+					Name:  "path",
+					Aliases: []string{"p"},
+					Usage: "Path location for OL environment",
+				},
+			},
 			// TODO: add param to decide how many to create
 		},
 	}
@@ -252,12 +258,14 @@ func BenchCommands() []cli.Command {
 					UsageText: fmt.Sprintf("ol bench %s [--path=NAME] [--seconds=SECONDS] [--warmup=BOOL] [--output=NAME]", name),
 					Action:    action,
 					Flags: []cli.Flag{
-						cli.StringFlag{
-							Name:  "path, p",
+						&cli.StringFlag{
+							Name:  "path",
+							Aliases: []string{"p"},
 							Usage: "Path location for OL environment",
 						},
-						cli.Float64Flag{
-							Name:  "seconds, s",
+						&cli.Float64Flag{
+							Name:  "seconds",
+							Aliases: []string{"s"},
 							Usage: "Seconds to run (after warmup)",
 						},
 						cli.IntFlag{
