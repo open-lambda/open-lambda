@@ -32,15 +32,13 @@ func newBossConf() error {
 
 // newBoss corresponses to the "new-boss" command of the admin tool.
 func newBoss(ctx *cli.Context) error {
-	platform := ctx.String("platform")
-	return newBossConf(platform)
+	return newBossConf()
 }
 
 // runBoss corresponses to the "boss" command of the admin tool.
 func runBoss(ctx *cli.Context) error {
-	platform := ctx.String("platform")
 	if _, err := os.Stat("boss.json"); os.IsNotExist(err) {
-		newBossConf(platform)
+		newBossConf()
 	}
 
 	if err := boss.LoadConf("boss.json"); err != nil {
@@ -177,30 +175,20 @@ OPTIONS:
 		&cli.Command{
 			Name:        "new-boss",
 			Usage:       "Create an OL Boss config (boss.json)",
-			UsageText:   "ol new-boss [--path=PATH] [--detach] [--platform]",
+			UsageText:   "ol new-boss [--path=PATH] [--detach]",
 			Description: "Create config for new boss",
 			Action:      newBoss,
-			Flags: []cli.Flag{
-				cli.StringFlag{
-					Name:  "platform, p",
-					Usage: "Select a platform",
-				},
-			},
 		},
 		&cli.Command{
 			Name:        "boss",
 			Usage:       "Start an OL Boss process",
-			UsageText:   "ol boss [--path=PATH] [--detach] [--platform]",
+			UsageText:   "ol boss [--path=PATH] [--detach]",
 			Description: "Start a boss server.",
 			Flags: []cli.Flag{
 				&cli.BoolFlag{
 					Name:  "detach",
 					Aliases: []string{"d"},
 					Usage: "Run worker in background",
-				},
-				cli.StringFlag{
-					Name:  "platform, p",
-					Usage: "Select a platform",
 				},
 			},
 			Action: runBoss,
