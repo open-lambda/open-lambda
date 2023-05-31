@@ -23,10 +23,10 @@ const (
 )
 
 type WorkerPool struct {
-	nextId  int
-	target  int
-	workers []map[string]*Worker
-	queue   chan *Worker
+	nextId  int                  // the next new worker's id
+	target  int                  // the target number of running+starting workers
+	workers []map[string]*Worker // a map of all workers' pointers
+	queue   chan *Worker         // a queue of running workers
 	WorkerPoolPlatform
 	Scaling
 	sync.Mutex
@@ -51,14 +51,8 @@ type Worker struct {
 	workerId string
 	workerIp string
 	numTask  int32
-	WorkerPlatform
-	pool  *WorkerPool
-	state WorkerState //state as enum
-}
-
-type WorkerPlatform interface {
-	//platform specific attributes and functions
-	//do not require any functions yet
+	pool     *WorkerPool
+	state    WorkerState //state as enum
 }
 
 func NewWorkerPool() (*WorkerPool, error) {
