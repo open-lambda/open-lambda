@@ -232,7 +232,7 @@ def run_tests():
     ping_test()
 
     # do smoke tests under various configs
-    with TestConfContext(features={"import_cache": False}):
+    with TestConfContext(features={"import_cache": ""}):
         install_tests()
     with TestConfContext(mem_pool_mb=1000):
         install_tests()
