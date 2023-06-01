@@ -366,17 +366,20 @@ func pprofCpuStart(ctx *cli.Context) error {
 		return fmt.Errorf("Could not send GET to %s", url)
 	}
 	defer response.Body.Close()
+
 	if response.StatusCode == 200 {
 		fmt.Printf("started cpu profiling\n")
 		fmt.Printf("use \"ol pprof cpu-stop\" to stop\n")
-	} else if response.StatusCode == 409 {
-		fmt.Printf("already started cpu profiling\n")
-		fmt.Printf("please call \"ol pprof cpu-stop\" first\n")
+	  return nil
+	} else if response.StatusCode == 500 {
+    return fmt.Errorf("Unknown server error\n")
 	} else {
-		fmt.Printf("unknown error in cpu-start\n")
+    body, err := ioutil.ReadAll(response.Body)
+    if err != nil {
+      return fmt.Errorf("failed to read body from GET to %s", url)
+    }
+    return fmt.Errorf("Failed to start cpu profiling: %s\n", body)
 	}
-
-	return nil
 }
 
 func pprofCpuStop(ctx *cli.Context) error {
@@ -393,12 +396,14 @@ func pprofCpuStop(ctx *cli.Context) error {
 	url := fmt.Sprintf("http://localhost:%s/pprof/cpu-stop", common.Conf.Worker_port)
 	response, err := http.Get(url)
 	if err != nil {
-		return fmt.Errorf("could not send GET to %s", url)
+		return fmt.Errorf("Could not send GET to %s", url)
 	}
 	defer response.Body.Close()
 	if response.StatusCode == 400 {
-		return fmt.Errorf("should call \"ol pprof cpu-start\" first\n")
-	}
+		return fmt.Errorf("Should call \"ol pprof cpu-start\" first\n")
+	} else if response.StatusCode == 500 {
+    return fmt.Errorf("Unknown server error\n")
+  }
 
 	path := ctx.String("out")
 	if path == "" {

@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"runtime"
 	"runtime/pprof"
+  "sync"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 )
@@ -31,6 +32,7 @@ const (
 // temporary file storing cpu profiled data
 const CPU_TEMP_PATTERN = ".cpu.*.prof"
 var cpuTemp *os.File = nil
+var lock sync.Mutex
 
 // GetPid returns process ID, useful for making sure we're talking to the expected server
 func GetPid(w http.ResponseWriter, r *http.Request) {
@@ -69,37 +71,54 @@ func PprofMem(w http.ResponseWriter, r *http.Request) {
         }
 }
 
-// Starts CPU profiling
-func PprofCpuStart(w http.ResponseWriter, r *http.Request) {
-	// user error: double start (previous profiling not stopped yet)
-	if cpuTemp != nil {
-		log.Printf("Already started cpu profiling\n")
-		w.WriteHeader(409) // conflict
-		return
-	}
+func DoCpuStart() error {
+  lock.Lock()
+  defer lock.Unlock()
 
+	// user error: double start (previous profiling not stopped yet)
+  if cpuTemp != nil {
+    return fmt.Errorf("Already started cpu profiling\n")
+  }
+  
 	// fresh cpu profiling
 	temp, err := os.CreateTemp("", CPU_TEMP_PATTERN)
-	if err != nil {
-		log.Fatal("could not create cpu temporary file")
-	}
+  if err != nil {
+    log.Printf("could not create the temp file: %v", err)
+    return err
+  }
 
-	log.Printf("created a temporary file: %s", temp.Name())
+	log.Printf("Created a temp file: %s", temp.Name())
 	cpuTemp = temp
 
 	if err := pprof.StartCPUProfile(temp); err != nil {
-		log.Fatal("could not start CPU profile: ", err)
-	}
+    log.Printf("could not start cpu profile: %v", err)
+    return err
+  }
 
 	log.Printf("Started cpu profiling\n")
+  return nil
+}
+
+// Starts CPU profiling
+func PprofCpuStart(w http.ResponseWriter, r *http.Request) {
+  if err := DoCpuStart(); err != nil {
+    msg := fmt.Sprintf("%v", err)
+    w.WriteHeader(http.StatusBadRequest)
+    if _, err := w.Write([]byte(msg)); err != nil {
+      w.WriteHeader(http.StatusInternalServerError)
+    }
+  }
 }
 
 // Stops CPU profiling, writes profiled data to response, and does cleanup
 func PprofCpuStop(w http.ResponseWriter, r *http.Request) {
-	// user error: should start cpu profiling first
+  lock.Lock()
+  defer lock.Unlock()
+
+  // user error: should start cpu profiling first
 	if cpuTemp == nil {
 		log.Printf("should start cpu profile before stopping it\n")
-		w.WriteHeader(400) // bad request
+		w.WriteHeader(http.StatusBadRequest) // bad request
 		return
 	}
 
@@ -109,17 +128,21 @@ func PprofCpuStop(w http.ResponseWriter, r *http.Request) {
 	cpuTemp.Close()
 	cpuTemp = nil
 	defer os.Remove(tempFilename) // deferred cleanup
-
+  
+  // read data from file
 	log.Printf("Reading from %s\n", tempFilename)
 	buffer, err := ioutil.ReadFile(tempFilename)
-	if err != nil {
-		log.Fatal("could not read file: ", err)
-	}
+  if err != nil {
+    log.Printf("could not read from file %s\n", tempFilename)
+    w.WriteHeader(http.StatusInternalServerError)
+    return
+  }
 
 	// write profiled data to response
 	w.Header().Add("Content-Type", "application/octet-stream")
 	if _, err := w.Write(buffer); err != nil {
-		log.Printf("error in PprofCpuStop: %v", err)
+    log.Printf("error in PprofCpuStop: %v", err)
+    w.WriteHeader(http.StatusInternalServerError)
 	}
 }
 
