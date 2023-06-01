@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-  "time"
+	"time"
 
 	docker "github.com/fsouza/go-dockerclient"
 	dutil "github.com/open-lambda/open-lambda/ol/sandbox/dockerutil"
@@ -370,15 +370,15 @@ func pprofCpuStart(ctx *cli.Context) error {
 	if response.StatusCode == 200 {
 		fmt.Printf("started cpu profiling\n")
 		fmt.Printf("use \"ol pprof cpu-stop\" to stop\n")
-	  return nil
+		return nil
 	} else if response.StatusCode == 500 {
-    return fmt.Errorf("Unknown server error\n")
+		return fmt.Errorf("Unknown server error\n")
 	} else {
-    body, err := ioutil.ReadAll(response.Body)
-    if err != nil {
-      return fmt.Errorf("failed to read body from GET to %s", url)
-    }
-    return fmt.Errorf("Failed to start cpu profiling: %s\n", body)
+	    	body, err := ioutil.ReadAll(response.Body)
+	    	if err != nil {
+	      		return fmt.Errorf("failed to read body from GET to %s", url)
+	    	}
+	    	return fmt.Errorf("Failed to start cpu profiling: %s\n", body)
 	}
 }
 
@@ -402,8 +402,8 @@ func pprofCpuStop(ctx *cli.Context) error {
 	if response.StatusCode == 400 {
 		return fmt.Errorf("Should call \"ol pprof cpu-start\" first\n")
 	} else if response.StatusCode == 500 {
-    return fmt.Errorf("Unknown server error\n")
-  }
+   	 	return fmt.Errorf("Unknown server error\n")
+  	}
 
 	path := ctx.String("out")
 	if path == "" {
