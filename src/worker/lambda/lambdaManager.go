@@ -21,7 +21,7 @@ type LambdaMgr struct {
 	sbPool sandbox.SandboxPool
 	*packages.DepTracer
 	*packages.PackagePuller // depends on sbPool and DepTracer
-	*zygote.ImportCache     // depends PackagePuller
+	zygote.ZygoteProvider     // depends PackagePuller
 	*HandlerPuller          // depends on sbPool and ImportCache[optional]
 
 	// storage dirs that we manage
@@ -84,9 +84,9 @@ func NewLambdaMgr() (res *LambdaMgr, err error) {
 		return nil, err
 	}
 
-	if common.Conf.Features.Import_cache {
+	if common.Conf.Features.Import_cache != "" {
 		log.Printf("Creating ImportCache")
-		mgr.ImportCache, err = zygote.NewImportCache(mgr.codeDirs, mgr.scratchDirs, mgr.sbPool, mgr.PackagePuller)
+		mgr.ZygoteProvider, err = zygote.NewZygoteProvider(mgr.codeDirs, mgr.scratchDirs, mgr.sbPool, mgr.PackagePuller)
 		if err != nil {
 			return nil, err
 		}
@@ -182,8 +182,8 @@ func (mgr *LambdaMgr) Cleanup() {
 		f.Kill()
 	}
 
-	if mgr.ImportCache != nil {
-		mgr.ImportCache.Cleanup()
+	if mgr.ZygoteProvider != nil {
+		mgr.ZygoteProvider.Cleanup()
 	}
 
 	if mgr.sbPool != nil {

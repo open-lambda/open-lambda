@@ -72,7 +72,7 @@ type Config struct {
 
 type FeaturesConfig struct {
 	Reuse_cgroups       bool `json:"reuse_cgroups"`
-	Import_cache        bool `json:"import_cache"`
+	Import_cache        string `json:"import_cache"`
 	Downsize_paused_mem bool `json:"downsize_paused_mem"`
 	Enable_seccomp      bool `json:"enable_seccomp"`
 }
@@ -169,7 +169,7 @@ func LoadDefaults(olPath string) error {
 			Swappiness:       0,
 		},
 		Features: FeaturesConfig{
-			Import_cache:        true,
+			Import_cache:        "tree",
 			Downsize_paused_mem: true,
 			Enable_seccomp:	     true,
 		},
@@ -240,7 +240,7 @@ func checkConf() error {
 			return fmt.Errorf("Pkgs_dir cannot be relative")
 		}
 
-		if Conf.Features.Import_cache {
+		if Conf.Features.Import_cache != "" {
 			return fmt.Errorf("features.import_cache must be disabled for docker Sandbox")
 		}
 	} else {
