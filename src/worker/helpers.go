@@ -17,6 +17,7 @@ import (
 	dutil "github.com/open-lambda/open-lambda/ol/worker/sandbox/dockerutil"
 
 	"github.com/open-lambda/open-lambda/ol/common"
+	"github.com/open-lambda/open-lambda/ol/worker/embedded"
 )
 
 func initOLBaseDir(baseDir string, dockerBaseImage string) error {
@@ -138,6 +139,11 @@ func initOLDir(olPath string, dockerBaseImage string, newBase bool) (err error) 
 	fmt.Printf("Init OL directory at %s\n", olPath)
 
 	if err := ioutil.WriteFile(initTimePath, []byte(time.Now().Local().String()+"\n"), 0400); err != nil {
+		return err
+	}
+
+	zygoteTreePath := filepath.Join(olPath, "default-zygotes-40.json")
+	if err := ioutil.WriteFile(zygoteTreePath, []byte(embedded.DefaultZygotes40_json), 0400); err != nil {
 		return err
 	}
 
