@@ -1,20 +1,31 @@
 package zygote
 
 import (
+	"log"
 	"math/rand"
+	"runtime"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 	"github.com/open-lambda/open-lambda/ol/worker/lambda/packages"
 	"github.com/open-lambda/open-lambda/ol/worker/sandbox"
 )
 
-const tree_count = 8
-
 type MultiTree struct {
 	trees []*ImportCache
 }
 
 func NewMultiTree(codeDirs *common.DirMaker, scratchDirs *common.DirMaker, sbPool sandbox.SandboxPool, pp *packages.PackagePuller) (*MultiTree, error) {
+	var tree_count int
+	switch cpus := runtime.NumCPU(); {
+	case cpus < 3:
+		tree_count = 3
+	case cpus > 10:
+		tree_count = 10
+	default:
+		tree_count = cpus
+	}
+	log.Printf("Starting MultiTree ZygoteProvider with %d trees (tree count equals CPU count, with min of 3 and max of 10).", tree_count)
+
 	trees := make([]*ImportCache, tree_count)
 	for i := range trees {
 		tree, err := NewImportCache(codeDirs, scratchDirs, sbPool, pp)

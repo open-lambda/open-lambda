@@ -10,13 +10,13 @@ import (
 )
 
 func NewZygoteProvider(codeDirs *common.DirMaker, scratchDirs *common.DirMaker, sbPool sandbox.SandboxPool, pp *packages.PackagePuller) (ZygoteProvider, error) {
-	switch common.Conf.Features.Import_cache {
+	switch impl := common.Conf.Features.Import_cache; impl {
 	case "tree":
 		return NewImportCache(codeDirs, scratchDirs, sbPool, pp)
 	case "multitree":
-		log.Printf("'multitree' zygote provider is very experimental")
+		log.Printf("ZygoteProvider %s is very experimental.", impl)
 		return NewMultiTree(codeDirs, scratchDirs, sbPool, pp)
 	default:
-		return nil, fmt.Errorf("provider %s not implemented")
+		return nil, fmt.Errorf("ZygoteProvider '%s' is not implemented", impl)
 	}
 }
