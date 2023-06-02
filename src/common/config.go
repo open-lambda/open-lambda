@@ -63,7 +63,7 @@ type Config struct {
 
 	// which OCI implementation to use for the docker sandbox (e.g., runc or runsc)
 	Docker_runtime string `json:"docker_runtime"`
-     
+
 	Limits   LimitsConfig   `json:"limits"`
 	Features FeaturesConfig `json:"features"`
 	Trace    TraceConfig    `json:"trace"`
@@ -71,10 +71,10 @@ type Config struct {
 }
 
 type FeaturesConfig struct {
-	Reuse_cgroups       bool `json:"reuse_cgroups"`
+	Reuse_cgroups       bool   `json:"reuse_cgroups"`
 	Import_cache        string `json:"import_cache"`
-	Downsize_paused_mem bool `json:"downsize_paused_mem"`
-	Enable_seccomp      bool `json:"enable_seccomp"`
+	Downsize_paused_mem bool   `json:"downsize_paused_mem"`
+	Enable_seccomp      bool   `json:"enable_seccomp"`
 }
 
 type TraceConfig struct {
@@ -161,21 +161,21 @@ func LoadDefaults(olPath string) error {
 		Mem_pool_mb:       memPoolMb,
 		Import_cache_tree: "",
 		Limits: LimitsConfig{
-			Procs:            10,
-			Mem_mb:           50,
-			CPU_percent:      100,
+			Procs:               10,
+			Mem_mb:              50,
+			CPU_percent:         100,
 			Max_runtime_default: 30,
-			Installer_mem_mb: Max(250, Min(500, memPoolMb/2)),
-			Swappiness:       0,
+			Installer_mem_mb:    Max(250, Min(500, memPoolMb/2)),
+			Swappiness:          0,
 		},
 		Features: FeaturesConfig{
 			Import_cache:        "tree",
 			Downsize_paused_mem: true,
-			Enable_seccomp:	     true,
+			Enable_seccomp:      true,
 		},
 		Trace: TraceConfig{
 			Cgroups: false,
-			Memory: false,
+			Memory:  false,
 			Evictor: false,
 			Package: false,
 			Latency: false,
@@ -199,7 +199,7 @@ func LoadConf(path string) error {
 	}
 
 	if err := json.Unmarshal(configRaw, &Conf); err != nil {
-		log.Printf("FILE: %v\n", string(configRaw))
+		fmt.Printf("Bad config file (%s):\n%s\n", path, string(configRaw))
 		return fmt.Errorf("could not parse config (%v): %v", path, err.Error())
 	}
 

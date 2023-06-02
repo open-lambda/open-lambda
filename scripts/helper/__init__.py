@@ -120,19 +120,21 @@ def run(cmd):
         fail = True
 
     out = str(out, 'utf-8')
-    if len(out) > 500:
-        out = out[:500] + "..."
 
-    if fail:
-        raise RuntimeError(f"command ({' '.join(cmd)}) failed: {out}")
-    print(out)
+    if not fail:
+        if len(out) > 500:
+            print(out[:500])
+        print(out)
+    else:
+        print(out)
+        raise RuntimeError(f"command ({' '.join(cmd)}) failed")
 
 class DockerWorker():
     ''' Runs OpenLambda with Docker as backend '''
 
     def __init__(self):
         self._running = False
-        self._config = TestConf(sandbox="docker", features={"import_cache": False})
+        self._config = TestConf(sandbox="docker", features={"import_cache": ""})
 
         try:
             print("Starting Docker container worker")
@@ -265,21 +267,7 @@ def prepare_open_lambda(ol_dir, reuse_config=False):
             print(f"Could not kill existing worker: {err}")
 
     # general setup
-    if not reuse_config:
-        if os.path.exists(ol_dir):
-            run(['rm', '-rf', ol_dir])
-
-        run(['./ol', 'worker', 'init', f'-p={ol_dir}'])
-    else:
-        if os.path.exists(_OL_DIR):
-            # Make sure the pid file is gone even if the previous worker crashed
-            try:
-                run(['rm', '-rf', f'{ol_dir}/worker'])
-            except Exception as _:
-                pass
-        else:
-            # There was never a config in the first place, create one
-            run(['./ol', 'worker', 'init', f'-p={ol_dir}'])
+    run(['./ol', 'worker', 'init', f'-p={ol_dir}'])
 
 def mounts():
     ''' Returns a list of all mounted directories '''
