@@ -110,7 +110,7 @@ def stress_one_lambda(procs, seconds):
     return {"reqs_per_sec": reqs/seconds}
 
 @test
-def call_each_once_exec(lambda_count, alloc_mb):
+def call_each_once_exec(lambda_count, alloc_mb, zygote_provider):
     open_lambda = OpenLambda()
 
     # TODO: do in parallel
@@ -122,7 +122,7 @@ def call_each_once_exec(lambda_count, alloc_mb):
 
     return {"reqs_per_sec": lambda_count/seconds}
 
-def call_each_once(lambda_count, alloc_mb=0):
+def call_each_once(lambda_count, alloc_mb=0, zygote_provider="tree"):
     with tempfile.TemporaryDirectory() as reg_dir:
         # create dummy lambdas
         for pos in range(lambda_count):
@@ -132,8 +132,8 @@ def call_each_once(lambda_count, alloc_mb=0):
                 code.write(f"    s = '*' * {alloc_mb} * 1024**2\n")
                 code.write(f"    return {pos}\n")
 
-        with TestConfContext(registry=reg_dir):
-            call_each_once_exec(lambda_count=lambda_count, alloc_mb=alloc_mb)
+        with TestConfContext(registry=reg_dir, features={"import_cache": zygote_provider}):
+            call_each_once_exec(lambda_count=lambda_count, alloc_mb=alloc_mb, zygote_provider=zygote_provider)
 
 @test
 def fork_bomb():
@@ -259,9 +259,11 @@ def run_tests():
         stress_one_lambda(procs=2, seconds=15)
         stress_one_lambda(procs=8, seconds=15)
 
-    with TestConfContext(features={"reuse_cgroups": True}):
-        call_each_once(lambda_count=10, alloc_mb=1)
-        call_each_once(lambda_count=100, alloc_mb=10)
+    with TestConfContext():
+        call_each_once(lambda_count=10, alloc_mb=1, zygote_provider="tree")
+        call_each_once(lambda_count=100, alloc_mb=10, zygote_provider="")
+        call_each_once(lambda_count=100, alloc_mb=10, zygote_provider="tree")
+        call_each_once(lambda_count=100, alloc_mb=10, zygote_provider="multitree")
 
 def main():
     global OL_DIR
