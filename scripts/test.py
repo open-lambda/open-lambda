@@ -111,16 +111,17 @@ def stress_one_lambda(procs, seconds):
 
 @test
 def call_each_once_exec(lambda_count, alloc_mb, zygote_provider):
-    open_lambda = OpenLambda()
+    with TestConfContext(features={"import_cache": zygote_provider}):
+        open_lambda = OpenLambda()
 
-    # TODO: do in parallel
-    start = time()
-    for pos in range(lambda_count):
-        result = open_lambda.run(f"L{pos}", {"alloc_mb": alloc_mb}, json=False)
-        assert_eq(result, str(pos))
-    seconds = time() - start
+        # TODO: do in parallel
+        start = time()
+        for pos in range(lambda_count):
+            result = open_lambda.run(f"L{pos}", {"alloc_mb": alloc_mb}, json=False)
+            assert_eq(result, str(pos))
+            seconds = time() - start
 
-    return {"reqs_per_sec": lambda_count/seconds}
+            return {"reqs_per_sec": lambda_count/seconds}
 
 def call_each_once(lambda_count, alloc_mb=0, zygote_provider="tree"):
     with tempfile.TemporaryDirectory() as reg_dir:
@@ -132,8 +133,9 @@ def call_each_once(lambda_count, alloc_mb=0, zygote_provider="tree"):
                 code.write(f"    s = '*' * {alloc_mb} * 1024**2\n")
                 code.write(f"    return {pos}\n")
 
-        with TestConfContext(registry=reg_dir, features={"import_cache": zygote_provider}):
-            call_each_once_exec(lambda_count=lambda_count, alloc_mb=alloc_mb, zygote_provider=zygote_provider)
+        with TestConfContext(registry=reg_dir):
+            call_each_once_exec(lambda_count=lambda_count, alloc_mb=alloc_mb,
+                                zygote_provider=zygote_provider)
 
 @test
 def fork_bomb():
