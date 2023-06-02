@@ -254,19 +254,13 @@ class WasmWorker():
         self._process.terminate()
         self._process = None
 
-def prepare_open_lambda(ol_dir, reuse_config=False):
+def prepare_open_lambda(ol_dir):
     '''
     Sets up the working director for open lambda,
     and stops currently running worker processes (if any)
     '''
-    if os.path.exists(_OL_DIR):
-        try:
-            run(['./ol', 'worker', 'down', f'-p={ol_dir}'])
-            print("stopped existing worker")
-        except Exception as err:
-            print(f"Could not kill existing worker: {err}")
-
-    # general setup
+    # init will kill any prior worker and refresh the directory
+    # (except for the base "lambda" dir)
     run(['./ol', 'worker', 'init', f'-p={ol_dir}'])
 
 def mounts():

@@ -267,7 +267,6 @@ def main():
     global OL_DIR
 
     parser = argparse.ArgumentParser(description='Run tests for OpenLambda')
-    parser.add_argument('--reuse_config', action="store_true")
     parser.add_argument('--worker_type', type=str, default="sock")
     parser.add_argument('--test_filter', type=str, default="")
     parser.add_argument('--registry', type=str, default="test-registry")
