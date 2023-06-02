@@ -135,6 +135,7 @@ func LoadDefaults(olPath string) error {
 	workerDir := filepath.Join(olPath, "worker")
 	registryDir := filepath.Join(olPath, "registry")
 	baseImgDir := filepath.Join(olPath, "lambda")
+	zygoteTreePath := filepath.Join(olPath, "default-zygotes-40.json")
 	packagesDir := filepath.Join(baseImgDir, "packages")
 
 	// split anything above 512 MB evenly between handler and import cache
@@ -159,7 +160,7 @@ func LoadDefaults(olPath string) error {
 		SOCK_base_path:    baseImgDir,
 		Registry_cache_ms: 5000, // 5 seconds
 		Mem_pool_mb:       memPoolMb,
-		Import_cache_tree: "",
+		Import_cache_tree: zygoteTreePath,
 		Limits: LimitsConfig{
 			Procs:               10,
 			Mem_mb:              50,
