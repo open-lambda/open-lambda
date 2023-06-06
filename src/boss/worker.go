@@ -13,51 +13,6 @@ import (
 	"time"
 )
 
-type WorkerState int
-
-const (
-	STARTING   WorkerState = 0
-	RUNNING    WorkerState = 1
-	CLEANING   WorkerState = 2 // waiting for already-started requests to complete (so can kill cleanly)
-	DESTROYING WorkerState = 3
-)
-
-type WorkerPool struct {
-	WorkerPoolPlatform
-	Scaling
-	sync.Mutex
-	nextId  int                  // the next new worker's id
-	target  int                  // the target number of running+starting workers
-	workers []map[string]*Worker // a slice of maps
-	// Slice: index maps to a const WorkerState
-	// Map: key=worker id (string), value=pointer to worker
-	queue chan *Worker // a queue of running workers
-
-	clusterLogFile *os.File
-	taskLogFile    *os.File
-	clusterLog     *log.Logger
-	taskLog        *log.Logger
-	totalTask      int32
-	sumLatency     int64
-	nLatency       int64
-}
-
-//platform specific attributes and functions
-type WorkerPoolPlatform interface {
-	NewWorker(workerId string) *Worker //return new worker struct
-	CreateInstance(worker *Worker)     //create new instance in the cloud platform
-	DeleteInstance(worker *Worker)     //delete cloud platform instance associated with give worker struct
-	ForwardTask(w http.ResponseWriter, r *http.Request, worker *Worker)
-}
-
-type Worker struct {
-	workerId string
-	workerIp string
-	numTask  int32
-	pool     *WorkerPool
-	state    WorkerState //state as enum
-}
-
 func NewWorkerPool() (*WorkerPool, error) {
 	clusterLogFile, _ := os.Create("cluster.log")
 	taskLogFile, _ := os.Create("tasks.log")
@@ -175,8 +130,41 @@ func (pool *WorkerPool) startNewWorker() {
 	pool.Lock()
 }
 
+// ssh to worker and run command
+func (w *Worker) runCmd(command string) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
+
+	user, err := user.Current()
+	if err != nil {
+		panic(err)
+	}
+
+	cmd := fmt.Sprintf("cd %s; %s", cwd, command)
+
+	tries := 10
+	for tries > 0 {
+		sshcmd := exec.Command("ssh", user.Username+"@"+w.workerIp, "-o", "StrictHostKeyChecking=no", "-C", cmd)
+		stdoutStderr, err := sshcmd.CombinedOutput()
+		log.Printf("%s\n", stdoutStderr)
+		if err == nil {
+			break
+		}
+		tries -= 1
+		if tries == 0 {
+			log.Println(sshcmd.String())
+			panic(err)
+		}
+		time.Sleep(5 * time.Second)
+	}
+}
+
+/*
+This method recover the worker in the cleaning state to running state
+*/
 // lock should be held before calling this function
-// recover cleaning worker
 func (pool *WorkerPool) recoverWorker(worker *Worker) {
 	log.Printf("recovering %s\n", worker.workerId)
 	worker.state = RUNNING
@@ -193,8 +181,10 @@ func (pool *WorkerPool) recoverWorker(worker *Worker) {
 	pool.updateCluster()
 }
 
+/*
+This method moves the worker to the cleaning stage
+*/
 // lock should be held before calling this function
-// clean the worker
 func (pool *WorkerPool) cleanWorker(worker *Worker) {
 	log.Printf("cleaning %s\n", worker.workerId)
 	worker.state = CLEANING
@@ -228,8 +218,10 @@ func (pool *WorkerPool) cleanWorker(worker *Worker) {
 	pool.Lock()
 }
 
+/*
+This method moves a worker to destroying stage
+*/
 // lock should be held before calling this function
-// destroy a worker from the cluster
 func (pool *WorkerPool) detroyWorker(worker *Worker) {
 	log.Printf("destroying %s\n", worker.workerId)
 
@@ -265,8 +257,11 @@ func (pool *WorkerPool) detroyWorker(worker *Worker) {
 	pool.Lock()
 }
 
+/*
+This method is called when one worker has to change its state.
+This method changes the metadate of WorkerPool and Worker to accomodate the change.
+*/
 // lock should be held before calling this function
-// called when worker is been evicted from cleaning or destroying map
 func (pool *WorkerPool) updateCluster() {
 	scaleSize := pool.target - pool.Size() // scaleSize = target - size of cluster
 
@@ -305,6 +300,9 @@ func (pool *WorkerPool) updateCluster() {
 	}
 }
 
+/*
+This methos send request to one selected worker in the WorkerPool
+*/
 //run lambda function
 func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 	starttime := time.Now()
@@ -339,7 +337,9 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 	atomic.AddInt64(&pool.nLatency, 1)
 }
 
-//force kill workers
+/*
+This method forces to kill all workers in the WorkerPool
+*/
 func (pool *WorkerPool) Close() {
 	log.Println("closing worker pool")
 
@@ -385,60 +385,10 @@ func (pool *WorkerPool) Close() {
 	wg.Wait()
 }
 
-// forward request to worker
-// TODO: this is kept for other platforms
-func forwardTask(w http.ResponseWriter, req *http.Request, workerIp string) error {
-	host := fmt.Sprintf("%s:%d", workerIp, 5000) //TODO: read from config
-	req.URL.Scheme = "http"
-	req.URL.Host = host
-	req.Host = host
-	req.RequestURI = ""
-
-	client := http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
-		return err
-	}
-	defer resp.Body.Close()
-
-	io.Copy(w, resp.Body)
-
-	return nil
-}
-
-// ssh to worker and run command
-func (w *Worker) runCmd(command string) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		panic(err)
-	}
-
-	user, err := user.Current()
-	if err != nil {
-		panic(err)
-	}
-
-	cmd := fmt.Sprintf("cd %s; %s", cwd, command)
-
-	tries := 10
-	for tries > 0 {
-		sshcmd := exec.Command("ssh", user.Username+"@"+w.workerIp, "-o", "StrictHostKeyChecking=no", "-C", cmd)
-		stdoutStderr, err := sshcmd.CombinedOutput()
-		log.Printf("%s\n", stdoutStderr)
-		if err == nil {
-			break
-		}
-		tries -= 1
-		if tries == 0 {
-			log.Println(sshcmd.String())
-			panic(err)
-		}
-		time.Sleep(5 * time.Second)
-	}
-}
-
-//return wokers' id and number of tasks
+/*
+This methos returns the number of tasks for each worker
+Used for benchmarking
+*/
 func (pool *WorkerPool) StatusTasks() map[string]int {
 	var output = map[string]int{}
 
@@ -462,7 +412,9 @@ func (pool *WorkerPool) StatusTasks() map[string]int {
 	return output
 }
 
-//return status of cluster
+/*
+This method returns the status of current WorkerPool
+*/
 func (pool *WorkerPool) StatusCluster() map[string]int {
 	var output = map[string]int{}
 
@@ -472,4 +424,26 @@ func (pool *WorkerPool) StatusCluster() map[string]int {
 	output["destroying"] = len(pool.workers[DESTROYING])
 
 	return output
+}
+
+// forward request to worker
+// TODO: this is kept for other platforms
+func forwardTask(w http.ResponseWriter, req *http.Request, workerIp string) error {
+	host := fmt.Sprintf("%s:%d", workerIp, 5000) //TODO: read from config
+	req.URL.Scheme = "http"
+	req.URL.Host = host
+	req.Host = host
+	req.RequestURI = ""
+
+	client := http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return err
+	}
+	defer resp.Body.Close()
+
+	io.Copy(w, resp.Body)
+
+	return nil
 }
