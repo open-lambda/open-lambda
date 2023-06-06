@@ -47,6 +47,7 @@ type WorkerPoolPlatform interface {
 	NewWorker(workerId string) *Worker //return new worker struct
 	CreateInstance(worker *Worker)     //create new instance in the cloud platform
 	DeleteInstance(worker *Worker)     //delete cloud platform instance associated with give worker struct
+	ForwardTask(w http.ResponseWriter, r *http.Request, worker *Worker)
 }
 
 type Worker struct {
@@ -327,16 +328,8 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 		pool.Scale(pool)
 	}
 
-	if Conf.Platform == "mock" {
-		s := fmt.Sprintf("hello from %s\n", worker.workerId)
-		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte(s))
-		if err != nil {
-			panic(err)
-		}
-	} else {
-		forwardTask(w, r, worker.workerIp)
-	}
+	pool.ForwardTask(w, r, worker)
+
 	atomic.AddInt32(&worker.numTask, -1)
 	atomic.AddInt32(&pool.totalTask, -1)
 
@@ -393,6 +386,7 @@ func (pool *WorkerPool) Close() {
 }
 
 // forward request to worker
+// TODO: this is kept for other platforms
 func forwardTask(w http.ResponseWriter, req *http.Request, workerIp string) error {
 	host := fmt.Sprintf("%s:%d", workerIp, 5000) //TODO: read from config
 	req.URL.Scheme = "http"

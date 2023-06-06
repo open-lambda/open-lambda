@@ -1,7 +1,9 @@
 package boss
 
 import (
+	"fmt"
 	"log"
+	"net/http"
 )
 
 // WORKER IMPLEMENTATION: MockWorker
@@ -32,4 +34,13 @@ func (pool *MockWorkerPool) CreateInstance(worker *Worker) {
 
 func (pool *MockWorkerPool) DeleteInstance(worker *Worker) {
 	log.Printf("deleted mock worker: %s\n", worker.workerId)
+}
+
+func (pool *MockWorkerPool) ForwardTask(w http.ResponseWriter, r *http.Request, worker *Worker) {
+	s := fmt.Sprintf("hello from %s\n", worker.workerId)
+	w.WriteHeader(http.StatusOK)
+	_, err := w.Write([]byte(s))
+	if err != nil {
+		panic(err)
+	}
 }
