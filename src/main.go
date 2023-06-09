@@ -34,11 +34,6 @@ func newBossConf() error {
 	return nil
 }
 
-// newBoss corresponses to the "new-boss" command of the admin tool.
-func newBoss(ctx *cli.Context) error {
-	return newBossConf()
-}
-
 // runBoss corresponses to the "boss" command of the admin tool.
 func runBoss(ctx *cli.Context) error {
 	if _, err := os.Stat("boss.json"); os.IsNotExist(err) {
@@ -250,13 +245,6 @@ OPTIONS:
 	app.EnableBashCompletion = true
 	app.HideVersion = true
 	app.Commands = []*cli.Command{
-		&cli.Command{
-			Name:        "new-boss",
-			Usage:       "Create an OL Boss config (boss.json)",
-			UsageText:   "ol new-boss [--path=PATH] [--detach]",
-			Description: "Create config for new boss",
-			Action:      newBoss,
-		},
 		&cli.Command{
 			Name:        "boss",
 			Usage:       "Start an OL Boss process",

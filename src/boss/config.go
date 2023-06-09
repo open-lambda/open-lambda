@@ -153,18 +153,6 @@ func LoadDefaults() error {
 	return checkConf()
 }
 
-func LoadAzure() error {
-	Conf = &Config{
-		Platform:   "azure",
-		Scaling:    "manual",
-		API_key:    "abc", // TODO
-		Boss_port:  "5000",
-		Worker_Cap: 4,
-	}
-
-	return checkConf()
-}
-
 // ParseConfig reads a file and tries to parse it as a JSON string to a Config
 // instance.
 func LoadConf(path string) error {
