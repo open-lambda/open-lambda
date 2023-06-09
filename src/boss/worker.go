@@ -102,7 +102,12 @@ func (pool *WorkerPool) startNewWorker() {
 
 	pool.Unlock()
 	go func() { // should be able to create multiple instances simultaneously
-		pool.CreateInstance(worker) //create new instance
+		worker.numTask = 1
+		err := pool.CreateInstance(worker) //create new instance
+		if err != nil {
+			// TODO: do something if the worker isn't created successfully
+			return
+		}
 
 		if Conf.Platform != "mock" {
 			worker.runCmd("./ol worker --detach") // start worker
@@ -124,6 +129,7 @@ func (pool *WorkerPool) startNewWorker() {
 			len(pool.workers[DESTROYING]))
 		pool.queue <- worker
 		log.Printf("%s ready\n", worker.workerId)
+		worker.numTask = 0
 
 		pool.updateCluster()
 	}()
@@ -428,7 +434,7 @@ func (pool *WorkerPool) StatusCluster() map[string]int {
 
 // forward request to worker
 // TODO: this is kept for other platforms
-func forwardTask(w http.ResponseWriter, req *http.Request, workerIp string) error {
+func forwardTaskHelper(w http.ResponseWriter, req *http.Request, workerIp string) error {
 	host := fmt.Sprintf("%s:%d", workerIp, 5000) //TODO: read from config
 	req.URL.Scheme = "http"
 	req.URL.Host = host

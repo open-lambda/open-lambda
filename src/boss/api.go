@@ -22,9 +22,9 @@ const (
 Defines the interface for platform-specific functions
 */
 type WorkerPoolPlatform interface {
-	NewWorker(workerId string) *Worker //return new worker struct
-	CreateInstance(worker *Worker)     //create new instance in the cloud platform
-	DeleteInstance(worker *Worker)     //delete cloud platform instance associated with give worker struct
+	NewWorker(workerId string) *Worker   //return new worker struct
+	CreateInstance(worker *Worker) error //create new instance in the cloud platform
+	DeleteInstance(worker *Worker) error //delete cloud platform instance associated with give worker struct
 	ForwardTask(w http.ResponseWriter, r *http.Request, worker *Worker)
 }
 
