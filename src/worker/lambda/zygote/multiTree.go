@@ -18,11 +18,11 @@ func NewMultiTree(codeDirs *common.DirMaker, scratchDirs *common.DirMaker, sbPoo
 	var tree_count int
 	switch cpus := runtime.NumCPU(); {
 	case cpus < 3:
-		tree_count = 3
+		tree_count = 6
 	case cpus > 10:
-		tree_count = 10
+		tree_count = 16
 	default:
-		tree_count = cpus
+		tree_count = cpus * 2
 	}
 	log.Printf("Starting MultiTree ZygoteProvider with %d trees (tree count equals CPU count, with min of 3 and max of 10).", tree_count)
 
