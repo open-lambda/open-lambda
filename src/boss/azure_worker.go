@@ -123,7 +123,7 @@ func (worker *Worker) startWorker() {
 	if err != nil {
 		panic(err)
 	}
-	cmd := fmt.Sprintf("cd %s; %s; %s", cwd, "sudo mount -o rw,remount /sys/fs/cgroup", "sudo ./ol worker up -d")
+	cmd := fmt.Sprintf("cd %s; %s; %s", cwd, "sudo mount -o rw,remount /sys/fs/cgroup", "sudo ./ol worker up -i ol-min -d")
 	tries := 10
 	for tries > 0 {
 		sshcmd := exec.Command("ssh", "-i", "~/.ssh/ol-boss_key.pem", user.Username+"@"+worker.workerIp, "-o", "StrictHostKeyChecking=no", "-C", cmd)
@@ -150,7 +150,7 @@ func (worker *AzureWorker) killWorker() {
 	if err != nil {
 		panic(err)
 	}
-	cmd := fmt.Sprintf("cd %s; %s", cwd, "sudo ./ol kill")
+	cmd := fmt.Sprintf("cd %s; %s", cwd, "sudo ./ol down")
 	log.Printf("Try to ssh into the worker and kill the process")
 	tries := 10
 	for tries > 0 {
@@ -204,5 +204,5 @@ func (pool *AzureWorkerPool) DeleteInstance(generalworker *Worker) error {
 }
 
 func (pool *AzureWorkerPool) ForwardTask(w http.ResponseWriter, r *http.Request, worker *Worker) {
-	forwardTaskHelper(w, r, worker.workerId)
+	forwardTaskHelper(w, r, worker.workerIp)
 }
