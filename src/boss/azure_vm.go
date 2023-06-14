@@ -159,11 +159,16 @@ func createVM(worker *Worker) (*AzureConfig, error) {
 	log.Printf("Created new virual machine: %s", *virtualMachine.ID)
 
 	log.Println("Virtual machine created successfully")
-	log.Fatalln()
 	new_vm.Vm = *virtualMachine
 	new_vm.Status = "Running"
 
 	create_lock.Lock()
+
+	if conf == nil {
+		conf = new(AzureConfig)
+		first_rgroup := new(rgroup)
+		conf.Resource_groups.Rgroup = append(conf.Resource_groups.Rgroup, *first_rgroup)
+	}
 	conf.Resource_groups.Rgroup[0].Resource = *resourceGroup
 	rg := &conf.Resource_groups.Rgroup[0]
 	rg.Vms = append(rg.Vms, *new_vm)

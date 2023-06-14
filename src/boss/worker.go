@@ -24,8 +24,10 @@ func NewWorkerPool() (*WorkerPool, error) {
 	var pool *WorkerPool
 	if Conf.Platform == "mock" {
 		pool = NewMockWorkerPool()
+	} else if Conf.Platform == "azure" {
+		pool = NewAzureWorkerPool()
 	} else {
-		return nil, fmt.Errorf("worker pool '%s' not supported", Conf.Platform)
+		log.Fatalf("%s is not supported.", Conf.Platform)
 	}
 
 	pool.nextId = 1
@@ -106,11 +108,14 @@ func (pool *WorkerPool) startNewWorker() {
 		err := pool.CreateInstance(worker) //create new instance
 		if err != nil {
 			// TODO: do something if the worker isn't created successfully
+			log.Printf("error: %s", err)
 			return
 		}
 
-		if Conf.Platform != "mock" {
-			worker.runCmd("./ol worker --detach") // start worker
+		if Conf.Platform == "azure" {
+			worker.startWorker()
+		} else if Conf.Platform != "mock" {
+			worker.runCmd("./ol worker up -d") // start worker
 		}
 
 		//change state starting -> running

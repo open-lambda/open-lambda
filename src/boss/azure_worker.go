@@ -114,7 +114,7 @@ func (pool *AzureWorkerPool) CreateInstance(worker *Worker) error {
 	return nil
 }
 
-func (worker *AzureWorker) startWorker() {
+func (worker *Worker) startWorker() {
 	cwd, err := os.Getwd()
 	if err != nil {
 		panic(err)
@@ -123,10 +123,10 @@ func (worker *AzureWorker) startWorker() {
 	if err != nil {
 		panic(err)
 	}
-	cmd := fmt.Sprintf("cd %s; %s; %s", cwd, "sudo mount -o rw,remount /sys/fs/cgroup", "sudo ./ol worker --detach")
+	cmd := fmt.Sprintf("cd %s; %s; %s", cwd, "sudo mount -o rw,remount /sys/fs/cgroup", "sudo ./ol worker up -d")
 	tries := 10
 	for tries > 0 {
-		sshcmd := exec.Command("ssh", "-i", "~/.ssh/ol-boss_key.pem", user.Username+"@"+worker.privateAddr, "-o", "StrictHostKeyChecking=no", "-C", cmd)
+		sshcmd := exec.Command("ssh", "-i", "~/.ssh/ol-boss_key.pem", user.Username+"@"+worker.workerIp, "-o", "StrictHostKeyChecking=no", "-C", cmd)
 		stdoutStderr, err := sshcmd.CombinedOutput()
 		fmt.Printf("%s\n", stdoutStderr)
 		if err == nil {
