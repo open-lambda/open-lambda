@@ -44,11 +44,6 @@ func NewWorkerPool() (*WorkerPool, error) {
 	pool.totalTask = 0
 	pool.sumLatency = 0
 
-	if Conf.Scaling == "auto" {
-		pool.Scaling = &ScalingThreshold{}
-		pool.SetTarget(1)
-	}
-
 	log.Printf("READY: worker pool of type %s", Conf.Platform)
 
 	//log total outstanding tasks
@@ -322,9 +317,6 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 
 	atomic.AddInt32(&worker.numTask, 1)
 	atomic.AddInt32(&pool.totalTask, 1)
-	if Conf.Scaling == "auto" {
-		pool.Scale(pool)
-	}
 
 	pool.ForwardTask(w, r, worker)
 
