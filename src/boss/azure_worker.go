@@ -150,7 +150,7 @@ func (worker *AzureWorker) killWorker() {
 	if err != nil {
 		panic(err)
 	}
-	cmd := fmt.Sprintf("cd %s; %s", cwd, "sudo ./ol down")
+	cmd := fmt.Sprintf("cd %s; %s", cwd, "sudo ./ol worker down")
 	log.Printf("Try to ssh into the worker and kill the process")
 	tries := 10
 	for tries > 0 {

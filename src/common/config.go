@@ -63,7 +63,7 @@ type Config struct {
 
 	// which OCI implementation to use for the docker sandbox (e.g., runc or runsc)
 	Docker_runtime string `json:"docker_runtime"`
-     
+
 	Limits   LimitsConfig   `json:"limits"`
 	Features FeaturesConfig `json:"features"`
 	Trace    TraceConfig    `json:"trace"`
@@ -149,7 +149,7 @@ func LoadDefaults(olPath string) error {
 	Conf = &Config{
 		Worker_dir:        workerDir,
 		Server_mode:       "lambda",
-		Worker_url:        "localhost",
+		Worker_url:        "0.0.0.0",
 		Worker_port:       "5000",
 		Registry:          registryDir,
 		Sandbox:           "sock",
@@ -161,21 +161,21 @@ func LoadDefaults(olPath string) error {
 		Mem_pool_mb:       memPoolMb,
 		Import_cache_tree: "",
 		Limits: LimitsConfig{
-			Procs:            10,
-			Mem_mb:           50,
-			CPU_percent:      100,
+			Procs:               10,
+			Mem_mb:              50,
+			CPU_percent:         100,
 			Max_runtime_default: 30,
-			Installer_mem_mb: Max(250, Min(500, memPoolMb/2)),
-			Swappiness:       0,
+			Installer_mem_mb:    Max(250, Min(500, memPoolMb/2)),
+			Swappiness:          0,
 		},
 		Features: FeaturesConfig{
 			Import_cache:        true,
 			Downsize_paused_mem: true,
-			Enable_seccomp:	     true,
+			Enable_seccomp:      true,
 		},
 		Trace: TraceConfig{
 			Cgroups: false,
-			Memory: false,
+			Memory:  false,
 			Evictor: false,
 			Package: false,
 			Latency: false,
