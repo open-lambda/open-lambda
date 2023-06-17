@@ -34,7 +34,6 @@ WorkerPoolPlatform.
 */
 type WorkerPool struct {
 	WorkerPoolPlatform
-	Scaling
 	sync.Mutex
 	nextId  int                  // the next new worker's id
 	target  int                  // the target number of running+starting workers

@@ -21,6 +21,7 @@ const (
 
 type Boss struct {
 	workerPool *WorkerPool
+	AutoScaler  Scaling
 }
 
 func (b *Boss) BossStatus(w http.ResponseWriter, r *http.Request) {
@@ -33,16 +34,19 @@ func (b *Boss) BossStatus(w http.ResponseWriter, r *http.Request) {
 		b.workerPool.StatusCluster(),
 		b.workerPool.StatusTasks(),
 	}
-
+	
 	if b, err := json.MarshalIndent(output, "", "\t"); err != nil {
 		panic(err)
 	} else {
 		w.Write(b)
 	}
+
+
 }
 
 func (b *Boss) Close(w http.ResponseWriter, r *http.Request) {
 	b.workerPool.Close()
+	b.AutoScaler.Close()
 	os.Exit(0)
 }
 
@@ -85,7 +89,7 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 
 	// STEP 2: adjust target worker count
 	b.workerPool.SetTarget(worker_count)
-
+	
 	//respond with status
 	b.BossStatus(w, r)
 }
@@ -101,6 +105,12 @@ func BossMain() (err error) {
 	boss := Boss{
 		workerPool: pool,
 	}
+
+	if Conf.Scaling == "threshold-scaler" {
+		boss.AutoScaler = &ThresholdScaling{}
+		boss.AutoScaler.Launch(&boss)
+	}
+
 	http.HandleFunc(BOSS_STATUS_PATH, boss.BossStatus)
 	http.HandleFunc(SCALING_PATH, boss.ScalingWorker)
 	http.HandleFunc(RUN_PATH, boss.workerPool.RunLambda)

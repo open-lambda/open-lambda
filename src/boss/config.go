@@ -56,7 +56,7 @@ func LoadConf(path string) error {
 }
 
 func checkConf() error {
-	if Conf.Scaling != "manual" && Conf.Scaling != "auto" {
+	if Conf.Scaling != "manual" && Conf.Scaling != "threshold-scaler" {
 		return fmt.Errorf("Scaling type '%s' not implemented", Conf.Scaling)
 	}
 
