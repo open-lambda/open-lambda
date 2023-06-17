@@ -109,9 +109,7 @@ func (pool *WorkerPool) startNewWorker() {
 		worker.numTask = 1
 		pool.CreateInstance(worker) //create new instance
 
-		if Conf.Platform == "azure" {
-			worker.startWorker()
-		} else {
+		if Conf.Platform == "mock" {
 			worker.runCmd("./ol worker up -d") // start worker
 		}
 
