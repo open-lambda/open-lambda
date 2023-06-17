@@ -80,10 +80,10 @@ func (pool *WorkerPool) Size() int {
 //renamed Scale() -> SetTarget()
 func (pool *WorkerPool) SetTarget(target int) {
 	pool.Lock()
-	defer pool.Unlock()
 	pool.target = target
 	pool.clusterLog.Printf("set target=%d", pool.target)
 	pool.updateCluster()
+	pool.Unlock()
 }
 
 // lock should be held before calling this function
@@ -337,7 +337,9 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 		pool.Scale(pool)
 	}
 
+	//log.Printf("Received task, forward task...")
 	pool.ForwardTask(w, r, worker)
+	//log.Printf("Get Reply. %s numTask: %d\n", worker.workerId, worker.numTask)
 
 	atomic.AddInt32(&worker.numTask, -1)
 	atomic.AddInt32(&pool.totalTask, -1)

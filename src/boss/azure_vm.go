@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"log"
 	"net"
+	"net/http"
 	"strconv"
 	"sync"
 
@@ -21,6 +22,17 @@ const (
 	resourceGroupName = "olvm-pool"
 	location          = "eastus"
 )
+
+type ResponseError struct {
+	// ErrorCode is the error code returned by the resource provider if available.
+	ErrorCode string
+
+	// StatusCode is the HTTP status code as defined in https://pkg.go.dev/net/http#pkg-constants.
+	StatusCode int
+
+	// RawResponse is the underlying HTTP response.
+	RawResponse *http.Response
+}
 
 func iptoInt(ip string) uint32 {
 	var long uint32
@@ -696,6 +708,7 @@ func createVirtualMachine(ctx context.Context, cred azcore.TokenCredential, netw
 		},
 	}
 
+	// TODO: Handle Retryable Error
 	pollerResponse, err := vmClient.BeginCreateOrUpdate(ctx, resourceGroupName, vmName, parameters, nil)
 	if err != nil {
 		return nil, err
