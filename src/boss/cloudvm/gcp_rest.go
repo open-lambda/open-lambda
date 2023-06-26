@@ -1,4 +1,4 @@
-package boss
+package cloudvm
 
 type GcpLaunchVmArgs struct {
 	ServiceAccountEmail string
