@@ -23,7 +23,7 @@ const (
 
 type Boss struct {
 	workerPool *cloudvm.WorkerPool
-	AutoScaler  autoscaling.Scaling
+	autoScaler  autoscaling.Scaling
 }
 
 func (b *Boss) BossStatus(w http.ResponseWriter, r *http.Request) {
@@ -48,7 +48,9 @@ func (b *Boss) BossStatus(w http.ResponseWriter, r *http.Request) {
 
 func (b *Boss) Close(w http.ResponseWriter, r *http.Request) {
 	b.workerPool.Close()
-	b.AutoScaler.Close()
+	if Conf.Scaling == "threshold-scaler" {
+		b.autoScaler.Close()
+	}
 	os.Exit(0)
 }
 
@@ -109,8 +111,8 @@ func BossMain() (err error) {
 	}
 
 	if Conf.Scaling == "threshold-scaler" {
-		boss.AutoScaler = &autoscaling.ThresholdScaling{}
-		boss.AutoScaler.Launch(boss.workerPool)
+		boss.autoScaler = &autoscaling.ThresholdScaling{}
+		boss.autoScaler.Launch(boss.workerPool)
 	}
 
 	http.HandleFunc(BOSS_STATUS_PATH, boss.BossStatus)
