@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/open-lambda/open-lambda/ol/common"
+	"github.com/open-lambda/open-lambda/ol/worker/sandbox/cgroups"
 )
 
 type SOCKContainer struct {
@@ -24,7 +25,7 @@ type SOCKContainer struct {
 	containerRootDir string
 	codeDir          string
 	scratchDir       string
-	cg               *Cgroup
+	cg               cgroups.Cgroup
 	rtType           common.RuntimeType
 	client *http.Client
 
@@ -59,7 +60,7 @@ func (container *SOCKContainer) GetRuntimeType() common.RuntimeType {
 func (container *SOCKContainer) freshProc() (err error) {
 	// get FD to cgroup
 	cgFiles := make([]*os.File, 1)
-	path := container.cg.ResourcePath("cgroup.procs")
+	path := container.cg.CgroupProcsPath()
 	fd, err := syscall.Open(path, syscall.O_WRONLY, 0600)
 	if err != nil {
 		return err
@@ -234,10 +235,10 @@ func (container *SOCKContainer) Pause() (err error) {
 		// drop mem limit to what is used when we're paused, because
 		// we know the Sandbox cannot allocate more when it's not
 		// schedulable.  Then release saved memory back to the pool.
-		oldLimit := container.cg.getMemLimitMB()
-		newLimit := container.cg.getMemUsageMB() + 1
+		oldLimit := container.cg.GetMemLimitMB()
+		newLimit := container.cg.GetMemUsageMB() + 1
 		if newLimit < oldLimit {
-			container.cg.setMemLimitMB(newLimit)
+			container.cg.SetMemLimitMB(newLimit)
 			container.pool.mem.adjustAvailableMB(oldLimit - newLimit)
 		}
 	}
@@ -253,10 +254,10 @@ func (container *SOCKContainer) Unpause() (err error) {
 	if common.Conf.Features.Downsize_paused_mem {
 		// block until we have enough mem to upsize limit to the
 		// normal size before unpausing
-		oldLimit := container.cg.getMemLimitMB()
+		oldLimit := container.cg.GetMemLimitMB()
 		newLimit := common.Conf.Limits.Mem_mb
 		container.pool.mem.adjustAvailableMB(oldLimit - newLimit)
-		container.cg.setMemLimitMB(newLimit)
+		container.cg.SetMemLimitMB(newLimit)
 	}
 
 	return container.cg.Unpause()
@@ -300,7 +301,7 @@ func (container *SOCKContainer) decCgRefCount() {
 			container.cg.KillAllProcs()
 			container.printf("killed PIDs in CG\n")
 			container.cg.Release()
-			container.pool.mem.adjustAvailableMB(container.cg.getMemLimitMB())
+			container.pool.mem.adjustAvailableMB(container.cg.GetMemLimitMB())
 		}
 		t.T1()
 
@@ -330,7 +331,7 @@ func (container *SOCKContainer) childExit(child Sandbox) {
 
 // fork a new process from the Zygote in container, relocate it to be the server in dst
 func (container *SOCKContainer) fork(dst Sandbox) (err error) {
-	spareMB := container.cg.getMemLimitMB() - container.cg.getMemUsageMB()
+	spareMB := container.cg.GetMemLimitMB() - container.cg.GetMemUsageMB()
 	if spareMB < 3 {
 		return fmt.Errorf("only %vMB of spare memory in parent, rejecting fork request (need at least 3MB)", spareMB)
 	}
@@ -357,7 +358,7 @@ func (container *SOCKContainer) fork(dst Sandbox) (err error) {
 	defer root.Close()
 
 	cg := dstSock.cg
-	cgProcs, err := os.OpenFile(cg.ResourcePath("cgroup.procs"), os.O_WRONLY, 0600)
+	cgProcs, err := os.OpenFile(cg.CgroupProcsPath(), os.O_WRONLY, 0600)
 	if err != nil {
 		return err
 	}
@@ -394,7 +395,7 @@ func (container *SOCKContainer) fork(dst Sandbox) (err error) {
 				}
 			}
 			if !isOrig {
-				container.printf("move PID %v from CG %v to CG %v\n", pid, container.cg.Name, dstSock.cg.Name)
+				container.printf("move PID %v from CG %v to CG %v\n", pid, container.cg.Name(), dstSock.cg.Name())
 				if err = dstSock.cg.AddPid(pid); err != nil {
 					return err
 				}
@@ -443,33 +444,8 @@ func (container *SOCKContainer) GetProxyLog() string {
 
 func (container *SOCKContainer) DebugString() string {
 	var s = fmt.Sprintf("SOCK %s\n", container.ID())
-
 	s += fmt.Sprintf("ROOT DIR: %s\n", container.containerRootDir)
-
 	s += fmt.Sprintf("HOST DIR: %s\n", container.scratchDir)
-
-	if pids, err := container.cg.GetPIDs(); err == nil {
-		s += fmt.Sprintf("CGROUP PIDS: %s\n", strings.Join(pids, ", "))
-	} else {
-		s += fmt.Sprintf("CGROUP PIDS: unknown (%s)\n", err)
-	}
-
-	s += fmt.Sprintf("CGROUPS: %s\n", container.cg.ResourcePath("<RESOURCE>."))
-
-	if state, err := ioutil.ReadFile(container.cg.ResourcePath("cgroup.freeze")); err == nil {
-		s += fmt.Sprintf("FREEZE STATE: %s", state)
-	} else {
-		s += fmt.Sprintf("FREEZE STATE: unknown (%s)\n", err)
-	}
-
-	s += fmt.Sprintf("MEMORY USED: %d of %d MB\n",
-		container.cg.getMemUsageMB(), container.cg.getMemLimitMB())
-
-	if kills, err := container.cg.TryReadIntKV("memory.events", "oom_kill"); err == nil {
-		s += fmt.Sprintf("OOM KILLS: %d\n", kills)
-	} else {
-		s += fmt.Sprintf("OOM KILLS: could not read because %d\n", err.Error())
-	}
-
+	s += container.cg.DebugString()
 	return s
 }
