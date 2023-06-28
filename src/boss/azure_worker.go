@@ -123,16 +123,20 @@ func (worker *Worker) startWorker() {
 	if err != nil {
 		panic(err)
 	}
-	cmd1 := fmt.Sprintf("cd %s; %s; %s",
+	// cmd1 := fmt.Sprintf("cd %s; %s; %s",
+	// 	cwd,
+	// 	"sudo mount -o rw,remount /sys/fs/cgroup",
+	// 	"sudo ./ol worker init -i ol-min")
+	// cmd2 := fmt.Sprintf("cd %s; %s; %s", cwd,
+	// 	"sudo ./ol worker up -i ol-min -d",
+	// 	"sudo ./ol bench init")
+	cmd := fmt.Sprintf("cd %s; %s; %s",
 		cwd,
 		"sudo mount -o rw,remount /sys/fs/cgroup",
-		"sudo ./ol worker init -i ol-min")
-	cmd2 := fmt.Sprintf("cd %s; %s; %s", cwd,
-		"sudo ./ol worker up -i ol-min -d",
-		"sudo ./ol bench init")
+		"sudo ./ol worker up -i ol-min -d")
 	tries := 10
 	for tries > 0 {
-		sshcmd := exec.Command("ssh", "-i", "~/.ssh/ol-boss_key.pem", user.Username+"@"+worker.workerIp, "-o", "StrictHostKeyChecking=no", "-C", cmd1)
+		sshcmd := exec.Command("ssh", "-i", "~/.ssh/ol-boss_key.pem", user.Username+"@"+worker.workerIp, "-o", "StrictHostKeyChecking=no", "-C", cmd)
 		stdoutStderr, err := sshcmd.CombinedOutput()
 		fmt.Printf("%s\n", stdoutStderr)
 		if err == nil {
@@ -146,20 +150,20 @@ func (worker *Worker) startWorker() {
 		time.Sleep(5 * time.Second)
 	}
 
-	for tries > 0 {
-		sshcmd := exec.Command("ssh", "-i", "~/.ssh/ol-boss_key.pem", user.Username+"@"+worker.workerIp, "-o", "StrictHostKeyChecking=no", "-C", cmd2)
-		stdoutStderr, err := sshcmd.CombinedOutput()
-		fmt.Printf("%s\n", stdoutStderr)
-		if err == nil {
-			break
-		}
-		tries -= 1
-		if tries == 0 {
-			fmt.Println(sshcmd.String())
-			panic(err)
-		}
-		time.Sleep(5 * time.Second)
-	}
+	// for tries > 0 {
+	// 	sshcmd := exec.Command("ssh", "-i", "~/.ssh/ol-boss_key.pem", user.Username+"@"+worker.workerIp, "-o", "StrictHostKeyChecking=no", "-C", cmd2)
+	// 	stdoutStderr, err := sshcmd.CombinedOutput()
+	// 	fmt.Printf("%s\n", stdoutStderr)
+	// 	if err == nil {
+	// 		break
+	// 	}
+	// 	tries -= 1
+	// 	if tries == 0 {
+	// 		fmt.Println(sshcmd.String())
+	// 		panic(err)
+	// 	}
+	// 	time.Sleep(5 * time.Second)
+	// }
 
 }
 

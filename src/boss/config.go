@@ -147,7 +147,7 @@ func LoadDefaults() error {
 		Scaling:    "manual",
 		API_key:    "abc", // TODO
 		Boss_port:  "5000",
-		Worker_Cap: 4,
+		Worker_Cap: 20,
 	}
 
 	return checkConf()
