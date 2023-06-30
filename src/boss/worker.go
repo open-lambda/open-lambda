@@ -229,10 +229,6 @@ func (pool *WorkerPool) detroyWorker(worker *Worker) {
 			len(pool.workers[DESTROYING]))
 		pool.Unlock()
 
-		if force_delete != nil {
-			force_delete[worker.workerId] <- true
-		}
-
 		pool.updateCluster()
 	}()
 }
@@ -317,50 +313,12 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 }
 
 //force kill workers
-var force_delete map[string]chan bool // only used for Ctrl+C cleaning step, a map of workerId and that worker's channel of whether it's deleted
 func (pool *WorkerPool) Close() {
 	log.Println("closing worker pool")
-	pool.Lock()
-	running := len(pool.workers[RUNNING])
-	pool.target = 0
-	pool.Unlock()
+	pool.SetTarget(0)
 
-	var workers []*Worker
-	force_delete = make(map[string]chan bool)
-	for i := 0; i < running; i++ {
-		worker := <-pool.queue
-		workers = append(workers, worker)
-
-		chan_i := make(chan bool)
-		force_delete[worker.workerId] = chan_i
-	}
-
-	for i := 0; i < running; i++ {
-		worker := workers[i]
-		fmt.Printf("cleaning %s\n", worker.workerId)
-		pool.cleanWorker(worker)
-	}
-
-	//killed := 0
-	for len(pool.workers[RUNNING]) != 0 {
-		for _, v := range force_delete {
-			select {
-			case <-v:
-				//killed += 1
-			default:
-			}
-		}
-	}
-
-	hasStarting := false
-	// This will poll to wait all STARTING workers to be finished
-	for len(pool.workers[STARTING]) != 0 {
-		hasStarting = true
-	}
-
-	// If there are starting workers need to clean and destroy them again
-	if hasStarting {
-		pool.Close()
+	for (len(pool.workers[STARTING]) + len(pool.workers[RUNNING]) +
+		len(pool.workers[CLEANING]) + len(pool.workers[DESTROYING])) != 0 {
 	}
 
 	os.Exit(0)
