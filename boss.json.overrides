@@ -10,5 +10,5 @@
 	"gcp": {},
 	"platform": "azure",
 	"scaling": "manual",
-	"worker_cap": 30
+	"worker_cap": 4
 }
