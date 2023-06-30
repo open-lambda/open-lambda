@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"os/signal"
 	"syscall"
+	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
+	"github.com/open-lambda/open-lambda/ol/boss/autoscaling"
 )
 
 const (
@@ -20,8 +22,8 @@ const (
 )
 
 type Boss struct {
-	workerPool *WorkerPool
-	AutoScaler  Scaling
+	workerPool *cloudvm.WorkerPool
+	autoScaler  autoscaling.Scaling
 }
 
 func (b *Boss) BossStatus(w http.ResponseWriter, r *http.Request) {
@@ -46,7 +48,9 @@ func (b *Boss) BossStatus(w http.ResponseWriter, r *http.Request) {
 
 func (b *Boss) Close(w http.ResponseWriter, r *http.Request) {
 	b.workerPool.Close()
-	b.AutoScaler.Close()
+	if Conf.Scaling == "threshold-scaler" {
+		b.autoScaler.Close()
+	}
 	os.Exit(0)
 }
 
@@ -97,7 +101,7 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 func BossMain() (err error) {
 	fmt.Printf("WARNING!  Boss incomplete (only use this as part of development process).\n")
 
-	pool, err := NewWorkerPool()
+	pool, err := cloudvm.NewWorkerPool(Conf.Platform, Conf.Worker_Cap)
 	if err != nil {
 		return err
 	}
@@ -107,8 +111,8 @@ func BossMain() (err error) {
 	}
 
 	if Conf.Scaling == "threshold-scaler" {
-		boss.AutoScaler = &ThresholdScaling{}
-		boss.AutoScaler.Launch(&boss)
+		boss.autoScaler = &autoscaling.ThresholdScaling{}
+		boss.autoScaler.Launch(boss.workerPool)
 	}
 
 	http.HandleFunc(BOSS_STATUS_PATH, boss.BossStatus)

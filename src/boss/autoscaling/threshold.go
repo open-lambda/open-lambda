@@ -1,8 +1,9 @@
-package boss
+package autoscaling
 
 import (
 	"log"
 	"time"
+	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
 )
 
 const (
@@ -12,16 +13,16 @@ const (
 )
 
 type ThresholdScaling struct {
-	boss *Boss
+	pool *cloudvm.WorkerPool
 	timeout *time.Timer
 	exitChan chan bool
 }
 
-func (s *ThresholdScaling) Launch(b *Boss) {
-	s.boss = b
+func (s *ThresholdScaling) Launch(pool *cloudvm.WorkerPool) {
+	s.pool = pool
 	s.exitChan = make(chan bool)
 	log.Println("lauching threshold-scaler")
-	b.workerPool.SetTarget(1) //initial cluster size set to 1
+	pool.SetTarget(1) //initial cluster size set to 1
 	go func() {
 		for {
 			s.Scale()
@@ -37,18 +38,17 @@ func (s *ThresholdScaling) Launch(b *Boss) {
 }
 
 func (s *ThresholdScaling) Scale() {
+	pool := s.pool
+	tasksPerWorker := pool.StatusTasks()["task/worker"]
 
-	pool := s.boss.workerPool
-	tasksPerWorker := s.boss.workerPool.StatusTasks()["task/worker"]
-
-	if pool.target < Conf.Worker_Cap && tasksPerWorker > UPPERBOUND {
-		new_target := pool.target + tasksPerWorker/UPPERBOUND
+	if pool.GetTarget() < pool.GetCap() && tasksPerWorker > UPPERBOUND {
+		new_target := pool.GetTarget() + tasksPerWorker/UPPERBOUND
 		log.Println("scale up (target=%d)\n", new_target)
 		pool.SetTarget(new_target)
 	}
 
-	if pool.target > 1 && tasksPerWorker < LOWERBOUND {
-		new_target := pool.target - (LOWERBOUND / tasksPerWorker)
+	if pool.GetTarget() > 1 && tasksPerWorker < LOWERBOUND {
+		new_target := pool.GetTarget() - (LOWERBOUND / tasksPerWorker)
 		if new_target < 1 {
 			new_target = 1
 		}
@@ -58,7 +58,7 @@ func (s *ThresholdScaling) Scale() {
 	}
 
 	s.timeout = time.AfterFunc(INACTIVITY_TIMEOUT*time.Second, func() {
-		if pool.target > 1 {
+		if pool.GetTarget() > 1 {
 			log.Printf("scale down due to inactivity\n")
 			pool.SetTarget(1)
 		}

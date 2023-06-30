@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/open-lambda/open-lambda/ol/common"
+	"github.com/open-lambda/open-lambda/ol/worker/lambda/packages"
 	"github.com/open-lambda/open-lambda/ol/worker/sandbox"
 )
 
@@ -110,7 +111,7 @@ func parseMeta(codeDir string) (meta *sandbox.SandboxMeta, err error) {
 	}
 
 	for i, pkg := range installs {
-		installs[i] = normalizePkg(pkg)
+		installs[i] = packages.NormalizePkg(pkg)
 	}
 
 	return &sandbox.SandboxMeta{

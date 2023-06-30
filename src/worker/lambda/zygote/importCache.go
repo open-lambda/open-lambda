@@ -1,4 +1,4 @@
-package lambda
+package zygote
 
 import (
 	"encoding/json"
@@ -10,13 +10,14 @@ import (
 	"sync/atomic"
 
 	"github.com/open-lambda/open-lambda/ol/common"
+	"github.com/open-lambda/open-lambda/ol/worker/lambda/packages"
 	"github.com/open-lambda/open-lambda/ol/worker/sandbox"
 )
 
 type ImportCache struct {
 	codeDirs    *common.DirMaker
 	scratchDirs *common.DirMaker
-	pkgPuller   *PackagePuller
+	pkgPuller   *packages.PackagePuller
 	sbPool      sandbox.SandboxPool
 	root        *ImportCacheNode
 }
@@ -63,7 +64,7 @@ type ZygoteReq struct {
 	parent chan sandbox.Sandbox
 }
 
-func NewImportCache(codeDirs *common.DirMaker, scratchDirs *common.DirMaker, sbPool sandbox.SandboxPool, pp *PackagePuller) (ic *ImportCache, err error) {
+func NewImportCache(codeDirs *common.DirMaker, scratchDirs *common.DirMaker, sbPool sandbox.SandboxPool, pp *packages.PackagePuller) (ic *ImportCache, err error) {
 	cache := &ImportCache{
 		codeDirs:    codeDirs,
 		scratchDirs: scratchDirs,
@@ -296,7 +297,7 @@ func (cache *ImportCache) createSandboxInNode(node *ImportCacheNode, rt_type com
 			if err != nil {
 				return err
 			}
-			topLevelMods = append(topLevelMods, pkg.meta.TopLevel...)
+			topLevelMods = append(topLevelMods, pkg.Meta.TopLevel...)
 		}
 
 		node.codeDir = codeDir

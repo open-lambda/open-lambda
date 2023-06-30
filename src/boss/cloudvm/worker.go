@@ -1,4 +1,4 @@
-package boss
+package cloudvm
 
 import (
 	"fmt"
@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-func NewWorkerPool() (*WorkerPool, error) {
+func NewWorkerPool(platform string, worker_cap int)(*WorkerPool, error) {
 	clusterLogFile, _ := os.Create("cluster.log")
 	taskLogFile, _ := os.Create("tasks.log")
 	clusterLog := log.New(clusterLogFile, "", 0)
@@ -21,7 +21,7 @@ func NewWorkerPool() (*WorkerPool, error) {
 	taskLog.SetFlags(log.Lmicroseconds)
 
 	var pool *WorkerPool
-	if Conf.Platform == "mock" {
+	if platform == "mock" {
 		pool = NewMockWorkerPool()
 	}
 
@@ -32,7 +32,7 @@ func NewWorkerPool() (*WorkerPool, error) {
 		make(map[string]*Worker), //cleaning
 		make(map[string]*Worker), //destroying
 	}
-	pool.queue = make(chan *Worker, Conf.Worker_Cap)
+	pool.queue = make(chan *Worker, worker_cap)
 	pool.clusterLogFile = clusterLogFile
 	pool.taskLogFile = taskLogFile
 	pool.clusterLog = clusterLog
@@ -40,8 +40,10 @@ func NewWorkerPool() (*WorkerPool, error) {
 	pool.nLatency = 0
 	pool.totalTask = 0
 	pool.sumLatency = 0
+	pool.platform = platform
+	pool.worker_cap = worker_cap
 
-	log.Printf("READY: worker pool of type %s", Conf.Platform)
+	log.Printf("READY: worker pool of type %s", platform)
 
 	//log total outstanding tasks
 	go func() {
@@ -81,6 +83,14 @@ func (pool *WorkerPool) SetTarget(target int) {
 	pool.updateCluster()
 }
 
+func (pool *WorkerPool) GetTarget()(int) {
+	return pool.target
+}
+
+func (pool *WorkerPool) GetCap()(int) {
+	return pool.worker_cap
+}
+
 // add a new worker to the cluster
 func (pool *WorkerPool) startNewWorker() {
 	pool.Lock()
@@ -104,7 +114,7 @@ func (pool *WorkerPool) startNewWorker() {
 		worker.numTask = 1
 		pool.CreateInstance(worker) //create new instance
 
-		if Conf.Platform == "mock" {
+		if pool.platform != "mock" {
 			worker.runCmd("./ol worker up -d") // start worker
 		}
 
@@ -273,13 +283,6 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 	starttime := time.Now()
 	if len(pool.workers[STARTING])+len(pool.workers[RUNNING]) == 0 {
 		w.WriteHeader(http.StatusInternalServerError)
-		if Conf.Scaling == "manual" {
-			_, err := w.Write([]byte("no active worker\n"))
-			if err != nil {
-				log.Printf("no active worker: %s\n", err.Error())
-			}
-			return
-		}
 	}
 
 	worker := <-pool.queue
