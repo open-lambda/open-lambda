@@ -9,6 +9,8 @@ import (
 	"sync"
 
 	"github.com/open-lambda/open-lambda/ol/common"
+	"github.com/open-lambda/open-lambda/ol/worker/lambda/packages"
+	"github.com/open-lambda/open-lambda/ol/worker/lambda/zygote"
 	"github.com/open-lambda/open-lambda/ol/worker/sandbox"
 )
 
@@ -17,10 +19,10 @@ import (
 type LambdaMgr struct {
 	// subsystems (these are thread safe)
 	sbPool sandbox.SandboxPool
-	*DepTracer
-	*PackagePuller // depends on sbPool and DepTracer
-	*ImportCache   // depends PackagePuller
-	*HandlerPuller // depends on sbPool and ImportCache[optional]
+	*packages.DepTracer
+	*packages.PackagePuller // depends on sbPool and DepTracer
+	zygote.ZygoteProvider     // depends PackagePuller
+	*HandlerPuller          // depends on sbPool and ImportCache[optional]
 
 	// storage dirs that we manage
 	codeDirs    *common.DirMaker
@@ -71,20 +73,20 @@ func NewLambdaMgr() (res *LambdaMgr, err error) {
 	}
 
 	log.Printf("Creating DepTracer")
-	mgr.DepTracer, err = NewDepTracer(filepath.Join(common.Conf.Worker_dir, "dep-trace.json"))
+	mgr.DepTracer, err = packages.NewDepTracer(filepath.Join(common.Conf.Worker_dir, "dep-trace.json"))
 	if err != nil {
 		return nil, err
 	}
 
 	log.Printf("Creating PackagePuller")
-	mgr.PackagePuller, err = NewPackagePuller(mgr.sbPool, mgr.DepTracer)
+	mgr.PackagePuller, err = packages.NewPackagePuller(mgr.sbPool, mgr.DepTracer)
 	if err != nil {
 		return nil, err
 	}
 
-	if common.Conf.Features.Import_cache {
+	if common.Conf.Features.Import_cache != "" {
 		log.Printf("Creating ImportCache")
-		mgr.ImportCache, err = NewImportCache(mgr.codeDirs, mgr.scratchDirs, mgr.sbPool, mgr.PackagePuller)
+		mgr.ZygoteProvider, err = zygote.NewZygoteProvider(mgr.codeDirs, mgr.scratchDirs, mgr.sbPool, mgr.PackagePuller)
 		if err != nil {
 			return nil, err
 		}
@@ -131,8 +133,8 @@ func (mgr *LambdaMgr) Debug() string {
 func (mgr *LambdaMgr) DumpStatsToLog() {
 	snapshot := common.SnapshotStats()
 
-	sec := func(name string) (float64) {
-		return float64(snapshot[name+".cnt"] * snapshot[name+".ms-avg"]) / 1000
+	sec := func(name string) float64 {
+		return float64(snapshot[name+".cnt"]*snapshot[name+".ms-avg"]) / 1000
 	}
 
 	time := func(indent int, name string, parent string) {
@@ -180,8 +182,8 @@ func (mgr *LambdaMgr) Cleanup() {
 		f.Kill()
 	}
 
-	if mgr.ImportCache != nil {
-		mgr.ImportCache.Cleanup()
+	if mgr.ZygoteProvider != nil {
+		mgr.ZygoteProvider.Cleanup()
 	}
 
 	if mgr.sbPool != nil {

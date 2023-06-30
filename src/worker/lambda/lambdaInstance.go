@@ -91,7 +91,7 @@ func (linst *LambdaInstance) Task() {
 				sb = nil
 			}
 			t2.T1()
-			
+
 		}
 
 		// if we don't already have a Sandbox, create one, and
@@ -99,11 +99,11 @@ func (linst *LambdaInstance) Task() {
 		if sb == nil {
 			sb = nil
 
-			if f.lmgr.ImportCache != nil && f.rtType == common.RT_PYTHON {
+			if f.lmgr.ZygoteProvider != nil && f.rtType == common.RT_PYTHON {
 				scratchDir := f.lmgr.scratchDirs.Make(f.name)
 
 				// we don't specify parent SB, because ImportCache.Create chooses it for us
-				sb, err = f.lmgr.ImportCache.Create(f.lmgr.sbPool, true, linst.codeDir, scratchDir, linst.meta, f.rtType)
+				sb, err = f.lmgr.ZygoteProvider.Create(f.lmgr.sbPool, true, linst.codeDir, scratchDir, linst.meta, f.rtType)
 				if err != nil {
 					f.printf("failed to get Sandbox from import cache")
 					sb = nil
@@ -161,8 +161,8 @@ func (linst *LambdaInstance) Task() {
 					// copy body
 					if _, err := io.Copy(req.w, resp.Body); err != nil {
 						// already used WriteHeader, so can't use that to surface on error anymore
-						msg := "reading lambda response failed: "+err.Error()+"\n"
-						f.printf("error: "+msg)
+						msg := "reading lambda response failed: " + err.Error() + "\n"
+						f.printf("error: " + msg)
 						linst.TrySendError(req, 0, msg, sb)
 					}
 
@@ -225,9 +225,9 @@ func (linst *LambdaInstance) TrySendError(req *Invocation, statusCode int, msg s
 
 	var err error
 	if sb != nil {
-		_, err = req.w.Write([]byte(msg+"\nSandbox State: "+sb.DebugString()+"\n"))
+		_, err = req.w.Write([]byte(msg + "\nSandbox State: " + sb.DebugString() + "\n"))
 	} else {
-		_, err = req.w.Write([]byte(msg+"\n"))
+		_, err = req.w.Write([]byte(msg + "\n"))
 	}
 
 	if err != nil {

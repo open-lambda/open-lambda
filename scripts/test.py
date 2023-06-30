@@ -110,19 +110,20 @@ def stress_one_lambda(procs, seconds):
     return {"reqs_per_sec": reqs/seconds}
 
 @test
-def call_each_once_exec(lambda_count, alloc_mb):
-    open_lambda = OpenLambda()
+def call_each_once_exec(lambda_count, alloc_mb, zygote_provider):
+    with TestConfContext(features={"import_cache": zygote_provider}):
+        open_lambda = OpenLambda()
 
-    # TODO: do in parallel
-    start = time()
-    for pos in range(lambda_count):
-        result = open_lambda.run(f"L{pos}", {"alloc_mb": alloc_mb}, json=False)
-        assert_eq(result, str(pos))
-    seconds = time() - start
+        # TODO: do in parallel
+        start = time()
+        for pos in range(lambda_count):
+            result = open_lambda.run(f"L{pos}", {"alloc_mb": alloc_mb}, json=False)
+            assert_eq(result, str(pos))
+            seconds = time() - start
 
-    return {"reqs_per_sec": lambda_count/seconds}
+            return {"reqs_per_sec": lambda_count/seconds}
 
-def call_each_once(lambda_count, alloc_mb=0):
+def call_each_once(lambda_count, alloc_mb=0, zygote_provider="tree"):
     with tempfile.TemporaryDirectory() as reg_dir:
         # create dummy lambdas
         for pos in range(lambda_count):
@@ -133,7 +134,8 @@ def call_each_once(lambda_count, alloc_mb=0):
                 code.write(f"    return {pos}\n")
 
         with TestConfContext(registry=reg_dir):
-            call_each_once_exec(lambda_count=lambda_count, alloc_mb=alloc_mb)
+            call_each_once_exec(lambda_count=lambda_count, alloc_mb=alloc_mb,
+                                zygote_provider=zygote_provider)
 
 @test
 def fork_bomb():
@@ -232,7 +234,7 @@ def run_tests():
     ping_test()
 
     # do smoke tests under various configs
-    with TestConfContext(features={"import_cache": False}):
+    with TestConfContext(features={"import_cache": ""}):
         install_tests()
     with TestConfContext(mem_pool_mb=1000):
         install_tests()
@@ -259,15 +261,16 @@ def run_tests():
         stress_one_lambda(procs=2, seconds=15)
         stress_one_lambda(procs=8, seconds=15)
 
-    with TestConfContext(features={"reuse_cgroups": True}):
-        call_each_once(lambda_count=10, alloc_mb=1)
-        call_each_once(lambda_count=100, alloc_mb=10)
+    with TestConfContext():
+        call_each_once(lambda_count=10, alloc_mb=1, zygote_provider="tree")
+        call_each_once(lambda_count=100, alloc_mb=10, zygote_provider="")
+        call_each_once(lambda_count=100, alloc_mb=10, zygote_provider="tree")
+        call_each_once(lambda_count=100, alloc_mb=10, zygote_provider="multitree")
 
 def main():
     global OL_DIR
 
     parser = argparse.ArgumentParser(description='Run tests for OpenLambda')
-    parser.add_argument('--reuse_config', action="store_true")
     parser.add_argument('--worker_type', type=str, default="sock")
     parser.add_argument('--test_filter', type=str, default="")
     parser.add_argument('--registry', type=str, default="test-registry")

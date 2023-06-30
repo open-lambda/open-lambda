@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/open-lambda/open-lambda/ol/common"
+	"github.com/open-lambda/open-lambda/ol/worker/sandbox/cgroups"
 )
 
 // the first program is executed on the host, which sets up the
@@ -25,7 +26,7 @@ var nextId int64 = 0
 type SOCKPool struct {
 	name          string
 	rootDirs      *common.DirMaker
-	cgPool        *CgroupPool
+	cgPool        *cgroups.CgroupPool
 	mem           *MemPool
 	eventHandlers []SandboxEventFunc
 	debugger
@@ -33,7 +34,7 @@ type SOCKPool struct {
 
 // NewSOCKPool creates a SOCKPool.
 func NewSOCKPool(name string, mem *MemPool) (cf *SOCKPool, err error) {
-	cgPool, err := NewCgroupPool(name)
+	cgPool, err := cgroups.NewCgroupPool(name)
 	if err != nil {
 		return nil, err
 	}

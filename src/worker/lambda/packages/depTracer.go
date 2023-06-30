@@ -1,4 +1,4 @@
-package lambda
+package packages
 
 import (
 	"bufio"
@@ -58,9 +58,9 @@ func (t *DepTracer) Cleanup() {
 func (t *DepTracer) TracePackage(p *Package) {
 	t.events <- map[string]any{
 		"type": "package",
-		"name": p.name,
-		"deps": p.meta.Deps,
-		"top":  p.meta.TopLevel,
+		"name": p.Name,
+		"deps": p.Meta.Deps,
+		"top":  p.Meta.TopLevel,
 	}
 }
 
