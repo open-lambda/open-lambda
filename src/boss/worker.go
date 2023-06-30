@@ -303,6 +303,12 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 func (pool *WorkerPool) Close() {
 	log.Println("closing worker pool")
 	pool.SetTarget(0)
+
+	for (len(pool.workers[STARTING]) + len(pool.workers[RUNNING]) +
+		len(pool.workers[CLEANING]) + len(pool.workers[DESTROYING])) != 0 {
+	}
+
+	os.Exit(0)
 }
 
 // ssh to worker and run command
