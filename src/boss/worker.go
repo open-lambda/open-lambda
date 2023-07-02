@@ -317,8 +317,14 @@ func (pool *WorkerPool) Close() {
 	log.Println("closing worker pool")
 	pool.SetTarget(0)
 
-	for (len(pool.workers[STARTING]) + len(pool.workers[RUNNING]) +
-		len(pool.workers[CLEANING]) + len(pool.workers[DESTROYING])) != 0 {
+	for {
+		pool.Lock()
+		worker_num := len(pool.workers[STARTING]) + len(pool.workers[RUNNING]) +
+			len(pool.workers[CLEANING]) + len(pool.workers[DESTROYING])
+		pool.Unlock()
+		if worker_num <= 0 {
+			break
+		}
 	}
 
 	os.Exit(0)
