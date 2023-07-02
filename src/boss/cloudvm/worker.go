@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-func NewWorkerPool(platform string, worker_cap int)(*WorkerPool, error) {
+func NewWorkerPool(platform string, worker_cap int) (*WorkerPool, error) {
 	clusterLogFile, _ := os.Create("cluster.log")
 	taskLogFile, _ := os.Create("tasks.log")
 	clusterLog := log.New(clusterLogFile, "", 0)
@@ -83,11 +83,11 @@ func (pool *WorkerPool) SetTarget(target int) {
 	pool.updateCluster()
 }
 
-func (pool *WorkerPool) GetTarget()(int) {
+func (pool *WorkerPool) GetTarget() int {
 	return pool.target
 }
 
-func (pool *WorkerPool) GetCap()(int) {
+func (pool *WorkerPool) GetCap() int {
 	return pool.worker_cap
 }
 
@@ -307,8 +307,14 @@ func (pool *WorkerPool) Close() {
 	log.Println("closing worker pool")
 	pool.SetTarget(0)
 
-	for (len(pool.workers[STARTING]) + len(pool.workers[RUNNING]) +
-		len(pool.workers[CLEANING]) + len(pool.workers[DESTROYING])) != 0 {
+	for {
+		pool.Lock()
+		worker_num := len(pool.workers[STARTING]) + len(pool.workers[RUNNING]) +
+			len(pool.workers[CLEANING]) + len(pool.workers[DESTROYING])
+		pool.Unlock()
+		if worker_num <= 0 {
+			break
+		}
 	}
 
 	os.Exit(0)
