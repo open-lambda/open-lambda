@@ -110,7 +110,10 @@ func (pool *WorkerPool) startNewWorker() {
 
 	go func() { // should be able to create multiple instances simultaneously
 		worker.numTask = 1
-		pool.CreateInstance(worker) //create new instance
+		err := pool.CreateInstance(worker) //create new instance
+		if err != nil {
+			log.Fatalf("Worker cannot be created successfully. Please check the cloud platform.\n")
+		}
 
 		if Conf.Platform == "azure" {
 			worker.startWorker()

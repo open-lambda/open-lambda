@@ -164,9 +164,23 @@ func createVM(worker *Worker) (*AzureConfig, error) {
 	// create virtual machine
 
 	virtualMachine, err := createVirtualMachine(ctx, conn, *networkInterfaceID, *new_disk.ID, newDiskName, vmName)
-	if err != nil {
+	tolerance := 3
+	iter := 1
+	for err != nil {
 		log.Println(err.Error())
-		return conf, err
+		// Handle Error
+		if iter <= tolerance {
+			log.Println("Iteration smaller than 3, Delete the vm and retry")
+			err = deleteVirtualMachine(ctx, conn, worker.workerId)
+			if err != nil {
+				log.Fatalf("cannot delete virtual machine:%+v", err)
+			}
+			log.Println("Successfully deleted the vm, realloc the vm")
+			virtualMachine, err = createVirtualMachine(ctx, conn, *networkInterfaceID, *new_disk.ID, newDiskName, vmName)
+		} else {
+			log.Println("Iteration greater than 3, this vm cannot be created successfully")
+			return conf, err
+		}
 	}
 	log.Printf("Created new virual machine: %s", *virtualMachine.ID)
 
@@ -708,9 +722,16 @@ func createVirtualMachine(ctx context.Context, cred azcore.TokenCredential, netw
 		},
 	}
 
-	// TODO: Handle Retryable Error
 	pollerResponse, err := vmClient.BeginCreateOrUpdate(ctx, resourceGroupName, vmName, parameters, nil)
 	if err != nil {
+		// // Handle Retryable Error
+		// errMsg := err.Error()
+		// match, _ := regexp.MatchString("Retry", errMsg)
+		// if match {
+		// 	return createVirtualMachine(ctx, cred, networkInterfaceID, new_diskID, newDiskName, vmName)
+		// } else {
+		// 	return nil, err
+		// }
 		return nil, err
 	}
 
