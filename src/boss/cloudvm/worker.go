@@ -10,6 +10,7 @@ import (
 	"os/user"
 	"sync/atomic"
 	"time"
+	"errors"
 )
 
 func NewWorkerPool(platform string, worker_cap int) (*WorkerPool, error) {
@@ -21,9 +22,14 @@ func NewWorkerPool(platform string, worker_cap int) (*WorkerPool, error) {
 	taskLog.SetFlags(log.Lmicroseconds)
 
 	var pool *WorkerPool
-	if platform == "mock" {
-		pool = NewMockWorkerPool()
-	}
+	switch {
+    case platform == "mock":
+        pool = NewMockWorkerPool()
+	case platform == "gcp":
+        pool = NewGcpWorkerPool()
+    default:
+        return nil, errors.New("invalid cloud platform")
+    }
 
 	pool.nextId = 1
 	pool.workers = []map[string]*Worker{
