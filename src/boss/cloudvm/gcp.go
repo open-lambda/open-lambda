@@ -187,49 +187,6 @@ func (c *GcpClient) RunComandWorker(VMName string, command string) error {
 	return nil
 }
 
-func (c *GcpClient) StopRemoteWorker(VMName string) error {
-	cwd, err := os.Getwd()
-	if err != nil {
-		panic(err)
-	}
-
-	user, err := user.Current()
-	if err != nil {
-		panic(err)
-	}
-
-	lookup, err := c.GcpInstancetoIP()
-	if err != nil {
-		panic(err)
-	}
-
-	ip, ok := lookup[VMName]
-	if !ok {
-		fmt.Println(lookup)
-		panic(fmt.Errorf("could not find IP for instance"))
-	}
-
-	cmd := fmt.Sprintf("cd %s; %s", cwd, "./ol kill")
-
-	tries := 10
-	for tries > 0 {
-		sshcmd := exec.Command("ssh", user.Username+"@"+ip, "-o", "StrictHostKeyChecking=no", "-C", cmd)
-		stdoutStderr, err := sshcmd.CombinedOutput()
-		fmt.Printf("%s\n", stdoutStderr)
-		if err == nil {
-			break
-		}
-		tries -= 1
-		if tries == 0 {
-			fmt.Println(sshcmd.String())
-			panic(err)
-		}
-		time.Sleep(5 * time.Second)
-	}
-
-	return nil
-}
-
 func (c *GcpClient) GetAccessToken() (string, error) {
 	if c.access_token != "" {
 		// TODO: refresh it if stale?

@@ -6,15 +6,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"net/http"
 )
 
-// WORKER IMPLEMENTATION: GcpWorker
 type GcpWorkerPool struct {
 	client *GcpClient
-}
-
-type GcpWorker struct {
-	//no additional attributes yet
 }
 
 func NewGcpWorkerPool() *WorkerPool {
@@ -83,12 +79,10 @@ func NewGcpWorkerPool() *WorkerPool {
 	}
 }
 
-func (pool *GcpWorkerPool) NewWorker(nextId int) *Worker {
-	workerId := fmt.Sprintf("ol-worker-%d", nextId)
+func (pool *GcpWorkerPool) NewWorker(workerId string) *Worker {
 	return &Worker{
 		workerId:       workerId,
 		workerIp:       "",
-		WorkerPlatform: GcpWorker{},
 	}
 }
 
@@ -104,13 +98,6 @@ func (pool *GcpWorkerPool) CreateInstance(worker *Worker) {
 		panic(err)
 	}
 
-	// fmt.Printf("STEP 5: start worker\n")
-	// err = client.RunComandWorker(worker.workerId, "./ol worker --detach")
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// this part is in worker.go now
-
 	lookup, err := client.GcpInstancetoIP()
 	if err != nil {
 		panic(err)
@@ -119,10 +106,13 @@ func (pool *GcpWorkerPool) CreateInstance(worker *Worker) {
 	worker.workerIp = lookup[worker.workerId]
 }
 
-//this function will only destroy instance from cloud platform
 func (pool *GcpWorkerPool) DeleteInstance(worker *Worker) {
 	client := pool.client
 
 	log.Printf("deleting gcp worker: %s\n", worker.workerId)
 	client.Wait(client.deleteGcpInstance(worker.workerId)) //wait until instance is completely deleted
+}
+
+func (pool *GcpWorkerPool) ForwardTask(w http.ResponseWriter, r *http.Request, worker *Worker) {
+	forwardTaskHelper(w, r, worker.workerIp)
 }
