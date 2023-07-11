@@ -70,7 +70,7 @@ def test(func):
 
     def _wrapper(*args, **kwargs):
         if len(args) > 0:
-            raise Exception("positional args not supported for tests")
+            raise RuntimeError("positional args not supported for tests")
 
         name = func.__name__
 
@@ -89,7 +89,7 @@ def test(func):
         result["params"] = kwargs
         result["pass"] = None
         result["conf"] = get_current_config()
-        result["seconds"] = None
+        result["test_seconds"] = None
         result["total_seconds"] = None
         result["stats"] = None
         result["ol-stats"] = None
@@ -110,7 +110,7 @@ def test(func):
                 test_t0 = time()
                 return_val = func(**kwargs)
                 test_t1 = time()
-                result["seconds"] = test_t1 - test_t0
+                result["test_seconds"] = test_t1 - test_t0
                 result["pass"] = True
             except Exception as err:
                 print(f"Failed to run test: {err}")
@@ -142,7 +142,19 @@ def test(func):
             result["worker_tail"] = get_worker_output()
 
         RESULTS["runs"].append(result)
-        print(json.dumps(result, indent=2))
+
+        if result["pass"]:
+            subset = {
+                "test": result["test"],
+                "params": result["params"],
+                "pass": result["pass"],
+                "test_seconds": result["test_seconds"],
+                "stats": result["stats"],
+            }
+            print(json.dumps(subset, indent=2))
+        else:
+            print(json.dumps(result, indent=2))
+
         return return_val
 
     return _wrapper

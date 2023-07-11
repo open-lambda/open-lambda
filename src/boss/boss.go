@@ -7,31 +7,31 @@ import (
 	"log"
 	"net/http"
 	"os"
-	//"os/signal"
 	"strconv"
-	//"syscall"
+	"os/signal"
+	"syscall"
+	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
+	"github.com/open-lambda/open-lambda/ol/boss/autoscaling"
 )
 
 const (
 	RUN_PATH         = "/run/"
 	BOSS_STATUS_PATH = "/status"
 	SCALING_PATH     = "/scaling/worker_count"
-	STORAGE_PATH     = "/registry/upload"
-	DOWNLOAD_PATH    = "/registry/download"
-	DELETE_PATH      = "registry/delete"
 	SHUTDOWN_PATH    = "/shutdown"
 )
 
 type Boss struct {
-	workerPool *WorkerPool
+	workerPool *cloudvm.WorkerPool
+	autoScaler  autoscaling.Scaling
 }
 
 func (b *Boss) BossStatus(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Receive request to %s\n", r.URL.Path)
 
-	output := struct{
-		State	map[string]int		`json:"state"`
-		Tasks	map[string]int	`json:"tasks"`
+	output := struct {
+		State map[string]int `json:"state"`
+		Tasks map[string]int `json:"tasks"`
 	}{
 		b.workerPool.StatusCluster(),
 		b.workerPool.StatusTasks(),
@@ -42,10 +42,15 @@ func (b *Boss) BossStatus(w http.ResponseWriter, r *http.Request) {
 	} else {
 		w.Write(b)
 	}
+
+
 }
 
 func (b *Boss) Close(w http.ResponseWriter, r *http.Request) {
 	b.workerPool.Close()
+	if Conf.Scaling == "threshold-scaler" {
+		b.autoScaler.Close()
+	}
 	os.Exit(0)
 }
 
@@ -88,83 +93,45 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 
 	// STEP 2: adjust target worker count
 	b.workerPool.SetTarget(worker_count)
-
+	
 	//respond with status
 	b.BossStatus(w, r)
 }
 
-func (b *Boss) RunLambda(w http.ResponseWriter, r *http.Request) {
-	b.workerPool.RunLambda(w, r)
-}
-
-func (b *Boss) StorageLambda(w http.ResponseWriter, r *http.Request) {
-	// contents, err := io.ReadAll(r.Body)
-	// if err != nil {
-	// 	w.WriteHeader(http.StatusInternalServerError)
-	// 	_, err := w.Write([]byte("could not read body of web request\n"))
-	// 	if err != nil {
-	// 		log.Printf("(2) could not write web response: %s\n", err.Error())
-	// 	}
-	// 	return
-	// }
-	// Create(string(contents))
-}
-
-func (*Boss) DownloadLambda(w http.ResponseWriter, r *http.Request) {
-	// contents, err := io.ReadAll(r.Body)
-	// if err != nil {
-	// 	w.WriteHeader(http.StatusInternalServerError)
-	// 	_, err := w.Write([]byte("could not read body of web request\n"))
-	// 	if err != nil {
-	// 		log.Printf("(2) could not write web response: %s\n", err.Error())
-	// 	}
-	// 	return
-	// }
-	// Download()
-}
-
-func (*Boss) DeleteLambda(w http.ResponseWriter, r *http.Request) {
-	// contents, err := io.ReadAll(r.Body)
-	// if err != nil {
-	// 	w.WriteHeader(http.StatusInternalServerError)
-	// 	_, err := w.Write([]byte("could not read body of web request\n"))
-	// 	if err != nil {
-	// 		log.Printf("(2) could not write web response: %s\n", err.Error())
-	// 	}
-	// 	return
-	// }
-	// Delete()
-}
-
 func BossMain() (err error) {
-	fmt.Printf("WARNING!  Boss incomplete (only use this as part of development process).")
+	fmt.Printf("WARNING!  Boss incomplete (only use this as part of development process).\n")
 
-	boss := Boss{
-		workerPool: NewWorkerPool(),
+	pool, err := cloudvm.NewWorkerPool(Conf.Platform, Conf.Worker_Cap)
+	if err != nil {
+		return err
 	}
 
-	// things shared by all servers
+	boss := Boss{
+		workerPool: pool,
+	}
+
+	if Conf.Scaling == "threshold-scaler" {
+		boss.autoScaler = &autoscaling.ThresholdScaling{}
+		boss.autoScaler.Launch(boss.workerPool)
+	}
+
 	http.HandleFunc(BOSS_STATUS_PATH, boss.BossStatus)
 	http.HandleFunc(SCALING_PATH, boss.ScalingWorker)
-	http.HandleFunc(RUN_PATH, boss.RunLambda)
-	http.HandleFunc(STORAGE_PATH, boss.StorageLambda)
-	http.HandleFunc(DOWNLOAD_PATH, boss.DownloadLambda)
-	http.HandleFunc(DELETE_PATH, boss.DeleteLambda)
+	http.HandleFunc(RUN_PATH, boss.workerPool.RunLambda)
 	http.HandleFunc(SHUTDOWN_PATH, boss.Close)
 
 	// clean up if signal hits us
-	// c := make(chan os.Signal, 1)
-	// signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	// signal.Notify(c, os.Interrupt, syscall.SIGINT)
-	// go func() {
-	// 	<-c
-	// 	log.Printf("received kill signal, cleaning up")
-	// 	boss.Close(nil, nil)
-	// 	os.Exit(0)
-	// }()
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	signal.Notify(c, os.Interrupt, syscall.SIGINT)
+	go func() {
+		<-c
+		log.Printf("received kill signal, cleaning up")
+		boss.Close(nil, nil)
+		os.Exit(0)
+	}()
 
 	port := fmt.Sprintf(":%s", Conf.Boss_port)
 	fmt.Printf("Listen on port %s\n", port)
-	log.Fatal(http.ListenAndServe(port, nil))
-	panic("ListenAndServe should never return")
+	return http.ListenAndServe(port, nil) // should never return if successful
 }
