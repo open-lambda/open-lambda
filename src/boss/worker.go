@@ -20,6 +20,16 @@ func NewWorkerPool() (*WorkerPool, error) {
 	clusterLog.SetFlags(log.Lmicroseconds)
 	taskLog.SetFlags(log.Lmicroseconds)
 
+	// Only used for worker throughput bench
+	InitTestConf()
+	go func() {
+		for {
+			time.Sleep(10 * time.Second)
+			WriteBack()
+		}
+	}()
+	// Ends here
+
 	var pool *WorkerPool
 	if Conf.Platform == "azure" {
 		pool = NewAzureWorkerPool()
@@ -53,7 +63,7 @@ func NewWorkerPool() (*WorkerPool, error) {
 
 	//log total outstanding tasks
 	go func() {
-		for true {
+		for {
 			time.Sleep(time.Second)
 			var avgLatency int64 = 0
 			if pool.nLatency > 0 {
@@ -305,6 +315,12 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pool.ForwardTask(w, r, worker)
+
+	// Here for throughputs for each worker
+	tConf_lock.Lock()
+	tConf[worker.workerId] += 1
+	tConf_lock.Unlock()
+	// Ends here
 
 	atomic.AddInt32(&worker.numTask, -1)
 	atomic.AddInt32(&pool.totalTask, -1)
