@@ -78,7 +78,7 @@ func GcpBossTest() {
 	fmt.Printf("STEP 3: take crash-consistent snapshot of instance\n")
 	disk := instance // assume Gcp disk name is same as instance name
 	start := time.Now()
-	resp, err := client.Wait(client.GcpSnapshot(disk))
+	resp, err := client.Wait(client.GcpSnapshot(disk, "test-snap"))
 	snapshot_time := time.Since(start)
 
 	fmt.Println(resp)
@@ -380,7 +380,6 @@ func (c *GcpClient) GcpIPtoInstance() (map[string]string, error) {
 	}
 
 	lookup := map[string]string{}
-
 	for _, item := range resp["items"].([]any) {
 		instance_name := item.(map[string]any)["name"].(string)
 		interfaces := item.(map[string]any)["networkInterfaces"]
@@ -477,14 +476,14 @@ func (c *GcpClient) Wait(resp1 map[string]any, err1 error) (resp2 map[string]any
 	return resp2, fmt.Errorf("Wait: operation timed out")
 }
 
-func (c *GcpClient) GcpSnapshot(disk string) (map[string]any, error) {
+func (c *GcpClient) GcpSnapshot(disk string, snapshot_name string) (map[string]any, error) {
 	// TODO: take args from config (or better, read from service account somehow)
 	args := GcpSnapshotArgs{
 		Project:      c.service_account["project_id"].(string),
 		Region:       c.service_account["region"].(string),
 		Zone:         c.service_account["zone"].(string),
 		Disk:         disk,
-		SnapshotName: "test-snap-2",
+		SnapshotName: snapshot_name,
 	}
 
 	url := fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/zones/%s/disks/%s/createSnapshot",

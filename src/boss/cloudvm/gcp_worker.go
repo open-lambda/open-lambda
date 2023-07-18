@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"net/http"
+	"time"
 )
 
 type GcpWorkerPool struct {
@@ -66,7 +67,7 @@ func NewGcpWorkerPool() *WorkerPool {
 
 	fmt.Printf("STEP 3: take crash-consistent snapshot of instance\n")
 	disk := instance // assume Gcp disk name is same as instance name
-	resp, err := client.Wait(client.GcpSnapshot(disk))
+	resp, err := client.Wait(client.GcpSnapshot(disk, "boss-snap"))
 	fmt.Println(resp)
 	if err != nil {
 		panic(err)
@@ -89,8 +90,9 @@ func (pool *GcpWorkerPool) NewWorker(workerId string) *Worker {
 func (pool *GcpWorkerPool) CreateInstance(worker *Worker) {
 	client := pool.client
 	fmt.Printf("STEP 4: create new VM from snapshot\n")
-	resp, err := client.Wait(client.LaunchGcp("test-snap", worker.workerId)) //TODO: load snapshot name from Config
-	fmt.Println(resp)
+
+	resp, err := client.Wait(client.LaunchGcp("boss-snap", worker.workerId)) //TODO: load snapshot name from Config
+
 	if err != nil && resp["error"].(map[string]any)["code"] != "409" { //continue if instance already exists error
 		fmt.Printf("instance alreay exists!\n")
 		client.startGcpInstance(worker.workerId)
@@ -107,10 +109,9 @@ func (pool *GcpWorkerPool) CreateInstance(worker *Worker) {
 }
 
 func (pool *GcpWorkerPool) DeleteInstance(worker *Worker) {
-	client := pool.client
-
 	log.Printf("deleting gcp worker: %s\n", worker.workerId)
-	client.Wait(client.deleteGcpInstance(worker.workerId)) //wait until instance is completely deleted
+	worker.runCmd("./ol worker down")
+	pool.client.Wait(pool.client.deleteGcpInstance(worker.workerId)) //wait until instance is completely deleted
 }
 
 func (pool *GcpWorkerPool) ForwardTask(w http.ResponseWriter, r *http.Request, worker *Worker) {
