@@ -110,9 +110,6 @@ func BossMain() (err error) {
 	rmonitor := exec.Command("observability/./rmonitor", "-o", "observability/logs/boss/usage.csv")
 	rmonitor.Start()
 
-	mvcmd := exec.Command("mv", "boss.out", "observability/logs/boss/")
-	mvcmd.Run()
-
 	pool, err := cloudvm.NewWorkerPool(Conf.Platform, Conf.Worker_Cap)
 	if err != nil {
 		return err
@@ -140,10 +137,6 @@ func BossMain() (err error) {
 		<-c
 		log.Printf("received kill signal, cleaning up")
 		boss.Close(nil, nil)
-
-		mvcmd := exec.Command("mv", "boss.out", "observability/logs/boss/")
-		mvcmd.Run()
-
 		rmonitor.Process.Kill()
 		
 		os.Exit(0)
