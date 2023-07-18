@@ -227,7 +227,7 @@ func BenchCommands() []*cli.Command {
 
 	for _, kind := range []string{"py", "pd"} {
 		for _, functions := range []int{64, 1024, 64 * 1024} {
-			for _, tasks := range []int{1, 32} {
+			for _, tasks := range []int{1, 70} {
 				var parseq string
 				var par_usage string
 				var usage string
