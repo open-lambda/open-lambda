@@ -52,7 +52,6 @@ func (b *Boss) Close(w http.ResponseWriter, r *http.Request) {
 	if Conf.Scaling == "threshold-scaler" {
 		b.autoScaler.Close()
 	}
-	os.Exit(0)
 }
 
 func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
@@ -137,8 +136,9 @@ func BossMain() (err error) {
 		<-c
 		log.Printf("received kill signal, cleaning up")
 		boss.Close(nil, nil)
+		mvcmd := exec.Command("mv", "boss.out", "observability/logs/boss/")
+		mvcmd.Run()
 		rmonitor.Process.Kill()
-		
 		os.Exit(0)
 	}()
 

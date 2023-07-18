@@ -337,8 +337,6 @@ func (pool *WorkerPool) Close() {
 			break
 		}
 	}
-
-	os.Exit(0)
 }
 
 // ssh to worker and run command
