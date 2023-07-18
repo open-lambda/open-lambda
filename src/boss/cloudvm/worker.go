@@ -122,6 +122,12 @@ func (pool *WorkerPool) startNewWorker() {
 
 		if pool.platform != "mock" {
 			worker.runCmd("./ol worker up -d") // start worker
+
+			//log cpu and memory usage
+			//run "make rmonitor" to build rmonitor
+			cmd := "cd open-lambda/observability/; ./rmonitor -o usage.csv"
+			sshcmd := exec.Command("ssh", worker.workerIp, "-o", "StrictHostKeyChecking=no", "-C", cmd)
+			sshcmd.Start()
 		}
 
 		//change state starting -> running
@@ -221,6 +227,14 @@ func (pool *WorkerPool) detroyWorker(worker *Worker) {
 	pool.Unlock()
 
 	go func() { // should be able to destroy multiple instances simultaneously
+		worker.runCmd("kill $(pidof rmonitor)")
+
+		os.Mkdir("observability/logs/"+worker.workerId, 0777)
+		scpcmd := exec.Command("scp", worker.workerIp+":open-lambda/observability/usage.csv", "observability/logs/"+worker.workerId+"/")
+		scpcmd.Run()
+		scpcmd = exec.Command("scp", worker.workerIp+":open-lambda/default-ol/worker.out", "observability/logs/"+worker.workerId+"/")
+		scpcmd.Run()
+
 		pool.DeleteInstance(worker) //delete new instance
 
 		// remove from cluster

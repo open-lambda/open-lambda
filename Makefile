@@ -76,6 +76,9 @@ container-proxy:
 ol: ${OL_GO_FILES}
 	cd ${OL_DIR} && ${GO} build -o ../ol
 
+rmonitor: 	
+	cd observability && ${GO} build -o rmonitor resource_monitor.go
+
 install: ol wasm-worker
 	cp ol ${INSTALL_PREFIX}/bin/
 	cp ol-wasm ${INSTALL_PREFIX}/bin/
