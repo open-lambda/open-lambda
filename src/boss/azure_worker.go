@@ -210,5 +210,8 @@ func (pool *AzureWorkerPool) DeleteInstance(generalworker *Worker) error {
 }
 
 func (pool *AzureWorkerPool) ForwardTask(w http.ResponseWriter, r *http.Request, worker *Worker) {
-	forwardTaskHelper(w, r, worker.workerIp)
+	err := forwardTaskHelper(w, r, worker.workerIp)
+	if err != nil {
+		log.Printf("%s", err.Error())
+	}
 }

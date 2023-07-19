@@ -17,8 +17,20 @@ func NewWorkerPool() (*WorkerPool, error) {
 	taskLogFile, _ := os.Create("tasks.log")
 	clusterLog := log.New(clusterLogFile, "", 0)
 	taskLog := log.New(taskLogFile, "", 0)
-	clusterLog.SetFlags(log.Lmicroseconds)
-	taskLog.SetFlags(log.Lmicroseconds)
+	clusterLog.SetFlags(log.Ldate | log.Lmicroseconds)
+	taskLog.SetFlags(log.Ldate | log.Lmicroseconds)
+
+	// Used for boss cpu and memory monitor
+	go func() {
+		log.Println("create worker_usage.log file.")
+		boss_usage, _ = os.Create("boss_usage.log")
+		boss_log = log.New(boss_usage, "", 0)
+		boss_log.SetFlags(log.Ldate | log.Lmicroseconds)
+		for {
+			getStatus()
+			time.Sleep(10 * time.Second)
+		}
+	}()
 
 	// Only used for worker throughput bench
 	InitTestConf()
