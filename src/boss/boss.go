@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"strconv"
 	"os/signal"
 	"syscall"
@@ -101,14 +100,6 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 func BossMain() (err error) {
 	fmt.Printf("WARNING!  Boss incomplete (only use this as part of development process).\n")
 
-	//start rmonitor
-	os.RemoveAll("observability/logs")
-	os.Mkdir("observability/logs", 0777)
-	os.Mkdir("observability/logs/boss", 0777)
-
-	rmonitor := exec.Command("observability/./rmonitor", "-o", "observability/logs/boss/usage.csv")
-	rmonitor.Start()
-
 	pool, err := cloudvm.NewWorkerPool(Conf.Platform, Conf.Worker_Cap)
 	if err != nil {
 		return err
@@ -136,9 +127,6 @@ func BossMain() (err error) {
 		<-c
 		log.Printf("received kill signal, cleaning up")
 		boss.Close(nil, nil)
-		mvcmd := exec.Command("mv", "boss.out", "observability/logs/boss/")
-		mvcmd.Run()
-		rmonitor.Process.Kill()
 		os.Exit(0)
 	}()
 

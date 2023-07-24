@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"net/http"
-	"time"
 )
 
 type GcpWorkerPool struct {
