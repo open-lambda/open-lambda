@@ -179,26 +179,26 @@ df2 = None
 
 def f(event):
 
-	x = [x for x in range(0, 5000)]
-	y = [y*100 for y in range(0, 5000)]
+    x = [x for x in range(0, 1000)]
+    y = [y*100 for y in range(0, 1000)]
     global df1
     if df1 is None:
-        df1 = pd.DataFrame(np.random.random((10000,10000)))
+        df1 = pd.DataFrame(np.random.random((1000,1000)))
     col0 = np.random.randint(len(df1.columns))
     col1 = np.random.randint(len(df1.columns))
-	res1 = df1[col0].corr(df1[col1])
+    res1 = df1[col0].corr(df1[col1])
 
-	global df2
-	if df2 is None:
-        df2 = pd.DataFrame(np.random.random((10000,10000)))
+    global df2
+    if df2 is None:
+        df2 = pd.DataFrame(np.random.random((1000,1000)))
     col0 = np.random.randint(len(df2.columns))
     col1 = np.random.randint(len(df2.columns))
-	res2 = df2[col0].corr(df2[col1])
+    res2 = df2[col0].corr(df2[col1])
 
-	for j in range(0, 10000):
-		res2 = df2[col0].corr(df2[col1])
+    for j in range(0, 1000):
+        res2 = df2[col0].corr(df2[col1])
 
-	time.sleep(3)
+    time.sleep(3)
     return res2
 `
 
