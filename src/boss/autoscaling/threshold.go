@@ -33,7 +33,31 @@ func (s *ThresholdScaling) Launch(pool *cloudvm.WorkerPool) {
 } 
 
 func (s *ThresholdScaling) Scale() {
-	// TODO
+	pool := s.pool
+	tasksPerWorker := pool.StatusTasks()["task/worker"]
+
+	if pool.GetTarget() < pool.GetCap() && tasksPerWorker > UPPERBOUND {
+		new_target := pool.GetTarget() + tasksPerWorker/UPPERBOUND
+		log.Println("scale up (target=%d)\n", new_target)
+		pool.SetTarget(new_target)
+	}
+
+	if pool.GetTarget() > 1 && tasksPerWorker < LOWERBOUND {
+		new_target := pool.GetTarget() - (LOWERBOUND / tasksPerWorker)
+		if new_target < 1 {
+			new_target = 1
+		}
+
+		log.Println("scale down (target=%d)\n", new_target)
+		pool.SetTarget(new_target)
+	}
+
+	s.timeout = time.AfterFunc(INACTIVITY_TIMEOUT*time.Second, func() {
+		if pool.GetTarget() > 1 {
+			log.Printf("scale down due to inactivity\n")
+			pool.SetTarget(1)
+		}
+	})
 }
 
 func (s *ThresholdScaling) Close() {
