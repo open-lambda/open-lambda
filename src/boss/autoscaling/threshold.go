@@ -6,6 +6,12 @@ import (
 	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
 )
 
+const (
+	UPPERBOUND         = 80
+	LOWERBOUND         = 30
+	INACTIVITY_TIMEOUT = 60
+)
+
 type ThresholdScaling struct {
 	pool *cloudvm.WorkerPool
 	timeout *time.Timer
