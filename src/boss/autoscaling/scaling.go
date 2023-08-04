@@ -6,4 +6,4 @@ type Scaling interface {
 	Launch(pool *cloudvm.WorkerPool) //launch auto-scaler
 	Scale() //makes scaling decision based on cluster status
 	Close() //close auto-scaler
-} 
+}

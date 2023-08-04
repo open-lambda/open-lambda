@@ -23,15 +23,15 @@ const (
 
 type Boss struct {
 	workerPool *cloudvm.WorkerPool
-	autoScaler autoscaling.Scaling
+	autoScaler  autoscaling.Scaling
 }
 
 func (b *Boss) BossStatus(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Receive request to %s\n", r.URL.Path)
 
-	output := struct{
-		State	map[string]int	`json:"state"`
-		Tasks	map[string]int	`json:"tasks"`
+	output := struct {
+		State map[string]int `json:"state"`
+		Tasks map[string]int `json:"tasks"`
 	}{
 		b.workerPool.StatusCluster(),
 		b.workerPool.StatusTasks(),
@@ -42,6 +42,8 @@ func (b *Boss) BossStatus(w http.ResponseWriter, r *http.Request) {
 	} else {
 		w.Write(b)
 	}
+
+
 }
 
 func (b *Boss) Close(w http.ResponseWriter, r *http.Request) {
@@ -49,6 +51,7 @@ func (b *Boss) Close(w http.ResponseWriter, r *http.Request) {
 	if Conf.Scaling == "threshold-scaler" {
 		b.autoScaler.Close()
 	}
+	os.Exit(0)
 }
 
 func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
@@ -90,13 +93,18 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 
 	// STEP 2: adjust target worker count
 	b.workerPool.SetTarget(worker_count)
-
+	
 	//respond with status
 	b.BossStatus(w, r)
 }
 
 func BossMain() (err error) {
-	fmt.Printf("WARNING!  Boss incomplete (only use this as part of development process).")
+	fmt.Printf("WARNING!  Boss incomplete (only use this as part of development process).\n")
+
+	pool, err := cloudvm.NewWorkerPool(Conf.Platform, Conf.Worker_Cap)
+	if err != nil {
+		return err
+	}
 
 	pool, err := cloudvm.NewWorkerPool(Conf.Platform, Conf.Worker_Cap)
 	if err != nil {
@@ -112,10 +120,9 @@ func BossMain() (err error) {
 		boss.autoScaler.Launch(boss.workerPool)
 	}
 
-	// things shared by all servers
 	http.HandleFunc(BOSS_STATUS_PATH, boss.BossStatus)
 	http.HandleFunc(SCALING_PATH, boss.ScalingWorker)
-	http.HandleFunc(RUN_PATH, boss.RunLambda)
+	http.HandleFunc(RUN_PATH, boss.workerPool.RunLambda)
 	http.HandleFunc(SHUTDOWN_PATH, boss.Close)
 
 	// clean up if signal hits us

@@ -35,8 +35,7 @@ func (s *ThresholdScaling) Launch(pool *cloudvm.WorkerPool) {
 			}
 		}
 	}()
-
-} 
+}
 
 func (s *ThresholdScaling) Scale() {
 	pool := s.pool

@@ -23,8 +23,8 @@ func NewMockWorkerPool() *WorkerPool {
 
 func (pool *MockWorkerPool) NewWorker(workerId string) *Worker {
 	return &Worker{
-		workerId:	workerId,
-		workerIp:	"",
+		workerId: workerId,
+		workerIp: "",
 	}
 }
 

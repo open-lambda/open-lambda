@@ -34,7 +34,7 @@ jobs:
     - name: Install rustc and clippy nightly
       uses: dtolnay/rust-toolchain@stable
       with:
-         toolchain: nightly-2022-12-16 #make sure this matches the version in the rust-toolchain files
+         toolchain: nightly-2023-02-22 #make sure this matches the version in the rust-toolchain files
          components: cargo, rustc, clippy, rustfmt
          target: wasm32-unknown-unknown
     - name: Setup rust dependency caching
@@ -49,7 +49,7 @@ jobs:
       run: cargo install cross
     - name: Build OpenLambda
       run: |
-        make ol imgs/lambda wasm-worker wasm-functions native-functions container-proxy
+        make ol imgs/ol-wasm wasm-worker wasm-functions native-functions container-proxy
         sudo make install-python-bindings
     - name: Test Python (Docker)
     # not all features are supported by docker yet, so we only run some of the tests

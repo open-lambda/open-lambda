@@ -37,7 +37,7 @@ def install_tests():
     msg = 'hello world'
     jdata = open_lambda.run("echo", msg)
     if jdata != msg:
-        raise Exception(f"found {jdata} but expected {msg}")
+        raise ValueError(f"found {jdata} but expected {msg}")
 
     jdata = open_lambda.get_statistics()
     installs = jdata.get('pull-package.cnt', 0)
@@ -61,7 +61,7 @@ def install_tests():
 
 def check_status_code(req):
     if req.status_code != 200:
-        raise Exception(f"STATUS {req.status_code}: {req.text}")
+        raise requests.HTTPError(f"STATUS {req.status_code}: {req.text}")
 
 @test
 def numpy_test():
@@ -69,25 +69,25 @@ def numpy_test():
 
     # try adding the nums in a few different matrixes.  Also make sure
     # we can have two different numpy versions co-existing.
-    result = open_lambda.run("numpy19", [1, 2])
+    result = open_lambda.run("numpy23", [1, 2])
     assert_eq(result['result'], 3)
-    assert result['version'].startswith('1.19')
+    assert result['numpy-version'].startswith('1.23')
 
-    result = open_lambda.run("numpy20", [[1, 2], [3, 4]])
+    result = open_lambda.run("numpy24", [[1, 2], [3, 4]])
     assert_eq(result['result'], 10)
-    assert result['version'].startswith('1.20')
+    assert result['numpy-version'].startswith('1.24')
 
-    result = open_lambda.run("numpy19", [[[1, 2], [3, 4]], [[1, 2], [3, 4]]])
+    result = open_lambda.run("numpy24", [[[1, 2], [3, 4]], [[1, 2], [3, 4]]])
     assert_eq(result['result'], 20)
-    assert result['version'].startswith('1.19')
+    assert result['numpy-version'].startswith('1.24')
 
     result = open_lambda.run("pandas", [[0, 1, 2], [3, 4, 5]])
     assert_eq(result['result'], 15)
-    assert float(".".join(result['version'].split('.')[:2])) >= 1.19
+    assert float(".".join(result['numpy-version'].split('.')[:2])) >= 1.24
 
-    result = open_lambda.run("pandas18", [[1, 2, 3], [1, 2, 3]])
+    result = open_lambda.run("pandas-v1", [[1, 2, 3], [1, 2, 3]])
     assert_eq(result['result'], 12)
-    assert result['version'].startswith('1.18')
+    assert result['numpy-version'].startswith('1.24')
 
 def stress_one_lambda_task(args):
     open_lambda = OpenLambda()
@@ -110,19 +110,20 @@ def stress_one_lambda(procs, seconds):
     return {"reqs_per_sec": reqs/seconds}
 
 @test
-def call_each_once_exec(lambda_count, alloc_mb):
-    open_lambda = OpenLambda()
+def call_each_once_exec(lambda_count, alloc_mb, zygote_provider):
+    with TestConfContext(features={"import_cache": zygote_provider}):
+        open_lambda = OpenLambda()
 
-    # TODO: do in parallel
-    start = time()
-    for pos in range(lambda_count):
-        result = open_lambda.run(f"L{pos}", {"alloc_mb": alloc_mb}, json=False)
-        assert_eq(result, str(pos))
-    seconds = time() - start
+        # TODO: do in parallel
+        start = time()
+        for pos in range(lambda_count):
+            result = open_lambda.run(f"L{pos}", {"alloc_mb": alloc_mb}, json=False)
+            assert_eq(result, str(pos))
+            seconds = time() - start
 
-    return {"reqs_per_sec": lambda_count/seconds}
+            return {"reqs_per_sec": lambda_count/seconds}
 
-def call_each_once(lambda_count, alloc_mb=0):
+def call_each_once(lambda_count, alloc_mb=0, zygote_provider="tree"):
     with tempfile.TemporaryDirectory() as reg_dir:
         # create dummy lambdas
         for pos in range(lambda_count):
@@ -133,7 +134,8 @@ def call_each_once(lambda_count, alloc_mb=0):
                 code.write(f"    return {pos}\n")
 
         with TestConfContext(registry=reg_dir):
-            call_each_once_exec(lambda_count=lambda_count, alloc_mb=alloc_mb)
+            call_each_once_exec(lambda_count=lambda_count, alloc_mb=alloc_mb,
+                                zygote_provider=zygote_provider)
 
 @test
 def fork_bomb():
@@ -232,7 +234,7 @@ def run_tests():
     ping_test()
 
     # do smoke tests under various configs
-    with TestConfContext(features={"import_cache": False}):
+    with TestConfContext(features={"import_cache": ""}):
         install_tests()
     with TestConfContext(mem_pool_mb=1000):
         install_tests()
@@ -259,15 +261,16 @@ def run_tests():
         stress_one_lambda(procs=2, seconds=15)
         stress_one_lambda(procs=8, seconds=15)
 
-    with TestConfContext(features={"reuse_cgroups": True}):
-        call_each_once(lambda_count=10, alloc_mb=1)
-        call_each_once(lambda_count=100, alloc_mb=10)
+    with TestConfContext():
+        call_each_once(lambda_count=10, alloc_mb=1, zygote_provider="tree")
+        call_each_once(lambda_count=100, alloc_mb=10, zygote_provider="")
+        call_each_once(lambda_count=100, alloc_mb=10, zygote_provider="tree")
+        call_each_once(lambda_count=100, alloc_mb=10, zygote_provider="multitree")
 
 def main():
     global OL_DIR
 
     parser = argparse.ArgumentParser(description='Run tests for OpenLambda')
-    parser.add_argument('--reuse_config', action="store_true")
     parser.add_argument('--worker_type', type=str, default="sock")
     parser.add_argument('--test_filter', type=str, default="")
     parser.add_argument('--registry', type=str, default="test-registry")
