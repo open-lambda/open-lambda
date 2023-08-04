@@ -61,5 +61,6 @@ func (s *ThresholdScaling) Scale() {
 }
 
 func (s *ThresholdScaling) Close() {
-	// TODO
+	log.Println("stopping threshold-scaler")
+	s.exitChan <- true
 }
