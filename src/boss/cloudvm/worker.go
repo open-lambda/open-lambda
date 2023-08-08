@@ -25,8 +25,8 @@ func NewWorkerPool(platform string, worker_cap int) (*WorkerPool, error) {
 	switch {
 case platform == "mock":
 	pool = NewMockWorkerPool()
-	case platform == "gcp":
-	pool = NewGcpWorkerPool()
+	case platform == "DO":
+	pool = NewDOWorkerPool()
 default:
 	return nil, errors.New("invalid cloud platform")
 }
