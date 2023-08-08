@@ -1,6 +1,0 @@
-{
-    "py-64-seq": {"benchmark": "py64-seq","seconds": 60.002, "successes": 25127, "errors": 0, "ops/s": 418.770},
-    "py-64-par": {"benchmark": "py64-par","seconds": 60.000, "successes": 329823, "errors": 0, "ops/s": 5497.048},
-    "pd-64-seq": {"benchmark": "pd64-seq","seconds": 60.002, "successes": 24999, "errors": 0, "ops/s": 416.639},
-    "pd-64-par": {"benchmark": "pd64-par","seconds": 60.000, "successes": 330535, "errors": 0, "ops/s": 5508.913}
-}
