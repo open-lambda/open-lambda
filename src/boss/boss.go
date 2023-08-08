@@ -106,11 +106,6 @@ func BossMain() (err error) {
 		return err
 	}
 
-	pool, err := cloudvm.NewWorkerPool(Conf.Platform, Conf.Worker_Cap)
-	if err != nil {
-		return err
-	}
-
 	boss := Boss{
 		workerPool: pool,
 	}
