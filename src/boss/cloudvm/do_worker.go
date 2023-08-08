@@ -1,4 +1,4 @@
-package boss
+package cloudvm
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"time"
+	"net/http"
 
 	"github.com/digitalocean/godo"
 )
@@ -20,10 +21,6 @@ type DOWorkerPool struct {
 	BossKey    godo.Key
 	BossSnap   godo.Snapshot
 	ParentPool *WorkerPool
-}
-
-type DOWorker struct {
-	pool *DOWorkerPool
 }
 
 // Helper function to click snapshots
@@ -143,12 +140,10 @@ func NewDOWorkerPool() *WorkerPool {
 }
 
 // Defines new DO Worker
-func (pool *DOWorkerPool) NewWorker(nextId int) *Worker {
-	workerId := fmt.Sprintf("ol-worker-%d", nextId)
+func (pool *DOWorkerPool) NewWorker(workerId string) *Worker {
 	return &Worker{
 		workerId:       workerId,
 		workerIp:       "",
-		WorkerPlatform: DOWorker{},
 		pool:           pool.ParentPool,
 	}
 }
@@ -244,4 +239,8 @@ func (pool *DOWorkerPool) DeleteInstance(worker *Worker) {
 	}
 
 	fmt.Printf("Deleted DO worker %v\n", worker_int)
+}
+
+func (pool *DOWorkerPool) ForwardTask(w http.ResponseWriter, r *http.Request, worker *Worker) {
+	forwardTaskHelper(w, r, worker.workerIp)
 }
