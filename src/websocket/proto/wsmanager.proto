@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package proto;
+
+option go_package="./;proto";
+
+message PostToConnectionRequest {
+    string msg = 1;
+    string connection_id = 2;
+}
+
+message PostToConnectionResponse {
+    bool success = 1;
+    string error = 2;
+}
+
+service WsManager {
+    rpc PostToConnection(PostToConnectionRequest) returns (PostToConnectionResponse);
+}

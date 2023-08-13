@@ -1,15 +1,15 @@
 package bench
 
 import (
-	"bytes"
 	"fmt"
-	"io/ioutil"
-	"math/rand"
 	"net/http"
-	"os"
+	"io/ioutil"
 	"path/filepath"
+	"bytes"
 	"time"
-
+	"math/rand"
+	"os"
+	
 	"github.com/urfave/cli/v2"
 
 	"github.com/open-lambda/open-lambda/ol/common"
@@ -128,9 +128,9 @@ func run_benchmark(ctx *cli.Context, name string, tasks int, functions int, func
 		waiting -= 1
 	}
 
-	// if errors > (errors+successes)/100 {
-	// 	panic(fmt.Sprintf(">1%% of requests failed (%d/%d)", errors, errors+successes))
-	// }
+	if errors > (errors+successes)/100 {
+		panic(fmt.Sprintf(">1%% of requests failed (%d/%d)", errors, errors+successes))
+	}
 
 	result := fmt.Sprintf("{\"benchmark\": \"%s\",\"seconds\": %.3f, \"successes\": %d, \"errors\": %d, \"ops/s\": %.3f}",
 		name, seconds, successes, errors, float64(successes)/seconds)
@@ -167,34 +167,16 @@ func create_lambdas(ctx *cli.Context) error {
 		code = `# ol-install: numpy,pandas
 import numpy as np
 import pandas as pd
-import time
 
-df1 = None
-df2 = None
+df = None
 
 def f(event):
-
-	x = [x for x in range(0, 5000)]
-	y = [y*100 for y in range(0, 5000)]
-	global df1
-	if df1 is None:
-		df1 = pd.DataFrame(np.random.random((10000,10000)))
-	col0 = np.random.randint(len(df1.columns))
-	col1 = np.random.randint(len(df1.columns))
-	res1 = df1[col0].corr(df1[col1])
-
-	global df2
-	if df2 is None:
-		df2 = pd.DataFrame(np.random.random((10000,10000)))
-	col0 = np.random.randint(len(df2.columns))
-	col1 = np.random.randint(len(df2.columns))
-	res2 = df2[col0].corr(df2[col1])
-
-	for j in range(0, 10000):
-		res2 = df2[col0].corr(df2[col1])
-
-	time.sleep(3)
-	return res2
+    global df
+    if df is None:
+        df = pd.DataFrame(np.random.random((1000,10)))
+    col0 = np.random.randint(len(df.columns))
+    col1 = np.random.randint(len(df.columns))
+    return df[col0].corr(df[col1])
 `
 
 		fmt.Printf("%s\n", path)
@@ -231,12 +213,12 @@ func BenchCommands() []*cli.Command {
 			Name:      "init",
 			Usage:     "creates lambdas for benchmarking",
 			UsageText: "ol bench init [--path=NAME]",
-			Action:    create_lambdas,
+            Action: create_lambdas,
 			Flags: []cli.Flag{
 				&cli.StringFlag{
-					Name:    "path",
+					Name:  "path",
 					Aliases: []string{"p"},
-					Usage:   "Path location for OL environment",
+					Usage: "Path location for OL environment",
 				},
 			},
 			// TODO: add param to decide how many to create
@@ -245,7 +227,7 @@ func BenchCommands() []*cli.Command {
 
 	for _, kind := range []string{"py", "pd"} {
 		for _, functions := range []int{64, 1024, 64 * 1024} {
-			for _, tasks := range []int{1, 100} {
+			for _, tasks := range []int{1, 32} {
 				var parseq string
 				var par_usage string
 				var usage string
@@ -278,30 +260,30 @@ func BenchCommands() []*cli.Command {
 					Action:    action,
 					Flags: []cli.Flag{
 						&cli.StringFlag{
-							Name:    "path",
+							Name:  "path",
 							Aliases: []string{"p"},
-							Usage:   "Path location for OL environment",
+							Usage: "Path location for OL environment",
 						},
 						&cli.Float64Flag{
-							Name:    "seconds",
+							Name:  "seconds",
 							Aliases: []string{"s"},
-							Usage:   "Seconds to run (after warmup)",
+							Usage: "Seconds to run (after warmup)",
 						},
 						&cli.IntFlag{
-							Name:    "tasks",
+							Name:  "tasks",
 							Aliases: []string{"t"},
-							Usage:   "number of parallel tasks to run (only for parallel bench)",
+							Usage: "number of parallel tasks to run (only for parallel bench)",
 						},
 						&cli.BoolFlag{
-							Name:    "warmup",
+							Name:  "warmup",
 							Aliases: []string{"w"},
-							Value:   true,
-							Usage:   "call lambda each once before benchmark",
+							Value: true,
+							Usage: "call lambda each once before benchmark",
 						},
 						&cli.StringFlag{
-							Name:    "output",
+							Name:  "output",
 							Aliases: []string{"o"},
-							Usage:   "store the result in json to the output file",
+							Usage: "store the result in json to the output file",
 						},
 					},
 				}

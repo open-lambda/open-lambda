@@ -1,18 +1,22 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
-	"github.com/open-lambda/open-lambda/ol/websocket"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 
 	"github.com/open-lambda/open-lambda/ol/bench"
 	"github.com/open-lambda/open-lambda/ol/boss"
 	"github.com/open-lambda/open-lambda/ol/common"
+	"github.com/open-lambda/open-lambda/ol/websocket"
 	"github.com/open-lambda/open-lambda/ol/worker"
 
 	"github.com/urfave/cli/v2"
@@ -31,22 +35,102 @@ func newBossConf() error {
 	return nil
 }
 
-// newBoss corresponses to the "new-boss" command of the admin tool.
-func newBoss(ctx *cli.Context) error {
-	return newBossConf()
-}
-
 // runBoss corresponses to the "boss" command of the admin tool.
 func runBoss(ctx *cli.Context) error {
 	if _, err := os.Stat("boss.json"); os.IsNotExist(err) {
 		newBossConf()
 	}
 
-	if err := boss.LoadConf("boss.json"); err != nil {
+	confPath := "boss.json"
+	overrides := ctx.String("options")
+	if overrides != "" {
+		overridesPath := confPath + ".overrides"
+		err := overrideOpts(confPath, overridesPath, overrides)
+		if err != nil {
+			return err
+		}
+		confPath = overridesPath
+	}
+
+	if err := boss.LoadConf(confPath); err != nil {
 		return err
 	}
 
 	return bossStart(ctx)
+}
+
+
+// modify the config.json file based on settings from cmdline: -o opt1=val1,opt2=val2,...
+//
+// apply changes in optsStr to config from confPath, saving result to overridePath
+func overrideOpts(confPath, overridePath, optsStr string) error {
+	b, err := ioutil.ReadFile(confPath)
+	if err != nil {
+		return err
+	}
+	conf := make(map[string]any)
+	if err := json.Unmarshal(b, &conf); err != nil {
+		return err
+	}
+
+	opts := strings.Split(optsStr, ",")
+	for _, opt := range opts {
+		parts := strings.Split(opt, "=")
+		if len(parts) != 2 {
+			return fmt.Errorf("Could not parse key=val: '%s'", opt)
+		}
+		keys := strings.Split(parts[0], ".")
+		val := parts[1]
+
+		c := conf
+		for i := 0; i < len(keys)-1; i++ {
+			sub, ok := c[keys[i]]
+			if !ok {
+				return fmt.Errorf("key '%s' not found", keys[i])
+			}
+			switch v := sub.(type) {
+			case map[string]any:
+				c = v
+			default:
+				return fmt.Errorf("%s refers to a %T, not a map", keys[i], c[keys[i]])
+			}
+		}
+
+		key := keys[len(keys)-1]
+		prev, ok := c[key]
+		if !ok {
+			return fmt.Errorf("invalid option: '%s'", key)
+		}
+		switch prev.(type) {
+		case string:
+			c[key] = val
+		case float64:
+			c[key], err = strconv.Atoi(val)
+			if err != nil {
+				return err
+			}
+		case bool:
+			if strings.ToLower(val) == "true" {
+				c[key] = true
+			} else if strings.ToLower(val) == "false" {
+				c[key] = false
+			} else {
+				return fmt.Errorf("'%s' for %s not a valid boolean value", val, key)
+			}
+		default:
+			return fmt.Errorf("config values of type %T (%s) must be edited manually in the config file ", prev, key)
+		}
+	}
+
+	// save back config
+	s, err := json.MarshalIndent(conf, "", "\t")
+	if err != nil {
+		return err
+	}
+	if err := ioutil.WriteFile(overridePath, s, 0644); err != nil {
+		return err
+	}
+	return nil
 }
 
 func startWebSocketAPI(ctx *cli.Context) error {
@@ -148,16 +232,6 @@ func bossStart(ctx *cli.Context) error {
 	return fmt.Errorf("this code should not be reachable")
 }
 
-func gcpTest(ctx *cli.Context) error {
-	boss.GCPBossTest()
-	return nil
-}
-
-func azureTest(ctx *cli.Context) error {
-	boss.AzureMain("default contents")
-	return nil
-}
-
 // main runs the admin tool
 func main() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
@@ -182,18 +256,16 @@ OPTIONS:
 	app.HideVersion = true
 	app.Commands = []*cli.Command{
 		&cli.Command{
-			Name:        "new-boss",
-			Usage:       "Create an OL Boss config (boss.json)",
-			UsageText:   "ol new-boss [--path=PATH] [--detach]",
-			Description: "Create config for new boss",
-			Action:      newBoss,
-		},
-		&cli.Command{
 			Name:        "boss",
 			Usage:       "Start an OL Boss process",
-			UsageText:   "ol boss [--path=PATH] [--detach]",
+			UsageText:   "ol boss [OPTIONS...] [--detach]",
 			Description: "Start a boss server.",
 			Flags: []cli.Flag{
+				&cli.StringFlag{
+					Name:    "options",
+					Aliases: []string{"o"},
+					Usage:   "Override options with: -o opt1=val1,opt2=val2/opt3.subopt31=val3",
+				},
 				&cli.BoolFlag{
 					Name:    "detach",
 					Aliases: []string{"d"},
@@ -220,20 +292,6 @@ OPTIONS:
 					Usage: "Host on which the WebSocket API server will listen",
 				},
 			},
-		},
-		&cli.Command{
-			Name:      "gcp-test",
-			Usage:     "Developer use only.  Start a GCP VM running the OL worker",
-			UsageText: "ol gcp-test",
-			Flags:     []cli.Flag{},
-			Action:    gcpTest,
-		},
-		&cli.Command{
-			Name:      "azure-test",
-			Usage:     "Developer use only.  Start an Azure Blob ",
-			UsageText: "ol zure-test",
-			Flags:     []cli.Flag{},
-			Action:    azureTest,
 		},
 		&cli.Command{
 			Name:        "worker",
