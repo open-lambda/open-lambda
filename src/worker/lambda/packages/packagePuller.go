@@ -108,7 +108,7 @@ func (pp *PackagePuller) InstallRecursive(installs []string) ([]string, error) {
 
 		// push any previously unseen deps on the list of ones to install
 		for _, dep := range p.Meta.Deps {
-			if !installSet[dep] {
+			if !installSet[dep] { // dep not in the set return false
 				installs = append(installs, dep)
 				installSet[dep] = true
 			}
@@ -215,6 +215,7 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 			resp.StatusCode, string(body), sb.DebugString())
 	}
 
+	// parse the response into Meta, the top-level modules are not normalized, and we do not guarantee their existence
 	if err := json.Unmarshal(body, &p.Meta); err != nil {
 		return err
 	}

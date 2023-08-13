@@ -1,8 +1,9 @@
 # pylint: disable=line-too-long,global-statement,invalid-name,broad-except
 
 ''' Python runtime for sock '''
-
-import os, sys, json, argparse, importlib, traceback, time, fcntl, array, socket, struct
+import http
+import os, sys, json, argparse, importlib, traceback, time, fcntl, array, socket, struct, resource
+import subprocess
 
 sys.path.append("/usr/local/lib/python3.10/dist-packages")
 
@@ -11,25 +12,45 @@ import tornado.web
 import tornado.httpserver
 import tornado.wsgi
 import tornado.netutil
+import requests
 
 import ol
 
 file_sock_path = "/host/ol.sock"
 file_sock = None
 bootstrap_path = None
+proc_path = "/proc"
+# when current container is a zygote, this is the generation of the zygote, otherwise -1
+split_gen = -1
+
+
+def get_page_count(pid):
+    with open(f"{proc_path}/{pid}/statm") as f:
+        return int(f.readline().split()[0])
+
+
+def get_pss(pid):
+    with open(f"{proc_path}/{pid}/smaps") as f:
+        pss = 0
+        for line in f:
+            if line.startswith("Pss:"):
+                pss += int(line.split()[1])
+        return pss
+
 
 def recv_fds(sock, msglen, maxfds):
     '''
     copied from https://docs.python.org/3/library/socket.html#socket.socket.recvmsg
     '''
 
-    fds = array.array("i")   # Array of ints
+    fds = array.array("i")  # Array of ints
     msg, ancdata, _flags, _addr = sock.recvmsg(msglen, socket.CMSG_LEN(maxfds * fds.itemsize))
     for cmsg_level, cmsg_type, cmsg_data in ancdata:
         if (cmsg_level == socket.SOL_SOCKET and cmsg_type == socket.SCM_RIGHTS):
             # Append data, ignoring any truncated integers at the end.
             fds.frombytes(cmsg_data[:len(cmsg_data) - (len(cmsg_data) % fds.itemsize)])
     return msg, list(fds)
+
 
 def web_server():
     print(f"server.py: start web server on fd: {file_sock.fileno()}")
@@ -44,7 +65,7 @@ def web_server():
         def post(self):
             try:
                 data = self.request.body
-                try :
+                try:
                     event = json.loads(data)
                 except:
                     self.set_status(400)
@@ -52,7 +73,7 @@ def web_server():
                     return
                 self.write(json.dumps(f.f(event)))
             except Exception:
-                self.set_status(500) # internal error
+                self.set_status(500)  # internal error
                 self.write(traceback.format_exc())
 
     if hasattr(f, "app"):
@@ -69,7 +90,11 @@ def web_server():
     server.start()
 
 
-def fork_server():
+def fork_server(split_generation):
+    global split_gen
+    split_gen = split_generation
+    fork_count = 0
+
     global file_sock
 
     file_sock.setblocking(True)
@@ -80,9 +105,26 @@ def fork_server():
         _, fds = recv_fds(client, 8, 2)
         root_fd, mem_cgroup_fd = fds
 
+        t0 = time.time()
         pid = os.fork()
-
+        t1 = time.time()
+        fork_count += 1
         if pid:
+            try:
+                resp = requests.post("http://127.0.0.1:4998/fork",
+                                     json={"splitGeneration": split_gen,
+                                           "forkTime": (t1 - t0) * 1000,
+                                           "forkCount": fork_count,
+                                           "pages": get_page_count(os.getpid()),  # num
+                                           "maxRss": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,  # KB
+                                           "pss": get_pss(os.getpid()),  # KB
+                                           }
+                                     )
+                if resp.status_code != 200:
+                    print(f"server.py: response status code is invalid: {resp.status_code}")
+            except Exception as e:
+                print(f"server.py: fork_server: failed to send fork info to RESTApi: {e}")
+
             # parent
             os.close(root_fd)
             os.close(mem_cgroup_fd)
@@ -95,7 +137,9 @@ def fork_server():
             # need to poll for ol.sock existence, because it is
             # guaranteed to exist.
             os.waitpid(pid, 0)
-            client.sendall(struct.pack("I", pid))
+            client.sendall(
+                struct.pack("I", pid)
+            )  # who is the client: C.sendRootFD, but C.sendRootFD ignore the return pid
             client.close()
 
         else:
@@ -114,9 +158,13 @@ def fork_server():
 
             # child
             start_container()
-            os._exit(1) # only reachable if program unnexpectedly returns
+            os._exit(1)  # only reachable if program unexpectedly returns
 
 
+# start_container will be called in 3 situations:
+# 1. when the container is a zygote, it will be called by fork_server
+# 2. when the container is a root zygote, it will be called by main()
+# 3. when the container is a pip-install container, it will be called by main()
 def start_container():
     '''
     1. this assumes chroot has taken us to the location where the
@@ -126,9 +174,12 @@ def start_container():
     '''
 
     global file_sock
-
     # TODO: if we can get rid of this, we can get rid of the ns module
-    return_val = ol.unshare()
+    try:
+        return_val = ol.unshare()
+    except RuntimeError as e:
+        print("An error occurred in ol.unshare():", e)
+        return_val = 1
     assert return_val == 0
 
     # we open a new .sock file in the child, before starting the grand
@@ -137,13 +188,28 @@ def start_container():
     # messages to the sock file.
     file_sock = tornado.netutil.bind_unix_socket(file_sock_path)
 
+    t0 = time.time()
     pid = os.fork()
+    t1 = time.time()
+
     assert pid >= 0
 
     if pid > 0:
+        # print(f"start_container fork = {(t1 - t0)*1000} ms, #pages={get_page_count(os.getpid())}")
         # orphan the new process by exiting parent.  The parent
         # process is in a weird state because unshare only partially
         # works for the process that calls it.
+        os._exit(0)
+
+    # # try to mount /proc, so that we could get number of pages (host dir seems not writable)
+    # if os.path.exists(proc_path) is False:
+    #     os.mkdir(proc_path)
+    print(os.path.exists(proc_path))
+    result = subprocess.run(["mount", "-t", "proc", "proc", f"{proc_path}"],
+                            stderr=subprocess.PIPE)
+
+    if result.returncode != 0:
+        print("mount proc err:", result.stderr.decode('utf-8'))
         os._exit(0)
 
     with open(bootstrap_path, encoding='utf-8') as f:
@@ -157,6 +223,7 @@ def start_container():
             print("Exception: " + traceback.format_exc())
             print("Problematic Python Code:\n" + code)
 
+
 def main():
     '''
     caller is expected to do chroot, because we want to use the
@@ -166,14 +233,15 @@ def main():
     global bootstrap_path
 
     if len(sys.argv) < 2:
-        print("Expected execution: chroot <path_to_root_fs> python3 server.py <path_to_bootstrap.py> [cgroup-count] [enable-seccomp]")
+        print(
+            "Expected execution: chroot <path_to_root_fs> python3 server.py <path_to_bootstrap.py> [cgroup-count] [enable-seccomp]")
         print("    cgroup-count: number of FDs (starting at 3) that refer to /sys/fs/cgroup/..../cgroup.procs files")
         print("    enable-seccomp: true/false to enable or disables seccomp filtering")
         sys.exit(1)
 
     print('server.py: started new process with args: ' + " ".join(sys.argv))
 
-    #enable_seccomp if enable-seccomp is not passed
+    # enable_seccomp if enable-seccomp is not passed
     if len(sys.argv) < 3 or sys.argv[3] == 'true':
         return_code = ol.enable_seccomp()
         assert return_code >= 0

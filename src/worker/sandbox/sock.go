@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"sync/atomic"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -27,7 +27,7 @@ type SOCKContainer struct {
 	scratchDir       string
 	cg               cgroups.Cgroup
 	rtType           common.RuntimeType
-	client *http.Client
+	client           *http.Client
 
 	// 1 for self, plus 1 for each child (we can't release memory
 	// until all descendants are dead, because they share the
@@ -73,7 +73,7 @@ func (container *SOCKContainer) freshProc() (err error) {
 	if container.rtType == common.RT_PYTHON {
 		cmd = exec.Command(
 			"chroot", container.containerRootDir, "python3", "-u",
-			"/runtimes/python/server.py", "/host/bootstrap.py", strconv.Itoa(1), 
+			"/runtimes/python/server.py", "/host/bootstrap.py", strconv.Itoa(1),
 			strconv.FormatBool(common.Conf.Features.Enable_seccomp),
 		)
 	} else if container.rtType == common.RT_NATIVE {
@@ -89,7 +89,6 @@ func (container *SOCKContainer) freshProc() (err error) {
 			"chroot", container.containerRootDir,
 			"env", "RUST_BACKTRACE=full", "/runtimes/native/server", strconv.Itoa(1),
 			strconv.FormatBool(common.Conf.Features.Enable_seccomp),
-
 		)
 	} else {
 		return fmt.Errorf("Unsupported runtime")
@@ -206,7 +205,7 @@ func (container *SOCKContainer) populateRoot() (err error) {
 	}
 
 	// FILE SYSTEM STEP 3: scratch dir (tmp and communication)
-	tmpDir := filepath.Join(container.scratchDir, "tmp")
+	tmpDir := filepath.Join(container.scratchDir, "tmp") // make the tmp dir in host machine fs
 	if err := os.Mkdir(tmpDir, 0777); err != nil && !os.IsExist(err) {
 		return err
 	}
@@ -220,6 +219,16 @@ func (container *SOCKContainer) populateRoot() (err error) {
 	sbTmpDir := filepath.Join(container.containerRootDir, "tmp")
 	if err := syscall.Mount(tmpDir, sbTmpDir, "", common.BIND, ""); err != nil {
 		return fmt.Errorf("failed to bind tmp dir: %v", err.Error())
+	}
+
+	procDir := filepath.Join(container.scratchDir, "proc")
+	if err := os.Mkdir(procDir, 0777); err != nil && !os.IsExist(err) {
+		return err
+	}
+
+	sbProcDir := filepath.Join(container.containerRootDir, "proc")
+	if err := syscall.Mount(procDir, sbProcDir, "", common.BIND, ""); err != nil {
+		return fmt.Errorf("failed to bind proc dir: %v", err.Error())
 	}
 
 	return nil
@@ -336,9 +345,9 @@ func (container *SOCKContainer) fork(dst Sandbox) (err error) {
 		return fmt.Errorf("only %vMB of spare memory in parent, rejecting fork request (need at least 3MB)", spareMB)
 	}
 
-    // increment reference count before we start any processes
+	// increment reference count before we start any processes
 	container.children[dst.ID()] = dst
-    newCount := atomic.AddInt32(&container.cgRefCount, 1)
+	newCount := atomic.AddInt32(&container.cgRefCount, 1)
 
 	if newCount == 0 {
 		panic("cgRefCount was already 0")
@@ -396,7 +405,7 @@ func (container *SOCKContainer) fork(dst Sandbox) (err error) {
 			}
 			if !isOrig {
 				container.printf("move PID %v from CG %v to CG %v\n", pid, container.cg.Name(), dstSock.cg.Name())
-				if err = dstSock.cg.AddPid(pid); err != nil {
+				if err = dstSock.cg.AddPid(pid); err != nil { // todo: I remember pids are added to new cg in server.py
 					return err
 				}
 				moved++
@@ -416,7 +425,7 @@ func (container *SOCKContainer) Meta() *SandboxMeta {
 	return container.meta
 }
 
-func (container *SOCKContainer) Client() (*http.Client) {
+func (container *SOCKContainer) Client() *http.Client {
 	return container.client
 }
 

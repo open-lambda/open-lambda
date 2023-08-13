@@ -11,6 +11,10 @@
 
 static PyObject *ol_unshare(PyObject *module) {
   int res = unshare(CLONE_NEWUTS|CLONE_NEWPID|CLONE_NEWIPC);
+  if (res == -1) {
+      PyErr_SetString(PyExc_RuntimeError, strerror(errno));
+      return NULL;
+   }
   return Py_BuildValue("i", res);
 }
 
@@ -368,7 +372,8 @@ static PyObject *ol_enable_seccomp(PyObject *module) {
                  SCMP_SYS(wait4),
                  SCMP_SYS(waitid),
                  SCMP_SYS(waitpid),
-                 SCMP_SYS(writev)
+                 SCMP_SYS(writev),
+                 SCMP_SYS(mount)
   };
 
   for (int i=0; i<(int)(sizeof(calls)/sizeof(calls[0])); i++) {

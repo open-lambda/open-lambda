@@ -29,8 +29,9 @@ type ImportCache struct {
 // Sandbox death, etc)
 type ImportCacheNode struct {
 	// from config file:
-	Packages []string           `json:"packages"`
-	Children []*ImportCacheNode `json:"children"`
+	Packages        []string           `json:"packages"`
+	Children        []*ImportCacheNode `json:"children"`
+	SplitGeneration int                `json:"split_generation"`
 
 	// backpointers based on Children structure
 	parent *ImportCacheNode
@@ -305,8 +306,9 @@ func (cache *ImportCache) createSandboxInNode(node *ImportCacheNode, rt_type com
 		// policy: what modules should we pre-import?  Top-level of
 		// pre-initialized packages is just one possibility...
 		node.meta = &sandbox.SandboxMeta{
-			Installs: installs,
-			Imports:  topLevelMods,
+			Installs:        installs,
+			Imports:         topLevelMods,
+			SplitGeneration: node.SplitGeneration,
 		}
 	}
 
@@ -314,7 +316,7 @@ func (cache *ImportCache) createSandboxInNode(node *ImportCacheNode, rt_type com
 	var sb sandbox.Sandbox
 	if node.parent != nil {
 		sb, err = cache.createChildSandboxFromNode(cache.sbPool, node.parent, false, node.codeDir, scratchDir, node.meta, rt_type)
-	} else {
+	} else { // create the root zygote
 		sb, err = cache.sbPool.Create(nil, false, node.codeDir, scratchDir, node.meta, common.RT_PYTHON)
 	}
 

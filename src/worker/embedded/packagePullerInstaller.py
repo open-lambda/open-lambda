@@ -1,5 +1,11 @@
 #!/usr/bin/env python
 import os, sys, platform, re
+import subprocess
+import pkgutil
+
+import pkg_resources
+from pkg_resources import parse_requirements
+
 
 def format_full_version(info):
     version = '{0.major}.{0.minor}.{0.micro}'.format(info)
@@ -7,6 +13,7 @@ def format_full_version(info):
     if kind != 'final':
         version += kind[0] + str(info.serial)
     return version
+
 
 # as specified here: https://www.python.org/dev/peps/pep-0508/#environment-markers
 os_name = os.name
@@ -23,20 +30,22 @@ if hasattr(sys, 'implementation'):
     implementation_version = format_full_version(sys.implementation.version)
 else:
     implementation_version = "0"
-extra = '' # TODO: support extras
+extra = ''  # TODO: support extras
 
-def matches(markers):
-    return eval(markers)
 
+# top_level.txt cannot be trusted, use pkgutil to get top level packages
+# pkgutil.iter_modules can also be used to get submodules
 def top(dirname):
-    path = None
-    for name in os.listdir(dirname):
-        if name.endswith('-info'):
-            path = os.path.join(dirname, name, "top_level.txt")
-    if path == None or not os.path.exists(path):
-        return []
-    with open(path) as f:
-        return f.read().strip().split("\n")
+    return [name for _, name, _ in pkgutil.iter_modules([dirname])]
+    # path = None
+    # for name in os.listdir(dirname):
+    #     if name.endswith('-info'):
+    #         path = os.path.join(dirname, name, "top_level.txt")
+    # if path == None or not os.path.exists(path):
+    #     return []
+    # with open(path) as f:
+    #     return f.read().strip().split("\n")
+
 
 def deps(dirname):
     path = None
@@ -48,28 +57,34 @@ def deps(dirname):
 
     rv = set()
     with open(path, encoding='utf-8') as f:
-        for line in f:
-            prefix = 'Requires-Dist: '
-            if line.startswith(prefix):
-                line = line[len(prefix):].strip()
-                parts = line.split(';')
-                if len(parts) > 1:
-                    match = matches(parts[1])
-                else:
-                    match = True
-                if match:
-                    name = re.split(' \(', parts[0])[0]
-                    rv.add(name)
+        metadata = f.read()
+
+    dist_lines = [line for line in metadata.splitlines() if line.startswith("Requires-Dist: ")]
+    dependencies = "\n".join(line[len("Requires-Dist: "):] for line in dist_lines)
+
+    for dependency in parse_requirements(dependencies):
+        try:
+            if dependency.marker is None or (dependency.marker is not None and dependency.marker.evaluate()):
+                rv.add(dependency.project_name)
+        # TODO: 'extra' would causes UndefinedEnvironmentName, simply ignore it for now
+        #  except "extra", is there anything else cause UndefinedEnvironmentName?
+        except pkg_resources.extern.packaging.markers.UndefinedEnvironmentName:
+            continue
     return list(rv)
+
 
 def f(event):
     pkg = event["pkg"]
     alreadyInstalled = event["alreadyInstalled"]
     if not alreadyInstalled:
-        rc = os.system('pip3 install --no-deps %s --cache-dir /tmp/.cache -t /host/files' % pkg)
-        print('pip install returned code %d' % rc)
-        assert(rc == 0)
+        try:
+            subprocess.check_output(
+                ['pip3', 'install', '--no-deps', pkg, '--cache-dir', '/tmp/.cache', '-t', '/host/files'])
+        except subprocess.CalledProcessError as e:
+            print(f'pip install failed with error code {e.returncode}')
+            print(f'Output: {e.output}')
+
     name = pkg.split("==")[0]
     d = deps("/host/files")
     t = top("/host/files")
-    return {"Deps":d, "TopLevel":t}
+    return {"Deps": d, "TopLevel": t}

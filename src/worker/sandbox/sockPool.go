@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
+	"net/http"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
-	"net"
-	"net/http"
 	"time"
 
 	"github.com/open-lambda/open-lambda/ol/common"
@@ -22,13 +22,13 @@ const SOCK_GUEST_INIT = "/ol-init"
 
 var nextId int64 = 0
 
-// SOCKPool is a ContainerFactory that creats docker containeres.
+// SOCKPool is a ContainerFactory that creates sock containers.
 type SOCKPool struct {
 	name          string
 	rootDirs      *common.DirMaker
 	cgPool        *cgroups.CgroupPool
 	mem           *MemPool
-	eventHandlers []SandboxEventFunc
+	eventHandlers []SandboxEventFunc // what is this?
 	debugger
 }
 
@@ -128,19 +128,25 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 
 		for _, pkg := range meta.Installs {
 			path := "'/packages/" + pkg + "/files'"
-			pyCode = append(pyCode, "if not "+path+" in sys.path:")
-			pyCode = append(pyCode, "    sys.path.insert(0, "+path+")")
+			pyCode = append(pyCode, "if os.path.exists("+path+"):")
+			pyCode = append(pyCode, "	if not "+path+" in sys.path:")
+			pyCode = append(pyCode, "		sys.path.insert(0, "+path+")")
 		}
 
+		// toplevel.txt can not be trusted, we must handle any possible error
 		for _, mod := range meta.Imports {
-			pyCode = append(pyCode, "import "+mod)
+			pyCode = append(pyCode, "try:")
+			pyCode = append(pyCode, "	import "+mod)
+			pyCode = append(pyCode, "except Exception as e:")
+			pyCode = append(pyCode, "	print('bootstrap.py error:', e)")
 		}
 
 		// handler or Zygote?
 		if isLeaf {
 			pyCode = append(pyCode, "web_server()")
 		} else {
-			pyCode = append(pyCode, "fork_server()")
+			fork := fmt.Sprintf("fork_server(%d)", meta.SplitGeneration)
+			pyCode = append(pyCode, fork)
 		}
 
 		path := filepath.Join(scratchDir, "bootstrap.py")
@@ -181,13 +187,13 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 	}
 
 	log.Printf("Connecting to container at '%s'", sockPath)
-	dial := func(proto, addr string) (net.Conn, error) {
+	dial := func(proto, addr string) (net.Conn, error) { // proto and addr are ignored, they're always "unix" and sockPath
 		return net.Dial("unix", sockPath)
 	}
 
 	cSock.client = &http.Client{
 		Transport: &http.Transport{Dial: dial},
-		Timeout: time.Second * time.Duration(common.Conf.Limits.Max_runtime_default),
+		Timeout:   time.Second * time.Duration(common.Conf.Limits.Max_runtime_default),
 	}
 
 	// event handling

@@ -56,7 +56,7 @@ func (sb *safeSandbox) printf(format string, args ...interface{}) {
 	log.Printf("%s [SB %s]", strings.TrimRight(msg, "\n"), sb.Sandbox.ID())
 }
 
-// propogate event to anybody who signed up to listen (e.g., an evictor)
+// propagate event to anybody who signed up to listen (e.g., an evictor)
 func (sb *safeSandbox) event(evType SandboxEventType) {
 	for _, handler := range sb.eventHandlers {
 		handler(evType, sb)
@@ -167,7 +167,7 @@ func (sb *safeSandbox) Unpause() (err error) {
 	return nil
 }
 
-func (sb *safeSandbox) Client() (*http.Client) {
+func (sb *safeSandbox) Client() *http.Client {
 	// According to the docs, "Clients and Transports are safe for
 	// concurrent use by multiple goroutines and for efficiency
 	// should only be created once and re-used."
