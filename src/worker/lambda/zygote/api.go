@@ -9,5 +9,6 @@ type ZygoteProvider interface {
 	Create(childSandboxPool sandbox.SandboxPool, isLeaf bool,
 		codeDir, scratchDir string, meta *sandbox.SandboxMeta,
 		rt_type common.RuntimeType) (sandbox.Sandbox, error)
+	Warmup() error
 	Cleanup()
 }

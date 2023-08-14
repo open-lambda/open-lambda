@@ -75,6 +75,7 @@ type FeaturesConfig struct {
 	Import_cache        string `json:"import_cache"`
 	Downsize_paused_mem bool   `json:"downsize_paused_mem"`
 	Enable_seccomp      bool   `json:"enable_seccomp"`
+	Warmup              bool   `json:"warmup"`
 }
 
 type TraceConfig struct {
@@ -173,6 +174,7 @@ func LoadDefaults(olPath string) error {
 			Import_cache:        "tree",
 			Downsize_paused_mem: true,
 			Enable_seccomp:      true,
+			Warmup:              true,
 		},
 		Trace: TraceConfig{
 			Cgroups: false,

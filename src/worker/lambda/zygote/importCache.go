@@ -328,6 +328,39 @@ func (cache *ImportCache) createSandboxInNode(node *ImportCacheNode, rt_type com
 	return nil
 }
 
+// todo: measure the warmup time
+func (cache *ImportCache) Warmup() error {
+	t := common.T0("ImportCache.Warmup")
+
+	// todo: pass in the runtime type
+	rt_type := common.RT_PYTHON
+	// find all the leaf zygotes in the tree
+	leafZygotes := []*ImportCacheNode{}
+	// do a BFS to find all the leaf nodes
+	tmpNodes := []*ImportCacheNode{cache.root}
+	for len(tmpNodes) > 0 {
+		node := tmpNodes[0]
+		tmpNodes = tmpNodes[1:]
+		if len(node.Children) == 0 {
+			leafZygotes = append(leafZygotes, node)
+		} else {
+			tmpNodes = append(tmpNodes, node.Children...)
+		}
+	}
+
+	for _, node := range leafZygotes {
+		zygoteSB, _, err := cache.getSandboxInNode(node, true, rt_type) // TODO: do I need to modify sbRefCounts?
+		if err != nil {
+			err = fmt.Errorf("failed to warm up zygote tree, rt_type is %s", rt_type)
+			return err
+		}
+		atomic.AddInt64(&node.createNonleafChild, 1)
+		cache.putSandboxInNode(node, zygoteSB)
+	}
+	t.T1()
+	return nil
+}
+
 // return concatenation of direct (.Packages) and indirect (.indirectPackages)
 func (node *ImportCacheNode) AllPackages() []string {
 	n := len(node.indirectPackages)

@@ -21,7 +21,7 @@ type LambdaMgr struct {
 	sbPool sandbox.SandboxPool
 	*packages.DepTracer
 	*packages.PackagePuller // depends on sbPool and DepTracer
-	zygote.ZygoteProvider     // depends PackagePuller
+	zygote.ZygoteProvider   // depends PackagePuller
 	*HandlerPuller          // depends on sbPool and ImportCache[optional]
 
 	// storage dirs that we manage
@@ -126,6 +126,10 @@ func (mgr *LambdaMgr) Get(name string) (f *LambdaFunc) {
 	return f
 }
 
+func (mgr *LambdaMgr) Warmup() error {
+	return mgr.ZygoteProvider.Warmup()
+}
+
 func (mgr *LambdaMgr) Debug() string {
 	return mgr.sbPool.DebugString() + "\n"
 }
@@ -149,6 +153,8 @@ func (mgr *LambdaMgr) DumpStatsToLog() {
 	}
 
 	log.Printf("Request Profiling (cumulative seconds):")
+	time(0, "ImportCache.Warmup", "")
+
 	time(0, "LambdaFunc.Invoke", "")
 
 	time(1, "LambdaInstance-WaitSandbox", "LambdaFunc.Invoke")
