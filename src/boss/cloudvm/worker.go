@@ -162,9 +162,7 @@ func (pool *WorkerPool) recoverWorker(worker *Worker) {
 		len(pool.workers[RUNNING]),
 		len(pool.workers[CLEANING]),
 		len(pool.workers[DESTROYING]))
-	
-	pool.Unlock()
-
+		
 	pool.Unlock()
 
 	pool.updateCluster()

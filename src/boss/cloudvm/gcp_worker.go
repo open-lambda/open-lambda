@@ -88,7 +88,7 @@ func (pool *GcpWorkerPool) NewWorker(workerId string) *Worker {
 
 func (pool *GcpWorkerPool) CreateInstance(worker *Worker) {
 	client := pool.client
-	fmt.Printf("STEP 4: create new VM from snapshot\n")
+	fmt.Printf("creating new VM from snapshot\n")
 
 	resp, err := client.Wait(client.LaunchGcp("boss-snap", worker.workerId)) //TODO: load snapshot name from Config
 

@@ -97,27 +97,27 @@ func GcpBossTest() {
 		panic(err)
 	}
 
-	fmt.Printf("\nsnapshot time: %d\n", snapshot_time.Milliseconds())
+	fmt.Printf("snapshot time: %d\n", snapshot_time.Milliseconds())
 	fmt.Printf("clone time: %d\n", clone_time.Milliseconds())
 
-	// fmt.Printf("STEP 5: start worker\n")
-	// err = client.RunComandWorker("test-vm", "./ol worker --detach")
-	// if err != nil {
-	// 	panic(err)
-	// }
+	fmt.Printf("STEP 5: start worker\n")
+	err = client.RunComandWorker("test-vm", "./ol worker --detach")
+	if err != nil {
+		panic(err)
+	}
 
-	// fmt.Printf("STEP 6: stop instance\n")
-	// resp, err = client.Wait(client.stopGcpInstance("test-vm"))
-	// if err != nil {
-	// 	panic(err)
-	// }
+	fmt.Printf("STEP 6: stop instance\n")
+	resp, err = client.Wait(client.stopGcpInstance("test-vm"))
+	if err != nil {
+		panic(err)
+	}
 
-	// fmt.Printf("STEP 7: delete instance\n")
-	// resp, err = client.deleteGcpInstance("test-vm")
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// fmt.Printf("Test Succeeded!\n")
+	fmt.Printf("STEP 7: delete instance\n")
+	resp, err = client.deleteGcpInstance("test-vm")
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Test Succeeded!\n")
 }
 
 func NewGcpClient(service_account_json string) (*GcpClient, error) {
@@ -386,15 +386,6 @@ func (c *GcpClient) GcpIPtoInstance() (map[string]string, error) {
 		for _, netif := range interfaces.([]any) {
 			ip := netif.(map[string]any)["networkIP"].(string) //internal ip
 			lookup[ip] = instance_name
-
-			// confs := netif.(map[string]any)["accessConfigs"]
-			// for _, conf := range confs.([]any) {
-			// 	iptmp := conf.(map[string]any)["natIP"] //external ip
-			// 	switch ip := iptmp.(type) {
-			// 	case string:
-			// 		lookup[ip] = instance_name
-			// 	}
-			// }
 		}
 	}
 
@@ -463,9 +454,6 @@ func (c *GcpClient) Wait(resp1 map[string]any, err1 error) (resp2 map[string]any
 			return nil, err2
 		}
 
-		// fmt.Println("POLLING", resp2)
-		// fmt.Println()
-
 		if resp2["status"].(string) != "RUNNING" {
 			return resp2, nil
 		}
@@ -477,7 +465,6 @@ func (c *GcpClient) Wait(resp1 map[string]any, err1 error) (resp2 map[string]any
 }
 
 func (c *GcpClient) GcpSnapshot(disk string, snapshot_name string) (map[string]any, error) {
-	// TODO: take args from config (or better, read from service account somehow)
 	args := GcpSnapshotArgs{
 		Project:      c.service_account["project_id"].(string),
 		Region:       c.service_account["region"].(string),
