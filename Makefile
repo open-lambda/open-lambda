@@ -3,7 +3,7 @@ WASM_TARGET=wasm32-unknown-unknown
 GO=go
 OL_DIR=$(abspath ./src)
 OL_GO_FILES=$(shell find src/ -name '*.go')
-LAMBDA_FILES = lambda/Dockerfile lambda/Makefile lambda/spin.c lambda/runtimes/python/server.py lambda/runtimes/python/setup.py lambda/runtimes/python/ol.c
+LAMBDA_FILES = min-image/Dockerfile min-image/Makefile min-image/spin.c min-image/runtimes/python/server.py min-image/runtimes/python/setup.py min-image/runtimes/python/ol.c
 USE_LLVM?=1
 BUILDTYPE?=debug
 INSTALL_PREFIX?=/usr/local
@@ -20,6 +20,7 @@ else
 	BUILD_FLAGS=
 endif
 
+.PHONY: all
 .PHONY: install
 .PHONY: test-all
 .PHONY: clean
@@ -31,7 +32,7 @@ endif
 .PHONY: container-proxy
 .PHONY: fmt check-fmt
 
-all: ol imgs/lambda wasm-worker wasm-functions native-functions
+all: ol imgs/ol-wasm wasm-worker wasm-functions native-functions
 
 wasm-worker:
 	cd wasm-worker && cargo build ${BUILD_FLAGS} ${WASM_WORKER_FLAGS}
@@ -42,7 +43,7 @@ wasm-functions:
 	bash ./bin-functions/install-wasm.sh test-registry.wasm ${WASM_TARGET}
 	ls test-registry.wasm/hashing.wasm test-registry.wasm/noop.wasm
 
-native-functions: imgs/lambda
+native-functions: imgs/ol-wasm
 	cd bin-functions && cross build --release
 	bash ./bin-functions/install-native.sh test-registry
 	ls test-registry/hashing.bin test-registry/noop.bin # guarantee they were created
@@ -53,10 +54,14 @@ update-dependencies:
 	cd bin-functions && cargo update
 	cd container-proxy && cargo update
 
-imgs/lambda: ${LAMBDA_FILES}
-	${MAKE} -C lambda
-	docker build -t lambda lambda
-	touch imgs/lambda
+imgs/ol-min: ${LAMBDA_FILES}
+	${MAKE} -C min-image
+	docker build -t ol-min min-image
+	touch imgs/ol-min
+
+imgs/ol-wasm: imgs/ol-min wasm-image/runtimes/native/src/main.rs
+	docker build -t ol-wasm wasm-image
+	touch imgs/ol-wasm
 
 install-python-bindings:
 	cd scripts && python setup.py install
@@ -100,7 +105,6 @@ lint: #go-lint
 	cd bin-functions && cargo clippy
 
 clean:
-	rm -f ol
-	rm -f imgs/lambda
+	rm -f ol imgs/ol-min imgs/ol-wasm
 	${MAKE} -C lambda clean
 	${MAKE} -C sock clean

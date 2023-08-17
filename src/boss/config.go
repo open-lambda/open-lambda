@@ -10,12 +10,13 @@ import (
 var Conf *Config
 
 type Config struct {
-	Platform string `json:"platform"`
-	Scaling string `json:"scaling"`
-        API_key string `json:"api_key"`
-	Boss_port string  `json:"boss_port"`
-	Azure AzureConfig `json:"azure"`
-	Gcp GcpConfig `json:"gcp"`
+	Platform   string      `json:"platform"`
+	Scaling    string      `json:"scaling"`
+	API_key    string      `json:"api_key"`
+	Boss_port  string      `json:"boss_port"`
+	Worker_Cap int         `json:"worker_cap"`
+	Azure      AzureConfig `json:"azure"`
+	Gcp        GcpConfig   `json:"gcp"`
 }
 
 type AzureConfig struct {
@@ -28,10 +29,11 @@ type GcpConfig struct {
 
 func LoadDefaults() error {
 	Conf = &Config{
-		Platform: "mock",
-		Scaling: "manual",
-		API_key: "abc", // TODO
-		Boss_port: "5000",
+		Platform:   "mock",
+		Scaling:    "manual",
+		API_key:    "abc", // TODO: autogenerate a random key
+		Boss_port:  "5000",
+		Worker_Cap: 4,
 	}
 
 	return checkConf()
@@ -54,7 +56,7 @@ func LoadConf(path string) error {
 }
 
 func checkConf() error {
-	if Conf.Scaling != "manual" {
+	if Conf.Scaling != "manual" && Conf.Scaling != "threshold-scaler" {
 		return fmt.Errorf("Scaling type '%s' not implemented", Conf.Scaling)
 	}
 

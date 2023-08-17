@@ -82,3 +82,16 @@ scripts/dist
 scripts/open_lambda.egg-info
 
 *.lsm
+
+benchmark.json
+
+#gcp key
+key.json
+
+#azure key
+azure.json
+
+#boss
+boss.json
+cluster.log
+tasks.log

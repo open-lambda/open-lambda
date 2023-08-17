@@ -72,7 +72,7 @@ class TestConf:
             try:
                 self.orig = json.load(cfile)
             except json.JSONDecodeError as err:
-                raise Exception(
+                raise ValueError(
                     f"Failed to parse JSON file. Contents are:\n"
                     f"{cfile.read()}"
                 ) from err
@@ -80,7 +80,7 @@ class TestConf:
         new = copy.deepcopy(self.orig)
         for (key, value) in keywords.items():
             if not key in new:
-                raise Exception(f"unknown config param: {key}")
+                raise ValueError(f"unknown config param: {key}")
 
             if isinstance(value, dict):
                 for key2 in value:
@@ -120,23 +120,25 @@ def run(cmd):
         fail = True
 
     out = str(out, 'utf-8')
-    if len(out) > 500:
-        out = out[:500] + "..."
 
-    if fail:
-        raise Exception(f"command ({' '.join(cmd)}) failed: {out}")
-    print(out)
+    if not fail:
+        if len(out) > 500:
+            print(out[:500])
+        print(out)
+    else:
+        print(out)
+        raise RuntimeError(f"command ({' '.join(cmd)}) failed")
 
 class DockerWorker():
     ''' Runs OpenLambda with Docker as backend '''
 
     def __init__(self):
         self._running = False
-        self._config = TestConf(sandbox="docker", features={"import_cache": False})
+        self._config = TestConf(sandbox="docker", features={"import_cache": ""})
 
         try:
             print("Starting Docker container worker")
-            run(['./ol', 'worker', f'-p={_OL_DIR}', '--detach'])
+            run(['./ol', 'worker', 'up', f'-p={_OL_DIR}', '--detach'])
         except Exception as err:
             raise RuntimeError(f"failed to start worker: {err}") from err
 
@@ -164,7 +166,7 @@ class DockerWorker():
 
         try:
             print("Stopping Docker container worker")
-            run(['./ol', 'kill', '-p='+_OL_DIR])
+            run(['./ol', 'worker', 'down', '-p='+_OL_DIR])
         except Exception as err:
             raise RuntimeError("Failed to start worker") from err
 
@@ -177,7 +179,7 @@ class SockWorker():
 
         try:
             print("Starting SOCK container worker")
-            run(['./ol', 'worker', '-p='+_OL_DIR, '--detach'])
+            run(['./ol', 'worker', 'up', '-p='+_OL_DIR, '--detach'])
         except Exception as err:
             raise RuntimeError(f"failed to start worker: {err}") from err
 
@@ -205,7 +207,7 @@ class SockWorker():
 
         try:
             print("Stopping SOCK container worker")
-            run(['./ol', 'kill', '-p='+_OL_DIR])
+            run(['./ol', 'worker', 'down', '-p='+_OL_DIR])
         except Exception as err:
             raise RuntimeError("Failed to start worker") from err
 
@@ -252,34 +254,14 @@ class WasmWorker():
         self._process.terminate()
         self._process = None
 
-def prepare_open_lambda(ol_dir, reuse_config=False):
+def prepare_open_lambda(ol_dir):
     '''
     Sets up the working director for open lambda,
     and stops currently running worker processes (if any)
     '''
-    if os.path.exists(_OL_DIR):
-        try:
-            run(['./ol', 'kill', f'-p={ol_dir}'])
-            print("stopped existing worker")
-        except Exception as err:
-            print(f"Could not kill existing worker: {err}")
-
-    # general setup
-    if not reuse_config:
-        if os.path.exists(ol_dir):
-            run(['rm', '-rf', ol_dir])
-
-        run(['./ol', 'new', f'-p={ol_dir}'])
-    else:
-        if os.path.exists(_OL_DIR):
-            # Make sure the pid file is gone even if the previous worker crashed
-            try:
-                run(['rm', '-rf', f'{ol_dir}/worker'])
-            except Exception as _:
-                pass
-        else:
-            # There was never a config in the first place, create one
-            run(['./ol', 'new', f'-p={ol_dir}'])
+    # init will kill any prior worker and refresh the directory
+    # (except for the base "lambda" dir)
+    run(['./ol', 'worker', 'init', f'-p={ol_dir}'])
 
 def mounts():
     ''' Returns a list of all mounted directories '''
@@ -306,10 +288,10 @@ def get_mem_stat_mb(stat):
                 parts = line.strip().split()
                 assert_eq(parts[-1], 'kB')
                 return int(parts[1]) / 1024
-    raise Exception('could not get stat')
+    raise ValueError('could not get stat')
 
 def assert_eq(actual, expected):
     ''' Test helper. Will fail if actual != expected '''
 
     if expected != actual:
-        raise Exception(f'Expected value "{expected}", but was "{actual}"')
+        raise ValueError(f'Expected value "{expected}", but was "{actual}"')
