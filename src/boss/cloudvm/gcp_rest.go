@@ -7,7 +7,9 @@ type GcpLaunchVmArgs struct {
 	Zone                string
 	InstanceName        string
 	//SourceImage string
-	SnapshotName string
+	SnapshotName        string
+	DiskSizeGb          int
+	MachineType         string
 }
 
 type GcpSnapshotArgs struct {
@@ -43,7 +45,7 @@ const gcpLaunchVmJSON = `{
       "deviceName": "{{.InstanceName}}",
       "diskEncryptionKey": {},
       "initializeParams": {
-        "diskSizeGb": "30",
+        "diskSizeGb": "{{.DiskSizeGb}}",
         "diskType": "projects/{{.Project}}/zones/{{.Zone}}/diskTypes/pd-balanced",
         "labels": {},
         "sourceSnapshot": "projects/{{.Project}}/global/snapshots/{{.SnapshotName}}"
@@ -57,7 +59,7 @@ const gcpLaunchVmJSON = `{
   },
   "guestAccelerators": [],
   "labels": {},
-  "machineType": "projects/{{.Project}}/zones/{{.Zone}}/machineTypes/e2-medium",
+  "machineType": "projects/{{.Project}}/zones/{{.Zone}}/machineTypes/{{.MachineType}}",
   "metadata": {
     "items": []
   },
