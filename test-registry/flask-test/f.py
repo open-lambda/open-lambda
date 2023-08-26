@@ -1,5 +1,3 @@
-# ol-install: flask
-# ol-install: werkzeug==2.3.6
 from flask import Flask, request, Response
 
 def page_not_found(e):
