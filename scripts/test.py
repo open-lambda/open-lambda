@@ -227,13 +227,13 @@ def flask_test():
 
     # flask apps should have control of status code, headers, and response body
     if r.status_code != 418:
-        raise Exception(f"expected status code 418, but got {r.status_code}")
+        raise ValueError(f"expected status code 418, but got {r.status_code}")
     if not "A" in r.headers:
-        raise Exception(f"'A' not found in headers, as expected: {r.headers}")
+        raise ValueError(f"'A' not found in headers, as expected: {r.headers}")
     if r.headers["A"] != "B":
-        raise Exception(f"headers['A'] should be 'B', not {headers['A']}")
+        raise ValueError(f"headers['A'] should be 'B', not {r.headers['A']}")
     if r.text != "hi\n":
-        raise Exception(f"r.text should be 'hi\n', not {repr(r.text)}")
+        raise ValueError(f"r.text should be 'hi\n', not {repr(r.text)}")
 
 def run_tests():
     ping_test()
