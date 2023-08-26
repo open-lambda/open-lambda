@@ -5,26 +5,18 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
 )
 
 var Conf *Config
 
 type Config struct {
-	Platform   string      `json:"platform"`
-	Scaling    string      `json:"scaling"`
-	API_key    string      `json:"api_key"`
-	Boss_port  string      `json:"boss_port"`
-	Worker_Cap int         `json:"worker_cap"`
-	Azure      AzureConfig `json:"azure"`
-	Gcp        GcpConfig   `json:"gcp"`
-}
-
-type AzureConfig struct {
-	// TODO
-}
-
-type GcpConfig struct {
-	// TODO
+	Platform   string              `json:"platform"`
+	Scaling    string              `json:"scaling"`
+	API_key    string              `json:"api_key"`
+	Boss_port  string              `json:"boss_port"`
+	Worker_Cap int                 `json:"worker_cap"`
+	Gcp        *cloudvm.GcpConfig  `json:"gcp"`
 }
 
 func LoadDefaults() error {
@@ -34,6 +26,7 @@ func LoadDefaults() error {
 		API_key:    "abc", // TODO: autogenerate a random key
 		Boss_port:  "5000",
 		Worker_Cap: 4,
+		Gcp: cloudvm.GetGcpConfigDefaults(),
 	}
 
 	return checkConf()
@@ -51,6 +44,8 @@ func LoadConf(path string) error {
 		log.Printf("FILE: %v\n", config_raw)
 		return fmt.Errorf("could not parse config (%v): %v\n", path, err.Error())
 	}
+
+	cloudvm.LoadGcpConfig(Conf.Gcp)
 
 	return checkConf()
 }

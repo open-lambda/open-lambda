@@ -10,6 +10,7 @@ import (
 	"os/user"
 	"sync/atomic"
 	"time"
+	"errors"
 )
 
 func NewWorkerPool(platform string, worker_cap int) (*WorkerPool, error) {
@@ -21,9 +22,14 @@ func NewWorkerPool(platform string, worker_cap int) (*WorkerPool, error) {
 	taskLog.SetFlags(log.Lmicroseconds)
 
 	var pool *WorkerPool
-	if platform == "mock" {
-		pool = NewMockWorkerPool()
-	}
+	switch {
+    case platform == "mock":
+        pool = NewMockWorkerPool()
+	case platform == "gcp":
+        pool = NewGcpWorkerPool()
+    default:
+        return nil, errors.New("invalid cloud platform")
+    }
 
 	pool.nextId = 1
 	pool.workers = []map[string]*Worker{
@@ -156,7 +162,7 @@ func (pool *WorkerPool) recoverWorker(worker *Worker) {
 		len(pool.workers[RUNNING]),
 		len(pool.workers[CLEANING]),
 		len(pool.workers[DESTROYING]))
-
+		
 	pool.Unlock()
 
 	pool.updateCluster()
@@ -287,7 +293,6 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 
 	worker := <-pool.queue
 	pool.queue <- worker
-
 	atomic.AddInt32(&worker.numTask, 1)
 	atomic.AddInt32(&pool.totalTask, 1)
 
@@ -316,8 +321,6 @@ func (pool *WorkerPool) Close() {
 			break
 		}
 	}
-
-	os.Exit(0)
 }
 
 // ssh to worker and run command
