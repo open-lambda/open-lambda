@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"net/http"
 	"time"
@@ -145,7 +146,9 @@ func NewPollerFromResumeToken[T any](token string, pl exported.Pipeline, options
 
 	opr := options.Handler
 	// now rehydrate the poller based on the encoded poller type
-	if async.CanResume(asJSON) {
+	if opr != nil {
+		log.Writef(log.EventLRO, "Resuming custom poller %T.", opr)
+	} else if async.CanResume(asJSON) {
 		opr, _ = async.New[T](pl, nil, "")
 	} else if body.CanResume(asJSON) {
 		opr, _ = body.New[T](pl, nil)
@@ -153,8 +156,6 @@ func NewPollerFromResumeToken[T any](token string, pl exported.Pipeline, options
 		opr, _ = loc.New[T](pl, nil)
 	} else if op.CanResume(asJSON) {
 		opr, _ = op.New[T](pl, nil, "")
-	} else if opr != nil {
-		log.Writef(log.EventLRO, "Resuming custom poller %T.", opr)
 	} else {
 		return nil, fmt.Errorf("unhandled poller token %s", string(raw))
 	}
@@ -210,7 +211,8 @@ func (p *Poller[T]) PollUntilDone(ctx context.Context, options *PollUntilDoneOpt
 		cp.Frequency = 30 * time.Second
 	}
 
-	if cp.Frequency < time.Second {
+	// skip the floor check when executing tests so they don't take so long
+	if isTest := flag.Lookup("test.v"); isTest == nil && cp.Frequency < time.Second {
 		return *new(T), errors.New("polling frequency minimum is one second")
 	}
 
