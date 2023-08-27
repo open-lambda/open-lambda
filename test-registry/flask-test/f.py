@@ -9,5 +9,6 @@ app.register_error_handler(404, page_not_found)
 # TODO: modify wrappers so "/" is the root
 @app.route("/run/flask-test")
 def hi():
+  print("in hi() of flask-test/f.py")
   teapot = 418 # I'm a teapot (https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/418)
   return Response("hi\n", status=teapot, headers={"A":"B"})

@@ -1,2 +1,2 @@
-flask
+flask==2.3.2
 werkzeug==2.3.6
