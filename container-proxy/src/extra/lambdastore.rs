@@ -31,8 +31,8 @@ pub async fn call(func_name: &str, args: &[u8]) -> CallResult {
     let client = get_or_create_client().await;
 
     if func_name == "create_object" {
-        let typename = bincode::deserialize(args).unwrap();
-        match client.create_object(typename).await {
+        let (app_name, typename) = bincode::deserialize(args).unwrap();
+        match client.create_object(app_name, typename).await {
             Ok(object) => {
                 let object_id = bincode::serialize(&object.get_identifier()).unwrap();
                 Ok(ByteBuf::from(object_id))

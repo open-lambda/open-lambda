@@ -1,4 +1,5 @@
 #![feature(type_alias_impl_trait)]
+#![feature(impl_trait_in_assoc_type)]
 
 use std::fs::{read_dir, remove_file, File};
 use std::net::{SocketAddr, ToSocketAddrs};
@@ -17,6 +18,8 @@ use tokio::runtime;
 use tokio::signal::unix::{signal, SignalKind};
 
 use lazy_static::lazy_static;
+
+mod support;
 
 mod functions;
 use functions::FunctionManager;
@@ -278,11 +281,13 @@ async fn main_func(args: Args) {
             let function_mgr = function_mgr.clone();
 
             tokio::spawn(async move {
-                conn.set_nodelay(true).unwrap();
                 let service = Service {
                     worker_addr,
                     function_mgr,
                 };
+
+                conn.set_nodelay(true).unwrap();
+                let conn = support::TokioIo::new(conn);
 
                 if let Err(http_err) = http1::Builder::new()
                     .keep_alive(true)

@@ -4,6 +4,8 @@ use hyper::body::Bytes;
 use hyper::client::conn;
 use hyper::Request;
 
+use crate::support;
+
 use http_body_util::{BodyExt, Full};
 
 pub struct HttpClient {
@@ -12,12 +14,13 @@ pub struct HttpClient {
 
 impl HttpClient {
     pub async fn new<S: ToSocketAddrs>(server_addr: S) -> Self {
-        let tcp_stream = tokio::net::TcpStream::connect(server_addr)
+        let conn = tokio::net::TcpStream::connect(server_addr)
             .await
             .expect("Failed to connect to server");
-        tcp_stream.set_nodelay(true).unwrap();
+        conn.set_nodelay(true).unwrap();
+        let conn = support::TokioIo::new(conn);
 
-        let (request_sender, connection) = conn::http1::handshake(tcp_stream)
+        let (request_sender, connection) = conn::http1::handshake(conn)
             .await
             .expect("HTTP handshake failed");
 

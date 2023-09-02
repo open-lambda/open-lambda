@@ -7,6 +7,7 @@ members = [
     "internal-call",
     "multiply",
 ]
+resolver = "2"
 
 [profile.release]
 debug = true
