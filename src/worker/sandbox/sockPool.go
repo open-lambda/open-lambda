@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/open-lambda/open-lambda/ol/common"
+	"github.com/open-lambda/open-lambda/ol/worker/sandbox/cgroups"
 )
 
 // the first program is executed on the host, which sets up the
@@ -25,7 +26,7 @@ var nextId int64 = 0
 type SOCKPool struct {
 	name          string
 	rootDirs      *common.DirMaker
-	cgPool        *CgroupPool
+	cgPool        *cgroups.CgroupPool
 	mem           *MemPool
 	eventHandlers []SandboxEventFunc
 	debugger
@@ -33,7 +34,7 @@ type SOCKPool struct {
 
 // NewSOCKPool creates a SOCKPool.
 func NewSOCKPool(name string, mem *MemPool) (cf *SOCKPool, err error) {
-	cgPool, err := NewCgroupPool(name)
+	cgPool, err := cgroups.NewCgroupPool(name)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +129,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 		for _, pkg := range meta.Installs {
 			path := "'/packages/" + pkg + "/files'"
 			pyCode = append(pyCode, "if not "+path+" in sys.path:")
-			pyCode = append(pyCode, "    sys.path.append("+path+")")
+			pyCode = append(pyCode, "    sys.path.insert(0, "+path+")")
 		}
 
 		for _, mod := range meta.Imports {

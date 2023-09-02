@@ -125,7 +125,6 @@ def main():
     parser.add_argument('--bench_filter', type=str, default="")
     parser.add_argument('--num_warmups', type=int, default=3)
     parser.add_argument('--num_runs', type=int, default=20)
-    parser.add_argument('--reuse_config', action='store_true')
     parser.add_argument('--ol_dir', type=str, default='bench-dir')
     parser.add_argument('--worker_types', type=str, default="datastore,container,wasm")
 
@@ -150,7 +149,7 @@ def main():
     OUTFILE = open("./bench-results.csv", 'w', encoding='utf-8')
     OUTFILE.write("bench_name, worker_type, elapsed\n")
 
-    prepare_open_lambda(args.ol_dir, reuse_config=args.reuse_config)
+    prepare_open_lambda(args.ol_dir)
 
     # pylint: disable=no-value-for-parameter
     hello()

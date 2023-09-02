@@ -1,13 +1,17 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 
 	"github.com/open-lambda/open-lambda/ol/bench"
 	"github.com/open-lambda/open-lambda/ol/boss"
@@ -30,22 +34,101 @@ func newBossConf() error {
 	return nil
 }
 
-// newBoss corresponses to the "new-boss" command of the admin tool.
-func newBoss(ctx *cli.Context) error {
-	return newBossConf()
-}
-
 // runBoss corresponses to the "boss" command of the admin tool.
 func runBoss(ctx *cli.Context) error {
 	if _, err := os.Stat("boss.json"); os.IsNotExist(err) {
 		newBossConf()
 	}
 
-	if err := boss.LoadConf("boss.json"); err != nil {
+	confPath := "boss.json"
+	overrides := ctx.String("options")
+	if overrides != "" {
+		overridesPath := confPath + ".overrides"
+		err := overrideOpts(confPath, overridesPath, overrides)
+		if err != nil {
+			return err
+		}
+		confPath = overridesPath
+	}
+
+	if err := boss.LoadConf(confPath); err != nil {
 		return err
 	}
 
 	return bossStart(ctx)
+}
+
+// modify the config.json file based on settings from cmdline: -o opt1=val1,opt2=val2,...
+//
+// apply changes in optsStr to config from confPath, saving result to overridePath
+func overrideOpts(confPath, overridePath, optsStr string) error {
+	b, err := ioutil.ReadFile(confPath)
+	if err != nil {
+		return err
+	}
+	conf := make(map[string]any)
+	if err := json.Unmarshal(b, &conf); err != nil {
+		return err
+	}
+
+	opts := strings.Split(optsStr, ",")
+	for _, opt := range opts {
+		parts := strings.Split(opt, "=")
+		if len(parts) != 2 {
+			return fmt.Errorf("Could not parse key=val: '%s'", opt)
+		}
+		keys := strings.Split(parts[0], ".")
+		val := parts[1]
+
+		c := conf
+		for i := 0; i < len(keys)-1; i++ {
+			sub, ok := c[keys[i]]
+			if !ok {
+				return fmt.Errorf("key '%s' not found", keys[i])
+			}
+			switch v := sub.(type) {
+			case map[string]any:
+				c = v
+			default:
+				return fmt.Errorf("%s refers to a %T, not a map", keys[i], c[keys[i]])
+			}
+		}
+
+		key := keys[len(keys)-1]
+		prev, ok := c[key]
+		if !ok {
+			return fmt.Errorf("invalid option: '%s'", key)
+		}
+		switch prev.(type) {
+		case string:
+			c[key] = val
+		case float64:
+			c[key], err = strconv.Atoi(val)
+			if err != nil {
+				return err
+			}
+		case bool:
+			if strings.ToLower(val) == "true" {
+				c[key] = true
+			} else if strings.ToLower(val) == "false" {
+				c[key] = false
+			} else {
+				return fmt.Errorf("'%s' for %s not a valid boolean value", val, key)
+			}
+		default:
+			return fmt.Errorf("config values of type %T (%s) must be edited manually in the config file ", prev, key)
+		}
+	}
+
+	// save back config
+	s, err := json.MarshalIndent(conf, "", "\t")
+	if err != nil {
+		return err
+	}
+	if err := ioutil.WriteFile(overridePath, s, 0644); err != nil {
+		return err
+	}
+	return nil
 }
 
 // corresponds to the "pprof mem" command of the admin tool.
@@ -82,6 +165,80 @@ func pprofMem(ctx *cli.Context) error {
 	}
 	fmt.Printf("output saved to %s.  Use the following to explore:\n", path)
 	fmt.Printf("go tool pprof -http=localhost:8888 %s\n", path)
+
+	return nil
+}
+
+func pprofCpuStart(ctx *cli.Context) error {
+	olPath, err := common.GetOlPath(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = common.LoadConf(filepath.Join(olPath, "config.json"))
+	if err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf("http://localhost:%s/pprof/cpu-start", common.Conf.Worker_port)
+	response, err := http.Get(url)
+	if err != nil {
+		return fmt.Errorf("Could not send GET to %s", url)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode == 200 {
+		fmt.Printf("started cpu profiling\n")
+		fmt.Printf("use \"ol pprof cpu-stop\" to stop\n")
+		return nil
+	} else if response.StatusCode == 500 {
+		return fmt.Errorf("Unknown server error\n")
+	} else {
+	    	body, err := ioutil.ReadAll(response.Body)
+	    	if err != nil {
+	      		return fmt.Errorf("failed to read body from GET to %s", url)
+	    	}
+	    	return fmt.Errorf("Failed to start cpu profiling: %s\n", body)
+	}
+}
+
+func pprofCpuStop(ctx *cli.Context) error {
+	olPath, err := common.GetOlPath(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = common.LoadConf(filepath.Join(olPath, "config.json"))
+	if err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf("http://localhost:%s/pprof/cpu-stop", common.Conf.Worker_port)
+	response, err := http.Get(url)
+	if err != nil {
+		return fmt.Errorf("Could not send GET to %s", url)
+	}
+	defer response.Body.Close()
+	if response.StatusCode == 400 {
+		return fmt.Errorf("Should call \"ol pprof cpu-start\" first\n")
+	} else if response.StatusCode == 500 {
+   	 	return fmt.Errorf("Unknown server error\n")
+  	}
+
+	path := ctx.String("out")
+	if path == "" {
+		path = "cpu.prof"
+	}
+	out, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	if _, err := io.Copy(out, response.Body); err != nil {
+		return err
+	}
+	fmt.Printf("output saved to %s. Use the following to explore:\n", path)
+	fmt.Printf("go tool pprof -http=localhost:8889 %s\n", path)
 
 	return nil
 }
@@ -130,23 +287,13 @@ func bossStart(ctx *cli.Context) error {
 
 		fmt.Printf("Starting boss: pid=%d, port=%s, log=%s\n", proc.Pid, boss.Conf.Boss_port, logPath)
 		return nil // TODO: ping status to make sure it is actually running?
-    }
+	}
 
 	if err := boss.BossMain(); err != nil {
 		return err
 	}
 
 	return fmt.Errorf("this code should not be reachable")
-}
-
-func gcpTest(ctx *cli.Context) error {
-	boss.GCPBossTest()
-	return nil
-}
-
-func azureTest(ctx *cli.Context) error {
-	boss.AzureMain("default contents")
-	return nil
 }
 
 // main runs the admin tool
@@ -173,66 +320,68 @@ OPTIONS:
 	app.HideVersion = true
 	app.Commands = []*cli.Command{
 		&cli.Command{
-			Name:        "new-boss",
-			Usage:       "Create an OL Boss config (boss.json)",
-			UsageText:   "ol new-boss [--path=PATH] [--detach]",
-			Description: "Create config for new boss",
-			Action:      newBoss,
-		},
-		&cli.Command{
 			Name:        "boss",
 			Usage:       "Start an OL Boss process",
-			UsageText:   "ol boss [--path=PATH] [--detach]",
+			UsageText:   "ol boss [OPTIONS...] [--detach]",
 			Description: "Start a boss server.",
 			Flags: []cli.Flag{
+				&cli.StringFlag{
+					Name:    "options",
+					Aliases: []string{"o"},
+					Usage:   "Override options with: -o opt1=val1,opt2=val2/opt3.subopt31=val3",
+				},
 				&cli.BoolFlag{
-					Name:  "detach",
+					Name:    "detach",
 					Aliases: []string{"d"},
-					Usage: "Run worker in background",
+					Usage:   "Run worker in background",
 				},
 			},
 			Action: runBoss,
 		},
 		&cli.Command{
-			Name:      "gcp-test",
-			Usage:     "Developer use only.  Start a GCP VM running the OL worker",
-			UsageText: "ol gcp-test",
-			Flags:     []cli.Flag{},
-			Action:    gcpTest,
-		},
-		&cli.Command{
-			Name:      "azure-test",
-			Usage:     "Developer use only.  Start an Azure Blob ",
-			UsageText: "ol zure-test",
-			Flags:     []cli.Flag{},
-			Action:    azureTest,
-		},
-		&cli.Command{
-			Name: "worker",
-			Usage: "Run OL worker commands.",
-			UsageText: "ol worker <cmd>",
+			Name:        "worker",
+			Usage:       "Run OL worker commands.",
+			UsageText:   "ol worker <cmd>",
 			Subcommands: worker.WorkerCommands(),
 		},
 		&cli.Command{
-			Name: "bench",
-			Usage: "Run benchmarks against an OL worker.",
-			UsageText: "ol bench <cmd>",
+			Name:        "bench",
+			Usage:       "Run benchmarks against an OL worker.",
+			UsageText:   "ol bench <cmd>",
 			Subcommands: bench.BenchCommands(),
 		},
 		&cli.Command{
-			Name: "pprof",
-			Usage: "Profile OL worker",
+			Name:      "pprof",
+			Usage:     "Profile OL worker",
 			UsageText: "ol pprof <cmd>",
 			Subcommands: []*cli.Command{
 				{
-					Name:  "mem",
-					Usage: "creates lambdas for benchmarking",
+					Name:      "mem",
+					Usage:     "creates lambdas for benchmarking",
 					UsageText: "ol pprof mem [--out=NAME]",
-					Action: pprofMem,
+					Action:    pprofMem,
 					Flags: []cli.Flag{
 						&cli.StringFlag{
-							Name:  "out",
+							Name:    "out",
 							Aliases: []string{"o"},
+						},
+					},
+				},
+				{
+					Name:      "cpu-start",
+					Usage:     "Starts CPU profiling",
+					UsageText: "ol pprof cpu-start ",
+					Action: pprofCpuStart,
+				},
+				{
+					Name:      "cpu-stop",
+					Usage:     "Stops CPU profiling if started",
+					UsageText: "ol pprof cpu-stop [--out=NAME]",
+					Action: pprofCpuStop,
+					Flags: []cli.Flag{
+						&cli.StringFlag{
+							Name: "out",
+              Aliases: []string{"o"},
 						},
 					},
 				},
