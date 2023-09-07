@@ -23,13 +23,15 @@ func NewWorkerPool(platform string, worker_cap int) (*WorkerPool, error) {
 
 	var pool *WorkerPool
 	switch {
-case platform == "mock":
-	pool = NewMockWorkerPool()
-	case platform == "DO":
-	pool = NewDOWorkerPool()
-default:
-	return nil, errors.New("invalid cloud platform")
-}
+  case platform == "mock":
+        pool = NewMockWorkerPool()
+	case platform == "gcp":
+        pool = NewGcpWorkerPool()
+  case platform == "DO":
+	      pool = NewDOWorkerPool()
+  default:
+        return nil, errors.New("invalid cloud platform")
+    }
 
 	pool.nextId = 1
 	pool.workers = []map[string]*Worker{
@@ -162,7 +164,7 @@ func (pool *WorkerPool) recoverWorker(worker *Worker) {
 		len(pool.workers[RUNNING]),
 		len(pool.workers[CLEANING]),
 		len(pool.workers[DESTROYING]))
-
+		
 	pool.Unlock()
 
 	pool.updateCluster()
@@ -321,8 +323,6 @@ func (pool *WorkerPool) Close() {
 			break
 		}
 	}
-
-	os.Exit(0)
 }
 
 // ssh to worker and run command
