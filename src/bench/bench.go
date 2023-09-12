@@ -164,13 +164,11 @@ func create_lambdas(ctx *cli.Context) error {
 
 		// simple pandas operation (correlation between two columns in 1000x10 DataFrame)
 		path = filepath.Join(common.Conf.Registry, fmt.Sprintf("bench-pd-%d.py", i))
-		code = `# ol-install: numpy,pandas
+		code = `# ol-install: numpy,pandas,matplotlib,scipy
 import numpy as np
 import pandas as pd
-import torch
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
 import scipy
 import time
 
@@ -179,23 +177,23 @@ df2 = None
 
 def f(event):
 
-    x = [x for x in range(0, 1000)]
-    y = [y*100 for y in range(0, 1000)]
+    x = [x for x in range(0, 100)]
+    y = [y*100 for y in range(0, 100)]
     global df1
     if df1 is None:
-        df1 = pd.DataFrame(np.random.random((1000,1000)))
+        df1 = pd.DataFrame(np.random.random((100,100)))
     col0 = np.random.randint(len(df1.columns))
     col1 = np.random.randint(len(df1.columns))
     res1 = df1[col0].corr(df1[col1])
 
     global df2
     if df2 is None:
-        df2 = pd.DataFrame(np.random.random((1000,1000)))
+        df2 = pd.DataFrame(np.random.random((100,100)))
     col0 = np.random.randint(len(df2.columns))
     col1 = np.random.randint(len(df2.columns))
     res2 = df2[col0].corr(df2[col1])
 
-    for j in range(0, 1000):
+    for j in range(0, 100):
         res2 = df2[col0].corr(df2[col1])
 
     time.sleep(3)
