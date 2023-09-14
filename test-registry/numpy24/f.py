@@ -1,4 +1,3 @@
-# ol-install: numpy==1.24
 import numpy
 
 def f(event):

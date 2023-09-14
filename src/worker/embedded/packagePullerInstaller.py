@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import os, sys, platform, re
 import subprocess
+import pkgutil
 
 import pkg_resources
 from pkg_resources import parse_requirements
@@ -29,19 +30,11 @@ if hasattr(sys, 'implementation'):
     implementation_version = format_full_version(sys.implementation.version)
 else:
     implementation_version = "0"
-extra = ''  # TODO: support extras
 
 
+# top_level.txt cannot be trusted, use pkgutil to get top level packages
 def top(dirname):
-    path = None
-    for name in os.listdir(dirname):
-        if name.endswith('-info'):
-            path = os.path.join(dirname, name, "top_level.txt")
-    if path == None or not os.path.exists(path):
-        return []
-    with open(path) as f:
-        return f.read().strip().split("\n")
-
+    return [name for _, name, _ in pkgutil.iter_modules([dirname])]
 
 def deps(dirname):
     path = None
@@ -62,23 +55,24 @@ def deps(dirname):
         try:
             if dependency.marker is None or (dependency.marker is not None and dependency.marker.evaluate()):
                 rv.add(dependency.project_name)
-        # TODO: except "extra", is there anything else cause undefined environment name?
-        # why extra in ubuntu causes undefined environment name, in windows it works fine?
+        # TODO: 'extra' would causes UndefinedEnvironmentName, simply ignore it for now
+        #  except "extra", is there anything else cause UndefinedEnvironmentName?
         except pkg_resources.extern.packaging.markers.UndefinedEnvironmentName:
             continue
     return list(rv)
+
 
 def f(event):
     pkg = event["pkg"]
     alreadyInstalled = event["alreadyInstalled"]
     if not alreadyInstalled:
-        print('installing %s' % pkg)
-        output = subprocess.check_output(['pip3', 'install', '--no-deps', pkg, '--cache-dir', '/tmp/.cache', '-t', '/host/files'])
-        print(output.decode())
+        try:
+            subprocess.check_output(
+                ['pip3', 'install', '--no-deps', pkg, '--cache-dir', '/tmp/.cache', '-t', '/host/files'])
+        except subprocess.CalledProcessError as e:
+            print(f'pip install failed with error code {e.returncode}')
+            print(f'Output: {e.output}')
 
-        #rc = os.system('pip3 install --no-deps %s --cache-dir /tmp/.cache -t /host/files' % pkg)
-        #print('pip install returned code %d' % rc)
-        #assert (rc == 0)
     name = pkg.split("==")[0]
     d = deps("/host/files")
     t = top("/host/files")

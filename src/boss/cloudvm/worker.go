@@ -1,6 +1,7 @@
-package boss
+package cloudvm
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -12,42 +13,22 @@ import (
 	"time"
 )
 
-func NewWorkerPool() (*WorkerPool, error) {
+func NewWorkerPool(platform string, worker_cap int) (*WorkerPool, error) {
 	clusterLogFile, _ := os.Create("cluster.log")
 	taskLogFile, _ := os.Create("tasks.log")
 	clusterLog := log.New(clusterLogFile, "", 0)
 	taskLog := log.New(taskLogFile, "", 0)
-	clusterLog.SetFlags(log.Ldate | log.Lmicroseconds)
-	taskLog.SetFlags(log.Ldate | log.Lmicroseconds)
-
-	// Used for boss cpu and memory monitor
-	go func() {
-		log.Println("create worker_usage.log file.")
-		boss_usage, _ = os.Create("boss_usage.log")
-		boss_log = log.New(boss_usage, "", 0)
-		boss_log.SetFlags(log.Ldate | log.Lmicroseconds)
-		for {
-			getStatus()
-			time.Sleep(10 * time.Second)
-		}
-	}()
-
-	// Only used for worker throughput bench
-	InitTestConf()
-	go func() {
-		for {
-			time.Sleep(10 * time.Second)
-			WriteBack()
-		}
-	}()
-	// Ends here
+	clusterLog.SetFlags(log.Lmicroseconds)
+	taskLog.SetFlags(log.Lmicroseconds)
 
 	var pool *WorkerPool
-	if Conf.Platform == "azure" {
-		pool = NewAzureWorkerPool()
-		conf, err = ReadAzureConfig()
-	} else if Conf.Platform == "mock" {
+	switch {
+	case platform == "mock":
 		pool = NewMockWorkerPool()
+	case platform == "gcp":
+		pool = NewGcpWorkerPool()
+	default:
+		return nil, errors.New("invalid cloud platform")
 	}
 
 	pool.nextId = 1
@@ -57,7 +38,7 @@ func NewWorkerPool() (*WorkerPool, error) {
 		make(map[string]*Worker), //cleaning
 		make(map[string]*Worker), //destroying
 	}
-	pool.queue = make(chan *Worker, Conf.Worker_Cap)
+	pool.queue = make(chan *Worker, worker_cap)
 	pool.clusterLogFile = clusterLogFile
 	pool.taskLogFile = taskLogFile
 	pool.clusterLog = clusterLog
@@ -65,17 +46,14 @@ func NewWorkerPool() (*WorkerPool, error) {
 	pool.nLatency = 0
 	pool.totalTask = 0
 	pool.sumLatency = 0
+	pool.platform = platform
+	pool.worker_cap = worker_cap
 
-	if Conf.Scaling == "auto" {
-		pool.Scaling = &ScalingThreshold{}
-		pool.SetTarget(1)
-	}
-
-	log.Printf("READY: worker pool of type %s", Conf.Platform)
+	log.Printf("READY: worker pool of type %s", platform)
 
 	//log total outstanding tasks
 	go func() {
-		for {
+		for true {
 			time.Sleep(time.Second)
 			var avgLatency int64 = 0
 			if pool.nLatency > 0 {
@@ -111,6 +89,14 @@ func (pool *WorkerPool) SetTarget(target int) {
 	pool.updateCluster()
 }
 
+func (pool *WorkerPool) GetTarget() int {
+	return pool.target
+}
+
+func (pool *WorkerPool) GetCap() int {
+	return pool.worker_cap
+}
+
 // add a new worker to the cluster
 func (pool *WorkerPool) startNewWorker() {
 	pool.Lock()
@@ -132,14 +118,9 @@ func (pool *WorkerPool) startNewWorker() {
 
 	go func() { // should be able to create multiple instances simultaneously
 		worker.numTask = 1
-		err := pool.CreateInstance(worker) //create new instance
-		if err != nil {
-			log.Fatalf("Worker cannot be created successfully. Please check the cloud platform.\n")
-		}
+		pool.CreateInstance(worker) //create new instance
 
-		if Conf.Platform == "azure" {
-			worker.startWorker()
-		} else {
+		if pool.platform != "mock" {
 			worker.runCmd("./ol worker up -d") // start worker
 		}
 
@@ -308,31 +289,14 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 	starttime := time.Now()
 	if len(pool.workers[STARTING])+len(pool.workers[RUNNING]) == 0 {
 		w.WriteHeader(http.StatusInternalServerError)
-		if Conf.Scaling == "manual" {
-			_, err := w.Write([]byte("no active worker\n"))
-			if err != nil {
-				log.Printf("no active worker: %s\n", err.Error())
-			}
-			return
-		}
 	}
 
 	worker := <-pool.queue
 	pool.queue <- worker
-
 	atomic.AddInt32(&worker.numTask, 1)
 	atomic.AddInt32(&pool.totalTask, 1)
-	if Conf.Scaling == "auto" {
-		pool.Scale(pool)
-	}
 
 	pool.ForwardTask(w, r, worker)
-
-	// Here for throughputs for each worker
-	tConf_lock.Lock()
-	tConf[worker.workerId] += 1
-	tConf_lock.Unlock()
-	// Ends here
 
 	atomic.AddInt32(&worker.numTask, -1)
 	atomic.AddInt32(&pool.totalTask, -1)
@@ -357,8 +321,6 @@ func (pool *WorkerPool) Close() {
 			break
 		}
 	}
-
-	os.Exit(0)
 }
 
 // ssh to worker and run command

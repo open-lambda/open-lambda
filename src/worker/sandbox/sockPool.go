@@ -128,15 +128,17 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 
 		for _, pkg := range meta.Installs {
 			path := "'/packages/" + pkg + "/files'"
-			pyCode = append(pyCode, "if not "+path+" in sys.path:")
-			pyCode = append(pyCode, "    sys.path.insert(0, "+path+")")
+			pyCode = append(pyCode, "if os.path.exists("+path+"):")
+			pyCode = append(pyCode, "	if not "+path+" in sys.path:")
+			pyCode = append(pyCode, "		sys.path.insert(0, "+path+")")
 		}
 
+		// we need handle any possible error while importing a module
 		for _, mod := range meta.Imports {
 			pyCode = append(pyCode, "try:")
-			pyCode = append(pyCode, "    import "+mod)
-			pyCode = append(pyCode, "except ImportError as e:")
-			pyCode = append(pyCode, "    print('bootstrap.py error:', e)")
+			pyCode = append(pyCode, "	import "+mod)
+			pyCode = append(pyCode, "except Exception as e:")
+			pyCode = append(pyCode, "	print('bootstrap.py error:', e)")
 		}
 
 		// handler or Zygote?

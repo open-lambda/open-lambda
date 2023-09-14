@@ -10,6 +10,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
+	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
 )
 
 var Conf *Config
@@ -139,6 +140,12 @@ func isFile(path string) (os.FileInfo, bool) {
 }
 
 type GcpConfig struct {
+	Platform   string             `json:"platform"`
+	Scaling    string             `json:"scaling"`
+	API_key    string             `json:"api_key"`
+	Boss_port  string             `json:"boss_port"`
+	Worker_Cap int                `json:"worker_cap"`
+	Gcp        *cloudvm.GcpConfig `json:"gcp"`
 }
 
 func LoadDefaults() error {
@@ -147,7 +154,8 @@ func LoadDefaults() error {
 		Scaling:    "manual",
 		API_key:    "abc", // TODO
 		Boss_port:  "5000",
-		Worker_Cap: 20,
+		Worker_Cap: 4,
+		Gcp:        cloudvm.GetGcpConfigDefaults(),
 	}
 
 	return checkConf()
@@ -166,11 +174,13 @@ func LoadConf(path string) error {
 		return fmt.Errorf("could not parse config (%v): %v\n", path, err.Error())
 	}
 
+	cloudvm.LoadGcpConfig(Conf.Gcp)
+
 	return checkConf()
 }
 
 func checkConf() error {
-	if Conf.Scaling != "manual" && Conf.Scaling != "auto" {
+	if Conf.Scaling != "manual" && Conf.Scaling != "threshold-scaler" {
 		return fmt.Errorf("Scaling type '%s' not implemented", Conf.Scaling)
 	}
 

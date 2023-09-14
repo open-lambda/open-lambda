@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"os/signal"
 	"syscall"
+	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
+	"github.com/open-lambda/open-lambda/ol/boss/autoscaling"
 )
 
 const (
@@ -20,7 +22,8 @@ const (
 )
 
 type Boss struct {
-	workerPool *WorkerPool
+	workerPool *cloudvm.WorkerPool
+	autoScaler  autoscaling.Scaling
 }
 
 func (b *Boss) BossStatus(w http.ResponseWriter, r *http.Request) {
@@ -33,17 +36,21 @@ func (b *Boss) BossStatus(w http.ResponseWriter, r *http.Request) {
 		b.workerPool.StatusCluster(),
 		b.workerPool.StatusTasks(),
 	}
-
+	
 	if b, err := json.MarshalIndent(output, "", "\t"); err != nil {
 		panic(err)
 	} else {
 		w.Write(b)
 	}
+
+
 }
 
 func (b *Boss) Close(w http.ResponseWriter, r *http.Request) {
 	b.workerPool.Close()
-	os.Exit(0)
+	if Conf.Scaling == "threshold-scaler" {
+		b.autoScaler.Close()
+	}
 }
 
 func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
@@ -85,7 +92,7 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 
 	// STEP 2: adjust target worker count
 	b.workerPool.SetTarget(worker_count)
-
+	
 	//respond with status
 	b.BossStatus(w, r)
 }
@@ -93,7 +100,7 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 func BossMain() (err error) {
 	fmt.Printf("WARNING!  Boss incomplete (only use this as part of development process).\n")
 
-	pool, err := NewWorkerPool()
+	pool, err := cloudvm.NewWorkerPool(Conf.Platform, Conf.Worker_Cap)
 	if err != nil {
 		return err
 	}
@@ -101,6 +108,12 @@ func BossMain() (err error) {
 	boss := Boss{
 		workerPool: pool,
 	}
+
+	if Conf.Scaling == "threshold-scaler" {
+		boss.autoScaler = &autoscaling.ThresholdScaling{}
+		boss.autoScaler.Launch(boss.workerPool)
+	}
+
 	http.HandleFunc(BOSS_STATUS_PATH, boss.BossStatus)
 	http.HandleFunc(SCALING_PATH, boss.ScalingWorker)
 	http.HandleFunc(RUN_PATH, boss.workerPool.RunLambda)

@@ -169,6 +169,80 @@ func pprofMem(ctx *cli.Context) error {
 	return nil
 }
 
+func pprofCpuStart(ctx *cli.Context) error {
+	olPath, err := common.GetOlPath(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = common.LoadConf(filepath.Join(olPath, "config.json"))
+	if err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf("http://localhost:%s/pprof/cpu-start", common.Conf.Worker_port)
+	response, err := http.Get(url)
+	if err != nil {
+		return fmt.Errorf("Could not send GET to %s", url)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode == 200 {
+		fmt.Printf("started cpu profiling\n")
+		fmt.Printf("use \"ol pprof cpu-stop\" to stop\n")
+		return nil
+	} else if response.StatusCode == 500 {
+		return fmt.Errorf("Unknown server error\n")
+	} else {
+	    	body, err := ioutil.ReadAll(response.Body)
+	    	if err != nil {
+	      		return fmt.Errorf("failed to read body from GET to %s", url)
+	    	}
+	    	return fmt.Errorf("Failed to start cpu profiling: %s\n", body)
+	}
+}
+
+func pprofCpuStop(ctx *cli.Context) error {
+	olPath, err := common.GetOlPath(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = common.LoadConf(filepath.Join(olPath, "config.json"))
+	if err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf("http://localhost:%s/pprof/cpu-stop", common.Conf.Worker_port)
+	response, err := http.Get(url)
+	if err != nil {
+		return fmt.Errorf("Could not send GET to %s", url)
+	}
+	defer response.Body.Close()
+	if response.StatusCode == 400 {
+		return fmt.Errorf("Should call \"ol pprof cpu-start\" first\n")
+	} else if response.StatusCode == 500 {
+   	 	return fmt.Errorf("Unknown server error\n")
+  	}
+
+	path := ctx.String("out")
+	if path == "" {
+		path = "cpu.prof"
+	}
+	out, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	if _, err := io.Copy(out, response.Body); err != nil {
+		return err
+	}
+	fmt.Printf("output saved to %s. Use the following to explore:\n", path)
+	fmt.Printf("go tool pprof -http=localhost:8889 %s\n", path)
+
+	return nil
+}
+
 func bossStart(ctx *cli.Context) error {
 	detach := ctx.Bool("detach")
 
@@ -290,6 +364,24 @@ OPTIONS:
 						&cli.StringFlag{
 							Name:    "out",
 							Aliases: []string{"o"},
+						},
+					},
+				},
+				{
+					Name:      "cpu-start",
+					Usage:     "Starts CPU profiling",
+					UsageText: "ol pprof cpu-start ",
+					Action: pprofCpuStart,
+				},
+				{
+					Name:      "cpu-stop",
+					Usage:     "Stops CPU profiling if started",
+					UsageText: "ol pprof cpu-stop [--out=NAME]",
+					Action: pprofCpuStop,
+					Flags: []cli.Flag{
+						&cli.StringFlag{
+							Name: "out",
+              Aliases: []string{"o"},
 						},
 					},
 				},
