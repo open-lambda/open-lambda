@@ -5,147 +5,20 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"os"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute"
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork"
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
 )
 
 var Conf *Config
 
 type Config struct {
-	Platform   string      `json:"platform"`
-	Scaling    string      `json:"scaling"`
-	API_key    string      `json:"api_key"`
-	Boss_port  string      `json:"boss_port"`
-	Worker_Cap int         `json:"worker_cap"`
-	Azure      AzureConfig `json:"azure"`
-	Gcp        GcpConfig   `json:"gcp"`
-}
-type AzureConfig struct {
-	Resource_groups rgroups `json:"azure_config"`
-}
-
-// TODO: Rightnow we default to have only one resource group
-type rgroups struct {
-	Rgroup    []rgroup `json:"resource_groups"`
-	Numrgroup int      `json:"resource_groups_number"`
-}
-
-type rgroup struct {
-	Resource armresources.ResourceGroup `json:"resource_group"`
-	Vms      []vmStatus                 `json:"virtual_machine_status"`
-	Numvm    int                        `json:"vm_number"`
-}
-
-type vmStatus struct {
-	Status         string                     `json:"virtual_machine_status"`
-	Vm             armcompute.VirtualMachine  `json:"virtual_machine"`
-	Virtual_net    armnetwork.VirtualNetwork  `json:"virtual_network"`
-	Subnet         armnetwork.Subnet          `json:"subnet"`
-	Public_ip      armnetwork.PublicIPAddress `json:"public_ip"`
-	Security_group armnetwork.SecurityGroup   `json:"security_group"`
-	Net_ifc        armnetwork.Interface       `json:"network_interface"`
-}
-
-func InitAzureConfig() (*AzureConfig, error) {
-	rg := new(rgroup)
-	rgs := new(rgroups)
-	conf := new(AzureConfig)
-	path := "azure.json"
-	var content []byte
-
-	rg.Numvm = 0
-	rgs.Numrgroup = 1
-	rgs.Rgroup = append(rgs.Rgroup, *rg)
-	conf.Resource_groups = *rgs
-
-	content, err := json.MarshalIndent(conf, "", "\t")
-	if err != nil {
-		return nil, err
-	}
-
-	if err = ioutil.WriteFile(path, content, 0666); err != nil {
-		return nil, err
-	}
-	return conf, nil
-}
-
-func ReadAzureConfig() (*AzureConfig, error) {
-	path := "azure.json"
-	_, b := isFile(path)
-	var file *os.File
-	var err error
-	var byteValue []byte
-
-	conf := new(AzureConfig)
-
-	if b {
-		if file, err = os.Open(path); err != nil {
-			return nil, err
-		}
-		if byteValue, err = ioutil.ReadAll(file); err != nil {
-			return nil, err
-		}
-		json.Unmarshal([]byte(byteValue), conf)
-	} else {
-		if file, err = os.Create(path); err != nil {
-			return nil, err
-		}
-		if ptr_conf, err := InitAzureConfig(); err != nil {
-			return nil, err
-		} else {
-			conf = ptr_conf
-		}
-	}
-
-	err = file.Close()
-	if err != nil {
-		return nil, err
-	}
-	return conf, err
-}
-
-func WriteAzureConfig(conf *AzureConfig) error {
-	path := "azure.json"
-	var content []byte
-
-	content, err := json.MarshalIndent(conf, "", "\t")
-	if err != nil {
-		return err
-	}
-	if err = ioutil.WriteFile(path, content, 0666); err != nil {
-		return err
-	}
-	return nil
-}
-
-func isExists(path string) (os.FileInfo, bool) {
-	f, err := os.Stat(path)
-	return f, err == nil || os.IsExist(err)
-}
-
-// if its dir
-func isDir(path string) (os.FileInfo, bool) {
-	f, flag := isExists(path)
-	return f, flag && f.IsDir()
-}
-
-// if its file
-func isFile(path string) (os.FileInfo, bool) {
-	f, flag := isExists(path)
-	return f, flag && !f.IsDir()
-}
-
-type GcpConfig struct {
-	Platform   string             `json:"platform"`
-	Scaling    string             `json:"scaling"`
-	API_key    string             `json:"api_key"`
-	Boss_port  string             `json:"boss_port"`
-	Worker_Cap int                `json:"worker_cap"`
-	Gcp        *cloudvm.GcpConfig `json:"gcp"`
+	Platform   string              `json:"platform"`
+	Scaling    string              `json:"scaling"`
+	API_key    string              `json:"api_key"`
+	Boss_port  string              `json:"boss_port"`
+	Worker_Cap int                 `json:"worker_cap"`
+	Azure      cloudvm.AzureConfig `json:"azure"`
+	Gcp        cloudvm.GcpConfig   `json:"gcp"`
 }
 
 func LoadDefaults() error {
@@ -155,7 +28,7 @@ func LoadDefaults() error {
 		API_key:    "abc", // TODO
 		Boss_port:  "5000",
 		Worker_Cap: 4,
-		Gcp:        cloudvm.GetGcpConfigDefaults(),
+		Gcp:        *cloudvm.GetGcpConfigDefaults(),
 	}
 
 	return checkConf()
@@ -174,7 +47,7 @@ func LoadConf(path string) error {
 		return fmt.Errorf("could not parse config (%v): %v\n", path, err.Error())
 	}
 
-	cloudvm.LoadGcpConfig(Conf.Gcp)
+	cloudvm.LoadGcpConfig(&Conf.Gcp)
 
 	return checkConf()
 }
@@ -185,24 +58,6 @@ func checkConf() error {
 	}
 
 	return nil
-}
-
-// Dump prints the Config as a JSON string.
-func DumpConf() {
-	s, err := json.Marshal(Conf)
-	if err != nil {
-		panic(err)
-	}
-	log.Printf("CONFIG = %v\n", string(s))
-}
-
-// DumpStr returns the Config as an indented JSON string.
-func DumpConfStr() string {
-	s, err := json.MarshalIndent(Conf, "", "\t")
-	if err != nil {
-		panic(err)
-	}
-	return string(s)
 }
 
 // Save writes the Config as an indented JSON to path with 644 mode.
