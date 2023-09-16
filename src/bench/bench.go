@@ -128,9 +128,9 @@ func run_benchmark(ctx *cli.Context, name string, tasks int, functions int, func
 		waiting -= 1
 	}
 
-	// if errors > (errors+successes)/100 {
-	// 	panic(fmt.Sprintf(">1%% of requests failed (%d/%d)", errors, errors+successes))
-	// }
+	if errors > (errors+successes)/100 {
+		panic(fmt.Sprintf(">1%% of requests failed (%d/%d)", errors, errors+successes))
+	}
 
 	result := fmt.Sprintf("{\"benchmark\": \"%s\",\"seconds\": %.3f, \"successes\": %d, \"errors\": %d, \"ops/s\": %.3f}",
 		name, seconds, successes, errors, float64(successes)/seconds)

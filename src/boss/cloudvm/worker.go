@@ -27,6 +27,11 @@ func NewWorkerPool(platform string, worker_cap int) (*WorkerPool, error) {
 		pool = NewMockWorkerPool()
 	case platform == "gcp":
 		pool = NewGcpWorkerPool()
+	case platform == "azure":
+		pool, err = NewAzureWorkerPool()
+		if err != nil {
+			return nil, err
+		}
 	default:
 		return nil, errors.New("invalid cloud platform")
 	}
@@ -120,8 +125,10 @@ func (pool *WorkerPool) startNewWorker() {
 		worker.numTask = 1
 		pool.CreateInstance(worker) //create new instance
 
-		if pool.platform != "mock" {
+		if pool.platform == "gcp" {
 			worker.runCmd("./ol worker up -d") // start worker
+		} else if pool.platform == "azure" {
+			worker.startWorker()
 		}
 
 		//change state starting -> running

@@ -1,6 +1,7 @@
 package cloudvm
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -31,10 +32,14 @@ type AzureWorker struct {
 	publicAddr   string
 }
 
-func NewAzureWorkerPool() *WorkerPool {
+func NewAzureWorkerPool() (*WorkerPool, error) {
 	conf, err := ReadAzureConfig()
 	if err != nil {
-		log.Fatalln(err)
+		return nil, err
+	}
+	if len(conf.Resource_groups.Rgroup) != 1 {
+		err1 := errors.New("should have one resource group")
+		return nil, err1
 	}
 	num := conf.Resource_groups.Rgroup[0].Numvm
 	workers := make(map[string]*AzureWorker, num)
@@ -59,7 +64,7 @@ func NewAzureWorkerPool() *WorkerPool {
 	parent := &WorkerPool{
 		WorkerPoolPlatform: pool,
 	}
-	return parent
+	return parent, nil
 }
 
 // Is nextId here useful? I store nextId in the pool
