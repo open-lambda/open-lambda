@@ -123,12 +123,19 @@ func (pool *WorkerPool) startNewWorker() {
 
 	go func() { // should be able to create multiple instances simultaneously
 		worker.numTask = 1
-		pool.CreateInstance(worker) //create new instance
-
+		err := pool.CreateInstance(worker) //create new instance
+		// TODO: need to handle this error, not panic (may use channel?)
+		if err != nil {
+			log.Fatalf(err.Error())
+		}
 		if pool.platform == "gcp" {
 			worker.runCmd("./ol worker up -d") // start worker
 		} else if pool.platform == "azure" {
-			worker.startWorker()
+			err = worker.start()
+			if err != nil {
+				// TODO: Handle error (may use channel?)
+				log.Fatalln(err)
+			}
 		}
 
 		//change state starting -> running
@@ -346,7 +353,12 @@ func (w *Worker) runCmd(command string) {
 
 	tries := 10
 	for tries > 0 {
-		sshcmd := exec.Command("ssh", user.Username+"@"+w.workerIp, "-o", "StrictHostKeyChecking=no", "-C", cmd)
+		var sshcmd *exec.Cmd
+		if w.pool.platform == "azure" {
+			sshcmd = exec.Command("ssh", "-i", AzureConf.Resource_groups.Rgroup[0].SSHKey, user.Username+"@"+w.workerIp, "-o", "StrictHostKeyChecking=no", "-C", cmd)
+		} else if w.pool.platform == "gcp" {
+			sshcmd = exec.Command("ssh", user.Username+"@"+w.workerIp, "-o", "StrictHostKeyChecking=no", "-C", cmd)
+		}
 		stdoutStderr, err := sshcmd.CombinedOutput()
 		log.Printf("%s\n", stdoutStderr)
 		if err == nil {

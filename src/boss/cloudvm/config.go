@@ -13,6 +13,7 @@ import (
 )
 
 var GcpConf *GcpConfig
+var AzureConf *AzureConfig
 
 type GcpConfig struct {
 	DiskSizeGb  int    `json:"disk_size_gb"`
@@ -62,6 +63,7 @@ type rgroup struct {
 	Resource armresources.ResourceGroup `json:"resource_group"`
 	Vms      []vmStatus                 `json:"virtual_machine_status"`
 	Numvm    int                        `json:"vm_number"`
+	SSHKey   string                     `json:"ssh_key"`
 }
 
 type vmStatus struct {
@@ -91,27 +93,36 @@ func isFile(path string) (os.FileInfo, bool) {
 	return f, flag && !f.IsDir()
 }
 
-func InitAzureConfig() (*AzureConfig, error) {
-	rg := new(rgroup)
-	rgs := new(rgroups)
-	conf := new(AzureConfig)
+func LoadAzureConfig(newConf *AzureConfig) {
+	AzureConf = newConf
+}
+
+func GetAzureConfigDefaults() *AzureConfig {
+	rg := &rgroup{
+		Numvm:  0,
+		SSHKey: "~/.ssh/ol-boss_key.pem",
+	}
+
+	rgs := &rgroups{
+		Numrgroup: 1,
+	}
+	rgs.Rgroup = append(rgs.Rgroup, *rg)
+
+	conf := &AzureConfig{
+		Resource_groups: *rgs,
+	}
+
 	path := "azure.json"
 	var content []byte
-
-	rg.Numvm = 0
-	rgs.Numrgroup = 1
-	rgs.Rgroup = append(rgs.Rgroup, *rg)
-	conf.Resource_groups = *rgs
-
 	content, err := json.MarshalIndent(conf, "", "\t")
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 
 	if err = ioutil.WriteFile(path, content, 0666); err != nil {
-		return nil, err
+		panic(err)
 	}
-	return conf, nil
+	return conf
 }
 
 func ReadAzureConfig() (*AzureConfig, error) {
@@ -135,11 +146,7 @@ func ReadAzureConfig() (*AzureConfig, error) {
 		if file, err = os.Create(path); err != nil {
 			return nil, err
 		}
-		if ptr_conf, err := InitAzureConfig(); err != nil {
-			return nil, err
-		} else {
-			conf = ptr_conf
-		}
+		conf = GetAzureConfigDefaults()
 	}
 
 	err = file.Close()

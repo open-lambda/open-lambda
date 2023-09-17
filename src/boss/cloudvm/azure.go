@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"math/rand"
@@ -117,7 +118,8 @@ func randomString() string {
 func AzureCreateVM(worker *Worker) (*AzureConfig, error) {
 	subscriptionId = os.Getenv("AZURE_SUBSCRIPTION_ID")
 	if len(subscriptionId) == 0 {
-		log.Fatal("AZURE_SUBSCRIPTION_ID is not set.")
+		err := errors.New("AZURE_SUBSCRIPTION_ID is not set")
+		return nil, err
 	}
 	return createVM(worker)
 }

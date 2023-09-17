@@ -648,17 +648,6 @@ func createVirtualMachine(ctx context.Context, cred azcore.TokenCredential, netw
 		return nil, err
 	}
 
-	//require ssh key for authentication on linux
-	//sshPublicKeyPath := "/home/user/.ssh/id_rsa.pub"
-	//var sshBytes []byte
-	//_,err := os.Stat(sshPublicKeyPath)
-	//if err == nil {
-	//	sshBytes,err = ioutil.ReadFile(sshPublicKeyPath)
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	//}
-
 	parameters := armcompute.VirtualMachine{
 		Location: to.Ptr(location),
 		Identity: &armcompute.VirtualMachineIdentity{
@@ -666,19 +655,6 @@ func createVirtualMachine(ctx context.Context, cred azcore.TokenCredential, netw
 		},
 		Properties: &armcompute.VirtualMachineProperties{
 			StorageProfile: &armcompute.StorageProfile{
-				// ImageReference: &armcompute.ImageReference{
-				// 	// search image reference
-				// 	// az vm image list --output table
-				// 	// Offer:     to.Ptr("WindowsServer"),
-				// 	// Publisher: to.Ptr("MicrosoftWindowsServer"),
-				// 	// SKU:       to.Ptr("2019-Datacenter"),
-				// 	// Version:   to.Ptr("latest"),
-				// 	//require ssh key for authentication on linux
-				// 	Offer:     to.Ptr("UbuntuServer"),
-				// 	Publisher: to.Ptr("Canonical"),
-				// 	SKU:       to.Ptr("18.04-LTS"),
-				// 	Version:   to.Ptr("latest"),
-				// },
 				OSDisk: &armcompute.OSDisk{
 					Name:         to.Ptr(newDiskName),
 					CreateOption: to.Ptr(armcompute.DiskCreateOptionTypesAttach),
@@ -688,30 +664,12 @@ func createVirtualMachine(ctx context.Context, cred azcore.TokenCredential, netw
 						ID:                 to.Ptr(new_diskID),
 					},
 					OSType: to.Ptr(armcompute.OperatingSystemTypesLinux),
-					//DiskSizeGB: to.Ptr[int32](100), // default 127G
 				},
 			},
 			HardwareProfile: &armcompute.HardwareProfile{
 				// TODO: make it user's choice
 				VMSize: to.Ptr(armcompute.VirtualMachineSizeTypes("Standard_B2s")), // VM size include vCPUs,RAM,Data Disks,Temp storage.
 			},
-			// OSProfile: &armcompute.OSProfile{ //
-			// 	ComputerName:  to.Ptr(vmName),
-			// 	AdminUsername: to.Ptr("ol-user"),
-			// 	AdminPassword: to.Ptr("123456"),
-			// 	//require ssh key for authentication on linux
-			// 	//LinuxConfiguration: &armcompute.LinuxConfiguration{
-			// 	//	DisablePasswordAuthentication: to.Ptr(true),
-			// 	//	SSH: &armcompute.SSHConfiguration{
-			// 	//		PublicKeys: []*armcompute.SSHPublicKey{
-			// 	//			{
-			// 	//				Path:    to.Ptr(fmt.Sprintf("/home/%s/.ssh/authorized_keys", "sample-user")),
-			// 	//				KeyData: to.Ptr(string(sshBytes)),
-			// 	//			},
-			// 	//		},
-			// 	//	},
-			// 	//},
-			// },
 			NetworkProfile: &armcompute.NetworkProfile{
 				NetworkInterfaces: []*armcompute.NetworkInterfaceReference{
 					{
@@ -724,14 +682,6 @@ func createVirtualMachine(ctx context.Context, cred azcore.TokenCredential, netw
 
 	pollerResponse, err := vmClient.BeginCreateOrUpdate(ctx, resourceGroupName, vmName, parameters, nil)
 	if err != nil {
-		// // Handle Retryable Error
-		// errMsg := err.Error()
-		// match, _ := regexp.MatchString("Retry", errMsg)
-		// if match {
-		// 	return createVirtualMachine(ctx, cred, networkInterfaceID, new_diskID, newDiskName, vmName)
-		// } else {
-		// 	return nil, err
-		// }
 		return nil, err
 	}
 

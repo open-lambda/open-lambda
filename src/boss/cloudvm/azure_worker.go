@@ -49,17 +49,19 @@ func NewAzureWorkerPool() (*WorkerPool, error) {
 		nextId:    num + 1,
 	}
 	for i := 0; i < num; i++ {
-		worker_i := new(AzureWorker)
-		worker_i.pool = pool
-		worker_i.privateAddr = *conf.Resource_groups.Rgroup[0].Vms[i].Net_ifc.Properties.IPConfigurations[0].Properties.PrivateIPAddress
+		cur_vm := conf.Resource_groups.Rgroup[0].Vms[i]
+		worker_i := &AzureWorker{
+			pool:        pool,
+			privateAddr: *cur_vm.Net_ifc.Properties.IPConfigurations[0].Properties.PrivateIPAddress,
+			workerId:    *cur_vm.Vm.Name,
+			configPosit: num,
+		}
 		publicWrap := conf.Resource_groups.Rgroup[0].Vms[i].Net_ifc.Properties.IPConfigurations[0].Properties.PublicIPAddress
 		if publicWrap == nil {
 			worker_i.publicAddr = ""
 		} else {
 			worker_i.publicAddr = *publicWrap.Properties.IPAddress
 		}
-		worker_i.workerId = *conf.Resource_groups.Rgroup[0].Vms[i].Vm.Name
-		worker_i.configPosit = num
 	}
 	parent := &WorkerPool{
 		WorkerPoolPlatform: pool,
@@ -83,10 +85,9 @@ func (pool *AzureWorkerPool) CreateInstance(worker *Worker) error {
 	if err != nil {
 		return err
 	}
-	var private string
 
 	vmNum := conf.Resource_groups.Rgroup[0].Numvm
-	private = worker.workerIp
+	private := worker.workerIp
 	newDiskName := worker.workerId + "-disk"
 	newNicName := worker.workerId + "-nic"
 	newNsgName := worker.workerId + "-nsg"
@@ -119,7 +120,7 @@ func (pool *AzureWorkerPool) CreateInstance(worker *Worker) error {
 	return nil
 }
 
-func (worker *Worker) startWorker() {
+func (worker *Worker) start() error {
 	cwd, err := os.Getwd()
 	if err != nil {
 		panic(err)
@@ -145,11 +146,12 @@ func (worker *Worker) startWorker() {
 		}
 		tries -= 1
 		if tries == 0 {
-			fmt.Println(sshcmd.String())
-			panic(err)
+			log.Println("sshing into the worker:", sshcmd.String())
+			return err
 		}
 		time.Sleep(5 * time.Second)
 	}
+	return nil
 }
 
 func (worker *AzureWorker) killWorker() {
@@ -193,12 +195,13 @@ func (pool *AzureWorkerPool) DeleteInstance(generalworker *Worker) error {
 
 	// shrink length
 	conf_lock.Lock()
+	defer conf_lock.Unlock()
+
 	conf, _ := ReadAzureConfig()
 	conf.Resource_groups.Rgroup[0].Numvm -= 1
 	// shrink slice
 	conf.Resource_groups.Rgroup[0].Vms[worker.configPosit] = conf.Resource_groups.Rgroup[0].Vms[len(conf.Resource_groups.Rgroup[0].Vms)-1]
 	conf.Resource_groups.Rgroup[0].Vms = conf.Resource_groups.Rgroup[0].Vms[:conf.Resource_groups.Rgroup[0].Numvm]
-	//fmt.Println(*conf.Resource_groups.Rgroup[0].Vms[worker.configPosit].Vm.Name)
 	if len(conf.Resource_groups.Rgroup[0].Vms) > 0 && worker.configPosit < conf.Resource_groups.Rgroup[0].Numvm {
 		// if all workers has been deleted, don't do this
 		// if the worker to be deleted is at the end of the list, don't do this
@@ -209,7 +212,6 @@ func (pool *AzureWorkerPool) DeleteInstance(generalworker *Worker) error {
 	worker.pool.workerNum -= 1
 	WriteAzureConfig(conf)
 	log.Printf("Deleted the worker and worker VM successfully\n")
-	conf_lock.Unlock()
 
 	return nil
 }

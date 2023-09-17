@@ -28,6 +28,7 @@ func LoadDefaults() error {
 		API_key:    "abc", // TODO
 		Boss_port:  "5000",
 		Worker_Cap: 4,
+		Azure:      *cloudvm.GetAzureConfigDefaults(),
 		Gcp:        *cloudvm.GetGcpConfigDefaults(),
 	}
 
@@ -47,7 +48,11 @@ func LoadConf(path string) error {
 		return fmt.Errorf("could not parse config (%v): %v\n", path, err.Error())
 	}
 
-	cloudvm.LoadGcpConfig(&Conf.Gcp)
+	if Conf.Platform == "gcp" {
+		cloudvm.LoadGcpConfig(&Conf.Gcp)
+	} else if Conf.Platform == "azure" {
+		cloudvm.LoadAzureConfig(&Conf.Azure)
+	}
 
 	return checkConf()
 }

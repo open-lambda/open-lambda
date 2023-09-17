@@ -150,7 +150,7 @@ func LoadDefaults(olPath string) error {
 	Conf = &Config{
 		Worker_dir:        workerDir,
 		Server_mode:       "lambda",
-		Worker_url:        "0.0.0.0",
+		Worker_url:        "localhost",
 		Worker_port:       "5000",
 		Registry:          registryDir,
 		Sandbox:           "sock",
