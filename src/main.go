@@ -16,7 +16,6 @@ import (
 	"github.com/open-lambda/open-lambda/ol/bench"
 	"github.com/open-lambda/open-lambda/ol/boss"
 	"github.com/open-lambda/open-lambda/ol/common"
-	"github.com/open-lambda/open-lambda/ol/websocket"
 	"github.com/open-lambda/open-lambda/ol/worker"
 
 	"github.com/urfave/cli/v2"
@@ -58,7 +57,6 @@ func runBoss(ctx *cli.Context) error {
 
 	return bossStart(ctx)
 }
-
 
 // modify the config.json file based on settings from cmdline: -o opt1=val1,opt2=val2,...
 //
@@ -128,14 +126,6 @@ func overrideOpts(confPath, overridePath, optsStr string) error {
 		return err
 	}
 	if err := ioutil.WriteFile(overridePath, s, 0644); err != nil {
-		return err
-	}
-	return nil
-}
-
-func startWebSocketAPI(ctx *cli.Context) error {
-	// start the websocket API server
-	if err := websocket.Start(ctx); err != nil {
 		return err
 	}
 	return nil
@@ -273,25 +263,6 @@ OPTIONS:
 				},
 			},
 			Action: runBoss,
-		},
-		&cli.Command{
-			Name:        "websocket-api",
-			Usage:       "Start the WebSocket API server",
-			UsageText:   "ol websocket-api [--port=PORT] [--host=HOST]",
-			Description: "Start a WebSocket API server to provide real-time communication",
-			Action:      startWebSocketAPI,
-			Flags: []cli.Flag{
-				&cli.StringFlag{
-					Name:  "port, p",
-					Value: "4999", // default port
-					Usage: "Port on which the WebSocket API server will listen",
-				},
-				&cli.StringFlag{
-					Name:  "host, H",
-					Value: "localhost", // default host
-					Usage: "Host on which the WebSocket API server will listen",
-				},
-			},
 		},
 		&cli.Command{
 			Name:        "worker",

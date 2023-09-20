@@ -37,14 +37,6 @@ extra = ''  # TODO: support extras
 # pkgutil.iter_modules can also be used to get submodules
 def top(dirname):
     return [name for _, name, _ in pkgutil.iter_modules([dirname])]
-    # path = None
-    # for name in os.listdir(dirname):
-    #     if name.endswith('-info'):
-    #         path = os.path.join(dirname, name, "top_level.txt")
-    # if path == None or not os.path.exists(path):
-    #     return []
-    # with open(path) as f:
-    #     return f.read().strip().split("\n")
 
 
 def deps(dirname):
