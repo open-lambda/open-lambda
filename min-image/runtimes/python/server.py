@@ -90,7 +90,7 @@ def web_server():
     server.start()
 
 
-def fork_server(split_generation):
+def fork_server(split_generation=-1):
     global split_gen
     split_gen = split_generation
     fork_count = 0
