@@ -1,6 +1,7 @@
 package cloudvm
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -21,8 +22,18 @@ func NewWorkerPool(platform string, worker_cap int) (*WorkerPool, error) {
 	taskLog.SetFlags(log.Lmicroseconds)
 
 	var pool *WorkerPool
-	if platform == "mock" {
+	switch {
+	case platform == "mock":
 		pool = NewMockWorkerPool()
+	case platform == "gcp":
+		pool = NewGcpWorkerPool()
+	case platform == "azure":
+		pool, err = NewAzureWorkerPool()
+		if err != nil {
+			return nil, err
+		}
+	default:
+		return nil, errors.New("invalid cloud platform")
 	}
 
 	pool.nextId = 1
@@ -112,10 +123,19 @@ func (pool *WorkerPool) startNewWorker() {
 
 	go func() { // should be able to create multiple instances simultaneously
 		worker.numTask = 1
-		pool.CreateInstance(worker) //create new instance
-
-		if pool.platform != "mock" {
+		err := pool.CreateInstance(worker) //create new instance
+		// TODO: need to handle this error, not panic (may use channel?)
+		if err != nil {
+			log.Fatalf(err.Error())
+		}
+		if pool.platform == "gcp" {
 			worker.runCmd("./ol worker up -d") // start worker
+		} else if pool.platform == "azure" {
+			err = worker.start()
+			if err != nil {
+				// TODO: Handle error (may use channel?)
+				log.Fatalln(err)
+			}
 		}
 
 		//change state starting -> running
@@ -287,7 +307,6 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 
 	worker := <-pool.queue
 	pool.queue <- worker
-
 	atomic.AddInt32(&worker.numTask, 1)
 	atomic.AddInt32(&pool.totalTask, 1)
 
@@ -316,8 +335,6 @@ func (pool *WorkerPool) Close() {
 			break
 		}
 	}
-
-	os.Exit(0)
 }
 
 // ssh to worker and run command
@@ -336,7 +353,12 @@ func (w *Worker) runCmd(command string) {
 
 	tries := 10
 	for tries > 0 {
-		sshcmd := exec.Command("ssh", user.Username+"@"+w.workerIp, "-o", "StrictHostKeyChecking=no", "-C", cmd)
+		var sshcmd *exec.Cmd
+		if w.pool.platform == "azure" {
+			sshcmd = exec.Command("ssh", "-i", AzureConf.Resource_groups.Rgroup[0].SSHKey, user.Username+"@"+w.workerIp, "-o", "StrictHostKeyChecking=no", "-C", cmd)
+		} else if w.pool.platform == "gcp" {
+			sshcmd = exec.Command("ssh", user.Username+"@"+w.workerIp, "-o", "StrictHostKeyChecking=no", "-C", cmd)
+		}
 		stdoutStderr, err := sshcmd.CombinedOutput()
 		log.Printf("%s\n", stdoutStderr)
 		if err == nil {

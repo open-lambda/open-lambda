@@ -28,12 +28,14 @@ func (pool *MockWorkerPool) NewWorker(workerId string) *Worker {
 	}
 }
 
-func (pool *MockWorkerPool) CreateInstance(worker *Worker) {
+func (pool *MockWorkerPool) CreateInstance(worker *Worker) error {
 	log.Printf("created new mock worker: %s\n", worker.workerId)
+	return nil
 }
 
-func (pool *MockWorkerPool) DeleteInstance(worker *Worker) {
+func (pool *MockWorkerPool) DeleteInstance(worker *Worker) error {
 	log.Printf("deleted mock worker: %s\n", worker.workerId)
+	return nil
 }
 
 func (pool *MockWorkerPool) ForwardTask(w http.ResponseWriter, r *http.Request, worker *Worker) {

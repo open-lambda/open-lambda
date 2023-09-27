@@ -1,5 +1,86 @@
 # Release History
 
+## 1.4.0 (2023-03-02)
+> This release doesn't include features added in v1.4.0-beta.1. They will return in v1.5.0-beta.1.
+
+### Features Added
+* Add `Clone()` method for `arm/policy.ClientOptions`.
+
+### Bugs Fixed
+* ARM's RP registration policy will no longer swallow unrecognized errors.
+* Fixed an issue in `runtime.NewPollerFromResumeToken()` when resuming a `Poller` with a custom `PollingHandler`.
+* Fixed wrong policy copy in `arm/runtime.NewPipeline()`.
+
+## 1.4.0-beta.1 (2023-02-02)
+
+### Features Added
+* Added support for ARM cross-tenant authentication. Set the `AuxiliaryTenants` field of `arm.ClientOptions` to enable.
+* Added `Claims` and `TenantID` fields to `policy.TokenRequestOptions`.
+* ARM bearer token policy handles CAE challenges.
+
+## 1.3.1 (2023-02-02)
+
+### Other Changes
+* Update dependencies to latest versions.
+
+## 1.3.0 (2023-01-06)
+
+### Features Added
+* Added `BearerTokenOptions.AuthorizationHandler` to enable extending `runtime.BearerTokenPolicy`
+  with custom authorization logic
+* Added `Client` types and matching constructors to the `azcore` and `arm` packages.  These represent a basic client for HTTP and ARM respectively.
+
+### Other Changes
+* Updated `internal` module to latest version.
+* `policy/Request.SetBody()` allows replacing a request's body with an empty one
+
+## 1.2.0 (2022-11-04)
+
+### Features Added
+* Added `ClientOptions.APIVersion` field, which overrides the default version a client
+  requests of the service, if the client supports this (all ARM clients do).
+* Added package `tracing` that contains the building blocks for distributed tracing.
+* Added field `TracingProvider` to type `policy.ClientOptions` that will be used to set the per-client tracing implementation.
+
+### Bugs Fixed
+* Fixed an issue in `runtime.SetMultipartFormData` to properly handle slices of `io.ReadSeekCloser`.
+* Fixed the MaxRetryDelay default to be 60s.
+* Failure to poll the state of an LRO will now return an `*azcore.ResponseError` for poller types that require this behavior.
+* Fixed a bug in `runtime.NewPipeline` that would cause pipeline-specified allowed headers and query parameters to be lost.
+
+### Other Changes
+* Retain contents of read-only fields when sending requests.
+
+## 1.1.4 (2022-10-06)
+
+### Bugs Fixed
+* Don't retry a request if the `Retry-After` delay is greater than the configured `RetryOptions.MaxRetryDelay`.
+* `runtime.JoinPaths`: do not unconditionally add a forward slash before the query string
+
+### Other Changes
+* Removed logging URL from retry policy as it's redundant.
+* Retry policy logs when it exits due to a non-retriable status code.
+
+## 1.1.3 (2022-09-01)
+
+### Bugs Fixed
+* Adjusted the initial retry delay to 800ms per the Azure SDK guidelines.
+
+## 1.1.2 (2022-08-09)
+
+### Other Changes
+* Fixed various doc bugs.
+
+## 1.1.1 (2022-06-30)
+
+### Bugs Fixed
+* Avoid polling when a RELO LRO synchronously terminates.
+
+## 1.1.0 (2022-06-03)
+
+### Other Changes
+* The one-second floor for `Frequency` when calling `PollUntilDone()` has been removed when running tests.
+
 ## 1.0.0 (2022-05-12)
 
 ### Features Added

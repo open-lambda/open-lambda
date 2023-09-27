@@ -5,35 +5,31 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+
+	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
 )
 
 var Conf *Config
 
 type Config struct {
-	Platform   string      `json:"platform"`
-	Scaling    string      `json:"scaling"`
-	API_key    string      `json:"api_key"`
-	Boss_port  string      `json:"boss_port"`
-	Worker_Cap int         `json:"worker_cap"`
-	Azure      AzureConfig `json:"azure"`
-	Gcp        GcpConfig   `json:"gcp"`
-}
-
-type AzureConfig struct {
-	// TODO
-}
-
-type GcpConfig struct {
-	// TODO
+	Platform   string              `json:"platform"`
+	Scaling    string              `json:"scaling"`
+	API_key    string              `json:"api_key"`
+	Boss_port  string              `json:"boss_port"`
+	Worker_Cap int                 `json:"worker_cap"`
+	Azure      cloudvm.AzureConfig `json:"azure"`
+	Gcp        cloudvm.GcpConfig   `json:"gcp"`
 }
 
 func LoadDefaults() error {
 	Conf = &Config{
 		Platform:   "mock",
 		Scaling:    "manual",
-		API_key:    "abc", // TODO: autogenerate a random key
+		API_key:    "abc", // TODO
 		Boss_port:  "5000",
 		Worker_Cap: 4,
+		Azure:      *cloudvm.GetAzureConfigDefaults(),
+		Gcp:        *cloudvm.GetGcpConfigDefaults(),
 	}
 
 	return checkConf()
@@ -52,6 +48,12 @@ func LoadConf(path string) error {
 		return fmt.Errorf("could not parse config (%v): %v\n", path, err.Error())
 	}
 
+	if Conf.Platform == "gcp" {
+		cloudvm.LoadGcpConfig(&Conf.Gcp)
+	} else if Conf.Platform == "azure" {
+		cloudvm.LoadAzureConfig(&Conf.Azure)
+	}
+
 	return checkConf()
 }
 
@@ -61,24 +63,6 @@ func checkConf() error {
 	}
 
 	return nil
-}
-
-// Dump prints the Config as a JSON string.
-func DumpConf() {
-	s, err := json.Marshal(Conf)
-	if err != nil {
-		panic(err)
-	}
-	log.Printf("CONFIG = %v\n", string(s))
-}
-
-// DumpStr returns the Config as an indented JSON string.
-func DumpConfStr() string {
-	s, err := json.MarshalIndent(Conf, "", "\t")
-	if err != nil {
-		panic(err)
-	}
-	return string(s)
 }
 
 // Save writes the Config as an indented JSON to path with 644 mode.
