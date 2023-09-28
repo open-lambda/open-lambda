@@ -131,10 +131,17 @@ func (worker *Worker) start() error {
 		panic(err)
 	}
 
-	cmd := fmt.Sprintf("cd %s; %s; %s",
+	worker_group := worker.groupId
+	python_path := "/home/azureuser/paper-tree-cache/analysis/cluster/"
+	run_python := fmt.Sprintf("python3 worker.py %d", worker_group)
+
+	cmd := fmt.Sprintf("cd %s; %s; %s; cd %s; %s",
 		cwd,
 		"sudo mount -o rw,remount /sys/fs/cgroup",
-		"sudo ./ol worker up -i ol-min -d")
+		"sudo ./ol worker up -i ol-min -d",
+		python_path,
+		run_python,
+	)
 
 	tries := 10
 	for tries > 0 {

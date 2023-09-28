@@ -1,16 +1,22 @@
 package cloudvm
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/exec"
 	"os/user"
+	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/open-lambda/open-lambda/ol/boss/loadbalancer"
 )
 
 func NewWorkerPool(platform string, worker_cap int) (*WorkerPool, error) {
@@ -53,6 +59,14 @@ func NewWorkerPool(platform string, worker_cap int) (*WorkerPool, error) {
 	pool.sumLatency = 0
 	pool.platform = platform
 	pool.worker_cap = worker_cap
+	// TODO: this is hard-coded. Need to set it changable
+	pool.numGroup = loadbalancer.NumGroup
+	pool.groups = make(map[int]*GroupWorker)
+	pool.nextGroup = 0
+
+	// This is for traces used to foward tasks
+	loadbalancer.Traces = loadbalancer.LoadTrace()
+	loadbalancer.Lb = loadbalancer.InitLoadBalancer()
 
 	log.Printf("READY: worker pool of type %s", platform)
 
@@ -124,10 +138,13 @@ func (pool *WorkerPool) startNewWorker() {
 	go func() { // should be able to create multiple instances simultaneously
 		worker.numTask = 1
 		err := pool.CreateInstance(worker) //create new instance
-		// TODO: need to handle this error, not panic (may use channel?)
 		if err != nil {
 			log.Fatalf(err.Error())
 		}
+		// TODO: need to handle this error, not panic (may use channel?)
+		workerIdDigit, err := strconv.Atoi(getAfterSep(worker.workerId, "-"))
+		// Assign the worker to the group
+		assignedGroup := workerIdDigit % loadbalancer.NumGroup
 		if pool.platform == "gcp" {
 			worker.runCmd("./ol worker up -d") // start worker
 		} else if pool.platform == "azure" {
@@ -154,6 +171,21 @@ func (pool *WorkerPool) startNewWorker() {
 		pool.queue <- worker
 		log.Printf("%s ready\n", worker.workerId)
 		worker.numTask = 0
+		// update the worker's assigned group
+		worker.groupId = assignedGroup
+
+		// update the group stuff in pool
+		if _, ok := pool.groups[assignedGroup]; !ok {
+			// this group hasn't been created
+			pool.groups[assignedGroup] = &GroupWorker{
+				groupId:      pool.nextGroup,
+				groupWorkers: make(map[string]*Worker),
+			}
+			pool.nextGroup += 1
+			pool.nextGroup %= loadbalancer.NumGroup
+		}
+		group := pool.groups[assignedGroup]
+		group.groupWorkers[worker.workerId] = worker
 
 		pool.Unlock()
 
@@ -177,7 +209,9 @@ func (pool *WorkerPool) recoverWorker(worker *Worker) {
 		len(pool.workers[CLEANING]),
 		len(pool.workers[DESTROYING]))
 
-	pool.Unlock()
+	// group stuff
+	workerGroup := pool.groups[worker.groupId]
+	workerGroup.groupWorkers[worker.workerId] = worker
 
 	pool.updateCluster()
 }
@@ -197,6 +231,10 @@ func (pool *WorkerPool) cleanWorker(worker *Worker) {
 		len(pool.workers[RUNNING]),
 		len(pool.workers[CLEANING]),
 		len(pool.workers[DESTROYING]))
+
+	// group stuff
+	workerGroup := pool.groups[worker.groupId]
+	delete(workerGroup.groupWorkers, worker.workerId)
 
 	pool.Unlock()
 
@@ -298,15 +336,151 @@ func (pool *WorkerPool) updateCluster() {
 	}
 }
 
+func getAfterSep(str string, sep string) string {
+	res := ""
+	if idx := strings.LastIndex(str, sep); idx != -1 {
+		res = str[idx+1:]
+	}
+	return res
+}
+
+// getURLComponents parses request URL into its "/" delimated components
+func getURLComponents(r *http.Request) []string {
+	path := r.URL.Path
+
+	// trim prefix
+	if strings.HasPrefix(path, "/") {
+		path = path[1:]
+	}
+
+	// trim trailing "/"
+	if strings.HasSuffix(path, "/") {
+		path = path[:len(path)-1]
+	}
+
+	components := strings.Split(path, "/")
+	return components
+}
+
+func readFirstLine(path string) string {
+	file, err := os.Open(path)
+	var res string
+	if err != nil {
+		log.Fatalf("Failed to open file: %s", err)
+	}
+	scanner := bufio.NewScanner(file)
+	if scanner.Scan() {
+		res = scanner.Text() // Outputs the first line
+	}
+
+	// Check for errors during scanning
+	if err := scanner.Err(); err != nil {
+		log.Fatalf("Error reading file: %s", err)
+	}
+	defer file.Close()
+	return res
+}
+
+func isStrExists(str string, list []string) bool {
+	exists := false
+	for _, s := range list {
+		if s == str {
+			exists = true
+			break
+		}
+	}
+	return exists
+}
+
 //run lambda function
 func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 	starttime := time.Now()
 	if len(pool.workers[STARTING])+len(pool.workers[RUNNING]) == 0 {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
+	var worker *Worker
+	if loadbalancer.Lb.LbType == loadbalancer.Random {
+		worker = <-pool.queue
+		pool.queue <- worker
+	} else if loadbalancer.Lb.LbType == loadbalancer.KMeans {
+		// TODO: what if the designated worker isn't up yet?
+		// Current solution: then randomly choose one that is up
+		// step 1: get its dependencies
+		urlParts := getURLComponents(r)
+		var pkgs []string
+		if len(urlParts) < 2 {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("expected invocation format: /run/<lambda-name>"))
+		} else {
+			// components represent run[0]/<name_of_sandbox>[1]/<extra_things>...
+			// ergo we want [1] for name of sandbox
+			urlParts := getURLComponents(r)
+			// TODO: if user changes the code, one worker will know that, boss cannot know that. How to handle this?
+			if len(urlParts) == 2 {
+				img := urlParts[1]
+				path := fmt.Sprintf("default-ol/registry/%s.py", img)
+				firstLine := readFirstLine(path)
+				sub := getAfterSep(firstLine, ":")
+				pkgs = strings.Split(sub, ",")
+				// get direct packages the function needs
+				for i, _ := range pkgs {
+					pkgs[i] = strings.TrimSpace(pkgs[i])
+				}
 
-	worker := <-pool.queue
-	pool.queue <- worker
+			} else {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("expected invocation format: /run/<lambda-name>"))
+			}
+		}
+		// get indirect packages the function needs
+		pkgsDeps := pkgs // this is a list of all packages required
+		for _, pkg := range pkgs {
+			for _, trace := range loadbalancer.Traces.Data {
+				if trace.Name == pkg {
+					pkgsDeps = append(pkgsDeps, trace.Deps...)
+				}
+			}
+		}
+		path := "call_matrix_sample.csv"
+		firstLine := readFirstLine(path)
+		matrix_pkgs := strings.Split(firstLine, ",")
+		var vec_matrix []float64
+		for _, name := range matrix_pkgs {
+			if isStrExists(name, pkgsDeps) {
+				vec_matrix = append(vec_matrix, 1)
+			} else {
+				vec_matrix = append(vec_matrix, 0)
+			}
+		}
+		// step 2: get assigned group
+		targetGroup := loadbalancer.GetGroup(vec_matrix)
+		// step3: get assigned worker randomly
+		assignSuccess := false
+		// Might be problem: shoud I add lock here?
+		if group, ok := pool.groups[targetGroup]; ok { // exists this group
+			if len(group.groupWorkers) > 0 {
+				// Seed the random number generator
+				rand.Seed(time.Now().UnixNano())
+				// Generate a random index
+				randIndex := rand.Intn(len(group.groupWorkers))
+				for _, thisWorker := range group.groupWorkers {
+					if randIndex == 0 {
+						assignSuccess = true
+						worker = thisWorker
+						break
+					}
+					randIndex--
+				}
+			}
+		}
+		// if assign to a worker failed, randomly pick one
+		if !assignSuccess {
+			fmt.Println("assign to a group (KMeans) failed")
+			worker = <-pool.queue
+			pool.queue <- worker
+		}
+	}
 	atomic.AddInt32(&worker.numTask, 1)
 	atomic.AddInt32(&pool.totalTask, 1)
 

@@ -51,6 +51,15 @@ type WorkerPool struct {
 	totalTask      int32
 	sumLatency     int64
 	nLatency       int64
+
+	numGroup  int
+	nextGroup int
+	groups    map[int]*GroupWorker // this mappes the groupId to the GroupWorker
+}
+
+type GroupWorker struct {
+	groupId      int                // specifies the group name
+	groupWorkers map[string]*Worker // what workers does this group have. The worker in this map must be running
 }
 
 /*
@@ -62,4 +71,5 @@ type Worker struct {
 	numTask  int32
 	pool     *WorkerPool
 	state    WorkerState
+	groupId  int
 }
