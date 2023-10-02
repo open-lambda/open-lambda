@@ -26,6 +26,7 @@ type HandlerPuller struct {
 	prefix   string   // combine with name to get file path or URL
 	dirCache sync.Map // key=lambda name, value=version, directory path
 	dirMaker *common.DirMaker
+	compiled *regexp.Regexp
 }
 
 type CacheEntry struct {
@@ -34,6 +35,13 @@ type CacheEntry struct {
 }
 
 func NewHandlerPuller(dirMaker *common.DirMaker) (cp *HandlerPuller, err error) {
+	cp.compiled, err = regexp.Compile(`^[A-Za-z0-9\.\-\_]+$`)
+	if err != nil {
+		fmt.Println("Compile error")
+	} else if cp.compiled == nil {
+		fmt.Println("Compiled is null")
+	}
+
 	return &HandlerPuller{
 		prefix:   common.Conf.Registry,
 		dirMaker: dirMaker,
@@ -48,10 +56,8 @@ func (cp *HandlerPuller) Pull(name string) (rt_type common.RuntimeType, targetDi
 	t := common.T0("pull-lambda")
 	defer t.T1()
 
-	matched, err := regexp.MatchString(`^[A-Za-z0-9\.\-\_]+$`, name)
-	if err != nil {
-		return rt_type, "", err
-	} else if !matched {
+	matched := cp.compiled.MatchString(name)
+	if !matched {
 		msg := "bad lambda name '%s', can only contain letters, numbers, period, dash, and underscore"
 		return rt_type, "", fmt.Errorf(msg, name)
 	}
