@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"sync/atomic"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -27,7 +27,7 @@ type SOCKContainer struct {
 	scratchDir       string
 	cg               cgroups.Cgroup
 	rtType           common.RuntimeType
-	client *http.Client
+	client           *http.Client
 
 	// 1 for self, plus 1 for each child (we can't release memory
 	// until all descendants are dead, because they share the
@@ -73,7 +73,7 @@ func (container *SOCKContainer) freshProc() (err error) {
 	if container.rtType == common.RT_PYTHON {
 		cmd = exec.Command(
 			"chroot", container.containerRootDir, "python3", "-u",
-			"/runtimes/python/server.py", "/host/bootstrap.py", strconv.Itoa(1), 
+			"/runtimes/python/server.py", "/host/bootstrap.py", strconv.Itoa(1),
 			strconv.FormatBool(common.Conf.Features.Enable_seccomp),
 		)
 	} else if container.rtType == common.RT_NATIVE {
@@ -89,7 +89,6 @@ func (container *SOCKContainer) freshProc() (err error) {
 			"chroot", container.containerRootDir,
 			"env", "RUST_BACKTRACE=full", "/runtimes/native/server", strconv.Itoa(1),
 			strconv.FormatBool(common.Conf.Features.Enable_seccomp),
-
 		)
 	} else {
 		return fmt.Errorf("Unsupported runtime")
@@ -190,6 +189,36 @@ func (container *SOCKContainer) populateRoot() (err error) {
 
 	if err := syscall.Mount("none", container.containerRootDir, "", common.PRIVATE, ""); err != nil {
 		return fmt.Errorf("failed to make root dir private :: %v", err)
+	}
+
+	// todo: now the packages' dir are read-only, is neccessary to remount the packages dir using overlayfs?
+	// todo: also, is it necessary to create a illusion like common site-packages dir?
+	// create a dir used to hidden the content in packages dir
+	tmpEmptyDir, err := os.MkdirTemp("", "empty")
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := syscall.Mount(tmpEmptyDir, filepath.Join(container.containerRootDir, "packages"), "", common.BIND, ""); err != nil {
+		return fmt.Errorf("failed to bind empty dir: %v", err)
+	}
+
+	for _, pkg := range container.meta.Installs {
+		srcDirStr := filepath.Join(common.Conf.SOCK_base_path, "packages", pkg, "files")
+		targetDirStr := filepath.Join(container.containerRootDir, "packages", pkg, "files")
+		err := os.MkdirAll(targetDirStr, 0777)
+		if err != nil {
+			return err
+		}
+
+		if err := syscall.Mount(srcDirStr, targetDirStr, "", common.BIND, ""); err != nil {
+			return fmt.Errorf("failed to bind package dir: %s -> %s :: %v", srcDirStr, targetDirStr, err)
+		}
+		if err := syscall.Mount("none", targetDirStr, "", common.BIND_RO, ""); err != nil {
+			return fmt.Errorf("failed to bind package dir RO: %s :: %v", targetDirStr, err)
+		}
+		if err := syscall.Mount("none", targetDirStr, "", common.PRIVATE, ""); err != nil {
+			return fmt.Errorf("failed to make package dir private :: %v", err)
+		}
 	}
 
 	// FILE SYSTEM STEP 2: code dir
@@ -336,9 +365,9 @@ func (container *SOCKContainer) fork(dst Sandbox) (err error) {
 		return fmt.Errorf("only %vMB of spare memory in parent, rejecting fork request (need at least 3MB)", spareMB)
 	}
 
-    // increment reference count before we start any processes
+	// increment reference count before we start any processes
 	container.children[dst.ID()] = dst
-    newCount := atomic.AddInt32(&container.cgRefCount, 1)
+	newCount := atomic.AddInt32(&container.cgRefCount, 1)
 
 	if newCount == 0 {
 		panic("cgRefCount was already 0")
@@ -416,7 +445,7 @@ func (container *SOCKContainer) Meta() *SandboxMeta {
 	return container.meta
 }
 
-func (container *SOCKContainer) Client() (*http.Client) {
+func (container *SOCKContainer) Client() *http.Client {
 	return container.client
 }
 

@@ -1,10 +1,15 @@
 package lambda
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 	"github.com/open-lambda/open-lambda/ol/worker/sandbox"
@@ -77,6 +82,8 @@ func (linst *LambdaInstance) Task() {
 			return
 		}
 
+		tStartCreate := float64(time.Now().UnixNano()) / float64(time.Millisecond)
+
 		t := common.T0("LambdaInstance-WaitSandbox")
 		// if we have a sandbox, try unpausing it to see if it is still alive
 		if sb != nil {
@@ -103,6 +110,7 @@ func (linst *LambdaInstance) Task() {
 				scratchDir := f.lmgr.scratchDirs.Make(f.name)
 
 				// we don't specify parent SB, because ImportCache.Create chooses it for us
+				// todo: assume linst.meta always include the accurate metadata info for the lambda
 				sb, err = f.lmgr.ZygoteProvider.Create(f.lmgr.sbPool, true, linst.codeDir, scratchDir, linst.meta, f.rtType)
 				if err != nil {
 					f.printf("failed to get Sandbox from import cache")
@@ -127,6 +135,34 @@ func (linst *LambdaInstance) Task() {
 			}
 		}
 		t.T1()
+
+		// todo: collect latency
+		tEndCreate := float64(time.Now().UnixNano()) / float64(time.Millisecond)
+		argsDict := make(map[string]interface{})
+		bodyBytes, _ := ioutil.ReadAll(req.r.Body)
+		if argsDict == nil {
+			fmt.Printf("req.r.Body is nil\n")
+		}
+		json.Unmarshal(bodyBytes, &argsDict)
+		if _, ok := argsDict["name"]; !ok {
+			// name is a unique identifier for each call, specified by the sender
+			// default is linst.lfunc.name, but cannot trace multiple calls on same lambda
+			argsDict["name"] = linst.lfunc.name
+		}
+		if _, ok := argsDict["req"]; !ok {
+			argsDict["req"] = 0
+		}
+		argsDict["start_create"] = tStartCreate
+		argsDict["end_create"] = tEndCreate
+
+		//times := map[string]interface{}{
+		//	"name":         argsDict["name"],
+		//	"req":          argsDict["req"],
+		//	"start_create": tStartCreate,
+		//	"end_create":   tEndCreate,
+		//}
+		newReqBytes, _ := json.Marshal(argsDict)
+		req.r.Body = io.NopCloser(bytes.NewBuffer(newReqBytes))
 
 		// below here, we're guaranteed (1) sb != nil, (2) proxy != nil, (3) sb is unpaused
 
