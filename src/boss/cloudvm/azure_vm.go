@@ -55,7 +55,7 @@ var create_lock sync.Mutex
 
 func createVM(worker *Worker) (*AzureConfig, error) {
 	vmName := worker.workerId
-	diskName := "ol-boss2_OsDisk_1_cee8d301a2974bdea23d38a8decad8e3"
+	diskName := "ol-boss3_OsDisk_1_0c16fafd09414fe9929799574f51395c"
 	vnetName := "ol-boss-vnet"
 	snapshotName := "ol-boss-snapshot"
 	conn, err := connectionAzure()
@@ -177,6 +177,11 @@ func createVM(worker *Worker) (*AzureConfig, error) {
 			}
 			log.Println("Successfully deleted the vm, realloc the vm")
 			virtualMachine, err = createVirtualMachine(ctx, conn, *networkInterfaceID, *new_disk.ID, newDiskName, vmName)
+			if err != nil {
+				iter += 1
+			} else {
+				break
+			}
 		} else {
 			log.Println("Iteration greater than 3, this vm cannot be created successfully")
 			return conf, err
@@ -668,7 +673,7 @@ func createVirtualMachine(ctx context.Context, cred azcore.TokenCredential, netw
 			},
 			HardwareProfile: &armcompute.HardwareProfile{
 				// TODO: make it user's choice
-				VMSize: to.Ptr(armcompute.VirtualMachineSizeTypes("Standard_B2s")), // VM size include vCPUs,RAM,Data Disks,Temp storage.
+				VMSize: to.Ptr(armcompute.VirtualMachineSizeTypes("Standard_D4s_v3")), // VM size include vCPUs,RAM,Data Disks,Temp storage.
 			},
 			NetworkProfile: &armcompute.NetworkProfile{
 				NetworkInterfaces: []*armcompute.NetworkInterfaceReference{
@@ -676,6 +681,9 @@ func createVirtualMachine(ctx context.Context, cred azcore.TokenCredential, netw
 						ID: to.Ptr(networkInterfaceID),
 					},
 				},
+			},
+			SecurityProfile: &armcompute.SecurityProfile{
+				SecurityType: &armcompute.PossibleSecurityTypesValues()[1],
 			},
 		},
 	}
@@ -753,6 +761,9 @@ func createDisk(ctx context.Context, cred azcore.TokenCredential, source_disk st
 					SourceResourceID: to.Ptr(source_disk),
 				},
 				DiskSizeGB: to.Ptr[int32](64),
+				SecurityProfile: &armcompute.DiskSecurityProfile{
+					SecurityType: &armcompute.PossibleDiskSecurityTypesValues()[3],
+				},
 			},
 		},
 		nil,
@@ -803,6 +814,9 @@ func createSnapshot(ctx context.Context, cred azcore.TokenCredential, diskID str
 				CreationData: &armcompute.CreationData{
 					CreateOption:     to.Ptr(armcompute.DiskCreateOptionCopy),
 					SourceResourceID: to.Ptr(diskID),
+				},
+				SecurityProfile: &armcompute.DiskSecurityProfile{
+					SecurityType: &armcompute.PossibleDiskSecurityTypesValues()[3],
 				},
 			},
 		},

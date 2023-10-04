@@ -1,0 +1,78 @@
+{"deps": ["tzdata", "numpy", "pytz", "python-dateutil"], "name": "pandas", "top": ["pandas"], "type": "package"}
+{"deps": [], "name": "tzdata", "top": ["tzdata"], "type": "package"}
+{"deps": [], "name": "numpy", "top": ["numpy"], "type": "package"}
+{"deps": [], "name": "pytz", "top": ["pytz"], "type": "package"}
+{"deps": ["six"], "name": "python-dateutil", "top": ["dateutil"], "type": "package"}
+{"deps": [], "name": "six", "top": ["six"], "type": "package"}
+{"deps": ["pandas", "tzdata", "numpy", "pytz", "python-dateutil", "six"], "name": "/root/open-lambda/default-ol/worker/code/1001-fn1", "type": "function"}
+{"name": "/root/open-lambda/default-ol/worker/code/1001-fn1", "type": "invocation"}
+{"deps": ["numpy"], "name": "scipy", "top": ["scipy"], "type": "package"}
+{"deps": ["scipy", "numpy"], "name": "/root/open-lambda/default-ol/worker/code/1028-fn2", "type": "function"}
+{"name": "/root/open-lambda/default-ol/worker/code/1028-fn2", "type": "invocation"}
+{"deps": ["contourpy", "pyparsing", "fonttools", "kiwisolver", "pillow", "cycler", "packaging", "numpy", "python-dateutil"], "name": "matplotlib", "top": ["matplotlib", "pylab"], "type": "package"}
+{"deps": ["numpy"], "name": "contourpy", "top": ["contourpy"], "type": "package"}
+{"deps": [], "name": "pyparsing", "top": ["pyparsing"], "type": "package"}
+{"deps": [], "name": "fonttools", "top": ["fontTools"], "type": "package"}
+{"deps": [], "name": "kiwisolver", "top": ["kiwisolver"], "type": "package"}
+{"deps": [], "name": "pillow", "top": ["PIL"], "type": "package"}
+{"deps": [], "name": "cycler", "top": ["cycler"], "type": "package"}
+{"deps": [], "name": "packaging", "top": ["packaging"], "type": "package"}
+{"deps": ["matplotlib", "contourpy", "pyparsing", "fonttools", "kiwisolver", "pillow", "cycler", "packaging", "numpy", "python-dateutil", "six"], "name": "/root/open-lambda/default-ol/worker/code/1032-fn3", "type": "function"}
+{"name": "/root/open-lambda/default-ol/worker/code/1032-fn3", "type": "invocation"}
+{"deps": ["greenlet", "typing-extensions"], "name": "sqlalchemy", "top": ["sqlalchemy"], "type": "package"}
+{"deps": [], "name": "greenlet", "top": ["greenlet"], "type": "package"}
+{"deps": [], "name": "typing-extensions", "top": ["typing_extensions"], "type": "package"}
+{"deps": ["sqlalchemy", "greenlet", "typing-extensions"], "name": "/root/open-lambda/default-ol/worker/code/1043-fn4", "type": "function"}
+{"name": "/root/open-lambda/default-ol/worker/code/1043-fn4", "type": "invocation"}
+{"deps": ["asgiref", "sqlparse"], "name": "django", "top": ["django"], "type": "package"}
+{"deps": ["typing-extensions"], "name": "asgiref", "top": ["asgiref"], "type": "package"}
+{"deps": [], "name": "sqlparse", "top": ["sqlparse"], "type": "package"}
+{"deps": ["django", "asgiref", "sqlparse", "typing-extensions"], "name": "/root/open-lambda/default-ol/worker/code/1052-fn5", "type": "function"}
+{"name": "/root/open-lambda/default-ol/worker/code/1052-fn5", "type": "invocation"}
+{"deps": ["jinja2", "click", "werkzeug", "blinker", "itsdangerous"], "name": "flask", "top": ["flask"], "type": "package"}
+{"deps": ["markupsafe"], "name": "jinja2", "top": ["jinja2"], "type": "package"}
+{"deps": [], "name": "click", "top": ["click"], "type": "package"}
+{"deps": ["markupsafe"], "name": "werkzeug", "top": ["werkzeug"], "type": "package"}
+{"deps": [], "name": "blinker", "top": ["blinker"], "type": "package"}
+{"deps": [], "name": "itsdangerous", "top": ["itsdangerous"], "type": "package"}
+{"deps": [], "name": "markupsafe", "top": ["markupsafe"], "type": "package"}
+{"deps": ["flask", "jinja2", "click", "werkzeug", "blinker", "itsdangerous", "markupsafe"], "name": "/root/open-lambda/default-ol/worker/code/1061-fn6", "type": "function"}
+{"name": "/root/open-lambda/default-ol/worker/code/1061-fn6", "type": "invocation"}
+{"deps": ["numpy"], "name": "/root/open-lambda/default-ol/worker/code/1077-fn7", "type": "function"}
+{"name": "/root/open-lambda/default-ol/worker/code/1077-fn7", "type": "invocation"}
+{"deps": [], "name": "simplejson", "top": ["simplejson"], "type": "package"}
+{"deps": ["simplejson"], "name": "/root/open-lambda/default-ol/worker/code/1080-fn8", "type": "function"}
+{"name": "/root/open-lambda/default-ol/worker/code/1080-fn8", "type": "invocation"}
+{"deps": [], "name": "protobuf", "top": [], "type": "package"}
+{"deps": ["protobuf"], "name": "/root/open-lambda/default-ol/worker/code/1084-fn9", "type": "function"}
+{"name": "/root/open-lambda/default-ol/worker/code/1084-fn9", "type": "invocation"}
+{"deps": ["jinja2", "markupsafe"], "name": "/root/open-lambda/default-ol/worker/code/1088-fn10", "type": "function"}
+{"name": "/root/open-lambda/default-ol/worker/code/1088-fn10", "type": "invocation"}
+{"deps": [], "name": "pip", "top": ["pip"], "type": "package"}
+{"deps": ["pip"], "name": "/root/open-lambda/default-ol/worker/code/1094-fn11", "type": "function"}
+{"name": "/root/open-lambda/default-ol/worker/code/1094-fn11", "type": "invocation"}
+{"deps": [], "name": "setuptools", "top": ["_distutils_hack", "pkg_resources", "setuptools"], "type": "package"}
+{"deps": ["setuptools"], "name": "/root/open-lambda/default-ol/worker/code/1098-fn12", "type": "function"}
+{"name": "/root/open-lambda/default-ol/worker/code/1098-fn12", "type": "invocation"}
+{"deps": ["charset-normalizer", "certifi", "urllib3", "idna"], "name": "requests", "top": ["requests"], "type": "package"}
+{"deps": [], "name": "charset-normalizer", "top": ["charset_normalizer"], "type": "package"}
+{"deps": [], "name": "certifi", "top": ["certifi"], "type": "package"}
+{"deps": [], "name": "urllib3", "top": ["urllib3"], "type": "package"}
+{"deps": [], "name": "idna", "top": ["idna"], "type": "package"}
+{"deps": ["requests", "charset-normalizer", "certifi", "urllib3", "idna"], "name": "/root/open-lambda/default-ol/worker/code/1105-fn13", "type": "function"}
+{"name": "/root/open-lambda/default-ol/worker/code/1105-fn13", "type": "invocation"}
+{"deps": [], "name": "mock", "top": ["mock"], "type": "package"}
+{"deps": ["mock"], "name": "/root/open-lambda/default-ol/worker/code/1116-fn14", "type": "function"}
+{"name": "/root/open-lambda/default-ol/worker/code/1116-fn14", "type": "invocation"}
+{"deps": ["werkzeug", "markupsafe"], "name": "/root/open-lambda/default-ol/worker/code/1120-fn15", "type": "function"}
+{"name": "/root/open-lambda/default-ol/worker/code/1120-fn15", "type": "invocation"}
+{"deps": [], "name": "dnspython", "top": ["dns"], "type": "package"}
+{"deps": ["dnspython"], "name": "/root/open-lambda/default-ol/worker/code/1123-fn16", "type": "function"}
+{"name": "/root/open-lambda/default-ol/worker/code/1123-fn16", "type": "invocation"}
+{"deps": ["six"], "name": "/root/open-lambda/default-ol/worker/code/1127-fn17", "type": "function"}
+{"name": "/root/open-lambda/default-ol/worker/code/1127-fn17", "type": "invocation"}
+{"deps": ["pyqt5-qt5", "pyqt5-sip"], "name": "pyqt5", "top": ["PyQt5"], "type": "package"}
+{"deps": [], "name": "pyqt5-qt5", "top": [], "type": "package"}
+{"deps": [], "name": "pyqt5-sip", "top": [], "type": "package"}
+{"deps": ["pyqt5", "pyqt5-qt5", "pyqt5-sip"], "name": "/root/open-lambda/default-ol/worker/code/1133-fn18", "type": "function"}
+{"name": "/root/open-lambda/default-ol/worker/code/1133-fn18", "type": "invocation"}

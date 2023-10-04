@@ -138,7 +138,7 @@ func (worker *Worker) start() error {
 	cmd := fmt.Sprintf("cd %s; %s; %s; cd %s; %s",
 		cwd,
 		"sudo mount -o rw,remount /sys/fs/cgroup",
-		"sudo ./ol worker up -i ol-min -d",
+		"sudo ./ol worker up -i ol-min -d -o import_cache_tree=/home/azureuser/paper-tree-cache/analysis/cluster/boss/tree-v0.node-40.json",
 		python_path,
 		run_python,
 	)

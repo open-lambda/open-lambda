@@ -144,6 +144,7 @@ func (pool *WorkerPool) startNewWorker() {
 		// TODO: need to handle this error, not panic (may use channel?)
 		workerIdDigit, err := strconv.Atoi(getAfterSep(worker.workerId, "-"))
 		// Assign the worker to the group
+		// TODO: need to find the most busy worker and double it
 		assignedGroup := workerIdDigit % loadbalancer.NumGroup
 		if pool.platform == "gcp" {
 			worker.runCmd("./ol worker up -d") // start worker

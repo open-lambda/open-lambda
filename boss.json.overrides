@@ -1,0 +1,24 @@
+{
+	"api_key": "abc",
+	"azure": {
+		"azure_config": {
+			"resource_groups": [
+				{
+					"resource_group": {},
+					"ssh_key": "~/.ssh/ol-boss_key.pem",
+					"virtual_machine_status": null,
+					"vm_number": 0
+				}
+			],
+			"resource_groups_number": 1
+		}
+	},
+	"boss_port": "5000",
+	"gcp": {
+		"disk_size_gb": 30,
+		"machine_type": "e2-medium"
+	},
+	"platform": "azure",
+	"scaling": "manual",
+	"worker_cap": 4
+}
