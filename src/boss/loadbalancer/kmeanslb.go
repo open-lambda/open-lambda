@@ -20,6 +20,9 @@ func loadCentroids(filename string) ([]Point, error) {
 
 	var centroids []Point
 	json.Unmarshal(byteValue, &centroids)
+	// for _, centroid := range centroids {
+	// 	fmt.Println(len(centroid))
+	// }
 	return centroids, nil
 }
 
@@ -27,6 +30,7 @@ func assignToCluster(p Point, centroids []Point) int {
 	minDist := math.MaxFloat64
 	minIdx := 0
 	for idx, centroid := range centroids {
+		// fmt.Println(len(centroid), len(p))
 		dist := distance(p, centroid)
 		if dist < minDist {
 			minDist = dist

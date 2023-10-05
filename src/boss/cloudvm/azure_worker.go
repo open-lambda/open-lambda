@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"os/user"
 	"sync"
 	"time"
 )
@@ -126,7 +125,7 @@ func (worker *Worker) start() error {
 		panic(err)
 	}
 
-	user, err := user.Current()
+	// user, err := user.Current()
 	if err != nil {
 		panic(err)
 	}
@@ -135,17 +134,17 @@ func (worker *Worker) start() error {
 	python_path := "/home/azureuser/paper-tree-cache/analysis/cluster/"
 	run_python := fmt.Sprintf("python3 worker.py %d", worker_group)
 
-	cmd := fmt.Sprintf("cd %s; %s; %s; cd %s; %s",
-		cwd,
-		"sudo mount -o rw,remount /sys/fs/cgroup",
-		"sudo ./ol worker up -i ol-min -d -o import_cache_tree=/home/azureuser/paper-tree-cache/analysis/cluster/boss/tree-v0.node-40.json",
+	cmd := fmt.Sprintf("cd %s; %s; cd %s; %s; %s",
 		python_path,
 		run_python,
+		cwd,
+		"sudo mount -o rw,remount /sys/fs/cgroup",
+		"sudo ./ol worker up -i ol-min -d -o import_cache_tree=/home/azureuser/paper-tree-cache/analysis/cluster/boss/tree-v0.node-40.json,worker_url=0.0.0.0",
 	)
 
 	tries := 10
 	for tries > 0 {
-		sshcmd := exec.Command("ssh", "-i", "~/.ssh/ol-boss_key.pem", user.Username+"@"+worker.workerIp, "-o", "StrictHostKeyChecking=no", "-C", cmd)
+		sshcmd := exec.Command("ssh", "-i", "/home/azureuser/.ssh/ol-boss_key.pem", "azureuser"+"@"+worker.workerIp, "-o", "StrictHostKeyChecking=no", "-C", cmd)
 		stdoutStderr, err := sshcmd.CombinedOutput()
 		fmt.Printf("%s\n", stdoutStderr)
 		if err == nil {
@@ -166,7 +165,7 @@ func (worker *AzureWorker) killWorker() {
 	if err != nil {
 		panic(err)
 	}
-	user, err := user.Current()
+	// user, err := user.Current()
 	if err != nil {
 		panic(err)
 	}
@@ -175,7 +174,7 @@ func (worker *AzureWorker) killWorker() {
 	tries := 10
 	for tries > 0 {
 		log.Printf("debug: %s\n", worker.privateAddr)
-		sshcmd := exec.Command("ssh", "-i", "~/.ssh/ol-boss_key.pem", user.Username+"@"+worker.privateAddr, "-o", "StrictHostKeyChecking=no", "-C", cmd)
+		sshcmd := exec.Command("ssh", "-i", "/home/azureuser/.ssh/ol-boss_key.pem", "azureuser"+"@"+worker.privateAddr, "-o", "StrictHostKeyChecking=no", "-C", cmd)
 		stdoutStderr, err := sshcmd.CombinedOutput()
 		fmt.Printf("%s\n", stdoutStderr)
 		if err == nil {

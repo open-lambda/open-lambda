@@ -55,7 +55,7 @@ var create_lock sync.Mutex
 
 func createVM(worker *Worker) (*AzureConfig, error) {
 	vmName := worker.workerId
-	diskName := "ol-boss3_OsDisk_1_0c16fafd09414fe9929799574f51395c"
+	diskName := "ol-boss_OsDisk_1_ed26effc1c1545dd9426f6711bc7caad"
 	vnetName := "ol-boss-vnet"
 	snapshotName := "ol-boss-snapshot"
 	conn, err := connectionAzure()
@@ -682,9 +682,6 @@ func createVirtualMachine(ctx context.Context, cred azcore.TokenCredential, netw
 					},
 				},
 			},
-			SecurityProfile: &armcompute.SecurityProfile{
-				SecurityType: &armcompute.PossibleSecurityTypesValues()[1],
-			},
 		},
 	}
 
@@ -761,9 +758,6 @@ func createDisk(ctx context.Context, cred azcore.TokenCredential, source_disk st
 					SourceResourceID: to.Ptr(source_disk),
 				},
 				DiskSizeGB: to.Ptr[int32](64),
-				SecurityProfile: &armcompute.DiskSecurityProfile{
-					SecurityType: &armcompute.PossibleDiskSecurityTypesValues()[3],
-				},
 			},
 		},
 		nil,
@@ -814,9 +808,6 @@ func createSnapshot(ctx context.Context, cred azcore.TokenCredential, diskID str
 				CreationData: &armcompute.CreationData{
 					CreateOption:     to.Ptr(armcompute.DiskCreateOptionCopy),
 					SourceResourceID: to.Ptr(diskID),
-				},
-				SecurityProfile: &armcompute.DiskSecurityProfile{
-					SecurityType: &armcompute.PossibleDiskSecurityTypesValues()[3],
 				},
 			},
 		},

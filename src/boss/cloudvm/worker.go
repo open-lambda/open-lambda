@@ -145,7 +145,11 @@ func (pool *WorkerPool) startNewWorker() {
 		workerIdDigit, err := strconv.Atoi(getAfterSep(worker.workerId, "-"))
 		// Assign the worker to the group
 		// TODO: need to find the most busy worker and double it
-		assignedGroup := workerIdDigit % loadbalancer.NumGroup
+		assignedGroup := workerIdDigit%loadbalancer.NumGroup - 1 // -1 because starts from 0
+		if assignedGroup == -1 {
+			assignedGroup = loadbalancer.NumGroup - 1
+		}
+		// fmt.Printf("Debug: %d\n", assignedGroup)
 		if pool.platform == "gcp" {
 			worker.runCmd("./ol worker up -d") // start worker
 		} else if pool.platform == "azure" {
@@ -183,8 +187,9 @@ func (pool *WorkerPool) startNewWorker() {
 				groupWorkers: make(map[string]*Worker),
 			}
 			pool.nextGroup += 1
-			pool.nextGroup %= loadbalancer.NumGroup
+			pool.nextGroup %= loadbalancer.NumGroup - 1
 		}
+		fmt.Printf("Debug: %d\n", assignedGroup)
 		group := pool.groups[assignedGroup]
 		group.groupWorkers[worker.workerId] = worker
 
@@ -446,6 +451,7 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 		path := "call_matrix_sample.csv"
 		firstLine := readFirstLine(path)
 		matrix_pkgs := strings.Split(firstLine, ",")
+		matrix_pkgs = matrix_pkgs[1:]
 		var vec_matrix []float64
 		for _, name := range matrix_pkgs {
 			if isStrExists(name, pkgsDeps) {
@@ -456,10 +462,12 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 		}
 		// step 2: get assigned group
 		targetGroup := loadbalancer.GetGroup(vec_matrix)
+		// fmt.Printf("Debug: targetGroup: %d\n", targetGroup)
 		// step3: get assigned worker randomly
 		assignSuccess := false
 		// Might be problem: shoud I add lock here?
 		if group, ok := pool.groups[targetGroup]; ok { // exists this group
+			// fmt.Println(len(group.groupWorkers))
 			if len(group.groupWorkers) > 0 {
 				// Seed the random number generator
 				rand.Seed(time.Now().UnixNano())
