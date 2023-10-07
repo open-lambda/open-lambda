@@ -196,32 +196,32 @@ func (container *SOCKContainer) populateRoot() (err error) {
 	// todo: now the packages' dir are read-only, is neccessary to remount the packages dir using overlayfs?
 	// todo: also, is it necessary to create a illusion like common site-packages dir?
 	// create a dir used to hidden the content in packages dir
-	tmpEmptyDir, err := os.MkdirTemp("", "empty")
-	if err != nil {
-		log.Fatal(err)
-	}
-	if err := syscall.Mount(tmpEmptyDir, filepath.Join(container.containerRootDir, "packages"), "", common.BIND, ""); err != nil {
-		return fmt.Errorf("failed to bind empty dir: %v", err)
-	}
-
-	for _, pkg := range container.meta.Installs {
-		srcDirStr := filepath.Join(common.Conf.SOCK_base_path, "packages", pkg, "files")
-		targetDirStr := filepath.Join(container.containerRootDir, "packages", pkg, "files")
-		err := os.MkdirAll(targetDirStr, 0777)
-		if err != nil {
-			return err
-		}
-
-		if err := syscall.Mount(srcDirStr, targetDirStr, "", common.BIND, ""); err != nil {
-			return fmt.Errorf("failed to bind package dir: %s -> %s :: %v", srcDirStr, targetDirStr, err)
-		}
-		if err := syscall.Mount("none", targetDirStr, "", common.BIND_RO, ""); err != nil {
-			return fmt.Errorf("failed to bind package dir RO: %s :: %v", targetDirStr, err)
-		}
-		if err := syscall.Mount("none", targetDirStr, "", common.PRIVATE, ""); err != nil {
-			return fmt.Errorf("failed to make package dir private :: %v", err)
-		}
-	}
+	//tmpEmptyDir, err := os.MkdirTemp("", "empty")
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
+	//if err := syscall.Mount(tmpEmptyDir, filepath.Join(container.containerRootDir, "packages"), "", common.BIND, ""); err != nil {
+	//	return fmt.Errorf("failed to bind empty dir: %v", err)
+	//}
+	//
+	//for _, pkg := range container.meta.Installs {
+	//	srcDirStr := filepath.Join(common.Conf.SOCK_base_path, "packages", pkg, "files")
+	//	targetDirStr := filepath.Join(container.containerRootDir, "packages", pkg, "files")
+	//	err := os.MkdirAll(targetDirStr, 0777)
+	//	if err != nil {
+	//		return err
+	//	}
+	//
+	//	if err := syscall.Mount(srcDirStr, targetDirStr, "", common.BIND, ""); err != nil {
+	//		return fmt.Errorf("failed to bind package dir: %s -> %s :: %v", srcDirStr, targetDirStr, err)
+	//	}
+	//	if err := syscall.Mount("none", targetDirStr, "", common.BIND_RO, ""); err != nil {
+	//		return fmt.Errorf("failed to bind package dir RO: %s :: %v", targetDirStr, err)
+	//	}
+	//	if err := syscall.Mount("none", targetDirStr, "", common.PRIVATE, ""); err != nil {
+	//		return fmt.Errorf("failed to make package dir private :: %v", err)
+	//	}
+	//}
 
 	// FILE SYSTEM STEP 2: code dir
 	if container.codeDir != "" {
