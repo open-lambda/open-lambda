@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -62,6 +63,23 @@ func sbStr(sb Sandbox) string {
 		return "<nil>"
 	}
 	return fmt.Sprintf("<SB %s>", sb.ID())
+}
+
+func importLines(modules []string) (string, error) {
+	modulesStr, err := json.Marshal(modules)
+	if err != nil {
+		fmt.Println("Error marshalling JSON:", err)
+		return "", nil
+	}
+	code := fmt.Sprintf(`
+os.environ['OPENBLAS_NUM_THREADS'] = '2'
+for mod in %s:
+	try:
+		importlib.import_module(mod)
+	except Exception as e:
+		pass
+    `, modulesStr)
+	return code, nil
 }
 
 func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, meta *SandboxMeta, rtType common.RuntimeType) (sb Sandbox, err error) {
@@ -132,9 +150,11 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 			pyCode = append(pyCode, "    sys.path.insert(0, "+path+")")
 		}
 
-		for _, mod := range meta.Imports {
-			pyCode = append(pyCode, "import "+mod)
+		lines, err := importLines(meta.Imports)
+		if err != nil {
+			log.Printf("Error generating import lines: %v", err)
 		}
+		pyCode = append(pyCode, lines)
 
 		// handler or Zygote?
 		if isLeaf {
