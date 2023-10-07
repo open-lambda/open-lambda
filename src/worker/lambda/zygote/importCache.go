@@ -30,8 +30,9 @@ type ImportCache struct {
 // Sandbox death, etc)
 type ImportCacheNode struct {
 	// from config file:
-	Packages []string           `json:"packages"`
-	Children []*ImportCacheNode `json:"children"`
+	Packages        []string           `json:"packages"`
+	Children        []*ImportCacheNode `json:"children"`
+	SplitGeneration int                `json:"split_generation"`
 
 	// backpointers based on Children structure
 	parent *ImportCacheNode
@@ -194,6 +195,10 @@ func (cache *ImportCache) createChildSandboxFromNode(
 		// dec ref count
 		cache.putSandboxInNode(node, zygoteSB)
 
+		if isLeaf {
+			sb.(*sandbox.SafeSandbox).Sandbox.(*sandbox.SOCKContainer).Node = node.SplitGeneration
+		}
+
 		// isNew is guaranteed to be true on 2nd iteration
 		if err != sandbox.FORK_FAILED || isNew {
 			return sb, err
@@ -317,8 +322,9 @@ func (cache *ImportCache) createSandboxInNode(node *ImportCacheNode, rt_type com
 		// policy: what modules should we pre-import?  Top-level of
 		// pre-initialized packages is just one possibility...
 		node.meta = &sandbox.SandboxMeta{
-			Installs: installs,
-			Imports:  topLevelMods,
+			Installs:        installs,
+			Imports:         topLevelMods,
+			SplitGeneration: node.SplitGeneration,
 		}
 	}
 

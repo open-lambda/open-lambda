@@ -29,6 +29,8 @@ type SOCKContainer struct {
 	rtType           common.RuntimeType
 	client           *http.Client
 
+	Node int
+
 	// 1 for self, plus 1 for each child (we can't release memory
 	// until all descendants are dead, because they share the
 	// pages of this Container, but this is the only container
@@ -373,7 +375,7 @@ func (container *SOCKContainer) fork(dst Sandbox) (err error) {
 		panic("cgRefCount was already 0")
 	}
 
-	dstSock := dst.(*safeSandbox).Sandbox.(*SOCKContainer)
+	dstSock := dst.(*SafeSandbox).Sandbox.(*SOCKContainer)
 
 	origPids, err := container.cg.GetPIDs()
 	if err != nil {

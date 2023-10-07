@@ -154,13 +154,8 @@ func (linst *LambdaInstance) Task() {
 		}
 		argsDict["start_create"] = tStartCreate
 		argsDict["end_create"] = tEndCreate
+		argsDict["parent"] = sb.(*sandbox.SafeSandbox).Sandbox.(*sandbox.SOCKContainer).Node
 
-		//times := map[string]interface{}{
-		//	"name":         argsDict["name"],
-		//	"req":          argsDict["req"],
-		//	"start_create": tStartCreate,
-		//	"end_create":   tEndCreate,
-		//}
 		newReqBytes, _ := json.Marshal(argsDict)
 		req.r.Body = io.NopCloser(bytes.NewBuffer(newReqBytes))
 
