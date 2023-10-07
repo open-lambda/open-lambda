@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -20,7 +21,7 @@ import (
 const SOCK_HOST_INIT = "/usr/local/bin/sock-init"
 const SOCK_GUEST_INIT = "/ol-init"
 
-var nextId int64
+var nextId int64 = 0
 
 // SOCKPool is a ContainerFactory that creats docker containeres.
 type SOCKPool struct {
@@ -62,6 +63,23 @@ func sbStr(sb Sandbox) string {
 		return "<nil>"
 	}
 	return fmt.Sprintf("<SB %s>", sb.ID())
+}
+
+func importLines(modules []string) (string, error) {
+	modulesStr, err := json.Marshal(modules)
+	if err != nil {
+		fmt.Println("Error marshalling JSON:", err)
+		return "", nil
+	}
+	code := fmt.Sprintf(`
+os.environ['OPENBLAS_NUM_THREADS'] = '2'
+for mod in %s:
+	try:
+		importlib.import_module(mod)
+	except Exception as e:
+		pass
+    `, modulesStr)
+	return code, nil
 }
 
 func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, meta *SandboxMeta, rtType common.RuntimeType) (sb Sandbox, err error) {
@@ -125,21 +143,18 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 	if rtType == common.RT_PYTHON {
 		// add installed packages to the path, and import the modules we'll need
 		var pyCode []string
-
+		// by this step, all packages are guaranteed to be installed in pullHandlerIfStale()
 		for _, pkg := range meta.Installs {
 			path := "'/packages/" + pkg + "/files'"
-			pyCode = append(pyCode, "if os.path.exists("+path+"):")
-			pyCode = append(pyCode, "	if not "+path+" in sys.path:")
-			pyCode = append(pyCode, "		sys.path.insert(0, "+path+")")
+			pyCode = append(pyCode, "if not "+path+" in sys.path:")
+			pyCode = append(pyCode, "    sys.path.insert(0, "+path+")")
 		}
 
-		// we need handle any possible error while importing a module
-		for _, mod := range meta.Imports {
-			pyCode = append(pyCode, "try:")
-			pyCode = append(pyCode, "	import "+mod)
-			pyCode = append(pyCode, "except Exception as e:")
-			pyCode = append(pyCode, "	print('bootstrap.py error:', e)")
+		lines, err := importLines(meta.Imports)
+		if err != nil {
+			log.Printf("Error generating import lines: %v", err)
 		}
+		pyCode = append(pyCode, lines)
 
 		// handler or Zygote?
 		if isLeaf {
@@ -192,7 +207,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 
 	cSock.client = &http.Client{
 		Transport: &http.Transport{Dial: dial},
-		Timeout: time.Second * time.Duration(common.Conf.Limits.Max_runtime_default),
+		Timeout:   time.Second * time.Duration(common.Conf.Limits.Max_runtime_default),
 	}
 
 	// event handling
