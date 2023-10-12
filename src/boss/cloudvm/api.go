@@ -55,6 +55,8 @@ type WorkerPool struct {
 	numGroup  int
 	nextGroup int
 	groups    map[int]*GroupWorker // this mappes the groupId to the GroupWorker
+
+	taksId int32
 }
 
 type GroupWorker struct {
@@ -72,4 +74,7 @@ type Worker struct {
 	pool     *WorkerPool
 	state    WorkerState
 	groupId  int
+
+	funcLogFile *os.File
+	funcLog     *log.Logger
 }

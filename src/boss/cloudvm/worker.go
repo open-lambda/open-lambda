@@ -64,6 +64,8 @@ func NewWorkerPool(platform string, worker_cap int) (*WorkerPool, error) {
 	pool.groups = make(map[int]*GroupWorker)
 	pool.nextGroup = 0
 
+	pool.taksId = 0
+
 	// This is for traces used to foward tasks
 	loadbalancer.Traces = loadbalancer.LoadTrace()
 	loadbalancer.Lb = loadbalancer.InitLoadBalancer()
@@ -121,9 +123,13 @@ func (pool *WorkerPool) startNewWorker() {
 	pool.Lock()
 
 	log.Printf("starting new worker\n")
+
 	nextId := pool.nextId
 	pool.nextId += 1
 	worker := pool.NewWorker(fmt.Sprintf("worker-%d", nextId))
+	logPath := fmt.Sprintf("%s_funcLog.log", worker.workerId)
+	funcLogFile, _ := os.Create(logPath)
+	funcLog := log.New(funcLogFile, "", 0)
 	worker.state = STARTING
 	pool.workers[STARTING][worker.workerId] = worker
 	pool.clusterLog.Printf("%s: starting [target=%d, starting=%d, running=%d, cleaning=%d, destroying=%d]",
@@ -132,6 +138,7 @@ func (pool *WorkerPool) startNewWorker() {
 		len(pool.workers[RUNNING]),
 		len(pool.workers[CLEANING]),
 		len(pool.workers[DESTROYING]))
+	worker.funcLog = funcLog
 
 	pool.Unlock()
 
@@ -400,7 +407,13 @@ func isStrExists(str string, list []string) bool {
 
 //run lambda function
 func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
+	pool.Lock()
+	pool.taksId += 1
+	thisTask := pool.taksId
+	pool.Unlock()
 	starttime := time.Now()
+
+	assignSuccess := false
 	if len(pool.workers[STARTING])+len(pool.workers[RUNNING]) == 0 {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
@@ -408,7 +421,7 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 	if loadbalancer.Lb.LbType == loadbalancer.Random {
 		worker = <-pool.queue
 		pool.queue <- worker
-	} else if loadbalancer.Lb.LbType == loadbalancer.KMeans {
+	} else {
 		// TODO: what if the designated worker isn't up yet?
 		// Current solution: then randomly choose one that is up
 		// step 1: get its dependencies
@@ -430,7 +443,7 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 				sub := getAfterSep(firstLine, ":")
 				pkgs = strings.Split(sub, ",")
 				// get direct packages the function needs
-				for i, _ := range pkgs {
+				for i := range pkgs {
 					pkgs[i] = strings.TrimSpace(pkgs[i])
 				}
 
@@ -452,7 +465,7 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 		firstLine := readFirstLine(path)
 		matrix_pkgs := strings.Split(firstLine, ",")
 		matrix_pkgs = matrix_pkgs[1:]
-		var vec_matrix []float64
+		var vec_matrix []int
 		for _, name := range matrix_pkgs {
 			if isStrExists(name, pkgsDeps) {
 				vec_matrix = append(vec_matrix, 1)
@@ -461,10 +474,19 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		// step 2: get assigned group
-		targetGroup := loadbalancer.GetGroup(vec_matrix)
+		var targetGroup int
+		if loadbalancer.Lb.LbType == loadbalancer.KMeans {
+			vec_float := make([]float64, len(vec_matrix))
+			for i, v := range vec_matrix {
+				vec_float[i] = float64(v)
+			}
+			targetGroup = loadbalancer.KMeansGetGroup(vec_float)
+		} else if loadbalancer.Lb.LbType == loadbalancer.KModes {
+			targetGroup = loadbalancer.KModesGetGroup(vec_matrix)
+		}
 		// fmt.Printf("Debug: targetGroup: %d\n", targetGroup)
 		// step3: get assigned worker randomly
-		assignSuccess := false
+		assignSuccess = false
 		// Might be problem: shoud I add lock here?
 		if group, ok := pool.groups[targetGroup]; ok { // exists this group
 			// fmt.Println(len(group.groupWorkers))
@@ -485,11 +507,13 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 		}
 		// if assign to a worker failed, randomly pick one
 		if !assignSuccess {
-			fmt.Println("assign to a group (KMeans) failed")
+			fmt.Println("assign to a group (KMeans/KModes) failed")
 			worker = <-pool.queue
 			pool.queue <- worker
 		}
 	}
+	assignTime := time.Since(starttime).Milliseconds()
+
 	atomic.AddInt32(&worker.numTask, 1)
 	atomic.AddInt32(&pool.totalTask, 1)
 
@@ -499,6 +523,18 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 	atomic.AddInt32(&pool.totalTask, -1)
 
 	latency := time.Since(starttime).Milliseconds()
+
+	pool.Lock()
+	if loadbalancer.Lb.LbType == loadbalancer.Random {
+		worker.funcLog.Printf("{\"workernum\": %d, \"task\": %d, \"time\": %d, \"assignTime\": %d, \"assign\": \"Random\"}\n", len(pool.workers[RUNNING]), thisTask, latency, assignTime)
+	} else {
+		if assignSuccess {
+			worker.funcLog.Printf("{\"workernum\": %d, \"task\": %d, \"time\": %d, \"assignTime\": %d, \"assign\": \"Success\"}\n", len(pool.workers[RUNNING]), thisTask, latency, assignTime)
+		} else {
+			worker.funcLog.Printf("{\"workernum\": %d, \"task\": %d, \"time\": %d, \"assignTime\": %d, \"assign\": \"Unsuccess\"}\n", len(pool.workers[RUNNING]), thisTask, latency, assignTime)
+		}
+	}
+	pool.Unlock()
 
 	atomic.AddInt64(&pool.sumLatency, latency)
 	atomic.AddInt64(&pool.nLatency, 1)

@@ -3,6 +3,7 @@ package loadbalancer
 const (
 	Random = 0
 	KMeans = 1
+	KModes = 2
 )
 
 const (
@@ -17,6 +18,6 @@ type LoadBalancer struct {
 
 func InitLoadBalancer() *LoadBalancer {
 	return &LoadBalancer{
-		LbType: KMeans,
+		LbType: Random,
 	}
 }
