@@ -82,6 +82,7 @@ build: ol wasm-worker container-proxy
 install: build
 	cp ol ${INSTALL_PREFIX}/bin/
 	cp ol-wasm ${INSTALL_PREFIX}/bin/
+	cp ol-container-proxy ${INSTALL_PREFIX}/bin/
 
 test-all:
 	sudo python3 -u ./scripts/test.py --worker_type=sock

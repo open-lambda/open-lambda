@@ -1,23 +1,13 @@
-use lambda_store_client::{ApplicationId, Client, ObjectType, ObjectTypeId};
+use lambda_store_client::{Client, ObjectType, ObjectTypeId};
 use open_lambda_proxy_protocol::CallResult;
-
-use std::env;
 
 use serde_bytes::ByteBuf;
 
 static mut CLIENT: Option<Client> = None;
 
-static mut APP_ID: Option<ApplicationId> = None;
-
 /// SAFETY: Only call this during startup
 pub async unsafe fn create_client(address: &str) -> Result<(), String> {
     CLIENT = Some(lambda_store_client::create_client(address).await?);
-
-    let app_id = env::var("LAMBDA_STORE_APP_ID")
-        .unwrap()
-        .parse::<ApplicationId>()
-        .unwrap();
-    APP_ID = Some(app_id);
     Ok(())
 }
 
@@ -25,7 +15,6 @@ pub async fn call(func_name: &str, args: &[u8]) -> CallResult {
     // SAFETY: lambdastore is always initialized at this point
     // otherwise the wasm-worker will not start successfully
     let client = unsafe { CLIENT.as_ref().expect("lambdastore not initialized") };
-    let app_id = unsafe { APP_ID.as_ref().unwrap() };
 
     if func_name == "create_object" {
         let (app_name, typename) = bincode::deserialize(args).unwrap();
@@ -58,8 +47,10 @@ pub async fn call(func_name: &str, args: &[u8]) -> CallResult {
         };
         result.map_err(|err| format!("{err}"))
     } else if func_name == "get_configuration" {
+        let app_name = bincode::deserialize(args).unwrap();
         let object_types: Vec<(ObjectTypeId, String, ObjectType)> = client
-            .get_object_types(app_id)
+            .get_object_types_by_app_name(app_name)
+            .unwrap()
             .into_iter()
             .map(|(id, name, info)| (id, name, (*info).clone()))
             .collect();
