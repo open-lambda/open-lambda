@@ -38,7 +38,7 @@ func NewHandlerPuller(dirMaker *common.DirMaker) (cp *HandlerPuller, err error) 
 	cp.handlerNameRegex, err = regexp.Compile(`^[A-Za-z0-9\.\-\_]+$`)
 	if err != nil {
 		fmt.Println("Compile error")
-	} else if cp.compiled == nil {
+	} else if cp.handlerNameRegex == nil {
 		fmt.Println("Compiled is null")
 	}
 
