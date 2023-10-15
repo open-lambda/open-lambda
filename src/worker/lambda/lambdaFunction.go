@@ -254,6 +254,9 @@ func (f *LambdaFunc) Task() {
 			argsDict := make(map[string]interface{})
 			bodyBytes, _ := ioutil.ReadAll(req.r.Body)
 			json.Unmarshal(bodyBytes, &argsDict)
+			if argsDict == nil {
+				argsDict = make(map[string]interface{})
+			}
 			fmt.Printf("pullHandlerIfStale: %f", tEndPullHandler-tStartPullHandler)
 			argsDict["start_pullHandler"] = tStartPullHandler
 			argsDict["end_pullHandler"] = tEndPullHandler
