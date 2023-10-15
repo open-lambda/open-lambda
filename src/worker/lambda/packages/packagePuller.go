@@ -40,8 +40,13 @@ type Package struct {
 
 // the pip-install admin lambda returns this
 type PackageMeta struct {
-	Deps     []string `json:"Deps"`
+	Deps     []string `json:"Deps"` // deprecated
 	TopLevel []string `json:"TopLevel"`
+}
+
+type ModuleInfo struct {
+	Name  string
+	IsPkg bool
 }
 
 func NewPackagePuller(sbPool sandbox.SandboxPool, depTracer *DepTracer) (*PackagePuller, error) {
@@ -75,47 +80,6 @@ func NewPackagePuller(sbPool sandbox.SandboxPool, depTracer *DepTracer) (*Packag
 // underscores to be equivalent."
 func NormalizePkg(pkg string) string {
 	return strings.ReplaceAll(strings.ToLower(pkg), "_", "-")
-}
-
-// "pip install" missing packages to Conf.Pkgs_dir
-func (pp *PackagePuller) InstallRecursive(installs []string) ([]string, error) {
-	// shrink capacity to length so that our appends are not
-	// visible to caller
-	installs = installs[:len(installs):len(installs)]
-
-	installSet := make(map[string]bool)
-	for _, install := range installs {
-		name := strings.Split(install, "==")[0]
-		installSet[name] = true
-	}
-
-	// Installs may grow as we loop, because some installs have
-	// deps, leading to other installs
-	for i := 0; i < len(installs); i++ {
-		pkg := installs[i]
-		if common.Conf.Trace.Package {
-			log.Printf("On %v of %v", pkg, installs)
-		}
-		p, err := pp.GetPkg(pkg)
-		if err != nil {
-			return nil, err
-		}
-
-		if common.Conf.Trace.Package {
-			log.Printf("Package '%s' has deps %v", pkg, p.Meta.Deps)
-			log.Printf("Package '%s' has top-level modules %v", pkg, p.Meta.TopLevel)
-		}
-
-		// push any previously unseen deps on the list of ones to install
-		for _, dep := range p.Meta.Deps {
-			if !installSet[dep] {
-				installs = append(installs, dep)
-				installSet[dep] = true
-			}
-		}
-	}
-
-	return installs, nil
 }
 
 // GetPkg does the pip install in a Sandbox, taking care to never install the
@@ -169,6 +133,7 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 		// assume dir existence means it is installed already
 		log.Printf("%s appears already installed from previous run of OL", p.Name)
 		alreadyInstalled = true
+		return nil
 	} else {
 		log.Printf("run pip install %s from a new Sandbox to %s on host", p.Name, scratchDir)
 		if err := os.Mkdir(scratchDir, 0700); err != nil {
@@ -219,9 +184,29 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 		return err
 	}
 
-	for i, pkg := range p.Meta.Deps {
-		p.Meta.Deps[i] = NormalizePkg(pkg)
+	return nil
+}
+
+// IterModules is a simplified implementation of pkgutil.iterModules
+// todo: implement every details in pkgutil.iterModules, or find a efficient way to call pkgutil.iterModules in python
+func IterModules(path string) ([]ModuleInfo, error) {
+	var modules []ModuleInfo
+
+	files, err := ioutil.ReadDir(path)
+	if err != nil {
+		return nil, err
 	}
 
-	return nil
+	for _, file := range files {
+		if file.IsDir() {
+			// Check if the directory contains an __init__.py file, which would make it a package.
+			if _, err := os.Stat(filepath.Join(path, file.Name(), "__init__.py")); !os.IsNotExist(err) {
+				modules = append(modules, ModuleInfo{Name: file.Name(), IsPkg: true})
+			}
+		} else if strings.HasSuffix(file.Name(), ".py") && file.Name() != "__init__.py" {
+			modName := strings.TrimSuffix(file.Name(), ".py")
+			modules = append(modules, ModuleInfo{Name: modName, IsPkg: false})
+		}
+	}
+	return modules, nil
 }
