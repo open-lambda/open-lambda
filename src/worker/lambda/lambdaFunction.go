@@ -321,8 +321,8 @@ func (f *LambdaFunc) Task() {
 
 		// AUTOSCALING STEP 2: tweak how many instances we have, to get closer to our goal
 
-		// make at most one scaling adjustment per second
-		adjustFreq := time.Second
+		// make at most one scaling adjustment per 100ms
+		adjustFreq := time.Millisecond * 100
 		now := time.Now()
 		if lastScaling != nil {
 			elapsed := now.Sub(*lastScaling)
