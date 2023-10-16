@@ -1,4 +1,4 @@
-use lambda_store_client::{ApplicationId, Client, ObjectType, ObjectTypeId};
+use lambda_store_client::{Client, ObjectType, ObjectTypeId};
 use open_lambda_proxy_protocol::CallResult;
 
 use parking_lot::Mutex as PMutex;
@@ -9,7 +9,6 @@ use async_once_cell::OnceCell;
 
 static ADDRESS: PMutex<Option<String>> = PMutex::new(None);
 static CLIENT: OnceCell<Client> = OnceCell::new();
-static APP_ID: ApplicationId = 1; //FIXME
 
 pub fn set_address(address: String) {
     log::debug!("Lambdastore address set to `{address}`");
@@ -62,8 +61,10 @@ pub async fn call(func_name: &str, args: &[u8]) -> CallResult {
         };
         result.map_err(|err| format!("{err}"))
     } else if func_name == "get_configuration" {
+        let app_name: String = bincode::deserialize(args).unwrap();
         let object_types: Vec<(ObjectTypeId, String, ObjectType)> = client
-            .get_object_types(&APP_ID)
+            .get_object_types_by_app_name(&app_name)
+            .unwrap()
             .into_iter()
             .map(|(id, name, info)| (id, name, (*info).clone()))
             .collect();
