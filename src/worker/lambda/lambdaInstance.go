@@ -172,8 +172,13 @@ func (linst *LambdaInstance) Task() {
 
 			// notify instance that we're done
 			t2.T1()
+            // Record at least 1 ms of elapsed time
 			v := int(t2.Milliseconds)
-			req.execMs = v
+            if v == 0 {
+                req.execMs = 1
+            } else {
+    			req.execMs = v
+            }
 			f.doneChan <- req
 
 			// check whether we should shutdown (non-blocking)
