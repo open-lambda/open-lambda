@@ -307,6 +307,8 @@ func (f *LambdaFunc) Task() {
 		inProgressWorkMs := outstandingReqs * execMs.Avg
 		desiredInstances := inProgressWorkMs / 1000
 
+		f.printf("outstandingReqs=%i avg=%i desired=%i", outstandingReqs, execMs.Avg, desiredInstances)
+
 		// if we have, say, one job that will take 100
 		// seconds, spinning up 100 instances won't do any
 		// good, so cap by number of outstanding reqs
