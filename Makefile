@@ -56,7 +56,7 @@ update-dependencies:
 
 imgs/ol-min: ${LAMBDA_FILES}
 	${MAKE} -C min-image
-	docker build -t ol-min min-image
+	docker build --no-cache -t ol-min min-image
 	touch imgs/ol-min
 
 imgs/ol-wasm: imgs/ol-min wasm-image/runtimes/native/src/main.rs
