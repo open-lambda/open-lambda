@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -286,19 +287,29 @@ func (cache *ImportCache) createSandboxInNode(node *ImportCacheNode, rt_type com
 	if node.codeDir == "" {
 		codeDir := cache.codeDirs.Make("import-cache")
 		// TODO: clean this up upon failure
-
-		installs, err := cache.pkgPuller.InstallRecursive(node.Packages)
-		if err != nil {
-			return err
+		// if all pkgs required by lambda are guaranteed to be installed, then no need to call getPkg(),
+		// but sometimes a zygote is created without requests, e.g. warm up the tree, then getPkg() is needed
+		installs := []string{}
+		for _, name := range node.AllPackages() {
+			_, err := cache.pkgPuller.GetPkg(name)
+			if err != nil {
+				return fmt.Errorf("ImportCache.go: could not get package %s: %v", name, err)
+			}
+			installs = append(installs, name)
 		}
 
 		topLevelMods := []string{}
 		for _, name := range node.Packages {
-			pkg, err := cache.pkgPuller.GetPkg(name)
+			pkgPath := filepath.Join(common.Conf.SOCK_base_path, "packages", name, "files")
+			moduleInfos, err := packages.IterModules(pkgPath)
 			if err != nil {
 				return err
 			}
-			topLevelMods = append(topLevelMods, pkg.Meta.TopLevel...)
+			modulesNames := []string{}
+			for _, moduleInfo := range moduleInfos {
+				modulesNames = append(modulesNames, moduleInfo.Name)
+			}
+			topLevelMods = append(topLevelMods, modulesNames...)
 		}
 
 		node.codeDir = codeDir

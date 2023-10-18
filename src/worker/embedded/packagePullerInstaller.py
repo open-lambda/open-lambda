@@ -30,11 +30,9 @@ if hasattr(sys, 'implementation'):
     implementation_version = format_full_version(sys.implementation.version)
 else:
     implementation_version = "0"
-extra = ''  # TODO: support extras
 
 
 # top_level.txt cannot be trusted, use pkgutil to get top level packages
-# pkgutil.iter_modules can also be used to get submodules
 def top(dirname):
     return [name for _, name, _ in pkgutil.iter_modules([dirname])]
 

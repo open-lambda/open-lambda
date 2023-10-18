@@ -3,6 +3,7 @@ package lambda
 import (
 	"bufio"
 	"container/list"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -65,26 +66,19 @@ func (f *LambdaFunc) printf(format string, args ...any) {
 	log.Printf("%s [FUNC %s]", strings.TrimRight(msg, "\n"), f.name)
 }
 
-// the function code may contain comments such as the following:
-//
-// # ol-install: parso,jedi,idna,chardet,certifi,requests
-// # ol-import: parso,jedi,idna,chardet,certifi,requests,urllib3
-//
-// The first list should be installed with pip install.  The latter is
-// a hint about what may be imported (useful for import cache).
-//
-// We support exact pkg versions (e.g., pkg==2.0.0), but not < or >.
-// If different lambdas import different versions of the same package,
-// we will install them, for example, to
-// /packages/pkg==1.0.0/files/pkg and /packages/pkg==2.0.0/files/pkg.
-// Each .../files path a handler needs is added to its sys.path.
+// parseMeta reads in a requirements.txt file that was built from pip-compile
 func parseMeta(codeDir string) (meta *sandbox.SandboxMeta, err error) {
-	installs := make([]string, 0)
-	imports := make([]string, 0)
+	meta = &sandbox.SandboxMeta{
+		Installs: []string{},
+		Imports:  []string{},
+	}
 
-	path := filepath.Join(codeDir, "f.py")
+	path := filepath.Join(codeDir, "requirements.txt")
 	file, err := os.Open(path)
-	if err != nil {
+	if errors.Is(err, os.ErrNotExist) {
+		// having a requirements.txt is optional
+		return meta, nil
+	} else if err != nil {
 		return nil, err
 	}
 	defer file.Close()
@@ -92,32 +86,15 @@ func parseMeta(codeDir string) (meta *sandbox.SandboxMeta, err error) {
 	scnr := bufio.NewScanner(file)
 	for scnr.Scan() {
 		line := strings.ReplaceAll(scnr.Text(), " ", "")
-		parts := strings.Split(line, ":")
-		if parts[0] == "#ol-install" {
-			for _, val := range strings.Split(parts[1], ",") {
-				val = strings.TrimSpace(val)
-				if len(val) > 0 {
-					installs = append(installs, val)
-				}
-			}
-		} else if parts[0] == "#ol-import" {
-			for _, val := range strings.Split(parts[1], ",") {
-				val = strings.TrimSpace(val)
-				if len(val) > 0 {
-					imports = append(imports, val)
-				}
-			}
+		pkg := strings.Split(line, "#")[0]
+		if pkg != "" {
+			pkg = strings.Split(pkg, ";")[0] // ignore conditional dependencies
+			pkg = packages.NormalizePkg(pkg)
+			meta.Installs = append(meta.Installs, pkg)
 		}
 	}
 
-	for i, pkg := range installs {
-		installs[i] = packages.NormalizePkg(pkg)
-	}
-
-	return &sandbox.SandboxMeta{
-		Installs: installs,
-		Imports:  imports,
-	}, nil
+	return meta, nil
 }
 
 // if there is any error:
@@ -169,10 +146,14 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 			return err
 		}
 
-		meta.Installs, err = f.lmgr.PackagePuller.InstallRecursive(meta.Installs)
-		if err != nil {
-			return err
+		// make sure all specified dependencies are installed
+		// (but don't recursively find others)
+		for _, pkg := range meta.Installs {
+			if _, err := f.lmgr.PackagePuller.GetPkg(pkg); err != nil {
+				return err
+			}
 		}
+
 		f.lmgr.DepTracer.TraceFunction(codeDir, meta.Installs)
 		f.meta = meta
 	} else if rtType == common.RT_NATIVE {

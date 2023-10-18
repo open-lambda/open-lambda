@@ -221,14 +221,19 @@ def recursive_kill(depth):
 @test
 def flask_test():
     url = 'http://localhost:5000/run/flask-test'
-    print(url)
+    print("URL", url)
     r = requests.get(url)
+    print("RESPONSE", r)
 
     # flask apps should have control of status code, headers, and response body
-    assert r.status_code == 418
-    assert "A" in r.headers
-    assert r.headers["A"] == "B"
-    assert r.text == "hi\n"
+    if r.status_code != 418:
+        raise ValueError(f"expected status code 418, but got {r.status_code}")
+    if not "A" in r.headers:
+        raise ValueError(f"'A' not found in headers, as expected: {r.headers}")
+    if r.headers["A"] != "B":
+        raise ValueError(f"headers['A'] should be 'B', not {r.headers['A']}")
+    if r.text != "hi\n":
+        raise ValueError(f"r.text should be 'hi\n', not {repr(r.text)}")
 
 def run_tests():
     ping_test()

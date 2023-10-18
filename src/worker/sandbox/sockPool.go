@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -64,6 +65,26 @@ func sbStr(sb Sandbox) string {
 	return fmt.Sprintf("<SB %s>", sb.ID())
 }
 
+func importLines(modules []string) (string, error) {
+	if len(modules) == 0 {
+		return "", nil
+	}
+	modulesStr, err := json.Marshal(modules)
+	if err != nil {
+		fmt.Println("Error marshalling JSON:", err)
+		return "", nil
+	}
+	code := fmt.Sprintf(`
+os.environ['OPENBLAS_NUM_THREADS'] = '2'
+for mod in %s:
+	try:
+		importlib.import_module(mod)
+	except Exception as e:
+		pass
+    `, modulesStr)
+	return code, nil
+}
+
 func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, meta *SandboxMeta, rtType common.RuntimeType) (sb Sandbox, err error) {
 	id := fmt.Sprintf("%d", atomic.AddInt64(&nextId, 1))
 	meta = fillMetaDefaults(meta)
@@ -125,7 +146,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 	if rtType == common.RT_PYTHON {
 		// add installed packages to the path, and import the modules we'll need
 		var pyCode []string
-
+		// by this step, all packages are guaranteed to be installed in pullHandlerIfStale()
 		for _, pkg := range meta.Installs {
 			path := "'/packages/" + pkg + "/files'"
 			pyCode = append(pyCode, "if os.path.exists("+path+"):")
@@ -133,13 +154,11 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 			pyCode = append(pyCode, "		sys.path.insert(0, "+path+")")
 		}
 
-		// toplevel.txt can not be trusted, we must handle any possible error
-		for _, mod := range meta.Imports {
-			pyCode = append(pyCode, "try:")
-			pyCode = append(pyCode, "	import "+mod)
-			pyCode = append(pyCode, "except Exception as e:")
-			pyCode = append(pyCode, "	print('bootstrap.py error:', e)")
+		lines, err := importLines(meta.Imports)
+		if err != nil {
+			log.Printf("Error generating import lines: %v", err)
 		}
+		pyCode = append(pyCode, lines)
 
 		// handler or Zygote?
 		if isLeaf {

@@ -46,6 +46,7 @@ const gcpLaunchVmJSON = `{
       "diskEncryptionKey": {},
       "initializeParams": {
         "diskSizeGb": "{{.DiskSizeGb}}",
+        "diskSizeGb": "{{.DiskSizeGb}}",
         "diskType": "projects/{{.Project}}/zones/{{.Zone}}/diskTypes/pd-balanced",
         "labels": {},
         "sourceSnapshot": "projects/{{.Project}}/global/snapshots/{{.SnapshotName}}"
@@ -59,6 +60,7 @@ const gcpLaunchVmJSON = `{
   },
   "guestAccelerators": [],
   "labels": {},
+  "machineType": "projects/{{.Project}}/zones/{{.Zone}}/machineTypes/{{.MachineType}}",
   "machineType": "projects/{{.Project}}/zones/{{.Zone}}/machineTypes/{{.MachineType}}",
   "metadata": {
     "items": []
