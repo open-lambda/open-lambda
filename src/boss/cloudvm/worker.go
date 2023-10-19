@@ -438,36 +438,37 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 			// TODO: if user changes the code, one worker will know that, boss cannot know that. How to handle this?
 			if len(urlParts) == 2 {
 				img := urlParts[1]
-				path := fmt.Sprintf("default-ol/registry/%s.py", img)
-				firstLine := readFirstLine(path)
-				sub := getAfterSep(firstLine, ":")
-				pkgs = strings.Split(sub, ",")
-				// get direct packages the function needs
-				for i := range pkgs {
-					pkgs[i] = strings.TrimSpace(pkgs[i])
+				path := fmt.Sprintf("default-ol/registry/%s/requirements.txt", img)
+				file, err := os.Open(path)
+				if err != nil {
+					fmt.Println("Error opening file:", err)
+					return
 				}
+				scanner := bufio.NewScanner(file)
+				for scanner.Scan() {
+					line := scanner.Text()
+					line = strings.TrimSpace(line)
+					// Ignore comments and empty lines
+					if strings.HasPrefix(line, "#") || line == "" {
+						continue
+					}
+					pkgs = append(pkgs, line)
+				}
+				file.Close()
 
 			} else {
 				w.WriteHeader(http.StatusInternalServerError)
 				w.Write([]byte("expected invocation format: /run/<lambda-name>"))
 			}
 		}
-		// get indirect packages the function needs
-		pkgsDeps := pkgs // this is a list of all packages required
-		for _, pkg := range pkgs {
-			for _, trace := range loadbalancer.Traces.Data {
-				if trace.Name == pkg {
-					pkgsDeps = append(pkgsDeps, trace.Deps...)
-				}
-			}
-		}
-		path := "call_matrix_sample.csv"
+		// get a vector
+		path := "call_matrix_cols.csv"
 		firstLine := readFirstLine(path)
 		matrix_pkgs := strings.Split(firstLine, ",")
 		matrix_pkgs = matrix_pkgs[1:]
 		var vec_matrix []int
 		for _, name := range matrix_pkgs {
-			if isStrExists(name, pkgsDeps) {
+			if isStrExists(name, pkgs) {
 				vec_matrix = append(vec_matrix, 1)
 			} else {
 				vec_matrix = append(vec_matrix, 0)

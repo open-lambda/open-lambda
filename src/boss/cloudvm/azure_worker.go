@@ -9,6 +9,8 @@ import (
 	"os/exec"
 	"sync"
 	"time"
+
+	"github.com/open-lambda/open-lambda/ol/boss/loadbalancer"
 )
 
 type AzureWorkerPool struct {
@@ -131,18 +133,27 @@ func (worker *Worker) start() error {
 	}
 
 	worker_group := worker.groupId
-	python_path := "/home/azureuser/paper-tree-cache/analysis/cluster/"
-	run_python := fmt.Sprintf("python3 worker.py %d", worker_group)
+	python_path := "/home/azureuser/paper-tree-cache/analysis/cluster_version/"
+	run_python := ""
+	if loadbalancer.Lb.LbType == loadbalancer.Random {
+		run_python = "sudo python3 worker.py -1"
+	} else {
+		run_python = fmt.Sprintf("sudo python3 worker.py %d", worker_group)
+	}
+	run_gen_funcs := "sudo python3 pre-bench.py"
 
-	cmd := fmt.Sprintf("cd %s; %s; cd %s; %s; %s",
+	cmd := fmt.Sprintf("cd %s; %s; cd %s; %s; %s; cd %s; %s; %s",
+		cwd,
+		"sudo ./ol worker init -o ol-min",
 		python_path,
 		run_python,
+		run_gen_funcs,
 		cwd,
 		"sudo mount -o rw,remount /sys/fs/cgroup",
-		"sudo ./ol worker up -i ol-min -d -o import_cache_tree=/home/azureuser/paper-tree-cache/analysis/cluster/boss/tree-v0.node-40.json,worker_url=0.0.0.0",
+		"sudo ./ol worker up -i ol-min -d -o import_cache_tree=/home/azureuser/paper-tree-cache/analysis/cluster_version/trees/tree-v0.node-40.json,worker_url=0.0.0.0",
 	)
 
-	tries := 10
+	tries := 5
 	for tries > 0 {
 		sshcmd := exec.Command("ssh", "-i", "/home/azureuser/.ssh/ol-boss_key.pem", "azureuser"+"@"+worker.workerIp, "-o", "StrictHostKeyChecking=no", "-C", cmd)
 		stdoutStderr, err := sshcmd.CombinedOutput()

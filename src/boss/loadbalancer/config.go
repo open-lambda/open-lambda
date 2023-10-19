@@ -18,6 +18,6 @@ type LoadBalancer struct {
 
 func InitLoadBalancer() *LoadBalancer {
 	return &LoadBalancer{
-		LbType: Random,
+		LbType: KModes,
 	}
 }

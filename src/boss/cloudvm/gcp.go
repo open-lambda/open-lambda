@@ -21,12 +21,9 @@ import (
 
 type GcpClient struct {
 	service_account map[string]any // from .json key exported from Gcp service account
-type GcpClient struct {
-	service_account map[string]any // from .json key exported from Gcp service account
 	access_token    string
 }
 
-func GcpBossTest() {
 func GcpBossTest() {
 	fmt.Printf("STEP 0: check SSH setup\n")
 	home, err := os.UserHomeDir()
@@ -60,7 +57,6 @@ func GcpBossTest() {
 
 	fmt.Printf("STEP 1: get access token\n")
 	client, err := NewGcpClient("key.json")
-	client, err := NewGcpClient("key.json")
 	if err != nil {
 		panic(err)
 	}
@@ -73,13 +69,7 @@ func GcpBossTest() {
 	fmt.Printf("Region: %s\nZone: %s\n", region, zone)
 
 	fmt.Printf("STEP 1a: lookup region and zone from metadata server\n")
-	region, zone, err := client.GcpProjectZone()
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("Region: %s\nZone: %s\n", region, zone)
 
-	fmt.Printf("STEP 2: lookup instance from IP address\n")
 	instance, err := client.GcpInstanceName()
 	if err != nil {
 		panic(err)
@@ -87,10 +77,6 @@ func GcpBossTest() {
 	fmt.Printf("Instance: %s\n", instance)
 
 	fmt.Printf("STEP 3: take crash-consistent snapshot of instance\n")
-	disk := instance // assume Gcp disk name is same as instance name
-	start := time.Now()
-	resp, err := client.Wait(client.GcpSnapshot(disk, "test-snap"))
-	snapshot_time := time.Since(start)
 	disk := instance // assume Gcp disk name is same as instance name
 	start := time.Now()
 	resp, err := client.Wait(client.GcpSnapshot(disk, "test-snap"))
@@ -124,8 +110,7 @@ func GcpBossTest() {
 	fmt.Printf("STEP 6: stop instance\n")
 	resp, err = client.Wait(client.stopGcpInstance("test-vm"))
 	start = time.Now()
-	resp, err = client.Wait(client.LaunchGcp("test-snap", "test-vm"))
-	clone_time := time.Since(start)
+
 	if err != nil && resp["error"].(map[string]any)["code"] != "409" { //continue if instance already exists error
 		fmt.Printf("instance alreay exists!\n")
 		client.startGcpInstance("test-vm")
@@ -161,8 +146,6 @@ func GcpBossTest() {
 
 func NewGcpClient(service_account_json string) (*GcpClient, error) {
 	client := &GcpClient{}
-func NewGcpClient(service_account_json string) (*GcpClient, error) {
-	client := &GcpClient{}
 
 	// read key file
 	jsonFile, err := os.Open(service_account_json)
@@ -186,7 +169,6 @@ func NewGcpClient(service_account_json string) (*GcpClient, error) {
 }
 
 func (c *GcpClient) RunComandWorker(VMName string, command string) error {
-func (c *GcpClient) RunComandWorker(VMName string, command string) error {
 	cwd, err := os.Getwd()
 	if err != nil {
 		panic(err)
@@ -204,13 +186,11 @@ func (c *GcpClient) RunComandWorker(VMName string, command string) error {
 
 	ip, ok := lookup[VMName]
 
-	ip, ok := lookup[VMName]
 	if !ok {
 		fmt.Println(lookup)
 		panic(fmt.Errorf("could not find IP for instance"))
 	}
 
-	cmd := fmt.Sprintf("cd %s; %s", cwd, command)
 	cmd := fmt.Sprintf("cd %s; %s", cwd, command)
 
 	tries := 10
@@ -232,7 +212,6 @@ func (c *GcpClient) RunComandWorker(VMName string, command string) error {
 	return nil
 }
 
-func (c *GcpClient) GetAccessToken() (string, error) {
 func (c *GcpClient) GetAccessToken() (string, error) {
 	if c.access_token != "" {
 		// TODO: refresh it if stale?
@@ -281,7 +260,6 @@ func (c *GcpClient) GetAccessToken() (string, error) {
 }
 
 func (c *GcpClient) get(url string) (rv map[string]any, err error) {
-func (c *GcpClient) get(url string) (rv map[string]any, err error) {
 	var result map[string]any
 
 	defer func() {
@@ -314,7 +292,6 @@ func (c *GcpClient) get(url string) (rv map[string]any, err error) {
 	return result, nil
 }
 
-func (c *GcpClient) post(url string, payload bytes.Buffer) (rv map[string]any, err error) {
 func (c *GcpClient) post(url string, payload bytes.Buffer) (rv map[string]any, err error) {
 	var result map[string]any
 
@@ -420,82 +397,8 @@ func (c *GcpClient) GcpProjectZone() (string, string, error) {
 func (c *GcpClient) GcpListInstances() (map[string]any, error) {
 	url := fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/zones/%s/instances", c.service_account["project_id"], c.service_account["zone"])
 	return c.get(url)
-func (c *GcpClient) delete(url string) (rv map[string]any, err error) {
-	var result map[string]any
-
-	defer func() {
-		if err != nil {
-			err = fmt.Errorf("DELETE to %s failed: %s", url, err.Error())
-		}
-	}()
-
-	token, err := c.GetAccessToken()
-	if err != nil {
-		return result, err
-	}
-
-	url = fmt.Sprintf("%s?access_token=%s", url, token)
-	req, err := http.NewRequest("DELETE", url, nil)
-	if err != nil {
-		return result, err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	client := http.Client{}
-	resp, err := client.Do(req)
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return result, err
-	}
-
-	if err := json.Unmarshal([]byte(body), &result); err != nil {
-		return result, err
-	}
-
-	return result, nil
 }
 
-func (c *GcpClient) GcpProjectZone() (string, string, error) {
-	url := fmt.Sprintf("http://metadata.google.internal/computeMetadata/v1/instance/zone")
-
-	token, err := c.GetAccessToken()
-	if err != nil {
-		return "", "", err
-	}
-
-	url = fmt.Sprintf("%s?access_token=%s", url, token)
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return "", "", err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Metadata-Flavor", "Google")
-	client := http.Client{}
-	resp, err := client.Do(req)
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", "", err
-	}
-
-	subs := strings.Split(string(body), "/")
-	zone := subs[len(subs)-1]
-	region := zone[:len(zone)-2]
-
-	c.service_account["region"] = region
-	c.service_account["zone"] = zone
-
-	return region, zone, nil
-}
-
-func (c *GcpClient) GcpListInstances() (map[string]any, error) {
-	url := fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/zones/%s/instances", c.service_account["project_id"], c.service_account["zone"])
-	return c.get(url)
-}
-
-func (c *GcpClient) GcpIPtoInstance() (map[string]string, error) {
 func (c *GcpClient) GcpIPtoInstance() (map[string]string, error) {
 	resp, err := c.GcpListInstances()
 	if err != nil {
@@ -508,7 +411,6 @@ func (c *GcpClient) GcpIPtoInstance() (map[string]string, error) {
 		interfaces := item.(map[string]any)["networkInterfaces"]
 		for _, netif := range interfaces.([]any) {
 			ip := netif.(map[string]any)["networkIP"].(string) //internal ip
-			ip := netif.(map[string]any)["networkIP"].(string) //internal ip
 			lookup[ip] = instance_name
 		}
 	}
@@ -516,7 +418,6 @@ func (c *GcpClient) GcpIPtoInstance() (map[string]string, error) {
 	return lookup, nil
 }
 
-func (c *GcpClient) GcpInstancetoIP() (map[string]string, error) {
 func (c *GcpClient) GcpInstancetoIP() (map[string]string, error) {
 	lookup1, err := c.GcpIPtoInstance()
 	if err != nil {
@@ -544,7 +445,6 @@ func getOutboundIP() (string, error) {
 }
 
 func (c *GcpClient) GcpInstanceName() (string, error) {
-func (c *GcpClient) GcpInstanceName() (string, error) {
 	lookup, err := c.GcpIPtoInstance()
 	if err != nil {
 		return "", nil
@@ -558,12 +458,10 @@ func (c *GcpClient) GcpInstanceName() (string, error) {
 	instance, ok := lookup[ip]
 	if !ok {
 		return "", fmt.Errorf("could not find Gcp instance for %s", ip)
-		return "", fmt.Errorf("could not find Gcp instance for %s", ip)
 	}
 	return instance, nil
 }
 
-func (c *GcpClient) Wait(resp1 map[string]any, err1 error) (resp2 map[string]any, err2 error) {
 func (c *GcpClient) Wait(resp1 map[string]any, err1 error) (resp2 map[string]any, err2 error) {
 	if err1 != nil {
 		return nil, fmt.Errorf("cannot Wait on on failed call: %s", err1.Error())
@@ -571,7 +469,6 @@ func (c *GcpClient) Wait(resp1 map[string]any, err1 error) (resp2 map[string]any
 
 	selfLink, ok := resp1["selfLink"]
 	if !ok {
-		return resp1, fmt.Errorf("Gcp REST operation did not succeed")
 		return resp1, fmt.Errorf("Gcp REST operation did not succeed")
 	}
 
@@ -594,16 +491,12 @@ func (c *GcpClient) Wait(resp1 map[string]any, err1 error) (resp2 map[string]any
 }
 
 func (c *GcpClient) GcpSnapshot(disk string, snapshot_name string) (map[string]any, error) {
-func (c *GcpClient) GcpSnapshot(disk string, snapshot_name string) (map[string]any, error) {
 	args := GcpSnapshotArgs{
-		Project:      c.service_account["project_id"].(string),
-		Region:       c.service_account["region"].(string),
-		Zone:         c.service_account["zone"].(string),
-		Project:      c.service_account["project_id"].(string),
-		Region:       c.service_account["region"].(string),
-		Zone:         c.service_account["zone"].(string),
+		Project: c.service_account["project_id"].(string),
+		Region:  c.service_account["region"].(string),
+		Zone:    c.service_account["zone"].(string),
+
 		Disk:         disk,
-		SnapshotName: snapshot_name,
 		SnapshotName: snapshot_name,
 	}
 
@@ -620,12 +513,8 @@ func (c *GcpClient) GcpSnapshot(disk string, snapshot_name string) (map[string]a
 }
 
 func (c *GcpClient) LaunchGcp(SnapshotName string, VMName string) (map[string]any, error) {
-func (c *GcpClient) LaunchGcp(SnapshotName string, VMName string) (map[string]any, error) {
 	args := GcpLaunchVmArgs{
 		ServiceAccountEmail: c.service_account["client_email"].(string),
-		Project:             c.service_account["project_id"].(string),
-		Region:              c.service_account["region"].(string),
-		Zone:                c.service_account["zone"].(string),
 		Project:             c.service_account["project_id"].(string),
 		Region:              c.service_account["region"].(string),
 		Zone:                c.service_account["zone"].(string),
@@ -646,37 +535,6 @@ func (c *GcpClient) LaunchGcp(SnapshotName string, VMName string) (map[string]an
 	}
 
 	return c.post(url, payload)
-}
-
-func (c *GcpClient) startGcpInstance(VMName string) (map[string]any, error) { //start existing instance
-	url := fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/zones/%s/instances/%s/start",
-		c.service_account["project_id"].(string),
-		c.service_account["zone"].(string),
-		VMName)
-
-	var payload bytes.Buffer
-
-	return c.post(url, payload)
-}
-
-func (c *GcpClient) stopGcpInstance(VMName string) (map[string]any, error) {
-	url := fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/zones/%s/instances/%s/stop",
-		c.service_account["project_id"].(string),
-		c.service_account["zone"].(string),
-		VMName)
-
-	var payload bytes.Buffer
-
-	return c.post(url, payload)
-}
-
-func (c *GcpClient) deleteGcpInstance(VMName string) (map[string]any, error) {
-	url := fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/zones/%s/instances/%s",
-		c.service_account["project_id"].(string),
-		c.service_account["zone"].(string),
-		VMName)
-
-	return c.delete(url)
 }
 
 func (c *GcpClient) startGcpInstance(VMName string) (map[string]any, error) { //start existing instance
