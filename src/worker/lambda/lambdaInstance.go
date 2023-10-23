@@ -110,7 +110,6 @@ func (linst *LambdaInstance) Task() {
 				scratchDir := f.lmgr.scratchDirs.Make(f.name)
 
 				// we don't specify parent SB, because ImportCache.Create chooses it for us
-				// todo: assume linst.meta always include the accurate metadata info for the lambda
 				sb, err = f.lmgr.ZygoteProvider.Create(f.lmgr.sbPool, true, linst.codeDir, scratchDir, linst.meta, f.rtType)
 				if err != nil {
 					f.printf("failed to get Sandbox from import cache")

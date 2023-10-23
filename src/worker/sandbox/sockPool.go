@@ -66,6 +66,9 @@ func sbStr(sb Sandbox) string {
 }
 
 func importLines(modules []string) (string, error) {
+	if len(modules) == 0 {
+		return "", nil
+	}
 	modulesStr, err := json.Marshal(modules)
 	if err != nil {
 		fmt.Println("Error marshalling JSON:", err)

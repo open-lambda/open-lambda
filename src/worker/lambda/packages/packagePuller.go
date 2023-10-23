@@ -131,8 +131,6 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 	alreadyInstalled := false
 	if _, err := os.Stat(scratchDir); err == nil {
 		// assume dir existence means it is installed already
-		// TODO: but still tell sandbox to do the pip-install again? we could fetch deps info from metadata directly or
-		//       don't even need deps info. add return statement here to skip the following code
 		log.Printf("%s appears already installed from previous run of OL", p.Name)
 		alreadyInstalled = true
 		return nil
@@ -185,10 +183,6 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 	if err := json.Unmarshal(body, &p.Meta); err != nil {
 		return err
 	}
-
-	//for i, pkg := range p.Meta.Deps {
-	//	p.Meta.Deps[i] = NormalizePkg(pkg)
-	//}
 
 	return nil
 }
