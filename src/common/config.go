@@ -174,7 +174,7 @@ func LoadDefaults(olPath string) error {
 			Import_cache:        "tree",
 			Downsize_paused_mem: true,
 			Enable_seccomp:      true,
-			Warmup:              false,
+			Warmup:              true,
 		},
 		Trace: TraceConfig{
 			Cgroups: false,
