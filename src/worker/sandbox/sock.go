@@ -29,6 +29,8 @@ type SOCKContainer struct {
 	rtType           common.RuntimeType
 	client           *http.Client
 
+	Node int
+
 	// 1 for self, plus 1 for each child (we can't release memory
 	// until all descendants are dead, because they share the
 	// pages of this Container, but this is the only container
@@ -190,6 +192,36 @@ func (container *SOCKContainer) populateRoot() (err error) {
 	if err := syscall.Mount("none", container.containerRootDir, "", common.PRIVATE, ""); err != nil {
 		return fmt.Errorf("failed to make root dir private :: %v", err)
 	}
+
+	// todo: now the packages' dir are read-only, is neccessary to remount the packages dir using overlayfs?
+	// todo: also, is it necessary to create a illusion like common site-packages dir?
+	// create a dir used to hidden the content in packages dir
+	//tmpEmptyDir, err := os.MkdirTemp("", "empty")
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
+	//if err := syscall.Mount(tmpEmptyDir, filepath.Join(container.containerRootDir, "packages"), "", common.BIND, ""); err != nil {
+	//	return fmt.Errorf("failed to bind empty dir: %v", err)
+	//}
+	//
+	//for _, pkg := range container.meta.Installs {
+	//	srcDirStr := filepath.Join(common.Conf.SOCK_base_path, "packages", pkg, "files")
+	//	targetDirStr := filepath.Join(container.containerRootDir, "packages", pkg, "files")
+	//	err := os.MkdirAll(targetDirStr, 0777)
+	//	if err != nil {
+	//		return err
+	//	}
+	//
+	//	if err := syscall.Mount(srcDirStr, targetDirStr, "", common.BIND, ""); err != nil {
+	//		return fmt.Errorf("failed to bind package dir: %s -> %s :: %v", srcDirStr, targetDirStr, err)
+	//	}
+	//	if err := syscall.Mount("none", targetDirStr, "", common.BIND_RO, ""); err != nil {
+	//		return fmt.Errorf("failed to bind package dir RO: %s :: %v", targetDirStr, err)
+	//	}
+	//	if err := syscall.Mount("none", targetDirStr, "", common.PRIVATE, ""); err != nil {
+	//		return fmt.Errorf("failed to make package dir private :: %v", err)
+	//	}
+	//}
 
 	// FILE SYSTEM STEP 2: code dir
 	if container.codeDir != "" {
@@ -353,7 +385,7 @@ func (container *SOCKContainer) fork(dst Sandbox) (err error) {
 		panic("cgRefCount was already 0")
 	}
 
-	dstSock := dst.(*safeSandbox).Sandbox.(*SOCKContainer)
+	dstSock := dst.(*SafeSandbox).Sandbox.(*SOCKContainer)
 
 	origPids, err := container.cg.GetPIDs()
 	if err != nil {

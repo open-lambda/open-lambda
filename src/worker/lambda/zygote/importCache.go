@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -195,6 +196,10 @@ func (cache *ImportCache) createChildSandboxFromNode(
 		// dec ref count
 		cache.putSandboxInNode(node, zygoteSB)
 
+		if isLeaf {
+			sb.(*sandbox.SafeSandbox).Sandbox.(*sandbox.SOCKContainer).Node = node.SplitGeneration
+		}
+
 		// isNew is guaranteed to be true on 2nd iteration
 		if err != sandbox.FORK_FAILED || isNew {
 			return sb, err
@@ -287,6 +292,7 @@ func (cache *ImportCache) createSandboxInNode(node *ImportCacheNode, rt_type com
 	if node.codeDir == "" {
 		codeDir := cache.codeDirs.Make("import-cache")
 		// TODO: clean this up upon failure
+		// todo: only thing is capture top-level mods, no need to open another sandbox
 		// if all pkgs required by lambda are guaranteed to be installed, then no need to call getPkg(),
 		// but sometimes a zygote is created without requests, e.g. warm up the tree, then getPkg() is needed
 		installs := []string{}
@@ -369,6 +375,8 @@ func (cache *ImportCache) Warmup() error {
 		cache.putSandboxInNode(node, zygoteSB)
 	}
 	t.T1()
+
+	http.Post("http://localhost:4997/warmup", "application/json", nil)
 	return nil
 }
 

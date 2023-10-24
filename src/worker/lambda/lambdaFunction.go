@@ -2,9 +2,13 @@ package lambda
 
 import (
 	"bufio"
+	"bytes"
 	"container/list"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -88,7 +92,7 @@ func parseMeta(codeDir string) (meta *sandbox.SandboxMeta, err error) {
 		line := strings.ReplaceAll(scnr.Text(), " ", "")
 		pkg := strings.Split(line, "#")[0]
 		if pkg != "" {
-			pkg = strings.Split(pkg, ";")[0] // ignore conditional dependencies
+			pkg = strings.Split(pkg, ";")[0] // avoid conditional dependencies for now
 			pkg = packages.NormalizePkg(pkg)
 			meta.Installs = append(meta.Installs, pkg)
 		}
@@ -237,6 +241,7 @@ func (f *LambdaFunc) Task() {
 
 			// check for new code, and cleanup old code
 			// (and instances that use it) if necessary
+			tStartPullHandler := float64(time.Now().UnixNano()) / float64(time.Millisecond)
 			oldCodeDir := f.codeDir
 			if err := f.pullHandlerIfStale(); err != nil {
 				f.printf("Error checking for new lambda code at `%s`: %v", f.codeDir, err)
@@ -245,6 +250,18 @@ func (f *LambdaFunc) Task() {
 				req.done <- true
 				continue
 			}
+			tEndPullHandler := float64(time.Now().UnixNano()) / float64(time.Millisecond)
+			argsDict := make(map[string]interface{})
+			bodyBytes, _ := ioutil.ReadAll(req.r.Body)
+			json.Unmarshal(bodyBytes, &argsDict)
+			if argsDict == nil {
+				argsDict = make(map[string]interface{})
+			}
+			fmt.Printf("pullHandlerIfStale: %f", tEndPullHandler-tStartPullHandler)
+			argsDict["start_pullHandler"] = tStartPullHandler
+			argsDict["end_pullHandler"] = tEndPullHandler
+			newReqBytes, _ := json.Marshal(argsDict)
+			req.r.Body = io.NopCloser(bytes.NewBuffer(newReqBytes))
 
 			if oldCodeDir != "" && oldCodeDir != f.codeDir {
 				el := f.instances.Front()
