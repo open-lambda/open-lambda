@@ -164,7 +164,7 @@ func LoadDefaults(olPath string) error {
 		Import_cache_tree: zygoteTreePath,
 		Limits: LimitsConfig{
 			Procs:               10,
-			Mem_mb:              900, // remember to change back
+			Mem_mb:              50,
 			CPU_percent:         100,
 			Max_runtime_default: 30,
 			Installer_mem_mb:    Max(250, Min(500, memPoolMb/2)),

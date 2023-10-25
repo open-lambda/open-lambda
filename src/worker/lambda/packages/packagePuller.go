@@ -180,7 +180,6 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 			resp.StatusCode, string(body), sb.DebugString())
 	}
 
-	// parse the response into Meta, the top-level modules are not normalized, and we do not guarantee their existence
 	if err := json.Unmarshal(body, &p.Meta); err != nil {
 		return err
 	}

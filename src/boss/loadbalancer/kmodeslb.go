@@ -29,20 +29,20 @@ func predictCluster(centroids [][]int, point []int) int {
 	return cluster
 }
 
-func KModesGetGroup(pkgs []int) int {
+func KModesGetGroup(pkgs []int) (int, error) {
 	// Load centroids from JSON file
 	data, err := ioutil.ReadFile("centroids_kmodes.json")
 	if err != nil {
-		panic(err)
+		return -1, err
 	}
 
 	var centroids [][]int
 	err = json.Unmarshal(data, &centroids)
 	if err != nil {
-		panic(err)
+		return -1, err
 	}
 
 	// Predict cluster
 	cluster := predictCluster(centroids, pkgs)
-	return cluster
+	return cluster, nil
 }

@@ -237,7 +237,7 @@ func (container *SOCKContainer) populateRoot() (err error) {
 	}
 
 	// FILE SYSTEM STEP 3: scratch dir (tmp and communication)
-	tmpDir := filepath.Join(container.scratchDir, "tmp") // make the tmp dir in host machine fs
+	tmpDir := filepath.Join(container.scratchDir, "tmp")
 	if err := os.Mkdir(tmpDir, 0777); err != nil && !os.IsExist(err) {
 		return err
 	}
@@ -251,16 +251,6 @@ func (container *SOCKContainer) populateRoot() (err error) {
 	sbTmpDir := filepath.Join(container.containerRootDir, "tmp")
 	if err := syscall.Mount(tmpDir, sbTmpDir, "", common.BIND, ""); err != nil {
 		return fmt.Errorf("failed to bind tmp dir: %v", err.Error())
-	}
-
-	procDir := filepath.Join(container.scratchDir, "proc")
-	if err := os.Mkdir(procDir, 0777); err != nil && !os.IsExist(err) {
-		return err
-	}
-
-	sbProcDir := filepath.Join(container.containerRootDir, "proc")
-	if err := syscall.Mount(procDir, sbProcDir, "", common.BIND, ""); err != nil {
-		return fmt.Errorf("failed to bind proc dir: %v", err.Error())
 	}
 
 	return nil
@@ -437,7 +427,7 @@ func (container *SOCKContainer) fork(dst Sandbox) (err error) {
 			}
 			if !isOrig {
 				container.printf("move PID %v from CG %v to CG %v\n", pid, container.cg.Name(), dstSock.cg.Name())
-				if err = dstSock.cg.AddPid(pid); err != nil { // todo: I remember pids are added to new cg in server.py
+				if err = dstSock.cg.AddPid(pid); err != nil {
 					return err
 				}
 				moved++

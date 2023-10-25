@@ -405,6 +405,27 @@ func isStrExists(str string, list []string) bool {
 	return exists
 }
 
+func getPkgs(img string) ([]string, error) {
+	var pkgs []string
+	path := fmt.Sprintf("default-ol/registry/%s/requirements.txt", img)
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		line = strings.TrimSpace(line)
+		// Ignore comments and empty lines
+		if strings.HasPrefix(line, "#") || line == "" {
+			continue
+		}
+		pkgs = append(pkgs, line)
+	}
+	file.Close()
+	return pkgs, nil
+}
+
 //run lambda function
 func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 	pool.Lock()
@@ -431,60 +452,67 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Access-Control-Allow-Origin", "*")
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("expected invocation format: /run/<lambda-name>"))
+			return
 		} else {
 			// components represent run[0]/<name_of_sandbox>[1]/<extra_things>...
 			// ergo we want [1] for name of sandbox
-			urlParts := getURLComponents(r)
 			// TODO: if user changes the code, one worker will know that, boss cannot know that. How to handle this?
 			if len(urlParts) == 2 {
 				img := urlParts[1]
-				path := fmt.Sprintf("default-ol/registry/%s.py", img)
-				firstLine := readFirstLine(path)
-				sub := getAfterSep(firstLine, ":")
-				pkgs = strings.Split(sub, ",")
-				// get direct packages the function needs
-				for i := range pkgs {
-					pkgs[i] = strings.TrimSpace(pkgs[i])
+				pkgs, err = getPkgs(img)
+				if err != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					w.Write([]byte("failed to get function's dependency packages"))
+					return
 				}
-
 			} else {
 				w.WriteHeader(http.StatusInternalServerError)
 				w.Write([]byte("expected invocation format: /run/<lambda-name>"))
+				return
 			}
 		}
-		// get indirect packages the function needs
-		pkgsDeps := pkgs // this is a list of all packages required
-		for _, pkg := range pkgs {
-			for _, trace := range loadbalancer.Traces.Data {
-				if trace.Name == pkg {
-					pkgsDeps = append(pkgsDeps, trace.Deps...)
+		var targetGroup int
+		// Sharding: get the target group
+		if loadbalancer.Lb.LbType == loadbalancer.Sharding {
+			targetGroup, err = loadbalancer.ShardingGetGroup(pkgs)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(err.Error()))
+				return
+			}
+		}
+		// KMeans/KModes: get the target group
+		if loadbalancer.Lb.LbType == loadbalancer.KModes || loadbalancer.Lb.LbType == loadbalancer.KMeans {
+			// get a vector
+			path := "call_matrix_cols.csv"
+			firstLine := readFirstLine(path)
+			matrix_pkgs := strings.Split(firstLine, ",")
+			matrix_pkgs = matrix_pkgs[1:]
+			var vec_matrix []int
+			for _, name := range matrix_pkgs {
+				if isStrExists(name, pkgs) {
+					vec_matrix = append(vec_matrix, 1)
+				} else {
+					vec_matrix = append(vec_matrix, 0)
 				}
 			}
-		}
-		path := "call_matrix_sample.csv"
-		firstLine := readFirstLine(path)
-		matrix_pkgs := strings.Split(firstLine, ",")
-		matrix_pkgs = matrix_pkgs[1:]
-		var vec_matrix []int
-		for _, name := range matrix_pkgs {
-			if isStrExists(name, pkgsDeps) {
-				vec_matrix = append(vec_matrix, 1)
-			} else {
-				vec_matrix = append(vec_matrix, 0)
+			// step 2: get assigned group
+			if loadbalancer.Lb.LbType == loadbalancer.KMeans {
+				vec_float := make([]float64, len(vec_matrix))
+				for i, v := range vec_matrix {
+					vec_float[i] = float64(v)
+				}
+				targetGroup, err = loadbalancer.KMeansGetGroup(vec_float)
+			} else if loadbalancer.Lb.LbType == loadbalancer.KModes {
+				targetGroup, err = loadbalancer.KModesGetGroup(vec_matrix)
 			}
-		}
-		// step 2: get assigned group
-		var targetGroup int
-		if loadbalancer.Lb.LbType == loadbalancer.KMeans {
-			vec_float := make([]float64, len(vec_matrix))
-			for i, v := range vec_matrix {
-				vec_float[i] = float64(v)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(err.Error()))
+				return
 			}
-			targetGroup = loadbalancer.KMeansGetGroup(vec_float)
-		} else if loadbalancer.Lb.LbType == loadbalancer.KModes {
-			targetGroup = loadbalancer.KModesGetGroup(vec_matrix)
+			// fmt.Printf("Debug: targetGroup: %d\n", targetGroup)
 		}
-		// fmt.Printf("Debug: targetGroup: %d\n", targetGroup)
 		// step3: get assigned worker randomly
 		assignSuccess = false
 		// Might be problem: shoud I add lock here?
@@ -511,6 +539,7 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 			worker = <-pool.queue
 			pool.queue <- worker
 		}
+
 	}
 	assignTime := time.Since(starttime).Milliseconds()
 

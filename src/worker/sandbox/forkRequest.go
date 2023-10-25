@@ -22,7 +22,7 @@ sendfds(int s, int *fds, int fdcount) {
 	struct msghdr header;
 	struct cmsghdr *cmsg;
 	int n;
-	char cms[CMSG_SPACE(sizeof(int) * fdcount)]; // CMSG_SPACE return the size of cmsghdr + data + padding
+	char cms[CMSG_SPACE(sizeof(int) * fdcount)];
 
 	buf[0] = 0;
 	iov.iov_base = buf;
@@ -31,11 +31,11 @@ sendfds(int s, int *fds, int fdcount) {
 	memset(&header, 0, sizeof header);
 	header.msg_iov = &iov;
 	header.msg_iovlen = 1;
-	header.msg_control = (caddr_t)cms; // the buffer to send the ancillary data, it will be got and initialized by CMSG_FIRSTHDR
+	header.msg_control = (caddr_t)cms;
 	header.msg_controllen = CMSG_LEN(sizeof(int) * fdcount);
 
 	cmsg = CMSG_FIRSTHDR(&header);
-	cmsg->cmsg_len = CMSG_LEN(sizeof(int) * fdcount); // CMSG_SPACE return the size of cmsghdr + data
+	cmsg->cmsg_len = CMSG_LEN(sizeof(int) * fdcount);
 	cmsg->cmsg_level = SOL_SOCKET;
 	cmsg->cmsg_type = SCM_RIGHTS;
 	memmove(CMSG_DATA(cmsg), fds, sizeof(int) * fdcount);
@@ -105,6 +105,6 @@ func (c *SOCKContainer) forkRequest(fileSockPath string, rootDir *os.File, memCG
 	cSock := C.CString(fileSockPath)
 	defer C.free(unsafe.Pointer(cSock))
 
-	_, err := C.sendRootFD(cSock, C.int(rootDir.Fd()), C.int(memCG.Fd())) // the return value is the pid of the forked process, probably should be received
+	_, err := C.sendRootFD(cSock, C.int(rootDir.Fd()), C.int(memCG.Fd()))
 	return err
 }

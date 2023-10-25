@@ -23,13 +23,13 @@ const SOCK_GUEST_INIT = "/ol-init"
 
 var nextId int64 = 0
 
-// SOCKPool is a ContainerFactory that creates sock containers.
+// SOCKPool is a ContainerFactory that creats docker containeres.
 type SOCKPool struct {
 	name          string
 	rootDirs      *common.DirMaker
 	cgPool        *cgroups.CgroupPool
 	mem           *MemPool
-	eventHandlers []SandboxEventFunc // what is this?
+	eventHandlers []SandboxEventFunc
 	debugger
 }
 
@@ -149,9 +149,8 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 		// by this step, all packages are guaranteed to be installed in pullHandlerIfStale()
 		for _, pkg := range meta.Installs {
 			path := "'/packages/" + pkg + "/files'"
-			pyCode = append(pyCode, "if os.path.exists("+path+"):")
-			pyCode = append(pyCode, "	if not "+path+" in sys.path:")
-			pyCode = append(pyCode, "		sys.path.insert(0, "+path+")")
+			pyCode = append(pyCode, "if not "+path+" in sys.path:")
+			pyCode = append(pyCode, "    sys.path.insert(0, "+path+")")
 		}
 
 		lines, err := importLines(meta.Imports)
@@ -164,8 +163,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 		if isLeaf {
 			pyCode = append(pyCode, "web_server()")
 		} else {
-			fork := fmt.Sprintf("fork_server(%d)", meta.SplitGeneration)
-			pyCode = append(pyCode, fork)
+			pyCode = append(pyCode, "fork_server()")
 		}
 
 		path := filepath.Join(scratchDir, "bootstrap.py")
@@ -206,7 +204,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 	}
 
 	log.Printf("Connecting to container at '%s'", sockPath)
-	dial := func(proto, addr string) (net.Conn, error) { // proto and addr are ignored, they're always "unix" and sockPath
+	dial := func(proto, addr string) (net.Conn, error) {
 		return net.Dial("unix", sockPath)
 	}
 

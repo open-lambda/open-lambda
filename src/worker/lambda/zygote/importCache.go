@@ -333,7 +333,7 @@ func (cache *ImportCache) createSandboxInNode(node *ImportCacheNode, rt_type com
 	var sb sandbox.Sandbox
 	if node.parent != nil {
 		sb, err = cache.createChildSandboxFromNode(cache.sbPool, node.parent, false, node.codeDir, scratchDir, node.meta, rt_type)
-	} else { // create the root zygote
+	} else {
 		sb, err = cache.sbPool.Create(nil, false, node.codeDir, scratchDir, node.meta, common.RT_PYTHON)
 	}
 
