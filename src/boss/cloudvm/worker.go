@@ -535,7 +535,7 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 		}
 		// if assign to a worker failed, randomly pick one
 		if !assignSuccess {
-			fmt.Println("assign to a group (KMeans/KModes) failed")
+			fmt.Println("assign to a group (Shard/KMeans/KModes) failed")
 			worker = <-pool.queue
 			pool.queue <- worker
 		}

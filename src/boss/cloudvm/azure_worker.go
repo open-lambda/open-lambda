@@ -153,7 +153,7 @@ func (worker *Worker) start() error {
 
 	cmd := fmt.Sprintf("cd %s; %s; cd %s; %s; %s; cd %s; %s; %s",
 		cwd,
-		"sudo ./ol worker init -o ol-min",
+		"sudo ./ol worker init -i ol-min",
 		python_path,
 		run_python,
 		run_gen_funcs,

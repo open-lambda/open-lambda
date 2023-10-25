@@ -19,6 +19,6 @@ type LoadBalancer struct {
 
 func InitLoadBalancer() *LoadBalancer {
 	return &LoadBalancer{
-		LbType: KModes,
+		LbType: Sharding,
 	}
 }

@@ -87,9 +87,9 @@ func ShardingGetGroup(pkgs []string) (int, error) {
 					if i == 0 { // since two groups has the same, randomly distribute
 						rand.Seed(time.Now().UnixNano())
 						randomInt := rand.Intn(2)
-						return id + randomInt, nil
+						return i + randomInt, nil // return the cluster number
 					}
-					return id, nil
+					return i, nil
 				}
 			}
 		}

@@ -130,7 +130,7 @@ func upCmd(ctx *cli.Context) error {
 
 		var pingErr error
 
-		for i := 0; i < 300; i++ {
+		for i := 0; i < 3000; i++ {
 			// check if it has died
 			select {
 			case err := <-died:
@@ -172,7 +172,7 @@ func upCmd(ctx *cli.Context) error {
 			return fmt.Errorf("expected PID %v but found %v (port conflict?)", proc.Pid, pid)
 		}
 
-		return fmt.Errorf("worker still not reachable after 30 seconds :: %s", pingErr)
+		return fmt.Errorf("worker still not reachable after 3 minutes :: %s", pingErr)
 	}
 
 	if err := server.Main(); err != nil {
