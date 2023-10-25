@@ -1,9 +1,10 @@
 package loadbalancer
 
 const (
-	Random = 0
-	KMeans = 1
-	KModes = 2
+	Random   = 0
+	KMeans   = 1
+	KModes   = 2
+	Sharding = 3
 )
 
 const (

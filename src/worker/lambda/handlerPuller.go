@@ -1,20 +1,20 @@
 package lambda
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"errors"
 	"fmt"
+	"github.com/open-lambda/open-lambda/ol/common"
 	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
-
-	"github.com/open-lambda/open-lambda/ol/common"
 )
 
 var notFound404 = errors.New("file does not exist")
@@ -113,9 +113,9 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type common.R
 		// expected to be efficient
 		targetDir = cp.dirMaker.Get(lambdaName)
 
-		cmd := exec.Command("cp", "-r", src, targetDir)
-		if output, err := cmd.CombinedOutput(); err != nil {
-			return rt_type, "", fmt.Errorf("%s :: %s", err, string(output))
+		err := copyItem(src, targetDir)
+		if err != nil {
+			return rt_type, "", fmt.Errorf("%s", err)
 		}
 
 		// Figure out runtime type
@@ -156,27 +156,27 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type common.R
 	if strings.HasSuffix(stat.Name(), ".py") {
 		log.Printf("Installing `%s` from a python file", src)
 
-		cmd := exec.Command("cp", src, filepath.Join(targetDir, "f.py"))
-		rt_type = common.RT_PYTHON
-
-		if output, err := cmd.CombinedOutput(); err != nil {
-			return rt_type, "", fmt.Errorf("%s :: %s", err, string(output))
+		// cmd := exec.Command("cp", src, filepath.Join(targetDir, "f.py"))
+		err := copyItem(src, filepath.Join(targetDir, "f.py"))
+		if err != nil {
+			return rt_type, "", err
 		}
+		rt_type = common.RT_PYTHON
 	} else if strings.HasSuffix(stat.Name(), ".bin") {
 		log.Printf("Installing `%s` from binary file", src)
 
-		cmd := exec.Command("cp", src, filepath.Join(targetDir, "f.bin"))
-		rt_type = common.RT_NATIVE
-
-		if output, err := cmd.CombinedOutput(); err != nil {
-			return rt_type, "", fmt.Errorf("%s :: %s", err, string(output))
+		// cmd := exec.Command("cp", src, filepath.Join(targetDir, "f.bin"))
+		err := copyItem(src, filepath.Join(targetDir, "f.bin"))
+		if err != nil {
+			return rt_type, "", err
 		}
+		rt_type = common.RT_NATIVE
 	} else if strings.HasSuffix(stat.Name(), ".tar.gz") {
 		log.Printf("Installing `%s` from an archive file", src)
 
-		cmd := exec.Command("tar", "-xzf", src, "--directory", targetDir)
-		if output, err := cmd.CombinedOutput(); err != nil {
-			return rt_type, "", fmt.Errorf("%s :: %s", err, string(output))
+		err := decompressTarGz(src, targetDir)
+		if err != nil {
+			return rt_type, "", fmt.Errorf("%s", err)
 		}
 
 		// Figure out runtime type
@@ -268,4 +268,107 @@ func (cp *HandlerPuller) getCache(name string) *CacheEntry {
 
 func (cp *HandlerPuller) putCache(name, version, path string) {
 	cp.dirCache.Store(name, &CacheEntry{version, path})
+}
+
+// copyItem function will either copy a file or recursively copy a directory
+func copyItem(src, dst string) error {
+	info, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+
+	if info.IsDir() {
+		return copyDir(src, dst)
+	}
+	return copyFile(src, dst)
+}
+
+func copyFile(src, dst string) error {
+	sourceFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer sourceFile.Close()
+
+	destFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer destFile.Close()
+
+	_, err = io.Copy(destFile, sourceFile)
+	return err
+}
+
+func copyDir(src, dst string) error {
+	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		relPath, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+
+		destPath := filepath.Join(dst, relPath)
+
+		if info.IsDir() {
+			// Create the directory if it doesn't exist
+			if _, err := os.Stat(destPath); os.IsNotExist(err) {
+				os.MkdirAll(destPath, info.Mode())
+			}
+			return nil
+		}
+
+		// Copy the file
+		return copyFile(path, destPath)
+	})
+}
+
+// decompressTarGz is equivalent to `tar -xzf src --directory dst`
+func decompressTarGz(src, dst string) error {
+	r, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+
+	gr, err := gzip.NewReader(r)
+	if err != nil {
+		return err
+	}
+	defer gr.Close()
+
+	tr := tar.NewReader(gr)
+
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+
+		target := filepath.Join(dst, header.Name)
+		switch header.Typeflag {
+		case tar.TypeDir:
+			if _, err := os.Stat(target); err != nil {
+				if err := os.MkdirAll(target, os.FileMode(header.Mode)); err != nil {
+					return err
+				}
+			}
+		case tar.TypeReg:
+			f, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
+			if err != nil {
+				return err
+			}
+			if _, err := io.Copy(f, tr); err != nil {
+				return err
+			}
+			f.Close()
+		}
+	}
+	return nil
 }

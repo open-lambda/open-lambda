@@ -49,10 +49,10 @@ func distance(p1, p2 Point) float64 {
 	return math.Sqrt(sum)
 }
 
-func KMeansGetGroup(pkgs []float64) int {
-	centroids, _ := loadCentroids("centroids_kmeans.json")
+func KMeansGetGroup(pkgs []float64) (int, error) {
+	centroids, error := loadCentroids("centroids_kmeans.json")
 
 	// Test the clustering with a new data point
 	cluster := assignToCluster(pkgs, centroids)
-	return cluster
+	return cluster, error
 }

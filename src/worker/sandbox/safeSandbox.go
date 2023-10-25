@@ -17,7 +17,7 @@ import (
 	"github.com/open-lambda/open-lambda/ol/common"
 )
 
-type safeSandbox struct {
+type SafeSandbox struct {
 	Sandbox
 
 	sync.Mutex
@@ -30,20 +30,20 @@ type safeSandbox struct {
 // init is complete.
 //
 // the rational is that we might need to do some setup (e.g., forking)
-// after a safeSandbox is created, and that setup may fail.  We never
+// after a SafeSandbox is created, and that setup may fail.  We never
 // want to notify listeners about a Sandbox that isn't ready to go.
 // E.g., would be problematic if an evictor (which is listening) were
 // to try to evict concurrently with us creating processes in the
 // Sandbox as part of setup.
-func newSafeSandbox(innerSB Sandbox) *safeSandbox {
-	sb := &safeSandbox{
+func newSafeSandbox(innerSB Sandbox) *SafeSandbox {
+	sb := &SafeSandbox{
 		Sandbox: innerSB,
 	}
 
 	return sb
 }
 
-func (sb *safeSandbox) startNotifyingListeners(eventHandlers []SandboxEventFunc) {
+func (sb *SafeSandbox) startNotifyingListeners(eventHandlers []SandboxEventFunc) {
 	sb.Mutex.Lock()
 	defer sb.Mutex.Unlock()
 	sb.eventHandlers = eventHandlers
@@ -51,20 +51,20 @@ func (sb *safeSandbox) startNotifyingListeners(eventHandlers []SandboxEventFunc)
 }
 
 // like regular printf, with suffix indicating which sandbox produced the message
-func (sb *safeSandbox) printf(format string, args ...interface{}) {
+func (sb *SafeSandbox) printf(format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
 	log.Printf("%s [SB %s]", strings.TrimRight(msg, "\n"), sb.Sandbox.ID())
 }
 
-// propagate event to anybody who signed up to listen (e.g., an evictor)
-func (sb *safeSandbox) event(evType SandboxEventType) {
+// propogate event to anybody who signed up to listen (e.g., an evictor)
+func (sb *SafeSandbox) event(evType SandboxEventType) {
 	for _, handler := range sb.eventHandlers {
 		handler(evType, sb)
 	}
 }
 
 // assumes lock is already held
-func (sb *safeSandbox) destroyOnErr(funcName string, origErr error) {
+func (sb *SafeSandbox) destroyOnErr(funcName string, origErr error) {
 	if origErr != nil {
 		sb.printf("Destroy() due to %v", origErr)
 		sb.Sandbox.Destroy(fmt.Sprintf("%s returned %s", funcName, origErr))
@@ -75,7 +75,7 @@ func (sb *safeSandbox) destroyOnErr(funcName string, origErr error) {
 	}
 }
 
-func (sb *safeSandbox) Destroy(reason string) {
+func (sb *SafeSandbox) Destroy(reason string) {
 	sb.printf("Destroy()")
 	t := common.T0("Destroy()")
 	defer t.T1()
@@ -97,7 +97,7 @@ func (sb *safeSandbox) Destroy(reason string) {
 	sb.event(EvDestroy)
 }
 
-func (sb *safeSandbox) DestroyIfPaused(reason string) {
+func (sb *SafeSandbox) DestroyIfPaused(reason string) {
 	sb.printf("DestroyIfPaused()")
 	t := common.T0("DestroyIfPaused()")
 	defer t.T1()
@@ -117,7 +117,7 @@ func (sb *safeSandbox) DestroyIfPaused(reason string) {
 	}
 }
 
-func (sb *safeSandbox) Pause() (err error) {
+func (sb *SafeSandbox) Pause() (err error) {
 	sb.printf("Pause()")
 	t := common.T0("Pause()")
 	defer t.T1()
@@ -140,7 +140,7 @@ func (sb *safeSandbox) Pause() (err error) {
 	return nil
 }
 
-func (sb *safeSandbox) Unpause() (err error) {
+func (sb *SafeSandbox) Unpause() (err error) {
 	sb.printf("Unpause()")
 	t := common.T0("Unpause()")
 	defer t.T1()
@@ -167,7 +167,7 @@ func (sb *safeSandbox) Unpause() (err error) {
 	return nil
 }
 
-func (sb *safeSandbox) Client() *http.Client {
+func (sb *SafeSandbox) Client() *http.Client {
 	// According to the docs, "Clients and Transports are safe for
 	// concurrent use by multiple goroutines and for efficiency
 	// should only be created once and re-used."
@@ -180,7 +180,7 @@ func (sb *safeSandbox) Client() *http.Client {
 }
 
 // fork (as a private method) doesn't cleanup parent sb if fork fails
-func (sb *safeSandbox) fork(dst Sandbox) (err error) {
+func (sb *SafeSandbox) fork(dst Sandbox) (err error) {
 	sb.printf("fork(SB %v)", dst.ID())
 	t := common.T0("fork()")
 	defer t.T1()
@@ -199,7 +199,7 @@ func (sb *safeSandbox) fork(dst Sandbox) (err error) {
 	return nil
 }
 
-func (sb *safeSandbox) childExit(child Sandbox) {
+func (sb *SafeSandbox) childExit(child Sandbox) {
 	sb.printf("childExit(SB %v)", child.ID())
 	t := common.T0("childExit()")
 	defer t.T1()
@@ -218,7 +218,7 @@ func (sb *safeSandbox) childExit(child Sandbox) {
 	}
 }
 
-func (sb *safeSandbox) DebugString() string {
+func (sb *SafeSandbox) DebugString() string {
 	sb.Mutex.Lock()
 	defer sb.Mutex.Unlock()
 

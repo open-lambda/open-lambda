@@ -126,10 +126,6 @@ func (mgr *LambdaMgr) Get(name string) (f *LambdaFunc) {
 	return f
 }
 
-func (mgr *LambdaMgr) Warmup() error {
-	return mgr.ZygoteProvider.Warmup()
-}
-
 func (mgr *LambdaMgr) Debug() string {
 	return mgr.sbPool.DebugString() + "\n"
 }
