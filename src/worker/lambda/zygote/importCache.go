@@ -176,7 +176,7 @@ func (cache *ImportCache) createChildSandboxFromNode(
 	// try twice, restarting parent Sandbox if it fails the first time
 	forceNew := false
 	for i := 0; i < 2; i++ {
-		zygoteSB, isNew, err := cache.getSandboxInNode(node, forceNew, rt_type)
+		zygoteSB, isNew, err := cache.getSandboxInNode(node, forceNew, rt_type, true)
 		if err != nil {
 			return nil, err
 		}
@@ -218,7 +218,7 @@ func (cache *ImportCache) createChildSandboxFromNode(
 //
 // the Sandbox returned is guaranteed to be in Unpaused state.  After
 // use, caller must also call putSandboxInNode to release ref count
-func (cache *ImportCache) getSandboxInNode(node *ImportCacheNode, forceNew bool, rt_type common.RuntimeType) (sb sandbox.Sandbox, isNew bool, err error) {
+func (cache *ImportCache) getSandboxInNode(node *ImportCacheNode, forceNew bool, rt_type common.RuntimeType, cow bool) (sb sandbox.Sandbox, isNew bool, err error) {
 	t := common.T0("ImportCache.getSandboxInNode")
 	defer t.T1()
 
@@ -244,7 +244,7 @@ func (cache *ImportCache) getSandboxInNode(node *ImportCacheNode, forceNew bool,
 		return node.sb, false, nil
 	} else {
 		// SLOW PATH
-		if err := cache.createSandboxInNode(node, rt_type); err != nil {
+		if err := cache.createSandboxInNode(node, rt_type, cow); err != nil {
 			return nil, false, err
 		}
 		node.sbRefCount = 1
@@ -287,7 +287,7 @@ func (*ImportCache) putSandboxInNode(node *ImportCacheNode, sb sandbox.Sandbox) 
 	}
 }
 
-func (cache *ImportCache) createSandboxInNode(node *ImportCacheNode, rt_type common.RuntimeType) (err error) {
+func (cache *ImportCache) createSandboxInNode(node *ImportCacheNode, rt_type common.RuntimeType, cow bool) (err error) {
 	// populate codeDir/packages with deps, and record top-level mods)
 	if node.codeDir == "" {
 		codeDir := cache.codeDirs.Make("import-cache")
@@ -332,7 +332,13 @@ func (cache *ImportCache) createSandboxInNode(node *ImportCacheNode, rt_type com
 	scratchDir := cache.scratchDirs.Make("import-cache")
 	var sb sandbox.Sandbox
 	if node.parent != nil {
-		sb, err = cache.createChildSandboxFromNode(cache.sbPool, node.parent, false, node.codeDir, scratchDir, node.meta, rt_type)
+		if cow {
+			sb, err = cache.createChildSandboxFromNode(cache.sbPool, node.parent, false, node.codeDir, scratchDir, node.meta, rt_type)
+		} else {
+			// todo: recursively collect meta and create a new sandbox without parent to achieve no cow
+			// create a new sandbox without parent
+			sb, err = cache.sbPool.Create(nil, false, node.codeDir, scratchDir, node.meta, common.RT_PYTHON)
+		}
 	} else {
 		sb, err = cache.sbPool.Create(nil, false, node.codeDir, scratchDir, node.meta, common.RT_PYTHON)
 	}
@@ -349,26 +355,36 @@ func (cache *ImportCache) createSandboxInNode(node *ImportCacheNode, rt_type com
 func (cache *ImportCache) Warmup() error {
 	t := common.T0("ImportCache.Warmup")
 
-	// todo: pass in the runtime type
 	rt_type := common.RT_PYTHON
 	// find all the leaf zygotes in the tree
 	leafZygotes := []*ImportCacheNode{}
 	// do a BFS to find all the leaf nodes
 	tmpNodes := []*ImportCacheNode{cache.root}
-	for len(tmpNodes) > 0 {
-		node := tmpNodes[0]
-		tmpNodes = tmpNodes[1:]
-		if len(node.Children) == 0 {
+	cow := true
+	if cow {
+		for len(tmpNodes) > 0 {
+			node := tmpNodes[0]
+			tmpNodes = tmpNodes[1:]
+			if len(node.Children) == 0 {
+				leafZygotes = append(leafZygotes, node)
+			} else {
+				tmpNodes = append(tmpNodes, node.Children...)
+			}
+		}
+	} else {
+		for len(tmpNodes) > 0 {
+			node := tmpNodes[0]
+			tmpNodes = tmpNodes[1:]
 			leafZygotes = append(leafZygotes, node)
-		} else {
-			tmpNodes = append(tmpNodes, node.Children...)
+			if len(node.Children) != 0 {
+				tmpNodes = append(tmpNodes, node.Children...)
+			}
 		}
 	}
-
 	for _, node := range leafZygotes {
-		zygoteSB, _, err := cache.getSandboxInNode(node, true, rt_type) // TODO: do I need to modify sbRefCounts?
+		zygoteSB, _, err := cache.getSandboxInNode(node, false, rt_type, cow) // TODO: do I need to modify sbRefCounts?
 		if err != nil {
-			err = fmt.Errorf("failed to warm up zygote tree, rt_type is %s", rt_type)
+			err = fmt.Errorf("failed to warm up zygote tree, reason is %s", err.Error())
 			return err
 		}
 		atomic.AddInt64(&node.createNonleafChild, 1)
