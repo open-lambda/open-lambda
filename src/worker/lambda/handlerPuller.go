@@ -68,6 +68,12 @@ func copyFile(src, dest string) error {
 	}
 	defer srcFile.Close()
 
+	// Get source file permissions
+	srcInfo, err := srcFile.Stat()
+	if err != nil {
+		return err
+	}
+
 	destFile, err := os.Create(dest)
 	if err != nil {
 		return err
@@ -75,7 +81,12 @@ func copyFile(src, dest string) error {
 	defer destFile.Close()
 
 	_, err = io.Copy(destFile, srcFile)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Set destination file permissions to match source
+	return destFile.Chmod(srcInfo.Mode())
 }
 
 func NewHandlerPuller(dirMaker *common.DirMaker) (cp *HandlerPuller, err error) {
@@ -158,11 +169,15 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type common.R
 		// expected to be efficient
 		targetDir = cp.dirMaker.Get(lambdaName)
 
-		// cmd := exec.Command("cp", "-r", src, targetDir)
 		err := ccopy(src, targetDir)
 		if err != nil {
 			return rt_type, "", fmt.Errorf("%s :: %s", err)
 		}
+
+//		cmd := exec.Command("cp", "-r", src, targetDir)
+//		if output, err := cmd.CombinedOutput(); err != nil {
+//			return rt_type, "", fmt.Errorf("%s :: %s", err, string(output))
+//		}
 
 		// Figure out runtime type
 		if _, err := os.Stat(src + "/f.py"); !os.IsNotExist(err) {
@@ -202,23 +217,36 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type common.R
 	if strings.HasSuffix(stat.Name(), ".py") {
 		log.Printf("Installing `%s` from a python file", src)
 
-		// cmd := exec.Command("cp", src, filepath.Join(targetDir, "f.py"))
 		err := ccopy(src, filepath.Join(targetDir, "f.py"))
 		rt_type = common.RT_PYTHON
 
 		if err != nil {
 			return rt_type, "", fmt.Errorf("%s :: %s", err)
 		}
+
+//		cmd := exec.Command("cp", src, filepath.Join(targetDir, "f.py"))
+//		rt_type = common.RT_PYTHON
+//
+//		if output, err := cmd.CombinedOutput(); err != nil {
+//			return rt_type, "", fmt.Errorf("%s :: %s", err, string(output))
+//		}
+
 	} else if strings.HasSuffix(stat.Name(), ".bin") {
 		log.Printf("Installing `%s` from binary file", src)
 
-		// cmd := exec.Command("cp", src, filepath.Join(targetDir, "f.bin"))
 		err := ccopy(src, filepath.Join(targetDir, "f.bin"))
 		rt_type = common.RT_NATIVE
 
 		if err != nil {
 			return rt_type, "", fmt.Errorf("%s :: %s", err)
 		}
+
+//		cmd := exec.Command("cp", src, filepath.Join(targetDir, "f.bin"))
+//		rt_type = common.RT_NATIVE
+//
+//		if output, err := cmd.CombinedOutput(); err != nil {
+//			return rt_type, "", fmt.Errorf("%s :: %s", err, string(output))
+//		}
 	} else if strings.HasSuffix(stat.Name(), ".tar.gz") {
 		log.Printf("Installing `%s` from an archive file", src)
 
