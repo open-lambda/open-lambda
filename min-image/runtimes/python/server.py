@@ -18,19 +18,6 @@ file_sock_path = "/host/ol.sock"
 file_sock = None
 bootstrap_path = None
 
-def recv_fds(sock, msglen, maxfds):
-    '''
-    copied from https://docs.python.org/3/library/socket.html#socket.socket.recvmsg
-    '''
-
-    fds = array.array("i")   # Array of ints
-    msg, ancdata, _flags, _addr = sock.recvmsg(msglen, socket.CMSG_LEN(maxfds * fds.itemsize))
-    for cmsg_level, cmsg_type, cmsg_data in ancdata:
-        if (cmsg_level == socket.SOL_SOCKET and cmsg_type == socket.SCM_RIGHTS):
-            # Append data, ignoring any truncated integers at the end.
-            fds.frombytes(cmsg_data[:len(cmsg_data) - (len(cmsg_data) % fds.itemsize)])
-    return msg, list(fds)
-
 def web_server():
     print(f"server.py: start web server on fd: {file_sock.fileno()}")
     sys.path.append('/handler')
@@ -77,7 +64,7 @@ def fork_server():
 
     while True:
         client, _info = file_sock.accept()
-        _, fds = recv_fds(client, 8, 2)
+        _, fds, _, _ = socket.recv_fds(client, 8, 2)
         root_fd, mem_cgroup_fd = fds
 
         pid = os.fork()
