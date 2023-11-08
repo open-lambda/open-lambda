@@ -3,10 +3,10 @@ package cgroups
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
+	"log/slog"
 	"os"
 	"path"
-	"strings"
+	//"strings"
 	"syscall"
 	"time"
 
@@ -36,7 +36,7 @@ func NewCgroupPool(name string) (*CgroupPool, error) {
 
 	// create cgroup
 	groupPath := pool.GroupPath()
-	pool.printf("create %s", groupPath)
+	pool.printf("INFO", "create %s", groupPath)
 	if err := syscall.Mkdir(groupPath, 0700); err != nil {
 		return nil, fmt.Errorf("Mkdir %s: %s", groupPath, err)
 	}
@@ -65,15 +65,30 @@ func (pool *CgroupPool) NewCgroup() Cgroup {
 		panic(fmt.Errorf("Mkdir %s: %s", groupPath, err))
 	}
 
-	cg.printf("created")
+	cg.printf("INFO", "created")
 	return cg
 }
 
 // add ID to each log message so we know which logs correspond to
 // which containers
-func (pool *CgroupPool) printf(format string, args ...any) {
+func (pool *CgroupPool) printf(level string, format string, args ...any) {
+
+	logger := slog.New(slog.Default().Handler())
 	msg := fmt.Sprintf(format, args...)
-	log.Printf("%s [CGROUP POOL %s]", strings.TrimRight(msg, "\n"), pool.Name)
+
+	currLevel := common.Conf.Log.CgroupsLog
+	
+	if currLevel == "INFO" && level == currLevel {
+		logger.Info(msg, "CGROUP POOL", pool.Name)
+
+	} else if currLevel == "WARN" && level == currLevel {
+		logger.Warn(msg, "CGROUP POOL", pool.Name)
+
+	} else if currLevel == "ERROR" && level == currLevel {
+		logger.Error(msg, "CGROUP POOL", pool.Name)
+	}
+
+	//log.Printf("%s [CGROUP POOL %s]", strings.TrimRight(msg, "\n"), pool.Name)
 }
 
 func (pool *CgroupPool) cgTask() {
@@ -81,7 +96,7 @@ func (pool *CgroupPool) cgTask() {
 	var done chan bool
 
 	// loop until we get the quit message
-	pool.printf("start creating/serving CGs")
+	pool.printf("INFO", "start creating/serving CGs")
 Loop:
 	for {
 		var cg *CgroupImpl
@@ -112,14 +127,14 @@ Loop:
 		select {
 		case pool.ready <- cg:
 		case done = <-pool.quit:
-			pool.printf("received shutdown request")
+			pool.printf("INFO", "received shutdown request")
 			cg.Destroy()
 			break Loop
 		}
 	}
 
 	// empty queues, freeing all cgroups
-	pool.printf("empty queues and release CGs")
+	pool.printf("INFO", "empty queues and release CGs")
 Empty:
 	for {
 		select {
@@ -144,13 +159,13 @@ func (pool *CgroupPool) Destroy() {
 
 	// Destroy cgroup for this entire pool
 	gpath := pool.GroupPath()
-	pool.printf("Destroying cgroup pool with path \"%s\"", gpath)
+	pool.printf("INFO", "Destroying cgroup pool with path \"%s\"", gpath)
 	for i := 100; i >= 0; i-- {
 		if err := syscall.Rmdir(gpath); err != nil {
 			if i == 0 {
 				panic(fmt.Errorf("Rmdir %s: %s", gpath, err))
 			} else {
-				pool.printf("cgroup pool Rmdir failed, trying again in 5ms")
+				pool.printf("ERROR", "cgroup pool Rmdir failed, trying again in 5ms")
 				time.Sleep(5 * time.Millisecond)
 			}
 		} else {

@@ -68,6 +68,9 @@ type Config struct {
 	Features FeaturesConfig `json:"features"`
 	Trace    TraceConfig    `json:"trace"`
 	Storage  StorageConfig  `json:"storage"`
+
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	Log		 LogConfig		`json:"log"`
 }
 
 type FeaturesConfig struct {
@@ -84,6 +87,14 @@ type TraceConfig struct {
 	Package bool `json:"package"`
 	Latency bool `json:"latency"`
 }
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+type LogConfig struct {
+	CgroupsLog 	string `json:"cgroups_log"`
+	SocksLog 	string `json:"socks_log"`
+}
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 type StoreString string
 
@@ -185,6 +196,10 @@ func LoadDefaults(olPath string) error {
 			Root:    "private",
 			Scratch: "",
 			Code:    "",
+		},
+		Log: LogConfig{
+			CgroupsLog: "INFO",
+			SocksLog: "INFO",
 		},
 	}
 

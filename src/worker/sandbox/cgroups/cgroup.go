@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io/ioutil"
-	"log"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -20,10 +20,27 @@ type CgroupImpl struct {
 	memLimitMB int
 }
 
-func (cg *CgroupImpl) printf(format string, args ...any) {
+func (cg *CgroupImpl) printf(level string, format string, args ...any) {
 	if common.Conf.Trace.Cgroups {
+		
 		msg := fmt.Sprintf(format, args...)
-		log.Printf("%s [CGROUP %s: %s]", strings.TrimRight(msg, "\n"), cg.pool.Name, cg.name)
+
+		//logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+		logger := slog.New(slog.Default().Handler())
+
+		currLevel := common.Conf.Log.CgroupsLog
+
+		if currLevel == "INFO" && level == currLevel {
+			logger.Info(msg, "CGROUP Pool", cg.pool.Name, "CGROUP", cg.name)
+	
+		} else if currLevel == "WARN" && level == currLevel {
+			logger.Warn(msg, "CGROUP Pool", cg.pool.Name, "CGROUP", cg.name)
+	
+		} else if currLevel == "ERROR" && level == currLevel {
+			logger.Error(msg, "CGROUP Pool", cg.pool.Name, "CGROUP", cg.name)
+		}
+
+		//log.Printf("%s [CGROUP %s: %s]", strings.TrimRight(msg, "\n"), cg.pool.Name, cg.name)
 	}
 }
 
@@ -43,7 +60,7 @@ func (cg *CgroupImpl) Release() {
 				if i == 0 {
 					panic(fmt.Errorf("Cannot release cgroup that contains processes: %v", pids))
 				} else {
-					cg.printf("cgroup Rmdir failed, trying again in 5ms")
+					cg.printf("ERROR","","cgroup Rmdir failed, trying again in 5ms")
 					time.Sleep(5 * time.Millisecond)
 				}
 			} else {
@@ -53,27 +70,27 @@ func (cg *CgroupImpl) Release() {
 
 		select {
 		case cg.pool.recycled <- cg:
-			cg.printf("release and recycle")
+			cg.printf("INFO", "release and recycle")
 			return
 		default:
 		}
 	}
 
-	cg.printf("release and Destroy")
+	cg.printf("INFO", "release and Destroy")
 	cg.Destroy()
 }
 
 // Destroy this cgroup
 func (cg *CgroupImpl) Destroy() {
 	gpath := cg.GroupPath()
-	cg.printf("Destroying cgroup with path \"%s\"", gpath)
+	cg.printf("INFO", "Destroying cgroup with path \"%s\"", gpath)
 
 	for i := 100; i >= 0; i-- {
 		if err := syscall.Rmdir(gpath); err != nil {
 			if i == 0 {
 				panic(fmt.Errorf("Rmdir(2) %s: %s", gpath, err))
 			} else {
-				cg.printf("cgroup Rmdir failed, trying again in 5ms")
+				cg.printf("ERROR", "cgroup Rmdir failed, trying again in 5ms")
 				time.Sleep(5 * time.Millisecond)
 			}
 		} else {
