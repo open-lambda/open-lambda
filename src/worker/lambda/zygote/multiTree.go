@@ -14,7 +14,7 @@ type MultiTree struct {
 	trees []*ImportCache
 }
 
-func (mt *MultiTree) Warmup() error {
+func (mt *MultiTree) Warmup(COW bool) error {
 	//TODO implement warm up
 	panic("multi-tree warmup not implemented")
 }

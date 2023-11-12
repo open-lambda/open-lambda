@@ -173,6 +173,16 @@ func (cache *ImportCache) createChildSandboxFromNode(
 	t := common.T0("ImportCache.createChildSandboxFromNode")
 	defer t.T1()
 
+	if !common.Conf.Features.COW {
+		if isLeaf {
+			return childSandboxPool.Create(node.sb, isLeaf, codeDir, scratchDir, meta, rt_type)
+		} else {
+			if node.sb != nil {
+				return node.sb, nil
+			}
+			return childSandboxPool.Create(nil, false, codeDir, scratchDir, meta, rt_type)
+		}
+	}
 	// try twice, restarting parent Sandbox if it fails the first time
 	forceNew := false
 	for i := 0; i < 2; i++ {
@@ -352,7 +362,7 @@ func (cache *ImportCache) createSandboxInNode(node *ImportCacheNode, rt_type com
 }
 
 // todo: measure the warmup time
-func (cache *ImportCache) Warmup() error {
+func (cache *ImportCache) Warmup(COW bool) error {
 	t := common.T0("ImportCache.Warmup")
 
 	rt_type := common.RT_PYTHON
@@ -360,8 +370,7 @@ func (cache *ImportCache) Warmup() error {
 	leafZygotes := []*ImportCacheNode{}
 	// do a BFS to find all the leaf nodes
 	tmpNodes := []*ImportCacheNode{cache.root}
-	cow := true
-	if cow {
+	if COW {
 		for len(tmpNodes) > 0 {
 			node := tmpNodes[0]
 			tmpNodes = tmpNodes[1:]
@@ -382,7 +391,7 @@ func (cache *ImportCache) Warmup() error {
 		}
 	}
 	for _, node := range leafZygotes {
-		zygoteSB, _, err := cache.getSandboxInNode(node, false, rt_type, cow) // TODO: do I need to modify sbRefCounts?
+		zygoteSB, _, err := cache.getSandboxInNode(node, false, rt_type, COW) // TODO: do I need to modify sbRefCounts?
 		if err != nil {
 			err = fmt.Errorf("failed to warm up zygote tree, reason is %s", err.Error())
 			return err

@@ -76,6 +76,7 @@ type FeaturesConfig struct {
 	Downsize_paused_mem bool   `json:"downsize_paused_mem"`
 	Enable_seccomp      bool   `json:"enable_seccomp"`
 	Warmup              bool   `json:"warmup"`
+	COW                 bool   `json:"COW"`
 }
 
 type TraceConfig struct {
