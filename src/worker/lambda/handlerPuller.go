@@ -69,12 +69,12 @@ func Copy(src, dest string) error {
 func copyFile(src, dest string) error {
 	srcFileInfo, err := os.Lstat(src)
 	if err != nil {
-	return err
+		return err
 	}
 
 	// Ignore symlinks
 	if srcFileInfo.Mode()&os.ModeSymlink != 0 {
-	return nil
+		return nil
 	}
 
 	srcFile, err := os.Open(src)
