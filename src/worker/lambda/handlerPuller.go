@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"io/fs"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 )
@@ -33,35 +34,49 @@ type CacheEntry struct {
 	path    string // where code is extracted to a dir
 }
 
-func ccopy(src, dest string) error {
+func Copy(src, dest string) error {
 	info, err := os.Stat(src)
 	if err != nil {
 		return err
 	}
 
+	
 	if info.IsDir() {
-		return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		return filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
+		    if err != nil {
+			return err
+		    }
+
+		    relPath, err := filepath.Rel(src, path)
+		    if err != nil {
+			return err
+		    }
+
+		    if d.IsDir() {
+			dirInfo, err := d.Info()
 			if err != nil {
-				return err
+			    return err
 			}
+			return os.MkdirAll(filepath.Join(dest, relPath), dirInfo.Mode())
+		    }
 
-			relPath, err := filepath.Rel(src, path)
-			if err != nil {
-				return err
-			}
-
-			if info.IsDir() {
-				return os.MkdirAll(filepath.Join(dest, relPath), info.Mode())
-			}
-
-			return copyFile(path, filepath.Join(dest, relPath))
+		    return copyFile(path, filepath.Join(dest, relPath))
 		})
 	}
-
 	return copyFile(src, dest)
 }
 
 func copyFile(src, dest string) error {
+	srcFileInfo, err := os.Lstat(src)
+	if err != nil {
+	return err
+	}
+
+	// Ignore symlinks
+	if srcFileInfo.Mode()&os.ModeSymlink != 0 {
+	return nil
+	}
+
 	srcFile, err := os.Open(src)
 	if err != nil {
 		return err
@@ -169,15 +184,10 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type common.R
 		// expected to be efficient
 		targetDir = cp.dirMaker.Get(lambdaName)
 
-		err := ccopy(src, targetDir)
+		err := Copy(src, targetDir)
 		if err != nil {
 			return rt_type, "", fmt.Errorf("%s :: %s", err)
 		}
-
-//		cmd := exec.Command("cp", "-r", src, targetDir)
-//		if output, err := cmd.CombinedOutput(); err != nil {
-//			return rt_type, "", fmt.Errorf("%s :: %s", err, string(output))
-//		}
 
 		// Figure out runtime type
 		if _, err := os.Stat(src + "/f.py"); !os.IsNotExist(err) {
@@ -217,36 +227,24 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type common.R
 	if strings.HasSuffix(stat.Name(), ".py") {
 		log.Printf("Installing `%s` from a python file", src)
 
-		err := ccopy(src, filepath.Join(targetDir, "f.py"))
+		err := Copy(src, filepath.Join(targetDir, "f.py"))
 		rt_type = common.RT_PYTHON
 
 		if err != nil {
 			return rt_type, "", fmt.Errorf("%s :: %s", err)
 		}
 
-//		cmd := exec.Command("cp", src, filepath.Join(targetDir, "f.py"))
-//		rt_type = common.RT_PYTHON
-//
-//		if output, err := cmd.CombinedOutput(); err != nil {
-//			return rt_type, "", fmt.Errorf("%s :: %s", err, string(output))
-//		}
 
 	} else if strings.HasSuffix(stat.Name(), ".bin") {
 		log.Printf("Installing `%s` from binary file", src)
 
-		err := ccopy(src, filepath.Join(targetDir, "f.bin"))
+		err := Copy(src, filepath.Join(targetDir, "f.bin"))
 		rt_type = common.RT_NATIVE
 
 		if err != nil {
 			return rt_type, "", fmt.Errorf("%s :: %s", err)
 		}
 
-//		cmd := exec.Command("cp", src, filepath.Join(targetDir, "f.bin"))
-//		rt_type = common.RT_NATIVE
-//
-//		if output, err := cmd.CombinedOutput(); err != nil {
-//			return rt_type, "", fmt.Errorf("%s :: %s", err, string(output))
-//		}
 	} else if strings.HasSuffix(stat.Name(), ".tar.gz") {
 		log.Printf("Installing `%s` from an archive file", src)
 
