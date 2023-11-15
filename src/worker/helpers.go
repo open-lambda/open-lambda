@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	//"log/slog"
 	"os"
 	"os/exec"
 	"path"
@@ -159,6 +160,12 @@ func initOLDir(olPath string, dockerBaseImage string, newBase bool) (err error) 
 	if err := os.Mkdir(common.Conf.Registry, 0700); err != nil {
 		return err
 	}
+	
+	/////////////////////////////////////////////////////////////////////
+	if err := os.Mkdir(common.Conf.Log.Log_file_dir, 0700); err != nil {
+		return err
+	}
+	//////////////////////////////////////////////////////////////////////
 
 	if _, err := os.Stat(baseDir); os.IsNotExist(err) {
 		if err := initOLBaseDir(baseDir, dockerBaseImage); err != nil {

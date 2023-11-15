@@ -72,11 +72,28 @@ func (pool *CgroupPool) NewCgroup() Cgroup {
 // add ID to each log message so we know which logs correspond to
 // which containers
 func (pool *CgroupPool) printf(level string, format string, args ...any) {
-
-	logger := slog.New(slog.Default().Handler())
+	
 	msg := fmt.Sprintf(format, args...)
+	currLevel := common.Conf.Log.CgroupsLevel
+	logger := slog.New(slog.Default().Handler())
 
-	currLevel := common.Conf.Log.CgroupsLog
+	if (common.Conf.Log.LogFormat == "text") {
+		logFilePath := path.Join(common.Conf.Log.Log_file_dir, "log.txt")
+		f, err := os.OpenFile(logFilePath, os.O_RDWR|os.O_APPEND, 0666)
+		if err != nil {
+			panic(fmt.Errorf("Cannot open log file at %s", logFilePath))
+		}
+		logger = slog.New(slog.NewTextHandler(f, nil))
+		//defer f.Close()
+	} else if (common.Conf.Log.LogFormat == "json") {
+		logFilePath := path.Join(common.Conf.Log.Log_file_dir, "log.json")
+		f, err := os.OpenFile(logFilePath, os.O_RDWR|os.O_APPEND, 0666)
+		if err != nil {
+			panic(fmt.Errorf("Cannot open log file at %s", logFilePath))
+		}
+		logger = slog.New(slog.NewJSONHandler(f, nil))
+		//defer f.Close()
+	}
 	
 	if currLevel == "INFO" && level == currLevel {
 		logger.Info(msg, "CGROUP POOL", pool.Name)
@@ -87,7 +104,6 @@ func (pool *CgroupPool) printf(level string, format string, args ...any) {
 	} else if currLevel == "ERROR" && level == currLevel {
 		logger.Error(msg, "CGROUP POOL", pool.Name)
 	}
-
 	//log.Printf("%s [CGROUP POOL %s]", strings.TrimRight(msg, "\n"), pool.Name)
 }
 

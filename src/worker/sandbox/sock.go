@@ -3,14 +3,14 @@ package sandbox
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
+	"log/slog"
 	"sync/atomic"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
-	"strings"
+	//"strings"
 	"syscall"
 	"time"
 
@@ -44,8 +44,12 @@ type SOCKContainer struct {
 // add ID to each log message so we know which logs correspond to
 // which containers
 func (container *SOCKContainer) printf(format string, args ...any) {
+	logger := slog.Default()
+	//logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	msg := fmt.Sprintf(format, args...)
-	log.Printf("%s [SOCK %s]", strings.TrimRight(msg, "\n"), container.id)
+	//log.Printf("%s [SOCK %s]", strings.TrimRight(msg, "\n"), container.id)
+	logger.Info("sock slog used here!!!!!!!!!!!!!")
+	logger.Info(msg, "SOCK id", container.id)
 }
 
 // ID returns the unique identifier of this container

@@ -3,6 +3,7 @@ package cgroups
 import (
 	"bufio"
 	"fmt"
+	//"io"
 	"io/ioutil"
 	"log/slog"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"path"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 )
@@ -22,13 +24,28 @@ type CgroupImpl struct {
 
 func (cg *CgroupImpl) printf(level string, format string, args ...any) {
 	if common.Conf.Trace.Cgroups {
-		
-		msg := fmt.Sprintf(format, args...)
 
-		//logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+		msg := fmt.Sprintf(format, args...)
+		currLevel := common.Conf.Log.CgroupsLevel
 		logger := slog.New(slog.Default().Handler())
 
-		currLevel := common.Conf.Log.CgroupsLog
+		if (common.Conf.Log.LogFormat == "text") {
+			logFilePath := path.Join(common.Conf.Log.Log_file_dir, "log.txt")
+			f, err := os.OpenFile(logFilePath, os.O_RDWR|os.O_APPEND, 0666)
+			if err != nil {
+				panic(fmt.Errorf("Cannot open log file at %s", logFilePath))
+			}
+			logger = slog.New(slog.NewTextHandler(f, nil))
+			//defer f.Close()
+		} else if (common.Conf.Log.LogFormat == "json") {
+			logFilePath := path.Join(common.Conf.Log.Log_file_dir, "log.json")
+			f, err := os.OpenFile(logFilePath, os.O_RDWR|os.O_APPEND, 0666)
+			if err != nil {
+				panic(fmt.Errorf("Cannot open log file at %s", logFilePath))
+			}
+			logger = slog.New(slog.NewJSONHandler(f, nil))
+			//defer f.Close()
+		}
 
 		if currLevel == "INFO" && level == currLevel {
 			logger.Info(msg, "CGROUP Pool", cg.pool.Name, "CGROUP", cg.name)
@@ -39,7 +56,6 @@ func (cg *CgroupImpl) printf(level string, format string, args ...any) {
 		} else if currLevel == "ERROR" && level == currLevel {
 			logger.Error(msg, "CGROUP Pool", cg.pool.Name, "CGROUP", cg.name)
 		}
-
 		//log.Printf("%s [CGROUP %s: %s]", strings.TrimRight(msg, "\n"), cg.pool.Name, cg.name)
 	}
 }
@@ -60,7 +76,7 @@ func (cg *CgroupImpl) Release() {
 				if i == 0 {
 					panic(fmt.Errorf("Cannot release cgroup that contains processes: %v", pids))
 				} else {
-					cg.printf("ERROR","","cgroup Rmdir failed, trying again in 5ms")
+					cg.printf("WARN", "cgroup Rmdir failed, trying again in 5ms")
 					time.Sleep(5 * time.Millisecond)
 				}
 			} else {
@@ -90,7 +106,7 @@ func (cg *CgroupImpl) Destroy() {
 			if i == 0 {
 				panic(fmt.Errorf("Rmdir(2) %s: %s", gpath, err))
 			} else {
-				cg.printf("ERROR", "cgroup Rmdir failed, trying again in 5ms")
+				cg.printf("WARN", "cgroup Rmdir failed, trying again in 5ms")
 				time.Sleep(5 * time.Millisecond)
 			}
 		} else {

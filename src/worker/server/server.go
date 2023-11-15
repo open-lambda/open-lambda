@@ -8,12 +8,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"runtime"
 	"runtime/pprof"
 	"strconv"
+	"sync"
 	"syscall"
-  "sync"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 )
@@ -213,6 +214,34 @@ func Main() (err error) {
 	log.Printf("Saved PID %d to file %s", os.Getpid(), pidPath)
 	if err := ioutil.WriteFile(pidPath, []byte(fmt.Sprintf("%d", os.Getpid())), 0644); err != nil {
 		return err
+	}
+
+	// cleaning old logs and setting up new logs
+	fs, err := filepath.Glob(filepath.Join(common.Conf.Log.Log_file_dir, "*"))
+	if err != nil {
+		return err
+	}
+	for _, f := range fs {
+		err := os.Remove(f)
+		if err != nil {
+			return err
+		}
+	}
+	if (common.Conf.Log.LogFormat != "default") {
+		logFilePath := ""
+		if common.Conf.Log.LogFormat == "text" {
+			logFilePath = path.Join(common.Conf.Log.Log_file_dir, "log.txt")
+
+		} else if common.Conf.Log.LogFormat == "json" {
+			logFilePath = path.Join(common.Conf.Log.Log_file_dir, "log.json")
+		}
+
+		f, err := os.OpenFile(logFilePath, os.O_RDWR|os.O_CREATE, 0666)
+		if err != nil {
+			return err
+		}
+		log.Printf("Log output for specified components will be written to %s", logFilePath)	
+		defer f.Close()
 	}
 
 	// things shared by all servers

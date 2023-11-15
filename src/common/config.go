@@ -90,8 +90,10 @@ type TraceConfig struct {
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 type LogConfig struct {
-	CgroupsLog 	string `json:"cgroups_log"`
-	SocksLog 	string `json:"socks_log"`
+	LogFormat		string `json:"log_format"`
+	Log_file_dir	string `json:"log_file_dir"`
+	CgroupsLevel 	string `json:"cgroups_level"`
+	SocksLevel		string `json:"socks_level"`
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -148,6 +150,7 @@ func LoadDefaults(olPath string) error {
 	baseImgDir := filepath.Join(olPath, "lambda")
 	zygoteTreePath := filepath.Join(olPath, "default-zygotes-40.json")
 	packagesDir := filepath.Join(baseImgDir, "packages")
+	logfileDir := filepath.Join(olPath, "log")
 
 	// split anything above 512 MB evenly between handler and import cache
 	in := &syscall.Sysinfo_t{}
@@ -198,8 +201,10 @@ func LoadDefaults(olPath string) error {
 			Code:    "",
 		},
 		Log: LogConfig{
-			CgroupsLog: "INFO",
-			SocksLog: "INFO",
+			LogFormat: "default",
+			Log_file_dir: logfileDir,
+			CgroupsLevel: "INFO",
+			SocksLevel: "INFO",
 		},
 	}
 
@@ -261,6 +266,16 @@ func checkConf() error {
 		}
 	} else {
 		return fmt.Errorf("Unknown Sandbox type '%s'", Conf.Sandbox)
+	}
+
+	if Conf.Log.LogFormat != "default" {
+		if Conf.Log.LogFormat == "text" || Conf.Log.LogFormat == "json" {
+			if Conf.Log.Log_file_dir == "" {
+				return fmt.Errorf("must specify log output directory")
+			}
+		} else {
+			return fmt.Errorf("unknown log format")
+		}
 	}
 
 	return nil
