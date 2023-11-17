@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"io/fs"
+	"syscall"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 )
@@ -67,17 +68,7 @@ func Copy(src, dest string) error {
 }
 
 func copyFile(src, dest string) error {
-	srcFileInfo, err := os.Lstat(src)
-	if err != nil {
-		return err
-	}
-
-	// Ignore symlinks
-	if srcFileInfo.Mode()&os.ModeSymlink != 0 {
-		return nil
-	}
-
-	srcFile, err := os.Open(src)
+	srcFile, err := os.OpenFile(src, os.O_RDWR|os.O_CREATE|syscall.O_NOFOLLOW, 0666)
 	if err != nil {
 		return err
 	}
