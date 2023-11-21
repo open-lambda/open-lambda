@@ -36,7 +36,6 @@ else:
 def top(dirname):
     return [name for _, name, _ in pkgutil.iter_modules([dirname])]
 
-
 def deps(dirname):
     path = None
     for name in os.listdir(dirname):

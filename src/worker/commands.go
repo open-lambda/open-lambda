@@ -3,6 +3,7 @@ package worker
 import (
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -81,6 +82,18 @@ func upCmd(ctx *cli.Context) error {
 
 	// should we run as a background process?
 	detach := ctx.Bool("detach")
+
+	// start logging the cpu and memory information here
+	go func() {
+		log.Println("create worker_usage.log file.")
+		worker_usage, _ = os.Create("worker_usage.log")
+		worker_log = log.New(worker_usage, "", 0)
+		worker_log.SetFlags(log.Ldate | log.Lmicroseconds)
+		for {
+			getStatus()
+			time.Sleep(10 * time.Second)
+		}
+	}()
 
 	if detach {
 		// stdout+stderr both go to log
@@ -175,7 +188,8 @@ func upCmd(ctx *cli.Context) error {
 		return fmt.Errorf("worker still not reachable after 30 seconds :: %s", pingErr)
 	}
 
-	if err := server.Main(); err != nil {
+	err = server.Main()
+	if err != nil {
 		return err
 	}
 

@@ -3,10 +3,10 @@ package cloudvm
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
-	"net/http"
 )
 
 type GcpWorkerPool struct {
@@ -81,12 +81,12 @@ func NewGcpWorkerPool() *WorkerPool {
 
 func (pool *GcpWorkerPool) NewWorker(workerId string) *Worker {
 	return &Worker{
-		workerId:       workerId,
-		workerIp:       "",
+		workerId: workerId,
+		workerIp: "",
 	}
 }
 
-func (pool *GcpWorkerPool) CreateInstance(worker *Worker) {
+func (pool *GcpWorkerPool) CreateInstance(worker *Worker) error {
 	client := pool.client
 	fmt.Printf("creating new VM from snapshot\n")
 
@@ -105,12 +105,15 @@ func (pool *GcpWorkerPool) CreateInstance(worker *Worker) {
 	}
 
 	worker.workerIp = lookup[worker.workerId]
+
+	return nil
 }
 
-func (pool *GcpWorkerPool) DeleteInstance(worker *Worker) {
+func (pool *GcpWorkerPool) DeleteInstance(worker *Worker) error {
 	log.Printf("deleting gcp worker: %s\n", worker.workerId)
 	worker.runCmd("./ol worker down")
 	pool.client.Wait(pool.client.deleteGcpInstance(worker.workerId)) //wait until instance is completely deleted
+	return nil
 }
 
 func (pool *GcpWorkerPool) ForwardTask(w http.ResponseWriter, r *http.Request, worker *Worker) {
