@@ -11,6 +11,10 @@
 
 static PyObject *ol_unshare(PyObject *module) {
   int res = unshare(CLONE_NEWUTS|CLONE_NEWPID|CLONE_NEWIPC);
+  if (res == -1) {
+      PyErr_SetString(PyExc_RuntimeError, strerror(errno));
+      return NULL;
+   }
   return Py_BuildValue("i", res);
 }
 

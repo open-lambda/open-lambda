@@ -128,7 +128,11 @@ def start_container():
     global file_sock
 
     # TODO: if we can get rid of this, we can get rid of the ns module
-    return_val = ol.unshare()
+    try:
+        return_val = ol.unshare()
+    except RuntimeError as e:
+        print("An error occurred in ol.unshare():", e)
+        return_val = 1
     assert return_val == 0
 
     # we open a new .sock file in the child, before starting the grand
