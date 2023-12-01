@@ -130,7 +130,7 @@ func upCmd(ctx *cli.Context) error {
 
 		var pingErr error
 
-		for i := 0; i < 300; i++ {
+		for i := 0; i < 1000; i++ {
 			// check if it has died
 			select {
 			case err := <-died:

@@ -176,6 +176,7 @@ func LoadDefaults(olPath string) error {
 			Downsize_paused_mem: true,
 			Enable_seccomp:      true,
 			Warmup:              false,
+			COW:                 true,
 		},
 		Trace: TraceConfig{
 			Cgroups: false,

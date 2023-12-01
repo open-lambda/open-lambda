@@ -81,6 +81,7 @@ for mod in %s:
 		importlib.import_module(mod)
 	except Exception as e:
 		pass
+print('Imported')
     `, modulesStr)
 	return code, nil
 }
@@ -124,7 +125,8 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 	moveMemCharge := (parent == nil)
 	cSock.cg = pool.cgPool.GetCg(meta.MemLimitMB, moveMemCharge, meta.CPUPercent)
 	t2.T1()
-	cSock.printf("use cgroup %s", cSock.cg.Name)
+	cgName := cSock.cg.Name()
+	cSock.printf("use cgroup %s", cgName)
 
 	defer func() {
 		if err != nil {

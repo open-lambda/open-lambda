@@ -186,7 +186,7 @@ func (cache *ImportCache) createChildSandboxFromNode(
 	// try twice, restarting parent Sandbox if it fails the first time
 	forceNew := false
 	for i := 0; i < 2; i++ {
-		zygoteSB, isNew, err := cache.getSandboxInNode(node, forceNew, rt_type, true)
+		zygoteSB, isNew, err := cache.getSandboxInNode(node, forceNew, rt_type, common.Conf.Features.COW)
 		if err != nil {
 			return nil, err
 		}
@@ -297,6 +297,36 @@ func (*ImportCache) putSandboxInNode(node *ImportCacheNode, sb sandbox.Sandbox) 
 	}
 }
 
+func appendUnique(original []string, elementsToAdd []string) []string {
+	exists := make(map[string]bool)
+	for _, item := range original {
+		exists[item] = true
+	}
+
+	for _, item := range elementsToAdd {
+		if !exists[item] {
+			original = append(original, item)
+			exists[item] = true
+		}
+	}
+
+	return original
+}
+
+// inherit the meta for all the ancestors
+func inheritMeta(node *ImportCacheNode) (meta *sandbox.SandboxMeta) {
+	tmpNode := node.parent
+	meta = node.meta
+	for tmpNode.SplitGeneration != 0 {
+		if tmpNode.meta != nil {
+			// merge meta
+			meta.Imports = appendUnique(meta.Imports, tmpNode.meta.Imports)
+		}
+		tmpNode = tmpNode.parent
+	}
+	return meta
+}
+
 func (cache *ImportCache) createSandboxInNode(node *ImportCacheNode, rt_type common.RuntimeType, cow bool) (err error) {
 	// populate codeDir/packages with deps, and record top-level mods)
 	if node.codeDir == "" {
@@ -345,7 +375,7 @@ func (cache *ImportCache) createSandboxInNode(node *ImportCacheNode, rt_type com
 		if cow {
 			sb, err = cache.createChildSandboxFromNode(cache.sbPool, node.parent, false, node.codeDir, scratchDir, node.meta, rt_type)
 		} else {
-			// todo: recursively collect meta and create a new sandbox without parent to achieve no cow
+			node.meta = inheritMeta(node)
 			// create a new sandbox without parent
 			sb, err = cache.sbPool.Create(nil, false, node.codeDir, scratchDir, node.meta, common.RT_PYTHON)
 		}
@@ -361,14 +391,11 @@ func (cache *ImportCache) createSandboxInNode(node *ImportCacheNode, rt_type com
 	return nil
 }
 
-// todo: measure the warmup time
 func (cache *ImportCache) Warmup(COW bool) error {
-	t := common.T0("ImportCache.Warmup")
-
 	rt_type := common.RT_PYTHON
 	// find all the leaf zygotes in the tree
 	leafZygotes := []*ImportCacheNode{}
-	// do a BFS to find all the leaf nodes
+	// do a BFS to find all the leaf zygote
 	tmpNodes := []*ImportCacheNode{cache.root}
 	if COW {
 		for len(tmpNodes) > 0 {
@@ -390,16 +417,53 @@ func (cache *ImportCache) Warmup(COW bool) error {
 			}
 		}
 	}
-	for _, node := range leafZygotes {
-		zygoteSB, _, err := cache.getSandboxInNode(node, false, rt_type, COW) // TODO: do I need to modify sbRefCounts?
+	errChan := make(chan error, len(leafZygotes))
+	var wg sync.WaitGroup
+
+	goroutinePool := make(chan struct{}, 6)
+
+	for i, node := range leafZygotes {
+		wg.Add(1)
+		goroutinePool <- struct{}{}
+
+		go func(i int, node *ImportCacheNode) {
+			defer wg.Done()
+			zygoteSB, _, err := cache.getSandboxInNode(node, false, rt_type, COW)
+
+			codeDir := cache.codeDirs.Make("warmup")
+			scratchDir := cache.scratchDirs.Make("warmup")
+			sb, err := cache.sbPool.Create(zygoteSB, true, codeDir, scratchDir, nil, rt_type)
+			if err != nil {
+				errChan <- fmt.Errorf("failed to warm up zygote tree, reason is %s", err.Error())
+				return
+			}
+			sb.Destroy("ensure modules are imported in ZygoteSB by launching a fork")
+			//if i < 20 {
+			//	time.Sleep(500 * time.Millisecond)
+			//} else if i < 40 {
+			//	time.Sleep(1000 * time.Millisecond)
+			//} else {
+			//	time.Sleep(2000 * time.Millisecond)
+			//}
+			atomic.AddInt64(&node.createNonleafChild, 1)
+			cache.putSandboxInNode(node, zygoteSB)
+			if err != nil {
+				errChan <- fmt.Errorf("failed to warm up zygote tree, reason is %s", err.Error())
+			} else {
+				errChan <- nil
+			}
+			<-goroutinePool
+		}(i, node)
+	}
+
+	wg.Wait()
+	close(errChan)
+
+	for err := range errChan {
 		if err != nil {
-			err = fmt.Errorf("failed to warm up zygote tree, reason is %s", err.Error())
 			return err
 		}
-		atomic.AddInt64(&node.createNonleafChild, 1)
-		cache.putSandboxInNode(node, zygoteSB)
 	}
-	t.T1()
 
 	http.Post("http://localhost:4997/warmup", "application/json", nil)
 	return nil
