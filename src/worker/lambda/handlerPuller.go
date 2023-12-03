@@ -13,6 +13,8 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"io/fs"
+	"syscall"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 )
@@ -31,6 +33,66 @@ type HandlerPuller struct {
 type CacheEntry struct {
 	version string // could be a timestamp for a file or web resource
 	path    string // where code is extracted to a dir
+}
+
+func Copy(src, dest string) error {
+	info, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+
+	
+	if info.IsDir() {
+		return filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
+		    if err != nil {
+			return err
+		    }
+
+		    relPath, err := filepath.Rel(src, path)
+		    if err != nil {
+			return err
+		    }
+
+		    if d.IsDir() {
+			dirInfo, err := d.Info()
+			if err != nil {
+			    return err
+			}
+			return os.MkdirAll(filepath.Join(dest, relPath), dirInfo.Mode())
+		    }
+
+		    return copyFile(path, filepath.Join(dest, relPath))
+		})
+	}
+	return copyFile(src, dest)
+}
+
+func copyFile(src, dest string) error {
+	srcFile, err := os.OpenFile(src, os.O_RDWR|os.O_CREATE|syscall.O_NOFOLLOW, 0666)
+	if err != nil {
+		return err
+	}
+	defer srcFile.Close()
+
+	// Get source file permissions
+	srcInfo, err := srcFile.Stat()
+	if err != nil {
+		return err
+	}
+
+	destFile, err := os.Create(dest)
+	if err != nil {
+		return err
+	}
+	defer destFile.Close()
+
+	_, err = io.Copy(destFile, srcFile)
+	if err != nil {
+		return err
+	}
+
+	// Set destination file permissions to match source
+	return destFile.Chmod(srcInfo.Mode())
 }
 
 func NewHandlerPuller(dirMaker *common.DirMaker) (cp *HandlerPuller, err error) {
@@ -113,9 +175,9 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type common.R
 		// expected to be efficient
 		targetDir = cp.dirMaker.Get(lambdaName)
 
-		cmd := exec.Command("cp", "-r", src, targetDir)
-		if output, err := cmd.CombinedOutput(); err != nil {
-			return rt_type, "", fmt.Errorf("%s :: %s", err, string(output))
+		err := Copy(src, targetDir)
+		if err != nil {
+			return rt_type, "", fmt.Errorf("%s :: %s", err)
 		}
 
 		// Figure out runtime type
@@ -156,21 +218,24 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type common.R
 	if strings.HasSuffix(stat.Name(), ".py") {
 		log.Printf("Installing `%s` from a python file", src)
 
-		cmd := exec.Command("cp", src, filepath.Join(targetDir, "f.py"))
+		err := Copy(src, filepath.Join(targetDir, "f.py"))
 		rt_type = common.RT_PYTHON
 
-		if output, err := cmd.CombinedOutput(); err != nil {
-			return rt_type, "", fmt.Errorf("%s :: %s", err, string(output))
+		if err != nil {
+			return rt_type, "", fmt.Errorf("%s :: %s", err)
 		}
+
+
 	} else if strings.HasSuffix(stat.Name(), ".bin") {
 		log.Printf("Installing `%s` from binary file", src)
 
-		cmd := exec.Command("cp", src, filepath.Join(targetDir, "f.bin"))
+		err := Copy(src, filepath.Join(targetDir, "f.bin"))
 		rt_type = common.RT_NATIVE
 
-		if output, err := cmd.CombinedOutput(); err != nil {
-			return rt_type, "", fmt.Errorf("%s :: %s", err, string(output))
+		if err != nil {
+			return rt_type, "", fmt.Errorf("%s :: %s", err)
 		}
+
 	} else if strings.HasSuffix(stat.Name(), ".tar.gz") {
 		log.Printf("Installing `%s` from an archive file", src)
 
@@ -269,3 +334,4 @@ func (cp *HandlerPuller) getCache(name string) *CacheEntry {
 func (cp *HandlerPuller) putCache(name, version, path string) {
 	cp.dirCache.Store(name, &CacheEntry{version, path})
 }
+
