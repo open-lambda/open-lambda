@@ -18,7 +18,6 @@ simple-logging = "2"
 serde_bytes = "0.11"
 cfg-if = "1"
 parking_lot = "0.12"
-lambda-store-client=  { git="ssh://git@github.com/kaimast/lambda-store.git", optional=true, branch="benchmark" }
 tokio-uring = { git="https://github.com/kaimast/tokio-uring.git" }
 tokio-uring-executor = { git="https://github.com/kaimast/tokio-uring-executor.git" }
 
@@ -26,7 +25,3 @@ tokio-uring-executor = { git="https://github.com/kaimast/tokio-uring-executor.gi
 debug = true
 opt-level = 3
 lto = false
-
-[features]
-default = ["lambdastore"]
-lambdastore = ["lambda-store-client"]

@@ -15,8 +15,6 @@ use open_lambda_proxy_protocol::ProxyMessage;
 
 use tokio_uring_executor as executor;
 
-mod extra;
-
 fn main() {
     executor::initialize();
 
@@ -31,9 +29,6 @@ async fn main_logic() {
     argv.next().unwrap();
 
     let container_dir = argv.next().expect("No container directory given");
-
-    #[cfg(feature="lambdastore")]
-    extra::lambdastore::set_address(argv.next().expect("No lambdastore path given"));
 
     simple_logging::log_to_file(
         format!("{container_dir}/container-proxy.log"),
@@ -135,21 +130,6 @@ async fn handle_connection(stream: UnixStream) {
             ProxyMessage::FuncCallRequest(call_data) => {
                 let result = function_call(call_data.fn_name, call_data.args.into_vec()).await;
                 ProxyMessage::FuncCallResult(result.map(ByteBuf::from))
-            }
-            ProxyMessage::HostCallRequest(call_data) => {
-                let result = if call_data.namespace == "lambdastore" {
-                    cfg_if::cfg_if! {
-                        if #[ cfg(feature="lambdastore") ] {
-                            crate::extra::lambdastore::call(&call_data.fn_name, &call_data.args).await
-                        } else {
-                            panic!("Feature `lambdastore` not enabled");
-                        }
-                    }
-                } else {
-                    panic!("Unknown host call namespace: {}", call_data.namespace);
-                };
-
-                ProxyMessage::HostCallResult(result)
             }
             _ => {
                 panic!("Got unexpected message: {msg:?}");

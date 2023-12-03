@@ -20,3 +20,4 @@ env_logger = "0.10"
 bytes = "1"
 serde_bytes = "0.11"
 rand = "0.8"
+ureq = { version="2", default-features=false, features=["json", "gzip"] }

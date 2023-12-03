@@ -7,19 +7,10 @@ pub struct FuncCallData {
     pub args: ByteBuf,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct HostCallData {
-    pub namespace: String,
-    pub fn_name: String,
-    pub args: ByteBuf,
-}
-
 pub type CallResult = Result<ByteBuf, String>;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum ProxyMessage {
     FuncCallRequest(FuncCallData),
     FuncCallResult(CallResult),
-    HostCallRequest(HostCallData),
-    HostCallResult(CallResult),
 }

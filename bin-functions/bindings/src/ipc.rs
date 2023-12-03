@@ -4,10 +4,7 @@ use crate::internal::ipc as internal_ipc;
 use crate::log;
 use open_lambda_proxy_protocol::CallResult;
 
-pub fn http_get(
-    address: &str,
-    path: &str,
-) -> Result<Option<json::Value>, String> {
+pub fn http_get(address: &str, path: &str) -> Result<Option<json::Value>, String> {
     let result = internal_ipc::http_get(address, path);
     parse_json_result(result)
 }

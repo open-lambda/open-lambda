@@ -4,4 +4,4 @@ build-std = true
 default-target = "x86_64-unknown-linux-gnu"
 
 [target.x86_64-unknown-linux-gnu]
-image = "lambda:latest"
+image = "ol-wasm:latest"

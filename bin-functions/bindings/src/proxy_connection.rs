@@ -9,7 +9,7 @@ use tokio_util::codec::{Decoder, Encoder};
 
 use serde_bytes::ByteBuf;
 
-use open_lambda_proxy_protocol::{CallResult, FuncCallData, HostCallData, ProxyMessage};
+use open_lambda_proxy_protocol::{CallResult, FuncCallData, ProxyMessage};
 
 pub(crate) struct ProxyConnection {
     codec: LengthDelimitedCodec,
@@ -43,22 +43,6 @@ impl ProxyConnection {
         self.send_message(&ProxyMessage::FuncCallRequest(cdata));
 
         if let ProxyMessage::FuncCallResult(result) = self.receive_message() {
-            result
-        } else {
-            panic!("got unexpected result");
-        }
-    }
-
-    pub fn host_call(&mut self, namespace: String, fn_name: String, args: Vec<u8>) -> CallResult {
-        log::trace!("Issuing call request");
-        let cdata = HostCallData {
-            namespace,
-            fn_name,
-            args: ByteBuf::from(args),
-        };
-        self.send_message(&ProxyMessage::HostCallRequest(cdata));
-
-        if let ProxyMessage::HostCallResult(result) = self.receive_message() {
             result
         } else {
             panic!("got unexpected result");
