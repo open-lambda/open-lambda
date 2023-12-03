@@ -33,7 +33,6 @@ impl HttpClient {
         Self { request_sender }
     }
 
-    #[allow(dead_code)]
     pub async fn get(&mut self, path: String) -> Result<Vec<u8>, hyper::Error> {
         let request = Request::builder()
             .method("GET")

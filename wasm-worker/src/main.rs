@@ -62,10 +62,6 @@ struct Args {
     registry_path: String,
 
     #[clap(long)]
-    #[clap(help = "Address of the lambdastore coordinator")]
-    lambdastore_coord: Option<String>,
-
-    #[clap(long)]
     enable_cpu_profiler: bool,
 }
 
@@ -238,23 +234,6 @@ async fn main_func(args: Args) {
     let function_mgr = Arc::new(FunctionManager::new(args.wasm_compiler).await);
 
     load_functions(&args.registry_path, &function_mgr, worker_addr).await;
-
-    if let Some(coord_address) = args.lambdastore_coord {
-        cfg_if::cfg_if! {
-            if #[cfg(feature="lambdastore")] {
-                let result = unsafe {
-                    bindings::extra::lambdastore::create_client(&coord_address).await
-                };
-
-                if let Err(err) = result {
-                    log::error!("Failed to setup lambdastore module: {err}");
-                    return;
-                }
-            } else {
-                panic!("`lambdastore`-feature not enabled");
-            }
-        }
-    }
 
     let listener = tokio::net::TcpListener::bind(&worker_addr)
         .await
