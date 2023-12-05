@@ -3,7 +3,6 @@ package cgroups
 import (
 	"bufio"
 	"fmt"
-	//"io"
 	"io/ioutil"
 	"log/slog"
 	"os"
