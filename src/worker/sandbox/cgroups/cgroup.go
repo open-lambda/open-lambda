@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io/ioutil"
-	"log"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -18,13 +18,7 @@ type CgroupImpl struct {
 	name       string
 	pool       *CgroupPool
 	memLimitMB int
-}
-
-func (cg *CgroupImpl) printf(format string, args ...any) {
-	if common.Conf.Trace.Cgroups {
-		msg := fmt.Sprintf(format, args...)
-		log.Printf("%s [CGROUP %s: %s]", strings.TrimRight(msg, "\n"), cg.pool.Name, cg.name)
-	}
+	logger	   slog.Logger
 }
 
 func (cg *CgroupImpl) Name() string {
@@ -43,7 +37,9 @@ func (cg *CgroupImpl) Release() {
 				if i == 0 {
 					panic(fmt.Errorf("Cannot release cgroup that contains processes: %v", pids))
 				} else {
-					cg.printf("cgroup Rmdir failed, trying again in 5ms")
+					if (common.Conf.Trace.Cgroups) {
+						cg.logger.Warn("cgroup Rmdir failed, trying again in 5ms", "CGROUP Pool", cg.pool.Name, "CGROUP", cg.name)
+					}
 					time.Sleep(5 * time.Millisecond)
 				}
 			} else {
@@ -53,27 +49,28 @@ func (cg *CgroupImpl) Release() {
 
 		select {
 		case cg.pool.recycled <- cg:
-			cg.printf("release and recycle")
+			cg.logger.Info("release and recycle", "CGROUP Pool", cg.pool.Name, "CGROUP", cg.name)
 			return
 		default:
 		}
 	}
 
-	cg.printf("release and Destroy")
+	cg.logger.Info("release and Destroy", "CGROUP Pool", cg.pool.Name, "CGROUP", cg.name)
 	cg.Destroy()
 }
 
 // Destroy this cgroup
 func (cg *CgroupImpl) Destroy() {
 	gpath := cg.GroupPath()
-	cg.printf("Destroying cgroup with path \"%s\"", gpath)
+
+	cg.logger.Info(fmt.Sprintf("Destroying cgroup with path \"%s\"", gpath), "CGROUP Pool", cg.pool.Name, "CGROUP", cg.name)
 
 	for i := 100; i >= 0; i-- {
 		if err := syscall.Rmdir(gpath); err != nil {
 			if i == 0 {
 				panic(fmt.Errorf("Rmdir(2) %s: %s", gpath, err))
 			} else {
-				cg.printf("cgroup Rmdir failed, trying again in 5ms")
+				cg.logger.Warn("cgroup Rmdir failed, trying again in 5ms", "CGROUP Pool", cg.pool.Name, "CGROUP", cg.name)
 				time.Sleep(5 * time.Millisecond)
 			}
 		} else {

@@ -3,10 +3,9 @@ package cgroups
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
+	"log/slog"
 	"os"
 	"path"
-	"strings"
 	"syscall"
 	"time"
 
@@ -23,20 +22,52 @@ type CgroupPool struct {
 	recycled chan *CgroupImpl
 	quit     chan chan bool
 	nextID   int
+	logger	 slog.Logger
 }
 
 func NewCgroupPool(name string) (*CgroupPool, error) {
+
+	level := new(slog.LevelVar)
+	if (common.Conf.Trace.Cgroups_level == "INFO") {
+		level.Set(slog.LevelInfo)
+	} else if (common.Conf.Trace.Cgroups_level == "WARN") {
+		level.Set(slog.LevelWarn)
+	} else if (common.Conf.Trace.Cgroups_level == "ERROR") {
+		level.Set(slog.LevelError)
+	}
+	// Default logger right now can't have the level be changed (haven't found the API for that, probably have to implement one from the interface)
+	logger := slog.Default()
+
+	// Replacing default logger based on config
+	if (common.Conf.Trace.Format == "text") {
+		logFilePath := path.Join(common.Conf.Trace.Log_file_dir, "log.txt")
+		f, err := os.OpenFile(logFilePath, os.O_RDWR|os.O_APPEND, 0666)
+		if err != nil {
+			panic(fmt.Errorf("Cannot open log file at %s", logFilePath))
+		}
+		logger = slog.New(slog.NewTextHandler(f, &slog.HandlerOptions{Level: level}))
+		
+	} else if (common.Conf.Trace.Format == "json") {
+		logFilePath := path.Join(common.Conf.Trace.Log_file_dir, "log.json")
+		f, err := os.OpenFile(logFilePath, os.O_RDWR|os.O_APPEND, 0666)
+		if err != nil {
+			panic(fmt.Errorf("Cannot open log file at %s", logFilePath))
+		}
+		logger = slog.New(slog.NewJSONHandler(f, &slog.HandlerOptions{Level: level}))
+	}
+
 	pool := &CgroupPool{
 		Name:     path.Base(path.Dir(common.Conf.Worker_dir)) + "-" + name,
 		ready:    make(chan *CgroupImpl, CGROUP_RESERVE),
 		recycled: make(chan *CgroupImpl, CGROUP_RESERVE),
 		quit:     make(chan chan bool),
 		nextID:   0,
+		logger: *logger,
 	}
 
 	// create cgroup
 	groupPath := pool.GroupPath()
-	pool.printf("create %s", groupPath)
+	pool.logger.Info(fmt.Sprintf("create %s", groupPath), "CGROUP POOL", pool.Name)
 	if err := syscall.Mkdir(groupPath, 0700); err != nil {
 		return nil, fmt.Errorf("Mkdir %s: %s", groupPath, err)
 	}
@@ -55,9 +86,39 @@ func NewCgroupPool(name string) (*CgroupPool, error) {
 func (pool *CgroupPool) NewCgroup() Cgroup {
 	pool.nextID++
 
+	level := new(slog.LevelVar)
+	if (common.Conf.Trace.Cgroups_level == "INFO") {
+		level.Set(slog.LevelInfo)
+	} else if (common.Conf.Trace.Cgroups_level == "WARN") {
+		level.Set(slog.LevelWarn)
+	} else if (common.Conf.Trace.Cgroups_level == "ERROR") {
+		level.Set(slog.LevelError)
+	}
+	// Default logger right now can't have the level be changed (haven't found the API for that, probably have to implement one from the interface)
+	logger := slog.Default()
+
+	// Replacing default logger based on config
+	if (common.Conf.Trace.Format == "text") {
+		logFilePath := path.Join(common.Conf.Trace.Log_file_dir, "log.txt")
+		f, err := os.OpenFile(logFilePath, os.O_RDWR|os.O_APPEND, 0666)
+		if err != nil {
+			panic(fmt.Errorf("Cannot open log file at %s", logFilePath))
+		}
+		logger = slog.New(slog.NewTextHandler(f, &slog.HandlerOptions{Level: level}))
+		
+	} else if (common.Conf.Trace.Format == "json") {
+		logFilePath := path.Join(common.Conf.Trace.Log_file_dir, "log.json")
+		f, err := os.OpenFile(logFilePath, os.O_RDWR|os.O_APPEND, 0666)
+		if err != nil {
+			panic(fmt.Errorf("Cannot open log file at %s", logFilePath))
+		}
+		logger = slog.New(slog.NewJSONHandler(f, &slog.HandlerOptions{Level: level}))
+	}
+
 	cg := &CgroupImpl{
 		name: fmt.Sprintf("cg-%d", pool.nextID),
 		pool: pool,
+		logger: *logger,
 	}
 
 	groupPath := cg.GroupPath()
@@ -65,15 +126,8 @@ func (pool *CgroupPool) NewCgroup() Cgroup {
 		panic(fmt.Errorf("Mkdir %s: %s", groupPath, err))
 	}
 
-	cg.printf("created")
+	cg.logger.Info("created", "CGROUP Pool", cg.pool.Name, "CGROUP", cg.name)
 	return cg
-}
-
-// add ID to each log message so we know which logs correspond to
-// which containers
-func (pool *CgroupPool) printf(format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
-	log.Printf("%s [CGROUP POOL %s]", strings.TrimRight(msg, "\n"), pool.Name)
 }
 
 func (pool *CgroupPool) cgTask() {
@@ -81,7 +135,7 @@ func (pool *CgroupPool) cgTask() {
 	var done chan bool
 
 	// loop until we get the quit message
-	pool.printf("start creating/serving CGs")
+	pool.logger.Info("start creating/serving CGs", "CGROUP POOL", pool.Name)
 Loop:
 	for {
 		var cg *CgroupImpl
@@ -112,14 +166,14 @@ Loop:
 		select {
 		case pool.ready <- cg:
 		case done = <-pool.quit:
-			pool.printf("received shutdown request")
+			pool.logger.Info("received shutdown request", "CGROUP POOL", pool.Name)
 			cg.Destroy()
 			break Loop
 		}
 	}
 
 	// empty queues, freeing all cgroups
-	pool.printf("empty queues and release CGs")
+	pool.logger.Info("empty queues and release CGs", "CGROUP POOL", pool.Name)
 Empty:
 	for {
 		select {
@@ -144,13 +198,13 @@ func (pool *CgroupPool) Destroy() {
 
 	// Destroy cgroup for this entire pool
 	gpath := pool.GroupPath()
-	pool.printf("Destroying cgroup pool with path \"%s\"", gpath)
+	pool.logger.Info(fmt.Sprintf("Destroying cgroup pool with path \"%s\"", gpath), "CGROUP POOL", pool.Name)
 	for i := 100; i >= 0; i-- {
 		if err := syscall.Rmdir(gpath); err != nil {
 			if i == 0 {
 				panic(fmt.Errorf("Rmdir %s: %s", gpath, err))
 			} else {
-				pool.printf("cgroup pool Rmdir failed, trying again in 5ms")
+				pool.logger.Error("cgroup pool Rmdir failed, trying again in 5ms", "CGROUP POOL", pool.Name)
 				time.Sleep(5 * time.Millisecond)
 			}
 		} else {

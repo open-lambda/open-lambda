@@ -8,12 +8,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"runtime"
 	"runtime/pprof"
 	"strconv"
+	"sync"
 	"syscall"
-  "sync"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 )
@@ -213,6 +214,23 @@ func Main() (err error) {
 	log.Printf("Saved PID %d to file %s", os.Getpid(), pidPath)
 	if err := ioutil.WriteFile(pidPath, []byte(fmt.Sprintf("%d", os.Getpid())), 0644); err != nil {
 		return err
+	}
+
+	if (common.Conf.Trace.Format != "default") {
+		logFilePath := ""
+		if common.Conf.Trace.Format == "text" {
+			logFilePath = path.Join(common.Conf.Trace.Log_file_dir, "log.txt")
+
+		} else if common.Conf.Trace.Format == "json" {
+			logFilePath = path.Join(common.Conf.Trace.Log_file_dir, "log.json")
+		}
+
+		f, err := os.OpenFile(logFilePath, os.O_RDWR|os.O_CREATE, 0666)
+		if err != nil {
+			return err
+		}
+		log.Printf("Log output for specified components will be written to %s", logFilePath)	
+		defer f.Close()
 	}
 
 	// things shared by all servers
