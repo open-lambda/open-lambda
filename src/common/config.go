@@ -68,6 +68,9 @@ type Config struct {
 	Features FeaturesConfig `json:"features"`
 	Trace    TraceConfig    `json:"trace"`
 	Storage  StorageConfig  `json:"storage"`
+
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	Log		 LogConfig		`json:"log"`
 }
 
 type FeaturesConfig struct {
@@ -87,6 +90,16 @@ type TraceConfig struct {
 	Latency 		bool `json:"latency"`
 	Cgroups_level	string `json:"cgroups_level"`
 }
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+type LogConfig struct {
+	LogFormat		string `json:"log_format"`
+	Log_file_dir	string `json:"log_file_dir"`
+	CgroupsLevel 	string `json:"cgroups_level"`
+	SocksLevel		string `json:"socks_level"`
+}
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 type StoreString string
 
@@ -192,6 +205,12 @@ func LoadDefaults(olPath string) error {
 			Root:    "private",
 			Scratch: "",
 			Code:    "",
+		},
+		Log: LogConfig{
+			LogFormat: "default",
+			Log_file_dir: logfileDir,
+			CgroupsLevel: "INFO",
+			SocksLevel: "INFO",
 		},
 	}
 

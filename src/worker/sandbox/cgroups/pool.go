@@ -67,7 +67,7 @@ func NewCgroupPool(name string) (*CgroupPool, error) {
 
 	// create cgroup
 	groupPath := pool.GroupPath()
-	pool.logger.Info(fmt.Sprintf("create %s", groupPath), "CGROUP POOL", pool.Name)
+	pool.printf("create %s", groupPath)
 	if err := syscall.Mkdir(groupPath, 0700); err != nil {
 		return nil, fmt.Errorf("Mkdir %s: %s", groupPath, err)
 	}
@@ -126,8 +126,15 @@ func (pool *CgroupPool) NewCgroup() Cgroup {
 		panic(fmt.Errorf("Mkdir %s: %s", groupPath, err))
 	}
 
-	cg.logger.Info("created", "CGROUP Pool", cg.pool.Name, "CGROUP", cg.name)
+	cg.printf("created")
 	return cg
+}
+
+// add ID to each log message so we know which logs correspond to
+// which containers
+func (pool *CgroupPool) printf(format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
+	log.Printf("%s [CGROUP POOL %s]", strings.TrimRight(msg, "\n"), pool.Name)
 }
 
 func (pool *CgroupPool) cgTask() {
@@ -135,7 +142,7 @@ func (pool *CgroupPool) cgTask() {
 	var done chan bool
 
 	// loop until we get the quit message
-	pool.logger.Info("start creating/serving CGs", "CGROUP POOL", pool.Name)
+	pool.printf("start creating/serving CGs")
 Loop:
 	for {
 		var cg *CgroupImpl
@@ -166,14 +173,14 @@ Loop:
 		select {
 		case pool.ready <- cg:
 		case done = <-pool.quit:
-			pool.logger.Info("received shutdown request", "CGROUP POOL", pool.Name)
+			pool.printf("received shutdown request")
 			cg.Destroy()
 			break Loop
 		}
 	}
 
 	// empty queues, freeing all cgroups
-	pool.logger.Info("empty queues and release CGs", "CGROUP POOL", pool.Name)
+	pool.printf("empty queues and release CGs")
 Empty:
 	for {
 		select {
@@ -198,13 +205,13 @@ func (pool *CgroupPool) Destroy() {
 
 	// Destroy cgroup for this entire pool
 	gpath := pool.GroupPath()
-	pool.logger.Info(fmt.Sprintf("Destroying cgroup pool with path \"%s\"", gpath), "CGROUP POOL", pool.Name)
+	pool.printf("Destroying cgroup pool with path \"%s\"", gpath)
 	for i := 100; i >= 0; i-- {
 		if err := syscall.Rmdir(gpath); err != nil {
 			if i == 0 {
 				panic(fmt.Errorf("Rmdir %s: %s", gpath, err))
 			} else {
-				pool.logger.Error("cgroup pool Rmdir failed, trying again in 5ms", "CGROUP POOL", pool.Name)
+				pool.printf("cgroup pool Rmdir failed, trying again in 5ms")
 				time.Sleep(5 * time.Millisecond)
 			}
 		} else {
