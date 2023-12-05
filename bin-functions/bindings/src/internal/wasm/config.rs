@@ -10,7 +10,7 @@ mod api {
     }
 }
 
-pub fn get_config_value(key: &str) -> CallResult {
+pub fn get_config_value(key: &str) -> Result<String, String> {
     let mut len = 0u64;
     let len_ptr = (&mut len) as *mut u64;
 
@@ -28,7 +28,7 @@ pub fn get_config_value(key: &str) -> CallResult {
 
     let len = len as usize;
 
-    let call_result_data = unsafe { Vec::<u8>::from_raw_parts(data_ptr as *mut u8, len, len) };
-
-    bincode::deserialize(&call_result_data).unwrap()
+    let result_data = unsafe { Vec::<u8>::from_raw_parts(data_ptr as *mut u8, len, len) };
+    let result: CallResult = bincode::deserialize(&result_data).unwrap();
+    result.map(|value| bincode::deserialize(&value).unwrap())
 }
