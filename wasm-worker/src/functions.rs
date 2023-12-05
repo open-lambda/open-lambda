@@ -1,5 +1,6 @@
 use dashmap::DashMap;
 
+use std::collections::HashMap;
 use std::fs;
 use std::io::{Read, Write};
 use std::net::SocketAddr;
@@ -20,6 +21,7 @@ use crate::WasmCompilerType;
 use crate::bindings::{
     self,
     args::{ArgsEnv, ResultHandle},
+    config::ConfigEnv,
     ipc::IpcEnv,
 };
 
@@ -43,6 +45,8 @@ struct InstanceData {
     args_env: ArgsEnv,
     #[allow(dead_code)]
     ipc_env: IpcEnv,
+    #[allow(dead_code)]
+    config_env: ConfigEnv,
 }
 
 pub struct InstanceHandle {
@@ -55,6 +59,7 @@ impl Function {
         &self,
         args: Vec<u8>,
         addr: SocketAddr,
+        config_values: &HashMap<String, String>,
         result_hdl: ResultHandle,
     ) -> InstanceHandle {
         if let Some(data) = self.idle_list.pop() {
@@ -78,10 +83,13 @@ impl Function {
         let (args_imports, args_env) = bindings::args::get_imports(&self.store, args, result_hdl);
         let log_imports = bindings::log::get_imports(&self.store);
         let (ipc_imports, ipc_env) = bindings::ipc::get_imports(&self.store, addr);
+        let (config_imports, config_env) =
+            bindings::config::get_imports(&self.store, config_values.clone());
 
         import_object.register("ol_args", args_imports);
         import_object.register("ol_log", log_imports);
         import_object.register("ol_ipc", ipc_imports);
+        import_object.register("ol_config", config_imports);
 
         let instance = unsafe {
             self.zygote
@@ -101,6 +109,7 @@ impl Function {
             instance,
             args_env,
             ipc_env,
+            config_env,
         };
 
         InstanceHandle {

@@ -1,6 +1,7 @@
 #![feature(type_alias_impl_trait)]
 #![feature(impl_trait_in_assoc_type)]
 
+use std::collections::HashMap;
 use std::fs::{read_dir, remove_file, File};
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::path::PathBuf;
@@ -63,6 +64,9 @@ struct Args {
 
     #[clap(long)]
     enable_cpu_profiler: bool,
+
+    #[clap(short = 'C')]
+    config_values: Option<Vec<String>>,
 }
 
 async fn load_functions(
@@ -111,6 +115,7 @@ async fn load_functions(
 struct Service {
     worker_addr: SocketAddr,
     function_mgr: Arc<FunctionManager>,
+    config_values: Arc<HashMap<String, String>>,
 }
 
 impl hyper::service::Service<Request<Incoming>> for Service {
@@ -119,7 +124,12 @@ impl hyper::service::Service<Request<Incoming>> for Service {
     type Future = impl std::future::Future<Output = http::Result<Response<Full<Bytes>>>>;
 
     fn call(&self, req: Request<Incoming>) -> Self::Future {
-        Self::handle_request(req, self.worker_addr, self.function_mgr.clone())
+        Self::handle_request(
+            req,
+            self.worker_addr,
+            self.function_mgr.clone(),
+            self.config_values.clone(),
+        )
     }
 }
 
@@ -128,6 +138,7 @@ impl Service {
         req: Request<Incoming>,
         worker_addr: SocketAddr,
         function_mgr: Arc<FunctionManager>,
+        config_values: Arc<HashMap<String, String>>,
     ) -> http::Result<Response<Full<Bytes>>> {
         log::trace!("Got new request: {req:?}");
 
@@ -143,7 +154,14 @@ impl Service {
         let args = req.collect().await.unwrap().to_bytes().to_vec();
 
         if method == Method::POST && path.len() == 2 && path[0] == "run" {
-            Self::execute_function(worker_addr, &path.pop().unwrap(), args, function_mgr).await
+            Self::execute_function(
+                worker_addr,
+                &path.pop().unwrap(),
+                args,
+                function_mgr,
+                config_values,
+            )
+            .await
         } else if method == Method::GET && path.len() == 1 && path[0] == "status" {
             Self::get_status().await
         } else {
@@ -156,6 +174,7 @@ impl Service {
         name: &str,
         args: Vec<u8>,
         function_mgr: Arc<FunctionManager>,
+        config_values: Arc<HashMap<String, String>>,
     ) -> http::Result<Response<Full<Bytes>>> {
         let result = Arc::new(Mutex::new(None));
 
@@ -170,7 +189,8 @@ impl Service {
             static ref STACK_POOL: StackPool = StackPool::new();
         }
 
-        let instance = function.get_idle_instance(args, worker_addr, result.clone());
+        let instance =
+            function.get_idle_instance(args, worker_addr, &config_values, result.clone());
 
         let func_args: Vec<u32> = vec![];
 
@@ -253,16 +273,32 @@ async fn main_func(args: Args) {
         log::info!("CPU profiler enabled. Writing output to '{fname}'");
     }
 
+    let mut config_values = HashMap::default();
+
+    if let Some(vals) = args.config_values {
+        for entry in vals {
+            let mut split = entry.split('=');
+            let key = split.next().expect("Invalid config setting");
+            let value = split.next().expect("Invalid config setting");
+
+            config_values.insert(key.to_string(), value.to_string());
+        }
+    }
+
+    let config_values = Arc::new(config_values);
+
     let fut = tokio::spawn(async move {
         while let Ok((conn, addr)) = listener.accept().await {
             log::debug!("Got new connection from {addr}");
 
             let function_mgr = function_mgr.clone();
+            let config_values = config_values.clone();
 
             tokio::spawn(async move {
                 let service = Service {
                     worker_addr,
                     function_mgr,
+                    config_values,
                 };
 
                 conn.set_nodelay(true).unwrap();

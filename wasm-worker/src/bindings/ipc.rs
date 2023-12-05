@@ -124,7 +124,7 @@ fn http_post(
         let mut client = HttpClient::new(addr).await;
         match client.post(path, body_slice.to_vec()).await {
             Ok(data) => Ok(ByteBuf::from(data)),
-            Err(err) => Err(err.to_string())
+            Err(err) => Err(err.to_string()),
         }
     });
 
@@ -179,7 +179,7 @@ fn http_get(
         let mut client = HttpClient::new(addr).await;
         match client.get(path).await {
             Ok(data) => Ok(ByteBuf::from(data)),
-            Err(err) => Err(err.to_string())
+            Err(err) => Err(err.to_string()),
         }
     });
 
