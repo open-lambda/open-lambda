@@ -13,10 +13,12 @@ pub struct HttpClient {
 }
 
 impl HttpClient {
-    pub async fn new<S: ToSocketAddrs>(server_addr: S) -> Self {
-        let conn = tokio::net::TcpStream::connect(server_addr)
+    pub async fn new<S: ToSocketAddrs + std::fmt::Debug>(server_addr: S) -> Self {
+        let conn = tokio::net::TcpStream::connect(&server_addr)
             .await
-            .expect("Failed to connect to server");
+            .unwrap_or_else(|err| {
+                panic!("Failed to connect to HTTP server at {server_addr:?}: {err}")
+            });
         conn.set_nodelay(true).unwrap();
         let conn = support::TokioIo::new(conn);
 

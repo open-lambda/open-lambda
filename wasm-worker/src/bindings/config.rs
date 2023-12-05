@@ -70,7 +70,7 @@ pub fn get_imports(store: &Store, config_values: HashMap<String, String>) -> (Ex
     };
 
     ns.insert(
-        "function_call",
+        "get_config_value",
         Function::new_native_with_env(store, env.clone(), get_config_value),
     );
 
