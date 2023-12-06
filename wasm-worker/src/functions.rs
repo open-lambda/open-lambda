@@ -199,7 +199,7 @@ impl FunctionManager {
         self.functions.get(name).map(|entry| entry.value().clone())
     }
 
-    pub async fn load_function(&self, path: PathBuf, cache_path: PathBuf, worker_addr: SocketAddr) {
+    pub async fn load_function(&self, path: PathBuf, cache_path: PathBuf, worker_addr: SocketAddr, config_values: HashMap<String, String>) {
         let store = self.store.clone();
         let os_name = path.file_stem().unwrap();
         let name = String::from(os_name.to_str().unwrap());
@@ -278,7 +278,7 @@ impl FunctionManager {
             module
         };
 
-        let zygote = self.create_zygote(&module, &store, worker_addr);
+        let zygote = self.create_zygote(&module, &store, worker_addr, config_values);
 
         let function = Arc::new(Function {
             next_instance_id: Arc::new(AtomicU64::new(1)),
@@ -289,7 +289,7 @@ impl FunctionManager {
         self.functions.insert(name, function);
     }
 
-    fn create_zygote(&self, module: &Module, store: &Store, worker_addr: SocketAddr) -> Instance {
+    fn create_zygote(&self, module: &Module, store: &Store, worker_addr: SocketAddr, config_values: HashMap<String, String>) -> Instance {
         let args = vec![];
         let result_hdl = Arc::new(Mutex::new(None));
 
@@ -297,10 +297,13 @@ impl FunctionManager {
 
         let (args_imports, _args_env) = bindings::args::get_imports(store, args, result_hdl);
         let (ipc_imports, _ipc_env) = bindings::ipc::get_imports(store, worker_addr);
+        let (config_imports, _config_env) =
+            bindings::config::get_imports(&self.store, config_values);
 
         import_object.register("ol_args", args_imports);
         import_object.register("ol_log", bindings::log::get_imports(store));
         import_object.register("ol_ipc", ipc_imports);
+        import_object.register("ol_config", config_imports);
 
         match Instance::new(module, &import_object) {
             Ok(instance) => {

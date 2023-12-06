@@ -104,13 +104,13 @@ fn http_post(
     body_data_len: u32,
     len_out: WasmPtr<u64>,
 ) -> i64 {
-    log::trace!("Got `function_call` call");
-
     let memory = env.memory.get_ref().unwrap();
     let yielder = env.yielder.get_ref().unwrap().get();
 
     let addr = addr_ptr.get_utf8_string(memory, addr_len).unwrap();
     let path = path_ptr.get_utf8_string(memory, path_len).unwrap();
+
+    log::trace!("Got `http_post` call to {addr} with path={path}");
 
     let body_slice = unsafe {
         let arg_ptr = memory
@@ -167,13 +167,13 @@ fn http_get(
     path_len: u32,
     len_out: WasmPtr<u64>,
 ) -> i64 {
-    log::trace!("Got `function_call` call");
-
     let memory = env.memory.get_ref().unwrap();
     let yielder = env.yielder.get_ref().unwrap().get();
 
     let addr = addr_ptr.get_utf8_string(memory, addr_len).unwrap();
     let path = path_ptr.get_utf8_string(memory, path_len).unwrap();
+
+    log::trace!("Got `http_get` call to {addr} with path={path}");
 
     let result: CallResult = yielder.async_suspend(async move {
         let mut client = HttpClient::new(addr).await;

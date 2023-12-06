@@ -72,6 +72,7 @@ async fn load_functions(
     registry_path: &str,
     function_mgr: &Arc<FunctionManager>,
     worker_addr: SocketAddr,
+    config_values: &HashMap<String, String>,
 ) {
     let compiler_name = format!("{}", function_mgr.get_compiler_type()).to_lowercase();
     let cache_path: PathBuf = format!("{registry_path}.{compiler_name}.cache").into();
@@ -106,7 +107,7 @@ async fn load_functions(
         }
 
         function_mgr
-            .load_function(file_path, cache_path.clone(), worker_addr)
+            .load_function(file_path, cache_path.clone(), worker_addr, config_values.clone())
             .await;
     }
 }
@@ -252,7 +253,21 @@ async fn main_func(args: Args) {
 
     let function_mgr = Arc::new(FunctionManager::new(args.wasm_compiler).await);
 
-    load_functions(&args.registry_path, &function_mgr, worker_addr).await;
+    let mut config_values = HashMap::default();
+
+    if let Some(vals) = args.config_values {
+        for entry in vals {
+            let mut split = entry.split('=');
+            let key = split.next().expect("Invalid config setting");
+            let value = split.next().expect("Invalid config setting");
+
+            config_values.insert(key.to_string(), value.to_string());
+        }
+    }
+
+    let config_values = Arc::new(config_values);
+
+    load_functions(&args.registry_path, &function_mgr, worker_addr, &config_values).await;
 
     let listener = tokio::net::TcpListener::bind(&worker_addr)
         .await
@@ -271,20 +286,6 @@ async fn main_func(args: Args) {
 
         log::info!("CPU profiler enabled. Writing output to '{fname}'");
     }
-
-    let mut config_values = HashMap::default();
-
-    if let Some(vals) = args.config_values {
-        for entry in vals {
-            let mut split = entry.split('=');
-            let key = split.next().expect("Invalid config setting");
-            let value = split.next().expect("Invalid config setting");
-
-            config_values.insert(key.to_string(), value.to_string());
-        }
-    }
-
-    let config_values = Arc::new(config_values);
 
     let fut = tokio::spawn(async move {
         while let Ok((conn, addr)) = listener.accept().await {
