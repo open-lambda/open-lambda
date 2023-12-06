@@ -165,6 +165,11 @@ func initOLDir(olPath string, dockerBaseImage string, newBase bool) (err error) 
 		return err
 	}
 
+	// will only execute once for each "ol worker init" so probably won't error out
+	if err := os.Mkdir(common.Conf.Trace.Log_file_dir, 0700); err != nil {
+		return err
+	}
+
 	if _, err := os.Stat(baseDir); os.IsNotExist(err) {
 		if err := initOLBaseDir(baseDir, dockerBaseImage); err != nil {
 			os.RemoveAll(baseDir)

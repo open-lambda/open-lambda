@@ -68,9 +68,6 @@ type Config struct {
 	Features FeaturesConfig `json:"features"`
 	Trace    TraceConfig    `json:"trace"`
 	Storage  StorageConfig  `json:"storage"`
-
-	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	Log		 LogConfig		`json:"log"`
 }
 
 type FeaturesConfig struct {
@@ -81,25 +78,15 @@ type FeaturesConfig struct {
 }
 
 type TraceConfig struct {
-	Format  		string `json:"format"`
-	Log_file_dir 	string `json:"log_file_dir"`
-	Cgroups 		bool `json:"cgroups"`
-	Memory  		bool `json:"memory"`
-	Evictor 		bool `json:"evictor"`
-	Package 		bool `json:"package"`
-	Latency 		bool `json:"latency"`
-	Cgroups_level	string `json:"cgroups_level"`
+	Format        string `json:"format"`
+	Log_file_dir  string `json:"log_file_dir"`
+	Cgroups       bool   `json:"cgroups"`
+	Memory        bool   `json:"memory"`
+	Evictor       bool   `json:"evictor"`
+	Package       bool   `json:"package"`
+	Latency       bool   `json:"latency"`
+	Cgroups_level string `json:"cgroups_level"`
 }
-
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-type LogConfig struct {
-	LogFormat		string `json:"log_format"`
-	Log_file_dir	string `json:"log_file_dir"`
-	CgroupsLevel 	string `json:"cgroups_level"`
-	SocksLevel		string `json:"socks_level"`
-}
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 type StoreString string
 
@@ -192,25 +179,19 @@ func LoadDefaults(olPath string) error {
 			Enable_seccomp:      true,
 		},
 		Trace: TraceConfig{
-			Format: "default",
-			Log_file_dir: logfileDir,
-			Cgroups: false,
-			Memory:  false,
-			Evictor: false,
-			Package: false,
-			Latency: false,
+			Format:        "default",
+			Log_file_dir:  logfileDir,
+			Cgroups:       false,
+			Memory:        false,
+			Evictor:       false,
+			Package:       false,
+			Latency:       false,
 			Cgroups_level: "INFO",
 		},
 		Storage: StorageConfig{
 			Root:    "private",
 			Scratch: "",
 			Code:    "",
-		},
-		Log: LogConfig{
-			LogFormat: "default",
-			Log_file_dir: logfileDir,
-			CgroupsLevel: "INFO",
-			SocksLevel: "INFO",
 		},
 	}
 

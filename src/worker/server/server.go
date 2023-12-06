@@ -20,14 +20,14 @@ import (
 )
 
 const (
-	RUN_PATH       = "/run/"
-	PID_PATH       = "/pid"
-	STATUS_PATH    = "/status"
-	STATS_PATH     = "/stats"
-	DEBUG_PATH     = "/debug"
-	PPROF_MEM_PATH = "/pprof/mem"
+	RUN_PATH             = "/run/"
+	PID_PATH             = "/pid"
+	STATUS_PATH          = "/status"
+	STATS_PATH           = "/stats"
+	DEBUG_PATH           = "/debug"
+	PPROF_MEM_PATH       = "/pprof/mem"
 	PPROF_CPU_START_PATH = "/pprof/cpu-start"
-	PPROF_CPU_STOP_PATH  = "/pprof/cpu-stop" 
+	PPROF_CPU_STOP_PATH  = "/pprof/cpu-stop"
 )
 
 type cleanable interface {
@@ -36,6 +36,7 @@ type cleanable interface {
 
 // temporary file storing cpu profiled data
 const CPU_TEMP_PATTERN = ".cpu.*.prof"
+
 var cpuTemp *os.File = nil
 var lock sync.Mutex
 
@@ -84,7 +85,7 @@ func doCpuStart() error {
 	if cpuTemp != nil {
 		return fmt.Errorf("Already started cpu profiling\n")
 	}
-	  
+
 	// fresh cpu profiling
 	temp, err := os.CreateTemp("", CPU_TEMP_PATTERN)
 	if err != nil {
@@ -133,7 +134,7 @@ func PprofCpuStop(w http.ResponseWriter, r *http.Request) {
 	cpuTemp.Close()
 	cpuTemp = nil
 	defer os.Remove(tempFilename) // deferred cleanup
-  
+
 	// read data from file
 	log.Printf("Reading from %s\n", tempFilename)
 	buffer, err := ioutil.ReadFile(tempFilename)
@@ -157,24 +158,24 @@ func shutdown(pidPath string, server cleanable) {
 	snapshot := common.SnapshotStats()
 	rc := 0
 
-  // "cpu-start"ed but have not "cpu-stop"ped before kill
-  log.Printf("save buffered profiled data to cpu.buf.prof\n")
-  if cpuTemp != nil {
-    pprof.StopCPUProfile()
-    filename := cpuTemp.Name()
-    cpuTemp.Close()
+	// "cpu-start"ed but have not "cpu-stop"ped before kill
+	log.Printf("save buffered profiled data to cpu.buf.prof\n")
+	if cpuTemp != nil {
+		pprof.StopCPUProfile()
+		filename := cpuTemp.Name()
+		cpuTemp.Close()
 
-    in, err := ioutil.ReadFile(filename)
-    if err != nil {
-      log.Printf("error: %s", err)
-      rc = 1
-    } else if err = ioutil.WriteFile("cpu.buf.prof", in, 0644); err != nil{
-      log.Printf("error: %s", err)
-      rc = 1
-    }
+		in, err := ioutil.ReadFile(filename)
+		if err != nil {
+			log.Printf("error: %s", err)
+			rc = 1
+		} else if err = ioutil.WriteFile("cpu.buf.prof", in, 0644); err != nil {
+			log.Printf("error: %s", err)
+			rc = 1
+		}
 
-    os.Remove(filename)
-  }
+		os.Remove(filename)
+	}
 
 	log.Printf("save stats to %s", statsPath)
 	if s, err := json.MarshalIndent(snapshot, "", "\t"); err != nil {
@@ -216,7 +217,20 @@ func Main() (err error) {
 		return err
 	}
 
-	if (common.Conf.Trace.Format != "default") {
+	// clean up old logs & set up new logs
+	fs, err := filepath.Glob(filepath.Join(common.Conf.Trace.Log_file_dir, "*"))
+	if err != nil {
+		return err
+	}
+	for _, f := range fs {
+		if filepath.Base(f) == "log.txt" || filepath.Base(f) == "log.json" {
+			err := os.Remove(f)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	if common.Conf.Trace.Format != "default" {
 		logFilePath := ""
 		if common.Conf.Trace.Format == "text" {
 			logFilePath = path.Join(common.Conf.Trace.Log_file_dir, "log.txt")
@@ -229,7 +243,7 @@ func Main() (err error) {
 		if err != nil {
 			return err
 		}
-		log.Printf("Log output for specified components will be written to %s", logFilePath)	
+		log.Printf("Log output for specified components will be written to %s", logFilePath)
 		defer f.Close()
 	}
 
