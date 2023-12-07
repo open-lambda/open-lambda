@@ -34,7 +34,7 @@ jobs:
     - name: Install rustc and clippy nightly
       uses: dtolnay/rust-toolchain@stable
       with:
-         toolchain: nightly-2023-09-26 #make sure this matches the version in the rust-toolchain files
+         toolchain: nightly-2023-12-01 #make sure this matches the version in the rust-toolchain files
          components: cargo, rustc, clippy, rustfmt
          target: wasm32-unknown-unknown
     - name: Setup rust dependency caching

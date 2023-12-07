@@ -1,241 +1,149 @@
-use wasmer::{
-    Array, Exports, Function, LazyInit, Memory, NativeFunc, Store, WasmPtr, WasmerEnv, Yielder,
-};
-
+use std::future::Future;
 use std::net::SocketAddr;
 
 use serde_bytes::ByteBuf;
 
 use open_lambda_proxy_protocol::CallResult;
 
+use super::{call_allocate, fill_slice, get_slice, get_str, set_u64, BindingsData};
+
+use wasmtime::{Caller, Linker};
+
 use crate::http_client::HttpClient;
 
-#[derive(Clone, WasmerEnv)]
-pub struct IpcEnv {
-    #[wasmer(export)]
-    memory: LazyInit<Memory>,
-    #[wasmer(export(name = "internal_alloc_buffer"))]
-    allocate: LazyInit<NativeFunc<u32, i64>>,
-    #[wasmer(yielder)]
-    yielder: LazyInit<Yielder>,
+#[derive(Clone)]
+pub struct IpcData {
     addr: SocketAddr,
 }
 
+impl IpcData {
+    pub fn new(addr: SocketAddr) -> Self {
+        Self { addr }
+    }
+}
+
 fn function_call(
-    env: &IpcEnv,
-    func_name_ptr: WasmPtr<u8, Array>,
+    mut caller: Caller<'_, BindingsData>,
+    func_name_ptr: i32,
     func_name_len: u32,
-    arg_data_ptr: WasmPtr<u8, Array>,
+    arg_data_ptr: i32,
     arg_data_len: u32,
-    len_out: WasmPtr<u64>,
-) -> i64 {
-    log::trace!("Got `function_call` call");
+    len_out: i32,
+) -> Box<dyn Future<Output = i64> + Send + '_> {
+    Box::new(async move {
+        log::trace!("Got `function_call` call");
 
-    let memory = env.memory.get_ref().unwrap();
-    let yielder = env.yielder.get_ref().unwrap().get();
+        let memory = caller.get_export("memory").unwrap().into_memory().unwrap();
+        let func_name = get_str(&caller, &memory, func_name_ptr, func_name_len);
 
-    // TODO sanity check the function name
-    let func_name = func_name_ptr
-        .get_utf8_string(memory, func_name_len)
-        .unwrap();
+        let args = get_slice(&caller, &memory, arg_data_ptr, arg_data_len);
 
-    let args = unsafe {
-        let arg_ptr = memory
-            .view::<u8>()
-            .as_ptr()
-            .add(arg_data_ptr.offset() as usize) as *mut u8;
-        let slice = std::slice::from_raw_parts(arg_ptr, arg_data_len as usize);
-        let mut args = vec![];
-        args.extend_from_slice(slice);
-        args
-    };
+        let mut client = HttpClient::new(caller.data().ipc.addr).await;
 
-    let result: CallResult = yielder.async_suspend(async move {
-        let mut client = HttpClient::new(env.addr).await;
-
-        let response = match client.post(format!("/run/{func_name}"), args).await {
+        let response = match client
+            .post(format!("/run/{func_name}"), args.to_vec())
+            .await
+        {
             Ok(resp) => resp,
             Err(err) => {
-                panic!("Internal call to {} failed: {err}", env.addr);
+                panic!("Internal call to {} failed: {err}", caller.data().ipc.addr);
             }
         };
 
-        Ok(bincode::deserialize(&response).unwrap())
-    });
+        let result: CallResult = Ok(bincode::deserialize(&response).unwrap());
 
-    let result_data = bincode::serialize(&result).unwrap();
-    let buffer_len = result_data.len();
-    let offset = env
-        .allocate
-        .get_ref()
-        .unwrap()
-        .call(buffer_len as u32)
-        .unwrap();
+        let result_data = bincode::serialize(&result).unwrap();
+        let buffer_len = result_data.len();
 
-    if offset < 0 {
-        panic!("Failed to allocate");
-    }
+        let offset = call_allocate(&mut caller, buffer_len as u32).await;
 
-    if (offset as u64) + (buffer_len as u64) > memory.data_size() {
-        panic!("Invalid pointer");
-    }
+        fill_slice(&caller, &memory, offset, result_data.as_slice());
+        set_u64(&caller, &memory, len_out, buffer_len as u64);
 
-    let out_slice = unsafe {
-        let raw_ptr = memory.data_ptr().add(offset as usize);
-        std::slice::from_raw_parts_mut(raw_ptr, buffer_len)
-    };
-
-    out_slice.clone_from_slice(result_data.as_slice());
-
-    let len = len_out.deref(memory).unwrap();
-    len.set(buffer_len as u64);
-
-    offset
+        offset as i64
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
 fn http_post(
-    env: &IpcEnv,
-    addr_ptr: WasmPtr<u8, Array>,
+    mut caller: Caller<'_, BindingsData>,
+    addr_ptr: i32,
     addr_len: u32,
-    path_ptr: WasmPtr<u8, Array>,
+    path_ptr: i32,
     path_len: u32,
-    body_data_ptr: WasmPtr<u8, Array>,
+    body_data_ptr: i32,
     body_data_len: u32,
-    len_out: WasmPtr<u64>,
-) -> i64 {
-    let memory = env.memory.get_ref().unwrap();
-    let yielder = env.yielder.get_ref().unwrap().get();
+    len_out: i32,
+) -> Box<dyn Future<Output = i64> + Send + '_> {
+    Box::new(async move {
+        let memory = caller.get_export("memory").unwrap().into_memory().unwrap();
+        let addr = get_str(&caller, &memory, addr_ptr, addr_len);
+        let path = get_str(&caller, &memory, path_ptr, path_len);
 
-    let addr = addr_ptr.get_utf8_string(memory, addr_len).unwrap();
-    let path = path_ptr.get_utf8_string(memory, path_len).unwrap();
+        log::trace!("Got `http_post` call to {addr} with path={path}");
 
-    log::trace!("Got `http_post` call to {addr} with path={path}");
+        let body_slice = get_slice(&caller, &memory, body_data_ptr, body_data_len);
 
-    let body_slice = unsafe {
-        let arg_ptr = memory
-            .view::<u8>()
-            .as_ptr()
-            .add(body_data_ptr.offset() as usize) as *mut u8;
-        std::slice::from_raw_parts(arg_ptr, body_data_len as usize)
-    };
-
-    let result: CallResult = yielder.async_suspend(async move {
         let mut client = HttpClient::new(addr).await;
-        match client.post(path, body_slice.to_vec()).await {
+        let result: CallResult = match client.post(path.to_string(), body_slice.to_vec()).await {
             Ok(data) => Ok(ByteBuf::from(data)),
             Err(err) => Err(err.to_string()),
-        }
-    });
+        };
 
-    let result_data = bincode::serialize(&result).unwrap();
-    let buffer_len = result_data.len();
-    let offset = env
-        .allocate
-        .get_ref()
-        .unwrap()
-        .call(buffer_len as u32)
-        .unwrap();
+        let result_data = bincode::serialize(&result).unwrap();
+        let buffer_len = result_data.len();
 
-    if offset < 0 {
-        panic!("Failed to allocate");
-    }
+        let offset = call_allocate(&mut caller, buffer_len as u32).await;
 
-    if (offset as u64) + (buffer_len as u64) > memory.data_size() {
-        panic!("Invalid pointer");
-    }
+        fill_slice(&caller, &memory, offset, result_data.as_slice());
+        set_u64(&caller, &memory, len_out, buffer_len as u64);
 
-    let out_slice = unsafe {
-        let raw_ptr = memory.data_ptr().add(offset as usize);
-        std::slice::from_raw_parts_mut(raw_ptr, buffer_len)
-    };
-
-    out_slice.clone_from_slice(result_data.as_slice());
-
-    let len = len_out.deref(memory).unwrap();
-    len.set(buffer_len as u64);
-
-    offset
+        offset as i64
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
 fn http_get(
-    env: &IpcEnv,
-    addr_ptr: WasmPtr<u8, Array>,
+    mut caller: Caller<'_, BindingsData>,
+    addr_ptr: i32,
     addr_len: u32,
-    path_ptr: WasmPtr<u8, Array>,
+    path_ptr: i32,
     path_len: u32,
-    len_out: WasmPtr<u64>,
-) -> i64 {
-    let memory = env.memory.get_ref().unwrap();
-    let yielder = env.yielder.get_ref().unwrap().get();
+    len_out: i32,
+) -> Box<dyn Future<Output = i64> + Send + '_> {
+    Box::new(async move {
+        let memory = caller.get_export("memory").unwrap().into_memory().unwrap();
+        let addr = get_str(&caller, &memory, addr_ptr, addr_len);
+        let path = get_str(&caller, &memory, path_ptr, path_len);
 
-    let addr = addr_ptr.get_utf8_string(memory, addr_len).unwrap();
-    let path = path_ptr.get_utf8_string(memory, path_len).unwrap();
+        log::trace!("Got `http_post` call to {addr} with path={path}");
 
-    log::trace!("Got `http_get` call to {addr} with path={path}");
-
-    let result: CallResult = yielder.async_suspend(async move {
         let mut client = HttpClient::new(addr).await;
-        match client.get(path).await {
+        let result: CallResult = match client.get(path.to_string()).await {
             Ok(data) => Ok(ByteBuf::from(data)),
             Err(err) => Err(err.to_string()),
-        }
-    });
+        };
 
-    let result_data = bincode::serialize(&result).unwrap();
-    let buffer_len = result_data.len();
-    let offset = env
-        .allocate
-        .get_ref()
-        .unwrap()
-        .call(buffer_len as u32)
-        .unwrap();
+        let result_data = bincode::serialize(&result).unwrap();
+        let buffer_len = result_data.len();
 
-    if offset < 0 {
-        panic!("Failed to allocate");
-    }
+        let offset = call_allocate(&mut caller, buffer_len as u32).await;
 
-    if (offset as u64) + (buffer_len as u64) > memory.data_size() {
-        panic!("Invalid pointer");
-    }
+        fill_slice(&caller, &memory, offset, result_data.as_slice());
+        set_u64(&caller, &memory, len_out, buffer_len as u64);
 
-    let out_slice = unsafe {
-        let raw_ptr = memory.data_ptr().add(offset as usize);
-        std::slice::from_raw_parts_mut(raw_ptr, buffer_len)
-    };
-
-    out_slice.clone_from_slice(result_data.as_slice());
-
-    let len = len_out.deref(memory).unwrap();
-    len.set(buffer_len as u64);
-
-    offset
+        offset as i64
+    })
 }
 
-pub fn get_imports(store: &Store, addr: SocketAddr) -> (Exports, IpcEnv) {
-    let mut ns = Exports::new();
-    let env = IpcEnv {
-        memory: Default::default(),
-        allocate: Default::default(),
-        yielder: Default::default(),
-        addr,
-    };
-
-    ns.insert(
-        "function_call",
-        Function::new_native_with_env(store, env.clone(), function_call),
-    );
-
-    ns.insert(
-        "http_post",
-        Function::new_native_with_env(store, env.clone(), http_post),
-    );
-
-    ns.insert(
-        "http_get",
-        Function::new_native_with_env(store, env.clone(), http_get),
-    );
-
-    (ns, env)
+pub fn get_imports(linker: &mut Linker<BindingsData>) {
+    linker
+        .func_wrap5_async("ol_ipc", "function_call", function_call)
+        .unwrap();
+    linker
+        .func_wrap7_async("ol_ipc", "http_post", http_post)
+        .unwrap();
+    linker
+        .func_wrap5_async("ol_ipc", "http_get", http_get)
+        .unwrap();
 }

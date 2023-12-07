@@ -1,78 +1,55 @@
 use std::collections::HashMap;
+use std::future::Future;
 
 use serde_bytes::ByteBuf;
 
-use wasmer::{Array, Exports, Function, LazyInit, Memory, NativeFunc, Store, WasmPtr, WasmerEnv};
-
 use open_lambda_proxy_protocol::CallResult;
 
-#[derive(Clone, WasmerEnv)]
-pub struct ConfigEnv {
-    #[wasmer(export)]
-    memory: LazyInit<Memory>,
-    #[wasmer(export(name = "internal_alloc_buffer"))]
-    allocate: LazyInit<NativeFunc<u32, i64>>,
+use super::{call_allocate, fill_slice, get_str, set_u64, BindingsData};
 
+use wasmtime::{Caller, Linker};
+
+pub struct ConfigData {
     config_values: HashMap<String, String>,
 }
 
-fn get_config_value(
-    env: &ConfigEnv,
-    key_ptr: WasmPtr<u8, Array>,
-    key_len: u32,
-    len_out: WasmPtr<u64>,
-) -> i64 {
-    let memory = env.memory.get_ref().unwrap();
-
-    let key = key_ptr.get_utf8_string(memory, key_len).unwrap();
-
-    let result: CallResult = match env.config_values.get(&key) {
-        Some(val) => Ok(ByteBuf::from(bincode::serialize(val).unwrap())),
-        None => Err("No such config value".to_string()),
-    };
-
-    let result_data = bincode::serialize(&result).unwrap();
-    let buffer_len = result_data.len();
-    let offset = env
-        .allocate
-        .get_ref()
-        .unwrap()
-        .call(buffer_len as u32)
-        .unwrap();
-
-    if offset < 0 {
-        panic!("Failed to allocate");
+impl ConfigData {
+    pub fn new(config_values: HashMap<String, String>) -> Self {
+        Self { config_values }
     }
-
-    if (offset as u64) + (buffer_len as u64) > memory.data_size() {
-        panic!("Invalid pointer");
-    }
-
-    let out_slice = unsafe {
-        let raw_ptr = memory.data_ptr().add(offset as usize);
-        std::slice::from_raw_parts_mut(raw_ptr, buffer_len)
-    };
-
-    out_slice.clone_from_slice(result_data.as_slice());
-
-    let len = len_out.deref(memory).unwrap();
-    len.set(buffer_len as u64);
-
-    offset
 }
 
-pub fn get_imports(store: &Store, config_values: HashMap<String, String>) -> (Exports, ConfigEnv) {
-    let mut ns = Exports::new();
-    let env = ConfigEnv {
-        memory: Default::default(),
-        allocate: Default::default(),
-        config_values,
-    };
+fn get_config_value(
+    mut caller: Caller<BindingsData>,
+    key_ptr: i32,
+    key_len: u32,
+    len_out: i32,
+) -> Box<dyn Future<Output = i64> + Send + '_> {
+    Box::new(async move {
+        let memory = caller.get_export("memory").unwrap().into_memory().unwrap();
+        let key = get_str(&caller, &memory, key_ptr, key_len).to_string();
 
-    ns.insert(
-        "get_config_value",
-        Function::new_native_with_env(store, env.clone(), get_config_value),
-    );
+        let result: CallResult = match caller.data().config.config_values.get(&key) {
+            Some(val) => Ok(ByteBuf::from(bincode::serialize(val).unwrap())),
+            None => Err("No such config value".to_string()),
+        };
 
-    (ns, env)
+        let result_data = bincode::serialize(&result).unwrap();
+        let buffer_len = result_data.len();
+
+        let offset = call_allocate(&mut caller, buffer_len as u32).await;
+
+        fill_slice(&caller, &memory, offset, result_data.as_slice());
+        set_u64(&caller, &memory, len_out, buffer_len as u64);
+
+        offset as i64
+    })
+}
+
+pub fn get_imports(linker: &mut Linker<BindingsData>) {
+    let module = "ol_config";
+
+    linker
+        .func_wrap3_async(module, "get_config_value", get_config_value)
+        .unwrap();
 }

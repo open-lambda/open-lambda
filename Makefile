@@ -4,16 +4,8 @@ GO=go
 OL_DIR=$(abspath ./src)
 OL_GO_FILES=$(shell find src/ -name '*.go')
 LAMBDA_FILES = min-image/Dockerfile min-image/Makefile min-image/spin.c min-image/runtimes/python/server.py min-image/runtimes/python/setup.py min-image/runtimes/python/ol.c
-USE_LLVM?=1
-ENABLE_LLVM?=1
 BUILDTYPE?=debug
 INSTALL_PREFIX?=/usr/local
-
-ifeq (${ENABLE_LLVM}, 1)
-	WASM_WORKER_FLAGS=--features=llvm-backend
-else
-	WASM_WORKER_FLAGS=
-endif
 
 ifeq (${BUILDTYPE}, release)
 	BUILD_FLAGS=--release
@@ -36,7 +28,7 @@ endif
 all: ol imgs/ol-wasm wasm-worker wasm-functions native-functions container-proxy
 
 wasm-worker:
-	cd wasm-worker && cargo build ${BUILD_FLAGS} ${WASM_WORKER_FLAGS}
+	cd wasm-worker && cargo build ${BUILD_FLAGS}
 	cp wasm-worker/target/${BUILDTYPE}/wasm-worker ./ol-wasm
 
 wasm-functions:

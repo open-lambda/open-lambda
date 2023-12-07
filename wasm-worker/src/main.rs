@@ -6,8 +6,6 @@ use std::net::{SocketAddr, ToSocketAddrs};
 use std::path::PathBuf;
 use std::thread::available_parallelism;
 
-use serde::{Deserialize, Serialize};
-
 use http_body_util::{BodyExt, Full};
 
 use hyper::body::{Bytes, Incoming};
@@ -16,8 +14,6 @@ use hyper::{http, Method, Request, Response, StatusCode};
 
 use tokio::runtime;
 use tokio::signal::unix::{signal, SignalKind};
-
-use lazy_static::lazy_static;
 
 mod support;
 
@@ -30,29 +26,13 @@ mod bindings;
 
 mod http_client;
 
-mod stack;
-use stack::StackPool;
-
 use std::sync::Arc;
 
 use clap::Parser;
 
-#[derive(
-    Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, derive_more::Display, clap::ValueEnum,
-)]
-pub enum WasmCompilerType {
-    LLVM,
-    Cranelift,
-    Singlepass,
-}
-
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
-    #[clap(long, value_enum, default_value = "llvm")]
-    #[clap(help = "Which compiler should be used to compile WebAssembly to native code?")]
-    wasm_compiler: WasmCompilerType,
-
     #[clap(long, short = 'l', default_value = "localhost:5000")]
     #[clap(help = "What is the address to listen on for client requests?")]
     listen_address: String,
@@ -71,11 +51,8 @@ struct Args {
 async fn load_functions(
     registry_path: &str,
     function_mgr: &Arc<FunctionManager>,
-    worker_addr: SocketAddr,
-    config_values: &HashMap<String, String>,
 ) {
-    let compiler_name = format!("{}", function_mgr.get_compiler_type()).to_lowercase();
-    let cache_path: PathBuf = format!("{registry_path}.{compiler_name}.cache").into();
+    let cache_path: PathBuf = format!("{registry_path}.cache").into();
 
     let directory = match read_dir(registry_path) {
         Ok(dir) => dir,
@@ -107,7 +84,7 @@ async fn load_functions(
         }
 
         function_mgr
-            .load_function(file_path, cache_path.clone(), worker_addr, config_values.clone())
+            .load_function(file_path, cache_path.clone())
             .await;
     }
 }
@@ -185,50 +162,45 @@ impl Service {
 
         log::trace!("Starting function call for \"{name}\"");
 
-        lazy_static! {
-            static ref STACK_POOL: StackPool = StackPool::new();
-        }
+        let mut instance_hdl = function
+            .get_idle_instance(args, &config_values, worker_addr, result.clone())
+            .await;
 
-        let instance =
-            function.get_idle_instance(args, worker_addr, &config_values, result.clone());
+        let (mut store, instance) = instance_hdl.get();
 
-        let func_args: Vec<u32> = vec![];
+        let call_result = instance
+            .get_func(&mut store, "f")
+            .unwrap()
+            .call_async(store, &[], &mut [])
+            .await;
 
-        let stack = STACK_POOL.get_stack();
+        let response = if let Err(error) = call_result {
+            // Handle a regular crash here
+            log::error!("Function failed with message \"{}\"", error.root_cause());
 
-        let (call_result, stack) = instance.get().call_with_stack("f", stack, func_args).await;
+            let response = Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(Default::default())?;
+            instance_hdl.mark_idle();
 
-        if let Err(err) = call_result {
-            if let Some(wasmer_vm::TrapCode::StackOverflow) = err.clone().to_trap() {
-                log::error!("Function failed due to stack overflow");
-            } else {
-                log::error!("Function failed with message \"{}\"", err.message());
-                log::error!("Stack trace:");
-
-                for frame in err.trace() {
-                    log::error!(
-                        "   {}::{}",
-                        frame.module_name(),
-                        frame.function_name().unwrap_or("unknown")
-                    );
-                }
-            }
-        };
-
-        let result = result.lock().take();
-
-        let body = if let Some(result) = result {
-            result.into()
+            response
         } else {
-            vec![].into()
+            let result = result.lock().take();
+
+            let body = if let Some(result) = result {
+                result.into()
+            } else {
+                vec![].into()
+            };
+
+            let response = Response::builder().status(StatusCode::OK).body(body)?;
+
+            instance_hdl.mark_idle();
+            log::trace!("Done with function call for \"{name}\"");
+
+            response
         };
 
-        let response = Response::builder().status(StatusCode::OK).body(body)?;
-
-        instance.mark_idle();
-        STACK_POOL.store_stack(stack);
-
-        log::trace!("Done with function call for \"{name}\"");
         Ok(response)
     }
 
@@ -251,7 +223,7 @@ async fn main_func(args: Args) {
         }
     };
 
-    let function_mgr = Arc::new(FunctionManager::new(args.wasm_compiler).await);
+    let function_mgr = Arc::new(FunctionManager::new().await);
 
     let mut config_values = HashMap::default();
 
@@ -267,7 +239,11 @@ async fn main_func(args: Args) {
 
     let config_values = Arc::new(config_values);
 
-    load_functions(&args.registry_path, &function_mgr, worker_addr, &config_values).await;
+    load_functions(
+        &args.registry_path,
+        &function_mgr,
+    )
+    .await;
 
     let listener = tokio::net::TcpListener::bind(&worker_addr)
         .await
