@@ -50,7 +50,7 @@ jobs:
     - name: Build OpenLambda
       run: |
         make ol imgs/ol-wasm wasm-worker wasm-functions native-functions container-proxy
-        sudo make install-python-bindings
+        sudo make install
     - name: Test Python (Docker)
     # not all features are supported by docker yet, so we only run some of the tests
       run: sudo ./scripts/test.py --worker_type=docker --test_filter=ping_test,numpy
