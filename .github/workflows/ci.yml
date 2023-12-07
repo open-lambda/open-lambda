@@ -24,7 +24,7 @@ jobs:
       # This uses a workaround for a known issue with docker. See here: https://github.com/actions/virtual-environments/issues/5490#issuecomment-1118328567
       run: |
          sudo apt-get update
-         sudo apt-get install build-essential python3 libclang-common-12-dev llvm-12-dev zlib1g-dev -y
+         sudo apt-get install build-essential python3 -y
          sudo apt-get install curl python3 python-is-python3 python3-setuptools python3-pip -y
          sudo apt-get install runc containerd docker.io -y || true
          sudo rm /etc/docker/daemon.json
