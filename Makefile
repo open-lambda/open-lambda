@@ -76,6 +76,11 @@ install: build
 	cp ol-wasm ${INSTALL_PREFIX}/bin/
 	cp ol-container-proxy ${INSTALL_PREFIX}/bin/
 
+sudo-install: build
+	sudo cp ol ${INSTALL_PREFIX}/bin/
+	sudo cp ol-wasm ${INSTALL_PREFIX}/bin/
+	sudo cp ol-container-proxy ${INSTALL_PREFIX}/bin/
+
 test-all:
 	sudo python3 -u ./scripts/test.py --worker_type=sock
 	sudo python3 -u ./scripts/test.py --worker_type=docker --test_filter=ping_test,numpy
