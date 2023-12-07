@@ -50,7 +50,7 @@ fn function_call(
             }
         };
 
-        let result: CallResult = Ok(bincode::deserialize(&response).unwrap());
+        let result: CallResult = Ok(ByteBuf::from(response));
 
         let result_data = bincode::serialize(&result).unwrap();
         let buffer_len = result_data.len();

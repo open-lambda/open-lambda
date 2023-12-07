@@ -115,7 +115,6 @@ func (container *SOCKContainer) launchContainerProxy() (err error) {
 	args := []string{}
 	args = append(args, "ol-container-proxy")
 	args = append(args, container.scratchDir)
-	args = append(args, os.Getenv("LAMBDASTORE_ADDR"))
 
 	var procAttr os.ProcAttr
 	procAttr.Files = []*os.File{os.Stdin, os.Stdout, os.Stderr}
