@@ -126,6 +126,9 @@ func removeNode(nodes []*Node, target *Node) []*Node {
 
 func UpdateShard(n, m int) {
 	// Call splitTree to get the sets
+	if n == 0 {
+		return
+	}
 	sets := splitTree(n, m)
 
 	// Add these sets to the global shardLists
@@ -157,17 +160,18 @@ func updateSubtreeCount(node *Node) int {
 func GetRoot() error {
 	// Read the JSON file
 	// TODO: not to hardcode
-	fileContent, err := ioutil.ReadFile("/home/azureuser/paper-tree-cache/analysis/16/trials/0/tree-v4.node-200.json")
+	fileContent, err := ioutil.ReadFile("/home/azureuser/paper-tree-cache/analysis/16/trials/0/tree-v1.node-200.json")
 	if err != nil {
 		return err
 	}
 
 	// Unmarshal the JSON content into the Node struct
-	root = &Node{}
-	err = json.Unmarshal(fileContent, root)
+	rootNode := Node{}
+	err = json.Unmarshal(fileContent, &rootNode)
 	if err != nil {
 		return err
 	}
+	root = &rootNode
 
 	// update the subtree_count
 	updateSubtreeCount(root)

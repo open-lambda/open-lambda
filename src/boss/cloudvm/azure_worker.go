@@ -132,30 +132,21 @@ func (worker *Worker) start() error {
 		panic(err)
 	}
 
-	worker_group := worker.groupId
-	python_path := "/home/azureuser/paper-tree-cache/analysis/cluster_version/"
+	python_path := "/home/azureuser/paper-tree-cache/analysis/17/"
 
-	var run_python string
-	if loadbalancer.Lb.LbType == loadbalancer.Random {
-		run_python = "sudo python3 worker.py -1"
-	} else {
-		run_python = fmt.Sprintf("sudo python3 worker.py %d", worker_group)
-	}
-
-	run_gen_funcs := "sudo python3 pre-bench.py"
+	run_gen_funcs := "sudo python3 write_funcs.py"
 
 	var run_worker_up string
 	if loadbalancer.Lb.LbType == loadbalancer.Sharding {
-		run_worker_up = "sudo ./ol worker up -i ol-min -d -o import_cache_tree=/home/azureuser/paper-tree-cache/analysis/cluster_version/trees/tree-v4.node-200.json,worker_url=0.0.0.0"
+		run_worker_up = "sudo ./ol worker up -i ol-min -d -o import_cache_tree=/home/azureuser/paper-tree-cache/analysis/16/trials/0/tree-v1.node-200.json,worker_url=0.0.0.0"
 	} else {
-		run_worker_up = "sudo ./ol worker up -i ol-min -d -o import_cache_tree=/home/azureuser/paper-tree-cache/analysis/cluster_version/trees/tree-v4.node-40.json,worker_url=0.0.0.0"
+		run_worker_up = "sudo ./ol worker up -i ol-min -d -o import_cache_tree=/home/azureuser/paper-tree-cache/analysis/16/trials/0/tree-v1.node-200.json,worker_url=0.0.0.0"
 	}
 
-	cmd := fmt.Sprintf("cd %s; %s; cd %s; %s; %s; cd %s; %s; %s",
+	cmd := fmt.Sprintf("cd %s; %s; cd %s; %s; cd %s; %s; %s",
 		cwd,
 		"sudo ./ol worker init -i ol-min",
 		python_path,
-		run_python,
 		run_gen_funcs,
 		cwd,
 		"sudo mount -o rw,remount /sys/fs/cgroup",

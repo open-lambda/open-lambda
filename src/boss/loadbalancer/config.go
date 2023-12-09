@@ -1,6 +1,7 @@
 package loadbalancer
 
 import (
+	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -60,7 +61,10 @@ func InitLoadBalancer(lbType int, maxGroup int) {
 			log.Fatalf(err.Error())
 		}
 		if lbType == Sharding {
+			fmt.Println("Debug")
 			GetRoot()
+			child1 := root.Children[0]
+			fmt.Printf("%d\n", child1.SplitGeneration)
 			if err != nil {
 				log.Fatalf(err.Error())
 			}

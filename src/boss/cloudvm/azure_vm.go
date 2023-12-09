@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	resourceGroupName = "olvm-pool"
+	resourceGroupName = "ol-group"
 	location          = "eastus"
 )
 
@@ -88,6 +88,12 @@ func createVM(worker *Worker) (*AzureConfig, error) {
 	log.Println("Fetched disk:", *disk.ID)
 
 	create_lock.Lock()
+	log.Println("start delete old snapshot")
+	err = deleteSnapshot(ctx, conn, snapshotName)
+	if err != nil {
+		log.Print(err)
+		return conf, err
+	}
 	log.Println("start create snapshot")
 	snapshot, err := createSnapshot(ctx, conn, *disk.ID, snapshotName)
 	create_lock.Unlock()
@@ -825,18 +831,18 @@ func createSnapshot(ctx context.Context, cred azcore.TokenCredential, diskID str
 	return &resp.Snapshot, nil
 }
 
-func cleanupSnapshot(ctx context.Context, cred azcore.TokenCredential) error {
-	resourceGroupClient, err := armresources.NewResourceGroupsClient(subscriptionId, cred, nil)
+func deleteSnapshot(ctx context.Context, cred azcore.TokenCredential, snapshotName string) error {
+	snapshotClient, err := armcompute.NewSnapshotsClient(subscriptionId, cred, nil)
 	if err != nil {
 		return err
 	}
 
-	pollerResp, err := resourceGroupClient.BeginDelete(ctx, resourceGroupName, nil)
+	pollerResponse, err := snapshotClient.BeginDelete(ctx, resourceGroupName, snapshotName, nil)
 	if err != nil {
 		return err
 	}
 
-	_, err = pollerResp.PollUntilDone(ctx, nil)
+	_, err = pollerResponse.PollUntilDone(ctx, nil)
 	if err != nil {
 		return err
 	}
