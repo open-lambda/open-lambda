@@ -251,10 +251,12 @@ func (cache *ImportCache) getSandboxInNode(node *ImportCacheNode, forceNew bool,
 			}
 		}
 		node.sbRefCount += 1
+		fmt.Printf("node.sb != nil: node %d, getSandboxInNode with ref count %d\n", node.SplitGeneration, node.sbRefCount)
 		return node.sb, false, nil
 	} else {
 		// SLOW PATH
 		if err := cache.createSandboxInNode(node, rt_type, cow); err != nil {
+			fmt.Printf("getSandboxInNode error: %s, node %d, parent %d\n", err.Error(), node.SplitGeneration, node.parent.SplitGeneration)
 			return nil, false, err
 		}
 		node.sbRefCount = 1
@@ -283,7 +285,13 @@ func (*ImportCache) putSandboxInNode(node *ImportCacheNode, sb sandbox.Sandbox) 
 	}
 
 	node.sbRefCount -= 1
-
+	if node.parent != nil {
+		fmt.Printf("node %d, parent %d putSandboxInNode with ref count %d\n",
+			node.SplitGeneration, node.parent.SplitGeneration, node.sbRefCount)
+	} else {
+		fmt.Printf("node %d, parent nil putSandboxInNode with ref count %d\n",
+			node.SplitGeneration, node.sbRefCount)
+	}
 	if node.sbRefCount == 0 {
 		t2 := common.T0("ImportCache.putSandboxInNode:Pause")
 		if err := node.sb.Pause(); err != nil {
@@ -391,7 +399,10 @@ func (cache *ImportCache) createSandboxInNode(node *ImportCacheNode, rt_type com
 	return nil
 }
 
+// Warmup will initialize every node in the tree,
+// to have an accurate memory usage result and prevent warmup from failing, please have a large enough memory to avoid evicting
 func (cache *ImportCache) Warmup(COW bool) error {
+	warmup_py := "pass"
 	rt_type := common.RT_PYTHON
 	// find all the leaf zygotes in the tree
 	leafZygotes := []*ImportCacheNode{}
@@ -428,9 +439,24 @@ func (cache *ImportCache) Warmup(COW bool) error {
 
 		go func(i int, node *ImportCacheNode) {
 			defer wg.Done()
-			zygoteSB, _, err := cache.getSandboxInNode(node, false, rt_type, COW)
+			for _, pkg := range node.Packages {
+				if _, err := cache.pkgPuller.GetPkg(pkg); err != nil {
+					errChan <- fmt.Errorf("warmup: could not get package %s: %v", pkg, err)
+					return
+				}
+			}
 
+			zygoteSB, _, err := cache.getSandboxInNode(node, false, rt_type, COW)
+			// TODO: if zygote is evicted, then node.sbRefCount will be 0, I should fix this
+			if node.sbRefCount == 0 {
+				fmt.Printf("warning: warmup node %d, refcnt: %d \n", node.SplitGeneration, node.sbRefCount)
+			} else {
+				fmt.Printf("warmup node %d, refcnt: %d \n", node.SplitGeneration, node.sbRefCount)
+			}
 			codeDir := cache.codeDirs.Make("warmup")
+			// write warmyp_py to codeDir
+			codePath := filepath.Join(codeDir, "f.py")
+			ioutil.WriteFile(codePath, []byte(warmup_py), 0777)
 			scratchDir := cache.scratchDirs.Make("warmup")
 			sb, err := cache.sbPool.Create(zygoteSB, true, codeDir, scratchDir, nil, rt_type)
 			if err != nil {
@@ -438,13 +464,6 @@ func (cache *ImportCache) Warmup(COW bool) error {
 				return
 			}
 			sb.Destroy("ensure modules are imported in ZygoteSB by launching a fork")
-			//if i < 20 {
-			//	time.Sleep(500 * time.Millisecond)
-			//} else if i < 40 {
-			//	time.Sleep(1000 * time.Millisecond)
-			//} else {
-			//	time.Sleep(2000 * time.Millisecond)
-			//}
 			atomic.AddInt64(&node.createNonleafChild, 1)
 			cache.putSandboxInNode(node, zygoteSB)
 			if err != nil {

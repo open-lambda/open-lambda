@@ -140,7 +140,7 @@ func (evictor *SOCKEvictor) updateState() {
 			prio += 1
 		case EvPause:
 			prio -= 1
-		case EvFork:
+		case EvFork: // TODO: add a huge value to avoid eviction for zygote
 			prio += 2
 		case EvChildExit:
 			prio -= 2
