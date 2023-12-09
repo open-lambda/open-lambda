@@ -55,7 +55,7 @@ var create_lock sync.Mutex
 
 func createVM(worker *Worker) (*AzureConfig, error) {
 	vmName := worker.workerId
-	diskName := "ol-boss_OsDisk_1_81346b108e79469f8783a3036b9a9486"
+	diskName := "ol-boss2_OsDisk_1_8da6de19442346df9b8470232b767039"
 	vnetName := "ol-boss-vnet"
 	snapshotName := "ol-boss-snapshot"
 	conn, err := connectionAzure()
@@ -96,7 +96,6 @@ func createVM(worker *Worker) (*AzureConfig, error) {
 	}
 	log.Println("start create snapshot")
 	snapshot, err := createSnapshot(ctx, conn, *disk.ID, snapshotName)
-	create_lock.Unlock()
 	if err != nil {
 		log.Print(err)
 		return conf, err
@@ -109,6 +108,7 @@ func createVM(worker *Worker) (*AzureConfig, error) {
 		return conf, err
 	}
 	log.Println("Created disk:", *new_disk.ID)
+	create_lock.Unlock()
 
 	new_vm := new(vmStatus)
 	// get network
