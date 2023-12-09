@@ -199,6 +199,14 @@ func createVM(worker *Worker) (*AzureConfig, error) {
 	new_vm.Vm = *virtualMachine
 	new_vm.Status = "Running"
 
+	log.Printf("Start to restart the vm: %s", *virtualMachine.Name)
+	err = restartVirtualMachine(ctx, conn, *virtualMachine.Name)
+	if err != nil {
+		log.Println(err.Error())
+		return conf, err
+	}
+	log.Printf("Restart the vm successfully\n")
+
 	create_lock.Lock()
 
 	if conf == nil {
@@ -711,6 +719,25 @@ func deleteVirtualMachine(ctx context.Context, cred azcore.TokenCredential, name
 	}
 
 	pollerResponse, err := vmClient.BeginDelete(ctx, resourceGroupName, name, nil)
+	if err != nil {
+		return err
+	}
+
+	_, err = pollerResponse.PollUntilDone(ctx, nil)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func restartVirtualMachine(ctx context.Context, cred azcore.TokenCredential, vmName string) error {
+	vmClient, err := armcompute.NewVirtualMachinesClient(subscriptionId, cred, nil)
+	if err != nil {
+		return err
+	}
+
+	pollerResponse, err := vmClient.BeginRestart(ctx, resourceGroupName, vmName, nil)
 	if err != nil {
 		return err
 	}
