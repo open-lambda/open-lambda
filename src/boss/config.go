@@ -7,6 +7,7 @@ import (
 	"log"
 
 	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
+	"github.com/open-lambda/open-lambda/ol/boss/loadbalancer"
 )
 
 var Conf *Config
@@ -19,6 +20,8 @@ type Config struct {
 	Worker_Cap int                 `json:"worker_cap"`
 	Azure      cloudvm.AzureConfig `json:"azure"`
 	Gcp        cloudvm.GcpConfig   `json:"gcp"`
+	Lb         string              `json:"lb"`
+	MaxGroup   int                 `json:"max_group"`
 }
 
 func LoadDefaults() error {
@@ -30,6 +33,8 @@ func LoadDefaults() error {
 		Worker_Cap: 20,
 		Azure:      *cloudvm.GetAzureConfigDefaults(),
 		Gcp:        *cloudvm.GetGcpConfigDefaults(),
+		Lb:         "random",
+		MaxGroup:   4,
 	}
 
 	return checkConf()
@@ -52,6 +57,19 @@ func LoadConf(path string) error {
 		cloudvm.LoadGcpConfig(&Conf.Gcp)
 	} else if Conf.Platform == "azure" {
 		cloudvm.LoadAzureConfig(&Conf.Azure)
+	}
+
+	if Conf.Lb == "random" {
+		loadbalancer.InitLoadBalancer(loadbalancer.Random, Conf.MaxGroup)
+	}
+	if Conf.Lb == "sharding" {
+		loadbalancer.InitLoadBalancer(loadbalancer.Sharding, Conf.MaxGroup)
+	}
+	if Conf.Lb == "kmeans" {
+		loadbalancer.InitLoadBalancer(loadbalancer.KMeans, Conf.MaxGroup)
+	}
+	if Conf.Lb == "kmodes" {
+		loadbalancer.InitLoadBalancer(loadbalancer.KModes, Conf.MaxGroup)
 	}
 
 	return checkConf()

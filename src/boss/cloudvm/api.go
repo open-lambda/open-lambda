@@ -71,6 +71,7 @@ type Worker struct {
 	workerId string
 	workerIp string
 	numTask  int32
+	allTaks  int32
 	pool     *WorkerPool
 	state    WorkerState
 	groupId  int

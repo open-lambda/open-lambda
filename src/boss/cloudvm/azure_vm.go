@@ -55,7 +55,7 @@ var create_lock sync.Mutex
 
 func createVM(worker *Worker) (*AzureConfig, error) {
 	vmName := worker.workerId
-	diskName := "ol-boss_OsDisk_1_ed26effc1c1545dd9426f6711bc7caad"
+	diskName := "ol-boss_OsDisk_1_81346b108e79469f8783a3036b9a9486"
 	vnetName := "ol-boss-vnet"
 	snapshotName := "ol-boss-snapshot"
 	conn, err := connectionAzure()

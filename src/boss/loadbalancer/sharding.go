@@ -3,8 +3,7 @@ package loadbalancer
 import (
 	"encoding/json"
 	"io/ioutil"
-	"math/rand"
-	"time"
+	"sort"
 )
 
 type Node struct {
@@ -13,40 +12,167 @@ type Node struct {
 	Children        []*Node  `json:"children"`
 	SplitGeneration int      `json:"split_generation"`
 	Count           int      `json:"count"`
+	SubtreeCount    int      `json:"subtree_count"`
 }
 
-// index is the cluster id, value is the cluster/shard's root node
-var shardingList1 = []int{3}
-var shardingList2 = []int{3}
-var shardingList3 = []int{9, 2, 38, 37, 51, 147, 79, 143, 182, 82}
-var shardingList4 = []int{4, 25, 81, 46, 57, 100, 15, 85, 169, 197, 103}
-var shardingList5 = []int{1, 124, 36, 17, 108, 144, 123, 28, 109, 179, 66, 106}
+var root *Node
+var shardLists [][][]*Node
 
-// These are all the split_generations, or ids
-var ShardingLists = [][]int{
-	{3},
-	{3},
-	{9, 2, 38, 37, 51, 147, 79, 143, 182, 82},
-	{4, 25, 81, 46, 57, 100, 15, 85, 169, 197, 103},
-	{1, 124, 36, 17, 108, 144, 123, 28, 109, 179, 66, 106},
+// // index is the cluster id, value is the cluster/shard's root node
+// var shardingList1 = []int{3}
+// var shardingList2 = []int{3}
+// var shardingList3 = []int{9, 2, 38, 37, 51, 147, 79, 143, 182, 82}
+// var shardingList4 = []int{4, 25, 81, 46, 57, 100, 15, 85, 169, 197, 103}
+// var shardingList5 = []int{1, 124, 36, 17, 108, 144, 123, 28, 109, 179, 66, 106}
+
+// // These are all the split_generations, or ids
+// var ShardingLists = [][]int{
+// 	{3},
+// 	{3},
+// 	{9, 2, 38, 37, 51, 147, 79, 143, 182, 82},
+// 	{4, 25, 81, 46, 57, 100, 15, 85, 169, 197, 103},
+// 	{1, 124, 36, 17, 108, 144, 123, 28, 109, 179, 66, 106},
+// }
+
+// BySubtreeCount implements sort.Interface for []*Node based on the SubtreeCount field.
+type BySubtreeCount []*Node
+
+func (a BySubtreeCount) Len() int           { return len(a) }
+func (a BySubtreeCount) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a BySubtreeCount) Less(i, j int) bool { return a[i].SubtreeCount > a[j].SubtreeCount }
+
+func splitNodes(nodes []*Node, n int) ([][]*Node, []int) {
+	// Sort the nodes by subtree_count in descending order
+	sort.Sort(BySubtreeCount(nodes))
+
+	// Initialize n sets
+	sets := make([][]*Node, n)
+	setSums := make([]int, n) // To keep track of the sum of subtree_count for each set
+
+	// Distribute nodes into sets
+	for _, node := range nodes {
+		// Find the set with the smallest sum
+		minSetIdx := 0
+		for i := 1; i < n; i++ {
+			if setSums[i] < setSums[minSetIdx] {
+				minSetIdx = i
+			}
+		}
+		// Add the current node to the selected set
+		sets[minSetIdx] = append(sets[minSetIdx], node)
+		// Update the sum of the selected set
+		setSums[minSetIdx] += node.SubtreeCount
+	}
+
+	return sets, setSums
 }
 
-func getRoot() (*Node, error) {
+func splitTree(n int, m int) [][][]*Node {
+	var nodes []*Node
+	nodes = append(nodes, root.Children...)
+
+	keepSplit := true
+	var sets [][]*Node
+	var setSums []int
+	depth := 0
+	var setsSumsDict [][][]*Node
+
+	for keepSplit {
+		depth++
+		if depth > m {
+			break
+		}
+		keepSplit = false
+		sets, setSums = splitNodes(nodes, n)
+		minSum := min(setSums)
+		setsSumsDict = [][][]*Node{}
+
+		for i, set := range sets {
+			setSum := setSums[i]
+			if float64(setSum) > 1.1*float64(minSum) {
+				keepSplit = true
+				for _, node := range set {
+					nodes = removeNode(nodes, node)
+					nodes = append(nodes, node.Children...)
+				}
+			} else {
+				setsSumsDict = append(setsSumsDict, [][]*Node{set, {&Node{SubtreeCount: setSum}}})
+			}
+		}
+	}
+
+	return setsSumsDict
+}
+
+func min(sums []int) int {
+	minValue := sums[0]
+	for _, v := range sums {
+		if v < minValue {
+			minValue = v
+		}
+	}
+	return minValue
+}
+
+func removeNode(nodes []*Node, target *Node) []*Node {
+	var result []*Node
+	for _, node := range nodes {
+		if node != target {
+			result = append(result, node)
+		}
+	}
+	return result
+}
+
+func UpdateShard(n, m int) {
+	// Call splitTree to get the sets
+	sets := splitTree(n, m)
+
+	// Add these sets to the global shardLists
+	shardLists = make([][][]*Node, 0)
+	shardLists = append(shardLists, sets...)
+}
+
+func updateSubtreeCount(node *Node) int {
+	// Base case: if the node has no children, its subtree_count is just its own count
+	if len(node.Children) == 0 {
+		node.SubtreeCount = node.Count
+		return node.Count
+	}
+
+	// Start with the current node's count
+	totalCount := node.Count
+
+	// Recursively update the count for all children
+	for _, child := range node.Children {
+		totalCount += updateSubtreeCount(child)
+	}
+
+	// After the total count for all children is calculated, update the current node's subtree_count
+	node.SubtreeCount = totalCount
+
+	return totalCount
+}
+
+func GetRoot() error {
 	// Read the JSON file
 	// TODO: not to hardcode
 	fileContent, err := ioutil.ReadFile("/home/azureuser/paper-tree-cache/analysis/16/trials/0/tree-v4.node-200.json")
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// Unmarshal the JSON content into the Node struct
-	var rootNode Node
-	err = json.Unmarshal(fileContent, &rootNode)
+	root = &Node{}
+	err = json.Unmarshal(fileContent, root)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return &rootNode, nil
+	// update the subtree_count
+	updateSubtreeCount(root)
+
+	return nil
 }
 
 func (n *Node) Lookup(required_pkgs []string) (*Node, []*Node) {
@@ -75,20 +201,12 @@ func (n *Node) Lookup(required_pkgs []string) (*Node, []*Node) {
 
 // if return -1, means no group found, need to randomly choose one
 func ShardingGetGroup(pkgs []string) (int, error) {
-	root, err := getRoot()
-	if err != nil {
-		return -1, err
-	}
 	_, path := root.Lookup(pkgs)
 	for _, node := range path {
-		for i, shard := range ShardingLists {
-			for _, id := range shard {
-				if id == node.SplitGeneration {
-					if i == 0 { // since two groups has the same, randomly distribute
-						rand.Seed(time.Now().UnixNano())
-						randomInt := rand.Intn(2)
-						return i + randomInt, nil // return the cluster number
-					}
+		for i, setSum := range shardLists {
+			set := setSum[0]
+			for _, shardNode := range set {
+				if shardNode.SplitGeneration == node.SplitGeneration {
 					return i, nil
 				}
 			}

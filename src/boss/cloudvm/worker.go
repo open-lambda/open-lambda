@@ -60,7 +60,7 @@ func NewWorkerPool(platform string, worker_cap int) (*WorkerPool, error) {
 	pool.platform = platform
 	pool.worker_cap = worker_cap
 	// TODO: this is hard-coded. Need to set it changable
-	pool.numGroup = loadbalancer.NumGroup
+	pool.numGroup = loadbalancer.MaxGroup
 	pool.groups = make(map[int]*GroupWorker)
 	pool.nextGroup = 0
 
@@ -68,7 +68,6 @@ func NewWorkerPool(platform string, worker_cap int) (*WorkerPool, error) {
 
 	// This is for traces used to foward tasks
 	loadbalancer.Traces = loadbalancer.LoadTrace()
-	loadbalancer.Lb = loadbalancer.InitLoadBalancer()
 
 	log.Printf("READY: worker pool of type %s", platform)
 
@@ -139,6 +138,7 @@ func (pool *WorkerPool) startNewWorker() {
 		len(pool.workers[CLEANING]),
 		len(pool.workers[DESTROYING]))
 	worker.funcLog = funcLog
+	worker.allTaks = 0
 
 	pool.Unlock()
 
@@ -152,9 +152,9 @@ func (pool *WorkerPool) startNewWorker() {
 		workerIdDigit, err := strconv.Atoi(getAfterSep(worker.workerId, "-"))
 		// Assign the worker to the group
 		// TODO: need to find the most busy worker and double it
-		assignedGroup := workerIdDigit%loadbalancer.NumGroup - 1 // -1 because starts from 0
+		assignedGroup := workerIdDigit%loadbalancer.MaxGroup - 1 // -1 because starts from 0
 		if assignedGroup == -1 {
-			assignedGroup = loadbalancer.NumGroup - 1
+			assignedGroup = loadbalancer.MaxGroup - 1
 		}
 		// fmt.Printf("Debug: %d\n", assignedGroup)
 		if pool.platform == "gcp" {
@@ -184,21 +184,24 @@ func (pool *WorkerPool) startNewWorker() {
 		log.Printf("%s ready\n", worker.workerId)
 		worker.numTask = 0
 		// update the worker's assigned group
-		worker.groupId = assignedGroup
+		// random lb don't need to assign a worker to a group
+		if loadbalancer.Lb.LbType != loadbalancer.Random {
+			worker.groupId = assignedGroup
 
-		// update the group stuff in pool
-		if _, ok := pool.groups[assignedGroup]; !ok {
-			// this group hasn't been created
-			pool.groups[assignedGroup] = &GroupWorker{
-				groupId:      pool.nextGroup,
-				groupWorkers: make(map[string]*Worker),
+			// update the group stuff in pool
+			if _, ok := pool.groups[assignedGroup]; !ok {
+				// this group hasn't been created
+				pool.groups[assignedGroup] = &GroupWorker{
+					groupId:      pool.nextGroup,
+					groupWorkers: make(map[string]*Worker),
+				}
+				pool.nextGroup += 1
+				pool.nextGroup %= loadbalancer.MaxGroup - 1
 			}
-			pool.nextGroup += 1
-			pool.nextGroup %= loadbalancer.NumGroup - 1
+			fmt.Printf("Debug: %d\n", assignedGroup)
+			group := pool.groups[assignedGroup]
+			group.groupWorkers[worker.workerId] = worker
 		}
-		fmt.Printf("Debug: %d\n", assignedGroup)
-		group := pool.groups[assignedGroup]
-		group.groupWorkers[worker.workerId] = worker
 
 		pool.Unlock()
 
@@ -223,8 +226,10 @@ func (pool *WorkerPool) recoverWorker(worker *Worker) {
 		len(pool.workers[DESTROYING]))
 
 	// group stuff
-	workerGroup := pool.groups[worker.groupId]
-	workerGroup.groupWorkers[worker.workerId] = worker
+	if loadbalancer.Lb.LbType != loadbalancer.Random {
+		workerGroup := pool.groups[worker.groupId]
+		workerGroup.groupWorkers[worker.workerId] = worker
+	}
 
 	pool.updateCluster()
 }
@@ -246,8 +251,10 @@ func (pool *WorkerPool) cleanWorker(worker *Worker) {
 		len(pool.workers[DESTROYING]))
 
 	// group stuff
-	workerGroup := pool.groups[worker.groupId]
-	delete(workerGroup.groupWorkers, worker.workerId)
+	if loadbalancer.Lb.LbType != loadbalancer.Random {
+		workerGroup := pool.groups[worker.groupId]
+		delete(workerGroup.groupWorkers, worker.workerId)
+	}
 
 	pool.Unlock()
 
@@ -306,6 +313,16 @@ func (pool *WorkerPool) detroyWorker(worker *Worker) {
 
 // called when worker is been evicted from cleaning or destroying map
 func (pool *WorkerPool) updateCluster() {
+	if loadbalancer.Lb.LbType == loadbalancer.Sharding {
+		pool.Lock()
+		numShards := 4
+		if len(pool.workers[RUNNING]) <= 4 {
+			numShards = len(pool.workers[RUNNING])
+		}
+		loadbalancer.UpdateShard(numShards, 2)
+		pool.Unlock()
+	}
+
 	scaleSize := pool.target - pool.Size() // scaleSize = target - size of cluster
 
 	if scaleSize > 0 {
@@ -407,22 +424,31 @@ func isStrExists(str string, list []string) bool {
 
 func getPkgs(img string) ([]string, error) {
 	var pkgs []string
-	path := fmt.Sprintf("default-ol/registry/%s/requirements.txt", img)
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	scanner := bufio.NewScanner(file)
+	content := loadbalancer.Requirements[img]
+	scanner := bufio.NewScanner(strings.NewReader(content))
+
 	for scanner.Scan() {
 		line := scanner.Text()
 		line = strings.TrimSpace(line)
+
 		// Ignore comments and empty lines
 		if strings.HasPrefix(line, "#") || line == "" {
 			continue
 		}
+
+		// Exclude the part after '[' or ';'
+		if idx := strings.IndexAny(line, "[;"); idx != -1 {
+			line = line[:idx]
+			line = strings.TrimSpace(line) // Trim space again as splitting might leave whitespace
+		}
+
 		pkgs = append(pkgs, line)
 	}
-	file.Close()
+
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
 	return pkgs, nil
 }
 
@@ -541,10 +567,26 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 		}
 
 	}
+
+	// a simple load balancer based on worker's processed tasks
+	var smallWorker *Worker
+	var smallWorkerTask int32
+	smallWorkerTask = 10000
+	for curWorker := range pool.queue {
+		if curWorker.allTaks < smallWorkerTask {
+			smallWorkerTask = curWorker.allTaks
+			smallWorker = curWorker
+		}
+	}
+	if smallWorkerTask < (worker.allTaks - 20) {
+		worker = smallWorker
+	}
+	// TODO: implement the delete snapshot
 	assignTime := time.Since(starttime).Milliseconds()
 
 	atomic.AddInt32(&worker.numTask, 1)
 	atomic.AddInt32(&pool.totalTask, 1)
+	atomic.AddInt32(&worker.allTaks, 1)
 
 	pool.ForwardTask(w, r, worker)
 
@@ -552,15 +594,18 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 	atomic.AddInt32(&pool.totalTask, -1)
 
 	latency := time.Since(starttime).Milliseconds()
+	endtime := time.Now()
+	startFormat := starttime.Format("15:04:05.0000")
+	endFormat := endtime.Format("15:04:05.0000")
 
 	pool.Lock()
 	if loadbalancer.Lb.LbType == loadbalancer.Random {
-		worker.funcLog.Printf("{\"workernum\": %d, \"task\": %d, \"time\": %d, \"assignTime\": %d, \"assign\": \"Random\"}\n", len(pool.workers[RUNNING]), thisTask, latency, assignTime)
+		worker.funcLog.Printf("{\"workernum\": %d, \"task\": %d, \"start\": \"%s\", \"end\": \"%s\", \"time\": %d, \"assignTime\": %d, \"assign\": \"Random\"}\n", len(pool.workers[RUNNING]), thisTask, startFormat, endFormat, latency, assignTime)
 	} else {
 		if assignSuccess {
-			worker.funcLog.Printf("{\"workernum\": %d, \"task\": %d, \"time\": %d, \"assignTime\": %d, \"assign\": \"Success\"}\n", len(pool.workers[RUNNING]), thisTask, latency, assignTime)
+			worker.funcLog.Printf("{\"workernum\": %d, \"task\": %d, \"start\": \"%s\", \"end\": \"%s\", \"time\": %d, \"assignTime\": %d, \"assign\": \"Success\"}\n", len(pool.workers[RUNNING]), thisTask, startFormat, endFormat, latency, assignTime)
 		} else {
-			worker.funcLog.Printf("{\"workernum\": %d, \"task\": %d, \"time\": %d, \"assignTime\": %d, \"assign\": \"Unsuccess\"}\n", len(pool.workers[RUNNING]), thisTask, latency, assignTime)
+			worker.funcLog.Printf("{\"workernum\": %d, \"task\": %d, \"start\": \"%s\", \"end\": \"%s\", \"time\": %d, \"assignTime\": %d, \"assign\": \"Unsuccess\"}\n", len(pool.workers[RUNNING]), thisTask, startFormat, endFormat, latency, assignTime)
 		}
 	}
 	pool.Unlock()

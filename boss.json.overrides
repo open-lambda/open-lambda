@@ -18,6 +18,8 @@
 		"disk_size_gb": 30,
 		"machine_type": "e2-medium"
 	},
+	"lb": "sharding",
+	"max_group": 4,
 	"platform": "azure",
 	"scaling": "manual",
 	"worker_cap": 20
