@@ -74,12 +74,8 @@ func (s *LambdaServer) cleanup() {
 	s.lambdaMgr.Cleanup()
 }
 
-func (s *LambdaServer) Warmup() error {
-	return s.lambdaMgr.Warmup() // lambdaMgr.sbPool is not exported, so I can't call sbPool.Warmup() directly
-}
-
 // NewLambdaServer creates a server based on the passed config."
-func NewLambdaServer(warmup bool) (*LambdaServer, error) {
+func NewLambdaServer(warmup bool, COW bool) (*LambdaServer, error) {
 	log.Printf("Starting new lambda server")
 
 	lambdaMgr, err := lambda.NewLambdaMgr()
@@ -89,7 +85,7 @@ func NewLambdaServer(warmup bool) (*LambdaServer, error) {
 
 	if warmup {
 		log.Printf("Warming up lambda server")
-		err = lambdaMgr.Warmup()
+		err = lambdaMgr.Warmup(COW)
 		if err != nil {
 			log.Printf("Error warming up lambda server: %s", err.Error())
 		}
