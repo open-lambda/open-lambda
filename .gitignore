@@ -76,9 +76,9 @@ lambda/runtimes/native/target
 bench-results.csv
 bench-results.pdf
 
-scripts/build
-scripts/dist
-scripts/open_lambda.egg-info
+python/dist
+python/build
+open_lambda.egg-info
 
 *.lsm
 

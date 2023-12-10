@@ -57,7 +57,7 @@ imgs/ol-wasm: imgs/ol-min wasm-image/runtimes/native/src/main.rs
 	touch imgs/ol-wasm
 
 install-python-bindings:
-	cd scripts && pip install .
+	cd python && pip install .
 
 check-runtime:
 	cd lambda/runtimes/rust && cargo check

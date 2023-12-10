@@ -6,6 +6,3 @@ requires-python=">=3.10"
 
 [metadata]
 author = "The Open Lambda Authors"
-
-[build-system]
-requires = ["setuptools", "wheel"]
