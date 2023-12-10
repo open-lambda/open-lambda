@@ -464,10 +464,13 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 	if len(pool.workers[STARTING])+len(pool.workers[RUNNING]) == 0 {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
+	// fmt.Println("Debug 1")
 	var worker *Worker
 	if loadbalancer.Lb.LbType == loadbalancer.Random {
+		// fmt.Println("Debug 2")
 		worker = <-pool.queue
 		pool.queue <- worker
+		// fmt.Println("Debug 3")
 	} else {
 		// TODO: what if the designated worker isn't up yet?
 		// Current solution: then randomly choose one that is up
@@ -567,12 +570,13 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 		}
 
 	}
+	// fmt.Println("Debug 4")
 
 	// a simple load balancer based on worker's processed tasks
 	var smallWorker *Worker
 	var smallWorkerTask int32
 	smallWorkerTask = 10000
-	for curWorker := range pool.queue {
+	for _, curWorker := range pool.workers[RUNNING] {
 		if curWorker.allTaks < smallWorkerTask {
 			smallWorkerTask = curWorker.allTaks
 			smallWorker = curWorker
@@ -584,11 +588,15 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 	// TODO: implement the delete snapshot
 	assignTime := time.Since(starttime).Milliseconds()
 
+	// fmt.Println("Debug 5")
+
 	atomic.AddInt32(&worker.numTask, 1)
 	atomic.AddInt32(&pool.totalTask, 1)
 	atomic.AddInt32(&worker.allTaks, 1)
 
 	pool.ForwardTask(w, r, worker)
+
+	// fmt.Println("Debug 6")
 
 	atomic.AddInt32(&worker.numTask, -1)
 	atomic.AddInt32(&pool.totalTask, -1)

@@ -138,9 +138,9 @@ func (worker *Worker) start() error {
 
 	var run_worker_up string
 	if loadbalancer.Lb.LbType == loadbalancer.Sharding {
-		run_worker_up = "sudo ./ol worker up -i ol-min -d -o import_cache_tree=/home/azureuser/paper-tree-cache/analysis/17/trials/0/tree-v2.node-320.json,worker_url=0.0.0.0,features.warmup=false"
+		run_worker_up = "sudo ./ol worker up -i ol-min -d -o import_cache_tree=/home/azureuser/paper-tree-cache/analysis/17/trials/0/tree-v2.node-320.json,worker_url=0.0.0.0,features.warmup=false,limits.mem_mb=600"
 	} else {
-		run_worker_up = "sudo ./ol worker up -i ol-min -d -o import_cache_tree=/home/azureuser/paper-tree-cache/analysis/17/trials/0/tree-v2.node-320.json,worker_url=0.0.0.0,features.warmup=false"
+		run_worker_up = "sudo ./ol worker up -i ol-min -d -o import_cache_tree=/home/azureuser/paper-tree-cache/analysis/17/trials/0/tree-v2.node-320.json,worker_url=0.0.0.0,features.warmup=false,limits.mem_mb=600"
 	}
 
 	cmd := fmt.Sprintf("cd %s; %s; cd %s; %s; cd %s; %s; %s",
