@@ -195,7 +195,7 @@ func stopOL(olPath string) error {
 	fmt.Printf("According to %s, a worker should already be running (PID %d).\n", pidPath, pid)
 	p, err := os.FindProcess(pid)
 	if err != nil {
-		return fmt.Errorf("Failed to find worker process with PID %d.  May require manual cleanup.\n", pid)
+		return fmt.Errorf("Failed to find worker process with PID %d.  May require manual cleanup.%s\n", pid, pidPath)
 	}
 	fmt.Printf("Send SIGINT and wait for worker to exit cleanly.\n")
 	if err := p.Signal(syscall.SIGINT); err != nil {

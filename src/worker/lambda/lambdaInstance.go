@@ -154,6 +154,7 @@ func (linst *LambdaInstance) Task() {
 		argsDict["start_create"] = tStartCreate
 		argsDict["end_create"] = tEndCreate
 		argsDict["split_gen"] = sb.(*sandbox.SafeSandbox).Sandbox.(*sandbox.SOCKContainer).Node
+		argsDict["sb_id"] = sb.(*sandbox.SafeSandbox).Sandbox.(*sandbox.SOCKContainer).ID()
 
 		newReqBytes, _ := json.Marshal(argsDict)
 		req.r.Body = io.NopCloser(bytes.NewBuffer(newReqBytes))

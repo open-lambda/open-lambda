@@ -257,7 +257,6 @@ func (f *LambdaFunc) Task() {
 			if argsDict == nil {
 				argsDict = make(map[string]interface{})
 			}
-			fmt.Printf("pullHandlerIfStale: %f", tEndPullHandler-tStartPullHandler)
 			argsDict["start_pullHandler"] = tStartPullHandler
 			argsDict["end_pullHandler"] = tEndPullHandler
 			newReqBytes, _ := json.Marshal(argsDict)
