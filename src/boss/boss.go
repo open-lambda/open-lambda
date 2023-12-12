@@ -51,6 +51,7 @@ func (b *Boss) Close(w http.ResponseWriter, r *http.Request) {
 	if Conf.Scaling == "threshold-scaler" {
 		b.autoScaler.Close()
 	}
+	os.Exit(0)
 }
 
 func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {

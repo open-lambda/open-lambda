@@ -55,9 +55,9 @@ var create_lock sync.Mutex
 
 func createVM(worker *Worker) (*AzureConfig, error) {
 	vmName := worker.workerId
-	diskName := "ol-boss2_OsDisk_1_8da6de19442346df9b8470232b767039"
-	vnetName := "ol-boss-vnet"
-	snapshotName := "ol-boss-snapshot"
+	diskName := "ol-boss-new_OsDisk_1_a3f9be95785c437fabe8819c5807ca13"
+	vnetName := "ol-boss-new-vnet"
+	snapshotName := "ol-boss-new-snapshot"
 	conn, err := connectionAzure()
 	if err != nil {
 		log.Println(err.Error())
@@ -199,13 +199,13 @@ func createVM(worker *Worker) (*AzureConfig, error) {
 	new_vm.Vm = *virtualMachine
 	new_vm.Status = "Running"
 
-	log.Printf("Start to restart the vm: %s", *virtualMachine.Name)
-	err = restartVirtualMachine(ctx, conn, *virtualMachine.Name)
-	if err != nil {
-		log.Println(err.Error())
-		return conf, err
-	}
-	log.Printf("Restart the vm successfully\n")
+	// log.Printf("Start to restart the vm: %s", *virtualMachine.Name)
+	// err = restartVirtualMachine(ctx, conn, *virtualMachine.Name)
+	// if err != nil {
+	// 	log.Println(err.Error())
+	// 	return conf, err
+	// }
+	// log.Printf("Restart the vm successfully\n")
 
 	create_lock.Lock()
 
@@ -687,7 +687,7 @@ func createVirtualMachine(ctx context.Context, cred azcore.TokenCredential, netw
 			},
 			HardwareProfile: &armcompute.HardwareProfile{
 				// TODO: make it user's choice
-				VMSize: to.Ptr(armcompute.VirtualMachineSizeTypes("Standard_D4s_v3")), // VM size include vCPUs,RAM,Data Disks,Temp storage.
+				VMSize: to.Ptr(armcompute.VirtualMachineSizeTypes("Standard_D8s_v5")), // VM size include vCPUs,RAM,Data Disks,Temp storage.
 			},
 			NetworkProfile: &armcompute.NetworkProfile{
 				NetworkInterfaces: []*armcompute.NetworkInterfaceReference{

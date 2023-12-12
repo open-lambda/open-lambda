@@ -564,7 +564,7 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 		}
 		// if assign to a worker failed, randomly pick one
 		if !assignSuccess {
-			fmt.Println("assign to a group (Shard/KMeans/KModes) failed")
+			// fmt.Println("assign to a group (Shard/KMeans/KModes) failed")
 			worker = <-pool.queue
 			pool.queue <- worker
 		}
@@ -582,11 +582,11 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 			smallWorker = curWorker
 		}
 	}
-	if smallWorkerTask < (worker.allTaks - 20) {
+	if smallWorkerTask < (worker.allTaks - 5) {
 		worker = smallWorker
 	}
 	// TODO: implement the delete snapshot
-	assignTime := time.Since(starttime).Milliseconds()
+	assignTime := time.Since(starttime).Microseconds()
 
 	// fmt.Println("Debug 5")
 

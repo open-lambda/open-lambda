@@ -93,7 +93,7 @@ func (pool *AzureWorkerPool) CreateInstance(worker *Worker) error {
 	newNicName := worker.workerId + "-nic"
 	newNsgName := worker.workerId + "-nsg"
 	subnetName := worker.workerId + "-subnet"
-	vnetName := "ol-boss-vnet"
+	vnetName := "ol-boss-new-vnet"
 	publicIPName := ""
 	public := ""
 
