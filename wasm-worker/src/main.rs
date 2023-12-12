@@ -247,7 +247,7 @@ async fn main_func(args: Args) {
 
     let listener = tokio::net::TcpListener::bind(&worker_addr)
         .await
-        .expect("Failed to bind socket for frontend");
+        .unwrap_or_else(|err| panic!("Failed to bind socket for OL wasm-worker at {worker_addr}: {err}"));
 
     #[cfg(feature = "cpuprofiler")]
     let enable_cpu_profiler = args.enable_cpu_profiler;
