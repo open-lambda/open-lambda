@@ -87,28 +87,46 @@ func createVM(worker *Worker) (*AzureConfig, error) {
 	}
 	log.Println("Fetched disk:", *disk.ID)
 
+	var snapshot *armcompute.Snapshot
+	// If the snapshot isn't updated in this iteration
 	create_lock.Lock()
-	log.Println("start delete old snapshot")
-	err = deleteSnapshot(ctx, conn, snapshotName)
-	if err != nil {
-		log.Print(err)
-		return conf, err
-	}
-	log.Println("start create snapshot")
-	snapshot, err := createSnapshot(ctx, conn, *disk.ID, snapshotName)
-	if err != nil {
-		log.Print(err)
-		return conf, err
-	}
-	log.Println("Created snapshot:", *snapshot.ID)
+	if !AzureConf.Snapshot_updated {
+		log.Println("start delete old snapshot")
+		err = deleteSnapshot(ctx, conn, snapshotName)
+		if err != nil {
+			log.Print(err)
+			return conf, err
+		}
 
+		log.Println("start create snapshot")
+		snapshot, err = createSnapshot(ctx, conn, *disk.ID, snapshotName)
+		if err != nil {
+			log.Print(err)
+			return conf, err
+		}
+		log.Println("Created snapshot:", *snapshot.ID)
+
+		AzureConf.Snapshot_updated = true
+		create_lock.Unlock()
+	} else {
+		create_lock.Unlock()
+		// Fetch the snapshot and create the disk
+		log.Println("start fetch snapshot")
+		snapshot, err = getSnapshot(ctx, conn, snapshotName)
+		if err != nil {
+			log.Print(err)
+			return conf, err
+		}
+		log.Println("fetched snapshot")
+	}
+
+	log.Println("start create disk")
 	new_disk, err := createDisk(ctx, conn, *snapshot.ID, newDiskName)
 	if err != nil {
 		log.Print(err)
 		return conf, err
 	}
 	log.Println("Created disk:", *new_disk.ID)
-	create_lock.Unlock()
 
 	new_vm := new(vmStatus)
 	// get network
@@ -687,7 +705,7 @@ func createVirtualMachine(ctx context.Context, cred azcore.TokenCredential, netw
 			},
 			HardwareProfile: &armcompute.HardwareProfile{
 				// TODO: make it user's choice
-				VMSize: to.Ptr(armcompute.VirtualMachineSizeTypes("Standard_D8s_v5")), // VM size include vCPUs,RAM,Data Disks,Temp storage.
+				VMSize: to.Ptr(armcompute.VirtualMachineSizeTypes("Standard_D4s_v3")), // VM size include vCPUs,RAM,Data Disks,Temp storage.
 			},
 			NetworkProfile: &armcompute.NetworkProfile{
 				NetworkInterfaces: []*armcompute.NetworkInterfaceReference{
@@ -823,6 +841,26 @@ func deleteDisk(ctx context.Context, cred azcore.TokenCredential, disk string) e
 		return err
 	}
 	return nil
+}
+
+func getSnapshot(ctx context.Context, cred azcore.TokenCredential, snapshotName string) (*armcompute.Snapshot, error) {
+	snapshotClient, err := armcompute.NewSnapshotsClient(subscriptionId, cred, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := snapshotClient.Get(
+		ctx,
+		resourceGroupName,
+		snapshotName,
+		nil,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &resp.Snapshot, nil
 }
 
 func createSnapshot(ctx context.Context, cred azcore.TokenCredential, diskID string, snapshotName string) (*armcompute.Snapshot, error) {

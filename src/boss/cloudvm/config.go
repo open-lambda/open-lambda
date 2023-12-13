@@ -50,7 +50,8 @@ func DumpConfStr() string {
 }
 
 type AzureConfig struct {
-	Resource_groups rgroups `json:"azure_config"`
+	Resource_groups  rgroups `json:"azure_config"`
+	Snapshot_updated bool    `json:"snapshot_created"`
 }
 
 // TODO: Rightnow we default to have only one resource group
@@ -109,7 +110,8 @@ func GetAzureConfigDefaults() *AzureConfig {
 	rgs.Rgroup = append(rgs.Rgroup, *rg)
 
 	conf := &AzureConfig{
-		Resource_groups: *rgs,
+		Resource_groups:  *rgs,
+		Snapshot_updated: false,
 	}
 
 	path := "azure.json"

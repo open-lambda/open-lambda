@@ -34,7 +34,7 @@ func LoadDefaults() error {
 		Azure:      *cloudvm.GetAzureConfigDefaults(),
 		Gcp:        *cloudvm.GetGcpConfigDefaults(),
 		Lb:         "random",
-		MaxGroup:   4,
+		MaxGroup:   5,
 	}
 
 	return checkConf()

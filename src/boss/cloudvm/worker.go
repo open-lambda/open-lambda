@@ -152,9 +152,14 @@ func (pool *WorkerPool) startNewWorker() {
 		workerIdDigit, err := strconv.Atoi(getAfterSep(worker.workerId, "-"))
 		// Assign the worker to the group
 		// TODO: need to find the most busy worker and double it
-		assignedGroup := workerIdDigit%loadbalancer.MaxGroup - 1 // -1 because starts from 0
-		if assignedGroup == -1 {
-			assignedGroup = loadbalancer.MaxGroup - 1
+		var assignedGroup int
+		if loadbalancer.MaxGroup == 1 {
+			assignedGroup = 0
+		} else {
+			assignedGroup = workerIdDigit%loadbalancer.MaxGroup - 1 // -1 because starts from 0
+			if assignedGroup == -1 {
+				assignedGroup = loadbalancer.MaxGroup - 1
+			}
 		}
 		// fmt.Printf("Debug: %d\n", assignedGroup)
 		if pool.platform == "gcp" {
@@ -195,8 +200,10 @@ func (pool *WorkerPool) startNewWorker() {
 					groupId:      pool.nextGroup,
 					groupWorkers: make(map[string]*Worker),
 				}
-				pool.nextGroup += 1
-				pool.nextGroup %= loadbalancer.MaxGroup - 1
+				if loadbalancer.MaxGroup != 1 {
+					pool.nextGroup += 1
+					pool.nextGroup %= loadbalancer.MaxGroup - 1
+				}
 			}
 			fmt.Printf("Debug: %d\n", assignedGroup)
 			group := pool.groups[assignedGroup]
@@ -315,8 +322,8 @@ func (pool *WorkerPool) detroyWorker(worker *Worker) {
 func (pool *WorkerPool) updateCluster() {
 	if loadbalancer.Lb.LbType == loadbalancer.Sharding {
 		pool.Lock()
-		numShards := 4
-		if len(pool.workers[RUNNING]) <= 4 {
+		numShards := loadbalancer.MaxGroup
+		if len(pool.workers[RUNNING]) <= loadbalancer.MaxGroup {
 			numShards = len(pool.workers[RUNNING])
 		}
 		loadbalancer.UpdateShard(numShards, 2)
@@ -456,7 +463,7 @@ func getPkgs(img string) ([]string, error) {
 func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 	pool.Lock()
 	pool.taksId += 1
-	thisTask := pool.taksId
+	var thisTask string
 	pool.Unlock()
 	starttime := time.Now()
 
@@ -471,6 +478,15 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 		worker = <-pool.queue
 		pool.queue <- worker
 		// fmt.Println("Debug 3")
+		urlParts := getURLComponents(r)
+		if len(urlParts) < 2 {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("expected invocation format: /run/<lambda-name>"))
+			return
+		}
+		img := urlParts[1]
+		thisTask = img
 	} else {
 		// TODO: what if the designated worker isn't up yet?
 		// Current solution: then randomly choose one that is up
@@ -488,6 +504,7 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 			// TODO: if user changes the code, one worker will know that, boss cannot know that. How to handle this?
 			if len(urlParts) == 2 {
 				img := urlParts[1]
+				thisTask = img
 				pkgs, err = getPkgs(img)
 				if err != nil {
 					w.WriteHeader(http.StatusInternalServerError)
@@ -573,6 +590,7 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 	// fmt.Println("Debug 4")
 
 	// a simple load balancer based on worker's processed tasks
+	assigned := worker.workerId
 	var smallWorker *Worker
 	var smallWorkerTask int32
 	smallWorkerTask = 10000
@@ -582,10 +600,10 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 			smallWorker = curWorker
 		}
 	}
-	if smallWorkerTask < (worker.allTaks - 5) {
+	if smallWorkerTask < (worker.allTaks - 20) {
 		worker = smallWorker
 	}
-	// TODO: implement the delete snapshot
+
 	assignTime := time.Since(starttime).Microseconds()
 
 	// fmt.Println("Debug 5")
@@ -608,12 +626,12 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 
 	pool.Lock()
 	if loadbalancer.Lb.LbType == loadbalancer.Random {
-		worker.funcLog.Printf("{\"workernum\": %d, \"task\": %d, \"start\": \"%s\", \"end\": \"%s\", \"time\": %d, \"assignTime\": %d, \"assign\": \"Random\"}\n", len(pool.workers[RUNNING]), thisTask, startFormat, endFormat, latency, assignTime)
+		worker.funcLog.Printf("{\"workernum\": %d, \"task\": \"%s\", \"start\": \"%s\", \"end\": \"%s\", \"time\": %d, \"assignTime\": %d, \"assign\": \"Random\", \"assigned\": \"Random\"}\n", len(pool.workers[RUNNING]), thisTask, startFormat, endFormat, latency, assignTime)
 	} else {
 		if assignSuccess {
-			worker.funcLog.Printf("{\"workernum\": %d, \"task\": %d, \"start\": \"%s\", \"end\": \"%s\", \"time\": %d, \"assignTime\": %d, \"assign\": \"Success\"}\n", len(pool.workers[RUNNING]), thisTask, startFormat, endFormat, latency, assignTime)
+			worker.funcLog.Printf("{\"workernum\": %d, \"task\": \"%s\", \"start\": \"%s\", \"end\": \"%s\", \"time\": %d, \"assignTime\": %d, \"assign\": \"Success\", \"assigned\": \"%s\"}\n", len(pool.workers[RUNNING]), thisTask, startFormat, endFormat, latency, assignTime, assigned)
 		} else {
-			worker.funcLog.Printf("{\"workernum\": %d, \"task\": %d, \"start\": \"%s\", \"end\": \"%s\", \"time\": %d, \"assignTime\": %d, \"assign\": \"Unsuccess\"}\n", len(pool.workers[RUNNING]), thisTask, startFormat, endFormat, latency, assignTime)
+			worker.funcLog.Printf("{\"workernum\": %d, \"task\": \"%s\", \"start\": \"%s\", \"end\": \"%s\", \"time\": %d, \"assignTime\": %d, \"assign\": \"Unsuccess\", \"assigned\": \"%s\"}\n", len(pool.workers[RUNNING]), thisTask, startFormat, endFormat, latency, assignTime, assigned)
 		}
 	}
 	pool.Unlock()

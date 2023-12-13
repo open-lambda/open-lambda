@@ -148,7 +148,7 @@ func LoadDefaults(olPath string) error {
 	}
 	// totalMb := uint64(in.Totalram) * uint64(in.Unit) / 1024 / 1024
 	// memPoolMb := Max(int(totalMb-500), 500)
-	memPoolMb := 25600
+	memPoolMb := 11264
 
 	Conf = &Config{
 		Worker_dir:        workerDir,

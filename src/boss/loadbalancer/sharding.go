@@ -2,8 +2,10 @@ package loadbalancer
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"sort"
+	"strings"
 )
 
 type Node struct {
@@ -134,6 +136,21 @@ func UpdateShard(n, m int) {
 	// Add these sets to the global shardLists
 	shardLists = make([][][]*Node, 0)
 	shardLists = append(shardLists, sets...)
+
+	for i, setSum := range shardLists {
+		sum := setSum[1][0].SubtreeCount
+		set := setSum[0]
+
+		subtreeCounts := make([]string, len(set))
+		splitGenerations := make([]string, len(set))
+		for j, node := range set {
+			subtreeCounts[j] = fmt.Sprintf("%d", node.SubtreeCount)
+			splitGenerations[j] = fmt.Sprintf("%d", node.SplitGeneration)
+		}
+
+		fmt.Printf("Set %d has a sum of %d and contains nodes with subtree_counts: [%s] with ids: [%s]\n", i+1, sum, strings.Join(subtreeCounts, ", "), strings.Join(splitGenerations, ", "))
+	}
+	fmt.Println()
 }
 
 func updateSubtreeCount(node *Node) int {
@@ -205,7 +222,13 @@ func (n *Node) Lookup(required_pkgs []string) (*Node, []*Node) {
 
 // if return -1, means no group found, need to randomly choose one
 func ShardingGetGroup(pkgs []string) (int, error) {
+	// for _, pkg := range pkgs {
+	// 	fmt.Println(pkg)
+	// }
 	_, path := root.Lookup(pkgs)
+	// for _, node := range path {
+	// 	fmt.Println(node.SplitGeneration)
+	// }
 	for _, node := range path {
 		for i, setSum := range shardLists {
 			set := setSum[0]
