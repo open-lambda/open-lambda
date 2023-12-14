@@ -72,6 +72,7 @@ func (container *SOCKContainer) freshProc() (err error) {
 
 	var cmd *exec.Cmd
 
+	// todo: make this a Cgroup method. also, why chroot return No such file or directory?
 	if container.rtType == common.RT_PYTHON {
 		cmd = exec.Command(
 			"chroot", container.containerRootDir, "python3", "-u",
@@ -408,6 +409,7 @@ func (container *SOCKContainer) fork(dst Sandbox) (err error) {
 	// spawned (TODO: better way to do this?  This lets a forking
 	// process potentially kill our cache entry, which isn't
 	// great).
+	// todo: why do we need this? we have already moved in server.py
 	t = common.T0("move-to-cg-after-fork")
 	for {
 		currPids, err := container.cg.GetPIDs()

@@ -194,6 +194,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 	} else {
 		t2 := t.T0("fresh-proc")
 		if err := cSock.freshProc(); err != nil {
+			fmt.Printf("freshProc error: %s \n", err.Error())
 			return nil, err
 		}
 		t2.T1()

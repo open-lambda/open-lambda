@@ -256,7 +256,10 @@ func (cache *ImportCache) getSandboxInNode(node *ImportCacheNode, forceNew bool,
 	} else {
 		// SLOW PATH
 		if err := cache.createSandboxInNode(node, rt_type, cow); err != nil {
-			fmt.Printf("getSandboxInNode error: %s, node %d, parent %d\n", err.Error(), node.SplitGeneration, node.parent.SplitGeneration)
+			fmt.Printf("getSandboxInNode error: %s \n", err.Error())
+			if node.parent != nil {
+				fmt.Printf("node %d, parent %d\n", err.Error(), node.SplitGeneration, node.parent.SplitGeneration)
+			}
 			return nil, false, err
 		}
 		node.sbRefCount = 1
