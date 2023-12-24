@@ -177,7 +177,7 @@ func updateSubtreeCount(node *Node) int {
 func GetRoot() error {
 	// Read the JSON file
 	// TODO: not to hardcode
-	fileContent, err := ioutil.ReadFile("/home/azureuser/paper-tree-cache/analysis/17/trials/0/tree-v2.node-320.json")
+	fileContent, err := ioutil.ReadFile(tree_path)
 	if err != nil {
 		return err
 	}

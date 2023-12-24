@@ -18,6 +18,20 @@ const (
 	DESTROYING WorkerState = 3
 )
 
+const (
+	resourceGroupName = "ol-group"
+	location          = "eastus"
+	disk              = "ol-boss-new_OsDisk_1_a3f9be95785c437fabe8819c5807ca13"
+	vnet              = "ol-boss-new-vnet"
+	snapshot          = "ol-boss-new-snapshot"
+)
+
+const (
+	tree_path    = "/home/azureuser/paper-tree-cache/analysis/17/trials/0/tree-v2.node-320.json"
+	test_path    = "/home/azureuser/paper-tree-cache/analysis/17/"
+	ssh_key_path = "/home/azureuser/.ssh/ol-boss_key.pem"
+)
+
 /*
 Defines the interface for platform-specific functions
 */
@@ -57,6 +71,8 @@ type WorkerPool struct {
 	groups    map[int]*GroupWorker // this mappes the groupId to the GroupWorker
 
 	taksId int32
+
+	workers_queue map[*Worker]chan string // mappes worker to its channel of handling requests
 }
 
 type GroupWorker struct {

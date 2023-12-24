@@ -18,11 +18,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 )
 
-const (
-	resourceGroupName = "ol-group"
-	location          = "eastus"
-)
-
 type ResponseError struct {
 	// ErrorCode is the error code returned by the resource provider if available.
 	ErrorCode string
@@ -55,9 +50,9 @@ var create_lock sync.Mutex
 
 func createVM(worker *Worker) (*AzureConfig, error) {
 	vmName := worker.workerId
-	diskName := "ol-boss-new_OsDisk_1_a3f9be95785c437fabe8819c5807ca13"
-	vnetName := "ol-boss-new-vnet"
-	snapshotName := "ol-boss-new-snapshot"
+	diskName := disk
+	vnetName := vnet
+	snapshotName := snapshot
 	conn, err := connectionAzure()
 	if err != nil {
 		log.Println(err.Error())
@@ -697,7 +692,7 @@ func createVirtualMachine(ctx context.Context, cred azcore.TokenCredential, netw
 					CreateOption: to.Ptr(armcompute.DiskCreateOptionTypesAttach),
 					Caching:      to.Ptr(armcompute.CachingTypesReadWrite),
 					ManagedDisk: &armcompute.ManagedDiskParameters{
-						StorageAccountType: to.Ptr(armcompute.StorageAccountTypesStandardSSDLRS), // OSDisk type Standard/Premium HDD/SSD
+						StorageAccountType: to.Ptr(armcompute.StorageAccountTypesPremiumLRS), // OSDisk type Standard/Premium HDD/SSD
 						ID:                 to.Ptr(new_diskID),
 					},
 					OSType: to.Ptr(armcompute.OperatingSystemTypesLinux),
@@ -705,7 +700,7 @@ func createVirtualMachine(ctx context.Context, cred azcore.TokenCredential, netw
 			},
 			HardwareProfile: &armcompute.HardwareProfile{
 				// TODO: make it user's choice
-				VMSize: to.Ptr(armcompute.VirtualMachineSizeTypes("Standard_D4s_v3")), // VM size include vCPUs,RAM,Data Disks,Temp storage.
+				VMSize: to.Ptr(armcompute.VirtualMachineSizeTypes("Standard_D8s_v5")), // VM size include vCPUs,RAM,Data Disks,Temp storage.
 			},
 			NetworkProfile: &armcompute.NetworkProfile{
 				NetworkInterfaces: []*armcompute.NetworkInterfaceReference{
@@ -793,6 +788,7 @@ func createDisk(ctx context.Context, cred azcore.TokenCredential, source_disk st
 	if err != nil {
 		return nil, err
 	}
+	performance_tier := "P15"
 
 	pollerResp, err := disksClient.BeginCreateOrUpdate(
 		ctx,
@@ -801,7 +797,7 @@ func createDisk(ctx context.Context, cred azcore.TokenCredential, source_disk st
 		armcompute.Disk{
 			Location: to.Ptr(location),
 			SKU: &armcompute.DiskSKU{
-				Name: to.Ptr(armcompute.DiskStorageAccountTypesStandardSSDLRS),
+				Name: to.Ptr(armcompute.DiskStorageAccountTypesPremiumLRS),
 			},
 			Properties: &armcompute.DiskProperties{
 				CreationData: &armcompute.CreationData{
@@ -809,6 +805,7 @@ func createDisk(ctx context.Context, cred azcore.TokenCredential, source_disk st
 					SourceResourceID: to.Ptr(source_disk),
 				},
 				DiskSizeGB: to.Ptr[int32](64),
+				Tier:       &performance_tier,
 			},
 		},
 		nil,

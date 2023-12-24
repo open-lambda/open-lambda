@@ -15,6 +15,10 @@ const (
 	Sharding = 3
 )
 
+const (
+	tree_path = "/home/azureuser/paper-tree-cache/analysis/17/trials/0/tree-v2.node-320.json"
+)
+
 var MaxGroup int
 var Lb *LoadBalancer
 var Requirements map[string]string

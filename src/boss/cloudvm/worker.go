@@ -66,6 +66,8 @@ func NewWorkerPool(platform string, worker_cap int) (*WorkerPool, error) {
 
 	pool.taksId = 0
 
+	pool.workers_queue = make(map[*Worker]chan string, 5)
+
 	// This is for traces used to foward tasks
 	loadbalancer.Traces = loadbalancer.LoadTrace()
 
@@ -139,6 +141,8 @@ func (pool *WorkerPool) startNewWorker() {
 		len(pool.workers[DESTROYING]))
 	worker.funcLog = funcLog
 	worker.allTaks = 0
+
+	pool.workers_queue[worker] = make(chan string, 5)
 
 	pool.Unlock()
 
@@ -595,14 +599,18 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 	var smallWorkerTask int32
 	smallWorkerTask = 10000
 	for _, curWorker := range pool.workers[RUNNING] {
-		if curWorker.allTaks < smallWorkerTask {
-			smallWorkerTask = curWorker.allTaks
+		if curWorker.numTask < smallWorkerTask {
+			smallWorkerTask = curWorker.numTask
 			smallWorker = curWorker
 		}
 	}
-	if smallWorkerTask < (worker.allTaks - 20) {
+	if smallWorkerTask < (worker.numTask - 10) {
 		worker = smallWorker
 	}
+
+	// another load balancer implementation
+	// insert the request's name to the designated queue
+	// if it's full, randomly pick another one that's not full
 
 	assignTime := time.Since(starttime).Microseconds()
 

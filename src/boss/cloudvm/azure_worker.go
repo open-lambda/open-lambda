@@ -9,8 +9,6 @@ import (
 	"os/exec"
 	"sync"
 	"time"
-
-	"github.com/open-lambda/open-lambda/ol/boss/loadbalancer"
 )
 
 type AzureWorkerPool struct {
@@ -132,30 +130,28 @@ func (worker *Worker) start() error {
 		panic(err)
 	}
 
-	python_path := "/home/azureuser/paper-tree-cache/analysis/17/"
+	python_path := test_path
 
-	run_gen_funcs := "sudo python3 write_funcs.py"
+	run_deploy_funcs := "sudo python3 write_funcs.py"
+	run_one_time := "sudo python3 run_worker.py"
 
 	var run_worker_up string
-	if loadbalancer.Lb.LbType == loadbalancer.Sharding {
-		run_worker_up = "sudo ./ol worker up -i ol-min -d -o import_cache_tree=/home/azureuser/paper-tree-cache/analysis/17/trials/0/tree-v2.node-320.json,worker_url=0.0.0.0,features.warmup=false,limits.mem_mb=600"
-	} else {
-		run_worker_up = "sudo ./ol worker up -i ol-min -d -o import_cache_tree=/home/azureuser/paper-tree-cache/analysis/17/trials/0/tree-v2.node-320.json,worker_url=0.0.0.0,features.warmup=false,limits.mem_mb=600"
-	}
+	run_worker_up = fmt.Sprintf("sudo ./ol worker up -i ol-min -d -o import_cache_tree=%s,worker_url=0.0.0.0,features.warmup=false,limits.mem_mb=600", tree_path)
 
-	cmd := fmt.Sprintf("cd %s; %s; cd %s; %s; cd %s; %s; %s",
+	cmd := fmt.Sprintf("%s; cd %s; %s; cd %s; %s; %s; cd %s; %s",
+		"sudo mount -o rw,remount /sys/fs/cgroup",
 		cwd,
 		"sudo ./ol worker init -i ol-min",
 		python_path,
-		run_gen_funcs,
+		run_one_time,
+		run_deploy_funcs,
 		cwd,
-		"sudo mount -o rw,remount /sys/fs/cgroup",
 		run_worker_up,
 	)
 
 	tries := 5
 	for tries > 0 {
-		sshcmd := exec.Command("ssh", "-i", "/home/azureuser/.ssh/ol-boss_key.pem", "azureuser"+"@"+worker.workerIp, "-o", "StrictHostKeyChecking=no", "-C", cmd)
+		sshcmd := exec.Command("ssh", "-i", ssh_key_path, "azureuser"+"@"+worker.workerIp, "-o", "StrictHostKeyChecking=no", "-C", cmd)
 		stdoutStderr, err := sshcmd.CombinedOutput()
 		fmt.Printf("%s\n", stdoutStderr)
 		if err == nil {
@@ -185,7 +181,7 @@ func (worker *AzureWorker) killWorker() {
 	tries := 10
 	for tries > 0 {
 		log.Printf("debug: %s\n", worker.privateAddr)
-		sshcmd := exec.Command("ssh", "-i", "/home/azureuser/.ssh/ol-boss_key.pem", "azureuser"+"@"+worker.privateAddr, "-o", "StrictHostKeyChecking=no", "-C", cmd)
+		sshcmd := exec.Command("ssh", "-i", ssh_key_path, "azureuser"+"@"+worker.privateAddr, "-o", "StrictHostKeyChecking=no", "-C", cmd)
 		stdoutStderr, err := sshcmd.CombinedOutput()
 		fmt.Printf("%s\n", stdoutStderr)
 		if err == nil {
