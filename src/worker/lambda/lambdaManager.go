@@ -2,6 +2,7 @@ package lambda
 
 import (
 	"container/list"
+	"fmt"
 	"log"
 	"net/http"
 	"path/filepath"
@@ -167,6 +168,11 @@ func (mgr *LambdaMgr) DumpStatsToLog() {
 	time(5, "ImportCache.putSandboxInNode:Pause", "ImportCache.putSandboxInNode")
 	time(1, "LambdaInstance-ServeRequests", "LambdaFunc.Invoke")
 	time(2, "LambdaInstance-RoundTrip", "LambdaInstance-ServeRequests")
+	log.Printf("eviction dict %v, evict zygote number %d\n", sandbox.EvictDict, sandbox.EvictZygoteCnt)
+
+	for k, v := range sandbox.EvictDict {
+		fmt.Printf("evict %d for %d times, create %d times\n", k, v, zygote.CreateCount[k])
+	}
 }
 
 func (mgr *LambdaMgr) Cleanup() {

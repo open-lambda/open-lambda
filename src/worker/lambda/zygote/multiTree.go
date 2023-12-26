@@ -14,7 +14,7 @@ type MultiTree struct {
 	trees []*ImportCache
 }
 
-func (mt *MultiTree) Warmup(COW bool) error {
+func (mt *MultiTree) Warmup() error {
 	//TODO implement warm up
 	panic("multi-tree warmup not implemented")
 }
@@ -45,9 +45,10 @@ func NewMultiTree(codeDirs *common.DirMaker, scratchDirs *common.DirMaker, sbPoo
 	return &MultiTree{trees: trees}, nil
 }
 
-func (mt *MultiTree) Create(childSandboxPool sandbox.SandboxPool, isLeaf bool, codeDir, scratchDir string, meta *sandbox.SandboxMeta, rt_type common.RuntimeType) (sandbox.Sandbox, error) {
+func (mt *MultiTree) Create(childSandboxPool sandbox.SandboxPool, isLeaf bool, codeDir, scratchDir string, meta *sandbox.SandboxMeta, rt_type common.RuntimeType) (sandbox.Sandbox, int, error) {
 	idx := rand.Intn(len(mt.trees))
-	return mt.trees[idx].Create(childSandboxPool, isLeaf, codeDir, scratchDir, meta, rt_type)
+	sb, miss, err := mt.trees[idx].Create(childSandboxPool, isLeaf, codeDir, scratchDir, meta, rt_type)
+	return sb, miss, err
 }
 
 func (mt *MultiTree) Cleanup() {

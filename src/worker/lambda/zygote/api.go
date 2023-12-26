@@ -8,7 +8,7 @@ import (
 type ZygoteProvider interface {
 	Create(childSandboxPool sandbox.SandboxPool, isLeaf bool,
 		codeDir, scratchDir string, meta *sandbox.SandboxMeta,
-		rt_type common.RuntimeType) (sandbox.Sandbox, error)
-	Warmup(COW bool) error
+		rt_type common.RuntimeType) (sandbox.Sandbox, int, error)
+	Warmup() error
 	Cleanup()
 }

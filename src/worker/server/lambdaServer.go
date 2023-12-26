@@ -75,7 +75,7 @@ func (s *LambdaServer) cleanup() {
 }
 
 // NewLambdaServer creates a server based on the passed config."
-func NewLambdaServer(warmup bool, COW bool) (*LambdaServer, error) {
+func NewLambdaServer() (*LambdaServer, error) {
 	log.Printf("Starting new lambda server")
 
 	lambdaMgr, err := lambda.NewLambdaMgr()
@@ -83,9 +83,10 @@ func NewLambdaServer(warmup bool, COW bool) (*LambdaServer, error) {
 		return nil, err
 	}
 
+	warmup := common.Conf.Features.Warmup
 	if warmup {
 		log.Printf("Warming up lambda server")
-		err = lambdaMgr.Warmup(COW)
+		err = lambdaMgr.Warmup()
 		if err != nil {
 			log.Printf("Error warming up lambda server: %s", err.Error())
 		}

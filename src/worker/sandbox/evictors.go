@@ -172,12 +172,19 @@ func (evictor *SOCKEvictor) updateState() {
 	}
 }
 
+var EvictZygoteCnt = 0
+var EvictDict = make(map[int]int)
+
 // evict whatever SB is at the front of the queue, assumes
 // queue is not empty
 func (evictor *SOCKEvictor) evictFront(queue *list.List, force bool) {
 	front := queue.Front()
 	sb := front.Value.(Sandbox)
 
+	if strings.Contains(sb.(*SafeSandbox).Sandbox.(*SOCKContainer).scratchDir, "import-cache") {
+		EvictZygoteCnt++
+		EvictDict[sb.(*SafeSandbox).Sandbox.(*SOCKContainer).meta.SplitGeneration]++
+	}
 	evictor.printf("Evict Sandbox %v", sb.ID())
 	evictor.move(sb, evictor.evicting)
 
