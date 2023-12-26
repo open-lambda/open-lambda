@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"math/rand"
 	"net/http"
 	"os"
 	"os/exec"
@@ -521,16 +520,18 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+		var targetGroups []int
 		var targetGroup int
 		// Sharding: get the target group
 		if loadbalancer.Lb.LbType == loadbalancer.Sharding {
-			targetGroup, err = loadbalancer.ShardingGetGroup(pkgs)
+			targetGroups, err = loadbalancer.ShardingGetGroup(pkgs)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				w.Write([]byte(err.Error()))
 				return
 			}
 		}
+
 		// KMeans/KModes: get the target group
 		if loadbalancer.Lb.LbType == loadbalancer.KModes || loadbalancer.Lb.LbType == loadbalancer.KMeans {
 			// get a vector
@@ -562,24 +563,24 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			// fmt.Printf("Debug: targetGroup: %d\n", targetGroup)
+			targetGroups = append(targetGroups, targetGroup)
 		}
 		// step3: get assigned worker randomly
 		assignSuccess = false
 		// Might be problem: shoud I add lock here?
-		if group, ok := pool.groups[targetGroup]; ok { // exists this group
-			// fmt.Println(len(group.groupWorkers))
-			if len(group.groupWorkers) > 0 {
-				// Seed the random number generator
-				rand.Seed(time.Now().UnixNano())
-				// Generate a random index
-				randIndex := rand.Intn(len(group.groupWorkers))
-				for _, thisWorker := range group.groupWorkers {
-					if randIndex == 0 {
-						assignSuccess = true
-						worker = thisWorker
+		smallest_numTask := 100000
+		for target := range targetGroups {
+			if group, ok := pool.groups[target]; ok { // exists this group
+				// fmt.Println(len(group.groupWorkers))
+				if len(group.groupWorkers) > 0 {
+					for _, thisWorker := range group.groupWorkers {
+						if int(thisWorker.numTask) < smallest_numTask {
+							smallest_numTask = int(thisWorker.numTask)
+							worker = thisWorker
+							assignSuccess = true
+						}
 						break
 					}
-					randIndex--
 				}
 			}
 		}

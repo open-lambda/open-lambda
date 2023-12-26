@@ -14,27 +14,14 @@ type Node struct {
 	Children        []*Node  `json:"children"`
 	SplitGeneration int      `json:"split_generation"`
 	Count           int      `json:"count"`
-	SubtreeCount    int      `json:"subtree_count"`
+	ParentInt       int      `json:"parent"`
+
+	SubtreeCount int
+	Parent       *Node
+	Shards       []int
 }
 
 var root *Node
-var shardLists [][][]*Node
-
-// // index is the cluster id, value is the cluster/shard's root node
-// var shardingList1 = []int{3}
-// var shardingList2 = []int{3}
-// var shardingList3 = []int{9, 2, 38, 37, 51, 147, 79, 143, 182, 82}
-// var shardingList4 = []int{4, 25, 81, 46, 57, 100, 15, 85, 169, 197, 103}
-// var shardingList5 = []int{1, 124, 36, 17, 108, 144, 123, 28, 109, 179, 66, 106}
-
-// // These are all the split_generations, or ids
-// var ShardingLists = [][]int{
-// 	{3},
-// 	{3},
-// 	{9, 2, 38, 37, 51, 147, 79, 143, 182, 82},
-// 	{4, 25, 81, 46, 57, 100, 15, 85, 169, 197, 103},
-// 	{1, 124, 36, 17, 108, 144, 123, 28, 109, 179, 66, 106},
-// }
 
 // BySubtreeCount implements sort.Interface for []*Node based on the SubtreeCount field.
 type BySubtreeCount []*Node
@@ -86,12 +73,13 @@ func splitTree(n int, m int) [][][]*Node {
 		}
 		keepSplit = false
 		sets, setSums = splitNodes(nodes, n)
+		fmt.Println(len(sets))
 		minSum := min(setSums)
 		setsSumsDict = [][][]*Node{}
 
 		for i, set := range sets {
 			setSum := setSums[i]
-			if float64(setSum) > 1.1*float64(minSum) {
+			if depth < m && float64(setSum) > 1.2*float64(minSum) {
 				keepSplit = true
 				for _, node := range set {
 					nodes = removeNode(nodes, node)
@@ -126,18 +114,51 @@ func removeNode(nodes []*Node, target *Node) []*Node {
 	return result
 }
 
+// contains checks if a slice contains a specific element.
+func contains(slice []int, element int) bool {
+	for _, item := range slice {
+		if item == element {
+			return true
+		}
+	}
+	return false
+}
+
+func (n *Node) appendToParents(i int) {
+	for node := n; node != nil; node = node.Parent {
+		if !contains(node.Shards, i) {
+			node.Shards = append(node.Shards, i)
+		}
+	}
+}
+
+func (n *Node) appendToSubtree(i int) {
+	if !contains(n.Shards, i) {
+		n.Shards = append(n.Shards, i)
+	}
+	for _, child := range n.Children {
+		child.appendToSubtree(i)
+	}
+}
+
+func (n *Node) clearShards() {
+	n.Shards = make([]int, 0)
+	for _, child := range n.Children {
+		child.clearShards()
+	}
+}
+
 func UpdateShard(n, m int) {
 	// Call splitTree to get the sets
 	if n == 0 {
 		return
 	}
+	root.clearShards()
 	sets := splitTree(n, m)
 
 	// Add these sets to the global shardLists
-	shardLists = make([][][]*Node, 0)
-	shardLists = append(shardLists, sets...)
 
-	for i, setSum := range shardLists {
+	for i, setSum := range sets {
 		sum := setSum[1][0].SubtreeCount
 		set := setSum[0]
 
@@ -146,6 +167,10 @@ func UpdateShard(n, m int) {
 		for j, node := range set {
 			subtreeCounts[j] = fmt.Sprintf("%d", node.SubtreeCount)
 			splitGenerations[j] = fmt.Sprintf("%d", node.SplitGeneration)
+			// for node's parent: append i to shards field
+			// for node's children: append i to shards field
+			node.appendToParents(i)
+			node.appendToSubtree(i)
 		}
 
 		fmt.Printf("Set %d has a sum of %d and contains nodes with subtree_counts: [%s] with ids: [%s]\n", i+1, sum, strings.Join(subtreeCounts, ", "), strings.Join(splitGenerations, ", "))
@@ -174,10 +199,26 @@ func updateSubtreeCount(node *Node) int {
 	return totalCount
 }
 
+// setParents traverses the tree and sets each node's Parent field.
+func setParents(root *Node, generationToNode map[int]*Node) {
+	if root == nil {
+		return
+	}
+
+	// Map the current node's SplitGeneration to the node itself.
+	generationToNode[root.SplitGeneration] = root
+
+	// Set the Parent for each child and recurse.
+	for _, child := range root.Children {
+		child.Parent = generationToNode[child.ParentInt]
+		setParents(child, generationToNode)
+	}
+}
+
 func GetRoot() error {
 	// Read the JSON file
 	// TODO: not to hardcode
-	fileContent, err := ioutil.ReadFile(tree_path)
+	fileContent, err := ioutil.ReadFile("/home/azureuser/paper-tree-cache/analysis/17/trials/0/tree-v2.node-320.json")
 	if err != nil {
 		return err
 	}
@@ -190,13 +231,20 @@ func GetRoot() error {
 	}
 	root = &rootNode
 
+	generationToNode := make(map[int]*Node)
+
+	// Set the parent nodes using the map and recursive traversal.
+	setParents(root, generationToNode)
+	// fmt.Println(root.Children[0].Children[0].Parent.SplitGeneration)
+
 	// update the subtree_count
 	updateSubtreeCount(root)
+	// log.Println(root.SubtreeCount)
 
 	return nil
 }
 
-func (n *Node) Lookup(required_pkgs []string) (*Node, []*Node) {
+func (n *Node) Lookup(required_pkgs []string) *Node {
 	for _, pkg := range n.Packages {
 		found := false
 		for _, req := range required_pkgs {
@@ -206,38 +254,21 @@ func (n *Node) Lookup(required_pkgs []string) (*Node, []*Node) {
 			}
 		}
 		if !found {
-			return nil, nil
+			return nil
 		}
 	}
 
 	for _, child := range n.Children {
-		bestNode, path := child.Lookup(required_pkgs)
+		bestNode := child.Lookup(required_pkgs)
 		if bestNode != nil {
-			return bestNode, append([]*Node{n}, path...)
+			return bestNode
 		}
 	}
 
-	return n, []*Node{n}
+	return n
 }
 
-// if return -1, means no group found, need to randomly choose one
-func ShardingGetGroup(pkgs []string) (int, error) {
-	// for _, pkg := range pkgs {
-	// 	fmt.Println(pkg)
-	// }
-	_, path := root.Lookup(pkgs)
-	// for _, node := range path {
-	// 	fmt.Println(node.SplitGeneration)
-	// }
-	for _, node := range path {
-		for i, setSum := range shardLists {
-			set := setSum[0]
-			for _, shardNode := range set {
-				if shardNode.SplitGeneration == node.SplitGeneration {
-					return i, nil
-				}
-			}
-		}
-	}
-	return -1, nil
+func ShardingGetGroup(pkgs []string) ([]int, error) {
+	node := root.Lookup(pkgs)
+	return node.Shards, nil
 }
