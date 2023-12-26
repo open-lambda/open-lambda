@@ -37,7 +37,7 @@ type LambdaInstance struct {
 func (linst *LambdaInstance) Task() {
 	f := linst.lfunc
 
-	var sb sandbox.Sandbox
+	var sb sandbox.Sandbox = nil
 	var err error
 
 	for {

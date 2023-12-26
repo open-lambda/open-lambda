@@ -14,6 +14,10 @@ type MultiTree struct {
 	trees []*ImportCache
 }
 
+func (mt *MultiTree) Warmup() error {
+	panic("multi-tree warmup not implemented!")
+}
+
 func NewMultiTree(codeDirs *common.DirMaker, scratchDirs *common.DirMaker, sbPool sandbox.SandboxPool, pp *packages.PackagePuller) (*MultiTree, error) {
 	var tree_count int
 	switch cpus := runtime.NumCPU(); {
