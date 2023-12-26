@@ -103,6 +103,7 @@ func (linst *LambdaInstance) Task() {
 
 		// if we don't already have a Sandbox, create one, and
 		// HTTP proxy over the channel
+		miss := 0
 		if sb == nil {
 			sb = nil
 
@@ -110,14 +111,14 @@ func (linst *LambdaInstance) Task() {
 				scratchDir := f.lmgr.scratchDirs.Make(f.name)
 
 				// we don't specify parent SB, because ImportCache.Create chooses it for us
-				sb, err = f.lmgr.ZygoteProvider.Create(f.lmgr.sbPool, true, linst.codeDir, scratchDir, linst.meta, f.rtType)
+				sb, miss, err = f.lmgr.ZygoteProvider.Create(f.lmgr.sbPool, true, linst.codeDir, scratchDir, linst.meta, f.rtType)
 				if err != nil {
 					f.printf("failed to get Sandbox from import cache")
 					sb = nil
 				}
 			}
 
-			log.Printf("Creating new sandbox")
+			log.Printf("Creating new sandbox, zygote miss=%d", miss)
 
 			// import cache is either disabled or it failed
 			if sb == nil {
@@ -155,6 +156,8 @@ func (linst *LambdaInstance) Task() {
 		argsDict["end_create"] = tEndCreate
 		argsDict["split_gen"] = sb.(*sandbox.SafeSandbox).Sandbox.(*sandbox.SOCKContainer).Node
 		argsDict["sb_id"] = sb.(*sandbox.SafeSandbox).Sandbox.(*sandbox.SOCKContainer).ID()
+		argsDict["zygote_miss"] = miss
+		tStartCreate, tEndCreate, miss = 0, 0, 0
 
 		newReqBytes, _ := json.Marshal(argsDict)
 		req.r.Body = io.NopCloser(bytes.NewBuffer(newReqBytes))

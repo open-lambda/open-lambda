@@ -227,7 +227,7 @@ func Main() (err error) {
 	var s cleanable
 	switch common.Conf.Server_mode {
 	case "lambda":
-		s, err = NewLambdaServer(common.Conf.Features.Warmup, common.Conf.Features.COW)
+		s, err = NewLambdaServer()
 	case "sock":
 		s, err = NewSOCKServer()
 	default:

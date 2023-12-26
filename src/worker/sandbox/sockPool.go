@@ -108,6 +108,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 		meta:             meta,
 		rtType:           rtType,
 		containerProxy:   nil,
+		Node:             -1, // -1 by default, if it has a parent, it will be set to the parent's node later
 	}
 	var c Sandbox = cSock
 
