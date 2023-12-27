@@ -329,6 +329,7 @@ func (pool *WorkerPool) updateCluster() {
 		if len(pool.workers[RUNNING]) <= loadbalancer.MaxGroup {
 			numShards = len(pool.workers[RUNNING])
 		}
+		fmt.Println(len(pool.workers[RUNNING]))
 		loadbalancer.UpdateShard(numShards, 2)
 		pool.Unlock()
 	}
@@ -579,7 +580,6 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 							worker = thisWorker
 							assignSuccess = true
 						}
-						break
 					}
 				}
 			}
