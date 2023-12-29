@@ -596,18 +596,18 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 
 	// a simple load balancer based on worker's processed tasks
 	assigned := worker.workerId
-	// var smallWorker *Worker
-	// var smallWorkerTask int32
-	// smallWorkerTask = 10000
-	// for _, curWorker := range pool.workers[RUNNING] {
-	// 	if curWorker.numTask < smallWorkerTask {
-	// 		smallWorkerTask = curWorker.numTask
-	// 		smallWorker = curWorker
-	// 	}
-	// }
-	// if smallWorkerTask < (worker.numTask - 10) {
-	// 	worker = smallWorker
-	// }
+	var smallWorker *Worker
+	var smallWorkerTask int32
+	smallWorkerTask = 10000
+	for _, curWorker := range pool.workers[RUNNING] {
+		if curWorker.numTask < smallWorkerTask {
+			smallWorkerTask = curWorker.numTask
+			smallWorker = curWorker
+		}
+	}
+	if smallWorkerTask < (worker.numTask - 32) {
+		worker = smallWorker
+	}
 
 	// fmt.Printf("Debug: function %s assigned to %s\n", thisTask, assigned)
 
