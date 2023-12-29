@@ -176,6 +176,7 @@ func UpdateShard(n, m int) {
 		fmt.Printf("Set %d has a sum of %d and contains nodes with subtree_counts: [%s] with ids: [%s]\n", i+1, sum, strings.Join(subtreeCounts, ", "), strings.Join(splitGenerations, ", "))
 	}
 	fmt.Println()
+	// bfs(root)
 }
 
 func updateSubtreeCount(node *Node) int {
@@ -239,7 +240,6 @@ func GetRoot() error {
 
 	// update the subtree_count
 	updateSubtreeCount(root)
-	// log.Println(root.SubtreeCount)
 
 	return nil
 }
@@ -270,5 +270,21 @@ func (n *Node) Lookup(required_pkgs []string) *Node {
 
 func ShardingGetGroup(pkgs []string) ([]int, error) {
 	node := root.Lookup(pkgs)
+	// fmt.Println("Debug3: ", node.SplitGeneration, node.Shards)
 	return node.Shards, nil
 }
+
+// func bfs(root *Node) {
+// 	queue := []*Node{root} // Initialize the queue with the root node
+
+// 	for len(queue) > 0 {
+// 		current := queue[0]                                  // Get the first node in the queue
+// 		queue = queue[1:]                                    // Dequeue the current node
+// 		fmt.Println(current.SplitGeneration, current.Shards) // Print the Shards of the current node
+
+// 		// Enqueue the children of the current node
+// 		for _, child := range current.Children {
+// 			queue = append(queue, child)
+// 		}
+// 	}
+// }

@@ -465,10 +465,7 @@ func getPkgs(img string) ([]string, error) {
 
 //run lambda function
 func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
-	pool.Lock()
-	pool.taksId += 1
 	var thisTask string
-	pool.Unlock()
 	starttime := time.Now()
 
 	assignSuccess := false
@@ -570,7 +567,8 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 		assignSuccess = false
 		// Might be problem: shoud I add lock here?
 		smallest_numTask := 100000
-		for target := range targetGroups {
+		for _, target := range targetGroups {
+			// fmt.Printf("Debug0: target %d\n", target)
 			if group, ok := pool.groups[target]; ok { // exists this group
 				// fmt.Println(len(group.groupWorkers))
 				if len(group.groupWorkers) > 0 {
@@ -586,6 +584,7 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 		}
 		// if assign to a worker failed, randomly pick one
 		if !assignSuccess {
+			fmt.Printf("Debug1\n")
 			// fmt.Println("assign to a group (Shard/KMeans/KModes) failed")
 			worker = <-pool.queue
 			pool.queue <- worker
@@ -593,21 +592,24 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 
 	}
 	// fmt.Println("Debug 4")
+	// fmt.Printf("Debug: function %s sent to %s\n", thisTask, assigned)
 
 	// a simple load balancer based on worker's processed tasks
 	assigned := worker.workerId
-	var smallWorker *Worker
-	var smallWorkerTask int32
-	smallWorkerTask = 10000
-	for _, curWorker := range pool.workers[RUNNING] {
-		if curWorker.numTask < smallWorkerTask {
-			smallWorkerTask = curWorker.numTask
-			smallWorker = curWorker
-		}
-	}
-	if smallWorkerTask < (worker.numTask - 10) {
-		worker = smallWorker
-	}
+	// var smallWorker *Worker
+	// var smallWorkerTask int32
+	// smallWorkerTask = 10000
+	// for _, curWorker := range pool.workers[RUNNING] {
+	// 	if curWorker.numTask < smallWorkerTask {
+	// 		smallWorkerTask = curWorker.numTask
+	// 		smallWorker = curWorker
+	// 	}
+	// }
+	// if smallWorkerTask < (worker.numTask - 10) {
+	// 	worker = smallWorker
+	// }
+
+	// fmt.Printf("Debug: function %s assigned to %s\n", thisTask, assigned)
 
 	// another load balancer implementation
 	// insert the request's name to the designated queue
@@ -633,7 +635,7 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 	startFormat := starttime.Format("15:04:05.0000")
 	endFormat := endtime.Format("15:04:05.0000")
 
-	pool.Lock()
+	// pool.Lock()
 	if loadbalancer.Lb.LbType == loadbalancer.Random {
 		worker.funcLog.Printf("{\"workernum\": %d, \"task\": \"%s\", \"start\": \"%s\", \"end\": \"%s\", \"time\": %d, \"assignTime\": %d, \"assign\": \"Random\", \"assigned\": \"Random\"}\n", len(pool.workers[RUNNING]), thisTask, startFormat, endFormat, latency, assignTime)
 	} else {
@@ -643,7 +645,7 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 			worker.funcLog.Printf("{\"workernum\": %d, \"task\": \"%s\", \"start\": \"%s\", \"end\": \"%s\", \"time\": %d, \"assignTime\": %d, \"assign\": \"Unsuccess\", \"assigned\": \"%s\"}\n", len(pool.workers[RUNNING]), thisTask, startFormat, endFormat, latency, assignTime, assigned)
 		}
 	}
-	pool.Unlock()
+	// pool.Unlock()
 
 	atomic.AddInt64(&pool.sumLatency, latency)
 	atomic.AddInt64(&pool.nLatency, 1)
