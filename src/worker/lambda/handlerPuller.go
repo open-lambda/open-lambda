@@ -105,29 +105,37 @@ func (cp *HandlerPuller) isRemote() bool {
 	return strings.HasPrefix(cp.prefix, "http://") || strings.HasPrefix(cp.prefix, "https://")
 }
 
-func useRegex(expr string) *regexp.Regexp {
+func createRegex(expr string, testValidString string, testInvalidString string) (reComp *regexp.Regexp, reErr error) {
+	re, err := regexp.Compile(expr)
+	errorMsg := error(nil)
 
-	// print and supress panic, reference: https://www.digitalocean.com/community/tutorials/handling-panics-in-go
-	// comment out if you want panic to terminate the program
-	defer func() {
-		if err := recover(); err != nil {
-			log.Println("panic occurred:", err)
+	if err != nil {
+		msg := "regex failed to comple with error '%s'"
+		errorMsg = fmt.Errorf(msg, err)
+	}
+	if re == nil {
+		errorMsg = errors.New("regex failed to compile with null output")
+	} else {
+		vMatched := re.MatchString(testValidString)
+		if !vMatched {
+			errorMsg = errors.New("regex valid test run failed")
 		}
-	}()
+		iMatched := re.MatchString(testInvalidString)
+		if iMatched {
+			errorMsg = errors.New("regex invalid test run failed")
+		}
+	}
 
-	re := regexp.MustCompile(expr)
-
-	return re
+	return re, errorMsg
 }
 
 func (cp *HandlerPuller) Pull(name string) (rt_type common.RuntimeType, targetDir string, err error) {
 	t := common.T0("pull-lambda")
 	defer t.T1()
 
-	handlerNameRegex := useRegex(`^[A-Za-z0-9\.\-\_]+$`)
-	if handlerNameRegex == nil {
-		msg := "bad lambda name '%s', regexp failed to compile"
-		return rt_type, "", fmt.Errorf(msg, name)
+	handlerNameRegex, handlerNameError := createRegex(`^[A-Za-z0-9\.\-\_]+$`, "-H3ll0.world_", "Hello world!")
+	if handlerNameError != nil {
+		return rt_type, "", handlerNameError
 	}
 
 	matched := handlerNameRegex.MatchString(name)
