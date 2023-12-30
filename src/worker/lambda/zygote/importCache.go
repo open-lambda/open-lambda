@@ -62,10 +62,6 @@ type ImportCacheNode struct {
 	meta *sandbox.SandboxMeta
 }
 
-type ZygoteReq struct {
-	parent chan sandbox.Sandbox
-}
-
 func NewImportCache(codeDirs *common.DirMaker, scratchDirs *common.DirMaker, sbPool sandbox.SandboxPool, pp *packages.PackagePuller) (ic *ImportCache, err error) {
 	cache := &ImportCache{
 		codeDirs:    codeDirs,
@@ -235,7 +231,9 @@ func (cache *ImportCache) getSandboxInNode(node *ImportCacheNode, forceNew bool,
 	t := common.T0("ImportCache.getSandboxInNode")
 	defer t.T1()
 
+	t1 := common.T0("ImportCache.getSandboxInNode:Lock")
 	node.mutex.Lock()
+	t1.T1()
 	defer node.mutex.Unlock()
 
 	// destroy any old Sandbox first if we're required to do so
@@ -291,13 +289,6 @@ func (*ImportCache) putSandboxInNode(node *ImportCacheNode, sb sandbox.Sandbox) 
 	}
 
 	node.sbRefCount -= 1
-	if node.parent != nil {
-		fmt.Printf("node %d, parent %d putSandboxInNode with ref count %d\n",
-			node.SplitGeneration, node.parent.SplitGeneration, node.sbRefCount)
-	} else {
-		fmt.Printf("node %d, parent nil putSandboxInNode with ref count %d\n",
-			node.SplitGeneration, node.sbRefCount)
-	}
 	if node.sbRefCount == 0 {
 		t2 := common.T0("ImportCache.putSandboxInNode:Pause")
 		if err := node.sb.Pause(); err != nil {
@@ -311,6 +302,7 @@ func (*ImportCache) putSandboxInNode(node *ImportCacheNode, sb sandbox.Sandbox) 
 	}
 }
 
+var countMapLock sync.Mutex
 var CreateCount = make(map[int]int)
 
 func appendUnique(original []string, elementsToAdd []string) []string {
@@ -405,7 +397,11 @@ func (cache *ImportCache) createSandboxInNode(node *ImportCacheNode, rt_type com
 	}
 
 	node.sb = sb
+
+	countMapLock.Lock()
 	CreateCount[node.SplitGeneration] += 1
+	countMapLock.Unlock()
+
 	return miss + 1, nil
 }
 

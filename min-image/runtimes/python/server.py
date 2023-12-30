@@ -32,7 +32,7 @@ def recv_fds(sock, msglen, maxfds):
     return msg, list(fds)
 
 def web_server():
-    print(f"server.py: start web server on fd: {file_sock.fileno()}")
+    # print(f"server.py: start web server on fd: {file_sock.fileno()}")
     sys.path.append('/handler')
 
     # TODO: as a safeguard, we should add a mechanism so that the
@@ -73,9 +73,13 @@ def fork_server():
     global file_sock
 
     file_sock.setblocking(True)
-    print(f"server.py: start fork server on fd: {file_sock.fileno()}")
+    # print(f"server.py: start fork server on fd: {file_sock.fileno()}")
 
     while True:
+        try:
+            pid, status = os.waitpid(-1, os.WNOHANG)
+        except ChildProcessError:
+            pass
         client, _info = file_sock.accept()
         _, fds = recv_fds(client, 8, 2)
         root_fd, mem_cgroup_fd = fds
@@ -184,21 +188,21 @@ def main():
         print('seccomp enabled')
 
     bootstrap_path = sys.argv[1]
-    cgroup_fds = 0
-    if len(sys.argv) > 2:
-        cgroup_fds = int(sys.argv[2])
-
-    # join cgroups passed to us.  The fact that chroot is called
-    # before we start means we also need to pass FDs to the cgroups we
-    # want to join, because chroot happens before we run, so we can no
-    # longer reach them by paths.
-    pid = str(os.getpid())
-    for i in range(cgroup_fds):
-        # golang guarantees extras start at 3: https://golang.org/pkg/os/exec/#Cmd
-        fd_id = 3 + i
-        with os.fdopen(fd_id, "w") as file:
-            file.write(pid)
-            print(f'server.py: joined cgroup, close FD {fd_id}')
+    # cgroup_fds = 0
+    # if len(sys.argv) > 2:
+    #     cgroup_fds = int(sys.argv[2])
+    #
+    # # join cgroups passed to us.  The fact that chroot is called
+    # # before we start means we also need to pass FDs to the cgroups we
+    # # want to join, because chroot happens before we run, so we can no
+    # # longer reach them by paths.
+    # pid = str(os.getpid())
+    # for i in range(cgroup_fds):
+    #     # golang guarantees extras start at 3: https://golang.org/pkg/os/exec/#Cmd
+    #     fd_id = 3 + i
+    #     with os.fdopen(fd_id, "w") as file:
+    #         file.write(pid)
+    #         print(f'server.py: joined cgroup, close FD {fd_id}')
 
     start_container()
 
