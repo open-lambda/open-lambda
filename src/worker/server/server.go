@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path"
 	"path/filepath"
 	"runtime"
 	"runtime/pprof"
@@ -217,34 +216,9 @@ func Main() (err error) {
 		return err
 	}
 
-	// clean up old logs & set up new logs
-	fs, err := filepath.Glob(filepath.Join(common.Conf.Trace.Log_file_dir, "*"))
-	if err != nil {
+	// setting up loggers
+	if err := common.LoadLoggers(); err != nil {
 		return err
-	}
-	for _, f := range fs {
-		if filepath.Base(f) == "log.txt" || filepath.Base(f) == "log.json" {
-			err := os.Remove(f)
-			if err != nil {
-				return err
-			}
-		}
-	}
-	if common.Conf.Trace.Format != "default" {
-		logFilePath := ""
-		if common.Conf.Trace.Format == "text" {
-			logFilePath = path.Join(common.Conf.Trace.Log_file_dir, "log.txt")
-
-		} else if common.Conf.Trace.Format == "json" {
-			logFilePath = path.Join(common.Conf.Trace.Log_file_dir, "log.json")
-		}
-
-		f, err := os.OpenFile(logFilePath, os.O_RDWR|os.O_CREATE, 0666)
-		if err != nil {
-			return err
-		}
-		log.Printf("Log output for specified components will be written to %s", logFilePath)
-		defer f.Close()
 	}
 
 	// things shared by all servers
