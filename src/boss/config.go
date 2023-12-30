@@ -71,6 +71,9 @@ func LoadConf(path string) error {
 	if Conf.Lb == "kmodes" {
 		loadbalancer.InitLoadBalancer(loadbalancer.KModes, Conf.MaxGroup)
 	}
+	if Conf.Lb == "hash" {
+		loadbalancer.InitLoadBalancer(loadbalancer.Hash, Conf.MaxGroup)
+	}
 
 	return checkConf()
 }

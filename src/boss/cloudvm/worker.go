@@ -474,50 +474,38 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 	}
 	// fmt.Println("Debug 1")
 	var worker *Worker
+	var img string
+	urlParts := getURLComponents(r)
+	if len(urlParts) < 2 {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("expected invocation format: /run/<lambda-name>"))
+		return
+	}
+	img = urlParts[1]
+	thisTask = img
 	if loadbalancer.Lb.LbType == loadbalancer.Random {
 		// fmt.Println("Debug 2")
 		worker = <-pool.queue
 		pool.queue <- worker
 		// fmt.Println("Debug 3")
-		urlParts := getURLComponents(r)
-		if len(urlParts) < 2 {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("expected invocation format: /run/<lambda-name>"))
-			return
-		}
-		img := urlParts[1]
-		thisTask = img
 	} else {
 		// TODO: what if the designated worker isn't up yet?
 		// Current solution: then randomly choose one that is up
 		// step 1: get its dependencies
-		urlParts := getURLComponents(r)
+
 		var pkgs []string
-		if len(urlParts) < 2 {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
+		// components represent run[0]/<name_of_sandbox>[1]/<extra_things>...
+		// ergo we want [1] for name of sandbox
+		// TODO: if user changes the code, one worker will know that, boss cannot know that. How to handle this?
+
+		pkgs, err = getPkgs(img)
+		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("expected invocation format: /run/<lambda-name>"))
+			w.Write([]byte("failed to get function's dependency packages"))
 			return
-		} else {
-			// components represent run[0]/<name_of_sandbox>[1]/<extra_things>...
-			// ergo we want [1] for name of sandbox
-			// TODO: if user changes the code, one worker will know that, boss cannot know that. How to handle this?
-			if len(urlParts) == 2 {
-				img := urlParts[1]
-				thisTask = img
-				pkgs, err = getPkgs(img)
-				if err != nil {
-					w.WriteHeader(http.StatusInternalServerError)
-					w.Write([]byte("failed to get function's dependency packages"))
-					return
-				}
-			} else {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte("expected invocation format: /run/<lambda-name>"))
-				return
-			}
 		}
+
 		var targetGroups []int
 		var targetGroup int
 		// Sharding: get the target group
@@ -528,6 +516,11 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 				w.Write([]byte(err.Error()))
 				return
 			}
+		}
+
+		if loadbalancer.Lb.LbType == loadbalancer.Hash {
+			targetGroup = loadbalancer.HashGetGroup(img)
+			targetGroups = append(targetGroups, targetGroup)
 		}
 
 		// KMeans/KModes: get the target group

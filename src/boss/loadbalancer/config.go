@@ -13,6 +13,7 @@ const (
 	KMeans   = 1
 	KModes   = 2
 	Sharding = 3
+	Hash     = 4
 )
 
 const (
@@ -72,6 +73,9 @@ func InitLoadBalancer(lbType int, maxGroup int) {
 			if err != nil {
 				log.Fatalf(err.Error())
 			}
+		}
+		if lbType == Hash {
+			initHasher()
 		}
 	}
 	Lb = &LoadBalancer{
