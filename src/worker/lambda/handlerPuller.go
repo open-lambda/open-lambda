@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -13,7 +14,6 @@ import (
 	"regexp"
 	"strings"
 	"sync"
-	"io/fs"
 	"syscall"
 
 	"github.com/open-lambda/open-lambda/ol/common"
@@ -41,27 +41,26 @@ func Copy(src, dest string) error {
 		return err
 	}
 
-	
 	if info.IsDir() {
 		return filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
-		    if err != nil {
-			return err
-		    }
-
-		    relPath, err := filepath.Rel(src, path)
-		    if err != nil {
-			return err
-		    }
-
-		    if d.IsDir() {
-			dirInfo, err := d.Info()
 			if err != nil {
-			    return err
+				return err
 			}
-			return os.MkdirAll(filepath.Join(dest, relPath), dirInfo.Mode())
-		    }
 
-		    return copyFile(path, filepath.Join(dest, relPath))
+			relPath, err := filepath.Rel(src, path)
+			if err != nil {
+				return err
+			}
+
+			if d.IsDir() {
+				dirInfo, err := d.Info()
+				if err != nil {
+					return err
+				}
+				return os.MkdirAll(filepath.Join(dest, relPath), dirInfo.Mode())
+			}
+
+			return copyFile(path, filepath.Join(dest, relPath))
 		})
 	}
 	return copyFile(src, dest)
@@ -106,14 +105,33 @@ func (cp *HandlerPuller) isRemote() bool {
 	return strings.HasPrefix(cp.prefix, "http://") || strings.HasPrefix(cp.prefix, "https://")
 }
 
+func useRegex(expr string) *regexp.Regexp {
+
+	// print and supress panic, reference: https://www.digitalocean.com/community/tutorials/handling-panics-in-go
+	// comment out if you want panic to terminate the program
+	defer func() {
+		if err := recover(); err != nil {
+			log.Println("panic occurred:", err)
+		}
+	}()
+
+	re := regexp.MustCompile(expr)
+
+	return re
+}
+
 func (cp *HandlerPuller) Pull(name string) (rt_type common.RuntimeType, targetDir string, err error) {
 	t := common.T0("pull-lambda")
 	defer t.T1()
 
-	matched, err := regexp.MatchString(`^[A-Za-z0-9\.\-\_]+$`, name)
-	if err != nil {
-		return rt_type, "", err
-	} else if !matched {
+	handlerNameRegex := useRegex(`^[A-Za-z0-9\.\-\_]+$`)
+	if handlerNameRegex == nil {
+		msg := "bad lambda name '%s', regexp failed to compile"
+		return rt_type, "", fmt.Errorf(msg, name)
+	}
+
+	matched := handlerNameRegex.MatchString(name)
+	if !matched {
 		msg := "bad lambda name '%s', can only contain letters, numbers, period, dash, and underscore"
 		return rt_type, "", fmt.Errorf(msg, name)
 	}
@@ -225,7 +243,6 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type common.R
 			return rt_type, "", fmt.Errorf("%s :: %s", err)
 		}
 
-
 	} else if strings.HasSuffix(stat.Name(), ".bin") {
 		log.Printf("Installing `%s` from binary file", src)
 
@@ -334,4 +351,3 @@ func (cp *HandlerPuller) getCache(name string) *CacheEntry {
 func (cp *HandlerPuller) putCache(name, version, path string) {
 	cp.dirCache.Store(name, &CacheEntry{version, path})
 }
-
