@@ -166,7 +166,7 @@ impl FunctionManager {
             let mut binary = Vec::new();
             file.read_to_end(&mut binary).unwrap();
 
-            log::info!("Loaded cached version of fucntion \"{name}\"");
+            log::info!("Loaded cached version of function \"{name}\"");
 
             unsafe {
                 Module::deserialize(&self.engine, &binary).expect("Failed to deserialize module")
@@ -245,6 +245,12 @@ impl InstanceData {
             .instantiate_async(store.as_context_mut(), module)
             .await
             .expect("Failed to create instance");
+
+        let _ = instance
+            .get_func(&mut store, "_initialize_instance")
+            .unwrap()
+            .call_async(&mut store, &[], &mut [])
+            .await;
 
         Self {
             identifier,
