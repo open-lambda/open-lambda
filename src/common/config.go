@@ -78,11 +78,12 @@ type FeaturesConfig struct {
 }
 
 type TraceConfig struct {
-	Cgroups bool `json:"cgroups"`
-	Memory  bool `json:"memory"`
-	Evictor bool `json:"evictor"`
-	Package bool `json:"package"`
-	Latency bool `json:"latency"`
+	Enable_JSON   bool	 `json:"enable_json"`
+	Cgroups       string `json:"cgroups"`
+	Memory        bool   `json:"memory"`
+	Evictor       bool   `json:"evictor"`
+	Package       bool   `json:"package"`
+	Latency       bool   `json:"latency"`
 }
 
 type StoreString string
@@ -175,11 +176,12 @@ func LoadDefaults(olPath string) error {
 			Enable_seccomp:      true,
 		},
 		Trace: TraceConfig{
-			Cgroups: false,
-			Memory:  false,
-			Evictor: false,
-			Package: false,
-			Latency: false,
+			Enable_JSON:   false,
+			Cgroups:       "INFO",
+			Memory:        false,
+			Evictor:       false,
+			Package:       false,
+			Latency:       false,
 		},
 		Storage: StorageConfig{
 			Root:    "private",
