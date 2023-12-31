@@ -168,7 +168,7 @@ func (pool *WorkerPool) startNewWorker() {
 		if pool.platform == "gcp" {
 			worker.runCmd("./ol worker up -d") // start worker
 		} else if pool.platform == "azure" {
-			err = worker.start()
+			err = worker.start(true)
 			if err != nil {
 				// TODO: Handle error (may use channel?)
 				log.Fatalln(err)
@@ -730,6 +730,73 @@ func (pool *WorkerPool) StatusCluster() map[string]int {
 	output["destroying"] = len(pool.workers[DESTROYING])
 
 	return output
+}
+
+// restart OL process in all workers
+func (pool *WorkerPool) Restart() {
+	for _, cur_worker := range pool.workers[RUNNING] {
+		cur_worker := cur_worker
+		go func(w *Worker) {
+			cur_worker.killWorker()
+			cur_worker.start(false)
+
+			if loadbalancer.Lb.LbType != loadbalancer.Random {
+				workerIdDigit, _ := strconv.Atoi(getAfterSep(cur_worker.workerId, "-"))
+				var assignedGroup int
+				if loadbalancer.MaxGroup == 1 {
+					assignedGroup = 0
+				} else {
+					assignedGroup = workerIdDigit%loadbalancer.MaxGroup - 1 // -1 because starts from 0
+					if assignedGroup == -1 {
+						assignedGroup = loadbalancer.MaxGroup - 1
+					}
+				}
+
+				cur_worker.groupId = assignedGroup
+
+				// update the group stuff in pool
+				if _, ok := pool.groups[assignedGroup]; !ok {
+					// this group hasn't been created
+					pool.groups[assignedGroup] = &GroupWorker{
+						groupId:      pool.nextGroup,
+						groupWorkers: make(map[string]*Worker),
+					}
+					if loadbalancer.MaxGroup != 1 {
+						pool.nextGroup += 1
+						pool.nextGroup %= loadbalancer.MaxGroup - 1
+					}
+				}
+				fmt.Printf("Debug: %d\n", assignedGroup)
+				group := pool.groups[assignedGroup]
+				group.groupWorkers[cur_worker.workerId] = cur_worker
+
+			}
+		}(cur_worker)
+	}
+}
+
+func (pool *WorkerPool) ChangePolicy(policy string) {
+	pool.Lock()
+	if policy == "random" {
+		loadbalancer.InitLoadBalancer(loadbalancer.Random, loadbalancer.MaxGroup)
+	}
+	if policy == "sharding" {
+		loadbalancer.InitLoadBalancer(loadbalancer.Sharding, loadbalancer.MaxGroup)
+	}
+	if policy == "kmeans" {
+		loadbalancer.InitLoadBalancer(loadbalancer.KMeans, loadbalancer.MaxGroup)
+	}
+	if policy == "kmodes" {
+		loadbalancer.InitLoadBalancer(loadbalancer.KModes, loadbalancer.MaxGroup)
+	}
+	if policy == "hash" {
+		loadbalancer.InitLoadBalancer(loadbalancer.Hash, loadbalancer.MaxGroup)
+	}
+	pool.Unlock()
+
+	pool.Restart()
+
+	pool.updateCluster()
 }
 
 // forward request to worker

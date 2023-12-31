@@ -20,6 +20,8 @@ const (
 	BOSS_STATUS_PATH = "/status"
 	SCALING_PATH     = "/scaling/worker_count"
 	SHUTDOWN_PATH    = "/shutdown"
+	RESTART_PATH     = "/restart"
+	CHANGE_LB_PATH   = "/change_lb"
 )
 
 type Boss struct {
@@ -98,6 +100,47 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 	b.BossStatus(w, r)
 }
 
+func (b *Boss) RestartWorkers(w http.ResponseWriter, r *http.Request) {
+	b.workerPool.Restart()
+	b.BossStatus(w, r)
+}
+
+func (b *Boss) ChangeLb(w http.ResponseWriter, r *http.Request) {
+	// STEP 1: get int (worker count) from POST body, or return an error
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		_, err := w.Write([]byte("POST a policy to /change_lb\n"))
+		if err != nil {
+			log.Printf("(1) could not write web response: %s\n", err.Error())
+		}
+		return
+	}
+
+	contents, err := io.ReadAll(r.Body)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, err := w.Write([]byte("could not read body of web request\n"))
+		if err != nil {
+			log.Printf("(2) could not write web response: %s\n", err.Error())
+		}
+		return
+	}
+
+	new_policy := string(contents)
+	Conf.Lb = new_policy
+	err = checkConf()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, err := w.Write([]byte("body of post to /change_policy should be random, sharding, kmeans, kmodes, hash\n"))
+		if err != nil {
+			log.Printf("(3) could not write web response: %s\n", err.Error())
+		}
+		return
+	}
+
+	b.workerPool.ChangePolicy(new_policy)
+}
+
 func BossMain() (err error) {
 	fmt.Printf("WARNING!  Boss incomplete (only use this as part of development process).\n")
 
@@ -119,6 +162,8 @@ func BossMain() (err error) {
 	http.HandleFunc(SCALING_PATH, boss.ScalingWorker)
 	http.HandleFunc(RUN_PATH, boss.workerPool.RunLambda)
 	http.HandleFunc(SHUTDOWN_PATH, boss.Close)
+	http.HandleFunc(RESTART_PATH, boss.RestartWorkers)
+	http.HandleFunc(CHANGE_LB_PATH, boss.ChangeLb)
 
 	// clean up if signal hits us
 	c := make(chan os.Signal, 1)

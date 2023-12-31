@@ -82,6 +82,9 @@ func checkConf() error {
 	if Conf.Scaling != "manual" && Conf.Scaling != "threshold-scaler" {
 		return fmt.Errorf("Scaling type '%s' not implemented", Conf.Scaling)
 	}
+	if Conf.Lb != "random" && Conf.Lb != "sharding" && Conf.Lb != "kmeans" && Conf.Lb != "kmodes" && Conf.Lb != "hash" {
+		return fmt.Errorf("%s is not implemented", Conf.Scaling)
+	}
 
 	return nil
 }

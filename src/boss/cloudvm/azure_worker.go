@@ -119,7 +119,7 @@ func (pool *AzureWorkerPool) CreateInstance(worker *Worker) error {
 	return nil
 }
 
-func (worker *Worker) start() error {
+func (worker *Worker) start(firstTime bool) error {
 	cwd, err := os.Getwd()
 	if err != nil {
 		panic(err)
@@ -138,16 +138,29 @@ func (worker *Worker) start() error {
 	var run_worker_up string
 	run_worker_up = fmt.Sprintf("sudo ./ol worker up -i ol-min -d -o import_cache_tree=%s,worker_url=0.0.0.0,features.warmup=false,limits.mem_mb=600", tree_path)
 
-	cmd := fmt.Sprintf("%s; cd %s; %s; cd %s; %s; %s; cd %s; %s",
-		"sudo mount -o rw,remount /sys/fs/cgroup",
-		cwd,
-		"sudo ./ol worker init -i ol-min",
-		python_path,
-		run_one_time,
-		run_deploy_funcs,
-		cwd,
-		run_worker_up,
-	)
+	var cmd string
+	if firstTime {
+		cmd = fmt.Sprintf("%s; cd %s; %s; cd %s; %s; %s; cd %s; %s",
+			"sudo mount -o rw,remount /sys/fs/cgroup",
+			cwd,
+			"sudo ./ol worker init -i ol-min",
+			python_path,
+			run_one_time,
+			run_deploy_funcs,
+			cwd,
+			run_worker_up,
+		)
+	} else {
+		cmd = fmt.Sprintf("%s; cd %s; %s; cd %s; %s; cd %s; %s",
+			"sudo mount -o rw,remount /sys/fs/cgroup",
+			cwd,
+			"sudo ./ol worker init -i ol-min",
+			python_path,
+			run_deploy_funcs,
+			cwd,
+			run_worker_up,
+		)
+	}
 
 	tries := 5
 	for tries > 0 {
@@ -167,7 +180,7 @@ func (worker *Worker) start() error {
 	return nil
 }
 
-func (worker *AzureWorker) killWorker() {
+func (worker *Worker) killWorker() {
 	cwd, err := os.Getwd()
 	if err != nil {
 		panic(err)
@@ -180,8 +193,8 @@ func (worker *AzureWorker) killWorker() {
 	log.Printf("Try to ssh into the worker and kill the process")
 	tries := 10
 	for tries > 0 {
-		log.Printf("debug: %s\n", worker.privateAddr)
-		sshcmd := exec.Command("ssh", "-i", ssh_key_path, "azureuser"+"@"+worker.privateAddr, "-o", "StrictHostKeyChecking=no", "-C", cmd)
+		log.Printf("debug: %s\n", worker.workerIp)
+		sshcmd := exec.Command("ssh", "-i", ssh_key_path, "azureuser"+"@"+worker.workerIp, "-o", "StrictHostKeyChecking=no", "-C", cmd)
 		stdoutStderr, err := sshcmd.CombinedOutput()
 		fmt.Printf("%s\n", stdoutStderr)
 		if err == nil {
@@ -203,7 +216,7 @@ func (pool *AzureWorkerPool) DeleteInstance(generalworker *Worker) error {
 
 	// delete the vm
 	log.Printf("Try to delete the vm")
-	worker.killWorker()
+	generalworker.killWorker()
 	cleanupVM(worker)
 
 	// shrink length
