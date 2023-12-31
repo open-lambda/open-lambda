@@ -75,7 +75,23 @@ func LoadConf(path string) error {
 		loadbalancer.InitLoadBalancer(loadbalancer.Hash, Conf.MaxGroup)
 	}
 
-	return checkConf()
+	err = checkConf()
+	if err != nil {
+		return err
+	}
+
+	// save back config
+	confPath := "boss.json"
+	overridesPath := confPath + ".overrides"
+
+	s, err := json.MarshalIndent(Conf, "", "\t")
+	if err != nil {
+		return err
+	}
+	if err := ioutil.WriteFile(overridesPath, s, 0644); err != nil {
+		return err
+	}
+	return nil
 }
 
 func checkConf() error {
