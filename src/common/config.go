@@ -78,14 +78,12 @@ type FeaturesConfig struct {
 }
 
 type TraceConfig struct {
-	Format        string `json:"format"`
-	Log_file_dir  string `json:"log_file_dir"`
-	Cgroups       bool   `json:"cgroups"`
+	Enable_JSON   bool	 `json:"enable_json"`
+	Cgroups       string `json:"cgroups"`
 	Memory        bool   `json:"memory"`
 	Evictor       bool   `json:"evictor"`
 	Package       bool   `json:"package"`
 	Latency       bool   `json:"latency"`
-	Cgroups_level string `json:"cgroups_level"`
 }
 
 type StoreString string
@@ -140,7 +138,6 @@ func LoadDefaults(olPath string) error {
 	baseImgDir := filepath.Join(olPath, "lambda")
 	zygoteTreePath := filepath.Join(olPath, "default-zygotes-40.json")
 	packagesDir := filepath.Join(baseImgDir, "packages")
-	logfileDir := filepath.Join(olPath, "log")
 
 	// split anything above 512 MB evenly between handler and import cache
 	in := &syscall.Sysinfo_t{}
@@ -179,14 +176,12 @@ func LoadDefaults(olPath string) error {
 			Enable_seccomp:      true,
 		},
 		Trace: TraceConfig{
-			Format:        "default",
-			Log_file_dir:  logfileDir,
-			Cgroups:       false,
+			Enable_JSON:   false,
+			Cgroups:       "INFO",
 			Memory:        false,
 			Evictor:       false,
 			Package:       false,
 			Latency:       false,
-			Cgroups_level: "INFO",
 		},
 		Storage: StorageConfig{
 			Root:    "private",
@@ -253,16 +248,6 @@ func checkConf() error {
 		}
 	} else {
 		return fmt.Errorf("Unknown Sandbox type '%s'", Conf.Sandbox)
-	}
-
-	if Conf.Trace.Format != "default" {
-		if Conf.Trace.Format == "text" || Conf.Trace.Format == "json" {
-			if Conf.Trace.Log_file_dir == "" {
-				return fmt.Errorf("must specify log output directory under log_file_dir in config.json")
-			}
-		} else {
-			return fmt.Errorf("unknown log format")
-		}
 	}
 
 	return nil
