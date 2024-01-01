@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"os"
 
 	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
 	"github.com/open-lambda/open-lambda/ol/boss/loadbalancer"
@@ -22,9 +23,16 @@ type Config struct {
 	Gcp        cloudvm.GcpConfig   `json:"gcp"`
 	Lb         string              `json:"lb"`
 	MaxGroup   int                 `json:"max_group"`
+	Tree_path  string              `json:"tree_path"`
 }
 
 func LoadDefaults() error {
+	olPath, err := os.Getwd()
+	if err != nil {
+		log.Println("Error getting executable path:", err)
+		return err
+	}
+	tree_path := fmt.Sprintf("%s/default-zygote-40.json", olPath)
 	Conf = &Config{
 		Platform:   "mock",
 		Scaling:    "manual",
@@ -35,6 +43,7 @@ func LoadDefaults() error {
 		Gcp:        *cloudvm.GetGcpConfigDefaults(),
 		Lb:         "random",
 		MaxGroup:   5,
+		Tree_path:  tree_path,
 	}
 
 	return checkConf()
@@ -53,6 +62,7 @@ func LoadConf(path string) error {
 		return fmt.Errorf("could not parse config (%v): %v\n", path, err.Error())
 	}
 
+	cloudvm.LoadTreePath(Conf.Tree_path)
 	if Conf.Platform == "gcp" {
 		cloudvm.LoadGcpConfig(&Conf.Gcp)
 	} else if Conf.Platform == "azure" {
@@ -60,38 +70,22 @@ func LoadConf(path string) error {
 	}
 
 	if Conf.Lb == "random" {
-		loadbalancer.InitLoadBalancer(loadbalancer.Random, Conf.MaxGroup)
+		loadbalancer.InitLoadBalancer(loadbalancer.Random, Conf.MaxGroup, Conf.Tree_path)
 	}
 	if Conf.Lb == "sharding" {
-		loadbalancer.InitLoadBalancer(loadbalancer.Sharding, Conf.MaxGroup)
+		loadbalancer.InitLoadBalancer(loadbalancer.Sharding, Conf.MaxGroup, Conf.Tree_path)
 	}
 	if Conf.Lb == "kmeans" {
-		loadbalancer.InitLoadBalancer(loadbalancer.KMeans, Conf.MaxGroup)
+		loadbalancer.InitLoadBalancer(loadbalancer.KMeans, Conf.MaxGroup, Conf.Tree_path)
 	}
 	if Conf.Lb == "kmodes" {
-		loadbalancer.InitLoadBalancer(loadbalancer.KModes, Conf.MaxGroup)
+		loadbalancer.InitLoadBalancer(loadbalancer.KModes, Conf.MaxGroup, Conf.Tree_path)
 	}
 	if Conf.Lb == "hash" {
-		loadbalancer.InitLoadBalancer(loadbalancer.Hash, Conf.MaxGroup)
+		loadbalancer.InitLoadBalancer(loadbalancer.Hash, Conf.MaxGroup, Conf.Tree_path)
 	}
 
-	err = checkConf()
-	if err != nil {
-		return err
-	}
-
-	// save back config
-	confPath := "boss.json"
-	overridesPath := confPath + ".overrides"
-
-	s, err := json.MarshalIndent(Conf, "", "\t")
-	if err != nil {
-		return err
-	}
-	if err := ioutil.WriteFile(overridesPath, s, 0644); err != nil {
-		return err
-	}
-	return nil
+	return checkConf()
 }
 
 func checkConf() error {

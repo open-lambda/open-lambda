@@ -140,6 +140,7 @@ func (pool *WorkerPool) startNewWorker() {
 		len(pool.workers[DESTROYING]))
 	worker.funcLog = funcLog
 	worker.allTaks = 0
+	worker.pool = pool
 
 	pool.workers_queue[worker] = make(chan string, 5)
 
@@ -736,61 +737,71 @@ func (pool *WorkerPool) StatusCluster() map[string]int {
 func (pool *WorkerPool) Restart() {
 	for _, cur_worker := range pool.workers[RUNNING] {
 		cur_worker := cur_worker
-		go func(w *Worker) {
-			cur_worker.killWorker()
-			cur_worker.start(false)
 
-			if loadbalancer.Lb.LbType != loadbalancer.Random {
-				workerIdDigit, _ := strconv.Atoi(getAfterSep(cur_worker.workerId, "-"))
-				var assignedGroup int
-				if loadbalancer.MaxGroup == 1 {
-					assignedGroup = 0
-				} else {
-					assignedGroup = workerIdDigit%loadbalancer.MaxGroup - 1 // -1 because starts from 0
-					if assignedGroup == -1 {
-						assignedGroup = loadbalancer.MaxGroup - 1
-					}
+		cur_worker.killWorker()
+		cur_worker.start(false)
+
+		if loadbalancer.Lb.LbType != loadbalancer.Random {
+			workerIdDigit, _ := strconv.Atoi(getAfterSep(cur_worker.workerId, "-"))
+			var assignedGroup int
+			if loadbalancer.MaxGroup == 1 {
+				assignedGroup = 0
+			} else {
+				assignedGroup = workerIdDigit%loadbalancer.MaxGroup - 1 // -1 because starts from 0
+				if assignedGroup == -1 {
+					assignedGroup = loadbalancer.MaxGroup - 1
 				}
-
-				cur_worker.groupId = assignedGroup
-
-				// update the group stuff in pool
-				if _, ok := pool.groups[assignedGroup]; !ok {
-					// this group hasn't been created
-					pool.groups[assignedGroup] = &GroupWorker{
-						groupId:      pool.nextGroup,
-						groupWorkers: make(map[string]*Worker),
-					}
-					if loadbalancer.MaxGroup != 1 {
-						pool.nextGroup += 1
-						pool.nextGroup %= loadbalancer.MaxGroup - 1
-					}
-				}
-				fmt.Printf("Debug: %d\n", assignedGroup)
-				group := pool.groups[assignedGroup]
-				group.groupWorkers[cur_worker.workerId] = cur_worker
-
 			}
-		}(cur_worker)
+
+			cur_worker.groupId = assignedGroup
+
+			// update the group stuff in pool
+			if _, ok := pool.groups[assignedGroup]; !ok {
+				// this group hasn't been created
+				pool.groups[assignedGroup] = &GroupWorker{
+					groupId:      pool.nextGroup,
+					groupWorkers: make(map[string]*Worker),
+				}
+				if loadbalancer.MaxGroup != 1 {
+					pool.nextGroup += 1
+					pool.nextGroup %= loadbalancer.MaxGroup - 1
+				}
+			}
+			fmt.Printf("Debug: %d\n", assignedGroup)
+			group := pool.groups[assignedGroup]
+			group.groupWorkers[cur_worker.workerId] = cur_worker
+
+		}
+
 	}
+}
+
+func (pool *WorkerPool) ChangeTree(tree string) {
+	pool.Lock()
+	loadbalancer.InitLoadBalancer(loadbalancer.Lb.LbType, loadbalancer.MaxGroup, tree)
+	pool.Unlock()
+
+	pool.Restart()
+
+	pool.updateCluster()
 }
 
 func (pool *WorkerPool) ChangePolicy(policy string) {
 	pool.Lock()
 	if policy == "random" {
-		loadbalancer.InitLoadBalancer(loadbalancer.Random, loadbalancer.MaxGroup)
+		loadbalancer.InitLoadBalancer(loadbalancer.Random, loadbalancer.MaxGroup, tree_path)
 	}
 	if policy == "sharding" {
-		loadbalancer.InitLoadBalancer(loadbalancer.Sharding, loadbalancer.MaxGroup)
+		loadbalancer.InitLoadBalancer(loadbalancer.Sharding, loadbalancer.MaxGroup, tree_path)
 	}
 	if policy == "kmeans" {
-		loadbalancer.InitLoadBalancer(loadbalancer.KMeans, loadbalancer.MaxGroup)
+		loadbalancer.InitLoadBalancer(loadbalancer.KMeans, loadbalancer.MaxGroup, tree_path)
 	}
 	if policy == "kmodes" {
-		loadbalancer.InitLoadBalancer(loadbalancer.KModes, loadbalancer.MaxGroup)
+		loadbalancer.InitLoadBalancer(loadbalancer.KModes, loadbalancer.MaxGroup, tree_path)
 	}
 	if policy == "hash" {
-		loadbalancer.InitLoadBalancer(loadbalancer.Hash, loadbalancer.MaxGroup)
+		loadbalancer.InitLoadBalancer(loadbalancer.Hash, loadbalancer.MaxGroup, tree_path)
 	}
 	pool.Unlock()
 

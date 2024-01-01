@@ -20,8 +20,9 @@
 		"machine_type": "e2-medium"
 	},
 	"lb": "random",
-	"max_group": 5,
+	"max_group": 2,
 	"platform": "azure",
 	"scaling": "manual",
+	"tree_path": "/home/azureuser/paper-tree-cache/analysis/17/trees/tree-v2.node-640.json",
 	"worker_cap": 20
 }

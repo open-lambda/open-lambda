@@ -22,6 +22,7 @@ const (
 	SHUTDOWN_PATH    = "/shutdown"
 	RESTART_PATH     = "/restart"
 	CHANGE_LB_PATH   = "/change_lb"
+	CHANGE_TREE_PATH = "/change_tree"
 )
 
 type Boss struct {
@@ -100,6 +101,33 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 	b.BossStatus(w, r)
 }
 
+func (b *Boss) ChangeTree(w http.ResponseWriter, r *http.Request) {
+	// STEP 1: get int (worker count) from POST body, or return an error
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		_, err := w.Write([]byte("POST a policy to /change_lb\n"))
+		if err != nil {
+			log.Printf("(1) could not write web response: %s\n", err.Error())
+		}
+		return
+	}
+
+	contents, err := io.ReadAll(r.Body)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, err := w.Write([]byte("could not read body of web request\n"))
+		if err != nil {
+			log.Printf("(2) could not write web response: %s\n", err.Error())
+		}
+		return
+	}
+
+	new_tree := string(contents)
+	Conf.Tree_path = new_tree
+
+	b.workerPool.ChangeTree(new_tree)
+}
+
 func (b *Boss) RestartWorkers(w http.ResponseWriter, r *http.Request) {
 	b.workerPool.Restart()
 	b.BossStatus(w, r)
@@ -164,6 +192,7 @@ func BossMain() (err error) {
 	http.HandleFunc(SHUTDOWN_PATH, boss.Close)
 	http.HandleFunc(RESTART_PATH, boss.RestartWorkers)
 	http.HandleFunc(CHANGE_LB_PATH, boss.ChangeLb)
+	http.HandleFunc(CHANGE_TREE_PATH, boss.ChangeTree)
 
 	// clean up if signal hits us
 	c := make(chan os.Signal, 1)

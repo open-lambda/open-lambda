@@ -132,7 +132,9 @@ func (worker *Worker) start(firstTime bool) error {
 
 	python_path := test_path
 
-	run_deploy_funcs := "sudo python3 write_funcs.py"
+	workerNum := len(worker.pool.workers[RUNNING]) + len(worker.pool.workers[STARTING])
+	run_deploy_funcs := fmt.Sprintf("sudo python3 write_funcs.py %d", workerNum)
+
 	run_one_time := "sudo python3 run_worker.py"
 
 	var run_worker_up string

@@ -16,9 +16,7 @@ const (
 	Hash     = 4
 )
 
-const (
-	tree_path = "/home/azureuser/paper-tree-cache/analysis/17/trials/0/tree-v2.node-320.json"
-)
+var tree_path string
 
 var MaxGroup int
 var Lb *LoadBalancer
@@ -57,7 +55,8 @@ func loadRequirements(root string) error {
 	return err
 }
 
-func InitLoadBalancer(lbType int, maxGroup int) {
+func InitLoadBalancer(lbType int, maxGroup int, path string) {
+	tree_path = path
 	if lbType != Random {
 		// read requirements.txt into a data structure
 		Requirements = make(map[string]string)

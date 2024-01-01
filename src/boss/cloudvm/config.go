@@ -20,6 +20,10 @@ type GcpConfig struct {
 	MachineType string `json:"machine_type"`
 }
 
+func LoadTreePath(path string) {
+	tree_path = path
+}
+
 func GetGcpConfigDefaults() *GcpConfig {
 	return &GcpConfig{
 		DiskSizeGb:  30,
