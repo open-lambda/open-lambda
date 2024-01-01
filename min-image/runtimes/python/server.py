@@ -76,10 +76,13 @@ def fork_server():
     # print(f"server.py: start fork server on fd: {file_sock.fileno()}")
 
     while True:
-        try:
-            pid, status = os.waitpid(-1, os.WNOHANG)
-        except ChildProcessError:
-            pass
+        while True:
+            try:
+                pid, _ = os.waitpid(-1, os.WNOHANG)
+                if pid == 0:
+                    break
+            except ChildProcessError:
+                break
         client, _info = file_sock.accept()
         _, fds = recv_fds(client, 8, 2)
         root_fd, mem_cgroup_fd = fds
