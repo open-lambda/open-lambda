@@ -59,6 +59,9 @@ imgs/ol-wasm: imgs/ol-min wasm-image/runtimes/native/src/main.rs
 install-python-bindings:
 	cd python && pip install .
 
+sudo-install-python-bindings:
+	cd python && sudo pip install .
+
 check-runtime:
 	cd lambda/runtimes/rust && cargo check
 
