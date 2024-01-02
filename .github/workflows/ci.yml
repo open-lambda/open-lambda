@@ -42,9 +42,13 @@ jobs:
       with:
          workspaces: "wasm-worker-> target"
     - name: Install golang
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v4
       with:
-         go-version: '>=1.18.0'
+         go-version: '>=1.20'
+    - name: Set up Python 3
+      uses: actions/setup-python@v4
+      with:
+         python-version: '3.12'
     - name: Install cross
       run: cargo install cross
     - name: Build OpenLambda
