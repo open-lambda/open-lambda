@@ -40,6 +40,7 @@ var lock sync.Mutex
 
 // GetPid returns process ID, useful for making sure we're talking to the expected server
 func GetPid(w http.ResponseWriter, r *http.Request) {
+	// TODO re-enable once logging is configurable
 	//log.Printf("Received request to %s\n", r.URL.Path)
 
 	wbody := []byte(strconv.Itoa(os.Getpid()) + "\n")
@@ -50,6 +51,7 @@ func GetPid(w http.ResponseWriter, r *http.Request) {
 
 // Status writes "ready" to the response.
 func Status(w http.ResponseWriter, r *http.Request) {
+	// TODO re-enable once logging is configurable
 	//log.Printf("Received request to %s\n", r.URL.Path)
 
 	if _, err := w.Write([]byte("ready\n")); err != nil {

@@ -304,6 +304,7 @@ func (f *LambdaFunc) Task() {
 		// AUTOSCALING STEP 1: decide how many instances we want
 
 		// let's aim to have 1 sandbox per 10ms of outstanding work
+		// TODO make this configurable
 		inProgressWorkMs := outstandingReqs * execMs.Avg
 		desiredInstances := inProgressWorkMs / 10
 

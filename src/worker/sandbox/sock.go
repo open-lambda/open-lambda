@@ -119,7 +119,7 @@ func (container *SOCKContainer) launchContainerProxy() (err error) {
 	var procAttr os.ProcAttr
 	procAttr.Files = []*os.File{os.Stdin, os.Stdout, os.Stderr}
 
-    binPath, err := exec.LookPath("ol-container-proxy")
+	binPath, err := exec.LookPath("ol-container-proxy")
 	if err != nil {
         return fmt.Errorf("Failed to find container proxy binary: %s", err)
 	}

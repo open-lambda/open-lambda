@@ -118,7 +118,7 @@ func (sb *safeSandbox) DestroyIfPaused(reason string) {
 }
 
 func (sb *safeSandbox) Pause() (err error) {
-    //sb.printf("Pause()")
+    sb.printf("Pause()")
 	t := common.T0("Pause()")
 	defer t.T1()
 	sb.Mutex.Lock()
@@ -141,7 +141,7 @@ func (sb *safeSandbox) Pause() (err error) {
 }
 
 func (sb *safeSandbox) Unpause() (err error) {
-	//sb.printf("Unpause()")
+	sb.printf("Unpause()")
 	t := common.T0("Unpause()")
 	defer t.T1()
 	sb.Mutex.Lock()
