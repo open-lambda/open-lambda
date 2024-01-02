@@ -1,4 +1,0 @@
-This is a hack.  We want to use Docker build from our Makefile, but
-Makefiles only understand local files with timestamps.  Thus, we use
-empty files in this directory as our targets.  Whenever we build an
-image with docker, we touch a file here with the same name.

@@ -21,6 +21,11 @@ import (
 
 var notFound404 = errors.New("file does not exist")
 
+// for handlerNameRegex inside Pull() usage
+var handlerNameRegex *regexp.Regexp
+var handlerNameRegexError error
+var handlerNameRegexStatus int // 0 = uncompiled, 1 = compiled and functional, -1 = failed compilation/test
+
 // TODO: for web registries, support an HTTP-based access key
 // (https://en.wikipedia.org/wiki/Basic_access_authentication)
 
@@ -105,37 +110,42 @@ func (cp *HandlerPuller) isRemote() bool {
 	return strings.HasPrefix(cp.prefix, "http://") || strings.HasPrefix(cp.prefix, "https://")
 }
 
-func createRegex(expr string, testValidString string, testInvalidString string) (reComp *regexp.Regexp, reErr error) {
-	re, err := regexp.Compile(expr)
-	errorMsg := error(nil)
+func createRegex(expr string, testValidString string, testInvalidString string) {
+	handlerNameRegex, handlerNameRegexError = regexp.Compile(expr)
 
-	if err != nil {
-		msg := "regex failed to comple with error '%s'"
-		errorMsg = fmt.Errorf(msg, err)
-	}
-	if re == nil {
-		errorMsg = errors.New("regex failed to compile with null output")
+	if handlerNameRegexError != nil {
+		handlerNameRegexStatus = -1
+	} else if handlerNameRegex == nil {
+		handlerNameRegexError = errors.New("null compilation output")
+		handlerNameRegexStatus = -1
 	} else {
-		vMatched := re.MatchString(testValidString)
+		vMatched := handlerNameRegex.MatchString(testValidString)
 		if !vMatched {
-			errorMsg = errors.New("regex valid test run failed")
+			handlerNameRegexError = errors.New("valid string test failed")
+			handlerNameRegexStatus = -1
 		}
-		iMatched := re.MatchString(testInvalidString)
+		iMatched := handlerNameRegex.MatchString(testInvalidString)
 		if iMatched {
-			errorMsg = errors.New("regex invalid test run failed")
+			handlerNameRegexError = errors.New("invalid string test failed")
+			handlerNameRegexStatus = -1
 		}
 	}
 
-	return re, errorMsg
+	handlerNameRegexStatus = 1
 }
 
 func (cp *HandlerPuller) Pull(name string) (rt_type common.RuntimeType, targetDir string, err error) {
 	t := common.T0("pull-lambda")
 	defer t.T1()
 
-	handlerNameRegex, handlerNameError := createRegex(`^[A-Za-z0-9\.\-\_]+$`, "-H3ll0.world_", "Hello world!")
-	if handlerNameError != nil {
-		return rt_type, "", handlerNameError
+	// compile regex if not compiled yet
+	if handlerNameRegexStatus == 0 {
+		createRegex(`^[A-Za-z0-9\.\-\_]+$`, `H3ll0.world_`, `Hello world!`)
+	}
+
+	// return error if failed to compile
+	if handlerNameRegexStatus == -1 {
+		return rt_type, "", handlerNameRegexError
 	}
 
 	matched := handlerNameRegex.MatchString(name)
