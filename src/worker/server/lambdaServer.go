@@ -60,8 +60,11 @@ func (s *LambdaServer) RunLambda(w http.ResponseWriter, r *http.Request) {
 			img := urlParts[1]
 			s.lambdaMgr.Get(img).Invoke(w, r)
 		} else {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("expected invocation format: /run/<lambda-name>"))
+			img := urlParts[1]
+			s.lambdaMgr.Get(img).Invoke(w, r)
+			// Commented out to deal with multiple paths in open lambda app runnning in WSGI container, check if need to fix later
+			// w.WriteHeader(http.StatusInternalServerError)
+			// w.Write([]byte("expected invocation format: /run/<lambda-name>"))
 		}
 	}
 }
