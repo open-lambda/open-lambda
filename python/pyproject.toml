@@ -8,4 +8,4 @@ requires-python=">=3.10"
 author = "The Open Lambda Authors"
 
 [build-system]
-requires = ["wheel"]
+requires = ["wheel", "setuptools"]
