@@ -110,7 +110,7 @@ lint-functions:
 lint-wasm-worker:
 	cd wasm-worker && cargo clippy
 
-lint: lint-wasm-worker lint-functions lint-python #lint-go
+lint: lint-wasm-worker lint-functions lint-python lint-go
 
 clean:
 	rm -f ol imgs/ol-min imgs/ol-wasm
