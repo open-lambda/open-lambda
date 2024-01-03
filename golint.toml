@@ -28,10 +28,6 @@ enableAllRules = true
     Disabled = true
 [rule.import-shadowing]
     Disabled = true
-[rule.unused-parameter]
-    Disabled = true
-[rule.unused-receiver]
-    Disabled = true
 [rule.receiver-naming]
     Disabled = true
 [rule.error-strings]

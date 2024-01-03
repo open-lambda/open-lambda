@@ -39,7 +39,7 @@ var cpuTemp *os.File
 var lock sync.Mutex
 
 // HandleGetPid returns process ID, useful for making sure we're talking to the expected server
-func HandleGetPid(w http.ResponseWriter, r *http.Request) {
+func HandleGetPid(w http.ResponseWriter, _ *http.Request) {
 	// TODO re-enable once logging is configurable
 	//log.Printf("Received request to %s\n", r.URL.Path)
 
@@ -50,7 +50,7 @@ func HandleGetPid(w http.ResponseWriter, r *http.Request) {
 }
 
 // Status writes "ready" to the response.
-func Status(w http.ResponseWriter, r *http.Request) {
+func Status(w http.ResponseWriter, _ *http.Request) {
 	// TODO re-enable once logging is configurable
 	//log.Printf("Received request to %s\n", r.URL.Path)
 
@@ -59,7 +59,7 @@ func Status(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func Stats(w http.ResponseWriter, r *http.Request) {
+func Stats(w http.ResponseWriter, _ *http.Request) {
 	//log.Printf("Received request to %s\n", r.URL.Path)
 	snapshot := common.SnapshotStats()
 	if b, err := json.MarshalIndent(snapshot, "", "\t"); err != nil {
@@ -69,7 +69,7 @@ func Stats(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func PprofMem(w http.ResponseWriter, r *http.Request) {
+func PprofMem(w http.ResponseWriter, _ *http.Request) {
 	runtime.GC()
 	w.Header().Add("Content-Type", "application/octet-stream")
 	if err := pprof.WriteHeapProfile(w); err != nil {
@@ -106,7 +106,7 @@ func doCpuStart() error {
 }
 
 // Starts CPU profiling
-func PprofCpuStart(w http.ResponseWriter, r *http.Request) {
+func PprofCpuStart(w http.ResponseWriter, _ *http.Request) {
 	if err := doCpuStart(); err != nil {
 		msg := fmt.Sprintf("%v", err)
 		w.WriteHeader(http.StatusBadRequest)
@@ -117,7 +117,7 @@ func PprofCpuStart(w http.ResponseWriter, r *http.Request) {
 }
 
 // Stops CPU profiling, writes profiled data to response, and does cleanup
-func PprofCpuStop(w http.ResponseWriter, r *http.Request) {
+func PprofCpuStop(w http.ResponseWriter, _ *http.Request) {
 	lock.Lock()
 	defer lock.Unlock()
 

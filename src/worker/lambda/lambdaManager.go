@@ -131,7 +131,7 @@ func (mgr *LambdaMgr) Debug() string {
 	return mgr.sbPool.DebugString() + "\n"
 }
 
-func (mgr *LambdaMgr) DumpStatsToLog() {
+func (_ *LambdaMgr) DumpStatsToLog() {
 	snapshot := common.SnapshotStats()
 
 	sec := func(name string) float64 {

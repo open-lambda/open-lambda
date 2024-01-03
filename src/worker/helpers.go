@@ -170,7 +170,7 @@ func initOLDir(olPath string, dockerBaseImage string, newBase bool) (err error) 
 // main error scenarios:
 // 1. PID exists, but process cannot be killed (worker probably died unexpectedly)
 // 2. The cleanup is taking too long (maybe the timeout is insufficient, or there is a deadlock)
-func stopOL(olPath string) error {
+func stopOL(_ string) error {
 	// locate worker.pid, use it to get worker's PID
 	pidPath := filepath.Join(common.Conf.Worker_dir, "worker.pid")
 	data, err := ioutil.ReadFile(pidPath)

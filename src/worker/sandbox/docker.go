@@ -169,7 +169,7 @@ func (container *DockerContainer) Unpause() error {
 }
 
 // Destroy shuts down this container
-func (container *DockerContainer) Destroy(reason string) {
+func (container *DockerContainer) Destroy(_ string) {
 	if err := container.internalDestroy(); err != nil {
 		panic(fmt.Sprintf("Failed to cleanup container %v: %v", container.container.ID, err))
 	}
@@ -296,11 +296,11 @@ func (container *DockerContainer) DebugString() string {
 	return fmt.Sprintf("SANDBOX %s (DOCKER)\n", container.ID())
 }
 
-func (*DockerContainer) fork(dst Sandbox) (err error) {
+func (*DockerContainer) fork(_ Sandbox) (err error) {
 	panic("DockerContainer does not implement cross-container forks")
 }
 
-func (*DockerContainer) childExit(child Sandbox) {
+func (*DockerContainer) childExit(_ Sandbox) {
 	panic("DockerContainers should not have children because fork is unsupported")
 }
 

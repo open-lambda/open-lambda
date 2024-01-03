@@ -79,7 +79,7 @@ func NewGcpWorkerPool() *WorkerPool {
 	}
 }
 
-func (pool *GcpWorkerPool) NewWorker(workerId string) *Worker {
+func (_ *GcpWorkerPool) NewWorker(workerId string) *Worker {
 	return &Worker{
 		workerId:       workerId,
 		workerIp:       "",
@@ -113,6 +113,6 @@ func (pool *GcpWorkerPool) DeleteInstance(worker *Worker) {
 	pool.client.Wait(pool.client.deleteGcpInstance(worker.workerId)) //wait until instance is completely deleted
 }
 
-func (pool *GcpWorkerPool) ForwardTask(w http.ResponseWriter, r *http.Request, worker *Worker) {
+func (_ *GcpWorkerPool) ForwardTask(w http.ResponseWriter, r *http.Request, worker *Worker) {
 	forwardTaskHelper(w, r, worker.workerIp)
 }

@@ -60,7 +60,7 @@ func NewDockerPool(pidMode string, caps []string) (*DockerPool, error) {
 }
 
 // Create creates a docker sandbox from the handler and sandbox directory.
-func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, meta *SandboxMeta, _rtType common.RuntimeType) (sb Sandbox, err error) {
+func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, meta *SandboxMeta, _ common.RuntimeType) (sb Sandbox, err error) {
 	meta = fillMetaDefaults(meta)
 	t := common.T0("Create()")
 	defer t.T1()
@@ -161,7 +161,7 @@ func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir 
 
 // Cleanup will free up any unneeded data/resources
 // Currently, this function does nothing and cleanup is handled by the docker daemon
-func (pool *DockerPool) Cleanup() {}
+func (_ *DockerPool) Cleanup() {}
 
 // DebugString returns debug information
 func (pool *DockerPool) DebugString() string {

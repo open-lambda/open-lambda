@@ -164,12 +164,15 @@ func (pool *CgroupPool) GetCg(memLimitMB int, moveMemCharge bool, cpuPercent int
 	cg.SetMemLimitMB(memLimitMB)
 	cg.SetCPUPercent(cpuPercent)
 
-	/* FIXME not supported in CG2?
-	   if moveMemCharge {
-	       cg.WriteInt("memory.move_charge_at_immigrate", 1)
-	   } else {
-	       cg.WriteInt("memory.move_charge_at_immigrate", 0)
-	   }*/
+	// FIXME not supported in CG2?
+	var _ = moveMemCharge
+
+	/*
+	if moveMemCharge {
+		cg.WriteInt("memory.move_charge_at_immigrate", 1)
+	} else {
+		cg.WriteInt("memory.move_charge_at_immigrate", 0)
+	}*/
 
 	return cg
 }

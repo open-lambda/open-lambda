@@ -44,7 +44,7 @@ func (b *Boss) BossStatus(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (b *Boss) Close(w http.ResponseWriter, r *http.Request) {
+func (b *Boss) Close(_ http.ResponseWriter, _ *http.Request) {
 	b.workerPool.Close()
 	if Conf.Scaling == "threshold-scaler" {
 		b.autoScaler.Close()
