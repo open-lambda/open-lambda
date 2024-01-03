@@ -28,11 +28,10 @@ func initOLBaseDir(baseDir string, dockerBaseImage string) error {
 	fmt.Printf("\tExtract '%s' Docker image to %s (make take several minutes).\n", dockerBaseImage, baseDir)
 
 	// PART 1: dump Docker image
-	var dockerClient *docker.Client
-	if c, err := docker.NewClientFromEnv(); err != nil {
+	dockerClient, err := docker.NewClientFromEnv()
+	if err != nil {
 		return err
 	}
-	dockerClient = c
 
 	err := dutil.DumpDockerImage(dockerClient, dockerBaseImage, baseDir)
 	if err != nil {
