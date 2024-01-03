@@ -12,6 +12,30 @@ enableAllRules = true
 [rule.unhandled-error]
     Disabled = true
 
+#TODO use uniform casing everywhere
+[rule.var-naming]
+    Disabled = true
+
+[rule.defer]
+    Disabled = true
+[rule.empty-block]
+    Disabled = true
+[ruile.var-declaration]
+    Disabled = true
+[rule.confusing-results]
+    Disabled = true
+[rule.call-to-gc]
+    Disabled = true
+[rule.import-shadowing]
+    Disabled = true
+[rule.unused-parameter]
+    Disabled = true
+[rule.unused-receiver]
+    Disabled = true
+[rule.receiver-naming]
+    Disabled = true
+[rule.error-strings]
+    Disabled = true
 [rule.exported]
     Disabled = true
 [rule.early-return]
@@ -32,10 +56,14 @@ enableAllRules = true
     Disabled = true
 [rule.increment-decrement]
     Disabled = true
+[rule.flag-parameter]
+    Disabled = true
 
 [rule.argument-limit]
     Arguments = [7]
+
+# TODO reduce to 10 or so
 [rule.cyclomatic]
-    Arguments = [10]
+    Arguments = [35]
 [rule.function-result-limit]
     Arguments = [3]

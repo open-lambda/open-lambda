@@ -222,7 +222,7 @@ func (f *LambdaFunc) Task() {
 	// stats for autoscaling
 	outstandingReqs := 0
 	execMs := common.NewRollingAvg(10)
-	var lastScaling *time.Time = nil
+	var lastScaling *time.Time
 	timeout := time.NewTimer(0)
 
 	for {

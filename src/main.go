@@ -125,10 +125,8 @@ func overrideOpts(confPath, overridePath, optsStr string) error {
 	if err != nil {
 		return err
 	}
-	if err := ioutil.WriteFile(overridePath, s, 0644); err != nil {
-		return err
-	}
-	return nil
+
+	return ioutil.WriteFile(overridePath, s, 0644)
 }
 
 // corresponds to the "pprof mem" command of the admin tool.

@@ -11,8 +11,8 @@ type debugger chan any
 
 func newDebugger(sbPool SandboxPool) debugger {
 	var d debugger = make(chan any, 64)
-	sbPool.AddListener(func(EvType SandboxEventType, sb Sandbox) {
-		d <- SandboxEvent{EvType, sb}
+	sbPool.AddListener(func(evType SandboxEventType, sb Sandbox) {
+		d <- SandboxEvent{evType, sb}
 	})
 	go d.Run()
 	return d

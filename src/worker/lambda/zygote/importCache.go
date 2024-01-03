@@ -166,7 +166,6 @@ func (cache *ImportCache) Create(childSandboxPool sandbox.SandboxPool, isLeaf bo
 func (cache *ImportCache) createChildSandboxFromNode(
 	childSandboxPool sandbox.SandboxPool, node *ImportCacheNode, isLeaf bool,
 	codeDir, scratchDir string, meta *sandbox.SandboxMeta, rt_type common.RuntimeType) (sandbox.Sandbox, error) {
-
 	t := common.T0("ImportCache.createChildSandboxFromNode")
 	defer t.T1()
 
@@ -235,14 +234,14 @@ func (cache *ImportCache) getSandboxInNode(node *ImportCacheNode, forceNew bool,
 		}
 		node.sbRefCount += 1
 		return node.sb, false, nil
-	} else {
-		// SLOW PATH
-		if err := cache.createSandboxInNode(node, rt_type); err != nil {
-			return nil, false, err
-		}
-		node.sbRefCount = 1
-		return node.sb, true, nil
 	}
+
+	// SLOW PATH
+	if err := cache.createSandboxInNode(node, rt_type); err != nil {
+		return nil, false, err
+	}
+	node.sbRefCount = 1
+	return node.sb, true, nil
 }
 
 // decrease refs to SB, pausing if nobody else is still using it

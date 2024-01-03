@@ -20,7 +20,7 @@ import (
 const SOCK_HOST_INIT = "/usr/local/bin/sock-init"
 const SOCK_GUEST_INIT = "/ol-init"
 
-var nextId int64 = 0
+var nextId int64
 
 // SOCKPool is a ContainerFactory that creats docker containeres.
 type SOCKPool struct {
@@ -75,7 +75,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 	t := common.T0("Create()")
 	defer t.T1()
 
-	var cSock *SOCKContainer = &SOCKContainer{
+	var cSock = &SOCKContainer{
 		pool:             pool,
 		id:               id,
 		containerRootDir: pool.rootDirs.Make("SB-" + id),

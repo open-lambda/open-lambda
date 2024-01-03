@@ -50,7 +50,7 @@ type snapshotMsg struct {
 }
 
 var initOnce sync.Once
-var statsChan chan any = make(chan any, 256)
+var statsChan = make(chan any, 256)
 
 func initTaskOnce() {
 	initOnce.Do(func() {

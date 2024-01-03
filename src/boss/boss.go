@@ -42,8 +42,6 @@ func (b *Boss) BossStatus(w http.ResponseWriter, r *http.Request) {
 	} else {
 		w.Write(b)
 	}
-
-
 }
 
 func (b *Boss) Close(w http.ResponseWriter, r *http.Request) {
