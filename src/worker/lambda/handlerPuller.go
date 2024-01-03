@@ -20,6 +20,7 @@ import (
 )
 
 var errNotFound404 = errors.New("file does not exist")
+var handlerNameRegex *regexp.Regexp
 
 // TODO: for web registries, support an HTTP-based access key
 // (https://en.wikipedia.org/wiki/Basic_access_authentication)
@@ -110,10 +111,11 @@ func (cp *HandlerPuller) Pull(name string) (rt_type common.RuntimeType, targetDi
 	t := common.T0("pull-lambda")
 	defer t.T1()
 
-	matched, err := regexp.MatchString(`^[A-Za-z0-9\.\-\_]+$`, name)
-	if err != nil {
-		return rt_type, "", err
-	} else if !matched {
+	if handlerNameRegex == nil {
+		handlerNameRegex = regexp.MustCompile(`^[A-Za-z0-9\.\-\_]+$`)
+	}
+	
+	if !handlerNameRegex.MatchString(name) {
 		msg := "bad lambda name '%s', can only contain letters, numbers, period, dash, and underscore"
 		return rt_type, "", fmt.Errorf(msg, name)
 	}
