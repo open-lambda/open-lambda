@@ -1,3 +1,5 @@
+# 
+
 # pylint: disable=line-too-long,global-statement,invalid-name,broad-except
 
 ''' Python runtime for sock '''
@@ -20,8 +22,10 @@ bootstrap_path = None
 
 def web_server():
     print(f"server.py: start web server on fd: {file_sock.fileno()}")
-    print("\nIN WEB_SERVER CODE\n")
     sys.path.append('/handler')
+    
+
+
 
     # TODO: as a safeguard, we should add a mechanism so that the
     # import doesn't happen until the cgroup move completes, so that a
@@ -42,72 +46,21 @@ def web_server():
             except Exception:
                 self.set_status(500) # internal error
                 self.write(traceback.format_exc())
-    print(f)
-    print(dir(f))
+    
     if hasattr(f, "app"):
-        import flask
-        from tornado import httputil
-        from typing import Dict, Text, Any
-        
         class CustomPrefixHandler(tornado.wsgi.WSGIContainer):
-            def __init__(self, flask_app, prefix='/run/flaskapp'):
-                super().__init__(flask_app)
-                self.prefix = prefix
+           
 
-            def environ(self, request: httputil.HTTPServerRequest) -> Dict[Text, Any]:
-                """Converts a `tornado.httputil.HTTPServerRequest` to a WSGI environment.
-
-                .. versionchanged:: 6.3
-                No longer a static method.
-                """
-                hostport = request.host.split(":")
-                if len(hostport) == 2:
-                    host = hostport[0]
-                    port = int(hostport[1])
-                else:
-                    host = request.host
-                    port = 443 if request.protocol == "https" else 80
-                environ = {
-                    "REQUEST_METHOD": request.method,
-                    "SCRIPT_NAME": self.prefix,
-                    "PATH_INFO": to_wsgi_str(
-                        escape.url_unescape(request.path[len(self.prefix)], encoding=None, plus=False)
-                    ),
-                    "QUERY_STRING": request.query,
-                    "REMOTE_ADDR": request.remote_ip,
-                    "SERVER_NAME": host,
-                    "SERVER_PORT": str(port),
-                    "SERVER_PROTOCOL": request.version,
-                    "wsgi.version": (1, 0),
-                    "wsgi.url_scheme": request.protocol,
-                    "wsgi.input": BytesIO(escape.utf8(request.body)),
-                    "wsgi.errors": sys.stderr,
-                    "wsgi.multithread": self.executor is not dummy_executor,
-                    "wsgi.multiprocess": True,
-                    "wsgi.run_once": False,
-                }
-                if "Content-Type" in request.headers:
-                    environ["CONTENT_TYPE"] = request.headers.pop("Content-Type")
-                if "Content-Length" in request.headers:
-                    environ["CONTENT_LENGTH"] = request.headers.pop("Content-Length")
-                for key, value in request.headers.items():
-                    environ["HTTP_" + key.replace("-", "_").upper()] = value
-                return environ
-
-
+            # modify call method so the lambda prefix isn't included in the call
             def __call__(self, request):
-                # Adjust the WSGI environment based on the prefix
-                # request.environ['SCRIPT_NAME'] = self.prefix
-                # request.environ['PATH_INFO'] = request.uri[len(self.prefix):]
-                request.path = request.path[len(self.prefix):]
-                print(f"\nREQUEST PATH: {request.path}")
+                # request.path = request.path[len(self.prefix):]
+                reqlist = request.path.split("/")
                 
-                # Pass the modified WSGI environment to the Flask app
+                request.path = "/".join(reqlist[3:]) + "/"
                 return super().__call__(request)
 
         # use WSGI entry
         app = CustomPrefixHandler(f.app)
-        print("\n CREATING WSGI \n")
     else:
         print("\n NO WSGI \n")
 
