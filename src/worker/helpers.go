@@ -33,8 +33,7 @@ func initOLBaseDir(baseDir string, dockerBaseImage string) error {
 		return err
 	}
 
-	err := dutil.DumpDockerImage(dockerClient, dockerBaseImage, baseDir)
-	if err != nil {
+	if err = dutil.DumpDockerImage(dockerClient, dockerBaseImage, baseDir); err != nil {
 		return err
 	}
 
