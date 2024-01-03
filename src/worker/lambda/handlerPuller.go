@@ -21,6 +21,11 @@ import (
 
 var notFound404 = errors.New("file does not exist")
 
+// for regex inside Pull() use
+var handlerNameRegex *regexp.Regexp
+var handlerNameRegexError error
+var handlerNameRegexStatus int // 0 = uncompiled, 1 = compiled and functional, -1 = failed compilation/test
+
 // TODO: for web registries, support an HTTP-based access key
 // (https://en.wikipedia.org/wiki/Basic_access_authentication)
 
@@ -106,14 +111,46 @@ func (cp *HandlerPuller) isRemote() bool {
 	return strings.HasPrefix(cp.prefix, "http://") || strings.HasPrefix(cp.prefix, "https://")
 }
 
+func createRegex(expr string, testValidString string, testInvalidString string) {
+	handlerNameRegex, handlerNameRegexError = regexp.Compile(expr)
+
+	if handlerNameRegexError != nil {
+		handlerNameRegexStatus = -1
+	} else if handlerNameRegex == nil {
+		handlerNameRegexError = errors.New("null compilation output")
+		handlerNameRegexStatus = -1
+	} else {
+		vMatched := handlerNameRegex.MatchString(testValidString)
+		if !vMatched {
+			handlerNameRegexError = errors.New("valid string test failed")
+			handlerNameRegexStatus = -1
+		}
+		iMatched := handlerNameRegex.MatchString(testInvalidString)
+		if iMatched {
+			handlerNameRegexError = errors.New("invalid string test failed")
+			handlerNameRegexStatus = -1
+		}
+	}
+
+	handlerNameRegexStatus = 1
+}
+
 func (cp *HandlerPuller) Pull(name string) (rt_type common.RuntimeType, targetDir string, err error) {
 	t := common.T0("pull-lambda")
 	defer t.T1()
 
-	matched, err := regexp.MatchString(`^[A-Za-z0-9\.\-\_]+$`, name)
-	if err != nil {
-		return rt_type, "", err
-	} else if !matched {
+	// compile regex if not compiled yet
+	if handlerNameRegexStatus == 0 {
+		createRegex(`^[A-Za-z0-9\.\-\_]+$`, `H3ll0.world_`, `Hello world!`)
+	}
+
+	// return error if failed to compile
+	if handlerNameRegexStatus == -1 {
+		return rt_type, "", handlerNameRegexError
+	}
+
+	matched := handlerNameRegex.MatchString(name)
+	if !matched {
 		msg := "bad lambda name '%s', can only contain letters, numbers, period, dash, and underscore"
 		return rt_type, "", fmt.Errorf(msg, name)
 	}
