@@ -21,8 +21,7 @@ fn main() {
         .as_i64()
         .unwrap() as usize;
 
-    let mut input_vec = Vec::<u8>::new();
-    input_vec.resize(input_len, 0);
+    let mut input_vec = vec![0; input_len];
 
     let mut rng = SmallRng::from_entropy();
     input_vec.try_fill(&mut rng).unwrap();

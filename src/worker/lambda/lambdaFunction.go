@@ -303,9 +303,10 @@ func (f *LambdaFunc) Task() {
 
 		// AUTOSCALING STEP 1: decide how many instances we want
 
-		// let's aim to have 1 sandbox per second of outstanding work
+		// let's aim to have 1 sandbox per 10ms of outstanding work
+		// TODO make this configurable
 		inProgressWorkMs := outstandingReqs * execMs.Avg
-		desiredInstances := inProgressWorkMs / 1000
+		desiredInstances := inProgressWorkMs / 10
 
 		// if we have, say, one job that will take 100
 		// seconds, spinning up 100 instances won't do any
@@ -321,8 +322,8 @@ func (f *LambdaFunc) Task() {
 
 		// AUTOSCALING STEP 2: tweak how many instances we have, to get closer to our goal
 
-		// make at most one scaling adjustment per second
-		adjustFreq := time.Second
+		// make at most one scaling adjustment per 100ms
+		adjustFreq := time.Millisecond * 100
 		now := time.Now()
 		if lastScaling != nil {
 			elapsed := now.Sub(*lastScaling)

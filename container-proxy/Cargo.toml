@@ -6,11 +6,22 @@ edition = "2021"
 
 [dependencies]
 tokio = { version="1", features=["signal", "net", "macros", "rt-multi-thread"] }
-tokio-util = { version="0.6", features=["codec"] }
+tokio-util = { version="0.7", features=["codec"] }
 futures-util = { version="0.3", features=["sink"] }
 reqwest = { version = "0.11", features = ["json"], default-features=false }
 log = "0.4"
 bincode = "1"
+async-once-cell = "0.5"
+lazy_static = "1"
 open-lambda-proxy-protocol = { path="../bin-functions/proxy-protocol" }
 simple-logging = "2"
 serde_bytes = "0.11"
+cfg-if = "1"
+parking_lot = "0.12"
+tokio-uring = { git="https://github.com/kaimast/tokio-uring.git" }
+tokio-uring-executor = { git="https://github.com/kaimast/tokio-uring-executor.git" }
+
+[profile.release]
+debug = true
+opt-level = 3
+lto = false

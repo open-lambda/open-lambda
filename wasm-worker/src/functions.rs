@@ -1,5 +1,6 @@
 use dashmap::DashMap;
 
+use std::collections::HashMap;
 use std::fs;
 use std::io::{Read, Write};
 use std::net::SocketAddr;
@@ -7,42 +8,27 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
-use parking_lot::Mutex;
+use wasmtime::{AsContextMut, Engine, Instance, Linker, Module, Store};
 
-use wasmer::{BaseTunables, ImportObject, Instance, Module, Pages, Store};
-use wasmer_compiler_cranelift::Cranelift;
-use wasmer_compiler_singlepass::Singlepass;
-use wasmer_engine::Engine;
-use wasmer_engine_dylib::Dylib as NativeEngine;
+use crate::bindings::{self, args::ResultHandle, BindingsData};
 
-use crate::WasmCompilerType;
+const MAX_IDLE_INSTANCES: usize = 100;
 
-use crate::bindings::{
-    self,
-    args::{ArgsEnv, ResultHandle},
-    ipc::IpcEnv,
-};
+pub type InstanceId = u64;
 
-#[cfg(feature = "llvm-backend")]
-use wasmer_compiler_llvm::LLVM;
-
-const MAX_IDLE_INSTANCES: usize = 20;
-
-type IdleInstancesList = Mutex<Vec<InstanceData>>;
+type IdleInstancesList = crossbeam::queue::SegQueue<InstanceData>;
 
 pub struct Function {
-    module: Module,
     next_instance_id: Arc<AtomicU64>,
-    store: Arc<Store>,
     idle_list: Arc<IdleInstancesList>,
+    engine: Arc<Engine>,
+    module: Arc<Module>,
 }
 
 struct InstanceData {
-    identifier: u64,
+    identifier: InstanceId,
+    store: Store<BindingsData>,
     instance: Instance,
-    args_env: ArgsEnv,
-    #[allow(dead_code)]
-    ipc_env: IpcEnv,
 }
 
 pub struct InstanceHandle {
@@ -51,71 +37,55 @@ pub struct InstanceHandle {
 }
 
 impl Function {
-    pub fn get_idle_instance(
+    pub async fn get_idle_instance(
         &self,
-        args: Arc<Vec<u8>>,
+        args: Vec<u8>,
+        config_values: &HashMap<String, String>,
         addr: SocketAddr,
         result_hdl: ResultHandle,
     ) -> InstanceHandle {
-        {
-            if let Some(data) = self.idle_list.lock().pop() {
-                log::trace!("Reusing WASM instance with id={}", data.identifier);
+        if let Some(mut data) = self.idle_list.pop() {
+            log::trace!("Reusing WASM instance with id={}", data.get_identifier());
+            data.refresh(config_values, addr, args, result_hdl);
 
-                data.args_env.set_args(args);
-                data.args_env.set_result_handle(result_hdl);
+            InstanceHandle::new(self.idle_list.clone(), data)
+        } else {
+            let identifier = self.next_instance_id.fetch_add(1, Ordering::SeqCst);
 
-                return InstanceHandle {
-                    idle_list: self.idle_list.clone(),
-                    data,
-                };
-            }
-        }
+            log::trace!("Creating new WASM instance with id={identifier}");
 
-        let identifier = self.next_instance_id.fetch_add(1, Ordering::SeqCst);
+            let data = InstanceData::new(
+                &self.engine,
+                &self.module,
+                identifier,
+                config_values.clone(),
+                addr,
+                args,
+                result_hdl,
+            )
+            .await;
 
-        log::trace!("Creating new WASM instance with id={identifier}");
-
-        let mut import_object = ImportObject::new();
-
-        let (args_imports, args_env) = bindings::args::get_imports(&self.store, args, result_hdl);
-        let log_imports = bindings::log::get_imports(&self.store);
-        let (ipc_imports, ipc_env) = bindings::ipc::get_imports(&self.store, addr);
-
-        import_object.register("ol_args", args_imports);
-        import_object.register("ol_log", log_imports);
-        import_object.register("ol_ipc", ipc_imports);
-
-        let instance =
-            Instance::new(&self.module, &import_object).expect("failed to create instance");
-
-        let data = InstanceData {
-            identifier,
-            instance,
-            args_env,
-            ipc_env,
-        };
-
-        InstanceHandle {
-            data,
-            idle_list: self.idle_list.clone(),
+            InstanceHandle::new(self.idle_list.clone(), data)
         }
     }
 }
 
 impl InstanceHandle {
-    pub fn get(&self) -> &Instance {
-        &self.data.instance
+    fn new(idle_list: Arc<IdleInstancesList>, data: InstanceData) -> Self {
+        Self { idle_list, data }
+    }
+
+    pub fn get(&mut self) -> (&mut Store<BindingsData>, &Instance) {
+        (&mut self.data.store, &self.data.instance)
     }
 
     pub fn mark_idle(self) {
-        let mut idle_list = self.idle_list.lock();
-
-        if idle_list.len() < MAX_IDLE_INSTANCES {
+        if self.idle_list.len() < MAX_IDLE_INSTANCES {
             log::trace!(
                 "Putting instance with id={} back into idle list",
                 self.data.identifier
             );
-            idle_list.push(self.data);
+            self.idle_list.push(self.data);
         } else {
             log::trace!(
                 "Discarding instance with id={}; idle list is already full",
@@ -134,50 +104,25 @@ impl InstanceHandle {
 }
 
 pub struct FunctionManager {
-    store: Arc<Store>,
     functions: Arc<DashMap<String, Arc<Function>>>,
-    compiler_type: WasmCompilerType,
+    next_instance_id: Arc<AtomicU64>,
+    engine: Arc<wasmtime::Engine>,
 }
 
 impl FunctionManager {
-    pub async fn new(compiler_type: WasmCompilerType) -> Self {
-        let engine = match compiler_type {
-            WasmCompilerType::Cranelift => {
-                log::info!("Using Cranelift compiler. Might result in lower performance");
-                NativeEngine::new(Cranelift::default()).engine()
-            }
-            WasmCompilerType::LLVM => {
-                cfg_if::cfg_if! {
-                    if #[cfg(feature="llvm-backend") ] {
-                        log::info!("Using LLVM compiler");
-                        NativeEngine::new(LLVM::default()).engine()
-                    } else {
-                        panic!("LLVM backend is disabled");
-                    }
-                }
-            }
-            WasmCompilerType::Singlepass => {
-                log::info!("Using Singlepass compiler. Might result in lower performance.");
-                NativeEngine::new(Singlepass::default()).engine()
-            }
-        };
+    pub async fn new() -> Self {
+        let next_instance_id = Arc::new(AtomicU64::new(1));
+        let mut config = wasmtime::Config::new();
+        config.async_support(true);
 
-        // Always use dynamic memory so we can clone the zygote
-        let mut tunables = BaseTunables::for_target(engine.target());
-        tunables.static_memory_bound = Pages(0);
-
-        let store = Arc::new(Store::new_with_tunables(&engine, tunables));
-        let functions = Arc::new(DashMap::new());
+        let engine =
+            Arc::new(wasmtime::Engine::new(&config).expect("Failed to create wasmtime engine"));
 
         Self {
-            functions,
-            store,
-            compiler_type,
+            functions: Default::default(),
+            engine,
+            next_instance_id,
         }
-    }
-
-    pub fn get_compiler_type(&self) -> &WasmCompilerType {
-        &self.compiler_type
     }
 
     pub async fn get_function(&self, name: &str) -> Option<Arc<Function>> {
@@ -185,7 +130,6 @@ impl FunctionManager {
     }
 
     pub async fn load_function(&self, path: PathBuf, cache_path: PathBuf) {
-        let store = self.store.clone();
         let os_name = path.file_stem().unwrap();
         let name = String::from(os_name.to_str().unwrap());
 
@@ -222,17 +166,19 @@ impl FunctionManager {
             let mut binary = Vec::new();
             file.read_to_end(&mut binary).unwrap();
 
-            log::info!("Loaded cached version of program \"{name}\"");
+            log::info!("Loaded cached version of function \"{name}\"");
 
-            unsafe { Module::deserialize(&store, &binary).expect("Failed to deserialize module") }
+            unsafe {
+                Module::deserialize(&self.engine, &binary).expect("Failed to deserialize module")
+            }
         } else {
             let mut code = Vec::new();
             file.read_to_end(&mut code).unwrap();
 
             // Load and compile
-            let module = match Module::new(&self.store, code) {
+            let module = match Module::new(&self.engine, code) {
                 Ok(module) => {
-                    log::info!("Compiled program \"{name}\"");
+                    log::info!("Compiled fucntion \"{name}\"");
                     module
                 }
                 Err(err) => panic!("Failed to compile wasm file \"{name}\": {err:?}"),
@@ -264,11 +210,70 @@ impl FunctionManager {
         };
 
         let function = Arc::new(Function {
-            next_instance_id: Arc::new(AtomicU64::new(1)),
+            engine: self.engine.clone(),
+            module: Arc::new(module),
+            next_instance_id: self.next_instance_id.clone(),
             idle_list: Default::default(),
-            store,
-            module,
         });
         self.functions.insert(name, function);
+    }
+}
+
+impl InstanceData {
+    #[allow(clippy::too_many_arguments)]
+    pub(super) async fn new(
+        engine: &Engine,
+        module: &Module,
+        identifier: InstanceId,
+        config_values: HashMap<String, String>,
+        addr: SocketAddr,
+        args: Vec<u8>,
+        result_hdl: ResultHandle,
+    ) -> Self {
+        let mut linker = Linker::new(engine);
+
+        let data = bindings::BindingsData::new(addr, config_values, args, result_hdl);
+
+        bindings::args::get_imports(&mut linker);
+        bindings::log::get_imports(&mut linker);
+        bindings::ipc::get_imports(&mut linker);
+        bindings::config::get_imports(&mut linker);
+
+        let mut store = Store::new(engine, data);
+
+        let instance = linker
+            .instantiate_async(store.as_context_mut(), module)
+            .await
+            .expect("Failed to create instance");
+
+        let _ = instance
+            .get_func(&mut store, "_initialize_instance")
+            .unwrap()
+            .call_async(&mut store, &[], &mut [])
+            .await;
+
+        Self {
+            identifier,
+            instance,
+            store,
+        }
+    }
+
+    /// Make the InstanceData ready to be used for another job
+    pub(super) fn refresh(
+        &mut self,
+        _config_values: &HashMap<String, String>,
+        _addr: SocketAddr,
+        args: Vec<u8>,
+        result_hdl: ResultHandle,
+    ) {
+        let bindings = self.store.data_mut();
+
+        bindings.args.set_args(args);
+        bindings.args.set_result_handle(result_hdl);
+    }
+
+    pub fn get_identifier(&self) -> InstanceId {
+        self.identifier
     }
 }

@@ -119,10 +119,15 @@ func (container *SOCKContainer) launchContainerProxy() (err error) {
 	var procAttr os.ProcAttr
 	procAttr.Files = []*os.File{os.Stdin, os.Stdout, os.Stderr}
 
-	proc, err := os.StartProcess("./ol-container-proxy", args, &procAttr)
+	binPath, err := exec.LookPath("ol-container-proxy")
+	if err != nil {
+        return fmt.Errorf("Failed to find container proxy binary: %s", err)
+	}
+
+	proc, err := os.StartProcess(binPath, args, &procAttr)
 
 	if err != nil {
-		return fmt.Errorf("Failed to start database proxy")
+        return fmt.Errorf("Failed to start container proxy: %s", err)
 	}
 
 	died := make(chan error)
@@ -132,7 +137,7 @@ func (container *SOCKContainer) launchContainerProxy() (err error) {
 	}()
 
 	if err != nil {
-		return fmt.Errorf("Failed to start database proxy")
+        return fmt.Errorf("Failed to start container proxy: %s", err)
 	}
 
 	var pingErr error

@@ -112,9 +112,10 @@ func (mgr *LambdaMgr) Get(name string) (f *LambdaFunc) {
 		f = &LambdaFunc{
 			lmgr:      mgr,
 			name:      name,
-			funcChan:  make(chan *Invocation, 32),
-			instChan:  make(chan *Invocation, 32),
-			doneChan:  make(chan *Invocation, 32),
+			// TODO make these configurable
+			funcChan:  make(chan *Invocation, 1024),
+			instChan:  make(chan *Invocation, 1024),
+			doneChan:  make(chan *Invocation, 1024),
 			instances: list.New(),
 			killChan:  make(chan chan bool, 1),
 		}

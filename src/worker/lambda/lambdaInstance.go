@@ -133,7 +133,7 @@ func (linst *LambdaInstance) Task() {
 		// serve until we incoming queue is empty
 		t = common.T0("LambdaInstance-ServeRequests")
 		for req != nil {
-			f.printf("Forwarding request to sandbox")
+			//f.printf("Forwarding request to sandbox")
 
 			t2 := common.T0("LambdaInstance-RoundTrip")
 
@@ -172,8 +172,13 @@ func (linst *LambdaInstance) Task() {
 
 			// notify instance that we're done
 			t2.T1()
+            // Record at least 1 ms of elapsed time
 			v := int(t2.Milliseconds)
-			req.execMs = v
+			if v == 0 {
+				req.execMs = 1
+			} else {
+				req.execMs = v
+			}
 			f.doneChan <- req
 
 			// check whether we should shutdown (non-blocking)

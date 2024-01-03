@@ -43,7 +43,8 @@ func (s *LambdaServer) RunLambda(w http.ResponseWriter, r *http.Request) {
 	t := common.T0("web-request")
 	defer t.T1()
 
-	log.Printf("Received request to %s\n", r.URL.Path)
+	// TODO re-enable logging once it is configurable
+	// log.Printf("Received request to %s\n", r.URL.Path)
 
 	// components represent run[0]/<name_of_sandbox>[1]/<extra_things>...
 	// ergo we want [1] for name of sandbox

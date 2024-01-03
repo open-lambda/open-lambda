@@ -9,6 +9,12 @@ pub fn main_func(_args: TokenStream, input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemFn).block;
 
     let expanded = quote! {
+        #[cfg(target_arch="wasm32")]
+        #[ no_mangle ]
+        fn _initialize_instance() {
+            open_lambda::set_panic_handler();
+        }
+
         #[ cfg(target_arch="wasm32") ]
         #[ no_mangle ]
         fn f() {
@@ -20,6 +26,7 @@ pub fn main_func(_args: TokenStream, input: TokenStream) -> TokenStream {
 
         #[ cfg(not(target_arch="wasm32")) ]
         fn main() {
+            open_lambda::set_panic_handler();
             open_lambda::internal_init();
             #input
         }

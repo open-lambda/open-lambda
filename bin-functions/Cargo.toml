@@ -4,12 +4,15 @@ members = [
     "macros",
     "noop",
     "hashing",
+    "internal-call",
+    "multiply",
 ]
+resolver = "2"
 
 [profile.release]
 debug = true
 opt-level = 3
-lto = true
+lto = false
 
 [patch.crates-io]
 getrandom = { git="https://github.com/kaimast/getrandom", branch="open-lambda" }

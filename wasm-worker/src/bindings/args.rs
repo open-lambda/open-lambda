@@ -1,85 +1,92 @@
-use wasmer::{Array, Exports, Function, LazyInit, Memory, NativeFunc, Store, WasmPtr, WasmerEnv};
-
+use std::future::Future;
 use std::sync::Arc;
-
-use rand::Fill;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use parking_lot::Mutex;
 
+use rand::Fill;
+
+use wasmtime::{Caller, Linker, Val};
+
+use super::{fill_slice, get_slice, get_slice_mut, set_u64, BindingsData};
+
 pub type ResultHandle = Arc<Mutex<Option<Vec<u8>>>>;
 
-#[derive(Clone, WasmerEnv)]
-pub struct ArgsEnv {
-    #[wasmer(export)]
-    memory: LazyInit<Memory>,
-    #[wasmer(export(name = "internal_alloc_buffer"))]
-    allocate: LazyInit<NativeFunc<u32, i64>>,
-    args: Arc<Mutex<Arc<Vec<u8>>>>,
-    result: Arc<Mutex<ResultHandle>>,
+pub struct ArgsData {
+    args: Vec<u8>,
+    result: ResultHandle,
 }
 
-impl ArgsEnv {
-    pub fn set_args(&self, args: Arc<Vec<u8>>) {
-        let mut lock = self.args.lock();
-        *lock = args;
+impl ArgsData {
+    pub fn new(args: Vec<u8>, result: ResultHandle) -> Self {
+        Self { args, result }
     }
 
-    pub fn set_result_handle(&self, new_hdl: ResultHandle) {
-        let mut result = self.result.lock();
-        *result = new_hdl;
+    pub fn set_args(&mut self, args: Vec<u8>) {
+        self.args = args;
+    }
+
+    pub fn set_result_handle(&mut self, new_hdl: ResultHandle) {
+        self.result = new_hdl;
     }
 }
 
-fn get_args(env: &ArgsEnv, len_out: WasmPtr<u64>) -> i64 {
-    log::trace!("Got `get_args` call");
+fn get_args(
+    mut caller: Caller<'_, BindingsData>,
+    len_out: i32,
+) -> Box<dyn Future<Output = i64> + Send + '_> {
+    Box::new(async move {
+        log::trace!("Got \"get_args\" call");
 
-    let memory = env.memory.get_ref().unwrap();
+        let alloc_fn = caller
+            .get_export("internal_alloc_buffer")
+            .expect("Missing alloc export")
+            .into_func()
+            .expect("Not a function");
 
-    let args_lock = env.args.lock();
-    let args = &*args_lock;
+        let memory = caller.get_export("memory").unwrap().into_memory().unwrap();
+        //FIXME do not copy
+        let args = caller.data().args.args.clone();
 
-    let offset = env
-        .allocate
-        .get_ref()
-        .unwrap()
-        .call(args.len() as u32)
-        .unwrap();
+        if args.is_empty() {
+            return 0;
+        }
 
-    if args.len() == 0 {
-        return 0;
-    }
+        let mut result = vec![Val::I64(0)];
 
-    let out_slice = unsafe {
-        let raw_ptr = memory.data_ptr().add(offset as usize);
-        std::slice::from_raw_parts_mut(raw_ptr, args.len())
-    };
+        alloc_fn
+            .call_async(&mut caller, &[Val::I32(args.len() as i32)], &mut result)
+            .await
+            .unwrap();
 
-    out_slice.clone_from_slice(args.as_slice());
+        let offset = result[0].i64().unwrap() as i32;
+        fill_slice(&caller, &memory, offset, args.as_slice());
+        set_u64(&caller, &memory, len_out, args.len() as u64);
 
-    let len = len_out.deref(memory).unwrap();
-    len.set(args.len() as u64);
-
-    offset
+        offset as i64
+    })
 }
 
-fn set_result(env: &ArgsEnv, buf_ptr: WasmPtr<u8, Array>, buf_len: u32) {
-    log::debug!("Got result of size {}", buf_len);
+fn get_unix_time() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("System time before UNIX epoch")
+        .as_secs()
+}
 
-    let result_outer_lock = env.result.lock();
-    let result_outer = &*result_outer_lock;
+fn set_result(mut caller: Caller<'_, BindingsData>, buf_ptr: i32, buf_len: u32) {
+    log::trace!("Got \"set_result\" call with result of size {buf_len}");
 
-    let mut result = result_outer.lock();
+    let memory = caller.get_export("memory").unwrap().into_memory().unwrap();
+
+    let data = &caller.data().args;
+    let mut result = data.result.lock();
 
     if result.is_some() {
         panic!("Result was already set");
     }
 
-    let memory = env.memory.get_ref().unwrap();
-
-    let buf_slice = unsafe {
-        let buf_ptr = memory.view::<u8>().as_ptr().add(buf_ptr.offset() as usize) as *mut u8;
-        std::slice::from_raw_parts(buf_ptr, buf_len as usize)
-    };
+    let buf_slice = get_slice(&caller, &memory, buf_ptr, buf_len);
 
     let mut vec = Vec::new();
     vec.extend_from_slice(buf_slice);
@@ -87,15 +94,12 @@ fn set_result(env: &ArgsEnv, buf_ptr: WasmPtr<u8, Array>, buf_len: u32) {
     *result = Some(vec);
 }
 
-fn get_random_value(env: &ArgsEnv, buf_ptr: WasmPtr<u8, Array>, buf_len: u32) {
+fn get_random_value(mut caller: Caller<'_, BindingsData>, buf_ptr: i32, buf_len: u32) {
     log::trace!("Got \"get_random_value\" call with buffer size {buf_len}");
 
-    let memory = env.memory.get_ref().unwrap();
+    let memory = caller.get_export("memory").unwrap().into_memory().unwrap();
 
-    let buf_slice = unsafe {
-        let buf_ptr = memory.view::<u8>().as_ptr().add(buf_ptr.offset() as usize) as *mut u8;
-        std::slice::from_raw_parts_mut(buf_ptr, buf_len as usize)
-    };
+    let buf_slice = get_slice_mut(&caller, &memory, buf_ptr, buf_len);
 
     let mut rng = rand::thread_rng();
     buf_slice
@@ -103,27 +107,17 @@ fn get_random_value(env: &ArgsEnv, buf_ptr: WasmPtr<u8, Array>, buf_len: u32) {
         .expect("Failed to fill buffer with random data");
 }
 
-pub fn get_imports(store: &Store, args: Arc<Vec<u8>>, result: ResultHandle) -> (Exports, ArgsEnv) {
-    let args_env = ArgsEnv {
-        args: Arc::new(Mutex::new(args)),
-        result: Arc::new(Mutex::new(result)),
-        memory: Default::default(),
-        allocate: Default::default(),
-    };
+pub fn get_imports(linker: &mut Linker<BindingsData>) {
+    let module = "ol_args";
 
-    let mut ns = Exports::new();
-    ns.insert(
-        "set_result",
-        Function::new_native_with_env(store, args_env.clone(), set_result),
-    );
-    ns.insert(
-        "get_args",
-        Function::new_native_with_env(store, args_env.clone(), get_args),
-    );
-    ns.insert(
-        "get_random_value",
-        Function::new_native_with_env(store, args_env.clone(), get_random_value),
-    );
-
-    (ns, args_env)
+    linker
+        .func_wrap(module, "get_unix_time", get_unix_time)
+        .unwrap();
+    linker.func_wrap(module, "set_result", set_result).unwrap();
+    linker
+        .func_wrap1_async(module, "get_args", get_args)
+        .unwrap();
+    linker
+        .func_wrap(module, "get_random_value", get_random_value)
+        .unwrap();
 }

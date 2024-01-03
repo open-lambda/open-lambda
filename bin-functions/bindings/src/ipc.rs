@@ -1,60 +1,36 @@
 use serde_json as json;
 
+use crate::internal::ipc as internal_ipc;
+use crate::log;
 use open_lambda_proxy_protocol::CallResult;
 
-#[cfg(target_arch = "wasm32")]
-mod internal {
-    #[link(wasm_import_module = "ol_ipc")]
-    extern "C" {
-        pub fn call(
-            func_name_ptr: *const u8,
-            func_name_len: u32,
-            arg_data: *const u8,
-            arg_data_len: u32,
-            result_len_ptr: *mut u64,
-        ) -> i64;
-    }
+pub use internal_ipc::http_get;
+pub use internal_ipc::http_post;
+
+pub fn http_get_json(address: &str, path: &str) -> Result<Option<json::Value>, String> {
+    let result = http_get(address, path);
+    parse_json_result(result)
 }
 
-#[cfg(target_arch = "wasm32")]
-pub fn call(func_name: &str, args: &json::Value) -> Result<Option<json::Value>, String> {
-    let args_str = serde_json::to_string(args).unwrap();
-    let mut len = 0u64;
-    let len_ptr = (&mut len) as *mut u64;
+pub fn http_post_json(
+    address: &str,
+    path: &str,
+    args: &json::Value,
+) -> Result<Option<json::Value>, String> {
+    let arg_string = serde_json::to_string(args).unwrap();
+    let arg_data = arg_string.into_bytes();
 
-    let data_ptr = unsafe {
-        internal::call(
-            func_name.as_bytes().as_ptr(),
-            func_name.len() as u32,
-            args_str.as_bytes().as_ptr(),
-            args_str.len() as u32,
-            len_ptr,
-        )
-    };
-
-    if data_ptr <= 0 {
-        panic!("Got unexpected error");
-    }
-
-    let len = len as usize;
-
-    let result_data = unsafe { Vec::<u8>::from_raw_parts(data_ptr as *mut u8, len, len) };
-
-    //TODO get rid of this additional serialization
-    parse_json_result(bincode::deserialize(&result_data).unwrap())
+    let result = http_post(address, path, arg_data);
+    parse_json_result(result)
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-pub fn call<S: ToString>(func_name: S, args: &json::Value) -> Result<Option<json::Value>, String> {
-    let func_name = func_name.to_string();
-    log::debug!("Got call request for \"{func_name}\"");
+pub fn function_call(func_name: &str, args: &json::Value) -> Result<Option<json::Value>, String> {
+    log::debug!("Issuing function call to '{func_name}'");
 
     let arg_string = serde_json::to_string(args).unwrap();
-    let jdata = arg_string.as_bytes().to_vec();
+    let arg_data = arg_string.into_bytes();
 
-    let mut proxy = crate::proxy_connection::ProxyConnection::get_instance();
-    let result = proxy.get_mut().call(func_name, jdata);
-
+    let result = internal_ipc::function_call(func_name, arg_data);
     parse_json_result(result)
 }
 

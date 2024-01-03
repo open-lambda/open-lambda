@@ -22,7 +22,7 @@ udeps:
 	cargo udeps --target=${WASM_TARGET}
 
 wasm-functions:
-	env CARGO_TARGET_DIR=wasm-target cargo build --target=${WASM_TARGET} --release
+	CARGO_TARGET_DIR=wasm-target cargo build --target=${WASM_TARGET} --release
 
 native-functions:
-	cargo build --release
+	CROSS_CONFIG=./Cross.toml cross build --release

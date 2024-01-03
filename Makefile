@@ -4,15 +4,8 @@ GO=go
 OL_DIR=$(abspath ./src)
 OL_GO_FILES=$(shell find src/ -name '*.go')
 LAMBDA_FILES = min-image/Dockerfile min-image/Makefile min-image/spin.c min-image/runtimes/python/server.py min-image/runtimes/python/setup.py min-image/runtimes/python/ol.c
-USE_LLVM?=1
 BUILDTYPE?=debug
 INSTALL_PREFIX?=/usr/local
-
-ifeq (${USE_LLVM}, 1)
-	WASM_WORKER_FLAGS=--features=llvm-backend
-else
-	WASM_WORKER_FLAGS=
-endif
 
 ifeq (${BUILDTYPE}, release)
 	BUILD_FLAGS=--release
@@ -32,10 +25,10 @@ endif
 .PHONY: container-proxy
 .PHONY: fmt check-fmt
 
-all: ol imgs/ol-wasm wasm-worker wasm-functions native-functions
+all: ol imgs/ol-wasm wasm-worker wasm-functions native-functions container-proxy
 
 wasm-worker:
-	cd wasm-worker && cargo build ${BUILD_FLAGS} ${WASM_WORKER_FLAGS}
+	cd wasm-worker && cargo build ${BUILD_FLAGS}
 	cp wasm-worker/target/${BUILDTYPE}/wasm-worker ./ol-wasm
 
 wasm-functions:
@@ -49,7 +42,7 @@ native-functions: imgs/ol-wasm
 	ls test-registry/hashing.bin test-registry/noop.bin # guarantee they were created
 
 update-dependencies:
-	cd lambda/runtimes/native && cargo update
+	cd wasm-image/runtimes/native && cargo update
 	cd wasm-worker && cargo update
 	cd bin-functions && cargo update
 	cd container-proxy && cargo update
@@ -64,7 +57,7 @@ imgs/ol-wasm: imgs/ol-min wasm-image/runtimes/native/src/main.rs
 	touch imgs/ol-wasm
 
 install-python-bindings:
-	cd scripts && python setup.py install
+	cd python && pip install .
 
 check-runtime:
 	cd lambda/runtimes/rust && cargo check
@@ -76,9 +69,17 @@ container-proxy:
 ol: ${OL_GO_FILES}
 	cd ${OL_DIR} && ${GO} build -o ../ol
 
-install: ol wasm-worker
+build: ol wasm-worker container-proxy
+
+install: build
 	cp ol ${INSTALL_PREFIX}/bin/
 	cp ol-wasm ${INSTALL_PREFIX}/bin/
+	cp ol-container-proxy ${INSTALL_PREFIX}/bin/
+
+sudo-install: build
+	sudo cp ol ${INSTALL_PREFIX}/bin/
+	sudo cp ol-wasm ${INSTALL_PREFIX}/bin/
+	sudo cp ol-container-proxy ${INSTALL_PREFIX}/bin/
 
 test-all:
 	sudo python3 -u ./scripts/test.py --worker_type=sock
@@ -99,10 +100,17 @@ check-fmt:
 lint-go:
 	revive -exclude src/vendor/... -config golint.toml src/...
 
-lint: #go-lint
-	pylint scripts --ignore=build --disable=missing-docstring,multiple-imports,global-statement,invalid-name,W0511,W1510,R0801,W3101
+lint-python:
+	pylint scripts --ignore=build --disable=missing-docstring,multiple-imports,global-statement,invalid-name,W0511,W1510,R0801,W3101,broad-exception-raised
+
+lint-functions:
+	cd bin-functions && make lint
+	cd container-proxy && cargo clippy
+
+lint-wasm-worker:
 	cd wasm-worker && cargo clippy
-	cd bin-functions && cargo clippy
+
+lint: lint-wasm-worker lint-functions lint-python #lint-go
 
 clean:
 	rm -f ol imgs/ol-min imgs/ol-wasm

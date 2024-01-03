@@ -40,7 +40,8 @@ var lock sync.Mutex
 
 // GetPid returns process ID, useful for making sure we're talking to the expected server
 func GetPid(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Received request to %s\n", r.URL.Path)
+	// TODO re-enable once logging is configurable
+	//log.Printf("Received request to %s\n", r.URL.Path)
 
 	wbody := []byte(strconv.Itoa(os.Getpid()) + "\n")
 	if _, err := w.Write(wbody); err != nil {
@@ -50,7 +51,8 @@ func GetPid(w http.ResponseWriter, r *http.Request) {
 
 // Status writes "ready" to the response.
 func Status(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Received request to %s\n", r.URL.Path)
+	// TODO re-enable once logging is configurable
+	//log.Printf("Received request to %s\n", r.URL.Path)
 
 	if _, err := w.Write([]byte("ready\n")); err != nil {
 		log.Printf("error in Status: %v", err)
@@ -58,7 +60,7 @@ func Status(w http.ResponseWriter, r *http.Request) {
 }
 
 func Stats(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Received request to %s\n", r.URL.Path)
+	//log.Printf("Received request to %s\n", r.URL.Path)
 	snapshot := common.SnapshotStats()
 	if b, err := json.MarshalIndent(snapshot, "", "\t"); err != nil {
 		panic(err)
@@ -156,24 +158,24 @@ func shutdown(pidPath string, server cleanable) {
 	snapshot := common.SnapshotStats()
 	rc := 0
 
-  // "cpu-start"ed but have not "cpu-stop"ped before kill
-  log.Printf("save buffered profiled data to cpu.buf.prof\n")
-  if cpuTemp != nil {
-    pprof.StopCPUProfile()
-    filename := cpuTemp.Name()
-    cpuTemp.Close()
+	// "cpu-start"ed but have not "cpu-stop"ped before kill
+	log.Printf("save buffered profiled data to cpu.buf.prof\n")
+	if cpuTemp != nil {
+	pprof.StopCPUProfile()
+	filename := cpuTemp.Name()
+	cpuTemp.Close()
 
-    in, err := ioutil.ReadFile(filename)
-    if err != nil {
-      log.Printf("error: %s", err)
-      rc = 1
-    } else if err = ioutil.WriteFile("cpu.buf.prof", in, 0644); err != nil{
-      log.Printf("error: %s", err)
-      rc = 1
-    }
+	in, err := ioutil.ReadFile(filename)
+	if err != nil {
+		log.Printf("error: %s", err)
+		rc = 1
+	} else if err = ioutil.WriteFile("cpu.buf.prof", in, 0644); err != nil{
+		log.Printf("error: %s", err)
+		rc = 1
+	}
 
-    os.Remove(filename)
-  }
+	os.Remove(filename)
+	}
 
 	log.Printf("save stats to %s", statsPath)
 	if s, err := json.MarshalIndent(snapshot, "", "\t"); err != nil {

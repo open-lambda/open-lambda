@@ -40,7 +40,7 @@ where
 fn main() {
     let make_service = make_service_fn(async move |_| {
         Ok::<_, hyper::Error>(service_fn(async move |req: Request<Body>| {
-            log::trace!("Got new request: {:?}", req);
+            log::trace!("Got new request: {req:?}");
 
             let mut args = Vec::new();
             let method = req.method().clone();
@@ -53,9 +53,7 @@ fn main() {
                         let mut chunk = c.to_vec();
                         args.append(&mut chunk);
                     }
-                    Err(e) => {
-                        panic!("Got error: {:?}", e);
-                    }
+                    Err(err) => panic!("Got error: {:?}", err),
                 }
             }
 
@@ -68,7 +66,7 @@ fn main() {
     });
 
     if let Err(err) = simple_logging::log_to_file("/host/ol-runtime.log", log::LevelFilter::Info) {
-        println!("Failed to create logfile: {}", err);
+        println!("Failed to create logfile: {err}");
     }
 
     let socket_path = "/host/ol.sock";
@@ -89,8 +87,8 @@ fn main() {
         let fd = 3 + i;
         let mut f = unsafe{ File::from_raw_fd(fd) };
 
-        f.write(format!("{}", pid).as_bytes()).unwrap();
-        log::trace!("Joined cgroup, closing FD{}'", fd);
+        f.write(format!("{pid}").as_bytes()).unwrap();
+        log::trace!("Joined cgroup, closing FD {fd}'");
     }
 
     unshare(CloneFlags::CLONE_NEWUTS | CloneFlags::CLONE_NEWPID | CloneFlags::CLONE_NEWIPC).unwrap();
@@ -99,7 +97,7 @@ fn main() {
         std::process::exit(0);
     }
 
-    log::info!("Starting server loop...");
+    log::debug!("Starting server loop...");
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(1)
         .enable_io().build().expect("Failed to start tokio");
@@ -114,13 +112,13 @@ fn main() {
         let server = Server::builder(acceptor).serve(make_service)
             .with_graceful_shutdown(async move {
                 sighandler.recv().await;
-                log::info!("Got ctrl+c");
+                log::debug!("Got ctrl+c");
             });
 
-        log::info!("Listening on unix:{}", socket_path);
+        log::info!("Listening on unix:{socket_path}");
 
-        if let Err(e) = server.await {
-            log::error!("server error: {}", e);
+        if let Err(err) = server.await {
+            log::error!("server error: {err}");
         }
     });
 }
@@ -129,7 +127,7 @@ async fn execute_function(args: Vec<u8>) -> Result<Response<Body>> {
     use std::io::Read;
 
     let arg_str = String::from_utf8(args).unwrap();
-    log::info!("Executing function with arg `{}`", arg_str);
+    log::debug!("Executing function with arg `{arg_str}`");
 
     let body;
     let status_code;
@@ -162,7 +160,8 @@ async fn execute_function(args: Vec<u8>) -> Result<Response<Body>> {
             if status.success() {
                 true
             } else {
-                e_str = format!("Function failed with exitcode: {}", status.code().unwrap());
+                let exit_code = status.code().unwrap_or(42);
+                e_str = format!("Function failed with exitcode: {exit_code}");
                 false
             }
         }
@@ -170,30 +169,30 @@ async fn execute_function(args: Vec<u8>) -> Result<Response<Body>> {
 
     if !success {
         status_code = StatusCode::INTERNAL_SERVER_ERROR;
-        log::error!("{}", e_str);
+        log::error!("{e_str}");
         body = e_str.into();
     } else {
-        log::info!("Function returned successfully");
+        log::debug!("Function returned successfully");
 
         match File::open("/tmp/output") {
             Ok(mut f) => {
                 let mut jstr = String::new();
                 f.read_to_string(&mut jstr).unwrap();
 
-                log::info!("Got response: {}", jstr);
+                log::debug!("Got response: {jstr}");
 
                 body = Body::from(jstr);
                 status_code = StatusCode::OK;
             }
-            Err(e) => {
-                if e.kind() !=  std::io::ErrorKind::NotFound {
-                    let e_str = format!("Got unexpected error: {:?}", e);
-                    log::error!("{}", e_str);
+            Err(err) => {
+                if err.kind() !=  std::io::ErrorKind::NotFound {
+                    let err_str = format!("Got unexpected error: {err:?}");
+                    log::error!("{err_str}");
 
-                    body = Body::from(e_str);
+                    body = Body::from(err_str);
                     status_code = StatusCode::INTERNAL_SERVER_ERROR;
                 } else {
-                    log::info!("Function did not give a response");
+                    log::debug!("Function did not give a response");
 
                     body = Body::empty();
                     status_code = StatusCode::OK;
@@ -219,7 +218,7 @@ async fn execute_function(args: Vec<u8>) -> Result<Response<Body>> {
             log_line += format!("    {}\n", line).as_str();
         }
 
-        log::info!("{}", log_line);
+        log::trace!("{}", log_line);
     }
 
     if stderr == "" {
@@ -231,7 +230,7 @@ async fn execute_function(args: Vec<u8>) -> Result<Response<Body>> {
             log_line += format!("    {}\n", line).as_str();
         }
 
-        log::info!("{}", log_line);
+        log::trace!("{}", log_line);
     }
 
     let response = Response::builder()

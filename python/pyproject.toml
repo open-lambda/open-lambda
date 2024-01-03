@@ -1,0 +1,11 @@
+[project]
+name = "open-lambda"
+version = "0.1dev0"
+dependencies=["requests"]
+requires-python=">=3.10"
+
+[metadata]
+author = "The Open Lambda Authors"
+
+[build-system]
+requires = ["wheel", "setuptools"]
