@@ -6,7 +6,7 @@ edition = "2021"
 
 [dependencies]
 tokio = { version="1", features=["net", "rt-multi-thread", "signal", "macros"] }
-hyper = { version="1" , features=["server", "client", "http1"] }
+hyper = { version="1", features=["server", "client", "http1"] }
 serde = "1"
 serde_bytes = "0.11"
 clap = { version = "4", default-features=false, features=["help", "suggestions", "color", "std", "cargo", "derive"]}
