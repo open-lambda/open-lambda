@@ -46,7 +46,7 @@ func (server *SOCKServer) Create(w http.ResponseWriter, rsrc []string, args map[
 	// create args
 	codeDir := args["code"].(string)
 
-	var parent sandbox.Sandbox = nil
+	var parent sandbox.Sandbox
 	if p, ok := args["parent"]; ok && p != "" {
 		parent = server.GetSandbox(p.(string))
 		if parent == nil {

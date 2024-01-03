@@ -144,7 +144,7 @@ func NewGcpClient(service_account_json string) (*GcpClient, error) {
 	return client, nil
 }
 
-func (c *GcpClient) RunComandWorker(VMName string, command string) error {
+func (c *GcpClient) RunComandWorker(vmName string, command string) error {
 	cwd, err := os.Getwd()
 	if err != nil {
 		panic(err)
@@ -160,7 +160,7 @@ func (c *GcpClient) RunComandWorker(VMName string, command string) error {
 		panic(err)
 	}
 
-	ip, ok := lookup[VMName]
+	ip, ok := lookup[vmName]
 	if !ok {
 		fmt.Println(lookup)
 		panic(fmt.Errorf("could not find IP for instance"))
@@ -485,15 +485,15 @@ func (c *GcpClient) GcpSnapshot(disk string, snapshot_name string) (map[string]a
 	return c.post(url, payload)
 }
 
-func (c *GcpClient) LaunchGcp(SnapshotName string, VMName string) (map[string]any, error) {
+func (c *GcpClient) LaunchGcp(snapshotName string, vmName string) (map[string]any, error) {
 	args := GcpLaunchVmArgs{
 		ServiceAccountEmail: c.service_account["client_email"].(string),
 		Project:             c.service_account["project_id"].(string),
 		Region:              c.service_account["region"].(string),
 		Zone:                c.service_account["zone"].(string),
-		InstanceName:        VMName,
+		InstanceName:        vmName,
 		//SourceImage: "projects/ubuntu-os-cloud/global/images/ubuntu-2004-focal-v20220204",
-		SnapshotName:        SnapshotName,
+		SnapshotName:        snapshotName,
 		DiskSizeGb:          GcpConf.DiskSizeGb,
 		MachineType:         GcpConf.MachineType,
 	}
@@ -510,33 +510,33 @@ func (c *GcpClient) LaunchGcp(SnapshotName string, VMName string) (map[string]an
 	return c.post(url, payload)
 }
 
-func (c *GcpClient) startGcpInstance(VMName string) (map[string]any, error) { //start existing instance
+func (c *GcpClient) startGcpInstance(vmName string) (map[string]any, error) { //start existing instance
 	url := fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/zones/%s/instances/%s/start",
 		c.service_account["project_id"].(string),
 		c.service_account["zone"].(string),
-		VMName)
+		vmName)
 
 	var payload bytes.Buffer
 
 	return c.post(url, payload)
 }
 
-func (c *GcpClient) stopGcpInstance(VMName string) (map[string]any, error) {
+func (c *GcpClient) stopGcpInstance(vmName string) (map[string]any, error) {
 	url := fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/zones/%s/instances/%s/stop",
 		c.service_account["project_id"].(string),
 		c.service_account["zone"].(string),
-		VMName)
+		vmName)
 
 	var payload bytes.Buffer
 
 	return c.post(url, payload)
 }
 
-func (c *GcpClient) deleteGcpInstance(VMName string) (map[string]any, error) {
+func (c *GcpClient) deleteGcpInstance(vmName string) (map[string]any, error) {
 	url := fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/zones/%s/instances/%s",
 		c.service_account["project_id"].(string),
 		c.service_account["zone"].(string),
-		VMName)
+		vmName)
 
 	return c.delete(url)
 }

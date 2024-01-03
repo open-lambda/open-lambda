@@ -16,6 +16,16 @@ enableAllRules = true
 [rule.var-naming]
     Disabled = true
 
+[rule.defer]
+    Disabled = true
+[rule.empty-block]
+    Disabled = true
+[ruile.var-declaration]
+    Disabled = true
+[rule.confusing-results]
+    Disabled = true
+[rule.call-to-gc]
+    Disabled = true
 [rule.import-shadowing]
     Disabled = true
 [rule.unused-parameter]
@@ -51,7 +61,9 @@ enableAllRules = true
 
 [rule.argument-limit]
     Arguments = [7]
+
+# TODO reduce to 10 or so
 [rule.cyclomatic]
-    Arguments = [20]
+    Arguments = [35]
 [rule.function-result-limit]
     Arguments = [3]

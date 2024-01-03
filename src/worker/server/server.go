@@ -35,11 +35,11 @@ type cleanable interface {
 
 // temporary file storing cpu profiled data
 const CPU_TEMP_PATTERN = ".cpu.*.prof"
-var cpuTemp *os.File = nil
+var cpuTemp *os.File
 var lock sync.Mutex
 
-// GetPid returns process ID, useful for making sure we're talking to the expected server
-func GetPid(w http.ResponseWriter, r *http.Request) {
+// HandleGetPid returns process ID, useful for making sure we're talking to the expected server
+func HandleGetPid(w http.ResponseWriter, r *http.Request) {
 	// TODO re-enable once logging is configurable
 	//log.Printf("Received request to %s\n", r.URL.Path)
 
@@ -218,7 +218,7 @@ func Main() (err error) {
 	}
 
 	// things shared by all servers
-	http.HandleFunc(PID_PATH, GetPid)
+	http.HandleFunc(PID_PATH, HandleGetPid)
 	http.HandleFunc(STATUS_PATH, Status)
 	http.HandleFunc(STATS_PATH, Stats)
 	http.HandleFunc(PPROF_MEM_PATH, PprofMem)

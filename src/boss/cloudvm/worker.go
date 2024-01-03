@@ -55,9 +55,11 @@ func NewWorkerPool(platform string, worker_cap int) (*WorkerPool, error) {
 	go func() {
 		for true {
 			time.Sleep(time.Second)
-			var avgLatency int64 = 0
+			var avgLatency int64
 			if pool.nLatency > 0 {
 				avgLatency = pool.sumLatency / pool.nLatency
+			} else {
+				avgLatency = 0
 			}
 			taskLog.Printf("tasks=%d, average_latency(ms)=%d", pool.totalTask, avgLatency)
 		}

@@ -31,9 +31,8 @@ func initOLBaseDir(baseDir string, dockerBaseImage string) error {
 	var dockerClient *docker.Client
 	if c, err := docker.NewClientFromEnv(); err != nil {
 		return err
-	} else {
-		dockerClient = c
 	}
+	dockerClient = c
 
 	err := dutil.DumpDockerImage(dockerClient, dockerBaseImage, baseDir)
 	if err != nil {
@@ -74,11 +73,8 @@ func initOLBaseDir(baseDir string, dockerBaseImage string) error {
 	}
 
 	path = filepath.Join(baseDir, "dev", "urandom")
-	if err := exec.Command("mknod", "-m", "0644", path, "c", "1", "9").Run(); err != nil {
-		return err
-	}
 
-	return nil
+	return exec.Command("mknod", "-m", "0644", path, "c", "1", "9").Run()
 }
 
 // initOLDir prepares a directory at olPath with necessary files for a
@@ -281,8 +277,5 @@ func overrideOpts(confPath, overridePath, optsStr string) error {
 	if err != nil {
 		return err
 	}
-	if err := ioutil.WriteFile(overridePath, s, 0644); err != nil {
-		return err
-	}
-	return nil
+	return ioutil.WriteFile(overridePath, s, 0644)
 }
