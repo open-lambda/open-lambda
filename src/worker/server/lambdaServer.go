@@ -67,7 +67,7 @@ func (s *LambdaServer) RunLambda(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *LambdaServer) Debug(w http.ResponseWriter, r *http.Request) {
+func (s *LambdaServer) Debug(w http.ResponseWriter, _ *http.Request) {
 	w.Write([]byte(s.lambdaMgr.Debug()))
 }
 

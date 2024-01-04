@@ -35,7 +35,7 @@ func (server *SOCKServer) GetSandbox(id string) sandbox.Sandbox {
 	return val.(sandbox.Sandbox)
 }
 
-func (server *SOCKServer) Create(w http.ResponseWriter, rsrc []string, args map[string]any) error {
+func (server *SOCKServer) Create(w http.ResponseWriter, _ []string, args map[string]any) error {
 	var leaf bool
 	if b, ok := args["leaf"]; !ok || b.(bool) {
 		leaf = true
@@ -100,7 +100,7 @@ func (server *SOCKServer) Create(w http.ResponseWriter, rsrc []string, args map[
 	return nil
 }
 
-func (server *SOCKServer) Destroy(w http.ResponseWriter, rsrc []string, args map[string]any) error {
+func (server *SOCKServer) Destroy(_ http.ResponseWriter, rsrc []string, _ map[string]any) error {
 	c := server.GetSandbox(rsrc[0])
 	if c == nil {
 		return fmt.Errorf("no sandbox found with ID '%s'", rsrc[0])
@@ -111,7 +111,7 @@ func (server *SOCKServer) Destroy(w http.ResponseWriter, rsrc []string, args map
 	return nil
 }
 
-func (server *SOCKServer) Pause(w http.ResponseWriter, rsrc []string, args map[string]any) error {
+func (server *SOCKServer) Pause(_ http.ResponseWriter, rsrc []string, _ map[string]any) error {
 	c := server.GetSandbox(rsrc[0])
 	if c == nil {
 		return fmt.Errorf("no sandbox found with ID '%s'", rsrc[0])
@@ -120,7 +120,7 @@ func (server *SOCKServer) Pause(w http.ResponseWriter, rsrc []string, args map[s
 	return c.Pause()
 }
 
-func (server *SOCKServer) Unpause(w http.ResponseWriter, rsrc []string, args map[string]any) error {
+func (server *SOCKServer) Unpause(_ http.ResponseWriter, rsrc []string, _ map[string]any) error {
 	c := server.GetSandbox(rsrc[0])
 	if c == nil {
 		return fmt.Errorf("no sandbox found with ID '%s'", rsrc[0])
@@ -129,7 +129,7 @@ func (server *SOCKServer) Unpause(w http.ResponseWriter, rsrc []string, args map
 	return c.Unpause()
 }
 
-func (server *SOCKServer) Debug(w http.ResponseWriter, rsrc []string, args map[string]any) error {
+func (server *SOCKServer) Debug(w http.ResponseWriter, _ []string, _ map[string]any) error {
 	str := server.sbPool.DebugString()
 	fmt.Printf("%s\n", str)
 	w.Write([]byte(str))

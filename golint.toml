@@ -1,4 +1,6 @@
 enableAllRules = true
+errorCode = 2
+#warningCode = 1
 
 #TODO we should eventually comment all public methods
 [rule.package-comments]
@@ -27,10 +29,6 @@ enableAllRules = true
 [rule.call-to-gc]
     Disabled = true
 [rule.import-shadowing]
-    Disabled = true
-[rule.unused-parameter]
-    Disabled = true
-[rule.unused-receiver]
     Disabled = true
 [rule.receiver-naming]
     Disabled = true

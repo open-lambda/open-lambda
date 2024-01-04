@@ -21,22 +21,22 @@ func NewMockWorkerPool() *WorkerPool {
 	}
 }
 
-func (pool *MockWorkerPool) NewWorker(workerId string) *Worker {
+func (_ *MockWorkerPool) NewWorker(workerId string) *Worker {
 	return &Worker{
 		workerId: workerId,
 		workerIp: "",
 	}
 }
 
-func (pool *MockWorkerPool) CreateInstance(worker *Worker) {
+func (_ *MockWorkerPool) CreateInstance(worker *Worker) {
 	log.Printf("created new mock worker: %s\n", worker.workerId)
 }
 
-func (pool *MockWorkerPool) DeleteInstance(worker *Worker) {
+func (_ *MockWorkerPool) DeleteInstance(worker *Worker) {
 	log.Printf("deleted mock worker: %s\n", worker.workerId)
 }
 
-func (pool *MockWorkerPool) ForwardTask(w http.ResponseWriter, r *http.Request, worker *Worker) {
+func (_ *MockWorkerPool) ForwardTask(w http.ResponseWriter, _ *http.Request, worker *Worker) {
 	s := fmt.Sprintf("hello from %s\n", worker.workerId)
 	w.WriteHeader(http.StatusOK)
 	_, err := w.Write([]byte(s))

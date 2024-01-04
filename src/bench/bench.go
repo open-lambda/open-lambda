@@ -19,7 +19,7 @@ type Call struct {
 	name string
 }
 
-func task(task int, reqQ chan Call, errQ chan error) {
+func task(_ int, reqQ chan Call, errQ chan error) {
 	for {
 		call, ok := <-reqQ
 		if !ok {

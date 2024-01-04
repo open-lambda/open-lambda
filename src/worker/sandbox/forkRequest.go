@@ -101,7 +101,7 @@ import (
  *
  * Returns the PID of the spawned process upon success.
  */
-func (c *SOCKContainer) forkRequest(fileSockPath string, rootDir *os.File, memCG *os.File) error {
+func (_ *SOCKContainer) forkRequest(fileSockPath string, rootDir *os.File, memCG *os.File) error {
 	cSock := C.CString(fileSockPath)
 	defer C.free(unsafe.Pointer(cSock))
 
