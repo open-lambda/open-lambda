@@ -18,7 +18,7 @@ apt install -y docker.io llvm-12-dev libclang-common-12-dev build-essential pyth
 
 For a recent version of go, run the following:
 ```
-wget -q -O /tmp/go.tar.gz https://go.dev/dl/go1.18.3.linux-amd64.tar.gz
+wget -q -O /tmp/go.tar.gz https://go.dev/dl/go1.21.5.linux-amd64.tar.gz
 tar -C /usr/local -xzf /tmp/go.tar.gz
 ln -s /usr/local/go/bin/go /usr/bin/go
 ```
