@@ -520,7 +520,8 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if loadbalancer.Lb.LbType == loadbalancer.Hash {
-			targetGroup = loadbalancer.HashGetGroup(img)
+			targetGroup = loadbalancer.HashGetGroup(img, len(pool.workers[RUNNING]))
+			// fmt.Println(targetGroup)
 			targetGroups = append(targetGroups, targetGroup)
 		}
 
@@ -778,6 +779,9 @@ func (pool *WorkerPool) Restart() {
 
 func (pool *WorkerPool) ChangeTree(tree string) {
 	pool.Lock()
+	// if tree_path == tree {
+	// 	return
+	// }
 	loadbalancer.InitLoadBalancer(loadbalancer.Lb.LbType, loadbalancer.MaxGroup, tree)
 	pool.Unlock()
 
@@ -789,18 +793,33 @@ func (pool *WorkerPool) ChangeTree(tree string) {
 func (pool *WorkerPool) ChangePolicy(policy string) {
 	pool.Lock()
 	if policy == "random" {
+		// if loadbalancer.Lb.LbType == loadbalancer.Random {
+		// 	return
+		// }
 		loadbalancer.InitLoadBalancer(loadbalancer.Random, loadbalancer.MaxGroup, tree_path)
 	}
 	if policy == "sharding" {
+		// if loadbalancer.Lb.LbType == loadbalancer.Sharding {
+		// 	return
+		// }
 		loadbalancer.InitLoadBalancer(loadbalancer.Sharding, loadbalancer.MaxGroup, tree_path)
 	}
 	if policy == "kmeans" {
+		// if loadbalancer.Lb.LbType == loadbalancer.KMeans {
+		// 	return
+		// }
 		loadbalancer.InitLoadBalancer(loadbalancer.KMeans, loadbalancer.MaxGroup, tree_path)
 	}
 	if policy == "kmodes" {
+		// if loadbalancer.Lb.LbType == loadbalancer.KModes {
+		// 	return
+		// }
 		loadbalancer.InitLoadBalancer(loadbalancer.KModes, loadbalancer.MaxGroup, tree_path)
 	}
 	if policy == "hash" {
+		// if loadbalancer.Lb.LbType == loadbalancer.Hash {
+		// 	return
+		// }
 		loadbalancer.InitLoadBalancer(loadbalancer.Hash, loadbalancer.MaxGroup, tree_path)
 	}
 	pool.Unlock()
@@ -812,6 +831,10 @@ func (pool *WorkerPool) ChangePolicy(policy string) {
 
 // forward request to worker
 // TODO: this is kept for other platforms
+var client = &http.Client{
+	Timeout: time.Second * 10,
+}
+
 func forwardTaskHelper(w http.ResponseWriter, req *http.Request, workerIp string) error {
 	host := fmt.Sprintf("%s:%d", workerIp, 5000) //TODO: read from config
 	req.URL.Scheme = "http"
@@ -819,7 +842,6 @@ func forwardTaskHelper(w http.ResponseWriter, req *http.Request, workerIp string
 	req.Host = host
 	req.RequestURI = ""
 
-	client := http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)

@@ -59,6 +59,9 @@ func (s *LambdaServer) RunLambda(w http.ResponseWriter, r *http.Request) {
 		if len(urlParts) == 2 {
 			img := urlParts[1]
 			s.lambdaMgr.Get(img).Invoke(w, r)
+			// time.Sleep(3 * time.Millisecond)
+			// w.WriteHeader(http.StatusOK)
+			// w.Write([]byte("Place Holder, testing boss throughput limit"))
 		} else {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("expected invocation format: /run/<lambda-name>"))
