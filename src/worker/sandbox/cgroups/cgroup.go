@@ -187,7 +187,8 @@ func (cg *CgroupImpl) setFreezeState(state int64) error {
 	cg.WriteInt("cgroup.freeze", state)
 
 	timeout := 5 * time.Second
-
+	sleepDur := 1 * time.Millisecond
+	time.Sleep(sleepDur)
 	start := time.Now()
 	for {
 		freezerState, err := cg.TryReadInt("cgroup.freeze")
@@ -202,8 +203,8 @@ func (cg *CgroupImpl) setFreezeState(state int64) error {
 		if time.Since(start) > timeout {
 			return fmt.Errorf("cgroup stuck on %v after %v (should be %v)", freezerState, timeout, state)
 		}
-
-		time.Sleep(1 * time.Millisecond)
+		time.Sleep(sleepDur)
+		sleepDur += 2
 	}
 }
 

@@ -184,6 +184,9 @@ func (cache *ImportCache) createChildSandboxFromNode(
 	// try twice, restarting parent Sandbox if it fails the first time
 	forceNew := false
 	for i := 0; i < 2; i++ {
+		if forceNew {
+			fmt.Printf("forceNew is true\n")
+		}
 		zygoteSB, isNew, miss, err := cache.getSandboxInNode(node, forceNew, rt_type, common.Conf.Features.COW)
 		if err != nil {
 			return nil, 0, err
@@ -204,7 +207,7 @@ func (cache *ImportCache) createChildSandboxFromNode(
 		// dec ref count
 		cache.putSandboxInNode(node, zygoteSB)
 
-		if isLeaf {
+		if isLeaf && sb != nil {
 			sb.(*sandbox.SafeSandbox).Sandbox.(*sandbox.SOCKContainer).Node = node.SplitGeneration
 		}
 

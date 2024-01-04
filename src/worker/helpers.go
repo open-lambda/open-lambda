@@ -202,7 +202,7 @@ func stopOL(olPath string) error {
 		return fmt.Errorf("Failed to send SIGINT to PID %d (%s).  May require manual cleanup.\n", pid, err.Error())
 	}
 
-	for i := 0; i < 600; i++ {
+	for i := 0; i < 1800; i++ {
 		err := p.Signal(syscall.Signal(0))
 		if err != nil {
 			fmt.Printf("OL worker process stopped successfully.\n")
@@ -211,7 +211,7 @@ func stopOL(olPath string) error {
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	return fmt.Errorf("worker didn't stop after 60s")
+	return fmt.Errorf("worker didn't stop after 180s")
 }
 
 // modify the config.json file based on settings from cmdline: -o opt1=val1,opt2=val2,...
