@@ -56,16 +56,9 @@ func (s *LambdaServer) RunLambda(w http.ResponseWriter, r *http.Request) {
 		// components represent run[0]/<name_of_sandbox>[1]/<extra_things>...
 		// ergo we want [1] for name of sandbox
 		urlParts := getURLComponents(r)
-		if len(urlParts) == 2 {
-			img := urlParts[1]
-			s.lambdaMgr.Get(img).Invoke(w, r)
-		} else {
-			img := urlParts[1]
-			s.lambdaMgr.Get(img).Invoke(w, r)
-			// Commented out to deal with multiple paths in open lambda app runnning in WSGI container, check if need to fix later
-			// w.WriteHeader(http.StatusInternalServerError)
-			// w.Write([]byte("expected invocation format: /run/<lambda-name>"))
-		}
+		img := urlParts[1]
+		s.lambdaMgr.Get(img).Invoke(w, r)
+
 	}
 }
 

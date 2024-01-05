@@ -23,10 +23,6 @@ bootstrap_path = None
 def web_server():
     print(f"server.py: start web server on fd: {file_sock.fileno()}")
     sys.path.append('/handler')
-    
-
-
-
     # TODO: as a safeguard, we should add a mechanism so that the
     # import doesn't happen until the cgroup move completes, so that a
     # malicious child cannot eat up Zygote resources
@@ -36,6 +32,11 @@ def web_server():
         def post(self):
             try:
                 data = self.request.body
+                reqlst = self.request.path.split("/")
+                if len(reqlst)>4 or (len(reqlst)==4 and reqlst[-1] != ''):
+                    self.set_status(500)
+                    self.write("expected invocation format: /run/<lambda-name>")
+                    return
                 try :
                     event = json.loads(data)
                 except:
@@ -46,24 +47,19 @@ def web_server():
             except Exception:
                 self.set_status(500) # internal error
                 self.write(traceback.format_exc())
+            
     
     if hasattr(f, "app"):
         class CustomPrefixHandler(tornado.wsgi.WSGIContainer):
-           
-
-            # modify call method so the lambda prefix isn't included in the call
+            # modify call method so the run/<lambda> isn't included in the call
             def __call__(self, request):
-                # request.path = request.path[len(self.prefix):]
                 reqlist = request.path.split("/")
-                
                 request.path = "/".join(reqlist[3:]) + "/"
                 return super().__call__(request)
 
         # use WSGI entry
         app = CustomPrefixHandler(f.app)
     else:
-        print("\n NO WSGI \n")
-
         # use function entry
         app = tornado.web.Application([
             (".*", SockFileHandler),
