@@ -70,7 +70,16 @@ func play_trace(ctx *cli.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	
 	traceCalls := strings.Split(string(traceText), "\n")
+
+	nonEmptyTraceCalls := make([]string, 0)
+	for _, traceCall := range traceCalls {
+		if traceCall != "" {
+			nonEmptyTraceCalls = append(nonEmptyTraceCalls, traceCall)
+		}
+	}
+	traceCalls = nonEmptyTraceCalls
 
 	tasks := ctx.Int("tasks")
 	if tasks == 0 {
@@ -108,6 +117,7 @@ func play_trace(ctx *cli.Context) (string, error) {
 	progressSnapshot := 0.0
 	progressSuccess := 0
 	callIdx := 0
+
 	for {
 		elapsed := time.Since(start).Seconds()
 		if elapsed >= seconds {
