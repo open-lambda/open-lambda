@@ -15,6 +15,12 @@ type HugeTree struct {
 	// the indexes between nodes and zygoteSets align
 	nodes []*Node
 	zygoteSets []*ZygoteSet
+
+	// subsystems needed for creating sandboxes
+	codeDirs    *common.DirMaker
+	scratchDirs *common.DirMaker
+	sbPool      sandbox.SandboxPool
+	pkgPuller   *packages.PackagePuller
 }
 
 type Zygote struct {
@@ -26,14 +32,27 @@ type Zygote struct {
 type ZygoteSet struct {
 	mutex      sync.Mutex
 	zygotes []*Zygote
+
+	// all sandboxes in the save ZygoteSet will share a codedir
+	// and metadata.
+	codeDir string
+	meta *sandbox.SandboxMeta
+}
+
+type CreateArgs struct {
+	isLeaf bool
+	codeDir string
+	scratchDir string
+	meta *sandbox.SandboxMeta
+	rt_type common.RuntimeType
 }
 
 func NewHugeTree(
 	codeDirs *common.DirMaker,
 	scratchDirs *common.DirMaker,
 	sbPool sandbox.SandboxPool,
-	pp *packages.PackagePuller,
-) (*HugeTree, error) {
+	pp *packages.PackagePuller) (*HugeTree, error) {
+
 	nodes, err := LoadTreeFromConfig()
 	if err != nil {
 		return nil, err
@@ -45,20 +64,61 @@ func NewHugeTree(
 	}
 
 	return &HugeTree{
-		nodes: nodes,
 		root: nodes[0],
+		nodes: nodes,
 		zygoteSets: zygoteSets,
+		codeDirs:    codeDirs,
+		scratchDirs: scratchDirs,
+		sbPool:      sbPool,
+		pkgPuller:   pp,
 	}, nil
+}
+
+// initCodeDirIfNecessary creates a code dir to be used by all Zygotes
+// in the set if it has not already been created.  The first-time init
+// of this code dir is the only time set.mutex should be held for any
+// significant amount of time.  This function assumes set.mutex is
+// already held.
+func (tree *HugeTree) initCodeDirIfNecessary(set *ZygoteSet, packages []string) error {
+	if set.codeDir != "" {
+		return nil
+	}
+	
+	codeDir := tree.codeDirs.Make("import-cache")
+	// TODO: clean this up upon failure
+
+	installs, err := tree.pkgPuller.InstallRecursive(packages)
+	if err != nil {
+		return err
+	}
+
+	topLevelMods := []string{}
+	for _, name := range packages {
+		pkg, err := tree.pkgPuller.GetPkg(name)
+		if err != nil {
+			return err
+		}
+		topLevelMods = append(topLevelMods, pkg.Meta.TopLevel...)
+	}
+
+	// policy: what modules should we pre-import?  Top-level of
+	// pre-initialized packages is just one possibility...
+	set.meta = &sandbox.SandboxMeta{
+		Installs: installs,
+		Imports:  topLevelMods,
+	}
+
+	set.codeDir = codeDir
+	return nil
 }
 
 // reserve tries to give us a Zygote.  If sbMustExist is true, reserve
 // will either return nil, or a Zygote with a sandbox.  If sbMustExist
 // is false, we are guaranteed to return a Zygote, but it may or may
 // not contain a Sandbox.
-func (set *ZygoteSet) reserve(sbMustExist bool) *Zygote {
-	set.mutex.Lock()
-	defer set.mutex.Unlock()
-
+//
+// assume lock is already held
+func (set *ZygoteSet) reserve(sbMustExist bool) (*Zygote) {
 	// any free zygotes with sandboxes already created?
 	for _, zygote := range set.zygotes {
 		if !zygote.inUse && zygote.sb != nil {
@@ -97,7 +157,26 @@ func (tree *HugeTree) Create(
 	codeDir, scratchDir string, meta *sandbox.SandboxMeta,
 	rt_type common.RuntimeType) (sandbox.Sandbox, error) {
 
-	zygoteP, zygoteC := tree.getZygotePair(meta.Installs)
+	args := CreateArgs{
+		isLeaf: isLeaf,
+		codeDir: codeDir,
+		scratchDir: scratchDir,
+		meta: meta,
+		rt_type: rt_type,
+	}
+	// TODO: implement retry here
+	return tree.tryCreate(childSandboxPool, args)
+}
+
+// responsible for acquiring and releasing Zygotes
+func (tree *HugeTree) tryCreate(
+	childSandboxPool sandbox.SandboxPool, createArgs CreateArgs) (sandbox.Sandbox, error) {
+
+	zygoteP, zygoteC, err := tree.getZygotePair(createArgs.meta.Installs)
+	if err != nil {
+		return nil, err
+	}
+
 	defer zygoteC.release()
 	if zygoteP != nil {
 		defer zygoteP.release()
@@ -107,12 +186,7 @@ func (tree *HugeTree) Create(
 	}
 	log.Printf("Zygote Pair: %V, %V\n", zygoteP, zygoteC)
 
-	// TODO case:
-	// case 1: if zygoteC has a sandbox, use it
-	// case 2: otherwise, if we have zygoteP, use zygoteP to create a sandbox for zygoteC, then use it
-	// case 3: otherwise, create a sanbox for zygoteC (without any parent), then use it
-
-	return nil, nil
+	return tree.tryCreateFromZygotes(childSandboxPool, createArgs, zygoteP, zygoteC)
 }
 
 // getZygotePair returns one or two Zygotes.  zygoteC (Child) will
@@ -123,7 +197,7 @@ func (tree *HugeTree) Create(
 // initialization will look something like this:
 //
 // root => ... => zygoteP => zygoteC => ... => handler
-func (tree *HugeTree) getZygotePair(packages []string) (zygoteP *Zygote, zygoteC *Zygote) {
+func (tree *HugeTree) getZygotePair(packages []string) (zygoteP *Zygote, zygoteC *Zygote, err error) {
 	zygoteIDs := []int{}
 	tree.root.FindEligibleZygotes(packages, &zygoteIDs)
 
@@ -137,10 +211,19 @@ func (tree *HugeTree) getZygotePair(packages []string) (zygoteP *Zygote, zygoteC
 	// of the packages that we need
 	for i := len(zygoteIDs)-1; i >= 0; i-- {
 		// try to get a Zygote at this level that already has a sandbox
+		set := tree.zygoteSets[zygoteIDs[i]]
+		set.mutex.Lock()
+		if err := tree.initCodeDirIfNecessary(set, tree.nodes[zygoteIDs[i]].Packages); err != nil {
+			set.mutex.Unlock()
+			return nil, nil, err
+		}
 		zygote := tree.zygoteSets[zygoteIDs[i]].reserve(true)
+		set.mutex.Unlock()
+
 		if zygote != nil {
 			if i == len(zygoteIDs) - 1 {
-				// yay, the deepest eligible Zygote has a sandbox!
+				// yay, the deepest eligible Zygote
+				// has a sandbox!
 				zygoteC = zygote
 			} else {
 				// the zygote was not as deep as we
@@ -148,18 +231,95 @@ func (tree *HugeTree) getZygotePair(packages []string) (zygoteP *Zygote, zygoteC
 				// to create another zygote that is
 				// one level deeper
 				zygoteP = zygote
-				zygoteC = tree.zygoteSets[zygoteIDs[i + 1]].reserve(false)
+				set := tree.zygoteSets[zygoteIDs[i + 1]]
+				set.mutex.Lock()
+				zygoteC = set.reserve(false)
+				set.mutex.Unlock()
 			}
-			break
+
+			return zygoteP, zygoteC, nil
 		}
 	}
-	if zygoteC == nil {
-		// could not find a Zygote with a sandbox at any level, so
-		// accept one at the root that does not have a sandbox
-		zygoteC = tree.zygoteSets[0].reserve(false)
-	}
 
-	return zygoteP, zygoteC
+	// could not find a Zygote with a sandbox at any level, so
+	// accept one at the root that does not have a sandbox
+	set := tree.zygoteSets[0]
+	set.mutex.Lock()
+	if err := tree.initCodeDirIfNecessary(set, tree.root.Packages); err != nil {
+		set.mutex.Unlock()
+		return nil, nil, err
+	}
+	zygoteC = set.reserve(false)
+	set.mutex.Unlock()
+	return zygoteP, zygoteC, nil
+}
+
+// responsible for pausing/unpausing sandboxes
+func (tree *HugeTree) tryCreateFromZygotes(
+	childSandboxPool sandbox.SandboxPool, createArgs CreateArgs,
+	zygoteP *Zygote, zygoteC *Zygote) (sandbox.Sandbox, error) {
+
+	// CASES
+	// case 1: if zygoteC has a sandbox, use it
+	// case 2: otherwise, if we have zygoteP, use zygoteP to create a sandbox for zygoteC, then use it
+	// case 3: otherwise, create a sanbox for zygoteC (without any parent), then use it
+
+	// if zygoteC has a sandbox, unpause it.  Otherwise, create
+	// it.
+	if zygoteC.sb == nil {
+		if err := zygoteC.sb.Unpause(); err != nil {
+			zygoteC.sb = nil
+			return nil, err
+		}
+	} else {
+		setC := zygoteC.containingSet
+		scratchDir := tree.scratchDirs.Make("import-cache")
+
+		// we have to create a zygoteC sandbox.  Do we have a
+		// parent from which to create it, or do we need a
+		// parentless sandbox?
+		if zygoteP == nil {
+			// we must create a parentless sandbox for zygoteC
+			sb, err := tree.sbPool.Create(
+				nil,   // no parent
+				false, // not a leaf
+				setC.codeDir,
+				scratchDir,
+				setC.meta,
+				createArgs.rt_type)
+			if err != nil {
+				return nil, err
+			}
+			zygoteC.sb = sb
+		} else {
+			// we must create a sandbox for zygoteC from the sandbox in zygoteP
+			if err := zygoteP.sb.Unpause(); err != nil {
+				zygoteP.sb = nil
+				return nil, err
+			}
+			defer zygoteP.sb.Pause()
+
+			sb, err := tree.sbPool.Create(
+				zygoteP.sb,   // this zygote has a parent zygote
+				false,        // not a leaf
+				setC.codeDir,
+				scratchDir,
+				setC.meta,
+				createArgs.rt_type)
+			if err != nil {
+				return nil, err
+			}
+			zygoteC.sb = sb
+		}
+	}
+	// if we get to here, we are guaranteed to have an unpaused sandbox in zygoteC
+	defer zygoteC.sb.Pause()
+
+	return childSandboxPool.Create(
+		zygoteC.sb, createArgs.isLeaf,
+		createArgs.codeDir, createArgs.scratchDir,
+		createArgs.meta, createArgs.rt_type)
+
 }
 
 func (tree *HugeTree) Cleanup() {
