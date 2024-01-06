@@ -29,8 +29,8 @@ type SOCKContainer struct {
 	rtType           common.RuntimeType
 	client           *http.Client
 
-	Node int
-
+	Node     int
+	IsZygote bool
 	// 1 for self, plus 1 for each child (we can't release memory
 	// until all descendants are dead, because they share the
 	// pages of this Container, but this is the only container
