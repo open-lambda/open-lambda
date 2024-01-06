@@ -130,6 +130,10 @@ func (worker *Worker) start(firstTime bool) error {
 		panic(err)
 	}
 
+	pid_namespace := "echo 500000 | sudo tee /proc/sys/user/max_pid_namespaces"
+	ipc_namespace := "echo 500000 | sudo tee /proc/sys/user/max_ipc_namespaces"
+	uts_namespace := "echo 500000 | sudo tee /proc/sys/user/max_uts_namespaces"
+
 	python_path := test_path
 
 	workerNum := len(worker.pool.workers[RUNNING]) + len(worker.pool.workers[STARTING])
@@ -138,12 +142,15 @@ func (worker *Worker) start(firstTime bool) error {
 	run_one_time := "sudo python3 run_worker.py"
 
 	var run_worker_up string
-	run_worker_up = fmt.Sprintf("sudo ./ol worker up -i ol-min -d -o import_cache_tree=%s,worker_url=0.0.0.0,features.warmup=false,limits.mem_mb=600", tree_path)
+	run_worker_up = fmt.Sprintf("sudo ./ol worker up -i ol-min -d -o import_cache_tree=%s,worker_url=0.0.0.0,features.warmup=false,limits.mem_mb=600,mem_pool_mb=10000,trace.evictor=true", tree_path)
 
 	var cmd string
 	if firstTime {
-		cmd = fmt.Sprintf("%s; cd %s; %s; cd %s; %s; %s; cd %s; %s",
+		cmd = fmt.Sprintf("%s; %s; %s; %s; cd %s; %s; cd %s; %s; %s; cd %s; %s",
 			"sudo mount -o rw,remount /sys/fs/cgroup",
+			pid_namespace,
+			ipc_namespace,
+			uts_namespace,
 			cwd,
 			"sudo ./ol worker init -i ol-min",
 			python_path,
@@ -153,12 +160,8 @@ func (worker *Worker) start(firstTime bool) error {
 			run_worker_up,
 		)
 	} else {
-		cmd = fmt.Sprintf("%s; cd %s; %s; cd %s; %s; cd %s; %s",
+		cmd = fmt.Sprintf("%s; cd %s; %s",
 			"sudo mount -o rw,remount /sys/fs/cgroup",
-			cwd,
-			"sudo ./ol worker init -i ol-min",
-			python_path,
-			run_deploy_funcs,
 			cwd,
 			run_worker_up,
 		)

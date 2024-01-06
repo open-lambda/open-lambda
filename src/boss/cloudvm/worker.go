@@ -600,7 +600,7 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 			smallWorker = curWorker
 		}
 	}
-	if smallWorkerTask < (worker.numTask - 32) {
+	if smallWorkerTask < (worker.numTask - 40) {
 		worker = smallWorker
 	}
 
@@ -632,12 +632,12 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 
 	// pool.Lock()
 	if loadbalancer.Lb.LbType == loadbalancer.Random {
-		worker.funcLog.Printf("{\"workernum\": %d, \"task\": \"%s\", \"start\": \"%s\", \"end\": \"%s\", \"time\": %d, \"assignTime\": %d, \"assign\": \"Random\", \"assigned\": \"Random\"}\n", len(pool.workers[RUNNING]), thisTask, startFormat, endFormat, latency, assignTime)
+		worker.funcLog.Printf("{\"workernum\": %d, \"policy\": %d, \"task\": \"%s\", \"start\": \"%s\", \"end\": \"%s\", \"time\": %d, \"assignTime\": %d, \"assign\": \"Random\", \"assigned\": \"Random\"}\n", len(pool.workers[RUNNING]), loadbalancer.Lb.LbType, thisTask, startFormat, endFormat, latency, assignTime)
 	} else {
 		if assignSuccess {
-			worker.funcLog.Printf("{\"workernum\": %d, \"task\": \"%s\", \"start\": \"%s\", \"end\": \"%s\", \"time\": %d, \"assignTime\": %d, \"assign\": \"Success\", \"assigned\": \"%s\"}\n", len(pool.workers[RUNNING]), thisTask, startFormat, endFormat, latency, assignTime, assigned)
+			worker.funcLog.Printf("{\"workernum\": %d, \"policy\": %d, \"task\": \"%s\", \"start\": \"%s\", \"end\": \"%s\", \"time\": %d, \"assignTime\": %d, \"assign\": \"Success\", \"assigned\": \"%s\", \"assignedIP\": \"%s\"}\n", len(pool.workers[RUNNING]), loadbalancer.Lb.LbType, thisTask, startFormat, endFormat, latency, assignTime, assigned, worker.workerIp)
 		} else {
-			worker.funcLog.Printf("{\"workernum\": %d, \"task\": \"%s\", \"start\": \"%s\", \"end\": \"%s\", \"time\": %d, \"assignTime\": %d, \"assign\": \"Unsuccess\", \"assigned\": \"%s\"}\n", len(pool.workers[RUNNING]), thisTask, startFormat, endFormat, latency, assignTime, assigned)
+			worker.funcLog.Printf("{\"workernum\": %d, \"policy\": %d, \"task\": \"%s\", \"start\": \"%s\", \"end\": \"%s\", \"time\": %d, \"assignTime\": %d, \"assign\": \"Unsuccess\", \"assigned\": \"%s\", \"assignedIP\": \"%s\"}\n", len(pool.workers[RUNNING]), loadbalancer.Lb.LbType, thisTask, startFormat, endFormat, latency, assignTime, assigned, worker.workerIp)
 		}
 	}
 	// pool.Unlock()
