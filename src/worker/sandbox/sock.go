@@ -29,8 +29,8 @@ type SOCKContainer struct {
 	rtType           common.RuntimeType
 	client           *http.Client
 
-	Node int
-
+	Node     int
+	IsZygote bool
 	// 1 for self, plus 1 for each child (we can't release memory
 	// until all descendants are dead, because they share the
 	// pages of this Container, but this is the only container
@@ -380,11 +380,6 @@ func (container *SOCKContainer) fork(dst Sandbox) (err error) {
 
 	dstSock := dst.(*SafeSandbox).Sandbox.(*SOCKContainer)
 
-	origPids, err := container.cg.GetPIDs()
-	if err != nil {
-		return err
-	}
-
 	root, err := os.Open(dstSock.containerRootDir)
 	if err != nil {
 		return err
@@ -402,45 +397,6 @@ func (container *SOCKContainer) fork(dst Sandbox) (err error) {
 	err = container.forkRequest(fmt.Sprintf("%s/ol.sock", container.scratchDir), root, cgProcs)
 	if err != nil {
 		return err
-	}
-	t.T1()
-
-	// move new PIDs to new cgroup.
-	//
-	// Make multiple passes in case new processes are being
-	// spawned (TODO: better way to do this?  This lets a forking
-	// process potentially kill our cache entry, which isn't
-	// great).
-	// todo: why do we need this? we have already moved in server.py
-	t = common.T0("move-to-cg-after-fork")
-	for {
-		currPids, err := container.cg.GetPIDs()
-		if err != nil {
-			return err
-		}
-
-		moved := 0
-
-		for _, pid := range currPids {
-			isOrig := false
-			for _, origPid := range origPids {
-				if pid == origPid {
-					isOrig = true
-					break
-				}
-			}
-			if !isOrig {
-				container.printf("move PID %v from CG %v to CG %v\n", pid, container.cg.Name(), dstSock.cg.Name())
-				if err = dstSock.cg.AddPid(pid); err != nil {
-					return err
-				}
-				moved++
-			}
-		}
-
-		if moved == 0 {
-			break
-		}
 	}
 	t.T1()
 
