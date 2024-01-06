@@ -39,6 +39,7 @@ type LambdaInstance struct {
 // 1. Sandbox.Pause/Unpause: discard Sandbox, create new one to handle request
 // 2. Sandbox.Create/Channel: discard Sandbox, propagate HTTP 500 to client
 // 3. Error inside Sandbox: simply propagate whatever occurred to the client (TODO: restart Sandbox)
+// todo: sleep for a random amount of time then return, print runtime.NumGoroutine() to see if goroutines are leaked
 func (linst *LambdaInstance) Task() {
 	f := linst.lfunc
 
@@ -100,6 +101,7 @@ func (linst *LambdaInstance) Task() {
 			t2.T1()
 
 		}
+		tUnpause := float64(time.Now().UnixNano()) / float64(time.Millisecond)
 
 		// if we don't already have a Sandbox, create one, and
 		// HTTP proxy over the channel
@@ -153,6 +155,7 @@ func (linst *LambdaInstance) Task() {
 			argsDict["req"] = 0
 		}
 		argsDict["start_create"] = tStartCreate
+		argsDict["unpause"] = tUnpause
 		argsDict["end_create"] = tEndCreate
 		argsDict["split_gen"] = sb.(*sandbox.SafeSandbox).Sandbox.(*sandbox.SOCKContainer).Node
 		argsDict["sb_id"] = sb.(*sandbox.SafeSandbox).Sandbox.(*sandbox.SOCKContainer).ID()

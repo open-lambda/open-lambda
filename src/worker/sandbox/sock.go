@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -365,11 +366,13 @@ func (container *SOCKContainer) childExit(child Sandbox) {
 
 // fork a new process from the Zygote in container, relocate it to be the server in dst
 func (container *SOCKContainer) fork(dst Sandbox) (err error) {
+	forkRec := make(map[string]int64)
+	forkRec["get_mem"] = time.Now().UnixNano() / 1e6
 	spareMB := container.cg.GetMemLimitMB() - container.cg.GetMemUsageMB()
 	if spareMB < 3 {
 		return fmt.Errorf("only %vMB of spare memory in parent, rejecting fork request (need at least 3MB)", spareMB)
 	}
-
+	forkRec["open_file"] = time.Now().UnixNano() / 1e6
 	// increment reference count before we start any processes
 	container.children[dst.ID()] = dst
 	newCount := atomic.AddInt32(&container.cgRefCount, 1)
@@ -393,15 +396,22 @@ func (container *SOCKContainer) fork(dst Sandbox) (err error) {
 	}
 	defer cgProcs.Close()
 
+	forkRec["fork_req"] = time.Now().UnixNano() / 1e6
 	t := common.T0("forkRequest")
 	err = container.forkRequest(fmt.Sprintf("%s/ol.sock", container.scratchDir), root, cgProcs)
 	if err != nil {
 		return err
 	}
 	t.T1()
-
+	forkRec["fork_done"] = time.Now().UnixNano() / 1e6
+	forkLock.Lock()
+	ForkRecords = append(ForkRecords, forkRec)
+	forkLock.Unlock()
 	return nil
 }
+
+var forkLock = sync.Mutex{}
+var ForkRecords = make([]map[string]int64, 0)
 
 func (container *SOCKContainer) Meta() *SandboxMeta {
 	return container.meta

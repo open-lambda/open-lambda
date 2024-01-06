@@ -11,7 +11,7 @@ import (
 
 // we would like 20% of the pool to be free for new containers.  the
 // evictor can only run if there's enough memory for two containers.
-// if there are only 2, our goal is to have free mem for on container.
+// if there are only 2, our goal is to have free mem for one container.
 // 20% only applies to containers in excess of 2.
 const FREE_SANDBOXES_PERCENT_GOAL = 20
 
@@ -140,7 +140,7 @@ func (evictor *SOCKEvictor) updateState() {
 			prio += 1
 		case EvPause:
 			prio -= 1
-		case EvFork: // TODO: add a huge value to avoid eviction for zygote
+		case EvFork:
 			prio += 2
 		case EvChildExit:
 			prio -= 2

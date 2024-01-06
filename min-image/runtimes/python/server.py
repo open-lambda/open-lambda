@@ -3,6 +3,7 @@
 ''' Python runtime for sock '''
 
 import os, sys, json, argparse, importlib, traceback, time, fcntl, array, socket, struct
+import requests
 
 sys.path.append("/usr/local/lib/python3.10/dist-packages")
 
@@ -87,6 +88,7 @@ def fork_server():
         _, fds = recv_fds(client, 8, 2)
         root_fd, mem_cgroup_fd = fds
 
+        t_fork = time.time()
         pid = os.fork()
 
         if pid:
@@ -106,6 +108,7 @@ def fork_server():
             client.close()
 
         else:
+            t_chroot = time.time()
             # child
             file_sock.close()
             file_sock = None
@@ -115,10 +118,16 @@ def fork_server():
             os.chroot(".")
             os.close(root_fd)
 
+            w_st = time.time()
             # mem cgroup
             os.write(mem_cgroup_fd, str(os.getpid()).encode('utf-8'))
             os.close(mem_cgroup_fd)
-
+            w_end = time.time()
+            record = {'fork_st': t_fork*1000, 'chroot': t_chroot*1000, 'mv_cg': w_st*1000, 'end': w_end*1000}
+            try:
+                requests.post('http://127.0.0.1:4998/fork', json = record)
+            except Exception as e:
+                pass
             # child
             start_container()
             os._exit(1) # only reachable if program unnexpectedly returns
@@ -135,6 +144,7 @@ def start_container():
     global file_sock
 
     # TODO: if we can get rid of this, we can get rid of the ns module
+    t_unshare = time.time()
     try:
         return_val = ol.unshare()
     except RuntimeError as e:
@@ -148,13 +158,20 @@ def start_container():
     # messages to the sock file.
     file_sock = tornado.netutil.bind_unix_socket(file_sock_path)
 
+    t_fork = time.time()
     pid = os.fork()
+    t_end = time.time()
     assert pid >= 0
 
     if pid > 0:
         # orphan the new process by exiting parent.  The parent
         # process is in a weird state because unshare only partially
         # works for the process that calls it.
+        try:
+            data = {'unshare': t_unshare*1000, 'fork': t_fork*1000, 'end': t_end*1000}
+            requests.post('http://127.0.0.1:4998/start', json = data)
+        except Exception as e:
+            pass
         os._exit(0)
 
     with open(bootstrap_path, encoding='utf-8') as f:

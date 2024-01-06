@@ -2,12 +2,15 @@ package lambda
 
 import (
 	"container/list"
+	"encoding/csv"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 	"github.com/open-lambda/open-lambda/ol/worker/lambda/packages"
@@ -172,7 +175,23 @@ func (mgr *LambdaMgr) DumpStatsToLog() {
 	time(0, "Unpause()", "")
 	time(0, "Pause()", "")
 	time(0, "Create()", "")
+	time(1, "Create()/acquire-mem", "ImportCache.Create")
+	time(1, "Create()/acquire-cgroup", "Create()")
+	time(1, "Create()/make-root-fs", "Create()")
+	time(1, "Create()/fork-proc", "Create()")
 	log.Printf("eviction dict %v, evict zygote number %d\n", sandbox.EvictDict, sandbox.EvictZygoteCnt)
+
+	if _, err := os.Stat("create.csv"); err == nil {
+		os.Remove("create.csv")
+	}
+	dir, _ := os.Getwd()
+	log.Printf("current create path %s\n", dir)
+	WriteListToFile("create.csv", sandbox.CreateList)
+
+	if _, err := os.Stat("go_fork.csv"); err == nil {
+		os.Remove("go_fork.csv")
+	}
+	WriteListToFile("go_fork.csv", sandbox.ForkRecords)
 
 	for k, v := range sandbox.EvictDict {
 		fmt.Printf("evict %d for %d times, create %d times\n", k, v, zygote.CreateCount[k])
@@ -214,4 +233,49 @@ func (mgr *LambdaMgr) Cleanup() {
 	if mgr.scratchDirs != nil {
 		mgr.scratchDirs.Cleanup()
 	}
+}
+
+func WriteListToFile(filePath string, listData []map[string]int64) {
+	if len(listData) == 0 {
+		return
+	}
+	start := time.Now()
+
+	mode := os.O_APPEND
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		mode = os.O_CREATE | os.O_WRONLY
+	} else {
+		mode = mode | os.O_WRONLY
+	}
+
+	file, err := os.OpenFile(filePath, mode, 0644)
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	var headers []string
+	if mode&os.O_CREATE == os.O_CREATE {
+		for key := range listData[0] {
+			headers = append(headers, key)
+		}
+		writer.Write(headers)
+	} else {
+		firstRow, _ := csv.NewReader(file).Read()
+		headers = firstRow
+	}
+
+	for _, item := range listData {
+		var record []string
+		for _, header := range headers {
+			record = append(record, fmt.Sprintf("%v", item[header]))
+		}
+		writer.Write(record)
+	}
+
+	elapsed := time.Since(start)
+	fmt.Printf("write to file %s takes %v seconds\n", filePath, elapsed.Seconds())
 }

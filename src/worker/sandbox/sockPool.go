@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -97,6 +98,8 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 	t := common.T0("Create()")
 	defer t.T1()
 
+	time_map := make(map[string]int64)
+	time_map["create"] = time.Now().UnixNano() / 1e6
 	var cSock *SOCKContainer = &SOCKContainer{
 		pool:             pool,
 		id:               id,
@@ -115,10 +118,12 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 
 	// block until we have enough to cover the cgroup mem limits
 	t2 := t.T0("acquire-mem")
+	time_map["acquire-mem"] = time.Now().UnixNano() / 1e6
 	pool.mem.adjustAvailableMB(-meta.MemLimitMB)
 	t2.T1()
 
 	t2 = t.T0("acquire-cgroup")
+	time_map["acquire-cgroup"] = time.Now().UnixNano() / 1e6
 	// when creating a new Sandbox without a parent, we want to
 	// move the cgroup memory charge (otherwise the charge will
 	// exist outside any Sandbox).  But when creating a child, we
@@ -142,6 +147,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 	}
 
 	t2 = t.T0("make-root-fs")
+	time_map["make-root-fs"] = time.Now().UnixNano() / 1e6
 	if err := cSock.populateRoot(); err != nil {
 		return nil, fmt.Errorf("failed to create root FS: %v", err)
 	}
@@ -186,6 +192,8 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 
 	// create new process in container (fresh, or forked from parent)
 	if parent != nil {
+		time_map["fork"] = time.Now().UnixNano() / 1e6
+		time_map["fresh"] = 0
 		t2 := t.T0("fork-proc")
 		if err := parent.fork(c); err != nil {
 			pool.printf("parent.fork returned %v", err)
@@ -194,6 +202,8 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 		cSock.parent = parent
 		t2.T1()
 	} else {
+		time_map["fresh"] = time.Now().UnixNano() / 1e6
+		time_map["fork"] = 0
 		t2 := t.T0("fresh-proc")
 		if err := cSock.freshProc(); err != nil {
 			fmt.Printf("freshProc error: %s \n", err.Error())
@@ -201,7 +211,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 		}
 		t2.T1()
 	}
-
+	time_map["fork_fresh_done"] = time.Now().UnixNano() / 1e6
 	// start HTTP client
 	sockPath := filepath.Join(cSock.scratchDir, "ol.sock")
 	if len(sockPath) > 108 {
@@ -220,8 +230,16 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 
 	// event handling
 	safe.startNotifyingListeners(pool.eventHandlers)
+	time_map["create_done"] = time.Now().UnixNano() / 1e6
+	createLock.Lock()
+	CreateList = append(CreateList, time_map)
+	createLock.Unlock()
+
 	return c, nil
 }
+
+var createLock = sync.Mutex{}
+var CreateList = make([]map[string]int64, 0)
 
 func (pool *SOCKPool) printf(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
