@@ -72,7 +72,7 @@ func NewHugeTree(
 
 	for i, node := range nodes {
 		zygoteSet := &ZygoteSet{}
-		if err := tree.initCodeDirIfNecessary(zygoteSet, node.Packages); err != nil {
+		if err := tree.initCodeDirIfNecessary(zygoteSet, node); err != nil {
 			log.Printf("ZygoteSet %d/%d init FAILED for packages: %v\n", node.Packages, (i+1), len(nodes))
 		} else {
 			log.Printf("ZygoteSet %d/%d inititialized for packages: %v\n", node.Packages, (i+1), len(nodes))
@@ -88,7 +88,7 @@ func NewHugeTree(
 // of this code dir is the only time set.mutex should be held for any
 // significant amount of time.  This function assumes set.mutex is
 // already held.
-func (tree *HugeTree) initCodeDirIfNecessary(set *ZygoteSet, packages []string) error {
+func (tree *HugeTree) initCodeDirIfNecessary(set *ZygoteSet, node *Node) error {
 	if set.codeDir != "" {
 		return nil
 	}
@@ -96,13 +96,8 @@ func (tree *HugeTree) initCodeDirIfNecessary(set *ZygoteSet, packages []string) 
 	codeDir := tree.codeDirs.Make("import-cache")
 	// TODO: clean this up upon failure
 
-	installs, err := tree.pkgPuller.InstallRecursive(packages)
-	if err != nil {
-		return err
-	}
-
 	topLevelMods := []string{}
-	for _, name := range packages {
+	for _, name := range node.Packages {
 		pkg, err := tree.pkgPuller.GetPkg(name)
 		if err != nil {
 			return err
@@ -113,7 +108,7 @@ func (tree *HugeTree) initCodeDirIfNecessary(set *ZygoteSet, packages []string) 
 	// policy: what modules should we pre-import?  Top-level of
 	// pre-initialized packages is just one possibility...
 	set.meta = &sandbox.SandboxMeta{
-		Installs: installs,
+		Installs: node.AllPackages(),
 		Imports:  topLevelMods,
 	}
 
@@ -222,7 +217,7 @@ func (tree *HugeTree) getZygotePair(packages []string) (zygoteP *Zygote, zygoteC
 		// try to get a Zygote at this level that already has a sandbox
 		set := tree.zygoteSets[zygoteIDs[i]]
 		set.mutex.Lock()
-		if err := tree.initCodeDirIfNecessary(set, tree.nodes[zygoteIDs[i]].Packages); err != nil {
+		if err := tree.initCodeDirIfNecessary(set, tree.nodes[zygoteIDs[i]]); err != nil {
 			set.mutex.Unlock()
 			return nil, nil, err
 		}
@@ -254,7 +249,7 @@ func (tree *HugeTree) getZygotePair(packages []string) (zygoteP *Zygote, zygoteC
 	// accept one at the root that does not have a sandbox
 	set := tree.zygoteSets[0]
 	set.mutex.Lock()
-	if err := tree.initCodeDirIfNecessary(set, tree.root.Packages); err != nil {
+	if err := tree.initCodeDirIfNecessary(set, tree.root); err != nil {
 		set.mutex.Unlock()
 		return nil, nil, err
 	}

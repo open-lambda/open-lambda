@@ -14,6 +14,8 @@ import (
 // locking (it is immutable).
 
 type Node struct {
+	parent *Node
+
 	// assigned via pre-order traversal, starting at 0
 	ID int
 	
@@ -63,11 +65,14 @@ func LoadTreeFromConfig() ([]*Node, error) {
 	return nodes, nil
 }
 
+
+
 func recursiveNodeInit(node *Node, nodes *[]*Node) {
 	node.ID = len(*nodes)
 	*nodes = append(*nodes, node)
 
 	for _, child := range node.Children {
+		child.parent = node
 		recursiveNodeInit(child, nodes)
 	}
 }
@@ -144,4 +149,14 @@ func (node *Node) FindEligibleZygotes(packages []string, eligible *[]int) bool {
 
 	// this node is eligible
 	return true
+}
+
+func (node *Node) AllPackages() []string {
+	all := []string{}
+	curr := node
+	for curr != nil {
+		all = append(all, node.Packages...)
+		curr = curr.parent
+	}
+	return all
 }
