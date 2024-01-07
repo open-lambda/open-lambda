@@ -74,7 +74,10 @@ func NewPackagePuller(sbPool sandbox.SandboxPool, depTracer *DepTracer) (*Packag
 // be case insensitive, and MUST consider hyphens and
 // underscores to be equivalent."
 func NormalizePkg(pkg string) string {
-	return strings.ReplaceAll(strings.ToLower(pkg), "_", "-")
+	// TODO: is there a better way to handle package requirements like this one?
+	//
+	// gunicorn==21.2.0;python-version>="3.5"
+	return strings.Split(strings.ReplaceAll(strings.ToLower(pkg), "_", "-"), ";")[0]
 }
 
 // "pip install" missing packages to Conf.Pkgs_dir

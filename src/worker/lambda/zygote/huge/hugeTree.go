@@ -59,11 +59,8 @@ func NewHugeTree(
 	}
 
 	zygoteSets := []*ZygoteSet{}
-	for _ = range nodes {
-		zygoteSets = append(zygoteSets, &ZygoteSet{})
-	}
 
-	return &HugeTree{
+	tree := &HugeTree{
 		root: nodes[0],
 		nodes: nodes,
 		zygoteSets: zygoteSets,
@@ -71,7 +68,19 @@ func NewHugeTree(
 		scratchDirs: scratchDirs,
 		sbPool:      sbPool,
 		pkgPuller:   pp,
-	}, nil
+	}
+
+	for i, node := range nodes {
+		zygoteSet := &ZygoteSet{}
+		if err := tree.initCodeDirIfNecessary(zygoteSet, node.Packages); err != nil {
+			log.Printf("ZygoteSet %d/%d init FAILED for packages: %v\n", node.Packages, (i+1), len(nodes))
+		} else {
+			log.Printf("ZygoteSet %d/%d inititialized for packages: %v\n", node.Packages, (i+1), len(nodes))
+		}
+		zygoteSets = append(zygoteSets, zygoteSet)
+	}
+
+	return tree, nil
 }
 
 // initCodeDirIfNecessary creates a code dir to be used by all Zygotes
@@ -117,7 +126,7 @@ func (tree *HugeTree) initCodeDirIfNecessary(set *ZygoteSet, packages []string) 
 // is false, we are guaranteed to return a Zygote, but it may or may
 // not contain a Sandbox.
 //
-// assume lock is already held
+// assume ZygoteSet lock is already held
 func (set *ZygoteSet) reserve(sbMustExist bool) (*Zygote) {
 	// any free zygotes with sandboxes already created?
 	for _, zygote := range set.zygotes {
@@ -266,7 +275,7 @@ func (tree *HugeTree) tryCreateFromZygotes(
 
 	// if zygoteC has a sandbox, unpause it.  Otherwise, create
 	// it.
-	if zygoteC.sb == nil {
+	if zygoteC.sb != nil {
 		if err := zygoteC.sb.Unpause(); err != nil {
 			zygoteC.sb = nil
 			return nil, err
@@ -323,5 +332,12 @@ func (tree *HugeTree) tryCreateFromZygotes(
 }
 
 func (tree *HugeTree) Cleanup() {
-	// TODO
+	for _, set := range tree.zygoteSets {
+		set.mutex.Lock() // never unlock, because we should never use it again
+		for _, zygote := range set.zygotes {
+			if zygote.sb != nil {
+				zygote.sb.Destroy("Zygote tree, final Cleanup()")
+			}
+		}
+	}
 }

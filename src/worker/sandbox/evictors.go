@@ -232,7 +232,7 @@ func (evictor *SOCKEvictor) doEvictions() {
 	if freeSandboxes <= 0 && evictor.evicting.Len() == 0 {
 		evictor.printf("WARNING!  Critically low on memory, so evicting an active Sandbox")
 		if evictor.prioQueues[1].Len() > 0 {
-			evictor.evictFront(evictor.prioQueues[1], true)
+			//evictor.evictFront(evictor.prioQueues[1], true) TODO
 		}
 	}
 
