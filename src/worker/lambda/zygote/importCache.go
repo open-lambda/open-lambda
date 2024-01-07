@@ -285,9 +285,11 @@ func (cache *ImportCache) createSandboxInNode(node *ImportCacheNode, rt_type com
 		codeDir := cache.codeDirs.Make("import-cache")
 		// TODO: clean this up upon failure
 
-		installs, err := cache.pkgPuller.InstallRecursive(node.Packages)
-		if err != nil {
-			return err
+		for _, pkg := range node.Packages {
+			_, err := cache.pkgPuller.GetPkg(pkg)
+			if err != nil {
+				return err
+			}
 		}
 
 		topLevelMods := []string{}
@@ -304,7 +306,7 @@ func (cache *ImportCache) createSandboxInNode(node *ImportCacheNode, rt_type com
 		// policy: what modules should we pre-import?  Top-level of
 		// pre-initialized packages is just one possibility...
 		node.meta = &sandbox.SandboxMeta{
-			Installs: installs,
+			Installs: node.Packages,
 			Imports:  topLevelMods,
 		}
 	}

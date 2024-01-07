@@ -58,12 +58,10 @@ func NewHugeTree(
 		return nil, err
 	}
 
-	zygoteSets := []*ZygoteSet{}
-
 	tree := &HugeTree{
 		root: nodes[0],
 		nodes: nodes,
-		zygoteSets: zygoteSets,
+		zygoteSets: []*ZygoteSet{},
 		codeDirs:    codeDirs,
 		scratchDirs: scratchDirs,
 		sbPool:      sbPool,
@@ -73,11 +71,11 @@ func NewHugeTree(
 	for i, node := range nodes {
 		zygoteSet := &ZygoteSet{}
 		if err := tree.initCodeDirIfNecessary(zygoteSet, node); err != nil {
-			log.Printf("ZygoteSet %d/%d init FAILED for packages: %v\n", node.Packages, (i+1), len(nodes))
+			log.Printf("ZygoteSet %d/%d init FAILED for packages: %v\n", (i+1), len(nodes), node.Packages)
 		} else {
-			log.Printf("ZygoteSet %d/%d inititialized for packages: %v\n", node.Packages, (i+1), len(nodes))
+			log.Printf("ZygoteSet %d/%d inititialized for packages: %v\n", (i+1), len(nodes), node.Packages)
 		}
-		zygoteSets = append(zygoteSets, zygoteSet)
+		tree.zygoteSets = append(tree.zygoteSets, zygoteSet)
 	}
 
 	return tree, nil
@@ -111,6 +109,8 @@ func (tree *HugeTree) initCodeDirIfNecessary(set *ZygoteSet, node *Node) error {
 		Installs: node.AllPackages(),
 		Imports:  topLevelMods,
 	}
+
+	log.Printf("Top Level: %v\n", topLevelMods)
 
 	set.codeDir = codeDir
 	return nil
@@ -169,7 +169,11 @@ func (tree *HugeTree) Create(
 		rt_type: rt_type,
 	}
 	// TODO: implement retry here
-	return tree.tryCreate(childSandboxPool, args)
+	sb, err := tree.tryCreate(childSandboxPool, args)
+	if err != nil {
+		log.Printf("Zygote could not be used to create child: %s", err.Error())
+	}
+	return sb, err
 }
 
 // responsible for acquiring and releasing Zygotes
@@ -319,6 +323,7 @@ func (tree *HugeTree) tryCreateFromZygotes(
 	// if we get to here, we are guaranteed to have an unpaused sandbox in zygoteC
 	defer zygoteC.sb.Pause()
 
+	log.Printf("Creating CHILD from ZYGOTE!")
 	return childSandboxPool.Create(
 		zygoteC.sb, createArgs.isLeaf,
 		createArgs.codeDir, createArgs.scratchDir,

@@ -79,7 +79,7 @@ func NewPackagePuller(sbPool sandbox.SandboxPool, depTracer *DepTracer) (*Packag
 // be case insensitive, and MUST consider hyphens and
 // underscores to be equivalent."
 func NormalizePkg(pkg string) string {
-	return strings.ReplaceAll(strings.ToLower(pkg), "_", "-")
+	return strings.Split(strings.ReplaceAll(strings.ToLower(pkg), "_", "-"), ";")[0]
 }
 
 // GetPkg does the pip install in a Sandbox, taking care to never install the
