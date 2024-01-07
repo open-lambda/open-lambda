@@ -74,6 +74,7 @@ func InitLoadBalancer(lbType int, maxGroup int, path string) {
 			}
 		}
 		if lbType == Hash {
+			GetRoot()
 			initHasher()
 		}
 	}

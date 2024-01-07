@@ -186,7 +186,7 @@ func (cg *CgroupImpl) AddPid(pid string) error {
 func (cg *CgroupImpl) setFreezeState(state int64) error {
 	cg.WriteInt("cgroup.freeze", state)
 
-	timeout := 5 * time.Second
+	timeout := 30 * time.Second
 	sleepDur := 1 * time.Millisecond
 	time.Sleep(sleepDur)
 	start := time.Now()

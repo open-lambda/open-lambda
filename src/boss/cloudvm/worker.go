@@ -520,7 +520,7 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if loadbalancer.Lb.LbType == loadbalancer.Hash {
-			targetGroup = loadbalancer.HashGetGroup(img, len(pool.workers[RUNNING]))
+			targetGroup = loadbalancer.HashGetGroup(pkgs, len(pool.workers[RUNNING]))
 			// fmt.Println(targetGroup)
 			targetGroups = append(targetGroups, targetGroup)
 		}
