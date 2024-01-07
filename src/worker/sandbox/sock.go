@@ -271,7 +271,7 @@ func (container *SOCKContainer) Pause() (err error) {
 		// we know the Sandbox cannot allocate more when it's not
 		// schedulable.  Then release saved memory back to the pool.
 		oldLimit := container.cg.GetMemLimitMB()
-		newLimit := container.cg.GetMemUsageMB() + 1
+		newLimit := container.cg.GetMemUsageMB() + 5 // 1 is not enough if we comment the setFreezeState
 		if newLimit < oldLimit {
 			container.cg.SetMemLimitMB(newLimit)
 			container.pool.mem.adjustAvailableMB(oldLimit - newLimit)

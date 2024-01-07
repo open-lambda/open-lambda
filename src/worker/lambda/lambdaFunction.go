@@ -93,6 +93,12 @@ func parseMeta(codeDir string) (meta *sandbox.SandboxMeta, err error) {
 		pkg := strings.Split(line, "#")[0]
 		if pkg != "" {
 			pkg = strings.Split(pkg, ";")[0] // avoid conditional dependencies for now
+			// avoid extra options, e.g. treat 'black[d]' the same as 'black'
+			if strings.Contains(pkg, "[") {
+				name := strings.Split(pkg, "[")[0]
+				ver := strings.Split(pkg, "==")[1]
+				pkg = name + "==" + ver
+			}
 			pkg = packages.NormalizePkg(pkg)
 			meta.Installs = append(meta.Installs, pkg)
 		}

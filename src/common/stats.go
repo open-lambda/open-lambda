@@ -72,6 +72,7 @@ func statsTask() {
 				msg.stats[k+".cnt"] = cnt
 				msg.stats[k+".ms-avg"] = msSums[k] / cnt
 			}
+			msg.stats["goroutines"] = int64(runtime.NumGoroutine())
 			msg.done <- true
 		default:
 			panic(fmt.Sprintf("unkown type: %T", msg))
