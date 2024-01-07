@@ -2,6 +2,7 @@ package zygote
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -292,14 +293,20 @@ func (cache *ImportCache) createSandboxInNode(node *ImportCacheNode, rt_type com
 			}
 		}
 
-		topLevelMods := []string{}
-		for _, name := range node.Packages {
-			pkg, err := cache.pkgPuller.GetPkg(name)
-			if err != nil {
-				return err
+		// copied from metrics branch...
+                topLevelMods := []string{}
+                for _, name := range node.Packages {
+			pkgPath := filepath.Join(common.Conf.SOCK_base_path, "packages", name, "files")
+                        moduleInfos, err := packages.IterModules(pkgPath)
+                        if err != nil {
+                                return err
+                        }
+                	modulesNames := []string{}
+                        for _, moduleInfo := range moduleInfos {
+                                modulesNames = append(modulesNames, moduleInfo.Name)
 			}
-			topLevelMods = append(topLevelMods, pkg.Meta.TopLevel...)
-		}
+                        topLevelMods = append(topLevelMods, modulesNames...)
+                }		
 
 		node.codeDir = codeDir
 

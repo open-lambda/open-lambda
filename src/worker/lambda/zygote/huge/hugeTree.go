@@ -3,6 +3,7 @@ package huge
 import (
 	"log"
 	"sync"
+	"path/filepath"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 	"github.com/open-lambda/open-lambda/ol/worker/lambda/packages"
@@ -94,13 +95,19 @@ func (tree *HugeTree) initCodeDirIfNecessary(set *ZygoteSet, node *Node) error {
 	codeDir := tree.codeDirs.Make("import-cache")
 	// TODO: clean this up upon failure
 
+	// copied from metrics branch...
 	topLevelMods := []string{}
 	for _, name := range node.Packages {
-		pkg, err := tree.pkgPuller.GetPkg(name)
+		pkgPath := filepath.Join(common.Conf.SOCK_base_path, "packages", name, "files")
+		moduleInfos, err := packages.IterModules(pkgPath)
 		if err != nil {
 			return err
 		}
-		topLevelMods = append(topLevelMods, pkg.Meta.TopLevel...)
+		modulesNames := []string{}
+		for _, moduleInfo := range moduleInfos {
+			modulesNames = append(modulesNames, moduleInfo.Name)
+		}
+		topLevelMods = append(topLevelMods, modulesNames...)
 	}
 
 	// policy: what modules should we pre-import?  Top-level of
