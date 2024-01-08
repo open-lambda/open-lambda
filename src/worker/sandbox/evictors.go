@@ -13,7 +13,7 @@ import (
 // evictor can only run if there's enough memory for two containers.
 // if there are only 2, our goal is to have free mem for on container.
 // 20% only applies to containers in excess of 2.
-const FREE_SANDBOXES_PERCENT_GOAL = 10
+const FREE_SANDBOXES_PERCENT_GOAL = 20
 
 // the maximum number of evictions we'll do concurrently
 const CONCURRENT_EVICTIONS = 8

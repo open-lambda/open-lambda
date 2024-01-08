@@ -168,7 +168,7 @@ func LoadDefaults(olPath string) error {
 			Procs:               10,
 			Mem_mb:              50,
 			CPU_percent:         100,
-			Max_runtime_default: 180,
+			Max_runtime_default: 90,
 			Installer_mem_mb:    500,
 			Swappiness:          0,
 		},
@@ -178,6 +178,7 @@ func LoadDefaults(olPath string) error {
 			Enable_seccomp:      true,
 			Warmup:              false,
 			COW:                 true,
+			Reuse_cgroups:       true,
 		},
 		Trace: TraceConfig{
 			Cgroups: false,

@@ -600,7 +600,7 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 			smallWorker = curWorker
 		}
 	}
-	if smallWorkerTask < (worker.numTask - 40) {
+	if smallWorkerTask < (worker.numTask - 16) {
 		worker = smallWorker
 	}
 
@@ -831,9 +831,7 @@ func (pool *WorkerPool) ChangePolicy(policy string) {
 
 // forward request to worker
 // TODO: this is kept for other platforms
-var client = &http.Client{
-	Timeout: time.Second * 10,
-}
+var client = &http.Client{}
 
 func forwardTaskHelper(w http.ResponseWriter, req *http.Request, workerIp string) error {
 	host := fmt.Sprintf("%s:%d", workerIp, 5000) //TODO: read from config
