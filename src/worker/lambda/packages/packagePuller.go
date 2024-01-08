@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -17,6 +18,47 @@ import (
 	"github.com/open-lambda/open-lambda/ol/worker/embedded"
 	"github.com/open-lambda/open-lambda/ol/worker/sandbox"
 )
+
+type SizeOfPackages struct {
+	TotalSize int            // total size of all packages
+	Packages  map[string]int // size of individual packages
+}
+
+// Initialize the global variable to track package sizes
+var sizeTracker = SizeOfPackages{
+	TotalSize: 0,
+	Packages:  make(map[string]int),
+}
+
+func PackageSizeIncreaser(pkg string, size int) {
+	// Normalize the package name
+	pkg = NormalizePkg(pkg)
+
+	// Lock the sizeTracker here if using in a concurrent context
+
+	// Update the size for the individual package and the total size
+	sizeTracker.Packages[pkg] += size
+	sizeTracker.TotalSize += size
+
+	// Unlock the sizeTracker here if using in a concurrent context
+}
+
+func getPackageSize(packageName string) (string, error) {
+	cmd := exec.Command("apt-cache", "show", packageName)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	err := cmd.Run()
+	if err != nil {
+		return "", err
+	}
+
+	for _, line := range strings.Split(out.String(), "\n") {
+		if strings.Contains(line, "Size") {
+			return line, nil
+		}
+	}
+	return "", fmt.Errorf("Size not found")
+}
 
 // PackagePuller is the interface for installing pip packages locally.
 // The manager installs to the worker host from an optional pip
