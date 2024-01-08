@@ -19,6 +19,10 @@ import (
 	"github.com/open-lambda/open-lambda/ol/worker/sandbox"
 )
 
+// PackagePuller is the interface for installing pip packages locally.
+// The manager installs to the worker host from an optional pip
+// mirror.
+
 type SizeOfPackages struct {
 	TotalSize int            // total size of all packages
 	Packages  map[string]int // size of individual packages
@@ -60,9 +64,6 @@ func getPackageSize(packageName string) (string, error) {
 	return "", fmt.Errorf("Size not found")
 }
 
-// PackagePuller is the interface for installing pip packages locally.
-// The manager installs to the worker host from an optional pip
-// mirror.
 type PackagePuller struct {
 	sbPool    sandbox.SandboxPool
 	depTracer *DepTracer
@@ -168,6 +169,7 @@ func (pp *PackagePuller) InstallRecursive(installs []string) ([]string, error) {
 // will never try more after the first success
 func (pp *PackagePuller) GetPkg(pkg string) (*Package, error) {
 	// get (or create) package
+	pkgname = pkg
 	pkg = NormalizePkg(pkg)
 	tmp, _ := pp.packages.LoadOrStore(pkg, &Package{Name: pkg})
 	p := tmp.(*Package)
@@ -190,6 +192,7 @@ func (pp *PackagePuller) GetPkg(pkg string) (*Package, error) {
 		return p, nil
 	}
 
+	getPackageSize(pkgname)
 	return p, nil
 }
 
