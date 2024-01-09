@@ -64,6 +64,8 @@ func NewWorkerPool(platform string, worker_cap int) (*WorkerPool, error) {
 	pool.nextGroup = 0
 
 	pool.taksId = 0
+	pool.rr_index = 0
+	pool.rr_queue = make([]*Worker, 0)
 
 	pool.workers_queue = make(map[*Worker]chan string, 5)
 
@@ -190,6 +192,7 @@ func (pool *WorkerPool) startNewWorker() {
 			len(pool.workers[CLEANING]),
 			len(pool.workers[DESTROYING]))
 		pool.queue <- worker
+		pool.rr_queue = append(pool.rr_queue, worker)
 		log.Printf("%s ready\n", worker.workerId)
 		worker.numTask = 0
 		// update the worker's assigned group
@@ -487,8 +490,8 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 	thisTask = img
 	if loadbalancer.Lb.LbType == loadbalancer.Random {
 		// fmt.Println("Debug 2")
-		worker = <-pool.queue
-		pool.queue <- worker
+		worker = pool.rr_queue[pool.rr_index]
+		pool.rr_index = (pool.rr_index + 1) % len(pool.rr_queue)
 		// fmt.Println("Debug 3")
 	} else {
 		// TODO: what if the designated worker isn't up yet?
@@ -600,7 +603,7 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 			smallWorker = curWorker
 		}
 	}
-	if smallWorkerTask < (worker.numTask - 16) {
+	if smallWorkerTask < (worker.numTask - 32) {
 		worker = smallWorker
 	}
 

@@ -142,7 +142,7 @@ func (worker *Worker) start(firstTime bool) error {
 	run_one_time := "sudo python3 run_worker.py"
 
 	var run_worker_up string
-	run_worker_up = fmt.Sprintf("sudo ./ol worker up -i ol-min -d -o import_cache_tree=%s,worker_url=0.0.0.0,features.warmup=false,limits.mem_mb=500,mem_pool_mb=8192,trace.evictor=true", tree_path)
+	run_worker_up = fmt.Sprintf("sudo ./ol worker up -i ol-min -d -o import_cache_tree=%s,worker_url=0.0.0.0,features.warmup=false,limits.mem_mb=500,mem_pool_mb=32768,trace.evictor=true", tree_path)
 
 	var cmd string
 	if firstTime {

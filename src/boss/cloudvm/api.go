@@ -57,7 +57,9 @@ type WorkerPool struct {
 	workers []map[string]*Worker // a slice of maps
 	// Slice: index maps to a const WorkerState
 	// Map: key=worker id (string), value=pointer to worker
-	queue chan *Worker // a queue of running workers
+	queue    chan *Worker // a queue of running workers
+	rr_index int
+	rr_queue []*Worker
 
 	clusterLogFile *os.File
 	taskLogFile    *os.File
