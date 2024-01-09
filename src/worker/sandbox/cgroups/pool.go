@@ -22,7 +22,7 @@ type CgroupPool struct {
 	recycled chan *CgroupImpl
 	quit     chan chan bool
 	nextID   int
-	logger   slog.Logger
+	log   	 slog.Logger
 }
 
 func NewCgroupPool(name string) (*CgroupPool, error) {
@@ -33,13 +33,12 @@ func NewCgroupPool(name string) (*CgroupPool, error) {
 		recycled: make(chan *CgroupImpl, CGROUP_RESERVE),
 		quit:     make(chan chan bool),
 		nextID:   0,
-		logger:   common.CgTopLogger,
+		log:   	  *common.TopLogger.With("cg-pool", path.Base(path.Dir(common.Conf.Worker_dir)) + "-" + name),
 	}
-	pool.logger = *pool.logger.With("cgroup pool", pool.Name)
 
 	// create cgroup
 	groupPath := pool.GroupPath()
-	pool.logger.Info(fmt.Sprintf("create %s", groupPath))
+	pool.log.Info(fmt.Sprintf("create %s", groupPath))
 	if err := syscall.Mkdir(groupPath, 0700); err != nil {
 		return nil, fmt.Errorf("Mkdir %s: %s", groupPath, err)
 	}
@@ -61,16 +60,15 @@ func (pool *CgroupPool) NewCgroup() Cgroup {
 	cg := &CgroupImpl{
 		name:   fmt.Sprintf("cg-%d", pool.nextID),
 		pool:   pool,
-		logger: common.CgTopLogger,
+		log: 	*pool.log.With("cg", fmt.Sprintf("cg-%d", pool.nextID)),
 	}
-	cg.logger = *cg.logger.With("cgroup pool", cg.pool.Name, "cgroup", cg.name)
 
 	groupPath := cg.GroupPath()
 	if err := syscall.Mkdir(groupPath, 0700); err != nil {
 		panic(fmt.Errorf("Mkdir %s: %s", groupPath, err))
 	}
 
-	cg.logger.Info("created")
+	cg.log.Info("created")
 
 	return cg
 }
@@ -80,7 +78,7 @@ func (pool *CgroupPool) cgTask() {
 	var done chan bool
 
 	// loop until we get the quit message
-	pool.logger.Info("start creating/serving CGs")
+	pool.log.Info("start creating/serving CGs")
 Loop:
 	for {
 		var cg *CgroupImpl
@@ -111,14 +109,14 @@ Loop:
 		select {
 		case pool.ready <- cg:
 		case done = <-pool.quit:
-			pool.logger.Info("received shutdown request")
+			pool.log.Info("received shutdown request")
 			cg.Destroy()
 			break Loop
 		}
 	}
 
 	// empty queues, freeing all cgroups
-	pool.logger.Info("empty queues and release CGs")
+	pool.log.Info("empty queues and release CGs")
 Empty:
 	for {
 		select {
@@ -143,13 +141,13 @@ func (pool *CgroupPool) Destroy() {
 
 	// Destroy cgroup for this entire pool
 	gpath := pool.GroupPath()
-	pool.logger.Info(fmt.Sprintf("Destroying cgroup pool with path \"%s\"", gpath))
+	pool.log.Info(fmt.Sprintf("Destroying cgroup pool with path \"%s\"", gpath))
 	for i := 100; i >= 0; i-- {
 		if err := syscall.Rmdir(gpath); err != nil {
 			if i == 0 {
 				panic(fmt.Errorf("Rmdir %s: %s", gpath, err))
 			} else {
-				pool.logger.Warn("cgroup pool Rmdir failed, trying again in 5ms")
+				pool.log.Warn("cgroup pool Rmdir failed, trying again in 5ms")
 				time.Sleep(5 * time.Millisecond)
 			}
 		} else {

@@ -10,7 +10,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
-	//"strings"
 	"syscall"
 	"time"
 
@@ -45,10 +44,7 @@ type SOCKContainer struct {
 // which containers
 func (container *SOCKContainer) printf(format string, args ...any) {
 	logger := slog.Default()
-	//logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	msg := fmt.Sprintf(format, args...)
-	//log.Printf("%s [SOCK %s]", strings.TrimRight(msg, "\n"), container.id)
-	logger.Info("sock slog used here!!!!!!!!!!!!!")
 	logger.Info(msg, "SOCK id", container.id)
 }
 
