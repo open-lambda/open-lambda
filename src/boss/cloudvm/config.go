@@ -14,6 +14,8 @@ import (
 
 var GcpConf *GcpConfig
 var AzureConf *AzureConfig
+var tree_path string
+var worker_mem int
 
 type GcpConfig struct {
 	DiskSizeGb  int    `json:"disk_size_gb"`
@@ -22,6 +24,10 @@ type GcpConfig struct {
 
 func LoadTreePath(path string) {
 	tree_path = path
+}
+
+func LoadWorkerMem(mem int) {
+	worker_mem = mem
 }
 
 func GetGcpConfigDefaults() *GcpConfig {

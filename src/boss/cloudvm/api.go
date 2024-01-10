@@ -26,8 +26,6 @@ const (
 	snapshot          = "ol-boss-new-snapshot"
 )
 
-var tree_path string
-
 const (
 	test_path    = "/home/azureuser/paper-tree-cache/analysis/17/"
 	ssh_key_path = "/home/azureuser/.ssh/ol-boss_key.pem"

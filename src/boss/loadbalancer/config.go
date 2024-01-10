@@ -9,11 +9,12 @@ import (
 )
 
 const (
-	Random   = 0
-	KMeans   = 1
-	KModes   = 2
-	Sharding = 3
-	Hash     = 4
+	Random     = 0
+	KMeans     = 1
+	KModes     = 2
+	Sharding   = 3
+	HashZygote = 4
+	HashFunc   = 5
 )
 
 var tree_path string
@@ -73,9 +74,12 @@ func InitLoadBalancer(lbType int, maxGroup int, path string) {
 				log.Fatalf(err.Error())
 			}
 		}
-		if lbType == Hash {
+		if lbType == HashZygote {
 			GetRoot()
-			initHasher()
+			initZygoteHasher()
+		}
+		if lbType == HashFunc {
+			initFuncHasher()
 		}
 	}
 	Lb = &LoadBalancer{

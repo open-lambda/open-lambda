@@ -24,6 +24,7 @@ type Config struct {
 	Lb         string              `json:"lb"`
 	MaxGroup   int                 `json:"max_group"`
 	Tree_path  string              `json:"tree_path"`
+	Worker_mem int                 `json:"worker_mem"`
 }
 
 func LoadDefaults() error {
@@ -33,6 +34,7 @@ func LoadDefaults() error {
 		return err
 	}
 	tree_path := fmt.Sprintf("%s/default-zygote-40.json", olPath)
+
 	Conf = &Config{
 		Platform:   "mock",
 		Scaling:    "manual",
@@ -44,9 +46,18 @@ func LoadDefaults() error {
 		Lb:         "random",
 		MaxGroup:   5,
 		Tree_path:  tree_path,
+		Worker_mem: 32768,
 	}
 
 	return checkConf()
+}
+
+func Max(x int, y int) int {
+	if x > y {
+		return x
+	}
+
+	return y
 }
 
 // ParseConfig reads a file and tries to parse it as a JSON string to a Config
@@ -63,6 +74,7 @@ func LoadConf(path string) error {
 	}
 
 	cloudvm.LoadTreePath(Conf.Tree_path)
+	cloudvm.LoadWorkerMem(Conf.Worker_mem)
 	if Conf.Platform == "gcp" {
 		cloudvm.LoadGcpConfig(&Conf.Gcp)
 	} else if Conf.Platform == "azure" {
@@ -81,8 +93,11 @@ func LoadConf(path string) error {
 	if Conf.Lb == "kmodes" {
 		loadbalancer.InitLoadBalancer(loadbalancer.KModes, Conf.MaxGroup, Conf.Tree_path)
 	}
-	if Conf.Lb == "hash" {
-		loadbalancer.InitLoadBalancer(loadbalancer.Hash, Conf.MaxGroup, Conf.Tree_path)
+	if Conf.Lb == "hashfunc" {
+		loadbalancer.InitLoadBalancer(loadbalancer.HashFunc, Conf.MaxGroup, Conf.Tree_path)
+	}
+	if Conf.Lb == "hashzygote" {
+		loadbalancer.InitLoadBalancer(loadbalancer.HashZygote, Conf.MaxGroup, Conf.Tree_path)
 	}
 
 	return checkConf()
@@ -92,8 +107,8 @@ func checkConf() error {
 	if Conf.Scaling != "manual" && Conf.Scaling != "threshold-scaler" {
 		return fmt.Errorf("Scaling type '%s' not implemented", Conf.Scaling)
 	}
-	if Conf.Lb != "random" && Conf.Lb != "sharding" && Conf.Lb != "kmeans" && Conf.Lb != "kmodes" && Conf.Lb != "hash" {
-		return fmt.Errorf("%s is not implemented", Conf.Scaling)
+	if Conf.Lb != "random" && Conf.Lb != "sharding" && Conf.Lb != "kmeans" && Conf.Lb != "kmodes" && Conf.Lb != "hashfunc" && Conf.Lb != "hashzygote" {
+		return fmt.Errorf("%s is not implemented", Conf.Lb)
 	}
 
 	return nil

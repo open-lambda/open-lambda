@@ -12,7 +12,7 @@ var (
 	hasherMutex sync.Mutex
 )
 
-func hashString(input int) int {
+func hashInt(input int) int {
 	hasherMutex.Lock()         // Lock the mutex before using the hasher
 	defer hasherMutex.Unlock() // Unlock the mutex when the function exits
 
@@ -34,13 +34,13 @@ func hashString(input int) int {
 	return truncatedHash
 }
 
-func HashGetGroup(pkgs []string, running int) int {
+func HashZygoteGetGroup(pkgs []string, running int) int {
 	node := root.Lookup(pkgs)
-	hashInt := hashString(node.SplitGeneration)
+	hashInt := hashInt(node.SplitGeneration)
 	group := hashInt % running
 	return group
 }
 
-func initHasher() {
+func initZygoteHasher() {
 	hasher = sha256.New()
 }

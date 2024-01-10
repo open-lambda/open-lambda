@@ -522,8 +522,14 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		if loadbalancer.Lb.LbType == loadbalancer.Hash {
-			targetGroup = loadbalancer.HashGetGroup(pkgs, len(pool.workers[RUNNING]))
+		if loadbalancer.Lb.LbType == loadbalancer.HashFunc {
+			targetGroup = loadbalancer.HashFuncGetGroup(img, len(pool.workers[RUNNING]))
+			// fmt.Println(targetGroup)
+			targetGroups = append(targetGroups, targetGroup)
+		}
+
+		if loadbalancer.Lb.LbType == loadbalancer.HashZygote {
+			targetGroup = loadbalancer.HashZygoteGetGroup(pkgs, len(pool.workers[RUNNING]))
 			// fmt.Println(targetGroup)
 			targetGroups = append(targetGroups, targetGroup)
 		}
@@ -603,7 +609,7 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 			smallWorker = curWorker
 		}
 	}
-	if smallWorkerTask < (worker.numTask - 32) {
+	if smallWorkerTask < (worker.numTask - 5) {
 		worker = smallWorker
 	}
 
@@ -793,6 +799,16 @@ func (pool *WorkerPool) ChangeTree(tree string) {
 	pool.updateCluster()
 }
 
+func (pool *WorkerPool) ChangeMem(mem int) {
+	pool.Lock()
+	LoadWorkerMem(mem)
+	pool.Unlock()
+
+	pool.Restart()
+
+	pool.updateCluster()
+}
+
 func (pool *WorkerPool) ChangePolicy(policy string) {
 	pool.Lock()
 	if policy == "random" {
@@ -819,11 +835,17 @@ func (pool *WorkerPool) ChangePolicy(policy string) {
 		// }
 		loadbalancer.InitLoadBalancer(loadbalancer.KModes, loadbalancer.MaxGroup, tree_path)
 	}
-	if policy == "hash" {
+	if policy == "hashfunc" {
 		// if loadbalancer.Lb.LbType == loadbalancer.Hash {
 		// 	return
 		// }
-		loadbalancer.InitLoadBalancer(loadbalancer.Hash, loadbalancer.MaxGroup, tree_path)
+		loadbalancer.InitLoadBalancer(loadbalancer.HashFunc, loadbalancer.MaxGroup, tree_path)
+	}
+	if policy == "hashzygote" {
+		// if loadbalancer.Lb.LbType == loadbalancer.Hash {
+		// 	return
+		// }
+		loadbalancer.InitLoadBalancer(loadbalancer.HashZygote, loadbalancer.MaxGroup, tree_path)
 	}
 	pool.Unlock()
 
