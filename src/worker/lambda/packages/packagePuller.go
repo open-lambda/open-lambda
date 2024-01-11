@@ -57,7 +57,7 @@ func getPackageSize(packageName string) (string, error) {
 			return line, nil
 		}
 	}
-	return "", fmt.Errorf("Size not found")
+	return "", fmt.Errorf("size not found")
 }
 
 // PackagePuller is the interface for installing pip packages locally.
@@ -169,6 +169,8 @@ func (pp *PackagePuller) InstallRecursive(installs []string) ([]string, error) {
 func (pp *PackagePuller) GetPkg(pkg string) (*Package, error) {
 	// get (or create) package
 	pkg = NormalizePkg(pkg)
+	//try to print the package size after install here?
+	getPackageSize(pkg)
 	tmp, _ := pp.packages.LoadOrStore(pkg, &Package{Name: pkg})
 	p := tmp.(*Package)
 
@@ -211,6 +213,8 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 		// assume dir existence means it is installed already
 		log.Printf("%s appears already installed from previous run of OL", p.Name)
 		alreadyInstalled = true
+		//try to print the package size after install here?
+		getPackageSize(p.Name)
 	} else {
 		log.Printf("run pip install %s from a new Sandbox to %s on host", p.Name, scratchDir)
 		if err := os.Mkdir(scratchDir, 0700); err != nil {
