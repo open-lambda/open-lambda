@@ -145,12 +145,12 @@ def start_container():
 
     # TODO: if we can get rid of this, we can get rid of the ns module
     t_unshare = time.time()
-    try:
-        return_val = ol.unshare()
-    except RuntimeError as e:
-        print("An error occurred in ol.unshare():", e)
-        return_val = 1
-    assert return_val == 0
+    # try:
+    #     return_val = ol.unshare()
+    # except RuntimeError as e:
+    #     print("An error occurred in ol.unshare():", e)
+    #     return_val = 1
+    # assert return_val == 0
 
     # we open a new .sock file in the child, before starting the grand
     # child, which will actually use it.  This is so that the parent

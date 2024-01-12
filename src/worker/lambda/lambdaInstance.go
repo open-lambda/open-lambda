@@ -146,10 +146,10 @@ func (linst *LambdaInstance) Task() {
 			fmt.Printf("req.r.Body is nil\n")
 		}
 		json.Unmarshal(bodyBytes, &argsDict)
-		if _, ok := argsDict["name"]; !ok {
-			// name is a unique identifier for each call, specified by the sender
+		if _, ok := argsDict["invoke_id"]; !ok {
+			// invoke_id is a unique identifier for each call, specified by the sender
 			// default is linst.lfunc.name, but cannot trace multiple calls on same lambda
-			argsDict["name"] = linst.lfunc.name
+			argsDict["invoke_id"] = linst.lfunc.name
 		}
 		if _, ok := argsDict["req"]; !ok {
 			argsDict["req"] = 0
@@ -160,7 +160,7 @@ func (linst *LambdaInstance) Task() {
 		argsDict["split_gen"] = sb.(*sandbox.SafeSandbox).Sandbox.(*sandbox.SOCKContainer).Node
 		argsDict["sb_id"] = sb.(*sandbox.SafeSandbox).Sandbox.(*sandbox.SOCKContainer).ID()
 		argsDict["zygote_miss"] = miss
-		tStartCreate, tEndCreate, miss = 0, 0, 0
+		tStartCreate, tUnpause, tEndCreate, miss = 0, 0, 0, 0
 
 		newReqBytes, _ := json.Marshal(argsDict)
 		req.r.Body = io.NopCloser(bytes.NewBuffer(newReqBytes))

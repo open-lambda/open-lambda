@@ -15,7 +15,7 @@ import (
 
 // if there are fewer than CGROUP_RESERVE available, more will be created.
 // If there are more than 2*CGROUP_RESERVE available, they'll be released.
-const CGROUP_RESERVE = 16
+const CGROUP_RESERVE = 4096
 
 type CgroupPool struct {
 	Name     string
@@ -162,7 +162,7 @@ func (pool *CgroupPool) Destroy() {
 func (pool *CgroupPool) GetCg(memLimitMB int, moveMemCharge bool, cpuPercent int) Cgroup {
 	cg := <-pool.ready
 	cg.SetMemLimitMB(memLimitMB)
-	cg.SetCPUPercent(cpuPercent)
+	// cg.SetCPUPercent(cpuPercent)
 
 	/* FIXME not supported in CG2?
 	   if moveMemCharge {
