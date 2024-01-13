@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 	"github.com/open-lambda/open-lambda/ol/worker/lambda/packages"
@@ -411,6 +412,7 @@ func (cache *ImportCache) createSandboxInNode(node *ImportCacheNode, rt_type com
 // Warmup will initialize every node in the tree,
 // to have an accurate memory usage result and prevent warmup from failing, please have a large enough memory to avoid evicting
 func (cache *ImportCache) Warmup() error {
+	t1 := float64(time.Now().UnixNano()) / float64(time.Millisecond)
 	COW := common.Conf.Features.COW
 	rt_type := common.RT_PYTHON
 
@@ -486,7 +488,8 @@ func (cache *ImportCache) Warmup() error {
 			return err
 		}
 	}
-
+	t2 := float64(time.Now().UnixNano()) / float64(time.Millisecond)
+	fmt.Printf("warmup time is %.3f ms\n", t2-t1)
 	return nil
 }
 
