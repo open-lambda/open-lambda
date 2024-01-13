@@ -1,6 +1,7 @@
 package bench
 
 import (
+	"log"
 	"fmt"
 	"net/http"
 	"io/ioutil"
@@ -141,7 +142,7 @@ func play_trace(ctx *cli.Context) (string, error) {
 
 		// show throughput stats about every 1 seconds
 		if elapsed > progressSnapshot + 1 {
-			fmt.Printf("throughput: %.1f/second\n", float64(progressSuccess) / (elapsed-progressSnapshot))
+			log.Printf("throughput: %.1f/second\n", float64(progressSuccess) / (elapsed-progressSnapshot))
 			progressSnapshot = elapsed
 			progressSuccess = 0
 		}

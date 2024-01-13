@@ -1,0 +1,52 @@
+#!/bin/bash
+duration=1800
+ol_path=/root/ol
+tree_path=/root/paper-tree-cache/analysis/18/tree-v2.node-320.json
+
+rmdir /sys/fs/cgroup/ol
+mkdir /sys/fs/cgroup/ol
+
+cd $ol_path
+
+./ol worker down
+./ol worker force-cleanup
+./ol worker force-cleanup
+
+cp min-image/runtimes/python/server_no_unshare.py min-image/runtimes/python/server.py
+cp default-ol/lambda/runtimes/python/server_no_unshare.py default-ol/lambda/runtimes/python/server.py
+
+cgexec -g memory,cpu:ol ./ol worker up -d -o import_cache_tree=$tree_path,mem_pool_mb=32768,limits.mem_mb=600,features.warmup=True,features.reuse_cgroups=True,features.downsize_paused_mem=True
+./ol bench play -f trace.txt -t 5 -s $duration &> reuse_no_unshare.txt
+
+./ol worker down
+kill -9 $(cat default-ol/worker/worker.pid)
+./ol worker force-cleanup
+./ol worker force-cleanup
+
+cgexec -g memory,cpu:ol ./ol worker up -d -o import_cache_tree=$tree_path,mem_pool_mb=32768,limits.mem_mb=600,features.warmup=True,features.reuse_cgroups=False,features.downsize_paused_mem=True
+./ol bench play -f trace.txt -t 5 -s $duration &> no_reuse_no_unshare.txt
+
+./ol worker down
+kill -9 $(cat default-ol/worker/worker.pid)
+./ol worker force-cleanup
+./ol worker force-cleanup
+
+
+cp min-image/runtimes/python/server_unshare.py min-image/runtimes/python/server.py
+cp default-ol/lambda/runtimes/python/server_unshare.py default-ol/lambda/runtimes/python/server.py
+
+cgexec -g memory,cpu:ol ./ol worker up -d -o import_cache_tree=$tree_path,mem_pool_mb=32768,limits.mem_mb=600,features.warmup=True,features.reuse_cgroups=True,features.downsize_paused_mem=True
+./ol bench play -f trace.txt -t 5 -s $duration &> reuse_unshare.txt
+
+./ol worker down
+kill -9 $(cat default-ol/worker/worker.pid)
+./ol worker force-cleanup
+./ol worker force-cleanup
+
+cgexec -g memory,cpu:ol ./ol worker up -d -o import_cache_tree=$tree_path,mem_pool_mb=32768,limits.mem_mb=600,features.warmup=True,features.reuse_cgroups=False,features.downsize_paused_mem=True
+./ol bench play -f trace.txt -t 5 -s $duration &> no_reuse_unshare.txt
+
+./ol worker down
+kill -9 $(cat default-ol/worker/worker.pid)
+./ol worker force-cleanup
+./ol worker force-cleanup
