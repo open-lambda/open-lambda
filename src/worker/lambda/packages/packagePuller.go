@@ -268,6 +268,15 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 	for i, pkg := range p.Meta.Deps {
 		p.Meta.Deps[i] = NormalizePkg(pkg)
 	}
+	size, err := getPackageSize(packageName)
+    if err != nil {
+        return err
+    }
+
+    // Do something with the size...
+    fmt.Println("Installed package size: ", size)
+
+    return nil
 
 	return nil
 }
