@@ -273,7 +273,7 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
         return err
     }
 
-    // Do something with the size...
+    // having issues with build 
     fmt.Println("Installed package size: ", size)
 
     return nil
