@@ -3,7 +3,6 @@
 ''' Python runtime for sock '''
 
 import os, sys, json, argparse, importlib, traceback, time, fcntl, array, socket, struct
-import requests
 
 sys.path.append("/usr/local/lib/python3.10/dist-packages")
 
