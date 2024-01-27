@@ -3,15 +3,15 @@
 ''' Python runtime for sock '''
 
 import os, sys, json, argparse, importlib, traceback, time, fcntl, array, socket, struct
-import requests
+import olRequests
 
 sys.path.append("/usr/local/lib/python3.10/dist-packages")
 
-import tornado.ioloop
-import tornado.web
-import tornado.httpserver
-import tornado.wsgi
-import tornado.netutil
+import olTornado.ioloop
+import olTornado.web
+import olTornado.httpserver
+import olTornado.wsgi
+import olTornado.netutil
 
 import ol
 
@@ -41,7 +41,7 @@ def web_server():
     # malicious child cannot eat up Zygote resources
     import f
 
-    class SockFileHandler(tornado.web.RequestHandler):
+    class SockFileHandler(olTornado.web.RequestHandler):
         def post(self):
             try:
                 data = self.request.body
@@ -58,15 +58,15 @@ def web_server():
 
     if hasattr(f, "app"):
         # use WSGI entry
-        app = tornado.wsgi.WSGIContainer(f.app)
+        app = olTornado.wsgi.WSGIContainer(f.app)
     else:
         # use function entry
-        app = tornado.web.Application([
+        app = olTornado.web.Application([
             (".*", SockFileHandler),
         ])
-    server = tornado.httpserver.HTTPServer(app)
+    server = olTornado.httpserver.HTTPServer(app)
     server.add_socket(file_sock)
-    tornado.ioloop.IOLoop.instance().start()
+    olTornado.ioloop.IOLoop.instance().start()
     server.start()
 
 
@@ -125,7 +125,7 @@ def fork_server():
             w_end = time.time()
             record = {'fork_st': t_fork*1000, 'chroot': t_chroot*1000, 'mv_cg': w_st*1000, 'end': w_end*1000}
             try:
-                requests.post('http://127.0.0.1:4998/fork', json = record)
+                olRequests.request(url='http://127.0.0.1:4998/fork', method='POST', data=record)
             except Exception as e:
                 pass
             # child
@@ -156,7 +156,7 @@ def start_container():
     # child, which will actually use it.  This is so that the parent
     # can know that once the child exits, it is safe to start sending
     # messages to the sock file.
-    file_sock = tornado.netutil.bind_unix_socket(file_sock_path)
+    file_sock = olTornado.netutil.bind_unix_socket(file_sock_path)
 
     t_fork = time.time()
     pid = os.fork()
@@ -169,7 +169,7 @@ def start_container():
         # works for the process that calls it.
         try:
             data = {'unshare': t_unshare*1000, 'fork': t_fork*1000, 'end': t_end*1000}
-            requests.post('http://127.0.0.1:4998/start', json = data)
+            olRequests.request(url='http://127.0.0.1:4998/start', method='POST', data=data)
         except Exception as e:
             pass
         os._exit(0)

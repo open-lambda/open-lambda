@@ -14,10 +14,10 @@ import argparse
 import importlib
 import traceback
 
-import tornado.ioloop
-import tornado.web
-import tornado.httpserver
-import tornado.netutil
+import olTornado.ioloop
+import olTornado.web
+import olTornado.httpserver
+import olTornado.netutil
 
 HOST_DIR = '/host'
 PKGS_DIR = '/packages'
@@ -49,7 +49,7 @@ def init():
 
     initialized = True
 
-class SockFileHandler(tornado.web.RequestHandler):
+class SockFileHandler(olTornado.web.RequestHandler):
     def post(self):
         try:
             data = self.request.body
@@ -64,21 +64,21 @@ class SockFileHandler(tornado.web.RequestHandler):
             self.set_status(500) # internal error
             self.write(traceback.format_exc())
 
-tornado_app = tornado.web.Application([
+tornado_app = olTornado.web.Application([
     (r".*", SockFileHandler),
 ])
 
 # listen on sock file with Tornado
 def lambda_server():
     init()
-    server = tornado.httpserver.HTTPServer(tornado_app)
-    socket = tornado.netutil.bind_unix_socket(SOCK_PATH)
+    server = olTornado.httpserver.HTTPServer(tornado_app)
+    socket = olTornado.netutil.bind_unix_socket(SOCK_PATH)
     server.add_socket(socket)
     # notify worker server that we are ready through stdout
     # flush is necessary, and don't put it after tornado start; won't work
     with open(SERVER_PIPE_PATH, 'w', encoding='utf-8') as pipe:
         pipe.write('ready')
-    tornado.ioloop.IOLoop.instance().start()
+    olTornado.ioloop.IOLoop.instance().start()
     server.start(PROCESSES_DEFAULT)
 
 # listen for fds to forkenter

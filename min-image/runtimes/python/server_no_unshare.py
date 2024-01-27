@@ -6,11 +6,11 @@ import os, sys, json, argparse, importlib, traceback, time, fcntl, array, socket
 
 sys.path.append("/usr/local/lib/python3.10/dist-packages")
 
-import tornado.ioloop
-import tornado.web
-import tornado.httpserver
-import tornado.wsgi
-import tornado.netutil
+import olTornado.ioloop
+import olTornado.web
+import olTornado.httpserver
+import olTornado.wsgi
+import olTornado.netutil
 
 import ol
 
@@ -40,7 +40,7 @@ def web_server():
     # malicious child cannot eat up Zygote resources
     import f
 
-    class SockFileHandler(tornado.web.RequestHandler):
+    class SockFileHandler(olTornado.web.RequestHandler):
         def post(self):
             try:
                 data = self.request.body
@@ -57,15 +57,15 @@ def web_server():
 
     if hasattr(f, "app"):
         # use WSGI entry
-        app = tornado.wsgi.WSGIContainer(f.app)
+        app = olTornado.wsgi.WSGIContainer(f.app)
     else:
         # use function entry
-        app = tornado.web.Application([
+        app = olTornado.web.Application([
             (".*", SockFileHandler),
         ])
-    server = tornado.httpserver.HTTPServer(app)
+    server = olTornado.httpserver.HTTPServer(app)
     server.add_socket(file_sock)
-    tornado.ioloop.IOLoop.instance().start()
+    olTornado.ioloop.IOLoop.instance().start()
     server.start()
 
 
@@ -145,7 +145,7 @@ def start_container():
     # child, which will actually use it.  This is so that the parent
     # can know that once the child exits, it is safe to start sending
     # messages to the sock file.
-    file_sock = tornado.netutil.bind_unix_socket(file_sock_path)
+    file_sock = olTornado.netutil.bind_unix_socket(file_sock_path)
 
     pid = os.fork()
     assert pid >= 0
