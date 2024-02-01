@@ -1,5 +1,3 @@
-use dashmap::DashMap;
-
 use std::collections::HashMap;
 use std::fs;
 use std::io::{Read, Write};
@@ -7,6 +5,10 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+
+use anyhow::Context;
+
+use dashmap::DashMap;
 
 use wasmtime::{AsContextMut, Engine, Instance, Linker, Module, Store};
 
@@ -110,19 +112,20 @@ pub struct FunctionManager {
 }
 
 impl FunctionManager {
-    pub async fn new() -> Self {
+    pub async fn new() -> anyhow::Result<Self> {
         let next_instance_id = Arc::new(AtomicU64::new(1));
         let mut config = wasmtime::Config::new();
         config.async_support(true);
+        config.allocation_strategy(wasmtime::InstanceAllocationStrategy::pooling());
 
-        let engine =
-            Arc::new(wasmtime::Engine::new(&config).expect("Failed to create wasmtime engine"));
+        let engine = wasmtime::Engine::new(&config)
+                .with_context(|| "Failed to create wasmtime engine")?;
 
-        Self {
+        Ok(Self {
             functions: Default::default(),
-            engine,
+            engine: Arc::new(engine),
             next_instance_id,
-        }
+        })
     }
 
     pub async fn get_function(&self, name: &str) -> Option<Arc<Function>> {
