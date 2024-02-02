@@ -1,10 +1,10 @@
 #![feature(impl_trait_in_assoc_type)]
 
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::fs::{read_dir, remove_file, File};
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::thread::available_parallelism;
 
 use http_body_util::{BodyExt, Full};
@@ -226,7 +226,9 @@ async fn main_func(args: Args) -> anyhow::Result<()> {
     };
 
     let function_mgr = Arc::new(
-        FunctionManager::new().await.with_context(|| "Failed to create function manager")?
+        FunctionManager::new()
+            .await
+            .with_context(|| "Failed to create function manager")?,
     );
 
     let mut config_values = HashMap::default();
@@ -243,15 +245,13 @@ async fn main_func(args: Args) -> anyhow::Result<()> {
 
     let config_values = Arc::new(config_values);
 
-    load_functions(
-        &args.registry_path,
-        &function_mgr,
-    )
-    .await?;
+    load_functions(&args.registry_path, &function_mgr).await?;
 
     let listener = tokio::net::TcpListener::bind(&worker_addr)
         .await
-        .unwrap_or_else(|err| panic!("Failed to bind socket for OL wasm-worker at {worker_addr}: {err}"));
+        .unwrap_or_else(|err| {
+            panic!("Failed to bind socket for OL wasm-worker at {worker_addr}: {err}")
+        });
 
     #[cfg(feature = "cpuprofiler")]
     let enable_cpu_profiler = args.enable_cpu_profiler;
@@ -348,7 +348,5 @@ fn main() -> anyhow::Result<()> {
         .build()
         .unwrap();
 
-    rt.block_on(async move {
-        main_func(args).await
-    })
+    rt.block_on(async move { main_func(args).await })
 }

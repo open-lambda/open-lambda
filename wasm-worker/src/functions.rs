@@ -116,10 +116,13 @@ impl FunctionManager {
         let next_instance_id = Arc::new(AtomicU64::new(1));
         let mut config = wasmtime::Config::new();
         config.async_support(true);
+
+        // Optimize for performance
+        config.cranelift_opt_level(wasmtime::OptLevel::Speed);
         config.allocation_strategy(wasmtime::InstanceAllocationStrategy::pooling());
 
-        let engine = wasmtime::Engine::new(&config)
-                .with_context(|| "Failed to create wasmtime engine")?;
+        let engine =
+            wasmtime::Engine::new(&config).with_context(|| "Failed to create wasmtime engine")?;
 
         Ok(Self {
             functions: Default::default(),
