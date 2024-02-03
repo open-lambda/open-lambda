@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::fs::{read_dir, remove_file, File};
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::thread::available_parallelism;
 
 use http_body_util::{BodyExt, Full};
@@ -15,6 +16,10 @@ use hyper::{http, Method, Request, Response, StatusCode};
 use tokio::runtime;
 use tokio::signal::unix::{signal, SignalKind};
 
+use anyhow::Context;
+
+use clap::Parser;
+
 mod support;
 
 mod functions;
@@ -25,10 +30,6 @@ use parking_lot::Mutex;
 mod bindings;
 
 mod http_client;
-
-use std::sync::Arc;
-
-use clap::Parser;
 
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
@@ -51,13 +52,13 @@ struct Args {
 async fn load_functions(
     registry_path: &str,
     function_mgr: &Arc<FunctionManager>,
-) {
+) -> anyhow::Result<()> {
     let cache_path: PathBuf = format!("{registry_path}.cache").into();
 
     let directory = match read_dir(registry_path) {
         Ok(dir) => dir,
         Err(err) => {
-            panic!("Failed to open registry at {registry_path:?}: {err}");
+            anyhow::bail!("Failed to open registry at {registry_path:?}: {err}");
         }
     };
 
@@ -87,6 +88,8 @@ async fn load_functions(
             .load_function(file_path, cache_path.clone())
             .await;
     }
+
+    Ok(())
 }
 
 struct Service {
@@ -211,19 +214,22 @@ impl Service {
     }
 }
 
-async fn main_func(args: Args) {
+async fn main_func(args: Args) -> anyhow::Result<()> {
     let worker_addr: SocketAddr = match args.listen_address.to_socket_addrs() {
         Ok(mut addrs) => addrs.next().unwrap(),
         Err(err) => {
-            log::error!(
+            anyhow::bail!(
                 "Failed to parse listen address \"{}\": {err}",
                 args.listen_address
             );
-            return;
         }
     };
 
-    let function_mgr = Arc::new(FunctionManager::new().await);
+    let function_mgr = Arc::new(
+        FunctionManager::new()
+            .await
+            .with_context(|| "Failed to create function manager")?,
+    );
 
     let mut config_values = HashMap::default();
 
@@ -239,15 +245,13 @@ async fn main_func(args: Args) {
 
     let config_values = Arc::new(config_values);
 
-    load_functions(
-        &args.registry_path,
-        &function_mgr,
-    )
-    .await;
+    load_functions(&args.registry_path, &function_mgr).await?;
 
     let listener = tokio::net::TcpListener::bind(&worker_addr)
         .await
-        .unwrap_or_else(|err| panic!("Failed to bind socket for OL wasm-worker at {worker_addr}: {err}"));
+        .unwrap_or_else(|err| {
+            panic!("Failed to bind socket for OL wasm-worker at {worker_addr}: {err}")
+        });
 
     #[cfg(feature = "cpuprofiler")]
     let enable_cpu_profiler = args.enable_cpu_profiler;
@@ -327,9 +331,11 @@ async fn main_func(args: Args) {
     }
 
     remove_file("./ol-wasm.ready").unwrap();
+
+    Ok(())
 }
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     env_logger::init();
 
     let args = Args::parse();
@@ -342,7 +348,5 @@ fn main() {
         .build()
         .unwrap();
 
-    rt.block_on(async move {
-        main_func(args).await;
-    });
+    rt.block_on(async move { main_func(args).await })
 }
