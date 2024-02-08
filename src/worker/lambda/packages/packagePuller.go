@@ -82,7 +82,7 @@ func (pp *PackagePuller) InstallRecursive(installs []string) ([]string, error) {
 	// shrink capacity to length so that our appends are not
 	// visible to caller
 	installs = installs[:len(installs):len(installs)]
-
+	log.Printf("THIS IS PRINTING")
 	installSet := make(map[string]bool)
 	for _, install := range installs {
 		name := strings.Split(install, "==")[0]
@@ -165,12 +165,22 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 	log.Printf("do pip install, using scratchDir='%v'", scratchDir)
 
 	alreadyInstalled := false
+	fileInfo, err := os.Stat(scratchDir)
+	if err == nil {
+		// assume dir existence means it is installed already
+		//print the size of the package and fileInfo.Size()
+		log.Printf("The size of the package %s is %v", fileInfo.Name(), fileInfo.Size())
+		
+	}
+
 	if _, err := os.Stat(scratchDir); err == nil {
 		// assume dir existence means it is installed already
 		log.Printf("%s appears already installed from previous run of OL", p.Name)
+		log.Printf("SIZE %v", p.Meta.Deps)
 		alreadyInstalled = true
 	} else {
 		log.Printf("run pip install %s from a new Sandbox to %s on host", p.Name, scratchDir)
+		log.Printf("the size of the package is %v", common.Conf.Limits.Installer_mem_mb)
 		if err := os.Mkdir(scratchDir, 0700); err != nil {
 			return err
 		}
