@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -17,6 +18,47 @@ import (
 	"github.com/open-lambda/open-lambda/ol/worker/embedded"
 	"github.com/open-lambda/open-lambda/ol/worker/sandbox"
 )
+
+type SizeOfPackages struct {
+	TotalSize int            // total size of all packages
+	Packages  map[string]int // size of individual packages
+}
+
+// Initialize the global variable to track package sizes
+var sizeTracker = SizeOfPackages{
+	TotalSize: 0,
+	Packages:  make(map[string]int),
+}
+
+func PackageSizeIncreaser(pkg string, size int) {
+	// Normalize the package name
+	pkg = NormalizePkg(pkg)
+
+	// Lock the sizeTracker here if using in a concurrent context
+
+	// Update the size for the individual package and the total size
+	sizeTracker.Packages[pkg] += size
+	sizeTracker.TotalSize += size
+
+	// Unlock the sizeTracker here if using in a concurrent context
+}
+
+func getPackageSize(packageName string) (string, error) {
+	cmd := exec.Command("apt-cache", "show", packageName)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	err := cmd.Run()
+	if err != nil {
+		return "", err
+	}
+
+	for _, line := range strings.Split(out.String(), "\n") {
+		if strings.Contains(line, "Size") {
+			return line, nil
+		}
+	}
+	return "", fmt.Errorf("size not found")
+}
 
 // PackagePuller is the interface for installing pip packages locally.
 // The manager installs to the worker host from an optional pip
@@ -127,6 +169,8 @@ func (pp *PackagePuller) InstallRecursive(installs []string) ([]string, error) {
 func (pp *PackagePuller) GetPkg(pkg string) (*Package, error) {
 	// get (or create) package
 	pkg = NormalizePkg(pkg)
+	//try to print the package size after install here?
+	getPackageSize(pkg)
 	tmp, _ := pp.packages.LoadOrStore(pkg, &Package{Name: pkg})
 	p := tmp.(*Package)
 
@@ -178,6 +222,8 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 		log.Printf("%s appears already installed from previous run of OL", p.Name)
 		log.Printf("SIZE %v", p.Meta.Deps)
 		alreadyInstalled = true
+		//try to print the package size after install here?
+		getPackageSize(p.Name)
 	} else {
 		log.Printf("run pip install %s from a new Sandbox to %s on host", p.Name, scratchDir)
 		log.Printf("the size of the package is %v", common.Conf.Limits.Installer_mem_mb)
@@ -232,6 +278,17 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 	for i, pkg := range p.Meta.Deps {
 		p.Meta.Deps[i] = NormalizePkg(pkg)
 	}
+	size, err := getPackageSize(packageName)
+    if err != nil {
+        return err
+    }
+
+    // having issues with build 
+	//is this change reflected
+	
+    fmt.Println("Installed package size: ", size)
+
+    return nil
 
 	return nil
 }
