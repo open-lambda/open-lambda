@@ -216,6 +216,21 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 		log.Printf("The size of the package %s is %v", fileInfo.Name(), fileInfo.Size())
 		
 	}
+	log.Printf("The package name is %s", p.Name)
+	packageName := p.Name
+
+	packageFilePath := filepath.Join(scratchDir, (packageName+".tar.gz"))
+	if filepath.Ext(packageFilePath) == ".tar.gz" {
+		fmt.Println("The package is a .tar.gz file")
+	} else {
+		fmt.Println("The package is not a .tar.gz file")
+	}
+	packageFileInfo, err := os.Stat(packageFilePath)
+	log.Printf("The package file size is %v", packageFileInfo.Size())
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("The size of the package file is %v bytes", packageFileInfo.Size())
 
 	if _, err := os.Stat(scratchDir); err == nil {
 		// assume dir existence means it is installed already
