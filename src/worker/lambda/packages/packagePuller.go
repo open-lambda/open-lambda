@@ -218,8 +218,20 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 	}
 	log.Printf("The package name is %s", p.Name)
 	packageName := p.Name
+	//need to run an ls on the scratchDir to get the package file name
+	cmd := exec.Command("ls", scratchDir)
+	out, err := cmd.Output()
+	if err != nil {
+		log.Printf("Error running ls on scratchDir: %v", err)
+	} else {	
+		log.Printf("ls printed: %s", out)
+	}
+	//then check if the package file is a .tar.gz file
+	//if it is, print the size of the package file
+	//if it is not, print that it is not a .tar.gz file
+	//then print the size of the package file
 
-	packageFilePath := filepath.Join(scratchDir, (packageName+".tar.gz"))
+	packageFilePath := filepath.Join(scratchDir, (packageName))
 	if filepath.Ext(packageFilePath) == ".tar.gz" {
 		fmt.Println("The package is a .tar.gz file")
 	} else {
@@ -228,10 +240,10 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 	packageFileInfo, err := os.Stat(packageFilePath)
 	log.Printf("The package file size is %v", packageFileInfo.Size())
 	if err != nil {
-		log.Fatal(err)
+		log.Printf(err)
+	} else {
+		log.Printf("The size of the package file is %v bytes", packageFileInfo.Size())
 	}
-	log.Printf("The size of the package file is %v bytes", packageFileInfo.Size())
-
 	if _, err := os.Stat(scratchDir); err == nil {
 		// assume dir existence means it is installed already
 		log.Printf("%s appears already installed from previous run of OL", p.Name)
