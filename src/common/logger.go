@@ -13,6 +13,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+// The system's unique handler which format of the output can be freely modified to the owner's preference
 type OLHandler struct {
 	level   slog.Leveler
 	goas 	[]groupOrAttrs
@@ -20,7 +21,8 @@ type OLHandler struct {
 	out 	io.Writer
 }
 
-func NewOLHandler(level slog.Leveler, out io.Writer) *OLHandler {
+// Create a new OLHandler that implements the slog.Handler interface
+func NewOLHandler(out io.Writer, level slog.Leveler) *OLHandler {
 	if level == nil {
 		// default to INFO (might not actually need this)
 		level = slog.LevelInfo
@@ -28,26 +30,22 @@ func NewOLHandler(level slog.Leveler, out io.Writer) *OLHandler {
 	return &OLHandler{level, nil, &sync.Mutex{}, out}
 }
 
-// Enabled implements Handler.Enabled by reporting whether
-// level is at least as large as h's level.
 func (h *OLHandler) Enabled(_ context.Context, level slog.Level) bool {
 	return level >= h.level.Level()
 }
 
-// Handle implements Handler.Handle.
 func (h *OLHandler) Handle(ctx context.Context, r slog.Record) error {
 	buf := make([]byte, 0, 1024)
 	if !r.Time.IsZero() {
-		buf = h.appendAttr(buf, slog.Time(slog.TimeKey, r.Time), 0)
+		buf = h.appendAttr(buf, slog.Time(slog.TimeKey, r.Time))
 	}
-	buf = h.appendAttr(buf, slog.Any(slog.LevelKey, r.Level), 0)
+	buf = h.appendAttr(buf, slog.Any("", r.Level))
 	if r.PC != 0 {
 		fs := runtime.CallersFrames([]uintptr{r.PC})
 		f, _ := fs.Next()
-		buf = h.appendAttr(buf, slog.String(slog.SourceKey, fmt.Sprintf("%s:%d", f.File, f.Line)), 0)
+		buf = h.appendAttr(buf, slog.String(slog.SourceKey, fmt.Sprintf("%s:%d", f.File, f.Line)))
 	}
-	buf = h.appendAttr(buf, slog.String(slog.MessageKey, r.Message), 0)
-	indentLevel := 0
+	buf = h.appendAttr(buf, slog.String(slog.MessageKey, r.Message))
 	// Handle state from WithGroup and WithAttrs.
 	goas := h.goas
 	if r.NumAttrs() == 0 {
@@ -58,16 +56,15 @@ func (h *OLHandler) Handle(ctx context.Context, r slog.Record) error {
 	}
 	for _, goa := range goas {
 		if goa.group != "" {
-			buf = fmt.Appendf(buf, "%*s%s: ", indentLevel*4, "", goa.group)
-			indentLevel++
+			buf = fmt.Appendf(buf, "%*s%s: ", "", goa.group)
 		} else {
 			for _, a := range goa.attrs {
-				buf = h.appendAttr(buf, a, indentLevel)
+				buf = h.appendAttr(buf, a)
 			}
 		}
 	}
 	r.Attrs(func(a slog.Attr) bool {
-		buf = h.appendAttr(buf, a, indentLevel)
+		buf = h.appendAttr(buf, a)
 		return true
 	})
 	buf = append(buf, "\n"...)
@@ -77,22 +74,20 @@ func (h *OLHandler) Handle(ctx context.Context, r slog.Record) error {
 	return err
 }
 
-func (h *OLHandler) appendAttr(buf []byte, a slog.Attr, indentLevel int) []byte {
-	// Resolve the Attr's value before doing anything else.
+func (h *OLHandler) appendAttr(buf []byte, a slog.Attr) []byte {
 	a.Value = a.Value.Resolve()
 	// Ignore empty Attrs.
 	if a.Equal(slog.Attr{}) {
 		return buf
 	}
-	// Indent 4 spaces per level.
-	buf = fmt.Appendf(buf, "%*s", indentLevel*4, "")
+
 	switch a.Value.Kind() {
 	case slog.KindString:
 		// Quote string values, to make them easy to parse.
 		buf = fmt.Appendf(buf, "%s: %q ", a.Key, a.Value.String())
 	case slog.KindTime:
 		// Currently using a time format that matches the old log's format. Can change to any preference.
-		buf = fmt.Appendf(buf, "%s ", a.Value.Time().Format("2000/01/01 00:00:00.999999"))
+		buf = fmt.Appendf(buf, "%s ", a.Value.Time().Format("2006/01/02 15:04:05.999999"))
 	case slog.KindGroup:
 		attrs := a.Value.Group()
 		// Ignore empty groups.
@@ -103,13 +98,12 @@ func (h *OLHandler) appendAttr(buf []byte, a slog.Attr, indentLevel int) []byte 
 		// Otherwise, inline the attrs.
 		if a.Key != "" {
 			buf = fmt.Appendf(buf, "%s: ", a.Key)
-			indentLevel++
 		}
 		for _, ga := range attrs {
-			buf = h.appendAttr(buf, ga, indentLevel)
+			buf = h.appendAttr(buf, ga)
 		}
 	default:
-		buf = fmt.Appendf(buf, "%s: %s ", a.Key, a.Value)
+		buf = fmt.Appendf(buf, "%s %s ", a.Key, a.Value)
 	}
 	return buf
 }
@@ -142,15 +136,48 @@ func (h *OLHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	return h.withGroupOrAttrs(groupOrAttrs{attrs: attrs})
 }
 
-// Rather than having a topLogger, we will have a topHandler that each subsystem will use to fetch its own logger with the appropriate level, since 
-// each subsystem will have its own log level.
-var TopLogger slog.Logger
+// A LevelHandler wraps a slog.Handler with an Enabled method
+// that returns false for levels below a minimum.
+type LevelHandler struct {
+	level   slog.Leveler
+	handler slog.Handler
+}
+
+// NewLevelHandler returns a LevelHandler with the given level.
+// All methods except Enabled delegate to h.
+func NewLevelHandler(level slog.Leveler, h slog.Handler) *LevelHandler {
+	// Optimization: avoid chains of LevelHandlers.
+	if lh, ok := h.(*LevelHandler); ok {
+		h = lh.Handler()
+	}
+	return &LevelHandler{level, h}
+}
+
+func (h *LevelHandler) Enabled(_ context.Context, level slog.Level) bool {
+	return level >= h.level.Level()
+}
+
+func (h *LevelHandler) Handle(ctx context.Context, r slog.Record) error {
+	return h.handler.Handle(ctx, r)
+}
+
+func (h *LevelHandler) Handler() slog.Handler {
+	return h.handler
+}
+
+func (h *LevelHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return NewLevelHandler(h.level, h.handler.WithAttrs(attrs))
+}
+
+func (h *LevelHandler) WithGroup(name string) slog.Handler {
+	return NewLevelHandler(h.level, h.handler.WithGroup(name))
+}
+
+// Rather than having a topLogger, we will have a topHandler that each subsystem will use to fetch its own logger with the appropriate level, 
+// since each subsystem will have its own log level.
+var TopHandler slog.Handler
 
 func LoadLoggers() error {
-	level, err := ParseLevelString(Conf.Trace.Cgroups)
-	if (err != nil) {
-		return err
-	}
 	// Open json log file as output instead of stdout.
 	if Conf.Trace.Enable_JSON == true {
 		olpath, err := GetOlPath(&cli.Context{})
@@ -162,19 +189,23 @@ func LoadLoggers() error {
 		if err != nil {
 			panic(fmt.Errorf("Cannot open log file at %s", logFilePath))
 		}
-		TopLogger = *slog.New(slog.NewJSONHandler(f, &slog.HandlerOptions{Level: level}))
+		TopHandler = slog.NewJSONHandler(f, &slog.HandlerOptions{})
 
 	// Using the OL's own handler.  
 	} else {
-		TopLogger = *slog.New(NewOLHandler(slog.LevelInfo, os.Stdout))
+		TopHandler = NewOLHandler(os.Stdout, slog.LevelInfo)
 	}
 	return nil
 }
 
 // Subsystem will be calling this function to get a copy of the topLogger with a specified level
-func FetchLogger() error {
-	
-	return nil
+func FetchLogger(ilevel string) (slog.Logger, error) {
+	level, err := ParseLevelString(ilevel)
+	if (err != nil) {
+		return *slog.Default(), err
+	}
+	logger := slog.New(NewLevelHandler(level, TopHandler))
+	return *logger, nil
 }
 
 func ParseLevelString(conf string) (*slog.LevelVar, error) {

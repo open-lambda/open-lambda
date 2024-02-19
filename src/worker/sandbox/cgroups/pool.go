@@ -27,13 +27,19 @@ type CgroupPool struct {
 
 func NewCgroupPool(name string) (*CgroupPool, error) {
 
+	// Fetching logger, might result in error 
+	logger, err := common.FetchLogger(common.Conf.Trace.Cgroups)
+	if err != nil {
+		return nil, err
+	}
+
 	pool := &CgroupPool{
 		Name:     path.Base(path.Dir(common.Conf.Worker_dir)) + "-" + name,
 		ready:    make(chan *CgroupImpl, CGROUP_RESERVE),
 		recycled: make(chan *CgroupImpl, CGROUP_RESERVE),
 		quit:     make(chan chan bool),
 		nextID:   0,
-		log:   	  *common.TopLogger.With("cg-pool", path.Base(path.Dir(common.Conf.Worker_dir)) + "-" + name),
+		log:   	  *logger.With("cg-pool", path.Base(path.Dir(common.Conf.Worker_dir)) + "-" + name),
 	}
 
 	// create cgroup
