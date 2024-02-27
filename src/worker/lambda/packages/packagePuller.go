@@ -16,7 +16,7 @@ import (
     "sync/atomic"
     "regexp"
     "strconv"
-    
+    "bufio"
     "github.com/open-lambda/open-lambda/ol/common"
     "github.com/open-lambda/open-lambda/ol/worker/embedded"
     "github.com/open-lambda/open-lambda/ol/worker/sandbox"
@@ -51,15 +51,142 @@ type PackageMeta struct {
 
 type PackageInfo struct {
     Name string
-    Size int64
+    Size float64
 }
 
 
 var packages []PackageInfo
+var totalPackageSize float64
 
 
+func getUnusedDependencies(requirementsTxt string, unusedImports []string) ([]string, error) {
+    var unusedDependencies []string
+
+    file, err := os.Open(requirementsTxt)
+    if err != nil {
+        return nil, err
+    }
+    defer file.Close()
+
+    scanner := bufio.NewScanner(file)
+    var prevLine string
+    for scanner.Scan() {
+        line := scanner.Text()
+        if strings.Contains(line, "# via") {
+            via := strings.TrimSpace(strings.Split(line, "# via")[1])
+            for _, imp := range unusedImports {
+                if imp == via {
+                    unusedDependencies = append(unusedDependencies, prevLine)
+                }
+            }
+        }
+        prevLine = line
+    }
+
+    if err := scanner.Err(); err != nil {
+        return nil, err
+    }
+
+    return unusedDependencies, nil
+}
+
+func getPythonImports(filepath string) ([]string, error) {
+    file, err := os.Open(filepath)
+    if err != nil {
+        return nil, err
+    }
+    defer file.Close()
+
+    var imports []string
+    scanner := bufio.NewScanner(file)
+    importRegex := regexp.MustCompile(`^import (\S+)|^from (\S+) import`)
+
+    for scanner.Scan() {
+        line := scanner.Text()
+        matches := importRegex.FindStringSubmatch(line)
+        if matches != nil {
+            if matches[1] != "" {
+                imports = append(imports, matches[1])
+            } else if matches[2] != "" {
+                imports = append(imports, matches[2])
+            }
+        }
+    }
+
+    if err := scanner.Err(); err != nil {
+        return nil, err
+    }
+
+    return imports, nil
+}
+func getPythonRequirements(filepath string) ([]string, error) {
+    file, err := os.Open(filepath)
+    if err != nil {
+        return nil, err
+    }
+    defer file.Close()
+
+    var packages []string
+    scanner := bufio.NewScanner(file)
+
+    for scanner.Scan() {
+        line := scanner.Text()
+        // Ignore lines that are comments or empty
+        if len(line) == 0 || line[0] == '#' {
+            continue
+        }
+        // Split the line on '==' to separate the package name from the version
+        parts := strings.Split(line, "==")
+        packages = append(packages, parts[0])
+    }
+
+    if err := scanner.Err(); err != nil {
+        return nil, err
+    }
+
+    return packages, nil
+}
+func getUnusedImports(importPath string, requirementsPath string) ([]string, error) {
+    imports, err := getPythonImports(importPath)
+    if err != nil {
+        return nil, err
+    }
+
+    packages, err := getPythonRequirements(requirementsPath)
+    if err != nil {
+        return nil, err
+    }
+
+    // Convert the packages slice to a map for faster lookup
+    importsMap := make(map[string]bool)
+for _, imp := range imports {
+    importsMap[imp] = true
+}
+//print out the importsMap
 
 
+var unusedPackages []string
+for _, pkg := range packages {
+    if !importsMap[pkg] {
+        unusedPackages = append(unusedPackages, pkg)
+    }
+}
+    //print out the unused imports
+    // for _, imp := range unusedImports {
+    //     log.Printf("unused %s",imp)
+    // }
+requirementsPath = "/home/pjt07/open-lambda/myw/registry/scraper/requirements.txt"
+unusedDependencies, err := getUnusedDependencies(requirementsPath, unusedPackages)
+if err != nil {
+    return nil, err
+}
+//print the unused dependencies to log
+for _, dep := range unusedDependencies {
+    log.Printf("Unused dependency: %s", dep)
+}        
+
+    return unusedDependencies, nil
+}
 func NewPackagePuller(sbPool sandbox.SandboxPool, depTracer *DepTracer) (*PackagePuller, error) {
     // create a lambda function for installing pip packages.  We do
     // each install in a Sandbox for two reasons:
@@ -181,6 +308,11 @@ func (pp *PackagePuller) GetPkg(pkg string) (*Package, error) {
 // the host.  We want the package on the host to share with all, but
 // want to run the install in the Sandbox because we don't trust it.
 func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
+    //need to check what packages are used in imports 
+    //imports, err := getPythonImports("/home/pjt07/open-lambda/myw/registry/scraper/f.py")
+    //packages, err := getPythonRequirements("/home/pjt07/open-lambda/myw/registry/scraper/requirements.in")
+    //need to scan the directory for python files and check which imports are used, need to find the path for these files and the path for the requirements files
+    unusedDependencies, err := getUnusedImports("/home/pjt07/open-lambda/myw/registry/scraper/f.py", "/home/pjt07/open-lambda/myw/registry/scraper/requirements.in")
     t := common.T0("pull-package")
     defer t.T1()
 
@@ -188,15 +320,8 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
     // same as scratchDir, which is the same as a sub-directory
     // named after the package in the packages dir
     scratchDir := filepath.Join(common.Conf.Pkgs_dir, p.Name)
-    log.Printf("%sPkgs_dir:",common.Conf.Pkgs_dir)
-    log.Printf("%sp.Name:", p.Name)
     log.Printf("do pip install, using scratchDir='%v'", scratchDir)
     fileInfo, err := os.Stat(scratchDir)
-    if err == nil {
-        // assume dir existence means it is installed already
-        //print the size of the package and fileInfo.Size()
-        log.Printf("The size of the package %s is %v", fileInfo.Name(), fileInfo.Size())
-    }
     alreadyInstalled := false
     if _, err := os.Stat(scratchDir); err == nil {
         // assume dir existence means it is installed already
@@ -208,7 +333,9 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
             return err
         }
     }
+    
     //ADDED CODE
+    //need to check which imports are used in files, if they are not used evict them
     cmd := exec.Command("du", "-sh", scratchDir)
     var out bytes.Buffer
     cmd.Stdout = &out
@@ -223,10 +350,8 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
         log.Fatal("Unexpected output from du command")
     }
     siz := matches[1]
-	other := matches[0]
-    log.Printf("Size of %s: %s and size of other: %s\n", scratchDir, siz, other)
     //convert sz to bytes
-    var sz int64
+    var sz float64
     switch siz[len(siz)-1] {
     case 'K':
         sz = 1024
@@ -243,20 +368,25 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
     }
     var rest float64
     rest,err = strconv.ParseFloat(siz[:len(siz)-1], 64)
-    sz = int64(float64(sz) * rest)
     if err != nil {
         log.Fatal(err)
     }
-    log.Printf("Size in bytes %s: %d\n", scratchDir, sz)
-
+    sz = float64(sz) * rest / (1024 * 1024)
+    log.Printf("Size in MB %s: %d\n", scratchDir, sz)
+    totalPackageSize += sz
+    log.Printf("Total package size: %d\n", totalPackageSize)
     //need to add the package to the list of packages
     packages = append(packages, PackageInfo{p.Name, sz})
     //TEST UNINSTALL   
     //check if the package's name is pandas, test uninstall method
-    if p.Name == "pandas==1.5.0"{
-        err = pp.Uninstall(p.Name)
-        if err != nil {
-            log.Printf("Error uninstalling package %s", p.Name)
+    for _, dep := range unusedDependencies {
+        if p.Name == dep {
+            err = pp.Uninstall(p.Name)
+            if err != nil {
+                log.Printf("Error uninstalling package %s", p.Name)
+            } else {
+                return nil
+            }
         }
     }
     //print out all the packages
@@ -274,6 +404,8 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
         MemLimitMB: common.Conf.Limits.Installer_mem_mb,
     }
     log.Printf("the mem limit is %v", meta.MemLimitMB)
+    //check if it is uninstalled, do not execute the sandbox
+
     sb, err := pp.sbPool.Create(nil, true, pp.pipLambda, scratchDir, meta, common.RT_PYTHON)
     if err != nil { 
         return err
