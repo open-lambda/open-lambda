@@ -1,332 +1,280 @@
-package lambda
+package packages
+
 
 import (
-	"errors"
-	"fmt"
-	"io"
-	"io/ioutil"
-	"log"
-	"net/http"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"regexp"
-	"strings"
-	"sync"
-	"io/fs"
-	"syscall"
-
-	"github.com/open-lambda/open-lambda/ol/common"
+    "bytes"
+    "encoding/json"
+    "fmt"
+    "io/ioutil"
+    "log"
+    "net/http"
+    "os"
+    "os/exec"
+    "path/filepath"
+    "strings"
+    "sync"
+    "sync/atomic"
+    "regexp"
+    "strconv"
+    "github.com/open-lambda/open-lambda/ol/common"
+    "github.com/open-lambda/open-lambda/ol/worker/embedded"
+    "github.com/open-lambda/open-lambda/ol/worker/sandbox"
 )
 
-var errNotFound404 = errors.New("file does not exist")
-var handlerNameRegex = regexp.MustCompile(`^[A-Za-z0-9\.\-\_]+$`)
+// PackagePuller is the interface for installing pip packages locally.
+// The manager installs to the worker host from an optional pip
+// mirror.
+type PackagePuller struct {
+    sbPool    sandbox.SandboxPool
+    depTracer *DepTracer
 
-// TODO: for web registries, support an HTTP-based access key
-// (https://en.wikipedia.org/wiki/Basic_access_authentication)
+    // directory of lambda code that installs pip packages
+    pipLambda string
 
-type HandlerPuller struct {
-	prefix   string   // combine with name to get file path or URL
-	dirCache sync.Map // key=lambda name, value=version, directory path
-	dirMaker *common.DirMaker
+    packages sync.Map
 }
 
-type CacheEntry struct {
-	version string // could be a timestamp for a file or web resource
-	path    string // where code is extracted to a dir
+type Package struct {
+    Name         string
+    Meta         PackageMeta
+    installMutex sync.Mutex
+    installed    uint32
 }
 
-func Copy(src, dest string) error {
-	info, err := os.Stat(src)
-	if err != nil {
-		return err
-	}
-
-	
-	if info.IsDir() {
-		return filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
-		    if err != nil {
-			return err
-		    }
-
-		    relPath, err := filepath.Rel(src, path)
-		    if err != nil {
-			return err
-		    }
-
-		    if d.IsDir() {
-			dirInfo, err := d.Info()
-			if err != nil {
-			    return err
-			}
-			return os.MkdirAll(filepath.Join(dest, relPath), dirInfo.Mode())
-		    }
-
-		    return copyFile(path, filepath.Join(dest, relPath))
-		})
-	}
-	return copyFile(src, dest)
+// the pip-install admin lambda returns this
+type PackageMeta struct {
+    Deps     []string `json:"Deps"`
+    TopLevel []string `json:"TopLevel"`
 }
 
-func copyFile(src, dest string) error {
-	srcFile, err := os.OpenFile(src, os.O_RDWR|os.O_CREATE|syscall.O_NOFOLLOW, 0666)
-	if err != nil {
-		return err
-	}
-	defer srcFile.Close()
 
-	// Get source file permissions
-	srcInfo, err := srcFile.Stat()
-	if err != nil {
-		return err
-	}
-
-	destFile, err := os.Create(dest)
-	if err != nil {
-		return err
-	}
-	defer destFile.Close()
-
-	_, err = io.Copy(destFile, srcFile)
-	if err != nil {
-		return err
-	}
-
-	// Set destination file permissions to match source
-	return destFile.Chmod(srcInfo.Mode())
+type PackageInfo struct {
+    Name string
+    Size int
 }
 
-func NewHandlerPuller(dirMaker *common.DirMaker) (cp *HandlerPuller, err error) {
-	return &HandlerPuller{
-		prefix:   common.Conf.Registry,
-		dirMaker: dirMaker,
-	}, nil
+
+var packages []PackageInfo
+var totalPackageSize int
+
+
+
+func NewPackagePuller(sbPool sandbox.SandboxPool, depTracer *DepTracer) (*PackagePuller, error) {
+    // create a lambda function for installing pip packages.  We do
+    // each install in a Sandbox for two reasons:
+    //
+    // 1. packages may be malicious
+    // 2. we want to install the right version, matching the Python
+    //    in the Sandbox
+    pipLambda := filepath.Join(common.Conf.Worker_dir, "admin-lambdas", "pip-install")
+    if err := os.MkdirAll(pipLambda, 0700); err != nil {
+        return nil, err
+    }
+    path := filepath.Join(pipLambda, "f.py")
+    code := []byte(embedded.PackagePullerInstaller_py)
+    if err := ioutil.WriteFile(path, code, 0600); err != nil {
+        return nil, err
+    }
+
+
+    installer := &PackagePuller{
+        sbPool:    sbPool,
+        depTracer: depTracer,
+        pipLambda: pipLambda,
+    }
+
+
+    return installer, nil
 }
 
-func (cp *HandlerPuller) isRemote() bool {
-	return strings.HasPrefix(cp.prefix, "http://") || strings.HasPrefix(cp.prefix, "https://")
+
+// From PEP-426: "All comparisons of distribution names MUST
+// be case insensitive, and MUST consider hyphens and
+// underscores to be equivalent."
+func NormalizePkg(pkg string) string {
+    return strings.ReplaceAll(strings.ToLower(pkg), "_", "-")
 }
 
-func (cp *HandlerPuller) Pull(name string) (rt_type common.RuntimeType, targetDir string, err error) {
-	t := common.T0("pull-lambda")
-	defer t.T1()
-	
-	if !handlerNameRegex.MatchString(name) {
-		msg := "bad lambda name '%s', can only contain letters, numbers, period, dash, and underscore"
-		return rt_type, "", fmt.Errorf(msg, name)
-	}
 
-	if cp.isRemote() {
-		// registry type = web
-		urls := []string{
-			cp.prefix + "/" + name + ".tar.gz",
-			cp.prefix + "/" + name + ".py",
-			cp.prefix + "/" + name + ".bin",
-		}
+// "pip install" missing packages to Conf.Pkgs_dir
+func (pp *PackagePuller) InstallRecursive(installs []string) ([]string, error) {
+    // shrink capacity to length so that our appends are not
+    // visible to caller
+    installs = installs[:len(installs):len(installs)]
 
-		for i := 0; i < len(urls); i++ {
-			rt_type, targetDir, err = cp.pullRemoteFile(urls[i], name)
-			if err == nil {
-				return rt_type, targetDir, nil
-			} else if err != errNotFound404 {
-				// 404 is OK, because we just go on to check the next URLs
-				return rt_type, "", err
-			}
-		}
 
-		return rt_type, "", fmt.Errorf("lambda not found at any of these locations: %s", strings.Join(urls, ", "))
-	}
+    installSet := make(map[string]bool)
+    for _, install := range installs {
+        name := strings.Split(install, "==")[0]
+        installSet[name] = true
+    }
 
-	// registry type = file
-	paths := []string{
-		filepath.Join(cp.prefix, name) + ".tar.gz",
-		filepath.Join(cp.prefix, name) + ".py",
-		filepath.Join(cp.prefix, name) + ".bin",
-		filepath.Join(cp.prefix, name),
-	}
 
-	for i := 0; i < len(paths); i++ {
-		if _, err := os.Stat(paths[i]); !os.IsNotExist(err) {
-			rt_type, targetDir, err = cp.pullLocalFile(paths[i], name)
-			return rt_type, targetDir, err
-		}
-	}
+    // Installs may grow as we loop, because some installs have
+    // deps, leading to other installs
+    for i := 0; i < len(installs); i++ {
+        pkg := installs[i]
+        if common.Conf.Trace.Package {
+            log.Printf("On %v of %v", pkg, installs)
+        }
+        p, err := pp.GetPkg(pkg)
+        if err != nil {
+            return nil, err
+        }
 
-	return rt_type, "", fmt.Errorf("lambda not found at any of these locations: %s", strings.Join(paths, ", "))
+
+        if common.Conf.Trace.Package {
+            log.Printf("Package '%s' has deps %v", pkg, p.Meta.Deps)
+            log.Printf("Package '%s' has top-level modules %v", pkg, p.Meta.TopLevel)
+        }
+
+
+        // push any previously unseen deps on the list of ones to install
+        for _, dep := range p.Meta.Deps {
+            if !installSet[dep] {
+                installs = append(installs, dep)
+                installSet[dep] = true
+            }
+        }
+    }
+
+
+    return installs, nil
 }
 
-// delete any caching associated with this handler
-func (cp *HandlerPuller) Reset(name string) {
-	cp.dirCache.Delete(name)
+
+// GetPkg does the pip install in a Sandbox, taking care to never install the
+// same Sandbox more than once.
+//
+// the fast/slow path code is tweaked from the sync.Once code, the
+// difference being that may try the installed more than once, but we
+// will never try more after the first success
+func (pp *PackagePuller) GetPkg(pkg string) (*Package, error) {
+    // get (or create) package
+    pkg = NormalizePkg(pkg)
+    tmp, _ := pp.packages.LoadOrStore(pkg, &Package{Name: pkg})
+    p := tmp.(*Package)
+
+    // fast path
+    if atomic.LoadUint32(&p.installed) == 1 {
+        return p, nil
+    }
+
+    // slow path
+    p.installMutex.Lock()
+    defer p.installMutex.Unlock()
+    if p.installed == 0 {
+        if err := pp.sandboxInstall(p); err != nil {
+            return p, err
+        }
+
+        atomic.StoreUint32(&p.installed, 1)
+        pp.depTracer.TracePackage(p)
+        return p, nil
+    }
+
+    return p, nil
 }
 
-func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type common.RuntimeType, targetDir string, err error) {
-	stat, err := os.Stat(src)
-	if err != nil {
-		return rt_type, "", err
-	}
+// sandboxInstall does the pip install within a new Sandbox, to a directory mapped from
+// the host.  We want the package on the host to share with all, but
+// want to run the install in the Sandbox because we don't trust it.
+func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
+    t := common.T0("pull-package")
+    defer t.T1()
 
-	if stat.Mode().IsDir() {
-		log.Printf("Installing `%s` from a directory", stat.Name())
-
-		// this is really just a debug mode, and is not
-		// expected to be efficient
-		targetDir = cp.dirMaker.Get(lambdaName)
-
-		err := Copy(src, targetDir)
-		if err != nil {
-			return rt_type, "", fmt.Errorf("%s :: %s", err)
-		}
-
-		// Figure out runtime type
-		if _, err := os.Stat(src + "/f.py"); !os.IsNotExist(err) {
-			rt_type = common.RT_PYTHON
-		} else if _, err := os.Stat(src + "/f.bin"); !os.IsNotExist(err) {
-			rt_type = common.RT_NATIVE
-		} else {
-			return rt_type, "", fmt.Errorf("Unknown runtime type")
-		}
-
-		return rt_type, targetDir, nil
-	} else if !stat.Mode().IsRegular() {
-		return rt_type, "", fmt.Errorf("%s not a file or directory", src)
-	}
-
-	// for regular files, we cache based on mod time.  We don't
-	// cache at the file level if this is a remote store (because
-	// caching is handled at the web level)
-	version := stat.ModTime().String()
-	if !cp.isRemote() {
-		cacheEntry := cp.getCache(lambdaName)
-		if cacheEntry != nil && cacheEntry.version == version {
-			// hit:
-			return rt_type, cacheEntry.path, nil
-		}
-	}
-
-	// miss:
-	targetDir = cp.dirMaker.Get(lambdaName)
-	if err := os.Mkdir(targetDir, os.ModeDir); err != nil {
-		return rt_type, "", err
-	}
-
-	log.Printf("Created new directory for lambda function at `%s`", targetDir)
-
-	// Make sure we include the suffix
-	if strings.HasSuffix(stat.Name(), ".py") {
-		log.Printf("Installing `%s` from a python file", src)
-
-		err := Copy(src, filepath.Join(targetDir, "f.py"))
-		rt_type = common.RT_PYTHON
-
-		if err != nil {
-			return rt_type, "", fmt.Errorf("%s :: %s", err)
-		}
-	} else if strings.HasSuffix(stat.Name(), ".bin") {
-		log.Printf("Installing `%s` from binary file", src)
-
-		err := Copy(src, filepath.Join(targetDir, "f.bin"))
-		rt_type = common.RT_NATIVE
-
-		if err != nil {
-			return rt_type, "", fmt.Errorf("%s :: %s", err)
-		}
-	} else if strings.HasSuffix(stat.Name(), ".tar.gz") {
-		log.Printf("Installing `%s` from an archive file", src)
-
-		cmd := exec.Command("tar", "-xzf", src, "--directory", targetDir)
-		if output, err := cmd.CombinedOutput(); err != nil {
-			return rt_type, "", fmt.Errorf("%s :: %s", err, string(output))
-		}
-
-		// Figure out runtime type
-		if _, err := os.Stat(targetDir + "f.py"); !os.IsNotExist(err) {
-			rt_type = common.RT_PYTHON
-		} else if _, err := os.Stat(targetDir + "/f.bin"); !os.IsNotExist(err) {
-			rt_type = common.RT_NATIVE
-		} else {
-			return rt_type, "", fmt.Errorf("Found unknown runtime type or no code at all")
-		}
-	} else {
-		return rt_type, "", fmt.Errorf("lambda file %s not a .tar.gz or .py", src)
-	}
-
-	if !cp.isRemote() {
-		cp.putCache(lambdaName, version, targetDir)
-	}
-
-	return rt_type, targetDir, nil
+    // the pip-install lambda installs to /host, which is the the
+    // same as scratchDir, which is the same as a sub-directory
+    // named after the package in the packages dir
+    scratchDir := filepath.Join(common.Conf.Pkgs_dir, p.Name)
+    log.Printf("do pip install, using scratchDir='%v'", scratchDir)
+    
+    alreadyInstalled := false
+    if _, err := os.Stat(scratchDir); err == nil {
+        // assume dir existence means it is installed already
+        log.Printf("%s appears already installed from previous run of OL", p.Name)
+        alreadyInstalled = true
+    } else {
+        log.Printf("run pip install %s from a new Sandbox to %s on host", p.Name, scratchDir)
+        if err := os.Mkdir(scratchDir, 0700); err != nil {
+            return err
+        }
+    }
+//gets the size of the current package
+cmd := exec.Command("du", "-sb", scratchDir)
+var out bytes.Buffer
+cmd.Stdout = &out
+err = cmd.Run()
+if err != nil {
+    log.Fatal(err)
 }
-
-func (cp *HandlerPuller) pullRemoteFile(src, lambdaName string) (rt_type common.RuntimeType, targetDir string, err error) {
-	// grab latest lambda code if it's changed (pass
-	// If-Modified-Since so this can be determined on server side
-	client := &http.Client{}
-	req, err := http.NewRequest("GET", src, nil)
-	if err != nil {
-		return rt_type, "", err
-	}
-
-	cacheEntry := cp.getCache(lambdaName)
-	if cacheEntry != nil {
-		req.Header.Set("If-Modified-Since", cacheEntry.version)
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return rt_type, "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		return rt_type, "", errNotFound404
-	}
-
-	if resp.StatusCode == http.StatusNotModified {
-		return rt_type, cacheEntry.path, nil
-	}
-
-	// download to local file, then use pullLocalFile to finish
-	dir, err := ioutil.TempDir("", "ol-")
-	if err != nil {
-		return rt_type, "", err
-	}
-	defer os.RemoveAll(dir)
-
-	parts := strings.Split(src, "/")
-	localPath := filepath.Join(dir, parts[len(parts)-1])
-	out, err := os.Create(localPath)
-	if err != nil {
-		return rt_type, "", err
-	}
-	defer out.Close()
-
-	if _, err = io.Copy(out, resp.Body); err != nil {
-		return rt_type, "", err
-	}
-
-	rt_type, targetDir, err = cp.pullLocalFile(localPath, lambdaName)
-
-	// record directory in cache, by mod time
-	if err == nil {
-		version := resp.Header.Get("Last-Modified")
-		if version != "" {
-			cp.putCache(lambdaName, version, targetDir)
-		}
-	}
-
-	return rt_type, targetDir, err
+//log.Printf("Disk usage of %s: %s\n", scratchDir, out.String())
+re := regexp.MustCompile(`^(\d+)`)
+matches := re.FindStringSubmatch(out.String())
+if len(matches) < 2 {
+    log.Fatal("Unexpected output from when getting package size")
 }
-
-func (cp *HandlerPuller) getCache(name string) *CacheEntry {
-	entry, found := cp.dirCache.Load(name)
-	if !found {
-		return nil
-	}
-	return entry.(*CacheEntry)
+siz, err := strconv.Atoi(matches[1])
+if err != nil {
+    log.Fatal(err)
 }
+log.Printf("Size in bytes %s: %d\n", scratchDir, siz)
+totalPackageSize += siz
+log.Printf("Total package size: %d\n", totalPackageSize)
+//need to add the package to the list of packages
+packages = append(packages, PackageInfo{p.Name, siz})
+//print out all the packages
+for _, p := range packages {
+    log.Printf("Package: %s, Size: %d", p.Name, p.Size)
+}
+    
+    defer func() {
+        if err != nil {
+            os.RemoveAll(scratchDir)
+        }
+    }()
 
-func (cp *HandlerPuller) putCache(name, version, path string) {
-	cp.dirCache.Store(name, &CacheEntry{version, path})
+    meta := &sandbox.SandboxMeta{
+        MemLimitMB: common.Conf.Limits.Installer_mem_mb,
+    }
+    sb, err := pp.sbPool.Create(nil, true, pp.pipLambda, scratchDir, meta, common.RT_PYTHON)
+    if err != nil { 
+        return err
+    }
+    defer sb.Destroy("package installation complete")
+
+    // we still need to run a Sandbox to parse the dependencies, even if it is already installed
+    msg := fmt.Sprintf(`{"pkg": "%s", "alreadyInstalled": %v}`, p.Name, alreadyInstalled)
+    reqBody := bytes.NewReader([]byte(msg))
+
+    // the URL doesn't matter, since it is local anyway
+    req, err := http.NewRequest("POST", "http://container/run/pip-install", reqBody)
+    if err != nil {
+        return err
+    }
+    resp, err := sb.Client().Do(req)
+    if err != nil {
+        return err
+    }
+    defer resp.Body.Close()
+    body, err := ioutil.ReadAll(resp.Body)
+    if err != nil {
+        return err
+    }
+
+    if resp.StatusCode != http.StatusOK {
+        return fmt.Errorf("install lambda returned status %d, Body: '%s', Installer Sandbox State: %s",
+            resp.StatusCode, string(body), sb.DebugString())
+    }
+
+    if err := json.Unmarshal(body, &p.Meta); err != nil {
+        return err
+    }
+
+    for i, pkg := range p.Meta.Deps {
+        p.Meta.Deps[i] = NormalizePkg(pkg)
+    }
+
+    return nil
 }
 
