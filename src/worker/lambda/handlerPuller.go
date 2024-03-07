@@ -167,9 +167,7 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type common.R
 	}
 
 	if stat.Mode().IsDir() {
-		log.Printf("Installing `%s` from a directory PRINTS", stat.Name())
-		log.Printf("This is printing");	// added by me
-		log.Printf("The size of the directory is %d", stat.Size())	// added by me
+		log.Printf("Installing `%s` from a directory", stat.Name())
 
 		// this is really just a debug mode, and is not
 		// expected to be efficient
