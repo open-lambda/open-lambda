@@ -39,6 +39,7 @@ type Package struct {
     Meta         PackageMeta
     installMutex sync.Mutex
     installed    uint32
+    Size int
 }
 
 // the pip-install admin lambda returns this
@@ -47,14 +48,6 @@ type PackageMeta struct {
     TopLevel []string `json:"TopLevel"`
 }
 
-
-type PackageInfo struct {
-    Name string
-    Size int
-}
-
-
-var packages []PackageInfo
 var totalPackageSize int
 
 
@@ -208,7 +201,6 @@ err = cmd.Run()
 if err != nil {
     log.Fatal(err)
 }
-//log.Printf("Disk usage of %s: %s\n", scratchDir, out.String())
 re := regexp.MustCompile(`^(\d+)`)
 matches := re.FindStringSubmatch(out.String())
 if len(matches) < 2 {
@@ -221,12 +213,10 @@ if err != nil {
 log.Printf("Size in bytes %s: %d\n", scratchDir, siz)
 totalPackageSize += siz
 log.Printf("Total package size: %d\n", totalPackageSize)
-//need to add the package to the list of packages
-packages = append(packages, PackageInfo{p.Name, siz})
-//print out all the packages
-for _, p := range packages {
-    log.Printf("Package: %s, Size: %d", p.Name, p.Size)
-}
+// set the size of the package
+p.Size = siz
+log.Printf("Setting size of package %s to %d\n", p.Name, p.Size)
+
     
     defer func() {
         if err != nil {
