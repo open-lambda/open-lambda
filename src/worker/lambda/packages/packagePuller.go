@@ -1,6 +1,5 @@
 package packages
 
-
 import (
         "bytes"
         "encoding/json"
