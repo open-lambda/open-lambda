@@ -23,20 +23,22 @@ func NewWorkerPool(platform string, worker_cap int) (*WorkerPool, error) {
 
 	var pool *WorkerPool
 	switch {
-    case platform == "mock":
+  case platform == "mock":
         pool = NewMockWorkerPool()
 	case platform == "gcp":
         pool = NewGcpWorkerPool()
-    default:
+  case platform == "DO":
+	      pool = NewDOWorkerPool()
+  default:
         return nil, errors.New("invalid cloud platform")
     }
 
 	pool.nextId = 1
 	pool.workers = []map[string]*Worker{
-		make(map[string]*Worker), //starting
-		make(map[string]*Worker), //running
-		make(map[string]*Worker), //cleaning
-		make(map[string]*Worker), //destroying
+			make(map[string]*Worker), //starting
+			make(map[string]*Worker), //running
+			make(map[string]*Worker), //cleaning
+			make(map[string]*Worker), //destroying
 	}
 	pool.queue = make(chan *Worker, worker_cap)
 	pool.clusterLogFile = clusterLogFile
