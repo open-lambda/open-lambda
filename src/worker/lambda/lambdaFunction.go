@@ -88,6 +88,7 @@ func parseMeta(codeDir string) (meta *sandbox.SandboxMeta, err error) {
 		line := strings.ReplaceAll(scnr.Text(), " ", "")
 		pkg := strings.Split(line, "#")[0]
 		if pkg != "" {
+			pkg = strings.Split(pkg, ";")[0] // ignore conditional dependencies
 			pkg = packages.NormalizePkg(pkg)
 			meta.Installs = append(meta.Installs, pkg)
 		}
