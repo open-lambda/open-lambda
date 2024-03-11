@@ -74,7 +74,7 @@ func (cg *CgroupImpl) Destroy() {
 				panic(fmt.Errorf("Rmdir(2) %s: %s", gpath, err))
 			} else {
 				cg.printf("cgroup Rmdir failed, trying again in 5ms")
-				time.Sleep(5 * time.Millisecond)
+				time.Sleep(10 * time.Millisecond)
 			}
 		} else {
 			break
