@@ -12,9 +12,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"regexp"
-    "strconv"
-	"os/exec"
+	"time"
 	"github.com/open-lambda/open-lambda/ol/common"
 	"github.com/open-lambda/open-lambda/ol/worker/embedded"
 	"github.com/open-lambda/open-lambda/ol/worker/sandbox"
@@ -36,12 +34,11 @@ type PackagePuller struct {
 type Package struct {
 	Name         string
 	Meta         PackageMeta
-	installMutex sync.Mutex
+	packageMutex sync.Mutex // Rename installMutex to packageMutex
 	installed    uint32
-	Size int
+	Size         int
 }
 
-var totalPackageSize = 0
 // the pip-install admin lambda returns this
 type PackageMeta struct {
 	Deps     []string `json:"Deps"`
@@ -140,8 +137,8 @@ func (pp *PackagePuller) GetPkg(pkg string) (*Package, error) {
 	}
 
 	// slow path
-	p.installMutex.Lock()
-	defer p.installMutex.Unlock()
+	p.packageMutex.Lock()
+	defer p.packageMutex.Unlock()
 	if p.installed == 0 {
 		if err := pp.sandboxInstall(p); err != nil {
 			return p, err
@@ -154,11 +151,31 @@ func (pp *PackagePuller) GetPkg(pkg string) (*Package, error) {
 
 	return p, nil
 }
-
+func DirSize(path string) (int64, error) {
+    var size int64
+    err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+        if !info.IsDir() {
+            size += info.Size()
+        }
+        return err
+    })
+    return size, err
+}
 // sandboxInstall does the pip install within a new Sandbox, to a directory mapped from
 // the host.  We want the package on the host to share with all, but
 // want to run the install in the Sandbox because we don't trust it.
 func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
+	//tracing execution time, will be removed in the future
+	if common.Conf.Trace.ExecutionTime {
+        defer func(start time.Time) {
+            elapsed := time.Since(start)
+            if err == nil {
+                log.Printf("Execution time of successful sandboxInstall: %s", elapsed)
+            } else {
+                log.Printf("Execution time of sandboxInstall: %s", elapsed)
+            }
+        }(time.Now())
+    }
 	t := common.T0("pull-package")
 	defer t.T1()
 
@@ -180,27 +197,15 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 		}
 	}
 	//gets the size of the current package
-	cmd := exec.Command("du", "-sb", scratchDir)
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	err = cmd.Run()
+	size, err := DirSize(scratchDir)
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("Failed to compute directory size: %v", err)
 	}
-	re := regexp.MustCompile(`^(\d+)`)
-	matches := re.FindStringSubmatch(out.String())
-	if len(matches) < 2 {
-		log.Fatal("Unexpected output from when getting package size")
-	}
-	siz, err := strconv.Atoi(matches[1])
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Printf("Size in bytes %s: %d\n", scratchDir, siz)
-	totalPackageSize += siz
-	log.Printf("Total package size: %d\n", totalPackageSize)
+	log.Printf("Size of directory %s: %d", scratchDir, size)
 	// set the size of the package
-	p.Size = siz
+	p.packageMutex.Lock()
+	p.Size = int(size)
+	p.packageMutex.Unlock()
 	log.Printf("Setting size of package %s to %d\n", p.Name, p.Size)
 
 	defer func() {
