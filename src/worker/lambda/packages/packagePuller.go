@@ -204,8 +204,8 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 	log.Printf("Size of directory %s: %d", scratchDir, size)
 	// set the size of the package
 	p.packageMutex.Lock()
+	defer p.packageMutex.Unlock()
 	p.Size = int(size)
-	p.packageMutex.Unlock()
 	log.Printf("Setting size of package %s to %d\n", p.Name, p.Size)
 
 	defer func() {
