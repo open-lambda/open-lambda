@@ -34,7 +34,8 @@ type PackagePuller struct {
 type Package struct {
 	Name         string
 	Meta         PackageMeta
-	packageMutex sync.Mutex // Rename installMutex to packageMutex
+	installMutex sync.Mutex 
+	sizeMutex sync.Mutex //mutex to uodate the package size
 	installed    uint32
 	Size         int
 }
@@ -137,8 +138,8 @@ func (pp *PackagePuller) GetPkg(pkg string) (*Package, error) {
 	}
 
 	// slow path
-	p.packageMutex.Lock()
-	defer p.packageMutex.Unlock()
+	p.installMutex.Lock()
+	defer p.installMutex.Unlock()
 	if p.installed == 0 {
 		if err := pp.sandboxInstall(p); err != nil {
 			return p, err
@@ -166,7 +167,7 @@ func DirSize(path string) (int64, error) {
 // want to run the install in the Sandbox because we don't trust it.
 func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 	//tracing execution time, will be removed in the future
-	if common.Conf.Trace.ExecutionTime {
+	if common.Conf.Trace.PackageInstallationTime {
         defer func(start time.Time) {
             elapsed := time.Since(start)
             if err == nil {
@@ -203,9 +204,9 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 	}
 	log.Printf("Size of directory %s: %d", scratchDir, size)
 	// set the size of the package
-	p.packageMutex.Lock()
-	defer p.packageMutex.Unlock()
+	p.sizeMutex.Lock()
 	p.Size = int(size)
+	p.sizeMutex.Unlock()
 	log.Printf("Setting size of package %s to %d\n", p.Name, p.Size)
 
 	defer func() {
