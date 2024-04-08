@@ -34,6 +34,7 @@ func (h *OLHandler) Enabled(_ context.Context, level slog.Level) bool {
 	return level >= h.level.Level()
 }
 
+// Source: https://github.com/golang/example/blob/master/slog-handler-guide/README.md (modified)
 func (h *OLHandler) Handle(ctx context.Context, r slog.Record) error {
 	buf := make([]byte, 0, 1024)
 	if !r.Time.IsZero() {

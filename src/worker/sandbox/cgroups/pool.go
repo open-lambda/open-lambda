@@ -29,6 +29,7 @@ func NewCgroupPool(name string) (*CgroupPool, error) {
 
 	// Fetching logger, might result in error 
 	logger, err := common.FetchLogger(common.Conf.Trace.Cgroups)
+	logptr := &logger
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +40,7 @@ func NewCgroupPool(name string) (*CgroupPool, error) {
 		recycled: make(chan *CgroupImpl, CGROUP_RESERVE),
 		quit:     make(chan chan bool),
 		nextID:   0,
-		log:   	  *logger.With("cg-pool", path.Base(path.Dir(common.Conf.Worker_dir)) + "-" + name),
+		log:   	  *logptr.With("cg-pool", path.Base(path.Dir(common.Conf.Worker_dir)) + "-" + name),
 	}
 
 	// create cgroup

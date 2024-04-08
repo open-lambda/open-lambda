@@ -216,11 +216,6 @@ func Main() (err error) {
 		return err
 	}
 
-	// setting up loggers
-	if err := common.LoadLoggers(); err != nil {
-		return err
-	}
-
 	// things shared by all servers
 	http.HandleFunc(PID_PATH, GetPid)
 	http.HandleFunc(STATUS_PATH, Status)

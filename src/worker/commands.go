@@ -73,6 +73,10 @@ func upCmd(ctx *cli.Context) error {
 	if err := common.LoadConf(confPath); err != nil {
 		return err
 	}
+	// setting up loggers along with load conf
+	if err := common.LoadLoggers(); err != nil {
+		return err
+	}
 
 	// PREP STEP 3: stop any prior worker that may be running
 	if err := stopOL(olPath); err != nil {
