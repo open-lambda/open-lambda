@@ -91,7 +91,7 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 	// STEP 2: adjust target worker count
 	b.workerPool.SetTarget(worker_count)
 	
-	//respond with status
+	// respond with status
 	b.BossStatus(w, r)
 }
 

@@ -25,7 +25,7 @@ var err error
 var containerClient azblob.ContainerClient
 
 func Create(contents string) {
-	url := "https://openlambda.blob.core.windows.net/" //replace <StorageAccountName> with your Azure storage account name
+	url := "https://openlambda.blob.core.windows.net/" // replace <StorageAccountName> with your Azure storage account name
 	ctx := context.Background()
 	// Create a default request pipeline using your storage account name and account key.
 	credential, err := azidentity.NewDefaultAzureCredential(nil)
@@ -115,7 +115,7 @@ func randomString() string {
 func AzureMain(contents string) {
 	fmt.Printf("Azure Blob storage quick start sample\n")
 
-	url := "https://<StorageAccountName>.blob.core.windows.net/" //replace <StorageAccountName> with your Azure storage account name
+	url := "https://<StorageAccountName>.blob.core.windows.net/" // replace <StorageAccountName> with your Azure storage account name
 	ctx := context.Background()
 
 	// Create a default request pipeline using your storage account name and account key.

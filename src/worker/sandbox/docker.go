@@ -234,13 +234,13 @@ func (container *DockerContainer) Logs() (string, error) {
 // GetRuntimeLog returns the log of the runtime
 // Note, this is not supported for docker yet
 func (*DockerContainer) GetRuntimeLog() string {
-	return "" //TODO
+	return "" // TODO
 }
 
 // GetProxyLog returns the log of the http proxy
 // Note, this is not supported for docker yet
 func (*DockerContainer) GetProxyLog() string {
-	return "" //TODO
+	return "" // TODO
 }
 
 // NSPid returns the pid of the first process of the docker container.

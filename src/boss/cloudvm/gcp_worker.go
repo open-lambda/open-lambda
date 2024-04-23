@@ -90,9 +90,9 @@ func (pool *GcpWorkerPool) CreateInstance(worker *Worker) {
 	client := pool.client
 	fmt.Printf("creating new VM from snapshot\n")
 
-	resp, err := client.Wait(client.LaunchGcp("boss-snap", worker.workerId)) //TODO: load snapshot name from Config
+	resp, err := client.Wait(client.LaunchGcp("boss-snap", worker.workerId)) // TODO: load snapshot name from Config
 
-	if err != nil && resp["error"].(map[string]any)["code"] != "409" { //continue if instance already exists error
+	if err != nil && resp["error"].(map[string]any)["code"] != "409" { // continue if instance already exists error
 		fmt.Printf("instance alreay exists!\n")
 		client.startGcpInstance(worker.workerId)
 	} else if err != nil {
@@ -110,7 +110,7 @@ func (pool *GcpWorkerPool) CreateInstance(worker *Worker) {
 func (pool *GcpWorkerPool) DeleteInstance(worker *Worker) {
 	log.Printf("deleting gcp worker: %s\n", worker.workerId)
 	worker.runCmd("./ol worker down")
-	pool.client.Wait(pool.client.deleteGcpInstance(worker.workerId)) //wait until instance is completely deleted
+	pool.client.Wait(pool.client.deleteGcpInstance(worker.workerId)) // wait until instance is completely deleted
 }
 
 func (_ *GcpWorkerPool) ForwardTask(w http.ResponseWriter, r *http.Request, worker *Worker) {

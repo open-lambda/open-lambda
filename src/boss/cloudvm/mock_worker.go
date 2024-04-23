@@ -8,11 +8,11 @@ import (
 
 // WORKER IMPLEMENTATION: MockWorker
 type MockWorkerPool struct {
-	//no platform specific attributes
+	// no platform specific attributes
 }
 
 type MockWorker struct {
-	//no platform specific attributes
+	// no platform specific attributes
 }
 
 func NewMockWorkerPool() *WorkerPool {

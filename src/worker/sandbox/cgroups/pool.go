@@ -135,7 +135,7 @@ Empty:
 	done <- true
 }
 
-/// Destroy this entire cgroup pool
+// Destroy this entire cgroup pool
 func (pool *CgroupPool) Destroy() {
 	// signal cgTask, then wait for it to finish
 	ch := make(chan bool)
