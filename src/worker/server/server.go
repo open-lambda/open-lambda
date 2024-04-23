@@ -62,7 +62,9 @@ func Status(w http.ResponseWriter, _ *http.Request) {
 func Stats(w http.ResponseWriter, _ *http.Request) {
 	// log.Printf("Received request to %s\n", r.URL.Path)
 	snapshot := common.SnapshotStats()
-	if b, err := json.MarshalIndent(snapshot, "", "\t"); err != nil {
+	b, err := json.MarshalIndent(snapshot, "", "\t")
+
+	if err != nil {
 		panic(err)
 	}
 
