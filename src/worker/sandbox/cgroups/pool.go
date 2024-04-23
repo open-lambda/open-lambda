@@ -149,10 +149,10 @@ func (pool *CgroupPool) Destroy() {
 		if err := syscall.Rmdir(gpath); err != nil {
 			if i == 0 {
 				panic(fmt.Errorf("Rmdir %s: %s", gpath, err))
-			} else {
-				pool.printf("cgroup pool Rmdir failed, trying again in 5ms")
-				time.Sleep(5 * time.Millisecond)
 			}
+
+			pool.printf("cgroup pool Rmdir failed, trying again in 5ms")
+			time.Sleep(5 * time.Millisecond)
 		} else {
 			break
 		}
