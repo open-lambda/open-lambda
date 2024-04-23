@@ -90,7 +90,7 @@ func GcpBossTest() {
 	start = time.Now()
 	resp, err = client.Wait(client.LaunchGcp("test-snap", "test-vm"))
 	clone_time := time.Since(start)
-	if err != nil && resp["error"].(map[string]any)["code"] != "409" { //continue if instance already exists error
+	if err != nil && resp["error"].(map[string]any)["code"] != "409" { // continue if instance already exists error
 		fmt.Printf("instance alreay exists!\n")
 		client.startGcpInstance("test-vm")
 	} else if err != nil {
@@ -384,7 +384,7 @@ func (c *GcpClient) GcpIPtoInstance() (map[string]string, error) {
 		instance_name := item.(map[string]any)["name"].(string)
 		interfaces := item.(map[string]any)["networkInterfaces"]
 		for _, netif := range interfaces.([]any) {
-			ip := netif.(map[string]any)["networkIP"].(string) //internal ip
+			ip := netif.(map[string]any)["networkIP"].(string) // internal ip
 			lookup[ip] = instance_name
 		}
 	}
@@ -492,7 +492,7 @@ func (c *GcpClient) LaunchGcp(snapshotName string, vmName string) (map[string]an
 		Region:              c.service_account["region"].(string),
 		Zone:                c.service_account["zone"].(string),
 		InstanceName:        vmName,
-		//SourceImage: "projects/ubuntu-os-cloud/global/images/ubuntu-2004-focal-v20220204",
+		// SourceImage: "projects/ubuntu-os-cloud/global/images/ubuntu-2004-focal-v20220204",
 		SnapshotName:        snapshotName,
 		DiskSizeGb:          GcpConf.DiskSizeGb,
 		MachineType:         GcpConf.MachineType,
@@ -510,7 +510,8 @@ func (c *GcpClient) LaunchGcp(snapshotName string, vmName string) (map[string]an
 	return c.post(url, payload)
 }
 
-func (c *GcpClient) startGcpInstance(vmName string) (map[string]any, error) { //start existing instance
+// start existing instance
+func (c *GcpClient) startGcpInstance(vmName string) (map[string]any, error) {
 	url := fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/zones/%s/instances/%s/start",
 		c.service_account["project_id"].(string),
 		c.service_account["zone"].(string),

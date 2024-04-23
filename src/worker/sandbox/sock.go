@@ -142,7 +142,7 @@ func (container *SOCKContainer) launchContainerProxy() (err error) {
 
 	var pingErr error
 
-	//TODO make more efficient
+	// TODO make this more efficient
 	for i := 0; i < 300; i++ {
 		// check if it has died
 		select {

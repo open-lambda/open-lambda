@@ -22,7 +22,7 @@ func (s *ThresholdScaling) Launch(pool *cloudvm.WorkerPool) {
 	s.pool = pool
 	s.exitChan = make(chan bool)
 	log.Println("lauching threshold-scaler")
-	pool.SetTarget(1) //initial cluster size set to 1
+	pool.SetTarget(1) // initial cluster size set to 1
 	go func() {
 		for {
 			s.Scale()

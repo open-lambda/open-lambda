@@ -33,10 +33,10 @@ func NewWorkerPool(platform string, worker_cap int) (*WorkerPool, error) {
 
 	pool.nextId = 1
 	pool.workers = []map[string]*Worker{
-		make(map[string]*Worker), //starting
-		make(map[string]*Worker), //running
-		make(map[string]*Worker), //cleaning
-		make(map[string]*Worker), //destroying
+		make(map[string]*Worker), // starting
+		make(map[string]*Worker), // running
+		make(map[string]*Worker), // cleaning
+		make(map[string]*Worker), // destroying
 	}
 	pool.queue = make(chan *Worker, worker_cap)
 	pool.clusterLogFile = clusterLogFile
@@ -51,7 +51,7 @@ func NewWorkerPool(platform string, worker_cap int) (*WorkerPool, error) {
 
 	log.Printf("READY: worker pool of type %s", platform)
 
-	//log total outstanding tasks
+	// log total outstanding tasks
 	go func() {
 		for true {
 			time.Sleep(time.Second)
@@ -68,7 +68,7 @@ func NewWorkerPool(platform string, worker_cap int) (*WorkerPool, error) {
 	return pool, nil
 }
 
-//return number of workers in the pool
+// return number of workers in the pool
 func (pool *WorkerPool) Size() int {
 	pool.Lock()
 	defer pool.Unlock()
@@ -79,7 +79,7 @@ func (pool *WorkerPool) Size() int {
 	return size
 }
 
-//renamed Scale() -> SetTarget()
+// renamed Scale() -> SetTarget()
 func (pool *WorkerPool) SetTarget(target int) {
 	pool.Lock()
 
@@ -120,13 +120,13 @@ func (pool *WorkerPool) startNewWorker() {
 
 	go func() { // should be able to create multiple instances simultaneously
 		worker.numTask = 1
-		pool.CreateInstance(worker) //create new instance
+		pool.CreateInstance(worker) // c`reate new instance
 
 		if pool.platform != "mock" {
 			worker.runCmd("./ol worker up -d") // start worker
 		}
 
-		//change state starting -> running
+		// change state starting -> running
 		pool.Lock()
 
 		worker.state = RUNNING
@@ -189,11 +189,11 @@ func (pool *WorkerPool) cleanWorker(worker *Worker) {
 	pool.Unlock()
 
 	go func(worker *Worker) {
-		for worker.numTask > 0 { //wait until all task is completed
+		for worker.numTask > 0 { // wait until all task is completed
 			fmt.Printf("%s cleaning: %d", worker.workerId, worker.numTask)
 			pool.Lock()
 			if _, ok := pool.workers[CLEANING][worker.workerId]; !ok {
-				return //stop if the worker is recovered
+				return // stop if the worker is recovered
 			}
 			pool.Unlock()
 			time.Sleep(time.Second)
@@ -221,7 +221,7 @@ func (pool *WorkerPool) detroyWorker(worker *Worker) {
 	pool.Unlock()
 
 	go func() { // should be able to destroy multiple instances simultaneously
-		pool.DeleteInstance(worker) //delete new instance
+		pool.DeleteInstance(worker) // delete new instance
 
 		// remove from cluster
 		pool.Lock()
@@ -257,7 +257,7 @@ func (pool *WorkerPool) updateCluster() {
 	pool.Unlock()
 
 	if toBeClean > 0 {
-		for i := 0; i < toBeClean; i++ { //TODO: policy: clean worker with least tasks
+		for i := 0; i < toBeClean; i++ { // TODO: policy: clean worker with least tasks
 			worker := <-pool.queue
 			fmt.Printf("cleaning %s\n", worker.workerId)
 			pool.cleanWorker(worker)
@@ -274,7 +274,7 @@ func (pool *WorkerPool) updateCluster() {
 	if toBeRecover > 0 {
 		pool.Lock()
 		for _, worker := range pool.workers[CLEANING] {
-			if toBeRecover <= 0 { //TODO: policy: recover worker with most tasks
+			if toBeRecover <= 0 { // TODO: policy: recover worker with most tasks
 				break
 			}
 			pool.Unlock()
@@ -286,7 +286,7 @@ func (pool *WorkerPool) updateCluster() {
 	}
 }
 
-//run lambda function
+// run lambda function
 func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 	starttime := time.Now()
 	if len(pool.workers[STARTING])+len(pool.workers[RUNNING]) == 0 {
@@ -309,7 +309,7 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 	atomic.AddInt64(&pool.nLatency, 1)
 }
 
-//force kill workers
+// force kill workers
 func (pool *WorkerPool) Close() {
 	log.Println("closing worker pool")
 	pool.SetTarget(0)
@@ -356,7 +356,7 @@ func (w *Worker) runCmd(command string) {
 	}
 }
 
-//return wokers' id and number of tasks
+// return wokers' id and number of tasks
 func (pool *WorkerPool) StatusTasks() map[string]int {
 	var output = map[string]int{}
 
@@ -380,7 +380,7 @@ func (pool *WorkerPool) StatusTasks() map[string]int {
 	return output
 }
 
-//return status of cluster
+// return status of cluster
 func (pool *WorkerPool) StatusCluster() map[string]int {
 	var output = map[string]int{}
 
@@ -395,7 +395,7 @@ func (pool *WorkerPool) StatusCluster() map[string]int {
 // forward request to worker
 // TODO: this is kept for other platforms
 func forwardTaskHelper(w http.ResponseWriter, req *http.Request, workerIp string) error {
-	host := fmt.Sprintf("%s:%d", workerIp, 5000) //TODO: read from config
+	host := fmt.Sprintf("%s:%d", workerIp, 5000) // TODO: read from config
 	req.URL.Scheme = "http"
 	req.URL.Host = host
 	req.Host = host
