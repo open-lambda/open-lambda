@@ -11,7 +11,7 @@ tokio-stream = { version="0.1", features=["net"] }
 simple-logging = "2"
 log = "0.4"
 dashmap = "5"
-nix = "0.26"
+nix = { version="0.28", features=["sched"] }
 futures-util = "0.3"
 
 [profile.release]

@@ -1,25 +1,25 @@
-#![feature(async_closure) ]
+#![feature(async_closure)]
 
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Method, Request, Response, Result, Server, StatusCode};
 
 use futures_util::stream::StreamExt;
 
-use std::process::Stdio;
 use std::env::args;
 use std::fs::File;
 use std::io::Write;
 use std::os::unix::io::FromRawFd;
+use std::process::Stdio;
 
 use tokio::io::AsyncReadExt;
-use tokio::select;
-use tokio::process::Command;
 use tokio::net::UnixListener;
-use tokio_stream::wrappers::UnixListenerStream;
+use tokio::process::Command;
+use tokio::select;
 use tokio::signal::unix::{signal, SignalKind};
+use tokio_stream::wrappers::UnixListenerStream;
 
-use nix::unistd::{getpid, fork, ForkResult};
-use nix::sched::{CloneFlags, unshare};
+use nix::sched::{unshare, CloneFlags};
+use nix::unistd::{fork, getpid, ForkResult};
 
 use std::os::unix::net::UnixListener as StdUnixListener;
 
@@ -85,22 +85,25 @@ fn main() {
 
     for i in 0..cgroup_count {
         let fd = 3 + i;
-        let mut f = unsafe{ File::from_raw_fd(fd) };
+        let mut f = unsafe { File::from_raw_fd(fd) };
 
         f.write(format!("{pid}").as_bytes()).unwrap();
         log::trace!("Joined cgroup, closing FD {fd}'");
     }
 
-    unshare(CloneFlags::CLONE_NEWUTS | CloneFlags::CLONE_NEWPID | CloneFlags::CLONE_NEWIPC).unwrap();
+    unshare(CloneFlags::CLONE_NEWUTS | CloneFlags::CLONE_NEWPID | CloneFlags::CLONE_NEWIPC)
+        .unwrap();
 
-    if let ForkResult::Parent{..} = unsafe{ fork().expect("Fork failed") } {
+    if let ForkResult::Parent { .. } = unsafe { fork().expect("Fork failed") } {
         std::process::exit(0);
     }
 
     log::debug!("Starting server loop...");
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(1)
-        .enable_io().build().expect("Failed to start tokio");
+        .enable_io()
+        .build()
+        .expect("Failed to start tokio");
 
     runtime.block_on(async move {
         let mut sighandler = signal(SignalKind::terminate()).expect("Failed to install sighandler");
@@ -109,7 +112,8 @@ fn main() {
         let stream = UnixListenerStream::new(listener);
         let acceptor = hyper::server::accept::from_stream(stream);
 
-        let server = Server::builder(acceptor).serve(make_service)
+        let server = Server::builder(acceptor)
+            .serve(make_service)
             .with_graceful_shutdown(async move {
                 sighandler.recv().await;
                 log::debug!("Got ctrl+c");
@@ -132,10 +136,13 @@ async fn execute_function(args: Vec<u8>) -> Result<Response<Body>> {
     let body;
     let status_code;
 
-    let mut child = Command::new("/handler/f.bin").arg(arg_str)
-            .env("RUST_LOG", "debug")
-            .stdout(Stdio::piped()).stderr(Stdio::piped())
-            .spawn().expect("Failed to spawn lambda process");
+    let mut child = Command::new("/handler/f.bin")
+        .arg(arg_str)
+        .env("RUST_LOG", "debug")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn lambda process");
 
     let child_future = child.wait();
 
@@ -185,7 +192,7 @@ async fn execute_function(args: Vec<u8>) -> Result<Response<Body>> {
                 status_code = StatusCode::OK;
             }
             Err(err) => {
-                if err.kind() !=  std::io::ErrorKind::NotFound {
+                if err.kind() != std::io::ErrorKind::NotFound {
                     let err_str = format!("Got unexpected error: {err:?}");
                     log::error!("{err_str}");
 
@@ -204,10 +211,20 @@ async fn execute_function(args: Vec<u8>) -> Result<Response<Body>> {
     let mut stdout = String::from("");
     let mut stderr = String::from("");
 
-    child.stdout.take().expect("Failed to get child stdout")
-        .read_to_string(&mut stdout).await.unwrap();
-    child.stderr.take().expect("Failed to get child stderr")
-        .read_to_string(&mut stderr).await.unwrap();
+    child
+        .stdout
+        .take()
+        .expect("Failed to get child stdout")
+        .read_to_string(&mut stdout)
+        .await
+        .unwrap();
+    child
+        .stderr
+        .take()
+        .expect("Failed to get child stderr")
+        .read_to_string(&mut stderr)
+        .await
+        .unwrap();
 
     if stdout == "" {
         log::debug!("Program has no stdout output");
@@ -233,10 +250,7 @@ async fn execute_function(args: Vec<u8>) -> Result<Response<Body>> {
         log::trace!("{}", log_line);
     }
 
-    let response = Response::builder()
-        .status(status_code)
-        .body(body)
-        .unwrap();
+    let response = Response::builder().status(status_code).body(body).unwrap();
 
     Ok(response)
 }
