@@ -56,7 +56,7 @@ def sock_churn(baseline, procs, seconds, fork):
 def run_tests():
     print("Testing SOCK directly (without lambdas)")
 
-    with TestConfContext(server_mode="sock", mem_pool_mb=500):
+    with TestConfContext(event_mode="sock", mem_pool_mb=500):
         sock_churn(baseline=0, procs=1, seconds=5, fork=False)
         sock_churn(baseline=0, procs=1, seconds=10, fork=True)
         sock_churn(baseline=0, procs=15, seconds=10, fork=True)

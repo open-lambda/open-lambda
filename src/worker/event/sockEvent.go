@@ -1,4 +1,4 @@
-package server
+package event
 
 import (
 	"encoding/json"
@@ -20,22 +20,22 @@ type Handler func(http.ResponseWriter, []string, map[string]any) error
 
 var nextScratchId int64 = 1000
 
-// SOCKServer is a worker server that listens to run lambda requests and forward
+// SOCKEvent is a worker event that listens to run lambda requests and forward
 // these requests to its sandboxes.
-type SOCKServer struct {
+type SOCKEvent struct {
 	sbPool    *sandbox.SOCKPool
 	sandboxes sync.Map
 }
 
-func (server *SOCKServer) GetSandbox(id string) sandbox.Sandbox {
-	val, ok := server.sandboxes.Load(id)
+func (event *SOCKEvent) GetSandbox(id string) sandbox.Sandbox {
+	val, ok := event.sandboxes.Load(id)
 	if !ok {
 		return nil
 	}
 	return val.(sandbox.Sandbox)
 }
 
-func (server *SOCKServer) Create(w http.ResponseWriter, _ []string, args map[string]any) error {
+func (event *SOCKEvent) Create(w http.ResponseWriter, _ []string, args map[string]any) error {
 	var leaf bool
 	if b, ok := args["leaf"]; !ok || b.(bool) {
 		leaf = true
@@ -48,7 +48,7 @@ func (server *SOCKServer) Create(w http.ResponseWriter, _ []string, args map[str
 
 	var parent sandbox.Sandbox
 	if p, ok := args["parent"]; ok && p != "" {
-		parent = server.GetSandbox(p.(string))
+		parent = event.GetSandbox(p.(string))
 		if parent == nil {
 			return fmt.Errorf("no sandbox found with ID '%s'", p)
 		}
@@ -88,31 +88,31 @@ func (server *SOCKServer) Create(w http.ResponseWriter, _ []string, args map[str
 		Installs: packages,
 	}
 
-	c, err := server.sbPool.Create(parent, leaf, codeDir, scratchDir, meta, rtType)
+	c, err := event.sbPool.Create(parent, leaf, codeDir, scratchDir, meta, rtType)
 	if err != nil {
 		return err
 	}
 
-	server.sandboxes.Store(c.ID(), c)
+	event.sandboxes.Store(c.ID(), c)
 	log.Printf("Save ID '%s' to map\n", c.ID())
 
 	w.Write([]byte(fmt.Sprintf("%v\n", c.ID())))
 	return nil
 }
 
-func (server *SOCKServer) Destroy(_ http.ResponseWriter, rsrc []string, _ map[string]any) error {
-	c := server.GetSandbox(rsrc[0])
+func (event *SOCKEvent) Destroy(_ http.ResponseWriter, rsrc []string, _ map[string]any) error {
+	c := event.GetSandbox(rsrc[0])
 	if c == nil {
 		return fmt.Errorf("no sandbox found with ID '%s'", rsrc[0])
 	}
 
-	c.Destroy("manually destroyed by SOCKServer")
+	c.Destroy("manually destroyed by SOCKEvent")
 
 	return nil
 }
 
-func (server *SOCKServer) Pause(_ http.ResponseWriter, rsrc []string, _ map[string]any) error {
-	c := server.GetSandbox(rsrc[0])
+func (event *SOCKEvent) Pause(_ http.ResponseWriter, rsrc []string, _ map[string]any) error {
+	c := event.GetSandbox(rsrc[0])
 	if c == nil {
 		return fmt.Errorf("no sandbox found with ID '%s'", rsrc[0])
 	}
@@ -120,8 +120,8 @@ func (server *SOCKServer) Pause(_ http.ResponseWriter, rsrc []string, _ map[stri
 	return c.Pause()
 }
 
-func (server *SOCKServer) Unpause(_ http.ResponseWriter, rsrc []string, _ map[string]any) error {
-	c := server.GetSandbox(rsrc[0])
+func (event *SOCKEvent) Unpause(_ http.ResponseWriter, rsrc []string, _ map[string]any) error {
+	c := event.GetSandbox(rsrc[0])
 	if c == nil {
 		return fmt.Errorf("no sandbox found with ID '%s'", rsrc[0])
 	}
@@ -129,14 +129,14 @@ func (server *SOCKServer) Unpause(_ http.ResponseWriter, rsrc []string, _ map[st
 	return c.Unpause()
 }
 
-func (server *SOCKServer) Debug(w http.ResponseWriter, _ []string, _ map[string]any) error {
-	str := server.sbPool.DebugString()
+func (event *SOCKEvent) Debug(w http.ResponseWriter, _ []string, _ map[string]any) error {
+	str := event.sbPool.DebugString()
 	fmt.Printf("%s\n", str)
 	w.Write([]byte(str))
 	return nil
 }
 
-func (server *SOCKServer) HandleInternal(w http.ResponseWriter, r *http.Request) error {
+func (event *SOCKEvent) HandleInternal(w http.ResponseWriter, r *http.Request) error {
 	log.Printf("%s %s", r.Method, r.URL.Path)
 
 	defer r.Body.Close()
@@ -166,11 +166,11 @@ func (server *SOCKServer) HandleInternal(w http.ResponseWriter, r *http.Request)
 	}
 
 	routes := map[string]Handler{
-		"create":  server.Create,
-		"destroy": server.Destroy,
-		"pause":   server.Pause,
-		"unpause": server.Unpause,
-		"debug":   server.Debug,
+		"create":  event.Create,
+		"destroy": event.Destroy,
+		"pause":   event.Pause,
+		"unpause": event.Unpause,
+		"debug":   event.Debug,
 	}
 
 	if h, ok := routes[rsrc[1]]; ok {
@@ -181,25 +181,25 @@ func (server *SOCKServer) HandleInternal(w http.ResponseWriter, r *http.Request)
 	return fmt.Errorf("unknown op %s", rsrc[1])
 }
 
-func (server *SOCKServer) Handle(w http.ResponseWriter, r *http.Request) {
-	if err := server.HandleInternal(w, r); err != nil {
+func (event *SOCKEvent) Handle(w http.ResponseWriter, r *http.Request) {
+	if err := event.HandleInternal(w, r); err != nil {
 		log.Printf("Request Handler Failed: %v", err)
 		w.WriteHeader(500)
 		w.Write([]byte(fmt.Sprintf("%v\n", err)))
 	}
 }
 
-func (server *SOCKServer) cleanup() {
-	server.sandboxes.Range(func(key, val any) bool {
-		val.(sandbox.Sandbox).Destroy("SOCKServer cleanup")
+func (event *SOCKEvent) cleanup() {
+	event.sandboxes.Range(func(key, val any) bool {
+		val.(sandbox.Sandbox).Destroy("SOCKEvent cleanup")
 		return true
 	})
-	server.sbPool.Cleanup()
+	event.sbPool.Cleanup()
 }
 
-// NewSOCKServer creates a server based on the passed config."
-func NewSOCKServer() (*SOCKServer, error) {
-	log.Printf("Start SOCK Server")
+// NewSOCKEvent creates an event based on the passed config."
+func NewSOCKEvent() (*SOCKEvent, error) {
+	log.Printf("Start SOCK Event")
 
 	mem := sandbox.NewMemPool("sandboxes", common.Conf.Mem_pool_mb)
 	sbPool, err := sandbox.NewSOCKPool("sandboxes", mem)
@@ -209,11 +209,11 @@ func NewSOCKServer() (*SOCKServer, error) {
 	// some of the SOCK tests depend on there not being an evictor
 	// sandbox.NewSOCKEvictor(sbPool)
 
-	server := &SOCKServer{
+	event := &SOCKEvent{
 		sbPool: sbPool,
 	}
 
-	http.HandleFunc("/", server.Handle)
+	http.HandleFunc("/", event.Handle)
 
-	return server, nil
+	return event, nil
 }

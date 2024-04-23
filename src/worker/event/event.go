@@ -1,4 +1,9 @@
-package server
+package event
+
+// Note for `io/ioutil` package:
+// As of Go 1.16, the same functionality is now provided by package io or package os,
+// and those implementations should be preferred in new code.
+// See the specific function documentation for details.
 
 import (
 	"encoding/json"
@@ -12,21 +17,21 @@ import (
 	"runtime"
 	"runtime/pprof"
 	"strconv"
+	"sync"
 	"syscall"
-  "sync"
 
-	"github.com/open-lambda/open-lambda/ol/common"
+	"github.com/open-lambda/open-lambda/src/common"
 )
 
 const (
-	RUN_PATH       = "/run/"
-	PID_PATH       = "/pid"
-	STATUS_PATH    = "/status"
-	STATS_PATH     = "/stats"
-	DEBUG_PATH     = "/debug"
-	PPROF_MEM_PATH = "/pprof/mem"
+	RUN_PATH             = "/run/"
+	PID_PATH             = "/pid"
+	STATUS_PATH          = "/status"
+	STATS_PATH           = "/stats"
+	DEBUG_PATH           = "/debug"
+	PPROF_MEM_PATH       = "/pprof/mem"
 	PPROF_CPU_START_PATH = "/pprof/cpu-start"
-	PPROF_CPU_STOP_PATH  = "/pprof/cpu-stop" 
+	PPROF_CPU_STOP_PATH  = "/pprof/cpu-stop"
 )
 
 type cleanable interface {
@@ -35,10 +40,11 @@ type cleanable interface {
 
 // temporary file storing cpu profiled data
 const CPU_TEMP_PATTERN = ".cpu.*.prof"
+
 var cpuTemp *os.File
 var lock sync.Mutex
 
-// HandleGetPid returns process ID, useful for making sure we're talking to the expected server
+// HandleGetPid returns process ID, useful for making sure we're talking to the expected event
 func HandleGetPid(w http.ResponseWriter, _ *http.Request) {
 	// TODO re-enable once logging is configurable
 	//log.Printf("Received request to %s\n", r.URL.Path)
@@ -85,7 +91,7 @@ func doCpuStart() error {
 	if cpuTemp != nil {
 		return fmt.Errorf("Already started cpu profiling\n")
 	}
-	  
+
 	// fresh cpu profiling
 	temp, err := os.CreateTemp("", CPU_TEMP_PATTERN)
 	if err != nil {
@@ -134,7 +140,7 @@ func PprofCpuStop(w http.ResponseWriter, _ *http.Request) {
 	cpuTemp.Close()
 	cpuTemp = nil
 	defer os.Remove(tempFilename) // deferred cleanup
-  
+
 	// read data from file
 	log.Printf("Reading from %s\n", tempFilename)
 	buffer, err := ioutil.ReadFile(tempFilename)
@@ -152,8 +158,8 @@ func PprofCpuStop(w http.ResponseWriter, _ *http.Request) {
 	}
 }
 
-func shutdown(pidPath string, server cleanable) {
-	server.cleanup()
+func shutdown(pidPath string, event cleanable) {
+	event.cleanup()
 	statsPath := filepath.Join(common.Conf.Worker_dir, "stats.json")
 	snapshot := common.SnapshotStats()
 	rc := 0
@@ -161,20 +167,20 @@ func shutdown(pidPath string, server cleanable) {
 	// "cpu-start"ed but have not "cpu-stop"ped before kill
 	log.Printf("save buffered profiled data to cpu.buf.prof\n")
 	if cpuTemp != nil {
-	pprof.StopCPUProfile()
-	filename := cpuTemp.Name()
-	cpuTemp.Close()
+		pprof.StopCPUProfile()
+		filename := cpuTemp.Name()
+		cpuTemp.Close()
 
-	in, err := ioutil.ReadFile(filename)
-	if err != nil {
-		log.Printf("error: %s", err)
-		rc = 1
-	} else if err = ioutil.WriteFile("cpu.buf.prof", in, 0644); err != nil{
-		log.Printf("error: %s", err)
-		rc = 1
-	}
+		in, err := ioutil.ReadFile(filename)
+		if err != nil {
+			log.Printf("error: %s", err)
+			rc = 1
+		} else if err = ioutil.WriteFile("cpu.buf.prof", in, 0644); err != nil {
+			log.Printf("error: %s", err)
+			rc = 1
+		}
 
-	os.Remove(filename)
+		os.Remove(filename)
 	}
 
 	log.Printf("save stats to %s", statsPath)
@@ -217,7 +223,7 @@ func Main() (err error) {
 		return err
 	}
 
-	// things shared by all servers
+	// things shared by all events
 	http.HandleFunc(PID_PATH, HandleGetPid)
 	http.HandleFunc(STATUS_PATH, Status)
 	http.HandleFunc(STATS_PATH, Stats)
@@ -226,13 +232,13 @@ func Main() (err error) {
 	http.HandleFunc(PPROF_CPU_STOP_PATH, PprofCpuStop)
 
 	var s cleanable
-	switch common.Conf.Server_mode {
+	switch common.Conf.Event_mode {
 	case "lambda":
-		s, err = NewLambdaServer()
+		s, err = NewLambdaEvent()
 	case "sock":
-		s, err = NewSOCKServer()
+		s, err = NewSOCKEvent()
 	default:
-		return fmt.Errorf("unknown Server_mode %s", common.Conf.Server_mode)
+		return fmt.Errorf("unknown Event_mode %s", common.Conf.Event_mode)
 	}
 	if err != nil {
 		os.Remove(pidPath)
@@ -252,7 +258,7 @@ func Main() (err error) {
 	port := fmt.Sprintf("%s:%s", common.Conf.Worker_url, common.Conf.Worker_port)
 	err = http.ListenAndServe(port, nil)
 
-	// if ListenAndServer returned, there must have been some issue
+	// if ListenAndServe returned, there must have been some issue
 	// (probably a port collision)
 	s.cleanup()
 	os.Remove(pidPath)

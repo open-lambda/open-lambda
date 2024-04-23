@@ -1,4 +1,4 @@
-package server
+package event
 
 import (
 	"fmt"
@@ -10,9 +10,9 @@ import (
 	"github.com/open-lambda/open-lambda/ol/worker/lambda"
 )
 
-// LambdaServer is a worker server that listens to run lambda requests and forward
+// LambdaEvent is a worker event that listens to run lambda requests and forward
 // these requests to its sandboxes.
-type LambdaServer struct {
+type LambdaEvent struct {
 	lambdaMgr *lambda.LambdaMgr
 }
 
@@ -39,7 +39,7 @@ func getURLComponents(r *http.Request) []string {
 // curl localhost:8080/run/<lambda-name>
 // curl -X POST localhost:8080/run/<lambda-name> -d '{}'
 // ...
-func (s *LambdaServer) RunLambda(w http.ResponseWriter, r *http.Request) {
+func (s *LambdaEvent) RunLambda(w http.ResponseWriter, r *http.Request) {
 	t := common.T0("web-request")
 	defer t.T1()
 
@@ -67,16 +67,16 @@ func (s *LambdaServer) RunLambda(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *LambdaServer) Debug(w http.ResponseWriter, _ *http.Request) {
+func (s *LambdaEvent) Debug(w http.ResponseWriter, _ *http.Request) {
 	w.Write([]byte(s.lambdaMgr.Debug()))
 }
 
-func (s *LambdaServer) cleanup() {
+func (s *LambdaEvent) cleanup() {
 	s.lambdaMgr.Cleanup()
 }
 
-// NewLambdaServer creates a server based on the passed config."
-func NewLambdaServer() (*LambdaServer, error) {
+// NewLambdaEvent creates a event based on the passed config."
+func NewLambdaEvent() (*LambdaEvent, error) {
 	log.Printf("Starting new lambda server")
 
 	lambdaMgr, err := lambda.NewLambdaMgr()
@@ -84,17 +84,17 @@ func NewLambdaServer() (*LambdaServer, error) {
 		return nil, err
 	}
 
-	server := &LambdaServer{
+	event := &LambdaEvent{
 		lambdaMgr: lambdaMgr,
 	}
 
 	log.Printf("Setups Handlers")
 	port := fmt.Sprintf(":%s", common.Conf.Worker_port)
-	http.HandleFunc(RUN_PATH, server.RunLambda)
-	http.HandleFunc(DEBUG_PATH, server.Debug)
+	http.HandleFunc(RUN_PATH, event.RunLambda)
+	http.HandleFunc(DEBUG_PATH, event.Debug)
 
 	log.Printf("Execute handler by POSTing to localhost%s%s%s\n", port, RUN_PATH, "<lambda>")
 	log.Printf("Get status by sending request to localhost%s%s\n", port, STATUS_PATH)
 
-	return server, nil
+	return event, nil
 }

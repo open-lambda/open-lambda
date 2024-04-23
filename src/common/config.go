@@ -33,8 +33,8 @@ type Config struct {
 	// currently ignored as cgroup sandbox is not fully integrated
 	Sandbox string `json:"sandbox"`
 
-	// what kind of server should be launched?  (e.g., lambda or sock)
-	Server_mode string `json:"server_mode"`
+	// what kind of event should be launched?  (e.g., lambda or sock)
+	Event_mode string `json:"event_mode"`
 
 	// location where code packages are stored.  Could be URL or local file path.
 	Registry string `json:"registry"`
@@ -149,7 +149,7 @@ func LoadDefaults(olPath string) error {
 
 	Conf = &Config{
 		Worker_dir:        workerDir,
-		Server_mode:       "lambda",
+		Event_mode:        "lambda",
 		Worker_url:        "localhost",
 		Worker_port:       "5000",
 		Registry:          registryDir,
