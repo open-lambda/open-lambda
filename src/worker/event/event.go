@@ -20,7 +20,7 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/open-lambda/open-lambda/src/common"
+	"github.com/open-lambda/open-lambda/ol/common"
 )
 
 const (
