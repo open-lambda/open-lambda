@@ -22,6 +22,8 @@ errorCode = 2
 # For now, we disable them one by one
 [rule.comment-spacings]
     severity = "error"
+[rule.superfluous-else]
+    severity = "error"
 
 [rule.defer]
     Disabled = true

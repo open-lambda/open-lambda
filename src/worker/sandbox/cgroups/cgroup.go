@@ -42,10 +42,10 @@ func (cg *CgroupImpl) Release() {
 			} else if len(pids) > 0 {
 				if i == 0 {
 					panic(fmt.Errorf("Cannot release cgroup that contains processes: %v", pids))
-				} else {
-					cg.printf("cgroup Rmdir failed, trying again in 5ms")
-					time.Sleep(5 * time.Millisecond)
 				}
+
+				cg.printf("cgroup Rmdir failed, trying again in 5ms")
+				time.Sleep(5 * time.Millisecond)
 			} else {
 				break
 			}
@@ -72,10 +72,10 @@ func (cg *CgroupImpl) Destroy() {
 		if err := syscall.Rmdir(gpath); err != nil {
 			if i == 0 {
 				panic(fmt.Errorf("Rmdir(2) %s: %s", gpath, err))
-			} else {
-				cg.printf("cgroup Rmdir failed, trying again in 5ms")
-				time.Sleep(5 * time.Millisecond)
 			}
+
+			cg.printf("cgroup Rmdir failed, trying again in 5ms")
+			time.Sleep(5 * time.Millisecond)
 		} else {
 			break
 		}
@@ -167,11 +167,13 @@ func (cg *CgroupImpl) TryReadInt(resource string) (int64, error) {
 }
 
 func (cg *CgroupImpl) ReadInt(resource string) int64 {
-	if val, err := cg.TryReadInt(resource); err != nil {
+	val, err := cg.TryReadInt(resource)
+
+	if err != nil {
 		panic(err)
-	} else {
-		return val
 	}
+
+	return val
 }
 
 func (cg *CgroupImpl) AddPid(pid string) error {
