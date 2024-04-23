@@ -26,17 +26,17 @@ type Boss struct {
 	autoScaler  autoscaling.Scaling
 }
 
-func (b *Boss) BossStatus(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Receive request to %s\n", r.URL.Path)
+func (boss *Boss) BossStatus(w http.ResponseWriter, req *http.Request) {
+	log.Printf("Receive request to %s\n", req.URL.Path)
 
 	output := struct {
 		State map[string]int `json:"state"`
 		Tasks map[string]int `json:"tasks"`
 	}{
-		b.workerPool.StatusCluster(),
-		b.workerPool.StatusTasks(),
+		boss.workerPool.StatusCluster(),
+		boss.workerPool.StatusTasks(),
 	}
-	
+
 	b, err := json.MarshalIndent(output, "", "\t")
 	if err != nil {
 		panic(err)
