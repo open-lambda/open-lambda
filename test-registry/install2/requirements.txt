@@ -12,7 +12,7 @@ charset-normalizer==3.2.0
     # via
     #   -r requirements.in
     #   requests
-idna==3.4
+idna==3.7
     # via
     #   -r requirements.in
     #   requests
