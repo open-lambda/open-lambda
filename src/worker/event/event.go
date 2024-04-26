@@ -21,6 +21,7 @@ import (
 	"syscall"
 
 	"github.com/open-lambda/open-lambda/ol/common"
+	// "github.com/segmentio/kafka-go"
 )
 
 const (
@@ -32,6 +33,7 @@ const (
 	PPROF_MEM_PATH       = "/pprof/mem"
 	PPROF_CPU_START_PATH = "/pprof/cpu-start"
 	PPROF_CPU_STOP_PATH  = "/pprof/cpu-stop"
+	PORT_NUMBER          = "localhost:9092" // TBD
 )
 
 type cleanable interface {
@@ -43,6 +45,39 @@ const CPU_TEMP_PATTERN = ".cpu.*.prof"
 
 var cpuTemp *os.File
 var lock sync.Mutex
+
+// var kafka.Reader []kafkaReaders;
+// var currKafkaEvent kafkaEvent;
+
+// // initialize a Kafka reader (consumer)
+// func initNewKafkaReader(brokers []string, partition int, groupId string) {
+// 	kafkaReaders.append(kafka.NewReader(kafka.ReaderConfig{
+// 		Brokers: brokers,
+// 		GroupID: groupID,
+// 		Partition: partition, // If we want this one reader to consume all partitions, just delete this line
+// 		Topic: "kafka-event",
+// 		MaxBytes: 10e6,
+// 		CommitInterval: time.Second, // This is for periodical commit offset, could use synchronous instead (default)
+// 	}))
+// }
+
+// // Read (consume) kafka messages from a particular reader. Offset will be automatically updated, so no separate JSON file required for now.
+// // So far a very sketchy approach due to lacking information.
+// func readKafkaMsg(reader int) {
+// 	for {
+// 		m, err := r.ReadMessage(context.Background())
+// 		if err != nil {
+// 			break
+// 		}
+// 		currMsgData := json.Unmarshal(m.Value, &currKafkaEvent)
+// 		currPid := currMsgData.EventPid
+// 		fmt.Printf("pid: %d\n", currPid)
+// 	}
+
+// 	if err := r.Close(); err != nil {
+// 		log.Fatal("failed to close reader:", err)
+// 	}
+// }
 
 // HandleGetPid returns process ID, useful for making sure we're talking to the expected event
 func HandleGetPid(w http.ResponseWriter, _ *http.Request) {
