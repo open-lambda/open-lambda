@@ -138,7 +138,7 @@ async fn execute_function(args: Vec<u8>) -> Result<Response<Body>> {
 
     let mut child = Command::new("/handler/f.bin")
         .arg(arg_str)
-        .env("RUST_LOG", "debug")
+        .env("RUST_LOG", "info")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
