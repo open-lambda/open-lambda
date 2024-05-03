@@ -41,7 +41,7 @@ var lock sync.Mutex
 // HandleGetPid returns process ID, useful for making sure we're talking to the expected server
 func HandleGetPid(w http.ResponseWriter, _ *http.Request) {
 	// TODO re-enable once logging is configurable
-	//log.Printf("Received request to %s\n", r.URL.Path)
+	// log.Printf("Received request to %s\n", r.URL.Path)
 
 	wbody := []byte(strconv.Itoa(os.Getpid()) + "\n")
 	if _, err := w.Write(wbody); err != nil {
@@ -52,7 +52,7 @@ func HandleGetPid(w http.ResponseWriter, _ *http.Request) {
 // Status writes "ready" to the response.
 func Status(w http.ResponseWriter, _ *http.Request) {
 	// TODO re-enable once logging is configurable
-	//log.Printf("Received request to %s\n", r.URL.Path)
+	// log.Printf("Received request to %s\n", r.URL.Path)
 
 	if _, err := w.Write([]byte("ready\n")); err != nil {
 		log.Printf("error in Status: %v", err)
@@ -60,13 +60,15 @@ func Status(w http.ResponseWriter, _ *http.Request) {
 }
 
 func Stats(w http.ResponseWriter, _ *http.Request) {
-	//log.Printf("Received request to %s\n", r.URL.Path)
+	// log.Printf("Received request to %s\n", r.URL.Path)
 	snapshot := common.SnapshotStats()
-	if b, err := json.MarshalIndent(snapshot, "", "\t"); err != nil {
+	b, err := json.MarshalIndent(snapshot, "", "\t")
+
+	if err != nil {
 		panic(err)
-	} else {
-		w.Write(b)
 	}
+
+	w.Write(b)
 }
 
 func PprofMem(w http.ResponseWriter, _ *http.Request) {

@@ -132,7 +132,7 @@ func (linst *LambdaInstance) Task() {
 		// serve until we incoming queue is empty
 		t = common.T0("LambdaInstance-ServeRequests")
 		for req != nil {
-			//f.printf("Forwarding request to sandbox")
+			// f.printf("Forwarding request to sandbox")
 
 			t2 := common.T0("LambdaInstance-RoundTrip")
 

@@ -189,15 +189,17 @@ func pprofCpuStart(ctx *cli.Context) error {
 		fmt.Printf("started cpu profiling\n")
 		fmt.Printf("use \"ol pprof cpu-stop\" to stop\n")
 		return nil
-	} else if response.StatusCode == 500 {
-		return fmt.Errorf("Unknown server error\n")
-	} else {
-	    	body, err := ioutil.ReadAll(response.Body)
-	    	if err != nil {
-	      		return fmt.Errorf("failed to read body from GET to %s", url)
-	    	}
-	    	return fmt.Errorf("Failed to start cpu profiling: %s\n", body)
 	}
+
+	if response.StatusCode == 500 {
+		return fmt.Errorf("Unknown server error\n")
+	}
+
+	body, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read body from GET to %s", url)
+	}
+	return fmt.Errorf("Failed to start cpu profiling: %s\n", body)
 }
 
 func pprofCpuStop(ctx *cli.Context) error {

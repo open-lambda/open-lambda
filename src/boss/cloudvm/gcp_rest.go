@@ -6,7 +6,7 @@ type GcpLaunchVmArgs struct {
 	Region              string
 	Zone                string
 	InstanceName        string
-	//SourceImage string
+	// SourceImage string
 	SnapshotName        string
 	DiskSizeGb          int
 	MachineType         string

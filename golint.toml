@@ -18,6 +18,13 @@ errorCode = 2
 [rule.var-naming]
     Disabled = true
 
+# Eventually we want to update all warnings to errors
+# For now, we disable them one by one
+[rule.comment-spacings]
+    severity = "error"
+[rule.superfluous-else]
+    severity = "error"
+
 [rule.defer]
     Disabled = true
 [rule.empty-block]

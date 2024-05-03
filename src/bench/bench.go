@@ -53,12 +53,14 @@ func task(reqQ chan Call, errQ chan error) {
 }
 
 func play_trace_cmd(ctx *cli.Context) (error) {
-	if result, err := play_trace(ctx); err != nil {
+	result, err := play_trace(ctx)
+
+	if err != nil {
 		return err
-	} else {
-		fmt.Printf("%s\n", result)
-		return nil
 	}
+
+	fmt.Printf("%s\n", result)
+	return nil
 }
 
 func play_trace(ctx *cli.Context) (string, error) {

@@ -291,7 +291,7 @@ func (f *LambdaFunc) Task() {
 				el = el.Next()
 			}
 			if f.codeDir != "" {
-				//cleanupChan <- f.codeDir
+				// cleanupChan <- f.codeDir
 			}
 			close(cleanupChan)
 			<-cleanupTaskDone
