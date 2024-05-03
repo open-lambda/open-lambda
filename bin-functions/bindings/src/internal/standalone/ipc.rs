@@ -13,7 +13,7 @@ pub fn function_call<S: ToString>(func_name: S, args: Vec<u8>) -> CallResult {
 pub fn http_get(address: &str, path: &str) -> CallResult {
     assert!(path.starts_with('/'));
 
-    let url = format!("{address}{path}");
+    let url = format!("http://{address}{path}");
     let mut result = vec![];
 
     match ureq::get(&url)
@@ -32,7 +32,7 @@ pub fn http_get(address: &str, path: &str) -> CallResult {
 pub fn http_post(address: &str, path: &str, args: Vec<u8>) -> CallResult {
     assert!(path.starts_with('/'));
 
-    let url = format!("{address}{path}");
+    let url = format!("http://{address}{path}");
     let mut result = vec![];
 
     match ureq::post(&url)
