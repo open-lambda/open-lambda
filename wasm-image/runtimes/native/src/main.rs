@@ -251,7 +251,7 @@ async fn execute_function(args: Vec<u8>) -> Result<Response<Body>> {
             log_line += format!("    {}\n", line).as_str();
         }
 
-        log::trace!("{}", log_line);
+        log::error!("{}", log_line);
     }
 
     let response = Response::builder().status(status_code).body(body).unwrap();
