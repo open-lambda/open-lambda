@@ -1,15 +1,17 @@
 #![feature(async_closure)]
 
-use hyper::service::{make_service_fn, service_fn};
-use hyper::{Body, Method, Request, Response, Result, Server, StatusCode};
-
-use futures_util::stream::StreamExt;
-
 use std::env::args;
 use std::fs::File;
 use std::io::Write;
 use std::os::unix::io::FromRawFd;
 use std::process::Stdio;
+use std::os::unix::process::ExitStatusExt;
+use std::os::unix::net::UnixListener as StdUnixListener;
+
+use hyper::service::{make_service_fn, service_fn};
+use hyper::{Body, Method, Request, Response, Result, Server, StatusCode};
+
+use futures_util::stream::StreamExt;
 
 use tokio::io::AsyncReadExt;
 use tokio::net::UnixListener;
@@ -20,8 +22,6 @@ use tokio_stream::wrappers::UnixListenerStream;
 
 use nix::sched::{unshare, CloneFlags};
 use nix::unistd::{fork, getpid, ForkResult};
-
-use std::os::unix::net::UnixListener as StdUnixListener;
 
 // Taken from: https://github.com/hyperium/hyper/blob/master/examples/single_threaded.rs
 #[derive(Clone, Copy, Debug)]
@@ -166,10 +166,14 @@ async fn execute_function(args: Vec<u8>) -> Result<Response<Body>> {
 
             if status.success() {
                 true
-            } else {
-                let exit_code = status.code().unwrap_or(42);
-                e_str = format!("Function failed with exitcode: {exit_code}");
+            } else if let Some(code) = status.code() {
+                e_str = format!("Function failed with error_code: {code}");
                 false
+            } else if let Some(signal) = status.signal() {
+                e_str = format!("Function failed with signal: {signal}");
+                false
+            } else {
+                panic!("Function failed for unknown reason");
             }
         }
     };
