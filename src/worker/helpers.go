@@ -208,6 +208,63 @@ func stopOL(_ string) error {
 	return fmt.Errorf("worker didn't stop after 60s")
 }
 
+func cleanupOL(olPath string) error {
+	cgRoot := filepath.Join("/sys", "fs", "cgroup", filepath.Base(olPath)+"-sandboxes")
+	fmt.Printf("ATTEMPT to cleanup cgroups at %s\n", cgRoot)
+
+	if files, err := ioutil.ReadDir(cgRoot); err != nil {
+		fmt.Printf("could not find cgroup root: %s\n", err.Error())
+	} else {
+		kill := filepath.Join(cgRoot, "cgroup.kill")
+		if err := ioutil.WriteFile(kill, []byte(fmt.Sprintf("%d", 1)), os.ModeAppend); err != nil {
+			fmt.Printf("could not kill processes in cgroup: %s\n", err.Error())
+		}
+
+		for _, file := range files {
+			if strings.HasPrefix(file.Name(), "cg-") {
+				cg := filepath.Join(cgRoot, file.Name())
+				fmt.Printf("try removing %s\n", cg)
+				if err := syscall.Rmdir(cg); err != nil {
+					fmt.Printf("could not remove cgroup: %s\n", err.Error())
+				}
+			}
+		}
+
+		if err := syscall.Rmdir(cgRoot); err != nil {
+			fmt.Printf("could not remove cgroup root: %s\n", err.Error())
+		}
+	}
+
+	dirName := filepath.Join(olPath, "worker", "root-sandboxes")
+	fmt.Printf("ATTEMPT to cleanup mounts at %s\n", dirName)
+
+	if files, err := ioutil.ReadDir(dirName); err != nil {
+		fmt.Printf("could not find mount root: %s\n", err.Error())
+	} else {
+		for _, file := range files {
+			path := filepath.Join(dirName, file.Name())
+			fmt.Printf("try unmounting %s\n", path)
+			if err := syscall.Unmount(path, syscall.MNT_DETACH); err != nil {
+				fmt.Printf("could not unmount: %s\n", err.Error())
+			}
+
+			if err := syscall.Rmdir(path); err != nil {
+				fmt.Printf("could not remove mount dir: %s\n", err.Error())
+			}
+		}
+	}
+
+	if err := syscall.Unmount(dirName, syscall.MNT_DETACH); err != nil {
+		fmt.Printf("could not unmount %s: %s\n", dirName, err.Error())
+	}
+
+	if err := os.Remove(filepath.Join(olPath, "worker", "worker.pid")); err != nil {
+		return fmt.Errorf("could not remove worker.pid: %s\n", err.Error())
+	}
+
+	return nil
+}
+
 // modify the config.json file based on settings from cmdline: -o opt1=val1,opt2=val2,...
 //
 // apply changes in optsStr to config from confPath, saving result to overridePath
