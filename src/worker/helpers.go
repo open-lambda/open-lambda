@@ -170,7 +170,7 @@ func initOLDir(olPath string, dockerBaseImage string, newBase bool) (err error) 
 // main error scenarios:
 // 1. PID exists, but process cannot be killed (worker probably died unexpectedly)
 // 2. The cleanup is taking too long (maybe the timeout is insufficient, or there is a deadlock)
-func stopOL(_ string) error {
+func stopOL(olPath string) error {
 	// locate worker.pid, use it to get worker's PID
 	pidPath := filepath.Join(common.Conf.Worker_dir, "worker.pid")
 	data, err := ioutil.ReadFile(pidPath)
@@ -193,7 +193,12 @@ func stopOL(_ string) error {
 	}
 	fmt.Printf("Send SIGINT and wait for worker to exit cleanly.\n")
 	if err := p.Signal(syscall.SIGINT); err != nil {
-		return fmt.Errorf("Failed to send SIGINT to PID %d (%s).  May require manual cleanup.\n", pid, err.Error())
+		// Failed to send SIGINT to PID  (os: process already finished).  May require manual cleanup will happen when system force shuts down.
+		if err.Error() == "os: process already finished" {
+			fmt.Printf("Unclean exit detected, trying automatic cleanup...")
+			return cleanupOL(olPath)
+		}
+		// return fmt.Errorf("Failed to send SIGINT to PID %d (%s).  May require manual cleanup.\n", pid, err.Error())
 	}
 
 	for i := 0; i < 600; i++ {
