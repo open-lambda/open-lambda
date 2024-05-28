@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/open-lambda/open-lambda/ol/common"
-	"github.com/open-lambda/open-lambda/ol/worker/server"
+	"github.com/open-lambda/open-lambda/ol/worker/event"
 
 	"github.com/urfave/cli/v2"
 )
@@ -175,7 +175,7 @@ func upCmd(ctx *cli.Context) error {
 		return fmt.Errorf("worker still not reachable after 30 seconds :: %s", pingErr)
 	}
 
-	if err := server.Main(); err != nil {
+	if err := event.Main(); err != nil {
 		return err
 	}
 

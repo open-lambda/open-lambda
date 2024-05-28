@@ -1,4 +1,4 @@
-package server
+package event
 
 import (
 	"encoding/json"
@@ -12,21 +12,21 @@ import (
 	"runtime"
 	"runtime/pprof"
 	"strconv"
+	"sync"
 	"syscall"
-  "sync"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 )
 
 const (
-	RUN_PATH       = "/run/"
-	PID_PATH       = "/pid"
-	STATUS_PATH    = "/status"
-	STATS_PATH     = "/stats"
-	DEBUG_PATH     = "/debug"
-	PPROF_MEM_PATH = "/pprof/mem"
+	RUN_PATH             = "/run/"
+	PID_PATH             = "/pid"
+	STATUS_PATH          = "/status"
+	STATS_PATH           = "/stats"
+	DEBUG_PATH           = "/debug"
+	PPROF_MEM_PATH       = "/pprof/mem"
 	PPROF_CPU_START_PATH = "/pprof/cpu-start"
-	PPROF_CPU_STOP_PATH  = "/pprof/cpu-stop" 
+	PPROF_CPU_STOP_PATH  = "/pprof/cpu-stop"
 )
 
 type cleanable interface {
@@ -35,6 +35,7 @@ type cleanable interface {
 
 // temporary file storing cpu profiled data
 const CPU_TEMP_PATTERN = ".cpu.*.prof"
+
 var cpuTemp *os.File
 var lock sync.Mutex
 
@@ -87,7 +88,7 @@ func doCpuStart() error {
 	if cpuTemp != nil {
 		return fmt.Errorf("Already started cpu profiling\n")
 	}
-	  
+
 	// fresh cpu profiling
 	temp, err := os.CreateTemp("", CPU_TEMP_PATTERN)
 	if err != nil {
@@ -136,7 +137,7 @@ func PprofCpuStop(w http.ResponseWriter, _ *http.Request) {
 	cpuTemp.Close()
 	cpuTemp = nil
 	defer os.Remove(tempFilename) // deferred cleanup
-  
+
 	// read data from file
 	log.Printf("Reading from %s\n", tempFilename)
 	buffer, err := ioutil.ReadFile(tempFilename)
@@ -163,20 +164,20 @@ func shutdown(pidPath string, server cleanable) {
 	// "cpu-start"ed but have not "cpu-stop"ped before kill
 	log.Printf("save buffered profiled data to cpu.buf.prof\n")
 	if cpuTemp != nil {
-	pprof.StopCPUProfile()
-	filename := cpuTemp.Name()
-	cpuTemp.Close()
+		pprof.StopCPUProfile()
+		filename := cpuTemp.Name()
+		cpuTemp.Close()
 
-	in, err := ioutil.ReadFile(filename)
-	if err != nil {
-		log.Printf("error: %s", err)
-		rc = 1
-	} else if err = ioutil.WriteFile("cpu.buf.prof", in, 0644); err != nil{
-		log.Printf("error: %s", err)
-		rc = 1
-	}
+		in, err := ioutil.ReadFile(filename)
+		if err != nil {
+			log.Printf("error: %s", err)
+			rc = 1
+		} else if err = ioutil.WriteFile("cpu.buf.prof", in, 0644); err != nil {
+			log.Printf("error: %s", err)
+			rc = 1
+		}
 
-	os.Remove(filename)
+		os.Remove(filename)
 	}
 
 	log.Printf("save stats to %s", statsPath)
