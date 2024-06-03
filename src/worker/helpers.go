@@ -166,10 +166,15 @@ func initOLDir(olPath string, dockerBaseImage string, newBase bool) (err error) 
 	return nil
 }
 
-// stop OL if running (or just return if not).
-// main error scenarios:
-// 1. PID exists, but process cannot be killed (worker probably died unexpectedly)
-// 2. The cleanup is taking too long (maybe the timeout is insufficient, or there is a deadlock)
+// stopOL stops the worker if running, handling various scenarios:
+// 1. Clean shutdown (PID file doesn't exist)
+// It will directly return nil.
+//
+// 2. Drity shutdown (PID file exisit, but processs isn't running):
+// It will try to clean up the PID file. It will return nil if cleanup is successful or error if failed.
+//
+// 3. Process is running (PID file exisit, and process is running):
+// It will try to stop the process with exisiting PID. It will return nill if successful or error if failed or timeout.
 func stopOL(olPath string) error {
 	// locate worker.pid, use it to get worker's PID
 	pidPath := filepath.Join(common.Conf.Worker_dir, "worker.pid")
@@ -191,14 +196,15 @@ func stopOL(olPath string) error {
 	if err != nil {
 		return fmt.Errorf("Failed to find worker process with PID %d.  May require manual cleanup.\n", pid)
 	}
+	// Senario 2: Drity shutdown
+	if err := p.Signal(syscall.Signal(0)); err != nil {
+		fmt.Printf("Unclean exit detected, trying automatic cleanup...")
+		return cleanupOL(olPath)
+	}
+	// Senario 3: Process is running
 	fmt.Printf("Send SIGINT and wait for worker to exit cleanly.\n")
 	if err := p.Signal(syscall.SIGINT); err != nil {
-		// Failed to send SIGINT to PID  (os: process already finished).  May require manual cleanup will happen when system force shuts down.
-		if err.Error() == "os: process already finished" {
-			fmt.Printf("Unclean exit detected, trying automatic cleanup...")
-			return cleanupOL(olPath)
-		}
-		// return fmt.Errorf("Failed to send SIGINT to PID %d (%s).  May require manual cleanup.\n", pid, err.Error())
+		return fmt.Errorf("Failed to send SIGINT to PID %d (%s).  May require manual cleanup.\n", pid, err.Error())
 	}
 
 	for i := 0; i < 600; i++ {
