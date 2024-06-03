@@ -229,10 +229,7 @@ func cleanupCmd(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := cleanupOL(olPath); err != nil {
-		return err
-	}
-	return nil
+	return cleanupOL(olPath)
 }
 
 func WorkerCommands() []*cli.Command {
