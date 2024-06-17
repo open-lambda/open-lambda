@@ -18,7 +18,7 @@ idna==3.4
     #   requests
 requests==2.31.0
     # via -r requirements.in
-urllib3==2.0.4
+urllib3==2.2.2
     # via
     #   -r requirements.in
     #   requests
