@@ -170,11 +170,11 @@ func initOLDir(olPath string, dockerBaseImage string, newBase bool) (err error) 
 // 1. Clean shutdown (PID file doesn't exist)
 // It will directly return nil.
 //
-// 2. Drity shutdown (PID file exisit, but processs isn't running):
+// 2. Dirty shutdown (PID file exist, but process isn't running):
 // It will try to clean up the PID file. It will return nil if cleanup is successful or error if failed.
 //
-// 3. Process is running (PID file exisit, and process is running):
-// It will try to stop the process with exisiting PID. It will return nill if successful or error if failed or timeout.
+// 3. Process is running (PID file exist, and process is running):
+// It will try to stop the process with existing PID. It will return nill if successful or error if failed or timeout.
 func stopOL(olPath string) error {
 	// locate worker.pid, use it to get worker's PID
 	pidPath := filepath.Join(common.Conf.Worker_dir, "worker.pid")
@@ -192,11 +192,9 @@ func stopOL(olPath string) error {
 	}
 
 	fmt.Printf("According to %s, a worker should already be running (PID %d).\n", pidPath, pid)
-	p, err := os.FindProcess(pid)
-	if err != nil {
-		return fmt.Errorf("Failed to find worker process with PID %d.  May require manual cleanup.\n", pid)
-	}
-	// Senario 2: Drity shutdown
+	// On Unix systems, FindProcess always succeeds and returns a Process for the given pid, regardless of whether the process exists.
+	p, _ := os.FindProcess(pid)
+	// Scenario 2: Drity shutdown
 	if err := p.Signal(syscall.Signal(0)); err != nil {
 		fmt.Printf("Unclean exit detected, trying automatic cleanup...\n")
 		if err := dirtyShutdownCleanup(olPath); err != nil {
@@ -204,7 +202,7 @@ func stopOL(olPath string) error {
 			return err
 		}
 	}
-	// Senario 3: Process is running
+	// Scenario 3: Process is running
 	fmt.Printf("Send SIGINT and wait for worker to exit cleanly.\n")
 	if err := p.Signal(syscall.SIGINT); err != nil {
 		return fmt.Errorf("Failed to send SIGINT to PID %d (%s).  May require manual cleanup.\n", pid, err.Error())
