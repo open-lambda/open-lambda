@@ -216,6 +216,7 @@ func checkState(olPath string) (OlState, int, error) {
 }
 
 // The cleanup procedure for a process that is currently running.
+// It should trigger the normal cleanup process of the existing Open Lambda instance.
 func gracefulCleanup(p *os.Process) error {
 	fmt.Println("Attempting to gracefully shut down the worker process by sending SIGINT.")
 
@@ -307,175 +308,50 @@ func dirtyCleanup(olPath string) error {
 	return nil
 }
 
-// stopOL stops the worker if running, handling various scenarios:
-// 1. Clean shutdown (PID file doesn't exist)
-// It will directly return nil.
-//
-// 2. Dirty shutdown (PID file exist, but process isn't running):
-// It will try to clean up the PID file. It will return nil if cleanup is successful or error if failed.
-//
-// 3. Process is running (PID file exist, and process is running):
-// It will try to stop the process with existing PID. It will return nill if successful or error if failed or timeout.
-func stopOL(olPath string) error {
-	// locate worker.pid, use it to get worker's PID
-	pidPath := filepath.Join(common.Conf.Worker_dir, "worker.pid")
-	data, err := ioutil.ReadFile(pidPath)
-	if os.IsNotExist(err) {
-		fmt.Printf("No worker appears to be running because %s does not exist.\n", pidPath)
-		return nil
-	} else if err != nil {
-		return err
-	}
-	pidstr := string(data)
-	pid, err := strconv.Atoi(pidstr)
+// generalCleanup checks the state of Open Lambda and performs appropriate cleanup actions.
+// It calls gracefulCleanup for running instances and dirtyCleanup for instances in DirtyShutdown state.
+func generalCleanup(olPath string) error {
+	state, pid, err := checkState(olPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to check OL state: %s", err)
 	}
 
-	fmt.Printf("According to %s, a worker should already be running (PID %d).\n", pidPath, pid)
-	// On Unix systems, FindProcess always succeeds and returns a Process for the given pid, regardless of whether the process exists.
+	// Retrieve the process handle for the identified PID.
 	p, _ := os.FindProcess(pid)
-	// Scenario 2: Dirty shutdown
-	if err := p.Signal(syscall.Signal(0)); err != nil {
-		fmt.Printf("Unclean exit detected, trying automatic cleanup...\n")
-		if err := dirtyShutdownCleanup(olPath); err != nil {
-			fmt.Printf("Automatic cleanup failed (%s). May require manual cleanup. \n", err.Error())
-			return err
-		}
-	}
-	// Scenario 3: Process is running
-	fmt.Printf("Send SIGINT and wait for worker to exit cleanly.\n")
-	if err := p.Signal(syscall.SIGINT); err != nil {
-		return fmt.Errorf("Failed to send SIGINT to PID %d (%s).  May require manual cleanup.\n", pid, err.Error())
-	}
 
-	for i := 0; i < 600; i++ {
-		err := p.Signal(syscall.Signal(0))
+	switch state {
+	case Running:
+		err := gracefulCleanup(p)
 		if err != nil {
-			fmt.Printf("OL worker process stopped successfully.\n")
-			return nil
+			return fmt.Errorf("failed to gracefully cleanup OL: %s", err)
 		}
-		time.Sleep(100 * time.Millisecond)
+	case DirtyShutdown:
+		dirtyCleanup(olPath)
+	case Unknown:
+		return fmt.Errorf("unknown state detected")
 	}
 
-	return fmt.Errorf("worker didn't stop after 60s")
+	return nil
 }
 
+// stopOL attempts to gracefully stop Open Lambda (OL) and handles errors.
+func stopOL(olPath string) error {
+	err := generalCleanup(olPath)
+	if err != nil {
+		fmt.Printf("Error during the shutdown process: %s\n", err)
+		fmt.Println("Manual cleanup may be required.")
+	}
+	return err
+}
+
+// cleanupOL performs manual cleanup of Open Lambda (OL) and handles errors.
 func cleanupOL(olPath string) error {
-	cgRoot := filepath.Join("/sys", "fs", "cgroup", filepath.Base(olPath)+"-sandboxes")
-	fmt.Printf("ATTEMPT to cleanup cgroups at %s\n", cgRoot)
-
-	if files, err := ioutil.ReadDir(cgRoot); err != nil {
-		fmt.Printf("could not find cgroup root: %s\n", err.Error())
-	} else {
-		kill := filepath.Join(cgRoot, "cgroup.kill")
-		if err := ioutil.WriteFile(kill, []byte(fmt.Sprintf("%d", 1)), os.ModeAppend); err != nil {
-			fmt.Printf("could not kill processes in cgroup: %s\n", err.Error())
-		}
-
-		for _, file := range files {
-			if strings.HasPrefix(file.Name(), "cg-") {
-				cg := filepath.Join(cgRoot, file.Name())
-				fmt.Printf("try removing %s\n", cg)
-				if err := syscall.Rmdir(cg); err != nil {
-					fmt.Printf("could not remove cgroup: %s\n", err.Error())
-				}
-			}
-		}
-
-		if err := syscall.Rmdir(cgRoot); err != nil {
-			fmt.Printf("could not remove cgroup root: %s\n", err.Error())
-		}
+	err := generalCleanup(olPath)
+	if err != nil {
+		fmt.Printf("Error during the manual cleanup process: %s\n", err)
+		fmt.Println("You may try to re-run the command.")
 	}
-
-	dirName := filepath.Join(olPath, "worker", "root-sandboxes")
-	fmt.Printf("ATTEMPT to cleanup mounts at %s\n", dirName)
-
-	if files, err := ioutil.ReadDir(dirName); err != nil {
-		fmt.Printf("could not find mount root: %s\n", err.Error())
-	} else {
-		for _, file := range files {
-			path := filepath.Join(dirName, file.Name())
-			fmt.Printf("try unmounting %s\n", path)
-			if err := syscall.Unmount(path, syscall.MNT_DETACH); err != nil {
-				fmt.Printf("could not unmount: %s\n", err.Error())
-			}
-
-			if err := syscall.Rmdir(path); err != nil {
-				fmt.Printf("could not remove mount dir: %s\n", err.Error())
-			}
-		}
-	}
-
-	if err := syscall.Unmount(dirName, syscall.MNT_DETACH); err != nil {
-		fmt.Printf("could not unmount %s: %s\n", dirName, err.Error())
-	}
-
-	if err := os.Remove(filepath.Join(olPath, "worker", "worker.pid")); err != nil {
-		fmt.Printf("could not remove worker.pid: %s\n", err.Error())
-	}
-
-	return nil
-}
-
-// Call when dirty shutdown is detected.
-// Returns errors when unable to fully clean.
-func dirtyShutdownCleanup(olPath string) error {
-	cgRoot := filepath.Join("/sys", "fs", "cgroup", filepath.Base(olPath)+"-sandboxes")
-	fmt.Printf("ATTEMPT to cleanup cgroups at %s\n", cgRoot)
-
-	if files, err := os.ReadDir(cgRoot); err != nil {
-		// This will happen when force system shutdown occurs.
-		fmt.Printf("could not find cgroup root: %s\n", err.Error())
-	} else {
-		kill := filepath.Join(cgRoot, "cgroup.kill")
-		if err := os.WriteFile(kill, []byte(fmt.Sprintf("%d", 1)), os.ModeAppend); err != nil {
-			fmt.Printf("could not kill processes in cgroup: %s\n", err.Error())
-		}
-		for _, file := range files {
-			if strings.HasPrefix(file.Name(), "cg-") {
-				cg := filepath.Join(cgRoot, file.Name())
-				fmt.Printf("try removing %s\n", cg)
-				if err := syscall.Rmdir(cg); err != nil {
-					// This is probably a real error.
-					return fmt.Errorf("could not remove cgroup: %s", err.Error())
-				}
-			}
-		}
-		if err := syscall.Rmdir(cgRoot); err != nil {
-			fmt.Printf("could not remove cgroup root: %s\n", err.Error())
-		}
-	}
-
-	dirName := filepath.Join(olPath, "worker", "root-sandboxes")
-	fmt.Printf("ATTEMPT to cleanup mounts at %s\n", dirName)
-
-	if files, err := os.ReadDir(dirName); err != nil {
-		// This is probably a real error
-		return fmt.Errorf("could not find mount root: %s", err.Error())
-	} else {
-		for _, file := range files {
-			path := filepath.Join(dirName, file.Name())
-			fmt.Printf("try unmounting %s\n", path)
-			if err := syscall.Unmount(path, syscall.MNT_DETACH); err != nil {
-				return fmt.Errorf("could not unmount: %s", err.Error())
-			}
-			if err := syscall.Rmdir(path); err != nil {
-				return fmt.Errorf("could not remove mount dir: %s", err.Error())
-			}
-		}
-	}
-
-	if err := syscall.Unmount(dirName, syscall.MNT_DETACH); err != nil {
-		// This will happen when force system shutdown occurs.
-		fmt.Printf("could not unmount %s: %s\n", dirName, err.Error())
-	}
-
-	if err := os.Remove(filepath.Join(olPath, "worker", "worker.pid")); err != nil {
-		return fmt.Errorf("could not remove worker.pid: %s", err.Error())
-	}
-
-	return nil
+	return err
 }
 
 // modify the config.json file based on settings from cmdline: -o opt1=val1,opt2=val2,...
