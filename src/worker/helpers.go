@@ -166,46 +166,208 @@ func initOLDir(olPath string, dockerBaseImage string, newBase bool) (err error) 
 	return nil
 }
 
-// stop OL if running (or just return if not).
-// main error scenarios:
-// 1. PID exists, but process cannot be killed (worker probably died unexpectedly)
-// 2. The cleanup is taking too long (maybe the timeout is insufficient, or there is a deadlock)
-func stopOL(_ string) error {
-	// locate worker.pid, use it to get worker's PID
-	pidPath := filepath.Join(common.Conf.Worker_dir, "worker.pid")
-	data, err := ioutil.ReadFile(pidPath)
+// Define a custom type for the state
+type OlState int
+
+// Define constants for the different states
+const (
+	Uninitialized OlState = iota
+	Running
+	StoppedClean
+	StoppedDirty
+	Unknown = -1
+)
+
+// Check the current state of Open Lambda
+//
+// This function returns the current state of Open Lambda, the PID if possible,
+// and an error if it encounters any.
+func checkState(olPath string) (OlState, int, error) {
+	dirStat, err := os.Stat(olPath)
 	if os.IsNotExist(err) {
-		fmt.Printf("No worker appears to be running because %s does not exist.\n", pidPath)
-		return nil
+		// If OL Path doesn't exist, Open Lambda is not initialized.
+		return Uninitialized, -1, nil
+	}
+	if !dirStat.IsDir() {
+		return Unknown, -1, fmt.Errorf("olPath is not a directory")
+	}
+
+	// Locate the worker.pid file, use it to get the worker's PID
+	pidPath := filepath.Join(olPath, "worker.pid")
+
+	data, err := os.ReadFile(pidPath)
+	if os.IsNotExist(err) {
+		// If we can't find the PID file, it probably means no OL instance is running.
+		return StoppedClean, -1, nil
 	} else if err != nil {
-		return err
-	}
-	pidstr := string(data)
-	pid, err := strconv.Atoi(pidstr)
-	if err != nil {
-		return err
+		// We will be in an unknown state if we encounter any other error.
+		return Unknown, -1, fmt.Errorf("unexpected error occurred when reading PID file (%s)", err)
 	}
 
-	fmt.Printf("According to %s, a worker should already be running (PID %d).\n", pidPath, pid)
-	p, err := os.FindProcess(pid)
+	pidStr := string(data)
+	pid, err := strconv.Atoi(pidStr)
 	if err != nil {
-		return fmt.Errorf("Failed to find worker process with PID %d.  May require manual cleanup.\n", pid)
+		// We will be in an unknown state if the PID file contains any string that is not a number.
+		return Unknown, -1, fmt.Errorf("unexpected error occurred when parsing PID file (%s) (%s)", pidStr, err)
 	}
-	fmt.Printf("Send SIGINT and wait for worker to exit cleanly.\n")
+
+	// On Unix systems, FindProcess always succeeds and returns a Process for the given PID,
+	// regardless of whether the process exists.
+	// https://pkg.go.dev/os#FindProcess
+	p, _ := os.FindProcess(pid)
+	if err := p.Signal(syscall.Signal(0)); err != nil {
+		// If we can't signal the process, it means the process isn't running and yet we found the PID file.
+		// Therefore, it was not cleanly shut down.
+		return StoppedDirty, -1, nil
+	}
+
+	// If we can signal the process, it means the process is currently running.
+	return Running, pid, nil
+}
+
+// The cleanup procedure for a process that is currently running.
+// It should trigger the normal cleanup process of the existing Open Lambda instance.
+func gracefulCleanup(p *os.Process) error {
+	fmt.Println("Attempting to gracefully shut down the worker process by sending SIGINT.")
+
 	if err := p.Signal(syscall.SIGINT); err != nil {
-		return fmt.Errorf("Failed to send SIGINT to PID %d (%s).  May require manual cleanup.\n", pid, err.Error())
+		fmt.Printf("Failed to send SIGINT to PID %d: %s. Manual cleanup may be required.\n", p.Pid, err.Error())
+		return fmt.Errorf("failed to send SIGINT to PID %d: %s", p.Pid, err.Error())
 	}
 
+	// Check the process status every 100 milliseconds for up to 60 seconds
 	for i := 0; i < 600; i++ {
 		err := p.Signal(syscall.Signal(0))
 		if err != nil {
-			fmt.Printf("OL worker process stopped successfully.\n")
+			fmt.Println("Worker process stopped successfully.")
 			return nil
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	return fmt.Errorf("worker didn't stop after 60s")
+	return fmt.Errorf("worker process did not stop within 60 seconds")
+}
+
+// This function attempts to clean up resources after detecting a dirty shutdown.
+// It cleans up cgroups and mounts associated with the Open Lambda instance at `olPath`.
+// Returns errors encountered during cleanup operations.
+func dirtyCleanup(olPath string) error {
+	// Clean up cgroups associated with sandboxes
+	cgRoot := filepath.Join("/sys", "fs", "cgroup", filepath.Base(olPath)+"-sandboxes")
+	fmt.Printf("Attempting to clean up cgroups at %s\n", cgRoot)
+
+	if files, err := os.ReadDir(cgRoot); err != nil {
+		// Log an error if the cgroup root directory cannot be found.
+		fmt.Printf("Could not find cgroup root: %s\n", err.Error())
+	} else {
+		kill := filepath.Join(cgRoot, "cgroup.kill")
+		if err := os.WriteFile(kill, []byte(fmt.Sprintf("%d", 1)), os.ModeAppend); err != nil {
+			// Log an error if killing processes in the cgroup fails.
+			fmt.Printf("Could not kill processes in cgroup: %s\n", err.Error())
+		}
+		for _, file := range files {
+			if strings.HasPrefix(file.Name(), "cg-") {
+				cg := filepath.Join(cgRoot, file.Name())
+				fmt.Printf("Attempting to remove %s\n", cg)
+				if err := syscall.Rmdir(cg); err != nil {
+					// Return an error if removing a cgroup fails.
+					return fmt.Errorf("could not remove cgroup: %s", err.Error())
+				}
+			}
+		}
+		if err := syscall.Rmdir(cgRoot); err != nil {
+			// Log an error if removing the cgroup root directory fails.
+			fmt.Errorf("could not remove cgroup root: %s", err.Error())
+		}
+	}
+
+	// Clean up mounts associated with sandboxes
+	dirName := filepath.Join(olPath, "worker", "root-sandboxes")
+	fmt.Printf("Attempting to clean up mounts at %s\n", dirName)
+
+	if files, err := os.ReadDir(dirName); err != nil {
+		// Return an error if the mount root directory cannot be found.
+		return fmt.Errorf("could not find mount root: %s", err.Error())
+	} else {
+		encounteredError := false
+		for _, file := range files {
+			path := filepath.Join(dirName, file.Name())
+			fmt.Printf("Attempting to unmount %s\n", path)
+			if err := syscall.Unmount(path, syscall.MNT_DETACH); err != nil {
+				// Return an error if unmounting fails.
+				encounteredError = true
+				fmt.Printf("Could not unmount: %s\n", err.Error())
+			}
+			if err := syscall.Rmdir(path); err != nil {
+				// Return an error if removing the mount directory fails.
+				encounteredError = true
+				fmt.Printf("Could not remove mount dir: %s\n", err.Error())
+			}
+		}
+		if encounteredError {
+			return fmt.Errorf("error while unmounting sandboxes")
+		}
+	}
+
+	// Attempt to unmount the main mount directory
+	if err := syscall.Unmount(dirName, syscall.MNT_DETACH); err != nil {
+		// Log an error if unmounting the main directory fails.
+		fmt.Printf("Could not unmount %s: %s\n", dirName, err.Error())
+	}
+
+	// Remove the worker.pid file
+	if err := os.Remove(filepath.Join(olPath, "worker", "worker.pid")); err != nil {
+		// Return an error if removing worker.pid fails.
+		return fmt.Errorf("could not remove worker.pid: %s", err.Error())
+	}
+
+	return nil
+}
+
+// generalCleanup checks the state of Open Lambda and performs appropriate cleanup actions.
+// It calls gracefulCleanup for running instances and dirtyCleanup for instances in DirtyShutdown state.
+func generalCleanup(olPath string) error {
+	state, pid, err := checkState(olPath)
+	if err != nil {
+		return fmt.Errorf("failed to check OL state: %s", err)
+	}
+
+	// Retrieve the process handle for the identified PID.
+	p, _ := os.FindProcess(pid)
+
+	switch state {
+	case Running:
+		err := gracefulCleanup(p)
+		if err != nil {
+			return fmt.Errorf("failed to gracefully cleanup OL: %s", err)
+		}
+	case StoppedDirty:
+		dirtyCleanup(olPath)
+	case Unknown:
+		return fmt.Errorf("unknown state detected")
+	}
+
+	return nil
+}
+
+// stopOL attempts to gracefully stop Open Lambda (OL) and handles errors.
+func stopOL(olPath string) error {
+	err := generalCleanup(olPath)
+	if err != nil {
+		fmt.Printf("Error during the shutdown process: %s\n", err)
+		fmt.Println("Manual cleanup may be required.")
+	}
+	return err
+}
+
+// cleanupOL performs manual cleanup of Open Lambda (OL) and handles errors.
+func cleanupOL(olPath string) error {
+	err := generalCleanup(olPath)
+	if err != nil {
+		fmt.Printf("Error during the manual cleanup process: %s\n", err)
+		fmt.Println("You may try to re-run the command.")
+	}
+	return err
 }
 
 // modify the config.json file based on settings from cmdline: -o opt1=val1,opt2=val2,...
