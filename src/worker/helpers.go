@@ -185,10 +185,11 @@ const (
 func checkState(olPath string) (OlState, int, error) {
 	dirStat, err := os.Stat(olPath)
 	if os.IsNotExist(err) {
+		// If OL Path doesn't exist, Open Lambda is not initialized.
 		return Uninitialized, -1, nil
 	}
 	if !dirStat.IsDir() {
-		return Unknown, -1, fmt.Errorf("OL Path is not a directory")
+		return Unknown, -1, fmt.Errorf("olPath is not a directory")
 	}
 
 	// Locate the worker.pid file, use it to get the worker's PID
