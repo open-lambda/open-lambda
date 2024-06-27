@@ -171,9 +171,10 @@ type OlState int
 
 // Define constants for the different states
 const (
-	Stopped OlState = iota
+	Uninitialized OlState = iota
 	Running
-	DirtyShutdown
+	StoppedClean
+	StoppedDirty
 	Unknown = -1
 )
 
@@ -182,13 +183,21 @@ const (
 // This function returns the current state of Open Lambda, the PID if possible,
 // and an error if it encounters any.
 func checkState(olPath string) (OlState, int, error) {
+	dirStat, err := os.Stat(olPath)
+	if os.IsNotExist(err) {
+		return Uninitialized, -1, nil
+	}
+	if !dirStat.IsDir() {
+		return Unknown, -1, fmt.Errorf("OL Path is not a directory")
+	}
+
 	// Locate the worker.pid file, use it to get the worker's PID
-	pidPath := filepath.Join(common.Conf.Worker_dir, "worker.pid")
+	pidPath := filepath.Join(olPath, "worker.pid")
 
 	data, err := os.ReadFile(pidPath)
 	if os.IsNotExist(err) {
 		// If we can't find the PID file, it probably means no OL instance is running.
-		return Stopped, -1, nil
+		return StoppedClean, -1, nil
 	} else if err != nil {
 		// We will be in an unknown state if we encounter any other error.
 		return Unknown, -1, fmt.Errorf("unexpected error occurred when reading PID file (%s)", err)
@@ -208,7 +217,7 @@ func checkState(olPath string) (OlState, int, error) {
 	if err := p.Signal(syscall.Signal(0)); err != nil {
 		// If we can't signal the process, it means the process isn't running and yet we found the PID file.
 		// Therefore, it was not cleanly shut down.
-		return DirtyShutdown, pid, nil
+		return StoppedDirty, -1, nil
 	}
 
 	// If we can signal the process, it means the process is currently running.
@@ -267,7 +276,7 @@ func dirtyCleanup(olPath string) error {
 		}
 		if err := syscall.Rmdir(cgRoot); err != nil {
 			// Log an error if removing the cgroup root directory fails.
-			fmt.Printf("Could not remove cgroup root: %s\n", err.Error())
+			fmt.Errorf("could not remove cgroup root: %s", err.Error())
 		}
 	}
 
@@ -325,7 +334,7 @@ func generalCleanup(olPath string) error {
 		if err != nil {
 			return fmt.Errorf("failed to gracefully cleanup OL: %s", err)
 		}
-	case DirtyShutdown:
+	case StoppedDirty:
 		dirtyCleanup(olPath)
 	case Unknown:
 		return fmt.Errorf("unknown state detected")
