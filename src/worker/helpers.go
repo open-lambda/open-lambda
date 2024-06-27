@@ -289,17 +289,23 @@ func dirtyCleanup(olPath string) error {
 		// Return an error if the mount root directory cannot be found.
 		return fmt.Errorf("could not find mount root: %s", err.Error())
 	} else {
+		encounteredError := false
 		for _, file := range files {
 			path := filepath.Join(dirName, file.Name())
 			fmt.Printf("Attempting to unmount %s\n", path)
 			if err := syscall.Unmount(path, syscall.MNT_DETACH); err != nil {
 				// Return an error if unmounting fails.
-				return fmt.Errorf("could not unmount: %s", err.Error())
+				encounteredError = true
+				fmt.Printf("Could not unmount: %s\n", err.Error())
 			}
 			if err := syscall.Rmdir(path); err != nil {
 				// Return an error if removing the mount directory fails.
-				return fmt.Errorf("could not remove mount dir: %s", err.Error())
+				encounteredError = true
+				fmt.Printf("Could not remove mount dir: %s\n", err.Error())
 			}
+		}
+		if encounteredError {
+			return fmt.Errorf("error while unmounting sandboxes")
 		}
 	}
 
