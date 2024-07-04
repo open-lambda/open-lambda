@@ -11,6 +11,8 @@ RUN mkdir /runtimes
 
 # Build the python module also in the Container
 RUN mkdir /runtimes/python
+COPY runtimes/python/olTornado /runtimes/python/olTornado
+COPY runtimes/python/olRequests.py /runtimes/python/olRequests.py
 COPY runtimes/python /tmp/py-runtime
 RUN cd /tmp/py-runtime && python3 setup.py build_ext --inplace
 RUN mv /tmp/py-runtime/ol.*.so /runtimes/python/ol.so

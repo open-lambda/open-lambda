@@ -11,6 +11,7 @@ import olTornado.web
 import olTornado.httpserver
 import olTornado.wsgi
 import olTornado.netutil
+import signal
 
 import ol
 
@@ -71,18 +72,18 @@ def web_server():
 
 def fork_server():
     global file_sock
-
+    signal.signal(signal.SIGCHLD, signal.SIG_IGN)
     file_sock.setblocking(True)
     # print(f"server.py: start fork server on fd: {file_sock.fileno()}")
 
     while True:
-        while True:
-            try:
-                pid, _ = os.waitpid(-1, os.WNOHANG)
-                if pid == 0:
-                    break
-            except ChildProcessError:
-                break
+        # while True:
+        #     try:
+        #         pid, _ = os.waitpid(-1, os.WNOHANG)
+        #         if pid == 0:
+        #             break
+        #     except ChildProcessError:
+        #         break
         client, _info = file_sock.accept()
         _, fds = recv_fds(client, 8, 2)
         root_fd, mem_cgroup_fd = fds
@@ -172,6 +173,14 @@ def main():
     caller is expected to do chroot, because we want to use the
     python.exe inside the container
     '''
+
+    import ctypes
+    from ctypes.util import find_library
+    libc = ctypes.CDLL(find_library("c"))
+    libc.prctl.argtypes = [ctypes.c_int, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_ulong]
+    libc.prctl.restype = ctypes.c_int
+    PR_SET_CHILD_SUBREAPER = 36
+    libc.prctl(PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0)
 
     global bootstrap_path
 
