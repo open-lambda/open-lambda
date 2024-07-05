@@ -98,7 +98,7 @@ func initOLDir(olPath string, dockerBaseImage string, newBase bool) (err error) 
 			fmt.Printf("Previous deployment found at %s.\n", olPath)
 
 			// kill previous worker (if running)
-			if err := generalCleanup(olPath); err != nil {
+			if err := bringToStoppedClean(olPath); err != nil {
 				return err
 			}
 
