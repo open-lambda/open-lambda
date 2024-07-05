@@ -378,7 +378,7 @@ func bringToStoppedClean(olPath string) error {
 	case StoppedClean:
 		fmt.Println("No Open Lambda instance is running. No further actions are needed.")
 	case Uninitialized:
-		fmt.Println("Open Lambda is not initialized.")
+		fmt.Println("Open Lambda is not initialized. You should initialized it.")
 		return fmt.Errorf("cannot bring Uninitialized to StoppedClean")
 	case Unknown:
 		return fmt.Errorf("cannot bring Unknown to StoppedClean")
