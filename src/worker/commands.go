@@ -74,8 +74,8 @@ func upCmd(ctx *cli.Context) error {
 		return err
 	}
 
-	// PREP STEP 3: stop any prior worker that may be running
-	if err := stopOL(olPath); err != nil {
+	// PREP STEP 3: ensure Open Lambda is in the StoppedClean state
+	if err := bringToStoppedClean(olPath); err != nil {
 		return err
 	}
 
@@ -220,7 +220,7 @@ func downCmd(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	return stopOL(olPath)
+	return bringToStoppedClean(olPath)
 }
 
 // cleanup corresponds to the "force-cleanup" command of the admin tool.
@@ -229,7 +229,7 @@ func cleanupCmd(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	return cleanupOL(olPath)
+	return bringToStoppedClean(olPath)
 }
 
 func WorkerCommands() []*cli.Command {
