@@ -275,7 +275,6 @@ func stoppedDirtyToStoppedClean(olPath string) error {
 
 	cgroupErrorCount := 0
 	if files, err := os.ReadDir(cgRoot); err != nil {
-		// Return an error if the cgroup root directory cannot be found.
 		fmt.Printf("Could not find cgroup root: %s\n", err.Error())
 	} else {
 		kill := filepath.Join(cgRoot, "cgroup.kill")
@@ -307,7 +306,6 @@ func stoppedDirtyToStoppedClean(olPath string) error {
 	fmt.Printf("Attempting to clean up mounts at %s\n", dirName)
 
 	if files, err := os.ReadDir(dirName); err != nil {
-		// Return an error if the mount root directory cannot be found.
 		fmt.Printf("Could not find mount root: %s", err.Error())
 	} else {
 		for _, file := range files {
