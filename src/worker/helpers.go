@@ -182,18 +182,19 @@ const (
 //
 // This function returns the current state of Open Lambda, the PID if possible,
 // and an error if it encounters any.
-func checkState(olPath string) (OlState, error) {
+func checkState() (OlState, error) {
+	olPath := common.Conf.Worker_dir
 	dirStat, err := os.Stat(olPath)
 	if os.IsNotExist(err) {
 		// If OL Path doesn't exist, Open Lambda is not initialized.
 		return Uninitialized, nil
 	}
 	if !dirStat.IsDir() {
-		return Unknown, fmt.Errorf("olPath is not a directory")
+		return Unknown, fmt.Errorf("%s is not a directory", olPath)
 	}
 
 	// Locate the worker.pid file, use it to get the worker's PID
-	pid, err := getPid(olPath)
+	pid, err := getPid()
 	if os.IsNotExist(err) {
 		// If we can't find the PID file, it probably means no OL instance is running.
 		return StoppedClean, nil
@@ -217,11 +218,11 @@ func checkState(olPath string) (OlState, error) {
 }
 
 // Get the PID of the currently running OL instance.
-func getPid(olPath string) (int, error) {
-	pidPath := filepath.Join(olPath, "worker.pid")
+func getPid() (int, error) {
+	pidPath := filepath.Join(common.Conf.Worker_dir, "worker.pid")
 	data, err := os.ReadFile(pidPath)
 	if os.IsNotExist(err) {
-		return -1, err
+		return -1, os.ErrNotExist
 	} else if err != nil {
 		return -1, fmt.Errorf("unexpected error occurred when reading PID file (%s)", err)
 	}
@@ -238,7 +239,7 @@ func getPid(olPath string) (int, error) {
 func runningToStoppedClean(olPath string) error {
 	fmt.Println("Attempting to gracefully shut down the worker process by sending SIGINT.")
 
-	pid, err := getPid(olPath)
+	pid, err := getPid()
 	if err != nil {
 		fmt.Errorf("failed to get pid: %s", err)
 	}
@@ -275,7 +276,7 @@ func stoppedDirtyToStoppedClean(olPath string) error {
 	cgroupErrorCount := 0
 	if files, err := os.ReadDir(cgRoot); err != nil {
 		// Return an error if the cgroup root directory cannot be found.
-		return fmt.Errorf("could not find cgroup root: %s\n", err.Error())
+		fmt.Printf("Could not find cgroup root: %s\n", err.Error())
 	} else {
 		kill := filepath.Join(cgRoot, "cgroup.kill")
 		if err := os.WriteFile(kill, []byte(fmt.Sprintf("%d", 1)), os.ModeAppend); err != nil {
@@ -307,7 +308,7 @@ func stoppedDirtyToStoppedClean(olPath string) error {
 
 	if files, err := os.ReadDir(dirName); err != nil {
 		// Return an error if the mount root directory cannot be found.
-		return fmt.Errorf("could not find mount root: %s", err.Error())
+		fmt.Printf("Could not find mount root: %s", err.Error())
 	} else {
 		for _, file := range files {
 			path := filepath.Join(dirName, file.Name())
@@ -329,13 +330,13 @@ func stoppedDirtyToStoppedClean(olPath string) error {
 	// return an error
 	if cgroupErrorCount != 0 || sandboxErrorCount != 0 {
 		if cgroupErrorCount != 0 {
-			fmt.Printf("%s error(s) while cleaning up cgroup.\n", cgroupErrorCount)
+			fmt.Printf("%d error(s) while cleaning up cgroup.\n", cgroupErrorCount)
 		}
 		if sandboxErrorCount != 0 {
-			fmt.Printf("%s error(s) while cleaning up sandboxes.\n", sandboxErrorCount)
+			fmt.Printf("%d error(s) while cleaning up sandboxes.\n", sandboxErrorCount)
 		}
 		fmt.Printf("You can try to rerun the cleanup process again later.\n")
-		return fmt.Errorf("%s error(s) while cleaning up cgroup and %s error(s) while cleaning up sandbox", cgroupErrorCount, sandboxErrorCount)
+		return fmt.Errorf("%d error(s) while cleaning up cgroup and %d error(s) while cleaning up sandbox", cgroupErrorCount, sandboxErrorCount)
 	}
 
 	// Attempt to unmount the main mount directory
@@ -355,7 +356,7 @@ func stoppedDirtyToStoppedClean(olPath string) error {
 
 // bringToStoppedClean tries the best to bring the state of Open Lambda to StoppedClean no mater which state it is in.
 func bringToStoppedClean(olPath string) error {
-	state, err := checkState(olPath)
+	state, err := checkState()
 	if err != nil {
 		return fmt.Errorf("failed to check OL state: %s", err)
 	}
