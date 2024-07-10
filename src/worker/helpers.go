@@ -196,7 +196,7 @@ func checkState() (OlState, error) {
 	}
 
 	// Locate the worker.pid file, use it to get the worker's PID
-	pid, err := getPid()
+	pid, err := readPidFile()
 	if os.IsNotExist(err) {
 		// If we can't find the PID file, it probably means no OL instance is running.
 		return StoppedClean, nil
@@ -219,8 +219,11 @@ func checkState() (OlState, error) {
 	return Running, nil
 }
 
-// Get the PID of the currently running OL instance.
-func getPid() (int, error) {
+// readPidFile reads the PID of the previously running OL instance from the worker.pid file.
+//
+// Note: The PID returned may not correspond to an active process. Users should verify
+// the process status separately.
+func readPidFile() (int, error) {
 	pidPath := filepath.Join(common.Conf.Worker_dir, "worker.pid")
 	data, err := os.ReadFile(pidPath)
 	if os.IsNotExist(err) {
@@ -241,7 +244,7 @@ func getPid() (int, error) {
 func runningToStoppedClean(olPath string) error {
 	fmt.Println("Attempting to gracefully shut down the worker process by sending SIGINT.")
 
-	pid, err := getPid()
+	pid, err := readPidFile()
 	if err != nil {
 		fmt.Errorf("failed to get pid: %s", err)
 	}
