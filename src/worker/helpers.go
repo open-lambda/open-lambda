@@ -97,7 +97,9 @@ func initOLDir(olPath string, dockerBaseImage string, newBase bool) (err error) 
 		if _, err := os.Stat(initTimePath); !os.IsNotExist(err) {
 			fmt.Printf("Previous deployment found at %s.\n", olPath)
 
-			// kill previous worker (if running)
+			// bringToStoppedClean attempts to transition the OpenLambda state to StoppedClean,
+			// regardless of its current state, ensuring the environment is reset and ready
+			// for the next operation.
 			if err := bringToStoppedClean(olPath); err != nil {
 				return err
 			}
@@ -178,15 +180,15 @@ const (
 	Unknown = -1
 )
 
-// Check the current state of Open Lambda
+// Check the current state of OpenLambda
 //
-// This function returns the current state of Open Lambda, the PID if possible,
+// This function returns the current state of OpenLambda, the PID if possible,
 // and an error if it encounters any.
 func checkState() (OlState, error) {
 	olPath := common.Conf.Worker_dir
 	dirStat, err := os.Stat(olPath)
 	if os.IsNotExist(err) {
-		// If OL Path doesn't exist, Open Lambda is not initialized.
+		// If OL Path doesn't exist, OpenLambda is not initialized.
 		return Uninitialized, nil
 	}
 	if !dirStat.IsDir() {
@@ -266,7 +268,7 @@ func runningToStoppedClean(olPath string) error {
 
 // This function will transition the StoppedDirty state to StoppedClean state.
 // It attempts to clean up resources after detecting a dirty shutdown.
-// It cleans up cgroups and mounts associated with the Open Lambda instance at `olPath`.
+// It cleans up cgroups and mounts associated with the OpenLambda instance at `olPath`.
 // Returns errors encountered during cleanup operations.
 func stoppedDirtyToStoppedClean(olPath string) error {
 	// Clean up cgroups associated with sandboxes
@@ -352,7 +354,7 @@ func stoppedDirtyToStoppedClean(olPath string) error {
 	return nil
 }
 
-// bringToStoppedClean tries the best to bring the state of Open Lambda to StoppedClean no mater which state it is in.
+// bringToStoppedClean tries the best to bring the state of OpenLambda to StoppedClean no mater which state it is in.
 func bringToStoppedClean(olPath string) error {
 	state, err := checkState()
 	if err != nil {
@@ -361,23 +363,23 @@ func bringToStoppedClean(olPath string) error {
 
 	switch state {
 	case Running:
-		fmt.Println("An Open Lambda instance is currently running. Attempting to stop it...")
+		fmt.Println("An OpenLambda instance is currently running. Attempting to stop it...")
 		err := runningToStoppedClean(olPath)
 		if err != nil {
 			return fmt.Errorf("failed to stop the running OL instance: %s", err)
 		}
-		fmt.Println("Successfully stopped the running Open Lambda instance.")
+		fmt.Println("Successfully stopped the running OpenLambda instance.")
 	case StoppedDirty:
-		fmt.Println("The previous Open Lambda instance did not exit cleanly. Attempting to clean up...")
+		fmt.Println("The previous OpenLambda instance did not exit cleanly. Attempting to clean up...")
 		err := stoppedDirtyToStoppedClean(olPath)
 		if err != nil {
 			return fmt.Errorf("failed to cleanup dirty shutdown: %s", err)
 		}
 		fmt.Println("Successfully cleaned up from the dirty shutdown.")
 	case StoppedClean:
-		fmt.Println("No Open Lambda instance is running. No further actions are needed.")
+		fmt.Println("No OpenLambda instance is running. No further actions are needed.")
 	case Uninitialized:
-		fmt.Println("Open Lambda is not initialized. You should initialized it.")
+		fmt.Println("OpenLambda is not initialized. You should initialized it.")
 		return fmt.Errorf("cannot bring Uninitialized to StoppedClean")
 	case Unknown:
 		return fmt.Errorf("cannot bring Unknown to StoppedClean")
