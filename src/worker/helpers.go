@@ -210,7 +210,7 @@ func checkState() (OlState, error) {
 	// https://pkg.go.dev/os#FindProcess
 	p, err := os.FindProcess(pid)
 	if err != nil {
-		return Unknown, fmt.Errorf("failed to find process with pid %d (not running on a Unix system?)", pid)
+		return Unknown, fmt.Errorf("failed to find process with pid %d (not running on Unix system?)", pid)
 	}
 
 	if err := p.Signal(syscall.Signal(0)); err != nil {
