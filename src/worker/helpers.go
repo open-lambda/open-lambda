@@ -384,8 +384,8 @@ func bringToStoppedClean(olPath string) error {
 	case Uninitialized:
 		fmt.Println("OpenLambda is not initialized. You should initialized it.")
 		return fmt.Errorf("cannot bring Uninitialized to StoppedClean")
-	case Unknown:
-		return fmt.Errorf("cannot bring Unknown to StoppedClean")
+	default:
+		return fmt.Errorf("Unrecognized state")
 	}
 
 	return nil
