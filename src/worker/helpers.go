@@ -208,7 +208,11 @@ func checkState() (OlState, error) {
 	// On Unix systems, FindProcess always succeeds and returns a Process for the given PID,
 	// regardless of whether the process exists.
 	// https://pkg.go.dev/os#FindProcess
-	p, _ := os.FindProcess(pid)
+	p, err := os.FindProcess(pid)
+	if err != nil {
+		return Unknown, fmt.Errorf("failed to find process with pid %d (not running on a Unix system?)", pid)
+	}
+
 	if err := p.Signal(syscall.Signal(0)); err != nil {
 		// If we can't signal the process, it means the process isn't running and yet we found the PID file.
 		// Therefore, it was not cleanly shut down.
