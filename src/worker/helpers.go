@@ -2,6 +2,7 @@ package worker
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -283,12 +284,25 @@ func stoppedDirtyToStoppedClean(olPath string) error {
 	fmt.Printf("Attempting to clean up cgroups at %s\n", cgRoot)
 
 	cgroupErrorCount := 0
-	if files, err := os.ReadDir(cgRoot); err != nil {
-		fmt.Printf("Could not find cgroup root: %s\n", err.Error())
+	if cgroupRootStat, err := os.Stat(cgRoot); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			fmt.Printf("Cgroup root doesn't exist. No need to cleanup.\n")
+		} else {
+			return fmt.Errorf("error getting status of cgroup root: %s", err)
+		}
 	} else {
+		if !cgroupRootStat.IsDir() {
+			return fmt.Errorf("cgroup root is not a directory")
+		}
+
+		// Perform cleanup
+		files, err := os.ReadDir(cgRoot)
+		if err != nil {
+			return fmt.Errorf("error reading cgroup root: %s", err.Error())
+		}
 		kill := filepath.Join(cgRoot, "cgroup.kill")
 		if err := os.WriteFile(kill, []byte(fmt.Sprintf("%d", 1)), os.ModeAppend); err != nil {
-			// Log an error if killing processes in the cgroup fails.
+			// Print an error if killing processes in the cgroup fails.
 			fmt.Printf("Could not kill processes in cgroup: %s\n", err.Error())
 			cgroupErrorCount += 1
 		}
@@ -304,31 +318,44 @@ func stoppedDirtyToStoppedClean(olPath string) error {
 			}
 		}
 		if err := syscall.Rmdir(cgRoot); err != nil {
-			// Log an error if removing the cgroup root directory fails.
+			// Print an error if removing the cgroup root directory fails.
 			fmt.Printf("could not remove cgroup root: %s", err.Error())
 			cgroupErrorCount += 1
 		}
 	}
+
 	sandboxErrorCount := 0
 	// Clean up mounts associated with sandboxes
 	dirName := filepath.Join(olPath, "worker", "root-sandboxes")
 	fmt.Printf("Attempting to clean up mounts at %s\n", dirName)
 
-	if files, err := os.ReadDir(dirName); err != nil {
-		fmt.Printf("Could not find mount root: %s", err.Error())
+	if sandboxRootStat, err := os.Stat(dirName); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			fmt.Printf("Sandbox mount root doesn't exist. No need to clean up.\n")
+		} else {
+			return fmt.Errorf("error getting status of cgroup root: %s", err)
+		}
 	} else {
+		if !sandboxRootStat.IsDir() {
+			return fmt.Errorf("sandbox mount root is not a directory")
+		}
+		// Perform cleanup
+		files, err := os.ReadDir(dirName)
+		if err != nil {
+			return fmt.Errorf("error reading mount root: %s", err.Error())
+		}
 		for _, file := range files {
 			path := filepath.Join(dirName, file.Name())
 			fmt.Printf("Attempting to unmount %s\n", path)
 			if err := syscall.Unmount(path, syscall.MNT_DETACH); err != nil {
-				// Return an error if unmounting fails.
-				sandboxErrorCount += 1
+				// Print an error if unmounting fails.
 				fmt.Printf("Could not unmount: %s\n", err.Error())
+				sandboxErrorCount += 1
 			}
 			if err := syscall.Rmdir(path); err != nil {
-				// Return an error if removing the mount directory fails.
-				sandboxErrorCount += 1
+				// Print an error if removing the mount directory fails.
 				fmt.Printf("Could not remove mount dir: %s\n", err.Error())
+				sandboxErrorCount += 1
 			}
 		}
 	}
@@ -347,9 +374,14 @@ func stoppedDirtyToStoppedClean(olPath string) error {
 	}
 
 	// Attempt to unmount the main mount directory
+	fmt.Printf("Attempting to clean up main mount directory at %s\n", dirName)
 	if err := syscall.Unmount(dirName, syscall.MNT_DETACH); err != nil {
 		// Log an error if unmounting the main directory fails.
-		fmt.Printf("Could not unmount %s: %s\n", dirName, err.Error())
+		if errors.Is(err, syscall.EINVAL) {
+			fmt.Printf("Sandbox mount root is not mounted. No need to clean up.\n")
+		} else {
+			return fmt.Errorf("could not unmount %s: %s", dirName, err.Error())
+		}
 	}
 
 	// Remove the worker.pid file
@@ -389,7 +421,7 @@ func bringToStoppedClean(olPath string) error {
 		fmt.Println("OpenLambda is not initialized. You should initialized it.")
 		return fmt.Errorf("cannot bring Uninitialized to StoppedClean")
 	default:
-		return fmt.Errorf("Unrecognized state")
+		return fmt.Errorf("unrecognized state")
 	}
 
 	return nil
