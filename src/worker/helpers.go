@@ -246,12 +246,12 @@ func readPidFile() (int, error) {
 
 // This function will transition the Running state to StoppedClean state.
 // In other words, this function will stop the currently running OL instance.
-func runningToStoppedClean(olPath string) error {
+func runningToStoppedClean() error {
 	fmt.Println("Attempting to gracefully shut down the worker process by sending SIGINT.")
 
 	pid, err := readPidFile()
 	if err != nil {
-		fmt.Errorf("failed to get pid: %s", err)
+		return fmt.Errorf("failed to get pid: %s", err)
 	}
 
 	p, _ := os.FindProcess(pid)
@@ -403,7 +403,7 @@ func bringToStoppedClean(olPath string) error {
 	switch state {
 	case Running:
 		fmt.Println("An OpenLambda instance is currently running. Attempting to stop it...")
-		err := runningToStoppedClean(olPath)
+		err := runningToStoppedClean()
 		if err != nil {
 			return fmt.Errorf("failed to stop the running OL instance: %s", err)
 		}
