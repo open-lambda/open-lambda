@@ -83,6 +83,7 @@ type TraceConfig struct {
 	Evictor bool `json:"evictor"`
 	Package bool `json:"package"`
 	Latency bool `json:"latency"`
+	PackageInstallationTime bool `json:"execution_time"`
 }
 
 type StoreString string
@@ -178,8 +179,9 @@ func LoadDefaults(olPath string) error {
 			Cgroups: false,
 			Memory:  false,
 			Evictor: false,
-			Package: false,
+			Package: true,
 			Latency: false,
+			PackageInstallationTime: true,
 		},
 		Storage: StorageConfig{
 			Root:    "private",
