@@ -43,7 +43,6 @@ func (s *LambdaServer) RunLambda(w http.ResponseWriter, r *http.Request) {
 	t := common.T0("web-request")
 	defer t.T1()
 
-	// TODO re-enable logging once it is configurable
 	// log.Printf("Received request to %s\n", r.URL.Path)
 
 	// components represent run[0]/<name_of_sandbox>[1]/<extra_things>...
@@ -82,6 +81,15 @@ func NewLambdaServer() (*LambdaServer, error) {
 	lambdaMgr, err := lambda.NewLambdaMgr()
 	if err != nil {
 		return nil, err
+	}
+
+	warmup := common.Conf.Features.Warmup
+	if warmup {
+		log.Printf("Warming up lambda server")
+		err = lambdaMgr.Warmup()
+		if err != nil {
+			log.Printf("Error warming up lambda server: %s", err.Error())
+		}
 	}
 
 	server := &LambdaServer{
