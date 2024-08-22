@@ -57,6 +57,7 @@ At the end, click menu `Tools` -> `Deployment` -> `Upload to <your deployment na
 
 ## step 1: install delve on the remote machine
 Make sure you correctly install delve ([install instruction](https://github.com/go-delve/delve/tree/master/Documentation/installation)) in the remote machine and open the port 2345 for remote debugging.
+delve version 1.20.2 should be compatible with go version 1.21.5 as installed in [getting-started.md](../worker/getting-started.md).
 
 If running `dlv version` in the remote machine and you see something like this:
 ```bash
