@@ -1,6 +1,7 @@
 package event
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -16,6 +17,7 @@ import (
 	"syscall"
 
 	"github.com/open-lambda/open-lambda/ol/common"
+	"github.com/segmentio/kafka-go"
 )
 
 const (
@@ -254,6 +256,32 @@ func Main() (err error) {
 
 	port := fmt.Sprintf("%s:%s", common.Conf.Worker_url, common.Conf.Worker_port)
 	err = http.ListenAndServe(port, nil)
+
+	// Code above is related to listening to HTTP channel.
+	// Requires Dockerfile and docker-compose.yml configurations to initialize Kafka.
+
+	/////////////// Beginning of Kafka consumer ///////////////
+	// TODO: change the following variables according to program
+	reader := kafka.NewReader(kafka.ReaderConfig{
+		Brokers: []string{"kafka:9092"},
+		Topic:   "example-topic",
+		GroupID: "example-group",
+	})
+
+	for {
+		msg, err := reader.ReadMessage(context.Background())
+		if err != nil {
+			log.Fatal("Failed to read message:", err)
+		}
+
+		// TODO: handle the received message
+		fmt.Printf("Received message: %s\n", string(msg.Value))
+	}
+
+	if err := reader.Close(); err != nil {
+		log.Fatal("Failed to close reader:", err)
+	}
+	/////////////// End of Kafka consumer ///////////////
 
 	// if ListenAndServer returned, there must have been some issue
 	// (probably a port collision)
