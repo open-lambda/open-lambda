@@ -9,6 +9,7 @@ import (
 	"github.com/open-lambda/open-lambda/ol/worker/sandbox"
 )
 
+// NewZygoteProvider creates a new ZygoteProvider based on the specified import cache implementation.
 func NewZygoteProvider(codeDirs *common.DirMaker, scratchDirs *common.DirMaker, sbPool sandbox.SandboxPool, pp *packages.PackagePuller) (ZygoteProvider, error) {
 	switch impl := common.Conf.Features.Import_cache; impl {
 	case "tree":

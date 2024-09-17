@@ -46,6 +46,7 @@ type Invocation struct {
 	execMs int
 }
 
+// NewLambdaMgr creates a new LambdaMgr instance and initializes its subsystems.
 func NewLambdaMgr() (res *LambdaMgr, err error) {
 	mgr := &LambdaMgr{
 		lfuncMap: make(map[string]*LambdaFunc),
@@ -101,7 +102,7 @@ func NewLambdaMgr() (res *LambdaMgr, err error) {
 	return mgr, nil
 }
 
-// Returns an existing instance (if there is one), or creates a new one
+// Get returns an existing LambdaFunc instance or creates a new one if it doesn't exist.
 func (mgr *LambdaMgr) Get(name string) (f *LambdaFunc) {
 	mgr.mapMutex.Lock()
 	defer mgr.mapMutex.Unlock()
@@ -127,10 +128,12 @@ func (mgr *LambdaMgr) Get(name string) (f *LambdaFunc) {
 	return f
 }
 
+// Debug returns the debug information of the sandbox pool.
 func (mgr *LambdaMgr) Debug() string {
 	return mgr.sbPool.DebugString() + "\n"
 }
 
+// DumpStatsToLog logs the profiling information of the LambdaMgr.
 func (_ *LambdaMgr) DumpStatsToLog() {
 	snapshot := common.SnapshotStats()
 
@@ -168,6 +171,7 @@ func (_ *LambdaMgr) DumpStatsToLog() {
 	time(2, "LambdaInstance-RoundTrip", "LambdaInstance-ServeRequests")
 }
 
+// Cleanup performs cleanup operations for the LambdaMgr and its subsystems.
 func (mgr *LambdaMgr) Cleanup() {
 	mgr.mapMutex.Lock() // don't unlock, because this shouldn't be used anymore
 

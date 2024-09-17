@@ -182,7 +182,7 @@ func upCmd(ctx *cli.Context) error {
 	return fmt.Errorf("this code should not be reachable")
 }
 
-// status corresponds to the "status" command of the admin tool.
+// statusCmd corresponds to the "status" command of the admin tool.
 func statusCmd(ctx *cli.Context) error {
 	olPath, err := common.GetOlPath(ctx)
 	if err != nil {
@@ -210,7 +210,7 @@ func statusCmd(ctx *cli.Context) error {
 	return nil
 }
 
-// down corresponds to the "down" command of the admin tool.
+// downCmd corresponds to the "down" command of the admin tool.
 func downCmd(ctx *cli.Context) error {
 	olPath, err := common.GetOlPath(ctx)
 	if err != nil {
@@ -223,7 +223,7 @@ func downCmd(ctx *cli.Context) error {
 	return bringToStoppedClean(olPath)
 }
 
-// cleanup corresponds to the "force-cleanup" command of the admin tool.
+// cleanupCmd corresponds to the "force-cleanup" command of the admin tool.
 func cleanupCmd(ctx *cli.Context) error {
 	olPath, err := common.GetOlPath(ctx)
 	if err != nil {
@@ -232,6 +232,7 @@ func cleanupCmd(ctx *cli.Context) error {
 	return bringToStoppedClean(olPath)
 }
 
+// WorkerCommands returns a list of CLI commands for the worker.
 func WorkerCommands() []*cli.Command {
 	pathFlag := cli.StringFlag{
 		Name:    "path",

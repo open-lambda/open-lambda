@@ -4,7 +4,7 @@ errorCode = 2
 
 #TODO we should eventually comment all public methods
 [rule.package-comments]
-    Disabled = true
+    Disabled = false
 
 #TODO get rid of all (or most) magic numbers
 [rule.add-constant]

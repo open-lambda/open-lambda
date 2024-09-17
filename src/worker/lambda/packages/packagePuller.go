@@ -44,6 +44,7 @@ type PackageMeta struct {
 	TopLevel []string `json:"TopLevel"`
 }
 
+// NewPackagePuller creates a new PackagePuller instance and initializes it with the given sandbox pool and dependency tracer.
 func NewPackagePuller(sbPool sandbox.SandboxPool, depTracer *DepTracer) (*PackagePuller, error) {
 	// create a lambda function for installing pip packages.  We do
 	// each install in a Sandbox for two reasons:
@@ -77,7 +78,7 @@ func NormalizePkg(pkg string) string {
 	return strings.ReplaceAll(strings.ToLower(pkg), "_", "-")
 }
 
-// "pip install" missing packages to Conf.Pkgs_dir
+// InstallRecursive installs the specified packages and their dependencies recursively.
 func (pp *PackagePuller) InstallRecursive(installs []string) ([]string, error) {
 	// shrink capacity to length so that our appends are not
 	// visible to caller
@@ -118,12 +119,7 @@ func (pp *PackagePuller) InstallRecursive(installs []string) ([]string, error) {
 	return installs, nil
 }
 
-// GetPkg does the pip install in a Sandbox, taking care to never install the
-// same Sandbox more than once.
-//
-// the fast/slow path code is tweaked from the sync.Once code, the
-// difference being that may try the installed more than once, but we
-// will never try more after the first success
+// GetPkg retrieves the specified package, installing it if necessary.
 func (pp *PackagePuller) GetPkg(pkg string) (*Package, error) {
 	// get (or create) package
 	pkg = NormalizePkg(pkg)
@@ -151,9 +147,7 @@ func (pp *PackagePuller) GetPkg(pkg string) (*Package, error) {
 	return p, nil
 }
 
-// sandboxInstall does the pip install within a new Sandbox, to a directory mapped from
-// the host.  We want the package on the host to share with all, but
-// want to run the install in the Sandbox because we don't trust it.
+// sandboxInstall installs the specified package within a new Sandbox.
 func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 	t := common.T0("pull-package")
 	defer t.T1()

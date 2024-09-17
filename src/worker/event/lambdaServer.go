@@ -16,7 +16,7 @@ type LambdaServer struct {
 	lambdaMgr *lambda.LambdaMgr
 }
 
-// getURLComponents parses request URL into its "/" delimated components
+// getURLComponents parses request URL into its "/" delimited components
 func getURLComponents(r *http.Request) []string {
 	path := r.URL.Path
 
@@ -67,15 +67,17 @@ func (s *LambdaServer) RunLambda(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// Debug returns the debug information of the lambda manager.
 func (s *LambdaServer) Debug(w http.ResponseWriter, _ *http.Request) {
 	w.Write([]byte(s.lambdaMgr.Debug()))
 }
 
+// cleanup cleans up the lambda manager.
 func (s *LambdaServer) cleanup() {
 	s.lambdaMgr.Cleanup()
 }
 
-// NewLambdaServer creates a server based on the passed config."
+// NewLambdaServer creates a server based on the passed config.
 func NewLambdaServer() (*LambdaServer, error) {
 	log.Printf("Starting new lambda server")
 

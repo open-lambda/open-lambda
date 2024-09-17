@@ -20,13 +20,14 @@ type Call struct {
 	name string
 }
 
+// task is a function that processes requests from the reqQ channel and sends errors to the errQ channel.
 func task(reqQ chan Call, errQ chan error) {
 	for {
 		call, ok := <-reqQ
 		if !ok {
 			errQ <- nil
 			break
-		}
+			}
 
 		url := fmt.Sprintf("http://localhost:%s/run/%s", common.Conf.Worker_port, call.name)
 		resp, err := http.Post(url, "text/json", bytes.NewBuffer([]byte("null")))
@@ -52,6 +53,7 @@ func task(reqQ chan Call, errQ chan error) {
 	}
 }
 
+// play_trace_cmd is a CLI command that plays a trace and prints the result.
 func play_trace_cmd(ctx *cli.Context) (error) {
 	result, err := play_trace(ctx)
 
@@ -63,6 +65,7 @@ func play_trace_cmd(ctx *cli.Context) (error) {
 	return nil
 }
 
+// play_trace plays a trace of lambda function calls and returns the result as a string.
 func play_trace(ctx *cli.Context) (string, error) {
 	tracePath := ctx.String("trace")
 	if tracePath == "" {
@@ -172,6 +175,7 @@ func play_trace(ctx *cli.Context) (string, error) {
 	return result, nil
 }
 
+// run_benchmark runs a benchmark with the specified parameters and returns the result as a string.
 func run_benchmark(ctx *cli.Context, name string, tasks int, functions int, func_template string) (string, error) {
 	num_tasks := ctx.Int("tasks")
 	if num_tasks != 0 {
@@ -261,6 +265,7 @@ func run_benchmark(ctx *cli.Context, name string, tasks int, functions int, func
 	return result, nil
 }
 
+// create_lambdas creates lambda functions for benchmarking.
 func create_lambdas(ctx *cli.Context) error {
 	olPath, err := common.GetOlPath(ctx)
 	if err != nil {
@@ -309,6 +314,7 @@ def f(event):
 	return nil
 }
 
+// make_action creates a CLI action function for running a benchmark.
 func make_action(name string, tasks int, functions int, func_template string) func(ctx *cli.Context) error {
 	return func(ctx *cli.Context) error {
 		result, err := run_benchmark(ctx, name, tasks, functions, func_template)
@@ -328,6 +334,7 @@ func make_action(name string, tasks int, functions int, func_template string) fu
 	}
 }
 
+// BenchCommands returns a list of CLI commands for benchmarking.
 func BenchCommands() []*cli.Command {
 	cmds := []*cli.Command{
 		{

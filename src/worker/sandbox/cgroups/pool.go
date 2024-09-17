@@ -25,6 +25,7 @@ type CgroupPool struct {
 	nextID   int
 }
 
+// NewCgroupPool creates a new CgroupPool with the specified name.
 func NewCgroupPool(name string) (*CgroupPool, error) {
 	pool := &CgroupPool{
 		Name:     path.Base(path.Dir(common.Conf.Worker_dir)) + "-" + name,
@@ -159,6 +160,7 @@ func (pool *CgroupPool) Destroy() {
 	}
 }
 
+// GetCg retrieves a cgroup from the pool, setting its memory limit and CPU percentage.
 func (pool *CgroupPool) GetCg(memLimitMB int, moveMemCharge bool, cpuPercent int) Cgroup {
 	cg := <-pool.ready
 	cg.SetMemLimitMB(memLimitMB)
