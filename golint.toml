@@ -2,10 +2,6 @@ enableAllRules = true
 errorCode = 2
 #warningCode = 1
 
-#TODO we should eventually comment all public methods
-[rule.package-comments]
-    Disabled = false
-
 #TODO get rid of all (or most) magic numbers
 [rule.add-constant]
     Disabled = true
