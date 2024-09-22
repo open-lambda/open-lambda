@@ -27,7 +27,7 @@ func task(reqQ chan Call, errQ chan error) {
 		if !ok {
 			errQ <- nil
 			break
-			}
+		}
   } 
  } 
 
