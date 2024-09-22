@@ -28,8 +28,6 @@ func task(reqQ chan Call, errQ chan error) {
 			errQ <- nil
 			break
 		}
-  } 
- } 
 
 		url := fmt.Sprintf("http://localhost:%s/run/%s", common.Conf.Worker_port, call.name)
 		resp, err := http.Post(url, "text/json", bytes.NewBuffer([]byte("null")))
