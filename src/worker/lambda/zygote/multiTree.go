@@ -10,10 +10,12 @@ import (
 	"github.com/open-lambda/open-lambda/ol/worker/sandbox"
 )
 
+// MultiTree is a ZygoteProvider that manages multiple ImportCache trees.
 type MultiTree struct {
 	trees []*ImportCache
 }
 
+// NewMultiTree creates a new MultiTree instance with the specified number of ImportCache trees.
 func NewMultiTree(codeDirs *common.DirMaker, scratchDirs *common.DirMaker, sbPool sandbox.SandboxPool, pp *packages.PackagePuller) (*MultiTree, error) {
 	var tree_count int
 	switch cpus := runtime.NumCPU(); {
@@ -30,7 +32,7 @@ func NewMultiTree(codeDirs *common.DirMaker, scratchDirs *common.DirMaker, sbPoo
 	for i := range trees {
 		tree, err := NewImportCache(codeDirs, scratchDirs, sbPool, pp)
 		if err != nil {
-			for j := 0; j < i; j ++ {
+			for j := 0; j < i; j++ {
 				trees[j].Cleanup()
 			}
 			return nil, err
@@ -40,11 +42,13 @@ func NewMultiTree(codeDirs *common.DirMaker, scratchDirs *common.DirMaker, sbPoo
 	return &MultiTree{trees: trees}, nil
 }
 
+// Create creates a new sandbox using a randomly selected ImportCache tree.
 func (mt *MultiTree) Create(childSandboxPool sandbox.SandboxPool, isLeaf bool, codeDir, scratchDir string, meta *sandbox.SandboxMeta, rt_type common.RuntimeType) (sandbox.Sandbox, error) {
 	idx := rand.Intn(len(mt.trees))
 	return mt.trees[idx].Create(childSandboxPool, isLeaf, codeDir, scratchDir, meta, rt_type)
 }
 
+// Cleanup performs cleanup operations for all ImportCache trees in the MultiTree.
 func (mt *MultiTree) Cleanup() {
 	for _, tree := range mt.trees {
 		tree.Cleanup()

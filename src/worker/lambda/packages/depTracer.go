@@ -13,6 +13,7 @@ type DepTracer struct {
 	done   chan bool
 }
 
+// NewDepTracer creates a new DepTracer instance and initializes it with the given log file path.
 func NewDepTracer(logPath string) (*DepTracer, error) {
 	file, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
@@ -30,6 +31,7 @@ func NewDepTracer(logPath string) (*DepTracer, error) {
 	return t, nil
 }
 
+// run processes events and writes them to the log file.
 func (t *DepTracer) run() {
 	for {
 		ev, ok := <-t.events
@@ -50,11 +52,13 @@ func (t *DepTracer) run() {
 	}
 }
 
+// Cleanup flushes and closes the log file.
 func (t *DepTracer) Cleanup() {
 	close(t.events)
 	<-t.done
 }
 
+// TracePackage logs a package event with its dependencies and top-level modules.
 func (t *DepTracer) TracePackage(p *Package) {
 	t.events <- map[string]any{
 		"type": "package",
@@ -64,6 +68,7 @@ func (t *DepTracer) TracePackage(p *Package) {
 	}
 }
 
+// TraceFunction logs a function event with its code directory and direct dependencies.
 func (t *DepTracer) TraceFunction(codeDir string, directDeps []string) {
 	t.events <- map[string]any{
 		"type": "function",
@@ -72,6 +77,7 @@ func (t *DepTracer) TraceFunction(codeDir string, directDeps []string) {
 	}
 }
 
+// TraceInvocation logs an invocation event with its code directory.
 func (t *DepTracer) TraceInvocation(codeDir string) {
 	t.events <- map[string]any{
 		"type": "invocation",

@@ -26,6 +26,7 @@ type Boss struct {
 	autoScaler  autoscaling.Scaling
 }
 
+// BossStatus handles the request to get the status of the boss.
 func (boss *Boss) BossStatus(w http.ResponseWriter, req *http.Request) {
 	log.Printf("Receive request to %s\n", req.URL.Path)
 
@@ -45,6 +46,7 @@ func (boss *Boss) BossStatus(w http.ResponseWriter, req *http.Request) {
 	w.Write(b)
 }
 
+// Close handles the request to close the boss.
 func (b *Boss) Close(_ http.ResponseWriter, _ *http.Request) {
 	b.workerPool.Close()
 	if Conf.Scaling == "threshold-scaler" {
@@ -52,6 +54,7 @@ func (b *Boss) Close(_ http.ResponseWriter, _ *http.Request) {
 	}
 }
 
+// ScalingWorker handles the request to scale the number of workers.
 func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 	// STEP 1: get int (worker count) from POST body, or return an error
 	if r.Method != "POST" {
@@ -96,6 +99,7 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 	b.BossStatus(w, r)
 }
 
+// BossMain is the main function for the boss.
 func BossMain() (err error) {
 	fmt.Printf("WARNING!  Boss incomplete (only use this as part of development process).\n")
 

@@ -27,6 +27,7 @@ type SOCKServer struct {
 	sandboxes sync.Map
 }
 
+// GetSandbox retrieves a sandbox by its ID.
 func (server *SOCKServer) GetSandbox(id string) sandbox.Sandbox {
 	val, ok := server.sandboxes.Load(id)
 	if !ok {
@@ -35,6 +36,7 @@ func (server *SOCKServer) GetSandbox(id string) sandbox.Sandbox {
 	return val.(sandbox.Sandbox)
 }
 
+// Create creates a new sandbox.
 func (server *SOCKServer) Create(w http.ResponseWriter, _ []string, args map[string]any) error {
 	var leaf bool
 	if b, ok := args["leaf"]; !ok || b.(bool) {
@@ -100,6 +102,7 @@ func (server *SOCKServer) Create(w http.ResponseWriter, _ []string, args map[str
 	return nil
 }
 
+// Destroy destroys a sandbox by its ID.
 func (server *SOCKServer) Destroy(_ http.ResponseWriter, rsrc []string, _ map[string]any) error {
 	c := server.GetSandbox(rsrc[0])
 	if c == nil {
@@ -111,6 +114,7 @@ func (server *SOCKServer) Destroy(_ http.ResponseWriter, rsrc []string, _ map[st
 	return nil
 }
 
+// Pause pauses a sandbox by its ID.
 func (server *SOCKServer) Pause(_ http.ResponseWriter, rsrc []string, _ map[string]any) error {
 	c := server.GetSandbox(rsrc[0])
 	if c == nil {
@@ -120,6 +124,7 @@ func (server *SOCKServer) Pause(_ http.ResponseWriter, rsrc []string, _ map[stri
 	return c.Pause()
 }
 
+// Unpause unpauses a sandbox by its ID.
 func (server *SOCKServer) Unpause(_ http.ResponseWriter, rsrc []string, _ map[string]any) error {
 	c := server.GetSandbox(rsrc[0])
 	if c == nil {
@@ -129,6 +134,7 @@ func (server *SOCKServer) Unpause(_ http.ResponseWriter, rsrc []string, _ map[st
 	return c.Unpause()
 }
 
+// Debug returns the debug information of the sandbox pool.
 func (server *SOCKServer) Debug(w http.ResponseWriter, _ []string, _ map[string]any) error {
 	str := server.sbPool.DebugString()
 	fmt.Printf("%s\n", str)
@@ -136,6 +142,7 @@ func (server *SOCKServer) Debug(w http.ResponseWriter, _ []string, _ map[string]
 	return nil
 }
 
+// HandleInternal handles internal requests to the SOCK server.
 func (server *SOCKServer) HandleInternal(w http.ResponseWriter, r *http.Request) error {
 	log.Printf("%s %s", r.Method, r.URL.Path)
 
@@ -181,6 +188,7 @@ func (server *SOCKServer) HandleInternal(w http.ResponseWriter, r *http.Request)
 	return fmt.Errorf("unknown op %s", rsrc[1])
 }
 
+// Handle handles requests to the SOCK server.
 func (server *SOCKServer) Handle(w http.ResponseWriter, r *http.Request) {
 	if err := server.HandleInternal(w, r); err != nil {
 		log.Printf("Request Handler Failed: %v", err)
@@ -189,6 +197,7 @@ func (server *SOCKServer) Handle(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// cleanup cleans up the SOCK server.
 func (server *SOCKServer) cleanup() {
 	server.sandboxes.Range(func(key, val any) bool {
 		val.(sandbox.Sandbox).Destroy("SOCKServer cleanup")
@@ -197,7 +206,7 @@ func (server *SOCKServer) cleanup() {
 	server.sbPool.Cleanup()
 }
 
-// NewSOCKServer creates a server based on the passed config."
+// NewSOCKServer creates a server based on the passed config.
 func NewSOCKServer() (*SOCKServer, error) {
 	log.Printf("Start SOCK Server")
 
