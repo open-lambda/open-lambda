@@ -12,7 +12,7 @@ serde_bytes = "0.11"
 clap = { version = "4", default-features=false, features=["help", "suggestions", "color", "std", "cargo", "derive"]}
 futures-util = "0.3"
 crossbeam = "0.8"
-wasmtime = { version="15", features=["async"] }
+wasmtime = { version="21", features=["async"] }
 wasmtime-runtime = { version="15" }
 env_logger = "0.10"
 log = "0.4"
