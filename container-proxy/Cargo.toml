@@ -19,7 +19,7 @@ serde_bytes = "0.11"
 cfg-if = "1"
 parking_lot = "0.12"
 tokio-uring = { git="https://github.com/kaimast/tokio-uring.git" }
-tokio-uring-executor = { git="https://github.com/kaimast/tokio-uring-executor.git" }
+tokio-uring-executor = { package="kioto-uring-executor", version="0.1" }
 
 [profile.release]
 debug = true

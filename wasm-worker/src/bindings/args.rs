@@ -33,8 +33,10 @@ impl ArgsData {
 
 fn get_args(
     mut caller: Caller<'_, BindingsData>,
-    len_out: i32,
+    args: (i32,),
 ) -> Box<dyn Future<Output = i64> + Send + '_> {
+    let (len_out,) = args;
+
     Box::new(async move {
         log::trace!("Got \"get_args\" call");
 
@@ -115,7 +117,7 @@ pub fn get_imports(linker: &mut Linker<BindingsData>) {
         .unwrap();
     linker.func_wrap(module, "set_result", set_result).unwrap();
     linker
-        .func_wrap1_async(module, "get_args", get_args)
+        .func_wrap_async(module, "get_args", get_args)
         .unwrap();
     linker
         .func_wrap(module, "get_random_value", get_random_value)
