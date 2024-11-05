@@ -8,4 +8,4 @@ syn = { version="2", features=["full"] }
 quote = "1"
 
 [lib]
-proc_macro = true
+proc-macro = true

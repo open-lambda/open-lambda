@@ -1,4 +1,5 @@
 #![feature(vec_into_raw_parts)]
+#![feature(once_cell_get_mut)]
 
 mod args;
 pub use args::*;

@@ -99,6 +99,7 @@ def test(func):
         total_t0 = time()
         mounts0 = mounts()
         worker = None
+        return_val = None
 
         worker = WORKER_TYPE()
         assert worker
@@ -114,7 +115,6 @@ def test(func):
                 result["pass"] = True
             except Exception as err:
                 print(f"Failed to run test: {err}")
-                return_val = None
                 result["pass"] = False
                 result["errors"].append(traceback.format_exc().split("\n"))
 

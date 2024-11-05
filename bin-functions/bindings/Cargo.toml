@@ -16,7 +16,8 @@ byte-slice-cast = "1"
 [target.'cfg(not(target_arch="wasm32"))'.dependencies]
 tokio-util = { version="0.7", features=["codec"] }
 log = "0.4"
-env_logger = "0.10"
+parking_lot = "0.12"
+env_logger = "0.11"
 bytes = "1"
 serde_bytes = "0.11"
 rand = "0.8"

@@ -92,10 +92,12 @@ fmt:
 	#cd src && go fmt ...
 	cd wasm-worker && cargo fmt
 	cd bin-functions && cargo fmt
+	cd container-proxy && cargo fmt
 
 check-fmt:
 	cd wasm-worker && cargo fmt --check
 	cd bin-functions && cargo fmt --check
+	cd container-proxy && cargo fmt --check
 
 lint-go:
 	revive -exclude src/vendor/... -config golint.toml src/...

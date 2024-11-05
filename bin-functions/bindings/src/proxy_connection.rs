@@ -1,8 +1,10 @@
 use bytes::{Bytes, BytesMut};
 
 use std::io::{Read, Write};
-
 use std::os::unix::net::UnixStream;
+
+use parking_lot::{Mutex, MutexGuard};
+use std::sync::OnceLock;
 
 use tokio_util::codec::length_delimited::LengthDelimitedCodec;
 use tokio_util::codec::{Decoder, Encoder};
@@ -16,22 +18,20 @@ pub(crate) struct ProxyConnection {
     stream: UnixStream,
 }
 
-static mut CONNECTION: Option<ProxyConnection> = None;
+pub static CONNECTION: OnceLock<Mutex<ProxyConnection>> = OnceLock::new();
 
 impl ProxyConnection {
-    pub fn get_instance() -> ProxyHandle {
-        let inner = if let Some(inner) = unsafe { CONNECTION.take() } {
-            inner
-        } else {
-            log::debug!("Establishing connection to container proxy");
-            let stream = UnixStream::connect("/host/proxy.sock")
-                .expect("Failed to connect to container proxy");
-            let codec = LengthDelimitedCodec::new();
+    pub fn get() -> MutexGuard<'static, Self> {
+        CONNECTION.get_or_init(Self::establish_connection).lock()
+    }
 
-            Self { stream, codec }
-        };
+    fn establish_connection() -> Mutex<Self> {
+        log::debug!("Establishing connection to container proxy");
+        let stream =
+            UnixStream::connect("/host/proxy.sock").expect("Failed to connect to container proxy");
+        let codec = LengthDelimitedCodec::new();
 
-        ProxyHandle { inner: Some(inner) }
+        Mutex::new(Self { stream, codec })
     }
 
     pub fn func_call(&mut self, fn_name: String, args: Vec<u8>) -> CallResult {
@@ -89,24 +89,6 @@ impl ProxyConnection {
                 }
                 Err(err) => panic!("Failed to decode from socket: {err}"),
             }
-        }
-    }
-}
-
-pub(crate) struct ProxyHandle {
-    inner: Option<ProxyConnection>,
-}
-
-impl ProxyHandle {
-    pub fn get_mut(&mut self) -> &mut ProxyConnection {
-        self.inner.as_mut().unwrap()
-    }
-}
-
-impl Drop for ProxyHandle {
-    fn drop(&mut self) {
-        unsafe {
-            CONNECTION = Some(self.inner.take().unwrap());
         }
     }
 }
