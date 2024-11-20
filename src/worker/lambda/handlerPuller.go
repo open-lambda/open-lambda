@@ -1,9 +1,13 @@
 package lambda
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -11,9 +15,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 	"sync"
-	"io/fs"
 	"syscall"
 
 	"github.com/open-lambda/open-lambda/ol/common"
@@ -160,6 +165,31 @@ func (cp *HandlerPuller) Reset(name string) {
 	cp.dirCache.Delete(name)
 }
 
+func (cp *HandlerPuller) calculateDirCacheVersion(src string) (string, error) {
+	var modTimeArr []int64
+	err := filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
+		if d.IsDir() {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		modTimeArr = append(modTimeArr, info.ModTime().Unix())
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+	slices.Sort(modTimeArr)
+	var buf bytes.Buffer
+	for _, modTime := range modTimeArr {
+		buf.Write([]byte(strconv.FormatInt(modTime, 10)))
+	}
+	hash := sha256.New()
+	hash.Write(buf.Bytes())
+	return hex.EncodeToString(hash.Sum(nil)), nil
+}
 func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type common.RuntimeType, targetDir string, err error) {
 	stat, err := os.Stat(src)
 	if err != nil {
@@ -167,13 +197,24 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type common.R
 	}
 
 	if stat.Mode().IsDir() {
+		version, err := cp.calculateDirCacheVersion(src)
+		if !cp.isRemote() {
+			cacheEntry := cp.getCache(lambdaName)
+			if err != nil {
+				return rt_type, "", err
+			}
+			if cacheEntry != nil && cacheEntry.version == version {
+				// hit:
+				return rt_type, cacheEntry.path, nil
+			}
+		}
 		log.Printf("Installing `%s` from a directory", stat.Name())
 
 		// this is really just a debug mode, and is not
 		// expected to be efficient
 		targetDir = cp.dirMaker.Get(lambdaName)
 
-		err := Copy(src, targetDir)
+		err = Copy(src, targetDir)
 		if err != nil {
 			return rt_type, "", fmt.Errorf("%s :: %s", err)
 		}
@@ -185,6 +226,9 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type common.R
 			rt_type = common.RT_NATIVE
 		} else {
 			return rt_type, "", fmt.Errorf("Unknown runtime type")
+		}
+		if !cp.isRemote() {
+			cp.putCache(lambdaName, version, targetDir)
 		}
 
 		return rt_type, targetDir, nil
