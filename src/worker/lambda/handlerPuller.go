@@ -1,9 +1,6 @@
 package lambda
 
 import (
-	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -15,11 +12,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 )
@@ -47,27 +44,26 @@ func Copy(src, dest string) error {
 		return err
 	}
 
-	
 	if info.IsDir() {
 		return filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
-		    if err != nil {
-			return err
-		    }
-
-		    relPath, err := filepath.Rel(src, path)
-		    if err != nil {
-			return err
-		    }
-
-		    if d.IsDir() {
-			dirInfo, err := d.Info()
 			if err != nil {
-			    return err
+				return err
 			}
-			return os.MkdirAll(filepath.Join(dest, relPath), dirInfo.Mode())
-		    }
 
-		    return copyFile(path, filepath.Join(dest, relPath))
+			relPath, err := filepath.Rel(src, path)
+			if err != nil {
+				return err
+			}
+
+			if d.IsDir() {
+				dirInfo, err := d.Info()
+				if err != nil {
+					return err
+				}
+				return os.MkdirAll(filepath.Join(dest, relPath), dirInfo.Mode())
+			}
+
+			return copyFile(path, filepath.Join(dest, relPath))
 		})
 	}
 	return copyFile(src, dest)
@@ -115,7 +111,7 @@ func (cp *HandlerPuller) isRemote() bool {
 func (cp *HandlerPuller) Pull(name string) (rt_type common.RuntimeType, targetDir string, err error) {
 	t := common.T0("pull-lambda")
 	defer t.T1()
-	
+
 	if !handlerNameRegex.MatchString(name) {
 		msg := "bad lambda name '%s', can only contain letters, numbers, period, dash, and underscore"
 		return rt_type, "", fmt.Errorf(msg, name)
@@ -166,7 +162,7 @@ func (cp *HandlerPuller) Reset(name string) {
 }
 
 func (cp *HandlerPuller) calculateDirCacheVersion(src string) (string, error) {
-	var modTimeArr []int64
+	var latestModTime time.Time
 	err := filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
 		if d.IsDir() {
 			return nil
@@ -175,20 +171,15 @@ func (cp *HandlerPuller) calculateDirCacheVersion(src string) (string, error) {
 		if err != nil {
 			return err
 		}
-		modTimeArr = append(modTimeArr, info.ModTime().Unix())
+		if info.ModTime().After(latestModTime) {
+			latestModTime = info.ModTime()
+		}
 		return nil
 	})
 	if err != nil {
 		return "", err
 	}
-	slices.Sort(modTimeArr)
-	var buf bytes.Buffer
-	for _, modTime := range modTimeArr {
-		buf.Write([]byte(strconv.FormatInt(modTime, 10)))
-	}
-	hash := sha256.New()
-	hash.Write(buf.Bytes())
-	return hex.EncodeToString(hash.Sum(nil)), nil
+	return strconv.FormatInt(latestModTime.Unix(), 10), nil
 }
 func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type common.RuntimeType, targetDir string, err error) {
 	stat, err := os.Stat(src)
@@ -373,4 +364,3 @@ func (cp *HandlerPuller) getCache(name string) *CacheEntry {
 func (cp *HandlerPuller) putCache(name, version, path string) {
 	cp.dirCache.Store(name, &CacheEntry{version, path})
 }
-
