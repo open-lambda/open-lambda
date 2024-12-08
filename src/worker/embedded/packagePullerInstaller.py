@@ -62,17 +62,28 @@ def deps(dirname):
             continue
     return list(rv)
 
-
 def f(event):
+    packages_path = '/packages/'
+    if packages_path not in sys.path:
+        sys.path.append(packages_path)
+
     pkg = event["pkg"]
     alreadyInstalled = event["alreadyInstalled"]
+    pip_mirror = event.get("pip_mirror", "")
+    pip_mirror = pip_mirror.rstrip('/') + '/simple/' # make sure it ends with / and has simple at the end
     if not alreadyInstalled:
         try:
-            subprocess.check_output(
-                ['pip3', 'install', '--no-deps', pkg, '--cache-dir', '/tmp/.cache', '-t', '/host/files'])
+            if pip_mirror == "":
+                subprocess.check_output(
+                    ['pip3', 'install', '--no-deps', pkg, '--cache-dir', '/tmp/.cache', '-t', '/host/files'])
+            else:
+                pip_mirror = pip_mirror + pkg.split("==")[0]
+                cmds = ['pip3', 'install', '--no-deps', pkg, '--cache-dir', '/tmp/.cache', '-t', '/host/files', "--no-index", f"--find-links={pip_mirror}", "-vvv"]
+                print(f"[packaagePullerInstaller.py] attempting install with command: {cmds}")
+                out = subprocess.check_output(cmds)
         except subprocess.CalledProcessError as e:
-            print(f'pip install failed with error code {e.returncode}')
-            print(f'Output: {e.output}')
+            print(f'[packagePullerInstaller.py] pip install failed with error code {e.returncode}')
+            print(f'[packagePullerInstaller.py] Output: {e.output}')
 
     name = pkg.split("==")[0]
     d = deps("/host/files")
