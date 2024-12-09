@@ -58,6 +58,9 @@ type Config struct {
 	// base image path for sock containers
 	SOCK_base_path string `json:"sock_base_path"`
 
+	// base image tag for docker containers
+	Docker_base_image string `json:"docker_base_image"`
+
 	// pass through to sandbox envirenment variable
 	Sandbox_config any `json:"sandbox_config"`
 
@@ -158,6 +161,7 @@ func LoadDefaults(olPath string) error {
 		Pkgs_dir:          packagesDir,
 		Sandbox_config:    map[string]any{},
 		SOCK_base_path:    baseImgDir,
+		Docker_base_image: "alpine:latest",
 		Registry_cache_ms: 5000, // 5 seconds
 		Mem_pool_mb:       memPoolMb,
 		Import_cache_tree: zygoteTreePath,

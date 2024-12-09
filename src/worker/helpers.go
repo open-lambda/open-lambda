@@ -73,6 +73,23 @@ func initOLBaseDir(baseDir string, dockerBaseImage string) error {
 
 	path = filepath.Join(baseDir, "dev", "urandom")
 
+	// PART 4: pull the docker base image only if not available
+	imageFilter := map[string][]string{
+		"reference": {common.Conf.Docker_base_image},
+	}
+	images, err := dockerClient.ListImages(docker.ListImagesOptions{
+		Filters: imageFilter,
+	})
+	if err != nil {
+		return err
+	}
+	if len(images) == 0 {
+		err = dockerClient.PullImage(docker.PullImageOptions{Repository: common.Conf.Docker_base_image}, docker.AuthConfiguration{})
+		if err != nil {
+			return err
+		}
+	}
+
 	return exec.Command("mknod", "-m", "0644", path, "c", "1", "9").Run()
 }
 
