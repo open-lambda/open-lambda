@@ -105,24 +105,7 @@ func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir 
 		pkgDirs = append(pkgDirs, "/packages/"+pkg+"/files")
 	}
 
-	// fmt.Printf("codeDir: %s\n", codeDir)
-	// fmt.Printf("scratchDir: %s\n", scratchDir)
-	// fmt.Printf("WorkerDir: %s\n", common.Conf.Worker_dir)
-	// fmt.Printf("SOCK Base Path: %s\n", common.Conf.SOCK_base_path)
-	// fmt.Printf("PackagesDir: %s\n", pool.pkgsDir)
-
-	// // Log image repositories and tags
-	// images, err := pool.client.ListImages(docker.ListImagesOptions{All: true})
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// fmt.Println("Available Docker Images:")
-	// for _, image := range images {
-	// 	for _, repo := range image.RepoTags {
-	// 		fmt.Printf("Image: %s\n", repo)
-	// 	}
-	// }
-
+	// set up container binds
 	imgDir := common.Conf.SOCK_base_path
 	err = filepath.WalkDir(imgDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -130,9 +113,6 @@ func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir 
 		}
 		relativePath := strings.TrimPrefix(path, imgDir)
 		if strings.Count(relativePath, "/") == 1 {
-			// if relativePath == "/usr" {
-			// 	volumes = append(volumes, fmt.Sprintf("%s%s:%s", imgDir, relativePath, relativePath))
-			// } else
 			if relativePath != "/host" && relativePath != "/handler" && relativePath != "/proc" && relativePath != "/dev" && relativePath != "/tmp" {
 				volumes = append(volumes, fmt.Sprintf("%s%s:%s:ro", imgDir, relativePath, relativePath))
 			}
@@ -143,11 +123,7 @@ func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir 
 		return nil, err
 	}
 
-	fmt.Println("PRINTING ALL VOLUMES:")
-	for _, str := range volumes {
-		fmt.Println(str)
-	}
-
+	// create the container using the specified configuration
 	procLimit := int64(common.Conf.Limits.Procs)
 	swappiness := int64(common.Conf.Limits.Swappiness)
 	cpuPercent := int64(common.Conf.Limits.CPU_percent)
@@ -194,10 +170,6 @@ func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir 
 		c.Destroy("c.start() failed")
 		return nil, err
 	}
-	// if strings.Contains(scratchDir, "scratch") {
-	// fmt.Printf("Container started with ID = %s. Now pausing indefinitely\n", c.ID())
-	// time.Sleep(time.Hour * 1000000)
-	// }
 
 	if err := c.runServer(); err != nil {
 		c.Destroy("c.runServer() failed")

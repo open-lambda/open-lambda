@@ -254,14 +254,14 @@ class WasmWorker():
         self._process.terminate()
         self._process = None
 
-def prepare_open_lambda(ol_dir):
+def prepare_open_lambda(ol_dir, image="ol-wasm"):
     '''
     Sets up the working director for open lambda,
     and stops currently running worker processes (if any)
     '''
     # init will kill any prior worker and refresh the directory
     # (except for the base "lambda" dir)
-    run(['./ol', 'worker', 'init', f'-p={ol_dir}'])
+    run(['./ol', 'worker', 'init', f'-p={ol_dir}', f'-i={image}'])
 
 def mounts():
     ''' Returns a list of all mounted directories '''

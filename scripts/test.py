@@ -7,6 +7,7 @@
 import argparse
 import os
 import tempfile
+import sys
 
 from time import time
 from subprocess import call
@@ -280,6 +281,7 @@ def main():
     parser.add_argument('--test_filter', type=str, default="")
     parser.add_argument('--registry', type=str, default="test-registry")
     parser.add_argument('--ol_dir', type=str, default="test-dir")
+    parser.add_argument('--image', type=str, default="ol-wasm")
 
     args = parser.parse_args()
 
@@ -287,7 +289,7 @@ def main():
     OL_DIR = args.ol_dir
 
     setup_config(args.ol_dir)
-    prepare_open_lambda(args.ol_dir)
+    prepare_open_lambda(args.ol_dir, args.image)
 
     trace_config = {
         "cgroups": True,
