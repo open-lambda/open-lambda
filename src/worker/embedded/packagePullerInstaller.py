@@ -63,10 +63,6 @@ def deps(dirname):
     return list(rv)
 
 def f(event):
-    packages_path = '/packages/'
-    if packages_path not in sys.path:
-        sys.path.append(packages_path)
-
     pkg = event["pkg"]
     alreadyInstalled = event["alreadyInstalled"]
     pip_mirror = event.get("pip_mirror", "")
