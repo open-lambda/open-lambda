@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -13,7 +14,6 @@ import (
 	"regexp"
 	"strings"
 	"sync"
-	"io/fs"
 	"syscall"
 
 	"github.com/open-lambda/open-lambda/ol/common"
@@ -42,27 +42,26 @@ func Copy(src, dest string) error {
 		return err
 	}
 
-	
 	if info.IsDir() {
 		return filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
-		    if err != nil {
-			return err
-		    }
-
-		    relPath, err := filepath.Rel(src, path)
-		    if err != nil {
-			return err
-		    }
-
-		    if d.IsDir() {
-			dirInfo, err := d.Info()
 			if err != nil {
-			    return err
+				return err
 			}
-			return os.MkdirAll(filepath.Join(dest, relPath), dirInfo.Mode())
-		    }
 
-		    return copyFile(path, filepath.Join(dest, relPath))
+			relPath, err := filepath.Rel(src, path)
+			if err != nil {
+				return err
+			}
+
+			if d.IsDir() {
+				dirInfo, err := d.Info()
+				if err != nil {
+					return err
+				}
+				return os.MkdirAll(filepath.Join(dest, relPath), dirInfo.Mode())
+			}
+
+			return copyFile(path, filepath.Join(dest, relPath))
 		})
 	}
 	return copyFile(src, dest)
@@ -110,7 +109,7 @@ func (cp *HandlerPuller) isRemote() bool {
 func (cp *HandlerPuller) Pull(name string) (rt_type common.RuntimeType, targetDir string, err error) {
 	t := common.T0("pull-lambda")
 	defer t.T1()
-	
+
 	if !handlerNameRegex.MatchString(name) {
 		msg := "bad lambda name '%s', can only contain letters, numbers, period, dash, and underscore"
 		return rt_type, "", fmt.Errorf(msg, name)
@@ -251,6 +250,16 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type common.R
 		return rt_type, "", fmt.Errorf("lambda file %s not a .tar.gz or .py", src)
 	}
 
+	if _, err := os.Stat(filepath.Join(filepath.Dir(src), "requirements.txt")); err == nil {
+		log.Printf("Optional: Copying `requirements.txt` for lambda `%s`", lambdaName)
+		err := Copy(filepath.Join(filepath.Dir(src), "requirements.txt"), filepath.Join(targetDir, "requirements.txt"))
+		if err != nil {
+			return rt_type, "", fmt.Errorf("Error copying requirements.txt: %s", err)
+		}
+	} else if !os.IsNotExist(err) {
+		log.Printf("Error checking for requirements.txt: %s", err)
+	}
+
 	if !cp.isRemote() {
 		cp.putCache(lambdaName, version, targetDir)
 	}
@@ -329,4 +338,3 @@ func (cp *HandlerPuller) getCache(name string) *CacheEntry {
 func (cp *HandlerPuller) putCache(name, version, path string) {
 	cp.dirCache.Store(name, &CacheEntry{version, path})
 }
-
