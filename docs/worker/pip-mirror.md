@@ -60,7 +60,20 @@ sudo apt update
 sudo apt install nginx
 ```
 
-Then edit the pypi-mirror file at `/etc/nginx/sites-available/pypi-mirror`.
+Create a configuration file in `/etc/nginx/sites-available/`,
+a starting configuration is:
+```
+server {
+            listen {ip}:{port};
+            server_name name;  # Change this to your server's hostname
+
+            # Serve static files from the bandersnatch mirror directory
+            location /pypi/ {
+                alias {mirror/web};  # This should point to the bandersnatch web directory
+                autoindex on;           # Enables directory listing
+            }
+}
+```
 
 Edit the location section of this file such that you have:
 ```
@@ -82,14 +95,14 @@ listen {internal/external ip address}:{port}
 If you running OpenLambda on the same network as the web server you will have
 to use the internal ip. Otherwise you will have to use an external ip.
 
-After you have finished editing these field test your configuration with:
+Create a link to the conf file within the sites enabled directory with:
 ```
-sudo nginx -t
+ln -s /etc/nginx/sites-available/{conf file} /etc/nginx/sites-enabled/
 ```
 
-Once nginx says your configuration is ok, then ensure this link exists:
+After you have finished editing these fields test your configuration with:
 ```
-ln -s /etc/nginx/sites-available/pypi-mirror /etc/nginx/sites-enabled/
+sudo nginx -t
 ```
 
 Then start the web server with:
@@ -99,15 +112,15 @@ sudo systemctl reload nginx
 
 To verify the web server is correctly connected to your mirror use:
 ```
-curl http//{ip}/pypi/ 
+curl http://{ip}/pypi/ 
 ```
 
 If you get an error 403, this is likely due to read permissions for your
 bandersnatch mirror. As nginx requires read and execute access, additionally
-nginx requires the user `www-data` to have ownership. To do this use:
+nginx may want the user `www-data` to have ownership. To do this use:
 ```
-sudo chmod -R 755 {path to mirror}
-sudo chown -R www-data:www-data {path to mirror}
+sudo chmod -R 755 {path to mirror} # for read permissions
+sudo chown -R www-data:www-data {path to mirror} # for ownership
 ```
 
 ### Worker Setup
@@ -119,9 +132,9 @@ ol worker init -p worker_name -i base_image
 ```
 You can choose the worker name and the base image to initialize.
 
-Then in `config.json` edit the `pip_mirror` field with the url to your pip mirror with web at the end.
-Do not include simple at the end, and ensure that the path is the path to base directory i.e.
-`{url}/web`.
+Then in `config.json` edit the `pip_mirror` field with the url to your pip mirror.
+Do not include simple at the end, and ensure that it is the url with the location field.
+`{url}/{location}`.
 
 Before starting the worker ensure that in the registry directory
 you have created a `requirements.in` file with the required packages.
