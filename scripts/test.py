@@ -7,7 +7,6 @@
 import argparse
 import os
 import tempfile
-import sys
 
 from time import time
 from subprocess import call
