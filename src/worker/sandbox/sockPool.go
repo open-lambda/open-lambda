@@ -103,7 +103,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 	moveMemCharge := (parent == nil)
 	cSock.cg = pool.cgPool.GetCg(meta.MemLimitMB, moveMemCharge, meta.CPUPercent)
 	t2.T1()
-	cSock.printf("use cgroup %s", cSock.cg.Name)
+	cSock.printf("use cgroup %s", cSock.cg.Name())
 
 	defer func() {
 		if err != nil {
