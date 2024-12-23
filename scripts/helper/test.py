@@ -13,6 +13,7 @@ import traceback
 from . import ol_oom_killer, mounts, get_ol_stats, get_current_config, get_worker_output
 
 TEST_FILTER = []
+TEST_BLOCKLIST = []
 WORKER_TYPE = []
 RESULTS = OrderedDict({"runs": []})
 START_TIME = None
@@ -27,6 +28,12 @@ def set_test_filter(new_val):
 
     global TEST_FILTER
     TEST_FILTER = new_val
+
+def set_test_blocklist(new_val):
+    ''' Sets up the blocklist for all following tests '''
+
+    global TEST_BLOCKLIST
+    TEST_BLOCKLIST = new_val
 
 def start_tests():
     ''' Starts the background logic for a test run '''
@@ -60,6 +67,9 @@ def check_test_results():
     sys.exit(failed)
 
 def _test_in_filter(name):
+    if name in TEST_BLOCKLIST:
+        return False
+
     if len(TEST_FILTER) == 0:
         return True
 

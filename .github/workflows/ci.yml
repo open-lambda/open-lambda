@@ -60,7 +60,7 @@ jobs:
         make sudo-install
     - name: Test Python (Docker)
       # not all features are supported by docker yet, so we only run some of the tests
-      run: sudo env "PATH=$PATH" ./scripts/test.py --worker_type=docker --test_filter=ping_test,numpy
+      run: sudo env "PATH=$PATH" ./scripts/test.py --worker_type=docker --test_blocklist=max_mem_alloc
     - name: Test Python (SOCK)
       run: sudo env "PATH=$PATH" ./scripts/test.py --worker_type=sock
       timeout-minutes: 20

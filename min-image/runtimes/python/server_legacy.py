@@ -18,6 +18,7 @@ import tornado.ioloop
 import tornado.web
 import tornado.httpserver
 import tornado.netutil
+import tornado.wsgi
 
 HOST_DIR = '/host'
 PKGS_DIR = '/packages'
@@ -64,13 +65,17 @@ class SockFileHandler(tornado.web.RequestHandler):
             self.set_status(500) # internal error
             self.write(traceback.format_exc())
 
-tornado_app = tornado.web.Application([
-    (r".*", SockFileHandler),
-])
-
 # listen on sock file with Tornado
 def lambda_server():
     init()
+    if hasattr(f, "app"):
+        # use WSGI entry
+        tornado_app = tornado.wsgi.WSGIContainer(f.app)
+    else:
+        # use function entry
+        tornado_app = tornado.web.Application([
+            (".*", SockFileHandler),
+        ])
     server = tornado.httpserver.HTTPServer(tornado_app)
     socket = tornado.netutil.bind_unix_socket(SOCK_PATH)
     server.add_socket(socket)

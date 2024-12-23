@@ -2,30 +2,30 @@ package sandbox
 
 import (
 	"fmt"
+	"net"
+	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"syscall"
-	"net"
-	"net/http"
 	"time"
 
 	docker "github.com/fsouza/go-dockerclient"
-
 	"github.com/open-lambda/open-lambda/ol/common"
 	"github.com/open-lambda/open-lambda/ol/worker/sandbox/dockerutil"
 )
 
 // DockerPool is a ContainerFactory that creates docker containers.
 type DockerPool struct {
-	client         *docker.Client
-	labels         map[string]string
-	caps           []string
-	pidMode        string
-	pkgsDir        string
-	idxPtr         *int64
+	client        *docker.Client
+	labels        map[string]string
+	caps          []string
+	pidMode       string
+	pkgsDir       string
+	idxPtr        *int64
 	dockerRuntime string
-	eventHandlers  []SandboxEventFunc
+	eventHandlers []SandboxEventFunc
 	debugger
 }
 
@@ -44,14 +44,14 @@ func NewDockerPool(pidMode string, caps []string) (*DockerPool, error) {
 	}
 
 	pool := &DockerPool{
-		client:         client,
-		labels:         labels,
-		caps:           caps,
-		pidMode:        pidMode,
-		pkgsDir:        common.Conf.Pkgs_dir,
-		idxPtr:         idxPtr,
+		client:        client,
+		labels:        labels,
+		caps:          caps,
+		pidMode:       pidMode,
+		pkgsDir:       common.Conf.Pkgs_dir,
+		idxPtr:        idxPtr,
 		dockerRuntime: common.Conf.Docker_runtime,
-		eventHandlers:  []SandboxEventFunc{},
+		eventHandlers: []SandboxEventFunc{},
 	}
 
 	pool.debugger = newDebugger(pool)
@@ -84,8 +84,19 @@ func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir 
 
 	// pipe for synchronization before socket is ready
 	pipe := filepath.Join(scratchDir, "server_pipe")
-	if err := syscall.Mkfifo(pipe, 0777); err != nil {
-		return nil, err
+	_, statErr := os.Stat(pipe)
+	if statErr == nil {
+		if err := os.Remove(pipe); err != nil {
+			return nil, err
+		}
+	}
+	if statErr == nil || os.IsNotExist(statErr) {
+		if err := syscall.Mkfifo(pipe, 0777); err != nil {
+			fmt.Println("PIPE CREATION IN Create FAILED")
+			return nil, err
+		}
+	} else {
+		return nil, statErr
 	}
 
 	// add installed packages to the path
@@ -94,19 +105,33 @@ func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir 
 		pkgDirs = append(pkgDirs, "/packages/"+pkg+"/files")
 	}
 
+	// create the container using the specified configuration
+	procLimit := int64(common.Conf.Limits.Procs)
+	swappiness := int64(common.Conf.Limits.Swappiness)
+	cpuPercent := int64(common.Conf.Limits.CPU_percent)
+	var memoryLimit int64
+	if strings.Contains(scratchDir, "scratch") {
+		memoryLimit = int64(common.Conf.Limits.Mem_mb * 1024 * 1024)
+	} else {
+		memoryLimit = int64(common.Conf.Limits.Installer_mem_mb * 1024 * 1024)
+	}
 	container, err := pool.client.CreateContainer(
 		docker.CreateContainerOptions{
 			Config: &docker.Config{
 				Cmd:    []string{"/spin"},
-				Image:  dockerutil.LAMBDA_IMAGE,
+				Image:  common.Conf.Docker_base_image,
 				Labels: pool.labels,
 				Env:    []string{"PYTHONPATH=" + strings.Join(pkgDirs, ":")},
 			},
 			HostConfig: &docker.HostConfig{
-				Binds:   volumes,
-				CapAdd:  pool.caps,
-				PidMode: pool.pidMode,
-				Runtime: pool.dockerRuntime,
+				Binds:            volumes,
+				CapAdd:           pool.caps,
+				PidMode:          pool.pidMode,
+				Runtime:          pool.dockerRuntime,
+				PidsLimit:        &procLimit,
+				MemorySwappiness: &swappiness,
+				CPUPercent:       cpuPercent,
+				Memory:           memoryLimit,
 			},
 		},
 	)
@@ -150,7 +175,7 @@ func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir 
 
 	c.httpClient = &http.Client{
 		Transport: &http.Transport{Dial: dial},
-		Timeout: time.Second * time.Duration(common.Conf.Limits.Max_runtime_default),
+		Timeout:   time.Second * time.Duration(common.Conf.Limits.Max_runtime_default),
 	}
 
 	// wrap to make thread-safe and handle container death

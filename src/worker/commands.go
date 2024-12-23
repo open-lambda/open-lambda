@@ -25,7 +25,7 @@ func initCmd(ctx *cli.Context) error {
 		return err
 	}
 
-	if err := common.LoadDefaults(olPath); err != nil {
+	if err := common.LoadDefaults(olPath, ctx.String("image")); err != nil {
 		return err
 	}
 
@@ -50,7 +50,7 @@ func upCmd(ctx *cli.Context) error {
 	if _, err := os.Stat(olPath); os.IsNotExist(err) {
 		// need to init worker dir first
 		fmt.Printf("Did not find OL directory at %s\n", olPath)
-		if err := common.LoadDefaults(olPath); err != nil {
+		if err := common.LoadDefaults(olPath, ctx.String("image")); err != nil {
 			return err
 		}
 
