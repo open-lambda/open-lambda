@@ -185,8 +185,8 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 	}
 	defer sb.Destroy("package installation complete")
 
-	// we still need to run a Sandbox to parse the dependencies, even if it is already installed
-	msg := fmt.Sprintf(`{"pkg": "%s", "alreadyInstalled": %v}`, p.Name, alreadyInstalled)
+	mirrorURL := common.Conf.Pip_index
+	msg := fmt.Sprintf(`{"pkg": "%s", "alreadyInstalled": %v, "pip_mirror":"%s"}`, p.Name, alreadyInstalled, mirrorURL)
 	reqBody := bytes.NewReader([]byte(msg))
 
 	// the URL doesn't matter, since it is local anyway
