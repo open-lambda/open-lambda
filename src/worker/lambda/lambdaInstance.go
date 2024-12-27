@@ -222,6 +222,7 @@ func (linst *LambdaInstance) Task() {
 	}
 }
 
+// TrySendError attempts to send an error response to the client.
 func (linst *LambdaInstance) TrySendError(req *Invocation, statusCode int, msg string, sb sandbox.Sandbox) {
 	if statusCode > 0 {
 		req.w.WriteHeader(statusCode)

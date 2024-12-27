@@ -21,10 +21,10 @@ impl ConfigData {
 
 fn get_config_value(
     mut caller: Caller<BindingsData>,
-    key_ptr: i32,
-    key_len: u32,
-    len_out: i32,
+    args: (i32, u32, i32),
 ) -> Box<dyn Future<Output = i64> + Send + '_> {
+    let (key_ptr, key_len, len_out) = args;
+
     Box::new(async move {
         let memory = caller.get_export("memory").unwrap().into_memory().unwrap();
         let key = get_str(&caller, &memory, key_ptr, key_len).to_string();
@@ -50,6 +50,6 @@ pub fn get_imports(linker: &mut Linker<BindingsData>) {
     let module = "ol_config";
 
     linker
-        .func_wrap3_async(module, "get_config_value", get_config_value)
+        .func_wrap_async(module, "get_config_value", get_config_value)
         .unwrap();
 }

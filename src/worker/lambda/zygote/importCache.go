@@ -64,6 +64,7 @@ type ZygoteReq struct {
 	parent chan sandbox.Sandbox
 }
 
+// NewImportCache creates a new ImportCache instance and initializes it with the given parameters.
 func NewImportCache(codeDirs *common.DirMaker, scratchDirs *common.DirMaker, sbPool sandbox.SandboxPool, pp *packages.PackagePuller) (ic *ImportCache, err error) {
 	cache := &ImportCache{
 		codeDirs:    codeDirs,
@@ -114,6 +115,7 @@ func NewImportCache(codeDirs *common.DirMaker, scratchDirs *common.DirMaker, sbP
 	return cache, nil
 }
 
+// Cleanup performs cleanup operations for the ImportCache and its nodes.
 func (cache *ImportCache) Cleanup() {
 	log.Printf("Import Cache Tree:")
 	cache.root.Dump(0)
@@ -143,7 +145,7 @@ func (cache *ImportCache) recursiveKill(node *ImportCacheNode) {
 	node.mutex.Unlock()
 }
 
-// (1) find Zygote and (2) use it to try creating a new Sandbox
+// Create creates a new sandbox using the import cache.
 func (cache *ImportCache) Create(childSandboxPool sandbox.SandboxPool, isLeaf bool, codeDir, scratchDir string, meta *sandbox.SandboxMeta, rt_type common.RuntimeType) (sandbox.Sandbox, error) {
 	t := common.T0("ImportCache.Create")
 	defer t.T1()

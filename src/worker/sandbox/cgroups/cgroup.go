@@ -27,10 +27,12 @@ func (cg *CgroupImpl) printf(format string, args ...any) {
 	}
 }
 
+// Name returns the name of the cgroup.
 func (cg *CgroupImpl) Name() string {
 	return cg.name
 }
 
+// Release releases the cgroup back to the pool or destroys it if the pool is full.
 func (cg *CgroupImpl) Release() {
 	// if there's room in the recycled channel, add it there.
 	// Otherwise, just delete it.
@@ -63,7 +65,7 @@ func (cg *CgroupImpl) Release() {
 	cg.Destroy()
 }
 
-// Destroy this cgroup
+// Destroy destroys the cgroup.
 func (cg *CgroupImpl) Destroy() {
 	gpath := cg.GroupPath()
 	cg.printf("Destroying cgroup with path \"%s\"", gpath)
@@ -176,6 +178,7 @@ func (cg *CgroupImpl) ReadInt(resource string) int64 {
 	return val
 }
 
+// AddPid adds a process ID to the cgroup.
 func (cg *CgroupImpl) AddPid(pid string) error {
 	err := ioutil.WriteFile(cg.ResourcePath("cgroup.procs"), []byte(pid), os.ModeAppend)
 	if err != nil {
@@ -264,17 +267,17 @@ func (cg *CgroupImpl) SetCPUPercent(percent int) {
 	cg.WriteString("cpu.max", fmt.Sprintf("%d %d", quota, period))
 }
 
-// Freeze processes in the cgroup
+// Pause freezes processes in the cgroup.
 func (cg *CgroupImpl) Pause() error {
 	return cg.setFreezeState(1)
 }
 
-// Unfreeze processes in the cgroup
+// Unpause unfreezes processes in the cgroup.
 func (cg *CgroupImpl) Unpause() error {
 	return cg.setFreezeState(0)
 }
 
-// Get the IDs of all processes running in this cgroup
+// GetPIDs returns the IDs of all processes running in this cgroup.
 func (cg *CgroupImpl) GetPIDs() ([]string, error) {
 	procsPath := cg.ResourcePath("cgroup.procs")
 	pids, err := ioutil.ReadFile(procsPath)
@@ -290,16 +293,18 @@ func (cg *CgroupImpl) GetPIDs() ([]string, error) {
 	return strings.Split(pidStr, "\n"), nil
 }
 
+// CgroupProcsPath returns the path to the cgroup.procs file.
 func (cg *CgroupImpl) CgroupProcsPath() string {
 	return cg.ResourcePath("cgroup.procs")
 }
 
-// KillAllProcs stops all processes inside the cgroup
+// KillAllProcs stops all processes inside the cgroup.
 // Note, the CG most be paused beforehand
 func (cg *CgroupImpl) KillAllProcs() {
 	cg.WriteInt("cgroup.kill", 1)
 }
 
+// DebugString returns a string representation of the cgroup's state.
 func (cg *CgroupImpl) DebugString() string {
 	s := ""
 	if pids, err := cg.GetPIDs(); err == nil {

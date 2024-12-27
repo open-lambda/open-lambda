@@ -40,6 +40,7 @@ type LambdaFunc struct {
 	killChan chan chan bool
 }
 
+// Invoke handles the invocation of the lambda function.
 func (f *LambdaFunc) Invoke(w http.ResponseWriter, r *http.Request) {
 	t := common.T0("LambdaFunc.Invoke")
 	defer t.T1()
@@ -359,6 +360,7 @@ func (f *LambdaFunc) Task() {
 	}
 }
 
+// newInstance creates a new lambda instance.
 func (f *LambdaFunc) newInstance() {
 	if f.codeDir == "" {
 		panic("cannot start instance until code has been fetched")
@@ -376,6 +378,7 @@ func (f *LambdaFunc) newInstance() {
 	go linst.Task()
 }
 
+// Kill signals the lambda function to terminate all instances and perform cleanup.
 func (f *LambdaFunc) Kill() {
 	done := make(chan bool)
 	f.killChan <- done

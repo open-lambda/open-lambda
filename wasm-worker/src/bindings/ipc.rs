@@ -24,12 +24,10 @@ impl IpcData {
 
 fn function_call(
     mut caller: Caller<'_, BindingsData>,
-    func_name_ptr: i32,
-    func_name_len: u32,
-    arg_data_ptr: i32,
-    arg_data_len: u32,
-    len_out: i32,
+    args: (i32, u32, i32, u32, i32),
 ) -> Box<dyn Future<Output = i64> + Send + '_> {
+    let (func_name_ptr, func_name_len, arg_data_ptr, arg_data_len, len_out) = args;
+
     Box::new(async move {
         log::trace!("Got `function_call` call");
 
@@ -67,14 +65,9 @@ fn function_call(
 #[allow(clippy::too_many_arguments)]
 fn http_post(
     mut caller: Caller<'_, BindingsData>,
-    addr_ptr: i32,
-    addr_len: u32,
-    path_ptr: i32,
-    path_len: u32,
-    body_data_ptr: i32,
-    body_data_len: u32,
-    len_out: i32,
+    args: (i32, u32, i32, u32, i32, u32, i32),
 ) -> Box<dyn Future<Output = i64> + Send + '_> {
+    let (addr_ptr, addr_len, path_ptr, path_len, body_data_ptr, body_data_len, len_out) = args;
     Box::new(async move {
         let memory = caller.get_export("memory").unwrap().into_memory().unwrap();
         let addr = get_str(&caller, &memory, addr_ptr, addr_len);
@@ -105,12 +98,10 @@ fn http_post(
 #[allow(clippy::too_many_arguments)]
 fn http_get(
     mut caller: Caller<'_, BindingsData>,
-    addr_ptr: i32,
-    addr_len: u32,
-    path_ptr: i32,
-    path_len: u32,
-    len_out: i32,
+    args: (i32, u32, i32, u32, i32),
 ) -> Box<dyn Future<Output = i64> + Send + '_> {
+    let (addr_ptr, addr_len, path_ptr, path_len, len_out) = args;
+
     Box::new(async move {
         let memory = caller.get_export("memory").unwrap().into_memory().unwrap();
         let addr = get_str(&caller, &memory, addr_ptr, addr_len);
@@ -138,12 +129,12 @@ fn http_get(
 
 pub fn get_imports(linker: &mut Linker<BindingsData>) {
     linker
-        .func_wrap5_async("ol_ipc", "function_call", function_call)
+        .func_wrap_async("ol_ipc", "function_call", function_call)
         .unwrap();
     linker
-        .func_wrap7_async("ol_ipc", "http_post", http_post)
+        .func_wrap_async("ol_ipc", "http_post", http_post)
         .unwrap();
     linker
-        .func_wrap5_async("ol_ipc", "http_get", http_get)
+        .func_wrap_async("ol_ipc", "http_get", http_get)
         .unwrap();
 }

@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/open-lambda/open-lambda/ol/common"
-	"github.com/open-lambda/open-lambda/ol/worker/server"
+	"github.com/open-lambda/open-lambda/ol/worker/event"
 
 	"github.com/urfave/cli/v2"
 )
@@ -74,8 +74,8 @@ func upCmd(ctx *cli.Context) error {
 		return err
 	}
 
-	// PREP STEP 3: stop any prior worker that may be running
-	if err := stopOL(olPath); err != nil {
+	// PREP STEP 3: ensure Open Lambda is in the StoppedClean state
+	if err := bringToStoppedClean(olPath); err != nil {
 		return err
 	}
 
@@ -175,14 +175,14 @@ func upCmd(ctx *cli.Context) error {
 		return fmt.Errorf("worker still not reachable after 30 seconds :: %s", pingErr)
 	}
 
-	if err := server.Main(); err != nil {
+	if err := event.Main(); err != nil {
 		return err
 	}
 
 	return fmt.Errorf("this code should not be reachable")
 }
 
-// status corresponds to the "status" command of the admin tool.
+// statusCmd corresponds to the "status" command of the admin tool.
 func statusCmd(ctx *cli.Context) error {
 	olPath, err := common.GetOlPath(ctx)
 	if err != nil {
@@ -210,7 +210,7 @@ func statusCmd(ctx *cli.Context) error {
 	return nil
 }
 
-// down corresponds to the "down" command of the admin tool.
+// downCmd corresponds to the "down" command of the admin tool.
 func downCmd(ctx *cli.Context) error {
 	olPath, err := common.GetOlPath(ctx)
 	if err != nil {
@@ -220,72 +220,19 @@ func downCmd(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	return stopOL(olPath)
+	return bringToStoppedClean(olPath)
 }
 
-// cleanup corresponds to the "force-cleanup" command of the admin tool.
+// cleanupCmd corresponds to the "force-cleanup" command of the admin tool.
 func cleanupCmd(ctx *cli.Context) error {
 	olPath, err := common.GetOlPath(ctx)
 	if err != nil {
 		return err
 	}
-
-	cgRoot := filepath.Join("/sys", "fs", "cgroup", filepath.Base(olPath)+"-sandboxes")
-	fmt.Printf("ATTEMPT to cleanup cgroups at %s\n", cgRoot)
-
-	if files, err := ioutil.ReadDir(cgRoot); err != nil {
-		fmt.Printf("could not find cgroup root: %s\n", err.Error())
-	} else {
-		kill := filepath.Join(cgRoot, "cgroup.kill")
-		if err := ioutil.WriteFile(kill, []byte(fmt.Sprintf("%d", 1)), os.ModeAppend); err != nil {
-			fmt.Printf("could kill processes in cgroup: %s\n", err.Error())
-		}
-
-		for _, file := range files {
-			if strings.HasPrefix(file.Name(), "cg-") {
-				cg := filepath.Join(cgRoot, file.Name())
-				fmt.Printf("try removing %s\n", cg)
-				if err := syscall.Rmdir(cg); err != nil {
-					fmt.Printf("could remove cgroup: %s\n", err.Error())
-				}
-			}
-		}
-
-		if err := syscall.Rmdir(cgRoot); err != nil {
-			fmt.Printf("could remove cgroup root: %s\n", err.Error())
-		}
-	}
-
-	dirName := filepath.Join(olPath, "worker", "root-sandboxes")
-	fmt.Printf("ATTEMPT to cleanup mounts at %s\n", dirName)
-
-	if files, err := ioutil.ReadDir(dirName); err != nil {
-		fmt.Printf("could not find mount root: %s\n", err.Error())
-	} else {
-		for _, file := range files {
-			path := filepath.Join(dirName, file.Name())
-			fmt.Printf("try unmounting %s\n", path)
-			if err := syscall.Unmount(path, syscall.MNT_DETACH); err != nil {
-				fmt.Printf("could not unmount: %s\n", err.Error())
-			}
-
-			if err := syscall.Rmdir(path); err != nil {
-				fmt.Printf("could remove mount dir: %s\n", err.Error())
-			}
-		}
-	}
-
-	if err := syscall.Unmount(dirName, syscall.MNT_DETACH); err != nil {
-		fmt.Printf("could not unmount %s: %s\n", dirName, err.Error())
-	}
-
-	if err := os.Remove(filepath.Join(olPath, "worker", "worker.pid")); err != nil {
-		fmt.Printf("could not remove worker.pid: %s\n", err.Error())
-	}
-
-	return nil
+	return bringToStoppedClean(olPath)
 }
 
+// WorkerCommands returns a list of CLI commands for the worker.
 func WorkerCommands() []*cli.Command {
 	pathFlag := cli.StringFlag{
 		Name:    "path",

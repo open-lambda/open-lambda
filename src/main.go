@@ -129,7 +129,7 @@ func overrideOpts(confPath, overridePath, optsStr string) error {
 	return ioutil.WriteFile(overridePath, s, 0644)
 }
 
-// corresponds to the "pprof mem" command of the admin tool.
+// pprofMem corresponds to the "pprof mem" command of the admin tool.
 func pprofMem(ctx *cli.Context) error {
 	olPath, err := common.GetOlPath(ctx)
 	if err != nil {
@@ -167,6 +167,7 @@ func pprofMem(ctx *cli.Context) error {
 	return nil
 }
 
+// pprofCpuStart corresponds to the "pprof cpu-start" command of the admin tool.
 func pprofCpuStart(ctx *cli.Context) error {
 	olPath, err := common.GetOlPath(ctx)
 	if err != nil {
@@ -202,6 +203,7 @@ func pprofCpuStart(ctx *cli.Context) error {
 	return fmt.Errorf("Failed to start cpu profiling: %s\n", body)
 }
 
+// pprofCpuStop corresponds to the "pprof cpu-stop" command of the admin tool.
 func pprofCpuStop(ctx *cli.Context) error {
 	olPath, err := common.GetOlPath(ctx)
 	if err != nil {

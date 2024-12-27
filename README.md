@@ -23,6 +23,7 @@ yourself and put an HTTP load balancer in front of them.
 
 ## Related Publications
 
+* [Forklift: Fitting Zygote Trees for Faster Package Initialization](https://dl.acm.org/doi/pdf/10.1145/3702634.3702952) by Yang <i>et al.</i> (WoSC '24)
 * [SOCK: Rapid Task Provisioning with Serverless-Optimized Containers](https://www.usenix.org/system/files/conference/atc18/atc18-oakes.pdf) by Oakes <i>et al.</i> (ATC '18)
 * [Pipsqueak: Lean Lambdas with Large Libraries](https://ieeexplore.ieee.org/document/7979853) by Oakes <i>et al.</i> (ICDCSW '17)
 * [Serverless Computation with OpenLambda](https://www.usenix.org/system/files/login/articles/login_winter16_03_hendrickson.pdf) by Hendrickson <i>et al.</i> (;login '16)

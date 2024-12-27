@@ -240,7 +240,7 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type common.R
 		}
 
 		// Figure out runtime type
-		if _, err := os.Stat(targetDir + "f.py"); !os.IsNotExist(err) {
+		if _, err := os.Stat(targetDir + "/f.py"); !os.IsNotExist(err) {
 			rt_type = common.RT_PYTHON
 		} else if _, err := os.Stat(targetDir + "/f.bin"); !os.IsNotExist(err) {
 			rt_type = common.RT_NATIVE
