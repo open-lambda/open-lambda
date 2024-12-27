@@ -1,18 +1,21 @@
+cargo-features=["edition2024"]
+
 [package]
 name = "open-lambda-runtime"
 version = "0.1.0"
 authors = ["Kai Mast <kaimast@cs.wisc.edu>"]
-edition = "2018"
+edition = "2024"
 
 [dependencies]
 tokio = { version="1", features=["net", "io-util", "rt-multi-thread", "macros", "signal", "process"] }
-hyper = { version="0.14", features=["server", "http1", "runtime", "stream"] }
-tokio-stream = { version="0.1", features=["net"] }
+hyper = { version="1", features=["server", "http1"] }
 simple-logging = "2"
 log = "0.4"
-dashmap = "5"
-nix = { version="0.28", features=["sched"] }
+nix = { version="0.29", features=["sched"] }
 futures-util = "0.3"
+pin-project-lite = "0.2"
+http-body-util = "0.1"
+hyper-util = { version="0.1", features=["tokio"] }
 
 [profile.release]
 debug = true

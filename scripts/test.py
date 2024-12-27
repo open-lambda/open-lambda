@@ -24,6 +24,7 @@ from open_lambda import OpenLambda
 # These will be set by argparse in main()
 OL_DIR = None
 
+
 @test
 def install_tests():
     # we want to make sure we see the expected number of pip installs,
@@ -59,9 +60,11 @@ def install_tests():
             # requests (and deps) + simplejson
             assert_eq(installs, 6)
 
+
 def check_status_code(req):
     if req.status_code != 200:
         raise requests.HTTPError(f"STATUS {req.status_code}: {req.text}")
+
 
 @test
 def numpy_test():

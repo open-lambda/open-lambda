@@ -138,7 +138,7 @@ class DockerWorker():
 
         try:
             print("Starting Docker container worker")
-            run(['./ol', 'worker', 'up', f'-p={_OL_DIR}', '--detach'])
+            run(['sudo', './ol', 'worker', 'up', f'-p={_OL_DIR}', '--detach'])
         except Exception as err:
             raise RuntimeError(f"failed to start worker: {err}") from err
 
@@ -166,7 +166,7 @@ class DockerWorker():
 
         try:
             print("Stopping Docker container worker")
-            run(['./ol', 'worker', 'down', '-p='+_OL_DIR])
+            run(['sudo', './ol', 'worker', 'down', '-p='+_OL_DIR])
         except Exception as err:
             raise RuntimeError("Failed to start worker") from err
 
@@ -179,7 +179,7 @@ class SockWorker():
 
         try:
             print("Starting SOCK container worker")
-            run(['./ol', 'worker', 'up', '-p='+_OL_DIR, '--detach'])
+            run(['sudo', './ol', 'worker', 'up', '-p='+_OL_DIR, '--detach'])
         except Exception as err:
             raise RuntimeError(f"failed to start worker: {err}") from err
 
@@ -203,13 +203,14 @@ class SockWorker():
         if self.is_running():
             self._running = False
         else:
-            return # Already stopped
+            return  # Already stopped
 
         try:
             print("Stopping SOCK container worker")
-            run(['./ol', 'worker', 'down', '-p='+_OL_DIR])
+            run(['sudo', './ol', 'worker', 'down', '-p='+_OL_DIR])
         except Exception as err:
             raise RuntimeError("Failed to start worker") from err
+
 
 class WasmWorker():
     ''' Runs OpenLambda's WebAssembly worker '''
@@ -254,6 +255,7 @@ class WasmWorker():
         self._process.terminate()
         self._process = None
 
+
 def prepare_open_lambda(ol_dir):
     '''
     Sets up the working director for open lambda,
@@ -263,6 +265,7 @@ def prepare_open_lambda(ol_dir):
     # (except for the base "lambda" dir)
     run(['./ol', 'worker', 'init', f'-p={ol_dir}'])
 
+
 def mounts():
     ''' Returns a list of all mounted directories '''
 
@@ -270,6 +273,7 @@ def mounts():
     output = str(output, "utf-8")
     output = output.split("\n")
     return set(output)
+
 
 def ol_oom_killer():
     ''' Will terminate OpenLambda if we run out of memory '''
@@ -279,6 +283,7 @@ def ol_oom_killer():
             print("out of memory, trying to kill OL")
             os.system('pkill ol')
         sleep(1)
+
 
 def get_mem_stat_mb(stat):
     ''' Get the current memory usage in MB '''
@@ -290,8 +295,10 @@ def get_mem_stat_mb(stat):
                 return int(parts[1]) / 1024
     raise ValueError('could not get stat')
 
+
 def assert_eq(actual, expected):
     ''' Test helper. Will fail if actual != expected '''
 
     if expected != actual:
-        raise ValueError(f'Expected value "{expected}", but was "{actual}"')
+        raise ValueError(f'Expected value "{expected}", '
+                         f'but was "{actual}"')
