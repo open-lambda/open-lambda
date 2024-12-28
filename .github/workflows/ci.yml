@@ -50,7 +50,7 @@ jobs:
     - name: Install pylint
       run: pip3 install pylint==3.3.3
     - name: Install revive (go linter)
-      run: go install github.com/mgechev/revive@latest
+      run: go install github.com/mgechev/revive@1.5.1
     - name: Install cross
       run: cargo install cross
     - name: Build OpenLambda
