@@ -186,9 +186,9 @@ const (
 // This function returns the current state of OpenLambda, the PID if possible,
 // and an error if it encounters any.
 func checkState() (OlState, error) {
-    if common.Conf == nil {
-        panic("Invalid state: config not initialized");
-    }
+	if common.Conf == nil {
+		panic("Invalid state: config not initialized");
+	}
 
 	olPath := common.Conf.Worker_dir
 	dirStat, err := os.Stat(olPath)
