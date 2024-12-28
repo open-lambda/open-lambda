@@ -64,7 +64,7 @@ func (f *LambdaFunc) Invoke(w http.ResponseWriter, r *http.Request) {
 // correspond to which LambdaFuncs
 func (f *LambdaFunc) printf(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
-	log.Debug("%s [FUNC %s]", strings.TrimRight(msg, "\n"), f.name)
+	log.Printf("%s [FUNC %s]", strings.TrimRight(msg, "\n"), f.name)
 }
 
 // parseMeta reads in a requirements.txt file that was built from pip-compile
