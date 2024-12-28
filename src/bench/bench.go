@@ -1,3 +1,4 @@
+// Package bench implements benchmarking functionality for OpenLambda
 package bench
 
 import (

@@ -17,10 +17,10 @@ const (
 	STORE_MEMORY
 )
 
-var BIND uintptr = uintptr(syscall.MS_BIND)
-var BIND_RO uintptr = uintptr(syscall.MS_BIND | syscall.MS_RDONLY | syscall.MS_REMOUNT)
-var PRIVATE uintptr = uintptr(syscall.MS_PRIVATE)
-var SHARED uintptr = uintptr(syscall.MS_SHARED)
+var BIND = uintptr(syscall.MS_BIND)
+var BIND_RO = uintptr(syscall.MS_BIND | syscall.MS_RDONLY | syscall.MS_REMOUNT)
+var PRIVATE = uintptr(syscall.MS_PRIVATE)
+var SHARED = uintptr(syscall.MS_SHARED)
 
 var nextDirId int64 = 1000
 

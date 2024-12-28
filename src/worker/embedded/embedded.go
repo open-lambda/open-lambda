@@ -1,9 +1,8 @@
+// Package embedded lets us include some Python code and other files directly inside
+// the binary so that ol is a standalone deployable.
 package embedded
 
 import _ "embed"
-
-// This lets us embed some Python code and other files directly inside
-// the binary so that ol is a standalone deployable.
 
 // Default tree of 40 Zygotes nodes (with nodes for Pandas, etc)
 

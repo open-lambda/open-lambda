@@ -1,3 +1,4 @@
+// Package main is entry point for the `ol` command
 package main
 
 import (

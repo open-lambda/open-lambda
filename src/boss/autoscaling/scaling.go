@@ -1,3 +1,5 @@
+// Package autoscaling provides the interface for different
+// implementations of the scaling logic
 package autoscaling
 
 import "github.com/open-lambda/open-lambda/ol/boss/cloudvm"

@@ -144,7 +144,7 @@ func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir 
 		return nil, fmt.Errorf("socket path length cannot exceed 108 characters (try moving cluster closer to the root directory")
 	}
 
-	dial := func(proto, addr string) (net.Conn, error) {
+	dial := func(_, _ string) (net.Conn, error) {
 		return net.Dial("unix", sockPath)
 	}
 

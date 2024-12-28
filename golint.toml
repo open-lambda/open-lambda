@@ -21,6 +21,10 @@ errorCode = 2
 [rule.superfluous-else]
     severity = "error"
 
+[rule.package-comments]
+    Disabled = true
+[rule.unchecked-type-assertion]
+    Disabled = true
 [rule.defer]
     Disabled = true
 [rule.empty-block]

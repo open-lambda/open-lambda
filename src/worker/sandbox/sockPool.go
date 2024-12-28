@@ -185,8 +185,8 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 		return nil, fmt.Errorf("socket path length cannot exceed 108 characters (try moving cluster closer to the root directory")
 	}
 
-	log.Debug("Connecting to container at '%s'", sockPath)
-	dial := func(proto, addr string) (net.Conn, error) {
+	log.Printf("Connecting to container at '%s'", sockPath)
+	dial := func(_, _ string) (net.Conn, error) {
 		return net.Dial("unix", sockPath)
 	}
 
@@ -202,7 +202,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 
 func (pool *SOCKPool) printf(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
-	log.Debug("%s [SOCK POOL %s]", strings.TrimRight(msg, "\n"), pool.name)
+	log.Printf("%s [SOCK POOL %s]", strings.TrimRight(msg, "\n"), pool.name)
 }
 
 // handler(...) will be called everytime a sandbox-related event occurs,
