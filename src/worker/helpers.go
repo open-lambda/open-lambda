@@ -186,6 +186,9 @@ const (
 // This function returns the current state of OpenLambda, the PID if possible,
 // and an error if it encounters any.
 func checkState() (OlState, error) {
+    if common.Conf == nil {
+        panic("Invalid state: config not initialized");
+    }
 
 	olPath := common.Conf.Worker_dir
 	dirStat, err := os.Stat(olPath)
@@ -396,11 +399,6 @@ func stoppedDirtyToStoppedClean(olPath string) error {
 
 // bringToStoppedClean tries the best to bring the state of OpenLambda to StoppedClean no mater which state it is in.
 func bringToStoppedClean(olPath string) error {
-	err := common.LoadConf(filepath.Join(olPath, "config.json"))
-	if err != nil {
-		return fmt.Errorf("failed to load OL config: %s", err)
-	}
-
 	state, err := checkState()
 	if err != nil {
 		return fmt.Errorf("failed to check OL state: %s", err)
