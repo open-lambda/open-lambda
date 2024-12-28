@@ -186,7 +186,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 	}
 
 	log.Printf("Connecting to container at '%s'", sockPath)
-	dial := func(proto, addr string) (net.Conn, error) {
+	dial := func(_, _ string) (net.Conn, error) {
 		return net.Dial("unix", sockPath)
 	}
 

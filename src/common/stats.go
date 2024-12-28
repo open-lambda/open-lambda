@@ -117,7 +117,7 @@ func (l *Latency) T1() {
 
 	// make sure we didn't double record
 	var zero time.Time
-	if l.t0 == zero {
+	if l.t0.Equal(zero) {
 		panic("double counted stat for " + l.name)
 	}
 	l.t0 = zero

@@ -199,7 +199,7 @@ func (server *SOCKServer) Handle(w http.ResponseWriter, r *http.Request) {
 
 // cleanup cleans up the SOCK server.
 func (server *SOCKServer) cleanup() {
-	server.sandboxes.Range(func(key, val any) bool {
+	server.sandboxes.Range(func(_, val any) bool {
 		val.(sandbox.Sandbox).Destroy("SOCKServer cleanup")
 		return true
 	})

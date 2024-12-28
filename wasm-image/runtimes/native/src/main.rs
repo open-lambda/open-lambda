@@ -1,70 +1,187 @@
-#![feature(async_closure)]
-
-use hyper::service::{make_service_fn, service_fn};
-use hyper::{Body, Method, Request, Response, Result, Server, StatusCode};
-
-use futures_util::stream::StreamExt;
+#![feature(impl_trait_in_assoc_type)]
 
 use std::env::args;
 use std::fs::File;
 use std::io::Write;
 use std::os::unix::io::FromRawFd;
+use std::os::unix::net::UnixListener as StdUnixListener;
+use std::os::unix::process::ExitStatusExt;
 use std::process::Stdio;
+
+use hyper::body::{Bytes, Incoming};
+use hyper::server::conn::http1;
+use hyper::{Method, Request, Response, StatusCode};
+
+use http_body_util::{BodyExt, Full};
 
 use tokio::io::AsyncReadExt;
 use tokio::net::UnixListener;
 use tokio::process::Command;
 use tokio::select;
-use tokio::signal::unix::{signal, SignalKind};
-use tokio_stream::wrappers::UnixListenerStream;
+use tokio::signal::unix::{SignalKind, signal};
 
-use nix::sched::{unshare, CloneFlags};
-use nix::unistd::{fork, getpid, ForkResult};
+use nix::sched::{CloneFlags, unshare};
+use nix::unistd::{ForkResult, fork, getpid};
 
-use std::os::unix::net::UnixListener as StdUnixListener;
+use hyper_util::rt::tokio::TokioIo;
 
-// Taken from: https://github.com/hyperium/hyper/blob/master/examples/single_threaded.rs
-#[derive(Clone, Copy, Debug)]
-struct LocalExec;
+struct Service {}
 
-impl<F> hyper::rt::Executor<F> for LocalExec
-where
-    F: std::future::Future + 'static, // not requiring `Send`
-{
-    fn execute(&self, fut: F) {
-        // This will spawn into the currently running `LocalSet`.
-        tokio::task::spawn_local(fut);
+impl hyper::service::Service<Request<Incoming>> for Service {
+    type Response = Response<Full<Bytes>>;
+    type Error = hyper::Error;
+    type Future = impl std::future::Future<Output = hyper::Result<Response<Full<Bytes>>>>;
+
+    fn call(&self, req: Request<Incoming>) -> Self::Future {
+        Self::handle_request(req)
+    }
+}
+
+impl Service {
+    async fn handle_request(req: Request<Incoming>) -> hyper::Result<hyper::Response<Full<Bytes>>> {
+        log::trace!("Got new request: {req:?}");
+
+        let method = req.method().clone();
+        let args = req.collect().await?.to_bytes().to_vec();
+
+        if method == Method::POST {
+            Self::execute_function(args).await
+        } else {
+            panic!("Got unexpected request");
+        }
+    }
+
+    async fn execute_function(args: Vec<u8>) -> hyper::Result<Response<Full<Bytes>>> {
+        use std::io::Read;
+
+        let arg_str = String::from_utf8(args).unwrap();
+        log::debug!("Executing function with arg `{arg_str}`");
+
+        let status_code;
+
+        let mut child = Command::new("/handler/f.bin")
+            .arg(arg_str)
+            .env("RUST_LOG", "info")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("Failed to spawn lambda process");
+
+        let child_future = child.wait();
+
+        let mut sighandler = signal(SignalKind::terminate()).expect("Failed to install sighandler");
+        let sig_future = sighandler.recv();
+
+        log::debug!("Waiting for process to terminate or signal");
+
+        let error = select! {
+            _ = sig_future => {
+                log::info!("Got ctrl+c");
+                child.kill().await.expect("Failed to kill child");
+                child.wait().await.unwrap();
+
+                std::process::exit(0);
+            }
+            res = child_future => {
+                let status = res.unwrap();
+
+                if status.success() {
+                    None 
+                } else if let Some(code) = status.code() {
+                    Some(format!("Function failed with error_code: {code}"))
+                } else if let Some(signal) = status.signal() {
+                    Some(format!("Function failed with signal: {signal}"))
+                } else {
+                    panic!("Function failed for unknown reason");
+                }
+            }
+        };
+
+        let body = if let Some(err_str) = error {
+            status_code = StatusCode::INTERNAL_SERVER_ERROR;
+            log::error!("{err_str}");
+            err_str
+        } else { 
+            log::debug!("Function returned successfully");
+
+            match File::open("/tmp/output") {
+                Ok(mut f) => {
+                    let mut jstr = String::new();
+                    f.read_to_string(&mut jstr).unwrap();
+
+                    log::debug!("Got response: {jstr}");
+
+                    status_code = StatusCode::OK;
+                    jstr
+                }
+                Err(err) => {
+                    if err.kind() != std::io::ErrorKind::NotFound {
+                        let err_str = format!("Got unexpected error: {err:?}");
+                        log::error!("{err_str}");
+
+                        status_code = StatusCode::INTERNAL_SERVER_ERROR;
+                        err_str
+                    } else {
+                        log::debug!("Function did not give a response");
+
+                        status_code = StatusCode::OK;
+                        String::default()
+                    }
+                }
+            }
+        };
+
+        let mut stdout = String::default();
+        let mut stderr = String::default();
+
+        child
+            .stdout
+            .take()
+            .expect("Failed to get child stdout")
+            .read_to_string(&mut stdout)
+            .await
+            .unwrap();
+        child
+            .stderr
+            .take()
+            .expect("Failed to get child stderr")
+            .read_to_string(&mut stderr)
+            .await
+            .unwrap();
+
+        if stdout.is_empty() {
+            log::debug!("Program has no stdout output");
+        } else {
+            let mut log_line = String::from("Process stdout:\n");
+
+            for line in stdout.split('\n') {
+                log_line += format!("    {line}\n").as_str();
+            }
+
+            log::trace!("{log_line}");
+        }
+        if stderr.is_empty() {
+            log::debug!("Program has no stderr output");
+        } else {
+            let mut log_line = String::from("Process stderr:\n");
+
+            for line in stderr.split('\n') {
+                log_line += format!("    {}\n", line).as_str();
+            }
+
+            log::error!("{log_line}");
+        }
+
+        let response = Response::builder()
+            .status(status_code)
+            .body(body.into())
+            .unwrap();
+
+        Ok(response)
     }
 }
 
 fn main() {
-    let make_service = make_service_fn(async move |_| {
-        Ok::<_, hyper::Error>(service_fn(async move |req: Request<Body>| {
-            log::trace!("Got new request: {req:?}");
-
-            let mut args = Vec::new();
-            let method = req.method().clone();
-
-            let mut body = req.into_body();
-
-            while let Some(chunk) = body.next().await {
-                match chunk {
-                    Ok(c) => {
-                        let mut chunk = c.to_vec();
-                        args.append(&mut chunk);
-                    }
-                    Err(err) => panic!("Got error: {:?}", err),
-                }
-            }
-
-            if method == &Method::POST {
-                execute_function(args).await
-            } else {
-                panic!("Got unexpected request");
-            }
-        }))
-    });
-
     if let Err(err) = simple_logging::log_to_file("/host/ol-runtime.log", log::LevelFilter::Info) {
         println!("Failed to create logfile: {err}");
     }
@@ -87,7 +204,7 @@ fn main() {
         let fd = 3 + i;
         let mut f = unsafe { File::from_raw_fd(fd) };
 
-        f.write(format!("{pid}").as_bytes()).unwrap();
+        f.write_all(format!("{pid}").as_bytes()).unwrap();
         log::trace!("Joined cgroup, closing FD {fd}'");
     }
 
@@ -106,151 +223,36 @@ fn main() {
         .expect("Failed to start tokio");
 
     runtime.block_on(async move {
-        let mut sighandler = signal(SignalKind::terminate()).expect("Failed to install sighandler");
+        let mut sigterm = signal(SignalKind::terminate()).expect("Failed to install sighandler");
 
-        let listener = UnixListener::from_std(listener).unwrap();
-        let stream = UnixListenerStream::new(listener);
-        let acceptor = hyper::server::accept::from_stream(stream);
+        let accept_task = tokio::spawn(async move {
+            let listener = UnixListener::from_std(listener).unwrap();
 
-        let server = Server::builder(acceptor)
-            .serve(make_service)
-            .with_graceful_shutdown(async move {
-                sighandler.recv().await;
-                log::debug!("Got ctrl+c");
-            });
+            log::info!("Listening on unix:{socket_path}");
 
-        log::info!("Listening on unix:{socket_path}");
+            while let Ok((conn, _addr)) = listener.accept().await {
+                let service = Service {};
+                let conn = TokioIo::new(conn);
 
-        if let Err(err) = server.await {
-            log::error!("server error: {err}");
-        }
-    });
-}
-
-async fn execute_function(args: Vec<u8>) -> Result<Response<Body>> {
-    use std::io::Read;
-
-    let arg_str = String::from_utf8(args).unwrap();
-    log::debug!("Executing function with arg `{arg_str}`");
-
-    let body;
-    let status_code;
-
-    let mut child = Command::new("/handler/f.bin")
-        .arg(arg_str)
-        .env("RUST_LOG", "debug")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("Failed to spawn lambda process");
-
-    let child_future = child.wait();
-
-    let mut sighandler = signal(SignalKind::terminate()).expect("Failed to install sighandler");
-    let sig_future = sighandler.recv();
-
-    let mut e_str = String::from("");
-
-    log::debug!("Waiting for process to terminate or signal");
-
-    let success = select! {
-        _ = sig_future => {
-            log::info!("Got ctrl+c");
-            child.kill().await.expect("Failed to kill child");
-            child.wait().await.unwrap();
-
-            std::process::exit(0);
-        }
-        res = child_future => {
-            let status = res.unwrap();
-
-            if status.success() {
-                true
-            } else {
-                let exit_code = status.code().unwrap_or(42);
-                e_str = format!("Function failed with exitcode: {exit_code}");
-                false
+                if let Err(http_err) = http1::Builder::new()
+                    .keep_alive(true)
+                    .serve_connection(conn, service)
+                    .await
+                {
+                    log::error!("Error while serving HTTP connection: {http_err}");
+                }
             }
-        }
-    };
+        });
 
-    if !success {
-        status_code = StatusCode::INTERNAL_SERVER_ERROR;
-        log::error!("{e_str}");
-        body = e_str.into();
-    } else {
-        log::debug!("Function returned successfully");
-
-        match File::open("/tmp/output") {
-            Ok(mut f) => {
-                let mut jstr = String::new();
-                f.read_to_string(&mut jstr).unwrap();
-
-                log::debug!("Got response: {jstr}");
-
-                body = Body::from(jstr);
-                status_code = StatusCode::OK;
-            }
-            Err(err) => {
-                if err.kind() != std::io::ErrorKind::NotFound {
-                    let err_str = format!("Got unexpected error: {err:?}");
-                    log::error!("{err_str}");
-
-                    body = Body::from(err_str);
-                    status_code = StatusCode::INTERNAL_SERVER_ERROR;
+        tokio::select! {
+            _result = accept_task => {}
+            result = sigterm.recv() => {
+                if result.is_none() {
+                    log::error!("Failed to receive signal. Shutting down.");
                 } else {
-                    log::debug!("Function did not give a response");
-
-                    body = Body::empty();
-                    status_code = StatusCode::OK;
+                    log::info!("Received SIGTERM. Shutting down gracefully...");
                 }
             }
         }
-    }
-
-    let mut stdout = String::from("");
-    let mut stderr = String::from("");
-
-    child
-        .stdout
-        .take()
-        .expect("Failed to get child stdout")
-        .read_to_string(&mut stdout)
-        .await
-        .unwrap();
-    child
-        .stderr
-        .take()
-        .expect("Failed to get child stderr")
-        .read_to_string(&mut stderr)
-        .await
-        .unwrap();
-
-    if stdout == "" {
-        log::debug!("Program has no stdout output");
-    } else {
-        let mut log_line = String::from("Process stdout:\n");
-
-        for line in stdout.split('\n') {
-            log_line += format!("    {}\n", line).as_str();
-        }
-
-        log::trace!("{}", log_line);
-    }
-
-    if stderr == "" {
-        log::debug!("Program has no stderr output");
-    } else {
-        let mut log_line = String::from("Process stderr:\n");
-
-        for line in stderr.split('\n') {
-            log_line += format!("    {}\n", line).as_str();
-        }
-
-        log::trace!("{}", log_line);
-    }
-
-    let response = Response::builder().status(status_code).body(body).unwrap();
-
-    Ok(response)
+    });
 }

@@ -48,9 +48,9 @@ jobs:
       with:
          python-version: '3.12'
     - name: Install pylint
-      run: pip3 install pylint==2.15.0
+      run: pip3 install pylint==3.3.3
     - name: Install revive (go linter)
-      run: go install github.com/mgechev/revive@v1.3.4
+      run: go install github.com/mgechev/revive@v1.5.1
     - name: Install cross
       run: cargo install cross
     - name: Build OpenLambda

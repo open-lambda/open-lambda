@@ -150,7 +150,7 @@ func (container *SOCKContainer) launchContainerProxy() (err error) {
 			if err != nil {
 				return err
 			}
-			return fmt.Errorf("container proxy does not seem to be running")
+			return fmt.Errorf("Container proxy does not seem to be running")
 		default:
 		}
 
@@ -171,7 +171,7 @@ func (container *SOCKContainer) launchContainerProxy() (err error) {
 		}
 
 		if pid != proc.Pid {
-			return fmt.Errorf("Database proxy pid does not match")
+			return fmt.Errorf("Container proxy pid does not match")
 		}
 
 		pingErr = nil
