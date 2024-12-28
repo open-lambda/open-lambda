@@ -225,8 +225,8 @@ func pprofCpuStop(ctx *cli.Context) error {
 	if response.StatusCode == 400 {
 		return fmt.Errorf("Should call \"ol pprof cpu-start\" first\n")
 	} else if response.StatusCode == 500 {
-   	 	return fmt.Errorf("Unknown server error\n")
-  	}
+		return fmt.Errorf("Unknown server error\n")
+	}
 
 	path := ctx.String("out")
 	if path == "" {
@@ -374,17 +374,17 @@ OPTIONS:
 					Name:      "cpu-start",
 					Usage:     "Starts CPU profiling",
 					UsageText: "ol pprof cpu-start ",
-					Action: pprofCpuStart,
+					Action:    pprofCpuStart,
 				},
 				{
 					Name:      "cpu-stop",
 					Usage:     "Stops CPU profiling if started",
 					UsageText: "ol pprof cpu-stop [--out=NAME]",
-					Action: pprofCpuStop,
+					Action:    pprofCpuStop,
 					Flags: []cli.Flag{
 						&cli.StringFlag{
-							Name: "out",
-              Aliases: []string{"o"},
+							Name:    "out",
+							Aliases: []string{"o"},
 						},
 					},
 				},
