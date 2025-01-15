@@ -17,7 +17,14 @@ import requests
 from helper import DockerWorker, SockWorker, prepare_open_lambda, setup_config
 from helper import get_current_config, TestConfContext, assert_eq
 
-from helper.test import set_test_filter, set_test_blocklist, start_tests, check_test_results, set_worker_type, test
+from helper.test import (
+    set_test_filter,
+    set_test_blocklist,
+    start_tests,
+    check_test_results,
+    set_worker_type,
+    test
+)
 
 from open_lambda import OpenLambda
 
@@ -289,12 +296,12 @@ def main():
     args = parser.parse_args()
 
     if args.test_filter and args.test_blocklist:
-        raise RuntimeError(f"--test_filter and --test_blocklist cannot be used together")
-    elif args.test_filter:
+        raise RuntimeError("--test_filter and --test_blocklist cannot be used together")
+    if args.test_filter:
         set_test_filter([name for name in args.test_filter.split(",") if name != ''])
     elif args.test_blocklist:
         set_test_blocklist([name for name in args.test_blocklist.split(",") if name != ''])
-    
+
     OL_DIR = args.ol_dir
 
     setup_config(args.ol_dir)
