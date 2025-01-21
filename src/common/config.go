@@ -61,16 +61,18 @@ type Config struct {
 	// pass through to sandbox envirenment variable
 	Sandbox_config any `json:"sandbox_config"`
 
-	// which OCI implementation to use for the docker sandbox (e.g., runc or runsc)
-	Docker_runtime string `json:"docker_runtime"`
-
-	// name of the image used for Docker containers
-	Docker_base_image string `json:"docker_base_image"`
-
+	Docker   DockerConfig   `json:"docker"`
 	Limits   LimitsConfig   `json:"limits"`
 	Features FeaturesConfig `json:"features"`
 	Trace    TraceConfig    `json:"trace"`
 	Storage  StorageConfig  `json:"storage"`
+}
+
+type DockerConfig struct {
+	// which OCI implementation to use for the docker sandbox (e.g., runc or runsc)
+	Runtime string `json:"runtime"`
+	// name of the image used for Docker containers
+	Base_image string `json:"base_image"`
 }
 
 type FeaturesConfig struct {
@@ -134,7 +136,7 @@ type LimitsConfig struct {
 
 // Choose reasonable defaults for a worker deployment (based on memory capacity).
 // olPath need not exist (it is used to determine default paths for registry, etc).
-func LoadDefaults(olPath string, dockerImg string) error {
+func LoadDefaults(olPath string) error {
 	workerDir := filepath.Join(olPath, "worker")
 	registryDir := filepath.Join(olPath, "registry")
 	baseImgDir := filepath.Join(olPath, "lambda")
@@ -164,7 +166,9 @@ func LoadDefaults(olPath string, dockerImg string) error {
 		Registry_cache_ms: 5000, // 5 seconds
 		Mem_pool_mb:       memPoolMb,
 		Import_cache_tree: zygoteTreePath,
-		Docker_base_image: dockerImg,
+		Docker: DockerConfig{
+			Base_image: "ol-min",
+		}
 		Limits: LimitsConfig{
 			Procs:               10,
 			Mem_mb:              50,

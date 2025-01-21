@@ -50,7 +50,7 @@ func NewDockerPool(pidMode string, caps []string) (*DockerPool, error) {
 		pidMode:       pidMode,
 		pkgsDir:       common.Conf.Pkgs_dir,
 		idxPtr:        idxPtr,
-		dockerRuntime: common.Conf.Docker_runtime,
+		dockerRuntime: common.Conf.Docker.Runtime,
 		eventHandlers: []SandboxEventFunc{},
 	}
 
@@ -109,17 +109,11 @@ func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir 
 	procLimit := int64(common.Conf.Limits.Procs)
 	swappiness := int64(common.Conf.Limits.Swappiness)
 	cpuPercent := int64(common.Conf.Limits.CPU_percent)
-	var memoryLimit int64
-	if strings.Contains(scratchDir, "scratch") {
-		memoryLimit = int64(common.Conf.Limits.Mem_mb * 1024 * 1024)
-	} else {
-		memoryLimit = int64(common.Conf.Limits.Installer_mem_mb * 1024 * 1024)
-	}
 	container, err := pool.client.CreateContainer(
 		docker.CreateContainerOptions{
 			Config: &docker.Config{
 				Cmd:    []string{"/spin"},
-				Image:  common.Conf.Docker_base_image,
+				Image:  common.Conf.Docker.Base_image,
 				Labels: pool.labels,
 				Env:    []string{"PYTHONPATH=" + strings.Join(pkgDirs, ":")},
 			},
@@ -131,7 +125,7 @@ func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir 
 				PidsLimit:        &procLimit,
 				MemorySwappiness: &swappiness,
 				CPUPercent:       cpuPercent,
-				Memory:           memoryLimit,
+				Memory:           meta.MemLimitMB,
 			},
 		},
 	)
