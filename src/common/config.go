@@ -168,7 +168,7 @@ func LoadDefaults(olPath string) error {
 		Import_cache_tree: zygoteTreePath,
 		Docker: DockerConfig{
 			Base_image: "ol-min",
-		}
+		},
 		Limits: LimitsConfig{
 			Procs:               10,
 			Mem_mb:              50,
