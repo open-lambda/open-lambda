@@ -125,7 +125,7 @@ func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir 
 				PidsLimit:        &procLimit,
 				MemorySwappiness: &swappiness,
 				CPUPercent:       cpuPercent,
-				Memory:           meta.MemLimitMB,
+				Memory:           int64(meta.MemLimitMB * 1024 * 1024),
 			},
 		},
 	)
