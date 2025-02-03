@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -11,10 +12,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
-	"io/fs"
 	"syscall"
+	"time"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 )
@@ -42,27 +44,26 @@ func Copy(src, dest string) error {
 		return err
 	}
 
-	
 	if info.IsDir() {
 		return filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
-		    if err != nil {
-			return err
-		    }
-
-		    relPath, err := filepath.Rel(src, path)
-		    if err != nil {
-			return err
-		    }
-
-		    if d.IsDir() {
-			dirInfo, err := d.Info()
 			if err != nil {
-			    return err
+				return err
 			}
-			return os.MkdirAll(filepath.Join(dest, relPath), dirInfo.Mode())
-		    }
 
-		    return copyFile(path, filepath.Join(dest, relPath))
+			relPath, err := filepath.Rel(src, path)
+			if err != nil {
+				return err
+			}
+
+			if d.IsDir() {
+				dirInfo, err := d.Info()
+				if err != nil {
+					return err
+				}
+				return os.MkdirAll(filepath.Join(dest, relPath), dirInfo.Mode())
+			}
+
+			return copyFile(path, filepath.Join(dest, relPath))
 		})
 	}
 	return copyFile(src, dest)
@@ -110,7 +111,7 @@ func (cp *HandlerPuller) isRemote() bool {
 func (cp *HandlerPuller) Pull(name string) (rt_type common.RuntimeType, targetDir string, err error) {
 	t := common.T0("pull-lambda")
 	defer t.T1()
-	
+
 	if !handlerNameRegex.MatchString(name) {
 		msg := "bad lambda name '%s', can only contain letters, numbers, period, dash, and underscore"
 		return rt_type, "", fmt.Errorf(msg, name)
@@ -160,6 +161,26 @@ func (cp *HandlerPuller) Reset(name string) {
 	cp.dirCache.Delete(name)
 }
 
+func (cp *HandlerPuller) calculateDirCacheVersion(src string) (string, error) {
+	var latestModTime time.Time
+	err := filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
+		if d.IsDir() {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		if info.ModTime().After(latestModTime) {
+			latestModTime = info.ModTime()
+		}
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+	return strconv.FormatInt(latestModTime.Unix(), 10), nil
+}
 func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type common.RuntimeType, targetDir string, err error) {
 	stat, err := os.Stat(src)
 	if err != nil {
@@ -167,13 +188,24 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type common.R
 	}
 
 	if stat.Mode().IsDir() {
+		version, err := cp.calculateDirCacheVersion(src)
+		if !cp.isRemote() {
+			cacheEntry := cp.getCache(lambdaName)
+			if err != nil {
+				return rt_type, "", err
+			}
+			if cacheEntry != nil && cacheEntry.version == version {
+				// hit:
+				return rt_type, cacheEntry.path, nil
+			}
+		}
 		log.Printf("Installing `%s` from a directory", stat.Name())
 
 		// this is really just a debug mode, and is not
 		// expected to be efficient
 		targetDir = cp.dirMaker.Get(lambdaName)
 
-		err := Copy(src, targetDir)
+		err = Copy(src, targetDir)
 		if err != nil {
 			return rt_type, "", fmt.Errorf("%s :: %s", err)
 		}
@@ -185,6 +217,9 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type common.R
 			rt_type = common.RT_NATIVE
 		} else {
 			return rt_type, "", fmt.Errorf("Unknown runtime type")
+		}
+		if !cp.isRemote() {
+			cp.putCache(lambdaName, version, targetDir)
 		}
 
 		return rt_type, targetDir, nil
@@ -329,4 +364,3 @@ func (cp *HandlerPuller) getCache(name string) *CacheEntry {
 func (cp *HandlerPuller) putCache(name, version, path string) {
 	cp.dirCache.Store(name, &CacheEntry{version, path})
 }
-
