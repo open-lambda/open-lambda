@@ -82,11 +82,11 @@ sudo-install: build
 	sudo cp ol-container-proxy ${INSTALL_PREFIX}/bin/
 
 test-all:
-	python3 -u ./scripts/test.py --worker_type=sock
-	python3 -u ./scripts/test.py --worker_type=docker --test_filter=ping_test,numpy
-	python3 -u ./scripts/sock_test.py
-	python3 -u ./scripts/bin_test.py --worker_type=wasm
-	python3 -u ./scripts/bin_test.py --worker_type=sock
+	sudo python3 -u ./scripts/test.py --worker_type=sock
+	sudo python3 -u ./scripts/test.py --worker_type=docker --test_blocklist=max_mem_alloc
+	sudo python3 -u ./scripts/sock_test.py
+	sudo python3 -u ./scripts/bin_test.py --worker_type=wasm
+	sudo python3 -u ./scripts/bin_test.py --worker_type=sock
 
 fmt:
 	#cd src && go fmt ...

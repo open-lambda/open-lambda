@@ -61,13 +61,18 @@ type Config struct {
 	// pass through to sandbox envirenment variable
 	Sandbox_config any `json:"sandbox_config"`
 
-	// which OCI implementation to use for the docker sandbox (e.g., runc or runsc)
-	Docker_runtime string `json:"docker_runtime"`
-
+	Docker   DockerConfig   `json:"docker"`
 	Limits   LimitsConfig   `json:"limits"`
 	Features FeaturesConfig `json:"features"`
 	Trace    TraceConfig    `json:"trace"`
 	Storage  StorageConfig  `json:"storage"`
+}
+
+type DockerConfig struct {
+	// which OCI implementation to use for the docker sandbox (e.g., runc or runsc)
+	Runtime string `json:"runtime"`
+	// name of the image used for Docker containers
+	Base_image string `json:"base_image"`
 }
 
 type FeaturesConfig struct {
@@ -161,6 +166,9 @@ func LoadDefaults(olPath string) error {
 		Registry_cache_ms: 5000, // 5 seconds
 		Mem_pool_mb:       memPoolMb,
 		Import_cache_tree: zygoteTreePath,
+		Docker: DockerConfig{
+			Base_image: "ol-min",
+		},
 		Limits: LimitsConfig{
 			Procs:               10,
 			Mem_mb:              50,
