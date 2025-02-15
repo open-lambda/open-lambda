@@ -19,9 +19,7 @@ pub fn http_get(address: &str, path: &str) -> CallResult {
 
     match ureq::get(&url)
         .call()
-        .map_err(|err| {
-            format!("Failed to send request to {url}: {err}")
-        })?
+        .map_err(|err| format!("Failed to send request to {url}: {err}"))?
         .into_reader()
         .read_to_end(&mut result)
     {
@@ -38,9 +36,7 @@ pub fn http_post(address: &str, path: &str, args: Vec<u8>) -> CallResult {
 
     match ureq::post(&url)
         .send_bytes(&args)
-        .map_err(|err| {
-            format!("Failed to send request to {url}: {err}")
-        })?
+        .map_err(|err| format!("Failed to send request to {url}: {err}"))?
         .into_reader()
         .read_to_end(&mut result)
     {

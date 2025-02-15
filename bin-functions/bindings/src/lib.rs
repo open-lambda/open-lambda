@@ -1,6 +1,10 @@
 #![feature(vec_into_raw_parts)]
 #![feature(once_cell_get_mut)]
 
+use rand::distr::{Distribution, StandardUniform};
+use rand::rngs::SmallRng;
+use rand::{Rng, SeedableRng};
+
 mod args;
 pub use args::*;
 
@@ -20,6 +24,19 @@ mod proxy_connection;
 #[cfg(not(target_arch = "wasm32"))]
 pub fn internal_init() {
     env_logger::init();
+}
+
+#[inline]
+pub fn rng() -> SmallRng {
+    SmallRng::from_os_rng()
+}
+
+#[inline]
+pub fn random<T>() -> T
+where
+    StandardUniform: Distribution<T>,
+{
+    rng().random()
 }
 
 #[cfg(target_arch = "wasm32")]

@@ -1,4 +1,4 @@
-use open_lambda::get_args;
+use open_lambda::{get_args, rng};
 
 use rand::rngs::SmallRng;
 use rand::{Fill, SeedableRng};
@@ -22,9 +22,7 @@ fn main() {
         .unwrap() as usize;
 
     let mut input_vec = vec![0; input_len];
-
-    let mut rng = SmallRng::from_entropy();
-    input_vec.try_fill(&mut rng).unwrap();
+    input_vec.try_fill(&mut rng()).unwrap();
 
     for _ in 0..num_hashes {
         let mut hasher = Sha512::new();
