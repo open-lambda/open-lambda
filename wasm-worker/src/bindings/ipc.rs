@@ -5,7 +5,7 @@ use serde_bytes::ByteBuf;
 
 use open_lambda_proxy_protocol::CallResult;
 
-use super::{call_allocate, fill_slice, get_slice, get_str, set_u64, BindingsData};
+use super::{BindingsData, call_allocate, fill_slice, get_slice, get_str, set_u64};
 
 use wasmtime::{Caller, Linker};
 
