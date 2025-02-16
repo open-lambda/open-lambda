@@ -1,7 +1,6 @@
 use open_lambda::{get_args, rng};
 
-use rand::rngs::SmallRng;
-use rand::{Fill, SeedableRng};
+use rand::TryRngCore;
 
 use sha2::{Digest, Sha512};
 
@@ -22,7 +21,7 @@ fn main() {
         .unwrap() as usize;
 
     let mut input_vec = vec![0; input_len];
-    input_vec.try_fill(&mut rng()).unwrap();
+    rng().try_fill_bytes(&mut input_vec).unwrap();
 
     for _ in 0..num_hashes {
         let mut hasher = Sha512::new();

@@ -9,6 +9,9 @@ members = [
 ]
 resolver = "2"
 
+[workspace.dependencies]
+rand = { version="0.9", default-features=false }
+
 [profile.release]
 debug = true
 opt-level = 3

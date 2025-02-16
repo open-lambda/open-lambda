@@ -40,7 +40,7 @@ where
 }
 
 #[cfg(target_arch = "wasm32")]
-#[no_mangle]
+#[unsafe(no_mangle)]
 fn internal_alloc_buffer(size: u32) -> i64 {
     let size = size as usize;
     let vec = Vec::<u8>::with_capacity(size);
