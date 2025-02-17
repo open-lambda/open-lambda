@@ -1,8 +1,8 @@
 [package]
 name = "open-lambda-proxy-protocol"
 version = "0.1.0"
-authors = ["Kai Mast <kaimast@cs.wisc.edu>"]
-edition = "2021"
+authors = ["Kai Mast <kai@kaimast.com>"]
+edition = "2024"
 
 [dependencies]
 serde = { version="1", features=["derive"] }

@@ -2,7 +2,7 @@ use open_lambda_proxy_protocol::CallResult;
 
 mod api {
     #[link(wasm_import_module = "ol_config")]
-    extern "C" {
+    unsafe extern "C" {
         pub fn get_config_value(key_ptr: *const u8, key_len: u32, len_out: *mut u64) -> i64;
     }
 }

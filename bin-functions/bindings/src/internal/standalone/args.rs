@@ -37,5 +37,3 @@ pub fn get_unix_time() -> u64 {
         .expect("System time before UNIX epoch")
         .as_secs()
 }
-
-pub use rand::random as get_random_value;

@@ -1,8 +1,8 @@
 use tokio::net::ToSocketAddrs;
 
+use hyper::Request;
 use hyper::body::Bytes;
 use hyper::client::conn;
-use hyper::Request;
 
 use crate::support;
 

@@ -1,17 +1,19 @@
 [package]
 name = "open-lambda"
 version = "0.1.0"
-authors = ["Kai Mast <kaimast@cs.wisc.edu>"]
-edition = "2021"
+authors = ["Kai Mast <kai@kaimast.com>"]
+edition = "2024"
 
 [dependencies]
 bincode = "1"
 serde_json = "1"
 open-lambda-proxy-protocol = { path="../proxy-protocol" }
 serde_bytes = "0.11"
+rand = { workspace=true, features=["os_rng", "small_rng"] }
 
 [target.'cfg(target_arch="wasm32")'.dependencies]
 byte-slice-cast = "1"
+getrandom = { version="*", default-features=false, features=["open-lambda"] }
 
 [target.'cfg(not(target_arch="wasm32"))'.dependencies]
 lazy_static = "1"
@@ -22,5 +24,4 @@ parking_lot = "0.12"
 env_logger = "0.11"
 bytes = "1"
 serde_bytes = "0.11"
-rand = "0.8"
-ureq = { version="2", default-features=false, features=["json", "gzip"] }
+ureq = { version="3", default-features=false, features=["json", "gzip"] }
