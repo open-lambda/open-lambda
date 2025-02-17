@@ -2,7 +2,9 @@
 
 ''' Various integration tests for the open lambda framwork '''
 
-# pylint: disable=global-statement, too-many-statements, fixme, broad-except, too-many-locals, missing-function-docstring
+# pylint: disable=global-statement,too-many-statements,fixme
+# pylint: disable=broad-except,too-many-locals
+# pylint: disable=missing-function-docstring,wrong-import-position
 
 import argparse
 import os

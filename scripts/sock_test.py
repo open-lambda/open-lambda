@@ -4,7 +4,7 @@
 SOCK-specific tests
 '''
 
-#pylint: disable=global-statement,too-many-statements,missing-function-docstring
+#pylint: disable=global-statement,too-many-statements,missing-function-docstring,wrong-import-position
 
 import argparse
 import os

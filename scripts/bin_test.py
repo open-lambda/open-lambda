@@ -2,7 +2,8 @@
 
 ''' Integration test for open lambda's native and WebAssembly runtimes '''
 
-# pylint: disable=missing-function-docstring, consider-using-with
+# pylint: disable=missing-function-docstring,consider-using-with
+# pylint: disable=wrong-import-position
 
 import argparse
 import os
