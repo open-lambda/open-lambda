@@ -4,6 +4,8 @@
 
 import os, sys, json, argparse, importlib, traceback, time, fcntl, array, socket, struct
 
+os.environ['OPENBLAS_NUM_THREADS'] = '1'
+
 sys.path.append("/usr/local/lib/python3.10/dist-packages")
 
 import tornado.ioloop

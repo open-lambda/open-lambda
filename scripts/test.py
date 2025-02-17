@@ -16,7 +16,7 @@ from multiprocessing import Pool
 import requests
 
 from helper import DockerWorker, SockWorker, prepare_open_lambda, setup_config
-from helper import get_current_config, TestConfContext, assert_eq
+from helper import get_current_config, TestConfContext, assert_true, assert_eq
 
 from helper.test import (
     set_test_filter,
@@ -85,23 +85,23 @@ def numpy_test():
     # we can have two different numpy versions co-existing.
     result = open_lambda.run("numpy21", [1, 2])
     assert_eq(result['result'], 3)
-    assert result['numpy-version'].startswith('2.1')
+    assert_true(result['numpy-version'].startswith('2.1'))
 
     result = open_lambda.run("numpy22", [[1, 2], [3, 4]])
     assert_eq(result['result'], 10)
-    assert result['numpy-version'].startswith('2.2')
+    assert_true(result['numpy-version'].startswith('2.2'))
 
     result = open_lambda.run("numpy22", [[[1, 2], [3, 4]], [[1, 2], [3, 4]]])
     assert_eq(result['result'], 20)
-    assert result['numpy-version'].startswith('2.2')
+    assert_true(result['numpy-version'].startswith('2.2'))
 
     result = open_lambda.run("pandas", [[0, 1, 2], [3, 4, 5]])
     assert_eq(result['result'], 15)
-    assert float(".".join(result['numpy-version'].split('.')[:2])) >= 1.24 
+    assert_true(float(".".join(result['numpy-version'].split('.')[:2])) >= 2.2)
 
     result = open_lambda.run("pandas-v1", [[1, 2, 3], [1, 2, 3]])
     assert_eq(result['result'], 12)
-    assert result['numpy-version'].startswith('1.24')
+    assert_true(result['numpy-version'].startswith('1.26'))
 
 def stress_one_lambda_task(args):
     open_lambda = OpenLambda()
