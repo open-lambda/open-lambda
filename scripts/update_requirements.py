@@ -25,4 +25,4 @@ for entry in os.scandir(REGISTRY_DIR):
 
     print(f'Refreshing requirements for "{folder}"')
     check_call(['pip-compile', 'requirements.in'],
-            cwd=f'{folder}') 
+               cwd=f'{folder}')
