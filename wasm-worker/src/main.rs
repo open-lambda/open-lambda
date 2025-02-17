@@ -1,7 +1,7 @@
 #![feature(impl_trait_in_assoc_type)]
 
 use std::collections::HashMap;
-use std::fs::{read_dir, remove_file, File};
+use std::fs::{File, read_dir, remove_file};
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -11,10 +11,10 @@ use http_body_util::{BodyExt, Full};
 
 use hyper::body::{Bytes, Incoming};
 use hyper::server::conn::http1;
-use hyper::{http, Method, Request, Response, StatusCode};
+use hyper::{Method, Request, Response, StatusCode, http};
 
 use tokio::runtime;
-use tokio::signal::unix::{signal, SignalKind};
+use tokio::signal::unix::{SignalKind, signal};
 
 use anyhow::Context;
 

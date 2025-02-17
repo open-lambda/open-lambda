@@ -1,6 +1,6 @@
 use wasmtime::{Caller, Linker};
 
-use super::{get_str, BindingsData};
+use super::{BindingsData, get_str};
 
 fn log_info(mut caller: Caller<'_, BindingsData>, ptr: i32, len: u32) {
     let memory = caller.get_export("memory").unwrap().into_memory().unwrap();

@@ -4,7 +4,7 @@ use byte_slice_cast::{AsMutByteSlice, ToMutByteSlice};
 
 mod api {
     #[link(wasm_import_module = "ol_args")]
-    extern "C" {
+    unsafe extern "C" {
         pub fn get_args(len_out: *mut u64) -> i64;
         pub fn set_result(buf_ptr: *const u8, buf_len: u32);
         pub fn get_unix_time() -> u64;
