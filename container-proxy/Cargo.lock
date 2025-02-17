@@ -442,12 +442,13 @@ dependencies = [
 
 [[package]]
 name = "kioto-uring-executor"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d524055a91bab4a6567a543f04bb7ea6e75ba7f9642c072eeeed8b64e5224e62"
+checksum = "5f0e1ad51f133106beba9af4352bb385556764f15f975990235e6909efacd58f"
 dependencies = [
  "kioto-uring-executor-macros",
  "log",
+ "parking_lot",
  "rand",
  "tokio",
  "tokio-uring 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -455,9 +456,9 @@ dependencies = [
 
 [[package]]
 name = "kioto-uring-executor-macros"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87826da5a57e29aa65d7cc5929629ec70705ad4ec9d6d9ca9625aa5c903b7c51"
+checksum = "beaf83aeb08c05292cfd5eb3ab635d35eea520ebd673bab24c27663a473781ab"
 dependencies = [
  "proc-macro2",
  "quote",

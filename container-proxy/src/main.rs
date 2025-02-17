@@ -13,18 +13,10 @@ use serde_bytes::ByteBuf;
 
 use open_lambda_proxy_protocol::ProxyMessage;
 
-use tokio_uring_executor as executor;
+use kioto_uring_executor as executor;
 
-fn main() {
-    executor::initialize();
-
-    //FIXME this adds an additional executor thread
-    tokio_uring::start(async move {
-        main_logic().await;
-    });
-}
-
-async fn main_logic() {
+#[kioto_uring_executor::main]
+async fn main() {
     let mut argv = std::env::args();
     argv.next().unwrap();
 
@@ -56,7 +48,7 @@ async fn main_logic() {
             }
             result = accept => {
                 match result {
-                    Ok((stream, _)) => unsafe {
+                    Ok((stream, _)) => {
                         executor::unsafe_spawn(async move {
                             handle_connection(stream).await;
                         });
