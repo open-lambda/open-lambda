@@ -18,12 +18,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "512761e0bb2578dd7380c6baaa0f4ce03e84f95e960231d1dec8bf4d7d6e2627"
 
 [[package]]
-name = "async-once-cell"
-version = "0.5.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4288f83726785267c6f2ef073a3d83dc3f9b81464e9f99898240cced85fce35a"
-
-[[package]]
 name = "autocfg"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -451,7 +445,7 @@ dependencies = [
  "parking_lot",
  "rand",
  "tokio",
- "tokio-uring 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio-uring",
 ]
 
 [[package]]
@@ -506,15 +500,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
 
 [[package]]
-name = "memmap2"
-version = "0.9.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd3f7eed9d3848f8b98834af67102b720745c4ec028fcd0aa0239277e7de374f"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "mime"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -559,20 +544,15 @@ checksum = "945462a4b81e43c4e3ba96bd7b49d834c6f61198356aa858733bc4acf3cbe62e"
 name = "open-lambda-container-proxy"
 version = "0.1.0"
 dependencies = [
- "async-once-cell",
  "bincode",
- "cfg-if",
  "futures-util",
  "kioto-uring-executor",
- "lazy_static",
  "log",
  "open-lambda-proxy-protocol",
- "parking_lot",
  "reqwest",
  "serde_bytes",
  "simple-logging",
  "tokio",
- "tokio-uring 0.5.0 (git+https://github.com/kaimast/tokio-uring.git)",
  "tokio-util",
 ]
 
@@ -962,32 +942,6 @@ dependencies = [
  "slab",
  "socket2 0.4.10",
  "tokio",
-]
-
-[[package]]
-name = "tokio-uring"
-version = "0.5.0"
-source = "git+https://github.com/kaimast/tokio-uring.git#8867c7623a15da116928285234fc7929d8dcc0d4"
-dependencies = [
- "bytes",
- "futures-util",
- "io-uring",
- "libc",
- "memmap2",
- "slab",
- "socket2 0.4.10",
- "tokio",
- "tokio-uring-macros",
-]
-
-[[package]]
-name = "tokio-uring-macros"
-version = "0.1.0"
-source = "git+https://github.com/kaimast/tokio-uring.git#8867c7623a15da116928285234fc7929d8dcc0d4"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]

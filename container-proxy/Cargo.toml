@@ -11,14 +11,9 @@ futures-util = { version="0.3", features=["sink"] }
 reqwest = { version = "0.12", features = ["json"], default-features=false }
 log = "0.4"
 bincode = "1"
-async-once-cell = "0.5"
-lazy_static = "1"
 open-lambda-proxy-protocol = { path="../bin-functions/proxy-protocol" }
 simple-logging = "2"
 serde_bytes = "0.11"
-cfg-if = "1"
-parking_lot = "0.12"
-tokio-uring = { git="https://github.com/kaimast/tokio-uring.git" }
 kioto-uring-executor = "0.2"
 
 [profile.release]
