@@ -8,6 +8,7 @@ SOCK-specific tests
 
 import argparse
 import os
+import sys
 
 from time import time
 
@@ -16,7 +17,11 @@ from multiprocessing import Pool
 from helper import SockWorker, prepare_open_lambda, setup_config, TestConfContext
 from helper.test import set_test_filter, start_tests, check_test_results, set_worker_type, test
 
+# You can either install the OpenLambda Python bindings
+# or run the test from the project's root folder
+sys.path.append('python/src')
 from open_lambda import OpenLambda
+
 
 def sock_churn_task(args):
     open_lambda = OpenLambda()

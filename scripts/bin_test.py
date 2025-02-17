@@ -6,15 +6,20 @@
 
 import argparse
 import os
+import sys
 
 from time import time
 
+# You can either install the OpenLambda Python bindings
+# or run the test from the project's root folder
+sys.path.append('python/src')
 from open_lambda import OpenLambda
 
 from helper import DockerWorker, WasmWorker, SockWorker, TestConfContext
 from helper import prepare_open_lambda, setup_config, assert_eq
 
 from helper.test import set_test_filter, start_tests, check_test_results, set_worker_type, test
+
 
 def get_mem_stat_mb(stat):
     with open('/proc/meminfo', 'r', encoding='utf-8') as file:

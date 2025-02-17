@@ -6,6 +6,7 @@
 
 import argparse
 import os
+import sys
 import tempfile
 
 from time import time
@@ -26,6 +27,9 @@ from helper.test import (
     test
 )
 
+# You can either install the OpenLambda Python bindings
+# or run the test from the project's root folder
+sys.path.append('python/src')
 from open_lambda import OpenLambda
 
 # These will be set by argparse in main()
@@ -79,21 +83,21 @@ def numpy_test():
 
     # try adding the nums in a few different matrixes.  Also make sure
     # we can have two different numpy versions co-existing.
-    result = open_lambda.run("numpy23", [1, 2])
+    result = open_lambda.run("numpy21", [1, 2])
     assert_eq(result['result'], 3)
-    assert result['numpy-version'].startswith('1.23')
+    assert result['numpy-version'].startswith('2.1')
 
-    result = open_lambda.run("numpy24", [[1, 2], [3, 4]])
+    result = open_lambda.run("numpy22", [[1, 2], [3, 4]])
     assert_eq(result['result'], 10)
-    assert result['numpy-version'].startswith('1.24')
+    assert result['numpy-version'].startswith('2.2')
 
-    result = open_lambda.run("numpy24", [[[1, 2], [3, 4]], [[1, 2], [3, 4]]])
+    result = open_lambda.run("numpy22", [[[1, 2], [3, 4]], [[1, 2], [3, 4]]])
     assert_eq(result['result'], 20)
-    assert result['numpy-version'].startswith('1.24')
+    assert result['numpy-version'].startswith('2.2')
 
     result = open_lambda.run("pandas", [[0, 1, 2], [3, 4, 5]])
     assert_eq(result['result'], 15)
-    assert float(".".join(result['numpy-version'].split('.')[:2])) >= 1.24
+    assert float(".".join(result['numpy-version'].split('.')[:2])) >= 1.24 
 
     result = open_lambda.run("pandas-v1", [[1, 2, 3], [1, 2, 3]])
     assert_eq(result['result'], 12)
