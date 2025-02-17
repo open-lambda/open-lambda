@@ -262,8 +262,10 @@ def run_tests():
     fork_bomb()
     max_mem_alloc()
 
-    # numpy pip install needs a larger mem cap
-    with TestConfContext(mem_pool_mb=1000, trace={"cgroups": True}):
+    # numpy pip install needs a larger memory cap.
+    # numpy also spawns threads using OpenBLAS, so a higher
+    # process limit is needed.
+    with TestConfContext(mem_pool_mb=1000, limits={'procs': 32}, trace={"cgroups": True}):
         numpy_test()
 
     # make sure we can use WSGI apps based on frameworks like Flask
