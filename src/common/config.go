@@ -14,6 +14,17 @@ import (
 
 // Configuration is stored globally here
 var Conf *Config
+var KafkaConf *KafkaConfig
+
+// KafkaConfig represents the configuration for a Kafka listener
+type KafkaConfig struct {
+	Bootstrap_server string `json:"bootstrap_server"`
+	Group_id         string `json:"group_id"`
+	Offset           string `json:"offset"`
+	Topic            string `json:"topic"`
+	// The function that should be triggered by kafka
+	Function string `json:"function"`
+}
 
 // Config represents the configuration for a worker server.
 type Config struct {
@@ -35,6 +46,12 @@ type Config struct {
 
 	// what kind of server should be launched?  (e.g., lambda or sock)
 	Server_mode string `json:"server_mode"`
+
+	// What type of trigger should be used? (eg http or Kafka)
+	Trigger string `json:"trigger"`
+
+	// What type of trigger should be used? (eg http or Kafka)
+	KafkaConfigPath string `json:"kafkaConfigPath"`
 
 	// location where code packages are stored.  Could be URL or local file path.
 	Registry string `json:"registry"`
@@ -155,6 +172,8 @@ func LoadDefaults(olPath string) error {
 	Conf = &Config{
 		Worker_dir:        workerDir,
 		Server_mode:       "lambda",
+		Trigger:           "kafka",
+		KafkaConfigPath:   "kafkaConfig.json",
 		Worker_url:        "localhost",
 		Worker_port:       "5000",
 		Registry:          registryDir,
@@ -213,6 +232,22 @@ func LoadConf(path string) error {
 	}
 
 	return checkConf()
+}
+
+// ParseConfig reads a file and tries to parse it as a JSON string to a KafkaConfig
+// instance.
+func LoadKafkaConf(path string) error {
+	configRaw, err := ioutil.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("could not open config (%v): %v", path, err.Error())
+	}
+
+	if err := json.Unmarshal(configRaw, &KafkaConf); err != nil {
+		fmt.Printf("Bad Kafka config file (%s):\n%s\n", path, string(configRaw))
+		return fmt.Errorf("could not Kafka parse config (%v): %v", path, err.Error())
+	}
+	// 	TODO: A config validator?
+	return nil
 }
 
 func checkConf() error {

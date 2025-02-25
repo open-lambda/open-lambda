@@ -1,0 +1,7 @@
+{
+    "bootstrap_server": "localhost:9092",
+    "group_id": "my-consumer-group",
+    "offset": "earliest",
+    "topic": "test-topic",
+    "function": "echo"
+  }
