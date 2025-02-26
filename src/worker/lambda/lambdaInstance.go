@@ -171,7 +171,7 @@ func (linst *LambdaInstance) Task() {
 
 			// notify instance that we're done
 			t2.T1()
-            // Record at least 1 ms of elapsed time
+			// Record at least 1 ms of elapsed time
 			v := int(t2.Milliseconds)
 			if v == 0 {
 				req.execMs = 1
@@ -212,9 +212,16 @@ func (linst *LambdaInstance) Task() {
 		}
 
 		if sb != nil {
-			if err := sb.Pause(); err != nil {
-				f.printf("discard sandbox %s due to Pause error: %v", sb.ID(), err)
+			// check if we are using single use sb, if yes, destroy the sb, if not, pause it.
+			if req.r.Header.Get("Single-Use-SB") == "true" {
+				f.printf("Using single-use sandbox, destroying the sandbox")
+				sb.Destroy("Single-use-sandbox")
 				sb = nil
+			} else {
+				if err := sb.Pause(); err != nil {
+					f.printf("discard sandbox %s due to Pause error: %v", sb.ID(), err)
+					sb = nil
+				}
 			}
 		}
 

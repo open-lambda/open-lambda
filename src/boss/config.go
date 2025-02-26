@@ -5,28 +5,35 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"sync"
+
 	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
 )
 
-var Conf *Config
+var (
+	Conf      *Config
+	ConfMutex sync.RWMutex // RWMutex allows multiple readers but exclusive write access.
+)
 
 type Config struct {
-	Platform   string              `json:"platform"`
-	Scaling    string              `json:"scaling"`
-	API_key    string              `json:"api_key"`
-	Boss_port  string              `json:"boss_port"`
-	Worker_Cap int                 `json:"worker_cap"`
-	Gcp        *cloudvm.GcpConfig  `json:"gcp"`
+	Platform      string             `json:"platform"`
+	Scaling       string             `json:"scaling"`
+	API_key       string             `json:"api_key"`
+	Boss_port     string             `json:"boss_port"`
+	Worker_Cap    int                `json:"worker_cap"`
+	Gcp           *cloudvm.GcpConfig `json:"gcp"`
+	Single_Use_Sb bool               `json:"single_use_sb"`
 }
 
 func LoadDefaults() error {
 	Conf = &Config{
-		Platform:   "mock",
-		Scaling:    "manual",
-		API_key:    "abc", // TODO: autogenerate a random key
-		Boss_port:  "5000",
-		Worker_Cap: 4,
-		Gcp: cloudvm.GetGcpConfigDefaults(),
+		Platform:      "mock",
+		Scaling:       "manual",
+		API_key:       "abc", // TODO: autogenerate a random key
+		Boss_port:     "5000",
+		Worker_Cap:    4,
+		Gcp:           cloudvm.GetGcpConfigDefaults(),
+		Single_Use_Sb: false,
 	}
 
 	return checkConf()

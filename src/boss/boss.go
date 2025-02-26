@@ -7,23 +7,25 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 	"os/signal"
+	"strconv"
 	"syscall"
-	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
+
 	"github.com/open-lambda/open-lambda/ol/boss/autoscaling"
+	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
 )
 
 const (
-	RUN_PATH         = "/run/"
-	BOSS_STATUS_PATH = "/status"
-	SCALING_PATH     = "/scaling/worker_count"
-	SHUTDOWN_PATH    = "/shutdown"
+	RUN_PATH                  = "/run/"
+	BOSS_STATUS_PATH          = "/status"
+	SCALING_PATH              = "/scaling/worker_count"
+	SHUTDOWN_PATH             = "/shutdown"
+	SINGLE_USE_SB_CONFIG_PATH = "/change_config"
 )
 
 type Boss struct {
 	workerPool *cloudvm.WorkerPool
-	autoScaler  autoscaling.Scaling
+	autoScaler autoscaling.Scaling
 }
 
 // BossStatus handles the request to get the status of the boss.
@@ -94,9 +96,51 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 
 	// STEP 2: adjust target worker count
 	b.workerPool.SetTarget(worker_count)
-	
+
 	// respond with status
 	b.BossStatus(w, r)
+}
+
+// Handler to modify the Single_Use_Sb config, could be used to modify other configs as well.
+func changeConfigHandler(w http.ResponseWriter, r *http.Request) {
+	// Only allow POST request to modify the config
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Parse the incoming JSON request body
+	var request struct {
+		Single_Use_Sb bool `json:"Single_Use_Sb"`
+	}
+
+	decoder := json.NewDecoder(r.Body)
+	if err := decoder.Decode(&request); err != nil {
+		http.Error(w, "Invalid JSON body", http.StatusBadRequest)
+		return
+	}
+
+	// Update the configuration value
+	ConfMutex.Lock()
+	Conf.Single_Use_Sb = request.Single_Use_Sb
+	ConfMutex.Unlock()
+
+	// Respond with the updated config
+	response := struct {
+		Status string `json:"status"`
+		Config struct {
+			Single_Use_Sb bool `json:"Single_Use_Sb"`
+		} `json:"config"`
+	}{
+		Status: "success",
+	}
+	response.Config.Single_Use_Sb = Conf.Single_Use_Sb
+
+	// Send response back to the client
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
+
 }
 
 // BossMain is the main function for the boss.
@@ -119,8 +163,19 @@ func BossMain() (err error) {
 
 	http.HandleFunc(BOSS_STATUS_PATH, boss.BossStatus)
 	http.HandleFunc(SCALING_PATH, boss.ScalingWorker)
-	http.HandleFunc(RUN_PATH, boss.workerPool.RunLambda)
+	// http.HandleFunc(RUN_PATH, boss.workerPool.RunLambda)
+
+	http.HandleFunc(RUN_PATH, func(w http.ResponseWriter, r *http.Request) {
+		// Set the header to indicate that sandboxes are single use and must be destroyed after finish running the function
+		if Conf.Single_Use_Sb {
+			r.Header.Set("Single-Use-SB", "true")
+		}
+
+		boss.workerPool.RunLambda(w, r)
+	})
+
 	http.HandleFunc(SHUTDOWN_PATH, boss.Close)
+	http.HandleFunc(SINGLE_USE_SB_CONFIG_PATH, changeConfigHandler)
 
 	// clean up if signal hits us
 	c := make(chan os.Signal, 1)

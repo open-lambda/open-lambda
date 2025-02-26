@@ -3,10 +3,10 @@ package cloudvm
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
-	"net/http"
 )
 
 type GcpWorkerPool struct {
@@ -81,8 +81,8 @@ func NewGcpWorkerPool() *WorkerPool {
 
 func (_ *GcpWorkerPool) NewWorker(workerId string) *Worker {
 	return &Worker{
-		workerId:       workerId,
-		workerIp:       "",
+		workerId: workerId,
+		workerIp: "",
 	}
 }
 
