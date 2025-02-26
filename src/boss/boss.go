@@ -101,7 +101,20 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 	b.BossStatus(w, r)
 }
 
-// Handler to modify the Single_Use_Sb config, could be used to modify other configs as well.
+// Handler to modify the Single_Use_Sb config (by default, it is false), could be used to modify other configs as well.
+// expected format of th reqest
+// curl -X POST http://localhost:8080/change-config \
+// -H "Content-Type: application/json" \
+// -d '{"Single_Use_Sb": true}'
+//
+// if successful, the response will be
+// {
+//	 "status": "success",
+//	 "config": {
+//	   "Single_Use_Sb": true
+//   }
+// }
+
 func changeConfigHandler(w http.ResponseWriter, r *http.Request) {
 	// Only allow POST request to modify the config
 	if r.Method != http.MethodPost {
