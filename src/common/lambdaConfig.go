@@ -20,16 +20,16 @@ type CronTrigger struct {
 	Schedule string `yaml:"schedule"` // Cron schedule (e.g., "*/5 * * * *")
 }
 
-type KafkaTrigger struct {
-	Broker string `yaml:"broker"` // Kafka broker address
-	Topic  string `yaml:"topic"`  // Kafka topic
-}
+// type KafkaTrigger struct {
+// 	Broker string `yaml:"broker"` // Kafka broker address
+// 	Topic  string `yaml:"topic"`  // Kafka topic
+// } For drishan's TODO
 
 // LambdaConfig defines the overall configuration for the lambda function.
 type LambdaConfig struct {
-	HTTPTriggers  []HTTPTrigger  `yaml:"http,omitempty"`  // List of HTTP triggers
-	CronTriggers  []CronTrigger  `yaml:"cron,omitempty"`  // List of cron triggers
-	KafkaTriggers []KafkaTrigger `yaml:"kafka,omitempty"` // List of Kafka triggers
+	HTTPTriggers []HTTPTrigger `yaml:"http,omitempty"` // List of HTTP triggers
+	CronTriggers []CronTrigger `yaml:"cron,omitempty"` // List of cron triggers
+	// KafkaTriggers []KafkaTrigger `yaml:"kafka,omitempty"` // List of Kafka triggers For Drishan's TODO
 	// Additional configurations can be added here, such as sandbox settings.
 }
 
@@ -38,7 +38,6 @@ func LoadDefaultLambdaConfig() error {
 	LambdaConf = &LambdaConfig{
 		HTTPTriggers: []HTTPTrigger{
 			{
-				Path:   "/",    // Default HTTP endpoint path
 				Method: "POST", // Default HTTP method
 			},
 		},
@@ -66,15 +65,15 @@ func checkLambdaConfig() error {
 		}
 	}
 
-	// Validate Kafka triggers
-	for _, trigger := range LambdaConf.KafkaTriggers {
-		if trigger.Broker == "" {
-			return fmt.Errorf("kafka trigger broker cannot be empty")
-		}
-		if trigger.Topic == "" {
-			return fmt.Errorf("kafka trigger topic cannot be empty")
-		}
-	}
+	// // Validate Kafka triggers for Drishan's TODO
+	// for _, trigger := range LambdaConf.KafkaTriggers {
+	// 	if trigger.Broker == "" {
+	// 		return fmt.Errorf("kafka trigger broker cannot be empty")
+	// 	}
+	// 	if trigger.Topic == "" {
+	// 		return fmt.Errorf("kafka trigger topic cannot be empty")
+	// 	}
+	// }
 
 	return nil
 }
