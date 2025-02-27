@@ -2,6 +2,7 @@ package cloudvm
 
 import (
 	"bufio"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -34,8 +35,22 @@ func (_ *LocalWorkerPool) NewWorker(workerId string) *LocalWorker {
 	}
 }
 
-func (_ *LocalWorkerPool) CreateInstance(worker *LocalWorker) {
+func (w *LocalWorker) StartProcess() error {
+	cmd := exec.Command()
+}
+
+func (_ *LocalWorkerPool) CreateInstance(worker *LocalWorker) error {
 	log.Printf("created new local worker: %s\n", worker.workerId)
+
+	if worker.workerProcess == nil {
+		err := worker.StartProcess()
+		if err != nil {
+			return fmt.Errorf("failed to start a worker process: %v", err)
+		}
+	}
+
+	log.Printf("worker has started successfully", worker.workerId)
+	return nil
 }
 
 func (_ *LocalWorkerPool) DeleteInstance(worker *LocalWorker) {
