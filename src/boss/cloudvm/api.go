@@ -34,7 +34,7 @@ WorkerPoolPlatform.
 */
 type WorkerPool struct {
 	WorkerPoolPlatform
-	platform string
+	platform   string
 	worker_cap int
 	sync.Mutex
 	nextId  int                  // the next new worker's id
