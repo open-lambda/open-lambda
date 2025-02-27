@@ -1,6 +1,8 @@
 module github.com/open-lambda/open-lambda/ol
 
-go 1.18
+go 1.21
+
+toolchain go1.21.5
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.6.0
@@ -8,6 +10,7 @@ require (
 	github.com/fsouza/go-dockerclient v1.10.1
 	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/urfave/cli/v2 v2.25.3
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
