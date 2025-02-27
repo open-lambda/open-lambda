@@ -1,0 +1,16 @@
+name: echo
+triggers:
+  - type: http
+    path: "/run/echo"
+    method: "POST"
+  - type: cron
+    schedule: "*/5 * * * *"  # Runs every 5 minutes
+  - type: kafka
+    topic: "echo_events"
+    group_id: "echo_group"
+  # - type: minio
+  #   bucket: "echo-bucket"
+  #   event: "s3:ObjectCreated:*"
+  # - type: grpc
+  #   service: "EchoService"
+  #   method: "EchoMessage"

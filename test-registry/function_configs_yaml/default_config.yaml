@@ -1,0 +1,5 @@
+name: default_config
+triggers:
+  - type: http
+    path: "/run/{function_name}"
+    method: "POST"
