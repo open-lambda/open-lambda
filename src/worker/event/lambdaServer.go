@@ -59,7 +59,15 @@ func (s *LambdaServer) RunLambda(w http.ResponseWriter, r *http.Request) {
 		urlParts := getURLComponents(r)
 		if len(urlParts) == 2 {
 			img := urlParts[1]
-			s.lambdaMgr.Get(img).Invoke(w, r)
+			// s.lambdaMgr.Get(img).Invoke(w, r)
+			lambda := s.lambdaMgr.Get(img)
+
+			if !lambda.Meta.Config.IsHTTPMethodAllowed(r.Method) {
+				http.Error(w, "HTTP method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+
+			lambda.Invoke(w, r)
 		} else {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("expected invocation format: /run/<lambda-name>"))
