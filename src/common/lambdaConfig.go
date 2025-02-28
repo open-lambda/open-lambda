@@ -19,7 +19,7 @@ type CronTrigger struct {
 	Schedule string `yaml:"schedule"` // Cron schedule (e.g., "*/5 * * * *")
 }
 
-//TODO add KafkaTrigger struct
+// TODO: add KafkaTrigger struct
 
 // LambdaConfig defines the overall configuration for the lambda function.
 type LambdaConfig struct {
@@ -45,6 +45,10 @@ func LoadDefaultLambdaConfig() error {
 
 // checkLambdaConfig validates the configuration.
 func checkLambdaConfig() error {
+	if LambdaConf == nil {
+		return fmt.Errorf("LambdaConf is not initialized")
+	}
+
 	// Validate HTTP triggers
 	for _, trigger := range LambdaConf.HTTPTriggers {
 		if trigger.Method == "" {
@@ -70,7 +74,7 @@ func ParseYaml(codeDir string) error {
 	file, err := os.Open(path)
 
 	if errors.Is(err, os.ErrNotExist) {
-		// No ol.yaml file found; load the defaults
+		fmt.Println("Config file not found. Loading defaults...")
 		return LoadDefaultLambdaConfig()
 	} else if err != nil {
 		// Failed to open the file
