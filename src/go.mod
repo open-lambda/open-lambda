@@ -1,6 +1,6 @@
 module github.com/open-lambda/open-lambda/ol
 
-go 1.21
+go 1.18
 
 toolchain go1.21.5
 
