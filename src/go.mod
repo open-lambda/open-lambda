@@ -2,8 +2,6 @@ module github.com/open-lambda/open-lambda/ol
 
 go 1.18
 
-toolchain go1.21.5
-
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.6.0
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v0.4.1
