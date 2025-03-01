@@ -172,6 +172,12 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 		f.Meta = meta
 	} else if rtType == common.RT_NATIVE {
 		log.Printf("Got native function")
+
+		// Initialize f.Meta for native functions for consistensy.
+		f.Meta = &FunctionMeta{
+			Sandbox: nil,                              // Sandbox is nil for native functions
+			Config:  common.LoadDefaultLambdaConfig(), // Load default configuration
+		}
 	}
 
 	f.codeDir = codeDir
@@ -262,7 +268,6 @@ func (f *LambdaFunc) Task() {
 
 			// only parsing the metadata when rtType is RT_PYTHON so need to access only when the rtType is RT_PYTHON
 			if f.rtType == common.RT_PYTHON {
-				log.Printf("INSIDE THE IF STATEMENT")
 				// Check if the HTTP method is valid
 				if !f.Meta.Config.IsHTTPMethodAllowed(req.r.Method) {
 					req.w.WriteHeader(http.StatusMethodNotAllowed)
