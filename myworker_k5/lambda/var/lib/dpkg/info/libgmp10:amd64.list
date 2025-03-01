@@ -1,0 +1,12 @@
+/.
+/usr
+/usr/lib
+/usr/lib/x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu/libgmp.so.10.4.1
+/usr/share
+/usr/share/doc
+/usr/share/doc/libgmp10
+/usr/share/doc/libgmp10/README.Debian
+/usr/share/doc/libgmp10/changelog.Debian.gz
+/usr/share/doc/libgmp10/copyright
+/usr/lib/x86_64-linux-gnu/libgmp.so.10

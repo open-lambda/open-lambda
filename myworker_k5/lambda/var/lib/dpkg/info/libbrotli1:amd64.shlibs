@@ -1,0 +1,3 @@
+libbrotlicommon 1 libbrotli1 (>= 1.0.9)
+libbrotlidec 1 libbrotli1 (>= 1.0.9)
+libbrotlienc 1 libbrotli1 (>= 1.0.9)

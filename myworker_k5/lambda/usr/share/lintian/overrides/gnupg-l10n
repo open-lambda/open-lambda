@@ -1,0 +1,2 @@
+# these files are how GnuPG distributes localized help text
+gnupg-l10n: package-contains-documentation-outside-usr-share-doc usr/share/gnupg/help.*txt

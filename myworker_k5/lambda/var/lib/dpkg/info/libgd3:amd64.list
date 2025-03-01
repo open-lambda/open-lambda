@@ -1,0 +1,14 @@
+/.
+/usr
+/usr/lib
+/usr/lib/x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu/libgd.so.3.0.8
+/usr/share
+/usr/share/doc
+/usr/share/doc/libgd3
+/usr/share/doc/libgd3/changelog.Debian.gz
+/usr/share/doc/libgd3/copyright
+/usr/share/lintian
+/usr/share/lintian/overrides
+/usr/share/lintian/overrides/libgd3
+/usr/lib/x86_64-linux-gnu/libgd.so.3

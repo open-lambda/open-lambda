@@ -1,0 +1,8 @@
+#!/bin/sh
+set -e
+# Automatically added by dh_installdeb/13.3ubuntu4
+dpkg-maintscript-helper mv_conffile /etc/javascript-common/javascript-common.conf /etc/apache2/conf-available/javascript-common.conf 8 -- "$@"
+# End automatically added section
+# Automatically added by dh_installdeb/13.3ubuntu4
+dpkg-maintscript-helper mv_conffile /etc/javascript-common/lighttpd.conf /etc/lighttpd/conf-available/90-javascript-alias.conf 8 -- "$@"
+# End automatically added section

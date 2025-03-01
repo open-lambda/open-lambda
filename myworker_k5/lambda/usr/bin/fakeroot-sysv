@@ -1,0 +1,184 @@
+#!/bin/sh
+
+# This script first starts faked (the daemon), and then it will run
+# the requested program with fake root privileges.
+
+usage () {
+cat - >&2 <<EOF
+fakeroot, create a fake root environment.
+   usage: fakeroot [-l|--lib fakerootlib] [-f|--faked fakedbin]
+                   [-i file] [-s file] [-u|--unknown-is-real]
+		   [-b|--fd-base fd] [-h|--help] [-v|--version]
+                   [--] [command]
+EOF
+  exit 1
+}
+
+stderr ()
+{
+  local i
+  for i
+  do
+      echo >&2 "fakeroot: $i"
+  done
+}
+
+fatal ()
+{
+  stderr "$@"
+  exit 1
+}
+
+# strip /bin/fakeroot to find install prefix
+FAKEROOT_PREFIX=/usr
+FAKEROOT_BINDIR=/usr/bin
+
+USEABSLIBPATH=0
+FAKEROOT_LIB=libfakeroot-sysv.so
+PATHS=/usr/lib/x86_64-linux-gnu/libfakeroot:${FAKEROOT_PREFIX}/lib64/libfakeroot:${FAKEROOT_PREFIX}/lib32/libfakeroot
+FAKED=${FAKEROOT_BINDIR}/faked-sysv
+
+FAKED_MODE="unknown-is-root"
+export FAKED_MODE
+
+libfound=no
+
+GETOPTTEST=`getopt -T`
+if test "$?" -eq 4; then # GNU getopt
+    FAKE_TEMP=`getopt -l lib: -l faked: -l unknown-is-real -l fd-base: -l version -l help -- +l:f:i:s:ub:vh "$@"`
+else
+    FAKE_TEMP=`getopt l:f:i:s:ub:vh "$@"`
+fi
+
+if test "$?" -ne 0; then
+  usage
+fi
+
+eval set -- "$FAKE_TEMP"
+
+FAKEDOPTS=""
+PIPEIN=""
+WAITINTRAP=0
+
+while test "X$1" != "X--"; do
+  case "$1" in
+    -l|--lib)
+       shift
+       FAKEROOT_LIB=`eval echo "$1"`
+       PATHS=
+       ;;
+    -f|--faked)
+       shift
+       FAKED="$1"
+       ;;
+    -i)
+       shift
+       if test -f "$1"; then
+         FAKEDOPTS=$FAKEDOPTS" --load"
+         PIPEIN="<$1"
+       else
+         stderr "database file \`$1' does not exist."
+       fi
+       ;;
+    -s)
+       shift
+       FAKEDOPTS=$FAKEDOPTS" --save-file $1"
+       [ -p $1 ] || WAITINTRAP=1
+       ;;
+    -u|--unknown-is-real)
+       FAKEDOPTS=$FAKEDOPTS" --unknown-is-real"
+       FAKED_MODE="unknown-is-real"
+       ;;
+    -b|--fd-base)
+       shift
+       FAKEROOT_FD_BASE="$1"
+       ;;
+    -v|--version)
+       echo "fakeroot version 1.28"
+       exit 0
+       ;;
+    -h|--help)
+       usage
+       ;;
+  esac
+  shift
+done
+
+shift #get rid of the '--'
+
+# make sure the preload is available
+ABSLIB=""
+if [ -n "$PATHS" ]
+then
+    for dir in `echo $PATHS | sed 's/:/ /g'`
+    do
+	if test -r "$dir/$FAKEROOT_LIB"
+	then
+	    libfound=yes
+	    ABSLIB="$dir/$FAKEROOT_LIB"
+	fi
+    done
+else
+    if test -r "$FAKEROOT_LIB"
+    then
+	libfound=yes
+	ABSLIB="$FAKEROOT_LIB"
+    fi
+fi
+
+if test $libfound = no
+then
+    fatal "preload library \`$FAKEROOT_LIB' not found, aborting."
+fi
+
+if test -n "$FAKEROOTKEY"
+then
+    fatal "FAKEROOTKEY set to $FAKEROOTKEY" \
+          "nested operation not yet supported"
+fi
+
+unset FAKEROOTKEY
+KEY_PID=`eval $FAKED $FAKEDOPTS $PIPEIN`
+FAKEROOTKEY=`echo $KEY_PID|cut -d: -f1`
+PID=`echo $KEY_PID|cut -d: -f2`
+
+if [ "$WAITINTRAP" -eq 0 ]; then
+  trap "kill -s TERM $PID" EXIT INT
+else
+  trap 'FAKEROOTKEY=$FAKEROOTKEY LD_LIBRARY_PATH="$PATHS" LD_PRELOAD="$FAKEROOT_LIB" /bin/ls -l / >/dev/null 2>&1; while kill -s TERM $PID 2>/dev/null; do sleep 0.1; done' EXIT INT
+  #trap 'FAKEROOTKEY=$FAKEROOTKEY LD_PRELOAD="$FAKEROOT_LIB" /bin/ls -l / >/dev/null 2>&1; while kill -s TERM $PID 2>/dev/null; do sleep 0.1; done' EXIT INT
+fi
+
+if test -z "$FAKEROOTKEY" || test -z "$PID"; then
+  fatal "error while starting the \`faked' daemon."
+fi
+
+if test $USEABSLIBPATH -ne 0 ; then
+  FAKEROOT_LIB=$ABSLIB
+fi
+# Keep other library paths
+if test -n "$LD_LIBRARY_PATH"; then
+  PATHS="$PATHS:$LD_LIBRARY_PATH"
+fi
+# ...and preloaded libs
+if test -n "$LD_PRELOAD"; then
+  FAKEROOT_LIB="$FAKEROOT_LIB:$LD_PRELOAD"
+fi
+
+export FAKEROOT_FD_BASE
+
+if test -z "$*"; then
+  FAKEROOTKEY=$FAKEROOTKEY LD_LIBRARY_PATH="$PATHS"  LD_PRELOAD="$FAKEROOT_LIB" ${SHELL:-/bin/sh}
+  #FAKEROOTKEY=$FAKEROOTKEY  LD_PRELOAD="$FAKEROOT_LIB" ${SHELL:-/bin/sh}
+  RESULT=$?
+else
+  FAKEROOTKEY=$FAKEROOTKEY LD_LIBRARY_PATH="$PATHS"  LD_PRELOAD="$FAKEROOT_LIB" "$@"
+  #FAKEROOTKEY=$FAKEROOTKEY  LD_PRELOAD="$FAKEROOT_LIB" "$@"
+  RESULT=$?
+fi
+
+exit $RESULT
+
+# Local Variables:
+# mode: shell-script
+# End:

@@ -1,0 +1,7 @@
+d6dfb611c00644d5da8f0a6f0fcf976f  usr/bin/pinentry-curses
+42abc950c1efcf35952befb02d3b39ee  usr/share/doc/pinentry-curses/AUTHORS
+cfee400ea6585c7f0ed16efa8c2910a6  usr/share/doc/pinentry-curses/NEWS.gz
+cb4a2db2402f03b3ef4c79c025712a90  usr/share/doc/pinentry-curses/README.Debian
+de60d4de15f855a959fb2d729fb045aa  usr/share/doc/pinentry-curses/changelog.Debian.gz
+41c25a67d2d126625594ad64cda62fc5  usr/share/doc/pinentry-curses/copyright
+12c9a9ad562d8572462e3181be7cae2a  usr/share/man/man1/pinentry-curses.1.gz

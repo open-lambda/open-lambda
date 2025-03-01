@@ -1,0 +1,15 @@
+/.
+/usr
+/usr/bin
+/usr/bin/pinentry-curses
+/usr/share
+/usr/share/doc
+/usr/share/doc/pinentry-curses
+/usr/share/doc/pinentry-curses/AUTHORS
+/usr/share/doc/pinentry-curses/NEWS.gz
+/usr/share/doc/pinentry-curses/README.Debian
+/usr/share/doc/pinentry-curses/changelog.Debian.gz
+/usr/share/doc/pinentry-curses/copyright
+/usr/share/man
+/usr/share/man/man1
+/usr/share/man/man1/pinentry-curses.1.gz

@@ -1,0 +1,14 @@
+ef55d1537377114cc24cdc398fbdd930  bin/egrep
+3885488b9d1d10902c6b9c18e20bf952  bin/fgrep
+c4ad4932499bd4edfd296df4984d2097  bin/grep
+449ab80d285c0965c814c89a8264a6a1  usr/bin/rgrep
+492e72343aac5f035a08dbfbcf6cfcf6  usr/share/doc/grep/AUTHORS
+2d770eb0d30e225f53326291217ce76b  usr/share/doc/grep/NEWS.Debian.gz
+943cd92b4b3cfefb0fa1e19e8c31d78e  usr/share/doc/grep/NEWS.gz
+d29312083b988955d9e5ded75691785f  usr/share/doc/grep/README
+01a71a1e0c8ccfae6dd2cd7640dc5640  usr/share/doc/grep/THANKS.gz
+2daa07c7017bc5274adcd08472b069dc  usr/share/doc/grep/TODO.gz
+c2379bea2eb6504d5d1d3aa904c3123d  usr/share/doc/grep/changelog.Debian.gz
+df9ea9a97934e5cf5b5c891da90ec2bb  usr/share/doc/grep/copyright
+d55403b844836ed800a8b7f36df8c246  usr/share/info/grep.info.gz
+7d39124be8280d42bd31467ba20c616c  usr/share/man/man1/grep.1.gz

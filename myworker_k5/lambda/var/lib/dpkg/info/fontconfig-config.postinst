@@ -1,0 +1,18 @@
+#!/bin/sh
+
+set -e
+
+
+CONFAVAIL=/usr/share/fontconfig/conf.avail
+CONFDIR=/etc/fonts/conf.d
+
+# Create /usr/local/share/fonts
+LOCALDIR=/usr/local/share/fonts
+if [ ! -d $LOCALDIR ]; then
+  if mkdir $LOCALDIR 2>/dev/null ; then
+    chmod 2775 $LOCALDIR
+    chown root:staff $LOCALDIR
+  fi
+fi
+
+

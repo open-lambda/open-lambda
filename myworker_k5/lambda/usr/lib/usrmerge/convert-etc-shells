@@ -1,0 +1,47 @@
+#!/usr/bin/perl
+# vim: shiftwidth=4 tabstop=4
+#
+# Copyright 2016 by Marco d'Itri <md@Linux.IT>
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+use lib "/usr/lib/usrmerge/lib";
+use warnings;
+use strict;
+use autodie;
+use v5.16;
+
+convert('/etc/shells');
+exit;
+
+sub convert {
+	my ($file) = @_;
+
+	my (@shells, @nonusr_shells, %seen_in_usr);
+
+	open(my $in, '<', $file);
+	while (<$in>) {
+		chomp;
+		push(@shells, $_);
+		$seen_in_usr{$1} = 1 if m#^/usr(/s?bin/.+)#;
+		push(@nonusr_shells, $_) if m#^/s?bin/#;
+	}
+	close $in;
+
+	my @new_shells =					# and add them to the list
+		map { "/usr$_" }				# add /usr to their path
+		grep { not $seen_in_usr{$_} }	# if they do not already exist in /usr
+		@nonusr_shells;					# for each shell not in /usr
+
+	return unless @new_shells;
+
+	open(my $out, '>', "$file.tmp");
+	say $out $_ foreach @shells, @new_shells;
+	close $out;
+
+	rename("$file.tmp", $file);
+}
+

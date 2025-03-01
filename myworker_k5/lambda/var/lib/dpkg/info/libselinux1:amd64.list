@@ -1,0 +1,10 @@
+/.
+/lib
+/lib/x86_64-linux-gnu
+/lib/x86_64-linux-gnu/libselinux.so.1
+/usr
+/usr/share
+/usr/share/doc
+/usr/share/doc/libselinux1
+/usr/share/doc/libselinux1/changelog.Debian.gz
+/usr/share/doc/libselinux1/copyright

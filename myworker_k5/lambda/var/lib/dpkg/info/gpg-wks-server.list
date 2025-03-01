@@ -1,0 +1,13 @@
+/.
+/usr
+/usr/bin
+/usr/bin/gpg-wks-server
+/usr/share
+/usr/share/doc
+/usr/share/doc/gpg-wks-server
+/usr/share/doc/gpg-wks-server/copyright
+/usr/share/man
+/usr/share/man/man1
+/usr/share/man/man1/gpg-wks-server.1.gz
+/usr/share/doc/gpg-wks-server/NEWS.Debian.gz
+/usr/share/doc/gpg-wks-server/changelog.Debian.gz

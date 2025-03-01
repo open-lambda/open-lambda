@@ -1,0 +1,207 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: libassuan
+Upstream-Contact: Werner Koch <wk@gnupg.org>
+Source: https://gnupg.org/ftp/gcrypt/libassuan/
+
+Files: *
+ Makefile.am
+ src/Makefile.am
+ src/assuan-buffer.c
+ src/assuan-error.c
+ src/assuan-inquire.c
+ src/assuan-io.c
+ src/assuan-listen.c
+ src/assuan-pipe-server.c
+ src/assuan-socket-connect.c
+ src/assuan-socket-server.c
+ src/assuan-socket.c
+ src/assuan-uds.c
+ src/client.c
+ src/context.c
+ src/funopen.c
+ src/memrchr.c
+ src/posix-fd-t.inc.h
+ src/posix-includes.inc.h
+ src/posix-sock-nonce.inc.h
+ src/posix-sys-pth-impl.h
+ src/posix-types.inc.h
+ src/putc_unlocked.c
+ src/server.c
+ src/setenv.c
+ src/stpcpy.c
+ src/system-posix.c
+ src/system-w32.c
+ src/system-w32ce.c
+ src/system.c
+ src/w32-fd-t.inc.h
+ src/w32-includes.inc.h
+ src/w32-sock-nonce.inc.h
+ src/w32-sys-pth-impl.h
+ src/w32-types.inc.h
+ src/w32ce-add.h
+ src/w32ce-fd-t.inc.h
+Copyright: 1992, 1995-2010, Free Software Foundation, Inc
+License: LGPL-2.1+
+
+Files: AUTHORS
+ aclocal.m4
+ build-aux/git-log-footer
+ configure
+ INSTALL
+ m4/gnupg-pth.m4
+ m4/ltoptions.m4
+ m4/ltsugar.m4
+ m4/ltversion.m4
+ m4/lt~obsolete.m4
+ m4/onceonly.m4
+ m4/socklen.m4
+ m4/sys_socket_h.m4
+ m4/Makefile.in
+ src/libassuan-config.in
+ src/libassuan.m4
+ src/mkheader.c
+Copyright: 1992-1996, 1998-2013, Free Software Foundation, Inc
+License: GAP~FSF
+ This file is free software; the Free Software Foundation
+ gives unlimited permission to copy and/or distribute it,
+ with or without modifications, as long as this notice is preserved.
+
+Files: doc/Makefile.am
+ doc/Makefile.in
+ src/gpgcedev.c
+ src/gpgcedev.def
+ src/gpgcemgr.c
+ tests/Makefile.am
+ tests/Makefile.in
+ tests/ce-createpipe.c
+ tests/ce-server.c
+ tests/common.h
+ tests/fdpassing.c
+ tests/pipeconnect.c
+Copyright: 2003, 2006, 2009-2010 Free Software Foundation, Inc
+License: LGPL-3+
+ Assuan is free software; you can redistribute it and/or modify it
+ under the terms of the GNU Lesser General Public License as
+ published by the Free Software Foundation; either version 3 of
+ the License, or (at your option) any later version.
+ .
+ Assuan is distributed in the hope that it will be useful, but
+ WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ Lesser General Public License for more details.
+ .
+ You should have received a copy of the GNU Lesser General Public
+ License along with this program; if not, see <http://www.gnu.org/licenses/>.
+ .
+ On Debian systems, the full text of the GNU Lesser General Public
+ License version 3 can be found in the file
+ `/usr/share/common-licenses/LGPL-3'
+
+Files: src/debug.h
+ src/libassuan.def
+ src/libassuan.vers
+ tests/version.c
+Copyright: 2002, 2004-2005, 2007, 2009, 2013 g10 Code GmbH
+License: LGPL-2.1+
+
+Files: build-aux/compile
+ build-aux/ltmain.sh
+ m4/libtool.m4
+ build-aux/missing
+Copyright: 1999-2013, Free Software Foundation, Inc
+License: GPL-2+ with libtool exception
+ GNU Libtool is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; either version 2 of the License, or
+ (at your option) any later version.
+ .
+ As a special exception to the GNU General Public License,
+ if you distribute this file as part of a program or library that
+ is built using GNU Libtool, you may include this file under the
+ same distribution terms that you use for the rest of that program.
+ .
+ GNU Libtool is distributed in the hope that it will be useful, but
+ WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ General Public License for more details.
+ .
+ You should have received a copy of the GNU General Public License
+ along with GNU Libtool; see the file COPYING.  If not, a copy
+ can be downloaded from http://www.gnu.org/licenses/gpl.html,
+ or obtained by writing to the Free Software Foundation, Inc.,
+ 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ .
+ On Debian systems, the full text of the GNU General Public
+ License version 2 can be found in the file
+ `/usr/share/common-licenses/GPL-2'.
+
+Files: build-aux/config.guess
+ build-aux/config.sub
+ doc/assuan.info
+ doc/assuan.texi
+Copyright: 1985-1986, 1988, 1990-2013, Free Software Foundation, Inc
+License: GPL-3+
+ Permission is granted to copy, distribute and/or modify this document
+ under the terms of the GNU General Public License as published by the
+ Free Software Foundation; either version 3 of the License, or (at your
+ option) any later version. The text of the license can be found in the
+ section entitled ``Copying''.
+ .
+ On Debian systems, the full text of the GNU General Public
+ License version 3 can be found in the file
+ `/usr/share/common-licenses/GPL-3'.
+
+Files: src/conversion.c
+ src/debug.c
+Copyright: 2000, Werner Koch (dd9jn)
+  2001-2005, 2007, 2009, g10 Code GmbH
+License: LGPL-2.1+
+
+Files: autogen.sh
+ m4/gpg-error.m4
+ src/versioninfo.rc.in
+Copyright: 2003-2013 g10 Code GmbH
+License: GAP
+ This file is free software; as a special exception the author gives
+ unlimited permission to copy and/or distribute it, with or without
+ modifications, as long as this notice is preserved.
+
+Files: src/assuan.c
+Copyright: 2001-2002, 2012-2013, g10 Code GmbH
+  2009, Free Software Foundation, Inc
+License: LGPL-2.1+
+
+Files: m4/autobuild.m4
+Copyright: 2004, Simon Josefsson
+License: GPL-2+
+ This file is free software, distributed under the terms of the GNU
+ General Public License.  As a special exception to the GNU General
+ Public License, this file may be distributed as part of a program
+ that contains a configuration script generated by Autoconf, under
+ the same distribution terms as the rest of that program.
+ .
+ This file can be used in projects which are not available under
+ the GNU General Public License or the GNU Library General Public
+ License but which still want to provide support for Autobuild.
+ .
+ On Debian systems, the full text of the GNU General Public
+ License version 2 can be found in the file
+ `/usr/share/common-licenses/GPL-2'.
+
+License: LGPL-2.1+
+ Assuan is free software; you can redistribute it and/or modify it
+ under the terms of the GNU Lesser General Public License as
+ published by the Free Software Foundation; either version 2.1 of
+ the License, or (at your option) any later version.
+ .
+ Assuan is distributed in the hope that it will be useful, but
+ WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ Lesser General Public License for more details.
+ .
+ You should have received a copy of the GNU Lesser General Public
+ License along with this program; if not, see <http://www.gnu.org/licenses/>.
+ .
+ On Debian systems, the full text of the GNU Lesser General Public
+ License version 2.1 can be found in the file
+ `/usr/share/common-licenses/LGPL-2.1'.

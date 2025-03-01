@@ -1,0 +1,12 @@
+/.
+/usr
+/usr/bin
+/usr/share
+/usr/share/doc
+/usr/share/man
+/usr/share/man/man1
+/usr/bin/g++
+/usr/bin/x86_64-linux-gnu-g++
+/usr/share/doc/g++
+/usr/share/man/man1/g++.1.gz
+/usr/share/man/man1/x86_64-linux-gnu-g++.1.gz

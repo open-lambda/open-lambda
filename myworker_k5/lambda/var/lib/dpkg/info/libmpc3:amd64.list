@@ -1,0 +1,11 @@
+/.
+/usr
+/usr/lib
+/usr/lib/x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu/libmpc.so.3.2.1
+/usr/share
+/usr/share/doc
+/usr/share/doc/libmpc3
+/usr/share/doc/libmpc3/changelog.Debian.gz
+/usr/share/doc/libmpc3/copyright
+/usr/lib/x86_64-linux-gnu/libmpc.so.3

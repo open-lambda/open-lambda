@@ -1,0 +1,7 @@
+#!/bin/sh
+set -e
+# Automatically added by dh_installdeb/13.6ubuntu1
+dpkg-maintscript-helper rm_conffile /etc/sysctl.d/protect-links.conf 2:3.3.16-1ubuntu1\~ -- "$@"
+dpkg-maintscript-helper rm_conffile /etc/sysctl.d/10-link-restrictions.conf 2:3.3.16-4ubuntu1\~ -- "$@"
+dpkg-maintscript-helper mv_conffile /usr/lib/sysctl.d/protect-links.conf /usr/lib/sysctl.d/99-protect-links.conf 2:3.3.17-6\~ procps -- "$@"
+# End automatically added section

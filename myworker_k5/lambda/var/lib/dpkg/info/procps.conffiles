@@ -1,0 +1,10 @@
+/etc/init.d/procps
+/etc/sysctl.conf
+/etc/sysctl.d/10-console-messages.conf
+/etc/sysctl.d/10-ipv6-privacy.conf
+/etc/sysctl.d/10-kernel-hardening.conf
+/etc/sysctl.d/10-magic-sysrq.conf
+/etc/sysctl.d/10-network-security.conf
+/etc/sysctl.d/10-ptrace.conf
+/etc/sysctl.d/10-zeropage.conf
+/etc/sysctl.d/README.sysctl

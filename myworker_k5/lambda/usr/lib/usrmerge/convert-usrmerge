@@ -1,0 +1,533 @@
+#!/usr/bin/perl
+# vim: shiftwidth=4 tabstop=4
+#
+# Copyright 2014 by Marco d'Itri <md@Linux.IT>
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+use lib "/usr/lib/usrmerge/lib";
+use warnings;
+use strict;
+use autodie;
+use v5.16;
+
+use File::Find::Rule;
+use Cwd qw(abs_path);
+use Errno;
+
+my $Debug = 0;
+my $Program_RC = 0;
+
+check_free_space();
+
+go_faster();
+
+# print the long error message if something fails due to autodie
+$SIG{__DIE__} = sub { fatal($_[0]); };
+
+{
+	foreach my $name (early_conversion_files()) {
+		next if $name =~ m#^/usr/#;	# already converted
+		convert_file($name);
+	}
+
+	my @dirs = directories_to_merge();
+
+	# create any directory which is in / but not in /usr
+	foreach my $dir (@dirs) {
+		mkdir("/usr$dir") if not -e "/usr$dir";
+	}
+
+	my @later;
+	my $rule = File::Find::Rule->mindepth(1)->maxdepth(1)->start(@dirs);
+	while (defined (my $name = $rule->match)) {
+		convert_file($name, \@later);
+	}
+
+	# symlinks must be converted after the rest to avoid races, because
+	# they may point to binaries which have not been converted yet
+	convert_file($_) foreach @later;
+
+	verify_links_only($_) foreach @dirs;
+
+	convert_directory($_) foreach @dirs;
+
+	exit($Program_RC) if $Program_RC;
+	print "The system has been successfully converted.\n";
+	exit;
+}
+
+##############################################################################
+sub convert_file {
+	my ($n, $later) = @_;
+	print "==== $n ====\n" if $Debug;
+
+	# the source is a broken link
+	if (-l $n and not -e $n and -e "/usr$n") {
+		warn "WARNING: $n is a broken symlink and has been renamed!\n";
+		rename($n, "$n.usrmerge-broken");
+		return;
+	}
+
+	# the destination is a broken link
+	if (-l "/usr$n" and not -e "/usr$n") {
+		warn "WARNING: /usr$n is a broken symlink and has been renamed!\n";
+		rename("/usr$n", "/usr$n.usrmerge-broken");
+		# continue and move the source as usual
+	}
+
+	# is a directory and the destination does not exist
+	if (-d $n and not -e "/usr$n") {
+		mv($n, "/usr$n");					# XXX race
+		symlink("/usr$n", $n);
+		return;
+	}
+
+	# is a link and the destination does not exist, but defer the conversion
+	if (-l $n and not -e "/usr$n" and $later) {
+		push(@$later, $n);
+		return;
+	}
+
+	# is a file or link and the destination does not exist
+	if (not -e "/usr$n") {
+		cp($n, "/usr$n");
+		symlink("/usr$n", "$n~~tmp~usrmerge~~");
+		rename("$n~~tmp~usrmerge~~", $n);
+		# XXX alternative implementation:
+		#mv($n, "/usr$n");					# XXX race
+		#symlink("/usr$n", $n);
+		return;
+	}
+
+	# both source and dest are directories
+	if (-d $n and -d "/usr$n") {
+		# so they have to be merged recursively
+		my $rule = File::Find::Rule->mindepth(1)->maxdepth(1)->start($n);
+		while (defined (my $name = $rule->match)) {
+			convert_file($name, $later);
+		}
+		return;
+	}
+
+	# The other cases are more complex and there are some corner cases that
+	# we do not try to resolve automatically.
+
+	# both source and dest are links
+	if (-l $n and -l "/usr$n") {
+		my $l1 = readlink($n);
+		my $l2 = readlink("/usr$n");
+		my ($basedir) = $n =~ m#^(.+)/[^/]+$#;
+		return if $l1 eq $l2;				# and they point to the same file
+		return if "$basedir/$l1" eq $l2;	# same (the / link is relative)
+		return if $l1 eq "/usr$basedir/$l2";# same (the /usr link is relative)
+		return if $l1 eq "/usr$n";	# and the / link points to the /usr link
+		if ($l2 eq $n) {			# and the /usr link points to the / link
+			# the target of the new link will be an absolute path, so it
+			# may be different from the original one even if both point to
+			# the same file
+			symlink(abs_path($n), "/usr$n~~tmp~usrmerge~~");
+			rename("/usr$n~~tmp~usrmerge~~", "/usr$n");
+			# convert the /bin link too to make the program idempotent
+			symlink(abs_path($n), "$n~~tmp~usrmerge~~");
+			rename("$n~~tmp~usrmerge~~", "$n");
+			return;
+		}
+		fatal("Both $n and /usr$n exist");
+	}
+
+	# the source is a link
+	if (-l $n) {
+		my $l = readlink($n);
+		return if $l eq "/usr$n";			# and it points to dest
+		fatal("Both $n and /usr$n exist");
+	}
+
+	# the destination is a link
+	if (-l "/usr$n") {
+		my $l = readlink("/usr$n");
+		if ($l eq $n) {						# and it points to source
+			cp($n, "/usr$n~~tmp~usrmerge~~");
+			rename("/usr$n~~tmp~usrmerge~~", "/usr$n");
+			symlink("/usr$n", "$n~~tmp~usrmerge~~");
+			rename("$n~~tmp~usrmerge~~", $n);
+			# XXX alternative implementation:
+			#mv($n, "/usr$n");				# XXX race
+			#symlink("/usr$n", $n);
+			return;
+		}
+		fatal("Both $n and /usr$n exist");
+	}
+
+	# generated files
+	# if it was already re-generated in the new place, clear the legacy location
+	# Origin of generated files:
+	# /lib/udev/hwdb.bin -> 'systemd-hwdb --usr update'
+	my @generated_files = qw(
+		/lib/udev/hwdb.bin
+	);
+	if (-e "/usr$n" && $n ~~ @generated_files) {
+		rm('-f', "$n");
+		return;
+	}
+
+	fatal("$n is a directory and /usr$n is not")
+		if -d $n and -e "/usr$n";
+	fatal("/usr$n is a directory and $n is not")
+		if -d "/usr$n";
+	fatal("Both $n and /usr$n exist")
+		if -e "/usr$n";
+
+	fatal("The status of $n and /usr$n is really unexpected");
+}
+
+##############################################################################
+# To prevent a failure later, the regular files of the libraries used by
+# cp and mv must be converted before of the symlinks that point to them.
+sub early_conversion_files {
+	open(my $fh, '-|', 'ldd /bin/cp');
+	my @ldd = <$fh>;
+	close $fh;
+
+	# the libraries
+	my @list = grep { $_ } map { /^\s+\S+ => (\S+) / and $1 } @ldd;
+	# the dynamic linker
+	push(@list, grep { $_ } map { /^\s+(\/\S+) \(/ and $1 } @ldd);
+
+	# this is the equivalent of readlink --canonicalize
+	my @newlist;
+	foreach my $name (@list) {
+		my $newname = -l $name ? readlink($name) : $name;
+		if ($newname !~ m#^/#) {
+			my $dir = $name;
+			$dir =~ s#[^/]+$##;
+			$newname = $dir . $newname;
+		}
+		my $topdir = $newname;
+		$topdir =~ s#^(/[^/]+).*#$1#;
+		# this is needed to be idempotent after a complete conversion
+		next if -l $topdir;
+		push(@newlist, $newname);
+	}
+
+	return @newlist;
+}
+
+##############################################################################
+# Safety check: verify that there are no regular files in the directories
+# that will be deleted by the final pass.
+sub verify_links_only {
+	my ($dir) = @_;
+
+	my $link_or_dir = File::Find::Rule->or(
+		File::Find::Rule->symlink,
+		File::Find::Rule->directory,
+	);
+
+	my $rule = File::Find::Rule->mindepth(1)->not($link_or_dir)->start($dir);
+	while (defined (my $name = $rule->match)) {
+		print STDERR "$name is not a symlink!\n";
+		print STDERR "\nSafety check: the conversion has failed!\n";
+		exit 1;
+	}
+}
+
+sub convert_directory {
+	my ($dir) = @_;
+
+	return if -l $dir;
+
+	if (not -d $dir) {
+		symlink("usr$dir", $dir);
+		restore_context($dir);
+		return;
+	}
+
+	no autodie;
+	if (not rename($dir, "$dir~~delete~usrmerge~~")) {	# XXX race
+		if ($!{EBUSY}) {
+			handle_ebusy($dir);
+			return;
+		}
+		die "Can't rename $dir: $!";
+	}
+	use autodie;
+	symlink("usr$dir", $dir);
+	restore_context($dir);
+
+	rm('-rf', "$dir~~delete~usrmerge~~");
+}
+
+sub restore_context {
+	my ($file) = @_;
+
+	return if not -x '/sbin/restorecon';
+
+	safe_system('restorecon', $file);
+}
+
+sub handle_ebusy {
+	my ($dir) = @_;
+
+	print STDERR <<END;
+
+WARNING: renaming $dir/ (for the purpose of replacing it with a symlink
+to /usr$dir/) has failed with the EBUSY error.
+This is probably caused by a systemd service started with the
+ProtectSystem option. Before running again this program you will need to
+stop the relevant daemon(s) or reboot the system.
+Do not install or update other Debian packages until the program
+has been run successfully. (Removing packages is not harmful.)
+END
+
+	# continue, but have the program eventually return an error
+	$Program_RC = 1;
+
+	# if systemd is running...
+	return if -d '/run/systemd/system';
+
+	# list the services with ProtectSystem enabled
+	my $cmd = q{
+	for service in $(systemctl --no-legend --full list-units \
+		    --state=active --type=service | cut -d ' ' -f 1); do
+	  if systemctl show $service | egrep -q "^ProtectSystem=(yes|full)"; then
+		echo $service
+	  fi
+	done
+	};
+
+	my $cmd_output = qx{$cmd} || return;
+	print STDERR <<END;
+
+The following services are using the ProtectSystem feature:
+$cmd_output
+END
+}
+
+##############################################################################
+sub check_free_space {
+	local $ENV{LC_ALL} = 'C';
+	my $fh;
+
+	open($fh, '-|', 'stat --dereference --file-system --format="%i" /');
+	my $root_id = <$fh>;
+	die "stat / failed" if not defined $root_id;
+	chomp $root_id;
+
+	# beware: df(1) reports the value of %a, not of %f
+	open($fh, '-|',
+		'stat --dereference --file-system --format="%f %S %i" /usr/');
+	my $stat_output = <$fh>;
+	die "stat /usr failed" if not defined $stat_output;
+	chomp $stat_output;
+	my ($free_blocks, $bs, $usr_id) = split(/ /, $stat_output);
+
+	return if $root_id eq $usr_id;
+
+	my $free = $free_blocks * ($bs / 1024);
+	my @dirs = grep { -e $_ } directories_to_merge();
+
+	open($fh, '-|',
+		"du --summarize --no-dereference --total --block-size=1K @dirs");
+	my $needed;
+	while (<$fh>) {
+		($needed) = /^(\d+)\s+total$/;
+	}
+	close $fh;
+	die "df @dirs failed" if not defined $needed;
+
+	say "Free space in /usr: $free KB." if $Debug;
+	say "The origin directories (@dirs) require $needed KB." if $Debug;
+
+	die "$free KB in /usr but $needed KB are required!\n" if $needed > $free;
+}
+
+##############################################################################
+# Try to avoid the inherent races by being as fast as possible.
+sub go_faster {
+	system('/usr/bin/ionice', '--class=realtime', "--pid=$$")
+		if -x '/usr/bin/ionice';
+	system('/usr/bin/chrt', '--rr', '-p', '99', '--pid', $$)
+		if -x '/usr/bin/chrt';
+}
+
+# We use cp from coreutils because it preserves extended attributes and
+# handles sparse files.
+sub cp {
+	my ($source, $dest) = @_;
+
+	safe_system('cp', '--no-dereference', '--preserve=all',
+		'--reflink=auto', '--sparse=always', $source, $dest);
+}
+
+# We use mv from coreutils because it supports moving directories across
+# filesystems, which would be inconvenient to implement here.
+sub mv {
+	my ($source, $dest) = @_;
+
+	safe_system('mv', '--no-clobber', $source, $dest);
+}
+
+# We use rm from coreutils because I cannot be bothered to implement -r.
+sub rm {
+	safe_system('rm', @_);
+}
+
+sub safe_system {
+	my (@cmd) = @_;
+
+	my $rc = system(@cmd);
+	die "Failed to execute @cmd: $!\n" if $rc == -1;
+	die "@cmd: rc=" . ($? >> 8) . "\n" if $rc;
+}
+
+sub fatal {
+	my ($msg) = @_;
+
+	$msg .= ".\n" if $msg !~ /\n$/;
+
+	print STDERR <<END;
+
+FATAL ERROR:
+$msg
+You can try correcting the errors reported and running again
+$0 until it will complete without errors.
+Do not install or update other Debian packages until the program
+has been run successfully.
+
+END
+	exit(1);
+}
+
+# Find out where the runtime dynamic linker and the shared libraries
+# can be installed on each architecture: native, multilib and multiarch.
+#
+# This function must be updated to support any new architecture which
+# either installs the RTLD in a directory different from /lib or builds
+# multilib library packages.
+sub directories_to_merge {
+	my @dirs;
+	push(@dirs, qw(lib32 lib64 libx32))	if running_arch('amd64');
+	push(@dirs, qw(      lib64 libx32))	if running_arch('i386');
+	push(@dirs, qw(lib32 lib64))		if running_arch('mips');
+	push(@dirs, qw(lib32 lib64))		if running_arch('mipsel');
+	push(@dirs, qw(lib32 lib64 libo32))	if running_arch('mips64');
+	push(@dirs, qw(lib32 lib64 libo32))	if running_arch('mips64el');
+	push(@dirs, qw(lib32 lib64 libo32))	if running_arch('mipsn32');
+	push(@dirs, qw(lib32 lib64 libo32))	if running_arch('mipsn32el');
+	push(@dirs, qw(      lib64))		if running_arch('powerpc');
+	push(@dirs, qw(lib32 lib64))		if running_arch('ppc64');
+	push(@dirs, qw(      lib64))		if running_arch('ppc64el');
+	push(@dirs, qw(lib32))				if running_arch('s390x');
+	push(@dirs, qw(      lib64))		if running_arch('sparc');
+	push(@dirs, qw(lib32 lib64))		if running_arch('sparc64');
+	push(@dirs, qw(lib32 lib64 libx32))	if running_arch('x32');
+
+	# remove the duplicates
+	my %seen;
+	@dirs = sort grep { not $seen{ $_ }++ } @dirs;
+
+	unshift(@dirs, qw(bin sbin lib));
+	return map { "/$_" } @dirs;
+}
+
+# check if the argument is one of the architectures enabled on the system
+sub running_arch {
+	my ($wanted) = @_;
+
+	state @system_arch;
+	if (not @system_arch) {
+		push(@system_arch, `dpkg --print-architecture`);
+		push(@system_arch, `dpkg --print-foreign-architectures`);
+		chomp @system_arch;
+	}
+
+	return 1 if grep { $_ eq $wanted } @system_arch;
+	return 0;
+}
+
+##############################################################################
+__END__
+
+=head1 NAME
+
+convert-usrmerge - converts the system to everything-in-usr
+
+=head1 SYNOPSIS
+
+convert-usrmerge
+
+=head1 DESCRIPTION
+
+This program will automatically convert the system to the
+everything-in-usr directory scheme.
+
+There is no automatic method to restore the precedent configuration, so
+there is no going back once the program has been run.
+
+The program is idempotent, unless the system crashes at a really bad time.
+
+The conflicts of all files in the Debian archive can be solved
+automatically, but some corner cases of custom setups may require
+manual changes.
+
+=head1 CONFLICTS RESOLUTION MATRIX
+
+ s/d F   D   L   B
+ F   X   X   S   Rd
+ D   X   D   S   Rd
+ L   K   K   K?  Rd
+ B   Rs  Rs  Rs  Rs
+
+I<Source> is / and I<destination> is /usr.
+
+Types of files:
+
+=over 4
+
+=item F: file
+
+=item D: directory
+
+=item L: symbolic link
+
+=item B: broken symbolic link
+
+=back
+
+Actions:
+
+=over 4
+
+=item X: unresolvable conflict
+
+=item D: recurse and compare the content of the directories
+
+=item K: keep the source (if the link matches the destination)
+
+=item S: swap source and destination (if the link matches the destination)
+
+=item R: rename (source or destination)
+
+=back
+
+=head1 BUGS
+
+Replacing a directory with a symlink is racy unless we do a complex dance
+of bind mounts. We should decide if this is really needed.
+
+Conflicting relative symbolic links are not handled automatically.
+
+The libc6-i386 and libc6-x32 packages require to convert the /lib32 and
+/libx32 directories as well, otherwise they would only contain the
+symlink to the dynamic linker specified by the architecture ABI.
+
+=head1 AUTHOR
+
+The program and this man page have been written by Marco d'Itri
+and are licensed under the terms of the GNU General Public License,
+version 2 or higher.
+

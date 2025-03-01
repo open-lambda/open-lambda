@@ -1,0 +1,37 @@
+#! /bin/sh -e
+
+# remove the doc dir, if it's still a directory and replace with a symlink
+pkg=`basename $0 .postinst`
+if [ ! -L  /usr/share/doc/$pkg ]; then
+    rm -rf /usr/share/doc/$pkg
+    ln -s cpp /usr/share/doc/$pkg
+fi
+
+# fix for report #138038: remove old diversions
+if [ -n "`dpkg-divert --list /usr/bin/c++filt.binutils`" ]; then
+    # diversion of /usr/bin/c++filt
+    #   to /usr/bin/c++filt.binutils
+    # /usr/bin/c++filt is from old g++
+    # /usr/bin/c++filt.binutils is from current binutils
+    rm -f /usr/bin/c++filt
+    dpkg-divert --package g++ --rename --remove /usr/bin/c++filt \
+	|| true
+fi
+if [ -n "`dpkg-divert --list /usr/man/man1/c++filt.binutils.1.gz`" ]; then
+    # diversion of /usr/man/man1/c++filt.1.gz
+    #   to /usr/man/man1/c++filt.binutils.1.gz
+    # /usr/man/man1/c++filt.1.gz is from old g++
+    # /usr/man/man1/c++filt.binutils.1.gz does not exist any more
+    # /usr/share/man/man1/c++filt.1.gz is from current binutils
+    rm -f /usr/man/man1/c++filt.1.gz
+    dpkg-divert --package g++ --rename --remove /usr/man/man1/c++filt.1.gz \
+	|| true
+fi
+
+update-alternatives \
+    --install /usr/bin/c++ c++ /usr/bin/g++ 20 \
+    --slave /usr/share/man/man1/c++.1.gz c++.1.gz /usr/share/man/man1/g++.1.gz
+
+
+
+exit 0

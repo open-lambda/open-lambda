@@ -1,0 +1,2 @@
+/etc/apache2/conf-available/javascript-common.conf
+/etc/lighttpd/conf-available/90-javascript-alias.conf

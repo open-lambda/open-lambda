@@ -1,0 +1,17 @@
+/.
+/lib
+/lib/x86_64-linux-gnu
+/lib/x86_64-linux-gnu/libncursesw.so.6.3
+/usr
+/usr/lib
+/usr/lib/x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu/libformw.so.6.3
+/usr/lib/x86_64-linux-gnu/libmenuw.so.6.3
+/usr/lib/x86_64-linux-gnu/libpanelw.so.6.3
+/usr/share
+/usr/share/doc
+/lib/x86_64-linux-gnu/libncursesw.so.6
+/usr/lib/x86_64-linux-gnu/libformw.so.6
+/usr/lib/x86_64-linux-gnu/libmenuw.so.6
+/usr/lib/x86_64-linux-gnu/libpanelw.so.6
+/usr/share/doc/libncursesw6

@@ -1,0 +1,38 @@
+#!/bin/sh -e
+
+standalone_usr() {
+  local device_root=$(stat --printf='%d\n' /)
+  local device_usr=$(stat --printf='%d\n' /usr)
+
+  if [ "$device_root" != "$device_usr" ]; then
+    return 0
+  fi
+  return 1
+}
+
+booted_with_initramfs() {
+  # created by update-initramfs
+  if [ -d /run/initramfs/ ]; then
+    return 1
+  fi
+  return 0
+}
+
+has_initramfs() {
+  standalone_usr || return 0
+  booted_with_initramfs || return 0
+  echo "/usr is a standalone filesystem, this requires using an initramfs."
+  exit 1
+}
+
+case "$1" in
+    install)
+    # check the prerequisites on the first install
+    if [ -z "$2" ]; then
+	has_initramfs
+    fi
+    ;;
+esac
+
+
+

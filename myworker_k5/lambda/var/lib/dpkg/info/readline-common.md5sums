@@ -1,0 +1,8 @@
+1c6d86780252d917a38892e0072149fd  usr/share/doc/readline-common/changelog.Debian.gz
+b0cf3572690d3722c99c47e2cc573aeb  usr/share/doc/readline-common/copyright
+244319c9dd88c980910aacd76477b8d9  usr/share/doc/readline-common/inputrc.arrows
+0e96ea0b3342cfb9702bd92c9acc0caf  usr/share/info/rluserman.info.gz
+8d25a612c254e92ce813fdd2fde12954  usr/share/lintian/overrides/readline-common
+fd761d5295f1f6a546e2f84c06ff6e8a  usr/share/man/man3/history.3readline.gz
+034c7897d1ba314a93602dfd2b6af377  usr/share/man/man3/readline.3readline.gz
+75858dffc595a0ec73c46a1e5744d087  usr/share/readline/inputrc

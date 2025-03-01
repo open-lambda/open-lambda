@@ -1,0 +1,28 @@
+#!/bin/sh
+# Copyright 2007 Jari Aalto; Released under GNU GPL v2 or any later version
+
+# Prevent recursive loops, where these values are set to this script
+p="$(command -v "$0")"
+[ -n "$PAGER" ] && [ "$(command -v "$PAGER" || true)" = "$p" ] && PAGER=
+
+IsError()
+{
+	# Operating system command not found
+	[ "$1" -ne 126 ] && [ $1 -ne 127 ]
+}
+
+Run()
+{
+	"$@"
+	ret=$?
+	IsError "$ret"
+}
+
+Run ${PAGER:-pager} "$@" ||
+Run more "$@" ||
+{
+		echo "Couldn't find a pager!" 1>&2
+		echo "Set the \$PAGER environment variable to your desired pager." 1>&2
+		exit 1;
+}
+exit "$ret"

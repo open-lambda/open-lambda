@@ -1,0 +1,10 @@
+/.
+/usr
+/usr/lib
+/usr/lib/x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu/libsemanage.so.2
+/usr/share
+/usr/share/doc
+/usr/share/doc/libsemanage2
+/usr/share/doc/libsemanage2/changelog.Debian.gz
+/usr/share/doc/libsemanage2/copyright

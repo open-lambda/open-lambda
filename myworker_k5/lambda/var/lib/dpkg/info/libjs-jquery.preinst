@@ -1,0 +1,5 @@
+#!/bin/sh
+set -e
+# Automatically added by dh_installdeb/13.6ubuntu1
+dpkg-maintscript-helper symlink_to_dir /usr/share/javascript/jquery /usr/share/nodejs/jquery/dist 3.5.1\+dfsg\+\~3.5.5-6\~ -- "$@"
+# End automatically added section

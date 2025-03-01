@@ -1,0 +1,17 @@
+/.
+/lib
+/lib/x86_64-linux-gnu
+/lib/x86_64-linux-gnu/libncurses.so.6.3
+/usr
+/usr/lib
+/usr/lib/x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu/libform.so.6.3
+/usr/lib/x86_64-linux-gnu/libmenu.so.6.3
+/usr/lib/x86_64-linux-gnu/libpanel.so.6.3
+/usr/share
+/usr/share/doc
+/lib/x86_64-linux-gnu/libncurses.so.6
+/usr/lib/x86_64-linux-gnu/libform.so.6
+/usr/lib/x86_64-linux-gnu/libmenu.so.6
+/usr/lib/x86_64-linux-gnu/libpanel.so.6
+/usr/share/doc/libncurses6

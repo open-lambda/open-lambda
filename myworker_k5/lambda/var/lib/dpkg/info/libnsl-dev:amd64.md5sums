@@ -1,0 +1,17 @@
+db850ad685931497d6bbd4182b6d7e60  usr/include/rpcsvc/nis.h
+05af63beb8877411081bab99ad7d8189  usr/include/rpcsvc/nis.x
+fd87721d1403bd61dacd03a7df4aeaa2  usr/include/rpcsvc/nis_callback.h
+af9b53e7896f752fe8f5f058b89f73dc  usr/include/rpcsvc/nis_callback.x
+bb40ceddadfe2a3d94c23307ab45c7fc  usr/include/rpcsvc/nis_object.x
+85a08c425c7479ad7843c4fc8512f978  usr/include/rpcsvc/nis_tags.h
+24f7ff8dc3dd174948eb79f6face6893  usr/include/rpcsvc/nislib.h
+de4de48283dff21d7e37117be119de3a  usr/include/rpcsvc/yp.h
+3cf33d0b0777b6fe42ed39f79226a911  usr/include/rpcsvc/yp.x
+45cd51398038ae3424943703827c49ac  usr/include/rpcsvc/yp_prot.h
+0dd3dbafccb837d59c1b5396872417f5  usr/include/rpcsvc/ypclnt.h
+9ace187c1417ce9a473f2da13c1003fa  usr/include/rpcsvc/yppasswd.h
+7284e95778a08f81d9d1fd4f6e5006d8  usr/include/rpcsvc/yppasswd.x
+3f82f2fee96d45d5e47b693a6ee2fb3b  usr/include/rpcsvc/ypupd.h
+d3878976f361189336e55d278729504d  usr/lib/x86_64-linux-gnu/libnsl.a
+299c102c530092384de51c5abc3f8abd  usr/lib/x86_64-linux-gnu/pkgconfig/libnsl.pc
+42dce1c4da6a668b04a202ba2f800e5a  usr/share/doc/libnsl-dev/copyright

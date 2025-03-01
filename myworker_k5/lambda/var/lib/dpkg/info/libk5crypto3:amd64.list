@@ -1,0 +1,11 @@
+/.
+/usr
+/usr/lib
+/usr/lib/x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu/libk5crypto.so.3.1
+/usr/share
+/usr/share/doc
+/usr/share/doc/libk5crypto3
+/usr/share/doc/libk5crypto3/copyright
+/usr/lib/x86_64-linux-gnu/libk5crypto.so.3
+/usr/share/doc/libk5crypto3/changelog.Debian.gz

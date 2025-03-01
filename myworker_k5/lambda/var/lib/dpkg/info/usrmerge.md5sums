@@ -1,0 +1,16 @@
+b4cc567f32195ecadaf3113695d38e7d  usr/lib/usrmerge/convert-etc-shells
+5cbbd15f23db4a8ee40a54abd17f60df  usr/lib/usrmerge/convert-usrmerge
+1eca1e4f202da02cccc7fd28d8deb51b  usr/lib/usrmerge/lib/Fatal.pm
+579c78cc80b06ef614e86e9bc0bb0ad7  usr/lib/usrmerge/lib/File/Find.pm
+ffca5e8103acd577b20513f9ae46e2b9  usr/lib/usrmerge/lib/File/Find/Rule.pm
+a50b398733a51be5e032121499b651db  usr/lib/usrmerge/lib/Number/Compare.pm
+8bfb0dcac57f5ce171527f0a2a2e6c9d  usr/lib/usrmerge/lib/Text/Glob.pm
+7d6efc6c2529c586739876b907b7b36c  usr/lib/usrmerge/lib/Tie/RefHash.pm
+db6e53e7950f4cb8d44ef6ed7cb0cf3e  usr/lib/usrmerge/lib/autodie.pm
+ec1bafef47da4f794f86eefaefb623e3  usr/lib/usrmerge/lib/autodie/Scope/Guard.pm
+c7b5a31d000fc8dc3d59b2a260d19d8d  usr/lib/usrmerge/lib/autodie/Scope/GuardStack.pm
+e0533b181a4e23f46387dca647290bbc  usr/lib/usrmerge/lib/autodie/Util.pm
+8135da5c6624f925318fea6ba657b498  usr/lib/usrmerge/lib/if.pm
+b35c0595b3d70931a7287aae7d3c1899  usr/share/doc/usrmerge/README.Debian
+b15c393172704792c70e0f2ff8b18ff7  usr/share/doc/usrmerge/changelog.gz
+4257d2eccabe7947d1452fde8e7ce167  usr/share/doc/usrmerge/copyright

@@ -1,0 +1,11 @@
+/.
+/usr
+/usr/lib
+/usr/lib/x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu/libassuan.so.0.8.5
+/usr/share
+/usr/share/doc
+/usr/share/doc/libassuan0
+/usr/share/doc/libassuan0/changelog.Debian.gz
+/usr/share/doc/libassuan0/copyright
+/usr/lib/x86_64-linux-gnu/libassuan.so.0

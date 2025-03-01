@@ -1,0 +1,1587 @@
+# list of source packages not to build with link time optimization (LTO).
+# format: <source> any | <arch> [<arch> ...]
+#
+# when adding new packages, please file a LP issue and add it in a comment
+# packages in main:
+
+# packages not in main:
+0ad arm64
+abinit any
+abiword arm64
+abseil any
+abyss any
+acbuild any
+accelio amd64
+accounts-qml-module any
+acedb any
+acmetool any
+acpica-unix any
+adabrowse arm64
+adacgi s390x
+adacontrol arm64 ppc64el
+adanaxisgpl any
+adasockets ppc64el s390x
+adns any
+adun.app any
+adwaita-qt any
+aerc any
+afflib any
+aflplusplus any
+afnix any
+afterstep any
+agda arm64
+agg any
+ahven ppc64el s390x
+aiscm amd64
+akonadi any
+akonadi-calendar ppc64el s390x
+akonadi-calendar-tools ppc64el s390x
+akonadiconsole ppc64el s390x
+akonadi-contacts any
+akonadi-import-wizard ppc64el s390x
+akregator ppc64el s390x
+alberta any
+algobox ppc64el s390x
+alltray any
+alsamixergui any
+android-platform-art any
+android-platform-build any
+android-platform-frameworks-base any
+android-platform-libnativehelper any
+android-platform-system-core any
+android-platform-system-tools-aidl any
+android-platform-system-tools-hidl any
+android-platform-tools-base any
+anet any
+angelscript any
+anypaper any
+anytun any
+apertium-br-fr amd64
+apertium-cy-en amd64
+apertium-eo-ca amd64
+apertium-eo-fr amd64
+apertium-lex-tools any
+aplus-fsf any
+apophenia ppc64el
+appstream-generator any
+apt-btrfs-snapshot amd64
+arb amd64
+argus any
+argus-clients any
+argyll any
+ariba s390x
+armnn arm64 s390x
+arpalert any
+ascd any
+asis any
+asmail any
+asmjit s390x
+assaultcube any
+astra-toolbox s390x
+astroid2-for-python3 amd64
+ataqv s390x
+atlas any
+atlas-ecmwf amd64 arm64 ppc64el
+atropos s390x
+audacious any
+aurora any
+autobahn-cpp amd64
+autofdo any
+awffull any
+aws-shell amd64
+ax25mail-utils any
+bandwidthd any
+bart any
+bart-cuda any
+basilisk2 any
+baycomepp amd64
+bazel-bootstrap any
+bcachefs-tools arm64 ppc64el s390x
+bcftools s390x
+beancount amd64 arm64 s390x
+bear s390x
+belcard any
+belr any
+bf any
+binaryen any
+binutils-arm-none-eabi any
+binutils-avr any
+binutils-h8300-hms any
+binutils-m68hc1x any
+binutils-mingw-w64 any
+binutils-msp430 any
+binutils-z80 any
+biobambam2 s390x
+bird2 any
+bird any
+bitstruct s390x
+blasr s390x
+blastem arm64 ppc64el s390x
+blender s390x
+blis amd64
+bookkeeper amd64
+bornagain any
+bowtie2 s390x
+bpftrace s390x
+brickos any
+bristol any
+buici-clock any
+buildapp ppc64el s390x
+bumpversion amd64
+bup any
+bwctl any
+bygfoot amd64 arm64 s390x
+bzrtp any
+cadvisor amd64 arm64
+cafeobj ppc64el s390x
+caftools any
+cairo-dock-plug-ins any
+calibre ppc64el s390x
+camitk arm64 ppc64el s390x
+caml-crush any
+camljava any
+canna any
+cantor any
+canu amd64 arm64 ppc64el
+carla amd64
+casparcg-server any
+castle-game-engine arm64 ppc64el s390x
+cavezofphear any
+cbmc amd64 ppc64el
+cbmplugs any
+ccextractor any
+cctools arm64
+cde amd64
+cdist amd64
+celery-batches any
+celery-haystack amd64
+cenon.app any
+centrifuge arm64 ppc64el s390x
+ceres-solver any
+cernlib any
+cfingerd any
+cgminer any
+chasen amd64 arm64 ppc64el
+chaussette amd64
+cheesecutter any
+circuslinux any
+civetweb any
+cjs any
+clasp arm64 ppc64el
+cld2 s390x
+clhep any
+clickhouse arm64 s390x
+clippoly any
+clisp any
+cmocka any
+cmt any
+coinor-dylp any
+coinor-vol any
+collectd any
+colobot amd64 ppc64el s390x
+comedilib any
+compiz any
+compyle amd64
+comskip any
+connectome-workbench any
+consul any
+coq-doc amd64
+coq s390x
+coturn any
+courier-authlib any
+courier-unicode any
+cpprest amd64 arm64 ppc64el
+cqrlog s390x
+crac s390x
+crafty arm64 ppc64el s390x
+criu any
+croaring s390x
+crossguid any
+crowdsec any
+crypto-equality-clojure amd64
+csh any
+csound arm64
+ctwm any
+cuneiform s390x
+cups-bjnp any
+cura amd64
+cura-engine any
+cvs-fast-export any
+cwm any
+cyclades-serial-client any
+dahdi-tools amd64 arm64 s390x
+daisy-player any
+darkplaces any
+dart s390x
+dateutils any
+datovka any
+dbmix any
+dbusada any
+dcontainers amd64 arm64 ppc64el
+dd2 any
+ddccontrol amd64
+ddd ppc64el
+dde-calendar any
+dde-qt5integration any
+dde-qt-dbus-factory any
+ddrescueview s390x
+ddrutility any
+dds amd64
+deal.ii any
+debdry amd64
+deepin-calculator any
+deepin-deb-installer any
+deepin-image-viewer any
+deepin-menu any
+deepin-movie-reborn any
+deepin-music any
+deepin-screen-recorder any
+deepin-voice-recorder any
+delve amd64
+derivations amd64
+dfvfs amd64
+dh-ada-library arm64
+diagnostics any
+dietlibc any
+diet-ng any
+digikam any
+digup s390x
+direwolf any
+distcc any
+dltlyse amd64
+dmalloc amd64
+dmarc-cat any
+dnsdbq any
+dnsdist any
+doc-linux-fr amd64
+dolfin any
+dolphin-emu amd64 arm64
+doublecmd ppc64el s390x
+double-conversion any
+doublex amd64
+doxygen any
+dozzaqueux s390x
+dpaste any
+dpf-plugins any
+drac any
+draco amd64 arm64 ppc64el
+dragonfly-reverb any
+drmips amd64
+dsniff any
+dspdfviewer amd64 ppc64el s390x
+dtkcore any
+dtkwidget any
+dtkwm any
+dump1090-mutability any
+dune-common any
+dune-grid-glue amd64 arm64 ppc64el
+dvdisaster any
+dvi2ps any
+dxvk arm64
+dynamips ppc64el s390x
+ebook-speaker any
+echoping any
+eckit any
+eclipse-titan any
+edb-debugger amd64
+edfbrowser any
+efax-gtk any
+effcee any
+efingerd any
+efitools ppc64el s390x
+elinks any
+el-ixir s390x
+elkcode any
+emacs any
+emoslib amd64
+entropybroker arm64
+epubcheck amd64
+equinox-framework s390x
+erlang-cuttlefish any
+erlang-ranch any
+eso-midas any
+etbemon any
+etcd any
+eukleides any
+ezquake any
+ezstream any
+faketime any
+falkon any
+fam any
+farstream-0.2 any
+fasta3 s390x
+fastdds any
+faucc any
+fbpanel any
+fcitx-qt5 any
+fdroidcl ppc64el s390x
+ferret-vis any
+ffe ppc64el
+ffmpeg any
+finit ppc64el s390x
+firmware-microbit-micropython amd64
+firmware-tomu amd64
+fizmo any
+flatbuffers any
+flatpack any
+fldigi any
+flmsg any
+flowgrind any
+fltk1.1 any
+fltk1.3 any
+fmtlib amd64
+fonts-alegreya-sans amd64
+fonts-inter amd64
+fonts-pecita amd64
+fpc arm64 s390x
+fractgen any
+frame any
+freespace2 arm64 ppc64el s390x
+fricas any
+frobtads any
+fscrypt any
+fuse-umfuse-ext2 arm64 ppc64el s390x
+fuse-umfuse-fat arm64 ppc64el s390x
+fuse-umfuse-iso9660 arm64 ppc64el s390x
+fuzz any
+fuzzylite any
+fvwm1 any
+g810-led any
+gadmin-proftpd any
+gammu any
+garcon any
+gargoyle-free any
+gatb-core amd64
+gauche amd64 arm64 s390x
+gazebo arm64 ppc64el s390x
+gcc-m68hc1x arm64 ppc64el
+gcc-mingw-w64 any
+gcc-or1k-elf any
+gcc-python-plugin any
+gcc-riscv64-unknown-elf any
+gcl any
+gdb-avr any
+gdb-mingw-w64 amd64
+gdb-msp430 s390x
+gdebi amd64
+geant321 any
+gearhead2 s390x
+gearhead s390x
+geekcode any
+generate-ninja any
+genesisplusgx any
+geonames any
+geonkick any
+gesftpserver any
+gfpoken any
+gftl-shared ppc64el s390x
+ggcov any
+ghdl any
+ghostwriter ppc64el s390x
+ginkgocadx arm64 ppc64el s390x
+gir-to-d amd64 arm64 ppc64el
+glew any
+glhack any
+glib-d any
+gloo amd64
+glymur amd64
+gngb any
+gnomad2 any
+gnome-colors amd64
+gnome-twitch any
+gnucap any
+gnupg1 any
+gnu-smalltalk s390x
+gnustep-back amd64 arm64
+gnustep-base any
+goattracker any
+gobgp s390x
+go-cve-dictionary any
+go-dlib any
+go-exploitdb any
+golang-1.12-race-detector-runtime amd64
+golang-1.13-race-detector-runtime amd64
+golang-github-azure-azure-sdk-for-go amd64
+golang-github-bep-golibsass amd64
+golang-github-bep-go-tocss amd64
+golang-github-bmatsuo-lmdb-go any
+golang-github-caarlos0-env amd64
+golang-github-canonical-go-dqlite any
+golang-github-cloudflare-cfssl any
+golang-github-containers-buildah any
+# For more info about golang-github-containers-{common,image} see LP: #1931258
+golang-github-containers-common any
+golang-github-containers-image any
+golang-github-containers-storage any
+golang-github-coreos-gexpect amd64
+golang-github-datadog-zstd any
+golang-github-ddevault-go-libvterm amd64
+golang-github-docker-spdystream amd64
+golang-github-dvsekhvalnov-jose2go amd64
+golang-github-google-certificate-transparency amd64
+golang-github-google-pprof amd64
+golang-github-gotk3-gotk3 amd64
+golang-github-go-xorm-core amd64
+golang-github-hashicorp-go-plugin amd64
+golang-github-hashicorp-raft amd64
+golang-github-hashicorp-yamux amd64
+golang-github-hillu-go-yara amd64
+golang-github-jinzhu-gorm amd64
+golang-github-keltia-archive amd64
+golang-github-libvirt-libvirt-go amd64
+golang-github-lunny-log amd64
+golang-github-manyminds-api2go amd64
+golang-github-mattn-go-gtk any
+# For info on golang-github-mattn-go-sqlite3, see LP: #1931881
+golang-github-mattn-go-sqlite3 any
+golang-github-mendersoftware-openssl amd64
+golang-github-msteinert-pam amd64
+golang-github-optiopay-kafka any
+golang-github-proglottis-gpgme amd64
+golang-github-pzhin-go-sophia amd64 arm64
+golang-github-rubenv-sql-migrate any
+golang-github-smartystreets-goconvey amd64
+golang-github-spf13-cobra any
+golang-github-twstrike-gotk3adapter amd64
+golang-github-wellington-go-libsass amd64
+golang-github-xanzy-go-gitlab amd64
+golang-gopkg-gorp.v1 amd64
+golang-gopkg-hlandau-service.v2 amd64
+golang-gopkg-hlandau-svcutils.v1 amd64
+golang-gopkg-libgit2-git2go.v31 any
+golang-gopkg-mcuadros-go-syslog.v2 amd64
+golang-gopkg-square-go-jose.v2 amd64
+goldencheetah any
+go-mtpfs amd64 ppc64el s390x
+google-i18n-address amd64
+gophernicus any
+gost any
+goval-dictionary any
+goverlay s390x
+goxel any
+gpac any
+gpp4 any
+gprbuild any
+# Non-trivial to fix in the gpsd package, reported upstream - LP: #1953040
+gpsd arm64
+gpyfft ppc64el s390x
+grace any
+gramophone2 any
+grantlee5 any
+grantlee-editor ppc64el s390x
+grcompiler arm64
+greenbone-security-assistant any
+gr-gsm s390x
+gri amd64
+gridengine any
+gringo any
+gringotts any
+grok any
+grpc-java any
+gr-satellites s390x
+grubzfs-testsuite s390x
+gsettings-qt any
+gsimplecal any
+gst-plugins-bad1.0 ppc64el s390x
+gtkboard any
+gtk-d amd64 arm64 ppc64el
+gtkpod any
+gtkspellmm any
+gubbins arm64 ppc64el s390x
+gudhi any
+guymager ppc64el s390x
+gvmd any
+gwc any
+hamlib any
+hannah any
+hasciicam any
+haskell-ghc-lib-parser arm64 s390x
+haskell-ghc-lib-parser-ex arm64 s390x
+haskell-hopenpgp-tools arm64
+haskell-ormolu arm64 s390x
+haskell-termonad arm64 ppc64el s390x
+haskell-xml-html-qq arm64 ppc64el s390x
+hdate-applet any
+heaptrack s390x
+hedgewars ppc64el s390x
+herbstluftwm s390x
+highwayhash any
+hippomocks arm64
+hlint arm64 s390x
+hotspot s390x
+hsail-tools s390x
+hsc s390x
+hspell-gui any
+htseq s390x
+hts-nim-tools s390x
+httest any
+hud any
+hugo any
+hwloc-contrib arm64 ppc64el s390x
+hyperic-sigar any
+hyperscan amd64
+ibus-keyman s390x
+ibus-libzhuyin arm64 ppc64el
+icecast2 any
+ifhp any
+ignition-common arm64 s390x
+ignition-fuel-tools s390x
+ignore-me amd64
+igraph amd64
+imagemagick amd64
+imapcopy s390x
+imdbpy amd64
+imgui any
+indi amd64 arm64
+indicator-china-weather any
+indicator-datetime any
+indicator-keyboard any
+indicator-power any
+indicator-printers any
+indicator-sound ppc64el s390x
+indigo any
+infinipath-psm amd64
+insighttoolkit4 amd64
+intake s390x
+intel-compute-runtime amd64
+intel-graphics-compiler amd64
+intel-vaapi-driver amd64
+intercal any
+ion any
+iraf amd64 arm64 ppc64el
+iraf-fitsutil s390x
+iraf-mscred s390x
+iraf-rvsao s390x
+iraf-sptable s390x
+ircd-irc2 any
+irpas any
+irrlicht any
+isoqlog any
+isoquery any
+isso amd64
+itksnap any
+ivar ppc64el s390x
+iva s390x
+iwd any
+jabber-muc any
+jackson-datatype-joda amd64
+jajuk amd64
+jamin any
+jayatana amd64
+jellyfish s390x
+jmock2 amd64
+jquery-at.js amd64
+jruby amd64
+js8call any
+julia amd64 ppc64el s390x
+juman any
+jython amd64
+kaccounts-integration any
+kactivities-kf5 any
+kaddressbook ppc64el s390x
+kafs-client arm64
+kalarm ppc64el s390x
+kannel-sqlbox any
+karchive any
+kbookmarks any
+kcalcore ppc64el
+kcollectd any
+kconfig any
+kcov s390x
+kdb any
+kdeclarative any
+kdelibs4support any
+kdepim-addons ppc64el s390x
+kdepim-runtime ppc64el s390x
+kdiagram any
+kdsoap any
+keepassxc amd64
+keyman-keyboardprocessor s390x
+kf5-kdepim-apps-libs ppc64el s390x
+kf5-messagelib any
+kfilemetadata-kf5 amd64 arm64 s390x
+khal amd64
+khtml any
+kiconthemes any
+kimagemapeditor ppc64el s390x
+kineticstools s390x
+kinput2 any
+kio any
+kio-gdrive ppc64el s390x
+kitemmodels s390x
+kiwix ppc64el s390x
+kjs any
+kjsembed any
+klatexformula any
+kmail-account-wizard ppc64el s390x
+kmail ppc64el s390x
+kmscube any
+knews any
+knewstuff any
+knotes ppc64el s390x
+kodi-pvr-argustv any
+kodi-pvr-dvbviewer any
+kodi-pvr-hdhomerun any
+kodi-pvr-hts amd64 arm64 s390x
+kodi-pvr-iptvsimple any
+kodi-pvr-mediaportal-tvserver any
+kodi-pvr-mythtv any
+kodi-pvr-nextpvr any
+kodi-pvr-njoy amd64 arm64 s390x
+kodi-pvr-vdr-vnsi amd64 arm64 s390x
+kodi-pvr-vuplus any
+kodi-pvr-wmc any
+kodi-visualization-spectrum arm64 s390x
+kontact ppc64el s390x
+kopete any
+korganizer ppc64el s390x
+koules any
+kpatch arm64 ppc64el s390x
+kpimtextedit any
+kproperty any
+krb5-sync any
+kreport any
+kross any
+kryo-serializers amd64
+ktexteditor any
+ktp-common-internals any
+ktp-text-ui ppc64el s390x
+kvmtool amd64 arm64 ppc64el
+kwayland any
+kxd any
+kylin-greeter any
+ladvd any
+lagan any
+lam any
+lambda-align2 any
+latrace amd64
+lazarus arm64 s390x
+lazpaint s390x
+lazr.config amd64
+lbfgsb amd64 arm64
+ldc amd64 arm64
+le any
+lebiniou any
+ledmon any
+lepton-eda arm64
+libaccounts-glib any
+libaccounts-qt any
+libalog any
+libaperture-0 s390x
+libassa any
+libatomic-queue any
+libaunit ppc64el s390x
+libaws any
+libbiod any
+libblocksruntime any
+libbpp-core amd64
+libbpp-phyl amd64
+libbpp-popgen amd64
+libbpp-qt amd64
+libbpp-raa amd64
+libbpp-seq amd64
+libbpp-seq-omics amd64
+libcdk5 any
+libcds s390x
+libcifpp any
+libcm256cc ppc64el s390x
+libcryptx-perl any
+libcxx-serial arm64
+libdatetime-format-strptime-perl amd64
+libdfp amd64 ppc64el
+libdispatch any
+libecpint arm64 ppc64el s390x
+libedlib any
+libept any
+libfastahack amd64 arm64 ppc64el
+libflorist ppc64el s390x
+libfm-qt any
+libftdi1 any
+libgenome amd64
+libgmpada ppc64el s390x
+libgnatcoll any
+libgnatcoll-bindings any
+libgnatcoll-db any
+libgnatcoll-python any
+libgooglepinyin any
+libgpiod any
+libgsecuredelete any
+libgtkada any
+libhdf4 any
+libhmsbeagle arm64 ppc64el s390x
+libhtml-html5-microdata-parser-perl amd64
+libhtml-microformats-perl amd64
+libhttp-lrdd-perl amd64
+libi8x s390x
+libisocodes any
+libkcapi any
+libkcddb any
+libkdegames any
+libkf5calendarsupport ppc64el s390x
+libkf5eventviews ppc64el s390x
+libkf5gravatar ppc64el s390x
+libkf5incidenceeditor any
+libkf5kexiv2 any
+libkf5ksieve ppc64el s390x
+libkf5libkleo any
+libkf5mailcommon any
+libkf5mailimporter ppc64el s390x
+libkf5pimcommon any
+libkgapi ppc64el s390x
+libkolabxml any
+libkqueue arm64 s390x
+libksysguard any
+libktorrent any
+liblastfm any
+libldac s390x
+liblinear any
+liblog4ada any
+liblxqt any
+libmail-sender-perl amd64
+libmath-cephes-perl s390x
+libmaus2 arm64 ppc64el s390x
+libmawk amd64 arm64 ppc64el
+libmmmulti arm64 ppc64el s390x
+libmodule-starter-plugin-cgiapp-perl amd64
+libmuscle any
+libmygpo-qt any
+libncl amd64
+libncursesada ppc64el s390x
+libneo4j-client s390x
+libnewlib-nano amd64
+libnitrokey any
+libofa any
+libopendbx any
+libopenshot any
+liborigin2 any
+libowfat any
+libowl-directsemantics-perl amd64
+libpam-freerdp2 any
+libpam-x2go any
+libpdf-builder-perl amd64
+libpgf any
+libpmemobj-cpp amd64
+libpod any
+libprelude any
+libpreludedb any
+libprotocol-http2-perl amd64
+libpthread-workqueue any
+libqofono ppc64el s390x
+libqtpas s390x
+libqtxdg any
+libquazip amd64
+librandomx any
+librcps any
+librdf-closure-perl amd64
+librdf-kml-exporter-perl amd64
+librdf-rdfa-parser-perl amd64
+librecad any
+libreswan any
+libretro-desmume s390x
+libretro-mupen64plus any
+librostlab any
+librpcsecgss any
+librsl any
+librtr any
+libsass any
+libsdl1.2 any
+libseqlib any
+libsignon-glib any
+libsimpleini any
+libsis-jhdf5-java s390x
+libsmithwaterman any
+libsml any
+libspe2 any
+libspectrum any
+libsrtp2 any
+libssw any
+libstatgen amd64
+libsvm any
+libtabixpp any
+libtemplates-parser any
+libtexttools ppc64el s390x
+libthread-pool amd64
+libtrio any
+libunivalue any
+libva any
+libvirt-php any
+libvirt-sandbox any
+libvma any
+libxfce4ui any
+libxmlada ppc64el s390x
+libxmlezout ppc64el s390x
+libxml-grddl-perl amd64
+libxml-hash-xs-perl s390x
+libxmp any
+libxrd-parser-perl amd64
+libxsmm amd64
+libyang amd64
+libzeitgeist any
+libzen any
+lightdm-gtk-greeter any
+linux-meta-raspi2-5.4 arm64
+linux-meta-raspi2 arm64
+linux-restricted-modules amd64
+linux-restricted-modules-aws amd64
+linux-restricted-modules-azure amd64
+linux-restricted-modules-gcp amd64
+linux-restricted-modules-oracle amd64
+liquidsoap any
+litehtml any
+lives any
+lix ppc64el s390x
+lldpad any
+lldpd any
+llvm-toolchain-9 any
+lmbench any
+lnav any
+log4cxx arm64 ppc64el s390x
+logging-tree amd64
+logtools any
+lookup any
+looptools any
+lsh-utils any
+luakit s390x
+macaulay2 arm64 ppc64el s390x
+madbomber any
+magma s390x
+mailavenger any
+mairix any
+malcontent any
+mali-midgard-driver arm64
+mame any
+manila amd64
+mapnik any
+mapsembler2 any
+marble any
+mariadb-connector-odbc arm64 ppc64el s390x
+marisa any
+massivethreads any
+mbedtls any
+mbox-importer ppc64el s390x
+mclibs any
+mdocml any
+mediaconch any
+medialibrary any
+mediastreamer2 any
+memkind any
+mender-client any
+mes arm64 ppc64el s390x
+metview any
+mgp any
+micropython any
+milter-greylist ppc64el s390x
+minetest arm64
+mingw-w64 amd64
+minimac4 arm64 ppc64el s390x
+minizinc-ide ppc64el s390x
+mir-core amd64 arm64 ppc64el
+mistral amd64
+mitmproxy amd64
+mixxx ppc64el
+mkvtoolnix any
+mlucas amd64 arm64 s390x
+mlv any
+mmorph any
+mmseqs2 any
+mochiweb amd64
+mocker amd64
+mojoshader arm64 ppc64el s390x
+mom amd64
+monero any
+mono ppc64el
+moon-buggy any
+morse-x any
+mosdepth s390x
+mosquitto any
+motion any
+mp4h arm64 ppc64el
+mpeg2dec any
+mplayer amd64
+mpsolve any
+mrbayes any
+mricron s390x
+mrpt any
+mrtrix3 arm64
+muse any
+musl any
+mustache-d amd64 arm64 ppc64el
+mutextrace any
+muttprint amd64
+mxt-app any
+mythtv amd64
+mz any
+naev any
+nanosv amd64
+nas any
+nast any
+navi2ch amd64
+nbc s390x
+ncbi-entrez-direct any
+ncurses-hexedit any
+ndpi arm64 ppc64el s390x
+ne10 arm64
+nescc any
+netatalk any
+net-cpp any
+netdiag any
+netkit-bootparamd any
+netkit-ftp-ssl ppc64el s390x
+netkit-rusers any
+netkit-rwall any
+netkit-telnet-ssl any
+netpbm-free any
+netperfmeter any
+netrek-client-cow any
+netsniff-ng any
+networking-arista amd64
+networking-l2gw amd64
+network-manager-iodine any
+neuron s390x
+neutron-taas amd64
+nextcloud-desktop ppc64el s390x
+nextepc any
+nfstrace any
+nifti2dicom arm64 ppc64el s390x
+nis any
+nmapsi4 ppc64el s390x
+nn any
+nng amd64 arm64 s390x
+nocache arm64
+node-agent-base amd64
+node-babel amd64
+node-browserify-zlib amd64
+node-css-select amd64
+node-debug-fabulous amd64
+node-filesize amd64
+node-gulp-sourcemaps amd64
+node-rollup-plugin-typescript amd64
+node-url-parse amd64
+nomad amd64 arm64 s390x
+nomad-driver-podman amd64 arm64
+notary any
+notcurses any
+notepadqq any
+ntopng arm64 ppc64el s390x
+ntp any
+nux amd64 arm64 ppc64el
+nvtop arm64 ppc64el s390x
+nxcomp any
+nxcompshad any
+nx-libs any
+nxt-firmware amd64
+oaklisp arm64 ppc64el
+obexpushd amd64 ppc64el s390x
+obs-studio s390x
+ocaml-stdcompat any
+oclgrind s390x
+octave-image arm64
+odil any
+ofxstatement-plugins amd64
+oggvideotools s390x
+ogmrip-ac3 any
+ogre-1.12 arm64
+okteta any
+olm amd64
+onboard amd64 arm64 s390x
+onednn amd64 ppc64el
+onedrive ppc64el s390x
+oneliner-el amd64
+opam any
+open3d any
+open-ath9k-htc-firmware amd64
+openblas amd64 arm64 ppc64el
+openbox-menu any
+openbsc any
+opencolorio any
+opencv ppc64el
+openjdk-8 any
+openjfx any
+openmolcas any
+openms any
+openmsx arm64
+openmw any
+openmx any
+openni s390x
+openni-sensor-pointclouds s390x
+openni-sensor-primesense s390x
+openscad any
+opensmtpd-extras any
+openstructure arm64 ppc64el s390x
+openturns any
+optgeo s390x
+orpie any
+orthanc-dicomweb any
+ortp any
+oscar any
+osdsh any
+osmcoastline any
+osmium-tool s390x
+osmo-bsc any
+osmo-fl2k amd64 arm64 s390x
+osmo-msc any
+osmo-pcu amd64 arm64 ppc64el
+osmo-sgsn any
+otb arm64 ppc64el s390x
+p8-platform any
+packer any
+pageedit ppc64el s390x
+paleomix s390x
+pam-pkcs11 any
+pandas amd64 ppc64el s390x
+panicparse amd64 arm64 s390x
+pantalaimon amd64
+papi amd64 arm64 s390x
+parasail s390x
+parley ppc64el s390x
+parsinsert arm64 ppc64el
+paryfor ppc64el s390x
+pasdoc s390x
+patat s390x
+paw any
+pbbam s390x
+pbdagcon s390x
+pbseqlib s390x
+pcscada any
+pdfsam amd64
+pdmenu any
+pdns any
+pep8-simul ppc64el s390x
+pesign amd64 arm64
+petri-foo any
+petsc4py arm64 ppc64el
+pftools amd64
+pgcharts ppc64el s390x
+pgloader ppc64el s390x
+pgpcre s390x
+pgplot5 any
+pg-repack any
+pgreplay any
+phlipple any
+phonon any
+php-finder-facade any
+picolisp arm64 s390x
+pike8.0 any
+pikepdf amd64
+pim-data-exporter ppc64el s390x
+pim-sieve-editor ppc64el s390x
+pinhole s390x
+piperka-client ppc64el s390x
+pitivi any
+pixmap any
+plasma-framework any
+plasma-workspace any
+plast any
+plastimatch arm64 ppc64el s390x
+plplot ppc64el s390x
+pocketsphinx-python s390x
+pocketsphinx s390x
+pocl any
+pokerth any
+polkit-qt-1 any
+poppler-qml-plugin any
+postgis amd64
+postgresql-filedump any
+powerman any
+powermock amd64
+prelude-lml any
+prelude-manager any
+procenv s390x
+process-cpp any
+prometheus-alertmanager arm64
+prometheus-libvirt-exporter any
+prometheus s390x
+prooftree s390x
+proxy-suite any
+psi-plus any
+psocksxx any
+psortb arm64 ppc64el s390x
+pugixml any
+puppetlabs-http-client-clojure amd64
+pureadmin any
+purple-lurch any
+putty any
+pvm any
+pycuda arm64 ppc64el s390x
+pyethash s390x
+pyfg amd64
+pykafka s390x
+pympler amd64
+pynwb amd64
+pyqt5 arm64
+pyqt5webengine ppc64el s390x
+pyraf s390x
+pyramid-jinja2 amd64
+pyrandom2 amd64
+pysdl2 amd64
+pysph arm64
+python-aiosqlite amd64
+python-aioxmpp amd64
+python-argcomplete amd64
+python-av ppc64el s390x
+python-biplist amd64
+python-boltons amd64
+python-cement amd64
+python-cmarkgfm amd64 arm64 s390x
+python-confluent-kafka amd64 arm64 s390x
+python-django-push-notifications amd64
+python-flask-cors amd64
+python-gear amd64
+python-gssapi amd64 arm64
+python-hug arm64 ppc64el s390x
+python-igraph ppc64el s390x
+python-ltfatpy s390x
+python-lz4 amd64 arm64 s390x
+python-m2r amd64
+python-pairix s390x
+python-pybedtools s390x
+python-pynvim amd64
+python-pynvml arm64 ppc64el
+python-pysam s390x
+python-pyvcf s390x
+python-scrapy amd64
+python-sfml amd64 arm64 s390x
+python-shapely amd64 arm64 ppc64el
+python-simpy amd64
+python-skbio s390x
+python-sqt s390x
+python-testing.mysqld amd64
+python-xdo amd64
+pytorch any
+pytorch-audio s390x
+pytorch-vision s390x
+pywavelets amd64 arm64 s390x
+q2-cutadapt s390x
+q2-dada2 arm64 ppc64el s390x
+q2-metadata s390x
+qbs any
+qca2 any
+qgis any
+qhull any
+qjoypad s390x
+qmapshack ppc64el s390x
+qmath3d any
+qoauth any
+qr-code-generator any
+qscintilla2 any
+qt3d-opensource-src any
+qt6-3d any
+qt6-5compat any
+qt6-base any
+qt6-charts any
+qt6-connectivity any
+qt6-datavis3d any
+qt6-declarative any
+qt6-imageformats any
+qt6-lottie any
+qt6-multimedia any
+qt6-networkauth any
+qt6-positioning any
+qt6-quick3d any
+qt6-quicktimeline any
+qt6-remoteobjects any
+qt6-scxml any
+qt6-sensors any
+qt6-serialbus any
+qt6-serialport any
+qt6-shadertools any
+qt6-svg any
+qt6-tools any
+qt6-translations any
+qt6-virtualkeyboard any
+qt6-wayland any
+qt6-webchannel any
+qt6-webengine any
+qt6-websockets any
+qt6-webview any
+qtbase-opensource-src any
+qtbase-opensource-src-gles any
+qtcharts-opensource-src any
+qtdbusextended any
+qtdeclarative-opensource-src any
+qtdeclarative-opensource-src-gles any
+qt-gstreamer any
+qtlocation-opensource-src any
+qtmpris any
+qtmultimedia-opensource-src any
+qtpim-opensource-src any
+qtpowerd any
+qtquickcontrols2-opensource-src any
+qtscript-opensource-src any
+qtscxml-everywhere-src any
+qtspell any
+qtsvg-opensource-src any
+qtubuntu-cameraplugin-fake ppc64el s390x
+qtvirtualkeyboard-opensource-src any
+qtwayland-opensource-src any
+qtwebchannel-opensource-src any
+qtwebkit-opensource-src any
+qtwebview-opensource-src ppc64el s390x
+quorum s390x
+qwt any
+qwtplot3d any
+racon arm64
+rainloop amd64
+rampler arm64
+rclone any
+rclone-browser any
+r-cran-ff s390x
+r-cran-rsgcc s390x
+r-cran-s2 arm64 s390x
+rcs-blame any
+rdkit any
+reapr s390x
+relion-cuda amd64
+remake arm64
+restbed any
+retroarch any
+rggobi s390x
+rheolef any
+rhonabwy any
+riemann-c-client any
+rio amd64
+robot-testing-framework any
+rocketcea s390x
+ros-actionlib any
+ros-bond-core any
+ros-class-loader arm64
+ros-collada-urdf any
+ros-common-msgs arm64
+ros-diagnostics any
+ros-dynamic-reconfigure any
+ros-geometric-shapes any
+ros-geometry2 any
+ros-geometry any
+ros-image-common any
+ros-image-pipeline any
+ros-interactive-markers any
+ros-kdl-parser any
+ros-laser-geometry any
+ros-message-runtime arm64
+ros-navigation-msgs arm64
+ros-nodelet-core any
+ros-opencv-apps any
+ros-pcl-msgs arm64
+ros-perception-pcl any
+ros-random-numbers arm64
+ros-resource-retriever any
+ros-robot-state-publisher any
+ros-ros arm64
+ros-ros-comm any
+ros-ros-comm-msgs arm64
+ros-rosconsole any
+ros-rosconsole-bridge any
+ros-roscpp-core arm64
+ros-rospack arm64
+ros-rviz any
+ros-std-msgs arm64
+ros-urdf any
+ros-vision-opencv any
+rott any
+rssguard ppc64el s390x
+rstatd any
+rtpproxy any
+ruby-em-synchrony amd64
+ruby-graffiti amd64
+ruby-httpclient amd64
+ruby-http-parser.rb arm64
+ruby-http-parser s390x
+ruby-invisible-captcha amd64
+ruby-kubeclient amd64
+ruby-moneta amd64
+ruby-psych amd64
+ruby-redis amd64
+ruby-sigar any
+ruby-stackprof arm64
+rungetty any
+rust-bat any
+rustc any
+rust-core-arch amd64
+rust-generator arm64 ppc64el s390x
+rust-kmon any
+rust-kvm-ioctls ppc64el s390x
+rust-mach-o-sys arm64 ppc64el s390x
+rust-nodrop-union any
+rust-ring ppc64el s390x
+rust-rustls ppc64el s390x
+rust-sct ppc64el s390x
+rust-simplelog any
+rust-sleef-sys s390x
+rust-webpki ppc64el s390x
+safeclib s390x
+sagan any
+sagemath arm64 ppc64el s390x
+sambamba any
+samtools-legacy any
+sarg any
+sasmodels ppc64el s390x
+sasview ppc64el s390x
+sawfish any
+sbcl amd64 ppc64el s390x
+sblim-cmpi-base any
+sblim-sfcb any
+scantool any
+scheme2c amd64
+schism any
+scite arm64 ppc64el s390x
+scm amd64 arm64 s390x
+scram any
+scrot any
+scscp-imcce amd64
+scummvm any
+sdcc any
+sdic amd64
+sdlbasic any
+sendmail any
+sepp arm64 ppc64el s390x
+seqan3 amd64
+ser-player any
+sfcgal any
+sga s390x
+sgb s390x
+sgt-puzzles ppc64el
+shairport-sync any
+shapetools any
+shasta amd64 arm64
+siconos arm64 s390x
+sift any
+sight arm64 ppc64el s390x
+sigil ppc64el s390x
+signon-keyring-extension ppc64el s390x
+signon-plugin-oauth2 any
+signon-plugin-sasl any
+signon-ui any
+silly any
+simde amd64
+simdjson amd64 arm64 ppc64el
+simgear any
+simh any
+simulavr any
+siphashc s390x
+sipxtapi any
+skesa arm64 ppc64el s390x
+skopeo any
+skstream any
+skypat amd64 arm64
+sleef s390x
+sleuthkit any
+slic3r any
+slic3r-prusa any
+slirp any
+slurm any
+smbc any
+snacc any
+snd arm64
+sniffles s390x
+snort any
+soapaligner amd64
+socket++ any
+softhsm2 any
+sogo arm64
+sope any
+spades any
+sparskit any
+spdlog amd64
+spectrwm any
+sphinxbase s390x
+sphinx-tabs amd64
+sphinxtrain s390x
+spoa any
+spout any
+sptk any
+sqsh any
+srslte any
+srst2 s390x
+sshcommand amd64
+sslsniff any
+ssvnc any
+starpu-contrib s390x
+staticsite amd64
+stdx-allocator amd64 arm64 ppc64el
+structure-synth any
+sugar-toolkit-gtk3 any
+supercollider amd64 arm64
+surgescript any
+swiglpk arm64
+swish-e any
+swt4-gtk any
+swupdate any
+syncmaildir any
+syndication any
+synfig arm64
+synfigstudio arm64
+sysbench s390x
+systemc amd64 arm64
+tarantool amd64
+tbb amd64
+tboot amd64
+tcc amd64 arm64
+tclcl any
+tclcurl s390x
+tcptrace any
+teckit any
+telegram-cli arm64 ppc64el
+telegram-desktop arm64
+telepathy-logger-qt any
+telepathy-qt any
+tellico arm64
+terminews any
+terminology any
+termtris any
+test-kitchen amd64
+texmaker any
+textql any
+texworks-manual amd64
+thinkfan any
+threadweaver any
+tightvnc any
+tiledb s390x
+tilix any
+tinyarray arm64 ppc64el s390x
+tinyxml2 any
+tldp amd64
+tlf any
+tnat64 any
+tome any
+tpm2-abrmd any
+tpm2-pkcs11 s390x
+tpm2-tools any
+trafficserver s390x
+traildb arm64 ppc64el s390x
+transcalc any
+transgui s390x
+trapperkeeper-clojure amd64
+trickle any
+trinityrnaseq arm64 ppc64el s390x
+tripwire ppc64el s390x
+trnascan-se arm64 ppc64el s390x
+troffcvt any
+trojita any
+trx arm64
+tua any
+tup s390x
+tutka any
+tuxcmd-modules ppc64el s390x
+tuxcmd s390x
+tuxmath any
+tuxpuck any
+twofish any
+ubuntu-defaults-builder amd64
+ubuntu-kylin-wizard any
+ucarp any
+ucommon any
+uftrace arm64
+ugene arm64 ppc64el s390x
+uglify-js amd64
+uglifyjs amd64
+ui-utilcpp any
+ukui-interface any
+umis s390x
+umps3 s390x
+unar any
+unar arm64
+unicycler arm64 ppc64el s390x
+unison-2.48 any
+unity any
+unity-api ppc64el s390x
+unity-lens-music any
+unity-lens-photos amd64
+uronode any
+uvp-monitor any
+uvtool amd64
+uwsgi-plugin-luajit s390x
+vala-panel-appmenu any
+vboot-utils amd64 arm64
+vdirsyncer amd64
+vectoroids any
+verdigris any
+vflib3 any
+vg any
+vienna-rna s390x
+view3dscene arm64 ppc64el s390x
+vilistextum any
+vinagre any
+virt-p2v any
+virt-top any
+virtuoso-opensource arm64 ppc64el s390x
+visualboyadvance any
+vmem amd64 arm64
+vmg ppc64el s390x
+vowpal-wabbit arm64 ppc64el s390x
+vtk6 any
+vtk7 any
+vtk9 any
+vulkan-tools arm64
+vulkan-validationlayers any
+vuls any
+vxi any
+w1retap any
+wasi-libc amd64
+watchman s390x
+webalizer any
+webcamoid amd64 arm64
+webdruid any
+weston any
+wine amd64 arm64
+wine-development amd64 arm64
+winff s390x
+wireshark amd64 arm64 s390x
+wiringpi any
+wmwave any
+wnn6-sdk any
+wpewebkit amd64 arm64
+wrk ppc64el s390x
+w-scan any
+wsclean amd64 arm64 ppc64el
+wsjtx any
+wulfware any
+x11iraf s390x
+x4d-icons amd64
+xaw3d any
+xawtv any
+xbase64 any
+xbindkeys-config any
+xblast-tnt any
+xcfa any
+xemacs21 any
+xen amd64 arm64
+xfce4-cpugraph-plugin any
+xfce4-datetime-plugin any
+xfce4-diskperf-plugin any
+xfce4-fsguard-plugin any
+xfce4-genmon-plugin any
+xfce4-mount-plugin any
+xfce4-panel any
+xfce4-sensors-plugin any
+xfce4-smartbookmark-plugin any
+xfce4-systemload-plugin any
+xfce4-verve-plugin any
+xfce4-wavelan-plugin any
+xfce4-xkb-plugin any
+xfoil any
+xfractint any
+xgammon any
+xidle any
+xindy ppc64el s390x
+xmakemol any
+xmbmon arm64 ppc64el s390x
+xmille any
+xmlrpc-c amd64
+xml-security-c amd64 arm64 ppc64el
+xneur any
+xnnpack ppc64el s390x
+xpaint any
+xppaut any
+xtel any
+xubuntu-docs amd64
+xylib any
+yade arm64 ppc64el
+yanosim s390x
+ygl any
+yosys any
+youker-assistant amd64 arm64
+yp-tools any
+zam-plugins any
+zchunk arm64
+zemberek-ooo amd64
+zfs-fuse amd64 ppc64el

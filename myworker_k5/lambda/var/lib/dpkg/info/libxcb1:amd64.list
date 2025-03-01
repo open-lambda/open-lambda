@@ -1,0 +1,11 @@
+/.
+/usr
+/usr/lib
+/usr/lib/x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu/libxcb.so.1.1.0
+/usr/share
+/usr/share/doc
+/usr/share/doc/libxcb1
+/usr/share/doc/libxcb1/changelog.Debian.gz
+/usr/share/doc/libxcb1/copyright
+/usr/lib/x86_64-linux-gnu/libxcb.so.1

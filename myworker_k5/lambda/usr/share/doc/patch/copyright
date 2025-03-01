@@ -1,0 +1,32 @@
+This is Debian's prepackaged version of patch, Larry Wall's program that
+allows you to apply diffs to a file automagically.
+
+The current maintainer for this package is Laszlo Boszormenyi (GCS)
+<gcs@debian.org>.
+
+Previous maintainers were Bill Mitchell <mitchell@mdd.comm.mot.com>,
+Darren Stalder <torin@daft.com>, Adrian Bunk <bunk@fs.tum.de>,
+Michael Fedrowitz <michaelf@debian.org> and Christoph Berg <myon@debian.org>.
+
+The upstream source is available at 'ftp://ftp.gnu.org/gnu/patch/', resp.
+'ftp://alpha.gnu.org/gnu/diffutils/'.
+
+Upstream Maintainer: Paul Eggert <eggert@twinsun.com>
+
+Copyright:
+
+   Copyright (C) 1984, 1985, 1986, 1987, 1988 Larry Wall
+   Copyright (C) 1989-2012 Free Software Foundation, Inc.
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+On Debian systems the complete text of the GNU General Public License can
+be found in '/usr/share/common-licenses/GPL'.

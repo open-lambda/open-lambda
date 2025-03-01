@@ -1,0 +1,13 @@
+/.
+/etc
+/etc/ldap
+/etc/ldap/ldap.conf
+/usr
+/usr/share
+/usr/share/doc
+/usr/share/doc/libldap-common
+/usr/share/doc/libldap-common/changelog.Debian.gz
+/usr/share/doc/libldap-common/copyright
+/usr/share/man
+/usr/share/man/man5
+/usr/share/man/man5/ldap.conf.5.gz

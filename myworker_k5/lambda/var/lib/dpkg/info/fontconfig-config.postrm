@@ -1,0 +1,25 @@
+#! /bin/sh
+
+set -e
+
+CONF=/etc/fonts/local.conf
+
+case "$1" in
+	purge)
+	    if which ucf >/dev/null 2>&1; then
+		ucf --purge $CONF
+	    fi
+	    rm -f $CONF
+
+	    # Remove any files linked in postinst
+	    for c in $CONFFILES; do
+		rm -f $CONFDIR/$c
+	    done
+
+	    # Remove an empty local fonts directory
+	    rm -rf /etc/fonts/conf.d
+	    rmdir /usr/local/share/fonts 2>/dev/null || true
+	    ;;
+esac
+
+

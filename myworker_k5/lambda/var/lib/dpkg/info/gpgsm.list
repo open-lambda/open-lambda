@@ -1,0 +1,13 @@
+/.
+/usr
+/usr/bin
+/usr/bin/gpgsm
+/usr/share
+/usr/share/doc
+/usr/share/doc/gpgsm
+/usr/share/doc/gpgsm/copyright
+/usr/share/man
+/usr/share/man/man1
+/usr/share/man/man1/gpgsm.1.gz
+/usr/share/doc/gpgsm/NEWS.Debian.gz
+/usr/share/doc/gpgsm/changelog.Debian.gz

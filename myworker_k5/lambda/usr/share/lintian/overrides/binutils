@@ -1,0 +1,6 @@
+# manpages are in binutils-common
+binutils binary: binary-without-manpage usr/bin/ld.bfd
+binutils binary: binary-without-manpage usr/bin/ld.gold
+
+# silence lintian stupidity
+binutils binary: spelling-error-in-binary usr/bin/as mmnemonic mnemonic

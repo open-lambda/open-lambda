@@ -1,0 +1,16 @@
+/.
+/usr
+/usr/bin
+/usr/bin/patch
+/usr/share
+/usr/share/doc
+/usr/share/doc/patch
+/usr/share/doc/patch/AUTHORS
+/usr/share/doc/patch/NEWS.Debian.gz
+/usr/share/doc/patch/NEWS.gz
+/usr/share/doc/patch/README
+/usr/share/doc/patch/changelog.Debian.gz
+/usr/share/doc/patch/copyright
+/usr/share/man
+/usr/share/man/man1
+/usr/share/man/man1/patch.1.gz

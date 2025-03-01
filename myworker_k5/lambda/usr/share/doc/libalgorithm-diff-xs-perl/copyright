@@ -1,0 +1,43 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: Algorithm-Diff-XS
+Upstream-Contact: Audrey Tang <cpan@audreyt.org>
+Source: https://metacpan.org/release/Algorithm-Diff-XS
+
+Files: *
+Copyright: 2008, Audrey Tang <cpan@audreyt.org>
+ 2003, Joe Schaefer <joe+cpan@sunstarsys.com>
+License: Artistic or GPL-1+
+
+Files: ppport.h
+Copyright: 2004-2009, Marcus Holland-Moritz <mhx-cpan@gmx.net>
+ 2001, Paul Marquess <pmqs@cpan.org> (Version 2.x)
+ 1999, Kenneth Albanowski <kjahds@kjahds.com> (Version 1.x)
+License: Artistic or GPL-1+
+
+Files: inc/Module/*
+Copyright: 2002-2009, Adam Kennedy <adamk@cpan.org>
+ 2002-2009, Audrey Tang <autrijus@autrijus.org>
+ 2002-2009, Brian Ingerson <ingy@cpan.org>
+License: Artistic or GPL-1+
+
+Files: debian/*
+Copyright: 2009, Jonathan Yu <jawnsy@cpan.org>
+ 2011, Steve McIntyre <steve.mcintyre@linaro.org>
+ 2011-2019, gregor herrmann <gregoa@debian.org>
+License: Artistic or GPL-1+
+
+License: Artistic
+ This program is free software; you can redistribute it and/or modify
+ it under the terms of the Artistic License, which comes with Perl.
+ .
+ On Debian systems, the complete text of the Artistic License can be
+ found in `/usr/share/common-licenses/Artistic'.
+
+License: GPL-1+
+ This program is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; either version 1, or (at your option)
+ any later version.
+ .
+ On Debian systems, the complete text of version 1 of the GNU General
+ Public License can be found in `/usr/share/common-licenses/GPL-1'.

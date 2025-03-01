@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+# Automatically added by dh_installdeb/13.6ubuntu1
+dpkg-maintscript-helper rm_conffile /etc/default/dirmngr -- "$@"
+dpkg-maintscript-helper rm_conffile /etc/dirmngr/dirmngr.conf -- "$@"
+dpkg-maintscript-helper rm_conffile /etc/dirmngr/ldapservers.conf -- "$@"
+dpkg-maintscript-helper rm_conffile /etc/init.d/dirmngr -- "$@"
+dpkg-maintscript-helper rm_conffile /etc/logrotate.d/dirmngr -- "$@"
+# End automatically added section

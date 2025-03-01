@@ -1,0 +1,2 @@
+libfreetype 6 libfreetype6 (>= 2.11)
+udeb: libfreetype 6 libfreetype6-udeb (>= 2.11)

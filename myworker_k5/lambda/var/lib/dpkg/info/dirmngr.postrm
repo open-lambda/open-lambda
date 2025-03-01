@@ -1,0 +1,23 @@
+#!/bin/sh
+set -e
+# Automatically added by dh_installdeb/13.6ubuntu1
+dpkg-maintscript-helper rm_conffile /etc/default/dirmngr -- "$@"
+dpkg-maintscript-helper rm_conffile /etc/dirmngr/dirmngr.conf -- "$@"
+dpkg-maintscript-helper rm_conffile /etc/dirmngr/ldapservers.conf -- "$@"
+dpkg-maintscript-helper rm_conffile /etc/init.d/dirmngr -- "$@"
+dpkg-maintscript-helper rm_conffile /etc/logrotate.d/dirmngr -- "$@"
+# End automatically added section
+# Automatically added by dh_installsystemduser/13.6ubuntu1
+if [ "$1" = "remove" ]; then
+	if [ -z "${DPKG_ROOT:-}" ] && [ -x "/usr/bin/deb-systemd-helper" ] ; then
+		deb-systemd-helper --user mask 'dirmngr.socket' >/dev/null || true
+	fi
+fi
+
+if [ "$1" = "purge" ]; then
+	if [ -z "${DPKG_ROOT:-}" ] && [ -x "/usr/bin/deb-systemd-helper" ] ; then
+		deb-systemd-helper --user purge 'dirmngr.socket' >/dev/null || true
+		deb-systemd-helper --user unmask 'dirmngr.socket' >/dev/null || true
+	fi
+fi
+# End automatically added section

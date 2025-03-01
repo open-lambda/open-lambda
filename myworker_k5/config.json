@@ -1,0 +1,48 @@
+{
+	"worker_dir": "/home/vboxuser/Documents/openl/open-lambda/myworker_k5/worker",
+	"worker_url": "localhost",
+	"worker_port": "5000",
+	"log_output": true,
+	"sandbox": "sock",
+	"server_mode": "lambda",
+	"trigger": "kafka",
+	"kafkaConfigPath": "kafkaConfig.json",
+	"registry": "/home/vboxuser/Documents/openl/open-lambda/myworker_k5/registry",
+	"registry_cache_ms": 5000,
+	"Pkgs_dir": "/home/vboxuser/Documents/openl/open-lambda/myworker_k5/lambda/packages",
+	"pip_mirror": "",
+	"mem_pool_mb": 5956,
+	"import_cache_tree": "/home/vboxuser/Documents/openl/open-lambda/myworker_k5/default-zygotes-40.json",
+	"sock_base_path": "/home/vboxuser/Documents/openl/open-lambda/myworker_k5/lambda",
+	"sandbox_config": {},
+	"docker": {
+		"runtime": "",
+		"base_image": "ol-min"
+	},
+	"limits": {
+		"procs": 10,
+		"mem_mb": 50,
+		"cpu_percent": 100,
+		"max_runtime_default": 30,
+		"swappiness": 0,
+		"installer_mem_mb": 500
+	},
+	"features": {
+		"reuse_cgroups": false,
+		"import_cache": "tree",
+		"downsize_paused_mem": true,
+		"enable_seccomp": true
+	},
+	"trace": {
+		"cgroups": false,
+		"memory": false,
+		"evictor": false,
+		"package": false,
+		"latency": false
+	},
+	"storage": {
+		"root": "private",
+		"scratch": "",
+		"code": ""
+	}
+}

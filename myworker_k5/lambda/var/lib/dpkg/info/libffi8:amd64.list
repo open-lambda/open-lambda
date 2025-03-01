@@ -1,0 +1,11 @@
+/.
+/usr
+/usr/lib
+/usr/lib/x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu/libffi.so.8.1.0
+/usr/share
+/usr/share/doc
+/usr/share/doc/libffi8
+/usr/share/doc/libffi8/changelog.Debian.gz
+/usr/share/doc/libffi8/copyright
+/usr/lib/x86_64-linux-gnu/libffi.so.8

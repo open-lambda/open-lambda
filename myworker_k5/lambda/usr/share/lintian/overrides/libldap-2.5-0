@@ -1,0 +1,3 @@
+# #687022
+lacks-unversioned-link-to-shared-library usr/lib/*/liblber-*.so.* usr/lib/*/liblber-*.so
+lacks-unversioned-link-to-shared-library usr/lib/*/libldap-*.so.* usr/lib/*/libldap-*.so

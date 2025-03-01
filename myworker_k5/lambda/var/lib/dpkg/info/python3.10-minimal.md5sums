@@ -1,0 +1,7 @@
+2370f3aa64179007cf4a8681076db1b8  usr/bin/python3.10
+7e36dd9857acf9fe5e2453e8a0ca25b4  usr/lib/binfmt.d/python3.10.conf
+a08268a0829aa01d1c1d1a9ead526e69  usr/share/binfmts/python3.10
+d51cd5b7bd1ce64dc20b6714d13a63a2  usr/share/doc/python3.10-minimal/README.Debian.gz
+d8c47e21fcd8f5a22f90828d568b0084  usr/share/doc/python3.10-minimal/copyright
+9ba5ff01f2ef7b6d088deb58ad77f0bd  usr/share/lintian/overrides/python3.10-minimal
+64ded2d9be6211e7a5838f4b48d3e7ba  usr/share/man/man1/python3.10.1.gz

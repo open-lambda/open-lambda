@@ -1,0 +1,13 @@
+/.
+/usr
+/usr/lib
+/usr/lib/x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu/libmpdec++.so.2.5.1
+/usr/lib/x86_64-linux-gnu/libmpdec.so.2.5.1
+/usr/share
+/usr/share/doc
+/usr/share/doc/libmpdec3
+/usr/share/doc/libmpdec3/changelog.Debian.gz
+/usr/share/doc/libmpdec3/copyright
+/usr/lib/x86_64-linux-gnu/libmpdec++.so.3
+/usr/lib/x86_64-linux-gnu/libmpdec.so.3

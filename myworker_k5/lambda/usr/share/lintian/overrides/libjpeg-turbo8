@@ -1,0 +1,3 @@
+# yes, we specifically want linkers to depends on the standard libjpeg name
+libjpeg-turbo8: symbols-declares-dependency-on-other-package libjpeg8 #MINVER#
+libjpeg-turbo8: package-name-doesnt-match-sonames

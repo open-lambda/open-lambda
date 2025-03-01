@@ -1,0 +1,17 @@
+/.
+/usr
+/usr/lib
+/usr/lib/x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu/libidn2.so.0.3.7
+/usr/share
+/usr/share/doc
+/usr/share/doc/libidn2-0
+/usr/share/doc/libidn2-0/AUTHORS
+/usr/share/doc/libidn2-0/NEWS.gz
+/usr/share/doc/libidn2-0/README.md.gz
+/usr/share/doc/libidn2-0/changelog.Debian.gz
+/usr/share/doc/libidn2-0/copyright
+/usr/share/lintian
+/usr/share/lintian/overrides
+/usr/share/lintian/overrides/libidn2-0
+/usr/lib/x86_64-linux-gnu/libidn2.so.0

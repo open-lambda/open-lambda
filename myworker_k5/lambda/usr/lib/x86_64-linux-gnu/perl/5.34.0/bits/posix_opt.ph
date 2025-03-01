@@ -1,0 +1,71 @@
+require '_h2ph_pre.ph';
+
+no warnings qw(redefine misc);
+
+unless(defined(&_BITS_POSIX_OPT_H)) {
+    eval 'sub _BITS_POSIX_OPT_H () {1;}' unless defined(&_BITS_POSIX_OPT_H);
+    eval 'sub _POSIX_JOB_CONTROL () {1;}' unless defined(&_POSIX_JOB_CONTROL);
+    eval 'sub _POSIX_SAVED_IDS () {1;}' unless defined(&_POSIX_SAVED_IDS);
+    eval 'sub _POSIX_PRIORITY_SCHEDULING () {200809;}' unless defined(&_POSIX_PRIORITY_SCHEDULING);
+    eval 'sub _POSIX_SYNCHRONIZED_IO () {200809;}' unless defined(&_POSIX_SYNCHRONIZED_IO);
+    eval 'sub _POSIX_FSYNC () {200809;}' unless defined(&_POSIX_FSYNC);
+    eval 'sub _POSIX_MAPPED_FILES () {200809;}' unless defined(&_POSIX_MAPPED_FILES);
+    eval 'sub _POSIX_MEMLOCK () {200809;}' unless defined(&_POSIX_MEMLOCK);
+    eval 'sub _POSIX_MEMLOCK_RANGE () {200809;}' unless defined(&_POSIX_MEMLOCK_RANGE);
+    eval 'sub _POSIX_MEMORY_PROTECTION () {200809;}' unless defined(&_POSIX_MEMORY_PROTECTION);
+    eval 'sub _POSIX_CHOWN_RESTRICTED () {0;}' unless defined(&_POSIX_CHOWN_RESTRICTED);
+    eval 'sub _POSIX_VDISABLE () {ord(\'\\0\');}' unless defined(&_POSIX_VDISABLE);
+    eval 'sub _POSIX_NO_TRUNC () {1;}' unless defined(&_POSIX_NO_TRUNC);
+    eval 'sub _XOPEN_REALTIME () {1;}' unless defined(&_XOPEN_REALTIME);
+    eval 'sub _XOPEN_REALTIME_THREADS () {1;}' unless defined(&_XOPEN_REALTIME_THREADS);
+    eval 'sub _XOPEN_SHM () {1;}' unless defined(&_XOPEN_SHM);
+    eval 'sub _POSIX_THREADS () {200809;}' unless defined(&_POSIX_THREADS);
+    eval 'sub _POSIX_REENTRANT_FUNCTIONS () {1;}' unless defined(&_POSIX_REENTRANT_FUNCTIONS);
+    eval 'sub _POSIX_THREAD_SAFE_FUNCTIONS () {200809;}' unless defined(&_POSIX_THREAD_SAFE_FUNCTIONS);
+    eval 'sub _POSIX_THREAD_PRIORITY_SCHEDULING () {200809;}' unless defined(&_POSIX_THREAD_PRIORITY_SCHEDULING);
+    eval 'sub _POSIX_THREAD_ATTR_STACKSIZE () {200809;}' unless defined(&_POSIX_THREAD_ATTR_STACKSIZE);
+    eval 'sub _POSIX_THREAD_ATTR_STACKADDR () {200809;}' unless defined(&_POSIX_THREAD_ATTR_STACKADDR);
+    eval 'sub _POSIX_THREAD_PRIO_INHERIT () {200809;}' unless defined(&_POSIX_THREAD_PRIO_INHERIT);
+    eval 'sub _POSIX_THREAD_PRIO_PROTECT () {200809;}' unless defined(&_POSIX_THREAD_PRIO_PROTECT);
+    if(defined(&__USE_XOPEN2K8)) {
+	eval 'sub _POSIX_THREAD_ROBUST_PRIO_INHERIT () {200809;}' unless defined(&_POSIX_THREAD_ROBUST_PRIO_INHERIT);
+	eval 'sub _POSIX_THREAD_ROBUST_PRIO_PROTECT () {-1;}' unless defined(&_POSIX_THREAD_ROBUST_PRIO_PROTECT);
+    }
+    eval 'sub _POSIX_SEMAPHORES () {200809;}' unless defined(&_POSIX_SEMAPHORES);
+    eval 'sub _POSIX_REALTIME_SIGNALS () {200809;}' unless defined(&_POSIX_REALTIME_SIGNALS);
+    eval 'sub _POSIX_ASYNCHRONOUS_IO () {200809;}' unless defined(&_POSIX_ASYNCHRONOUS_IO);
+    eval 'sub _POSIX_ASYNC_IO () {1;}' unless defined(&_POSIX_ASYNC_IO);
+    eval 'sub _LFS_ASYNCHRONOUS_IO () {1;}' unless defined(&_LFS_ASYNCHRONOUS_IO);
+    eval 'sub _POSIX_PRIORITIZED_IO () {200809;}' unless defined(&_POSIX_PRIORITIZED_IO);
+    eval 'sub _LFS64_ASYNCHRONOUS_IO () {1;}' unless defined(&_LFS64_ASYNCHRONOUS_IO);
+    eval 'sub _LFS_LARGEFILE () {1;}' unless defined(&_LFS_LARGEFILE);
+    eval 'sub _LFS64_LARGEFILE () {1;}' unless defined(&_LFS64_LARGEFILE);
+    eval 'sub _LFS64_STDIO () {1;}' unless defined(&_LFS64_STDIO);
+    eval 'sub _POSIX_SHARED_MEMORY_OBJECTS () {200809;}' unless defined(&_POSIX_SHARED_MEMORY_OBJECTS);
+    eval 'sub _POSIX_CPUTIME () {0;}' unless defined(&_POSIX_CPUTIME);
+    eval 'sub _POSIX_THREAD_CPUTIME () {0;}' unless defined(&_POSIX_THREAD_CPUTIME);
+    eval 'sub _POSIX_REGEXP () {1;}' unless defined(&_POSIX_REGEXP);
+    eval 'sub _POSIX_READER_WRITER_LOCKS () {200809;}' unless defined(&_POSIX_READER_WRITER_LOCKS);
+    eval 'sub _POSIX_SHELL () {1;}' unless defined(&_POSIX_SHELL);
+    eval 'sub _POSIX_TIMEOUTS () {200809;}' unless defined(&_POSIX_TIMEOUTS);
+    eval 'sub _POSIX_SPIN_LOCKS () {200809;}' unless defined(&_POSIX_SPIN_LOCKS);
+    eval 'sub _POSIX_SPAWN () {200809;}' unless defined(&_POSIX_SPAWN);
+    eval 'sub _POSIX_TIMERS () {200809;}' unless defined(&_POSIX_TIMERS);
+    eval 'sub _POSIX_BARRIERS () {200809;}' unless defined(&_POSIX_BARRIERS);
+    eval 'sub _POSIX_MESSAGE_PASSING () {200809;}' unless defined(&_POSIX_MESSAGE_PASSING);
+    eval 'sub _POSIX_THREAD_PROCESS_SHARED () {200809;}' unless defined(&_POSIX_THREAD_PROCESS_SHARED);
+    eval 'sub _POSIX_MONOTONIC_CLOCK () {0;}' unless defined(&_POSIX_MONOTONIC_CLOCK);
+    eval 'sub _POSIX_CLOCK_SELECTION () {200809;}' unless defined(&_POSIX_CLOCK_SELECTION);
+    eval 'sub _POSIX_ADVISORY_INFO () {200809;}' unless defined(&_POSIX_ADVISORY_INFO);
+    eval 'sub _POSIX_IPV6 () {200809;}' unless defined(&_POSIX_IPV6);
+    eval 'sub _POSIX_RAW_SOCKETS () {200809;}' unless defined(&_POSIX_RAW_SOCKETS);
+    eval 'sub _POSIX2_CHAR_TERM () {200809;}' unless defined(&_POSIX2_CHAR_TERM);
+    eval 'sub _POSIX_SPORADIC_SERVER () {-1;}' unless defined(&_POSIX_SPORADIC_SERVER);
+    eval 'sub _POSIX_THREAD_SPORADIC_SERVER () {-1;}' unless defined(&_POSIX_THREAD_SPORADIC_SERVER);
+    eval 'sub _POSIX_TRACE () {-1;}' unless defined(&_POSIX_TRACE);
+    eval 'sub _POSIX_TRACE_EVENT_FILTER () {-1;}' unless defined(&_POSIX_TRACE_EVENT_FILTER);
+    eval 'sub _POSIX_TRACE_INHERIT () {-1;}' unless defined(&_POSIX_TRACE_INHERIT);
+    eval 'sub _POSIX_TRACE_LOG () {-1;}' unless defined(&_POSIX_TRACE_LOG);
+    eval 'sub _POSIX_TYPED_MEMORY_OBJECTS () {-1;}' unless defined(&_POSIX_TYPED_MEMORY_OBJECTS);
+}
+1;

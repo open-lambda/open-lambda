@@ -1,0 +1,13 @@
+/.
+/etc
+/etc/xattr.conf
+/usr
+/usr/lib
+/usr/lib/x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu/libattr.so.1.1.2501
+/usr/share
+/usr/share/doc
+/usr/share/doc/libattr1
+/usr/share/doc/libattr1/changelog.Debian.gz
+/usr/share/doc/libattr1/copyright
+/usr/lib/x86_64-linux-gnu/libattr.so.1

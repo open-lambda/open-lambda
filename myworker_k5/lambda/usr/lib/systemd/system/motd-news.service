@@ -1,0 +1,8 @@
+[Unit]
+Description=Message of the Day
+After=network-online.target
+Documentation=man:update-motd(8)
+
+[Service]
+Type=oneshot
+ExecStart=/etc/update-motd.d/50-motd-news --force

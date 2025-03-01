@@ -1,0 +1,40 @@
+#!/bin/sh -e
+
+# If the user has removed the config file, respect this sign of dementia
+# -- only create on package install.
+
+if [ -z "$2" ] || dpkg --compare-versions "$2" lt 0.99.7.1-3
+then
+	if ! [ -f /etc/security/opasswd ]; then
+		umask 066
+		touch /etc/security/opasswd
+		umask 022
+	fi
+fi
+
+if dpkg --compare-versions "$2" lt 0.99.9.0-1 && ! [ -f /etc/environment ]
+then
+	touch /etc/environment
+fi
+
+# Add PATH to /etc/environment if it's not present there or in
+# /etc/security/pam_env.conf
+if [ "$1" = "configure" ] && dpkg --compare-versions "$2" lt 1.3.1-5ubuntu5; then
+	if ! grep -qs ^PATH /etc/security/pam_env.conf; then
+		if ! grep -qs ^PATH= /etc/environment; then
+			echo 'PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin"' >> /etc/environment
+		elif ! grep -qs "^PATH=.*/snap/bin" /etc/environment; then
+			sed -i '/^PATH="/ s,"$,:/snap/bin",g' /etc/environment
+		fi
+	fi
+fi
+
+if dpkg --compare-versions "$2" lt-nl 1.1.2-1 \
+   && grep -q 'pam_unix.*\bmin=[0-9]\+' /etc/pam.d/common-password
+then
+	echo "'min=' option to pam_unix is obsolete."
+	echo "replacing with 'minlen=' in /etc/pam.d/common-password."
+	sed -i -e'/pam_unix/ s/\bmin=/minlen=/' /etc/pam.d/common-password
+fi
+
+

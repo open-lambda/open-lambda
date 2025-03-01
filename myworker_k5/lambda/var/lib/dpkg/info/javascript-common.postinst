@@ -1,0 +1,92 @@
+#!/bin/sh
+
+set -e
+
+# summary of how this script can be called:
+#        * <postinst> `configure' <most-recently-configured-version>
+#        * <old-postinst> `abort-upgrade' <new version>
+#        * <conflictor's-postinst> `abort-remove' `in-favour' <package>
+#          <new-version>
+#        * <postinst> `abort-remove'
+#        * <deconfigured's-postinst> `abort-deconfigure' `in-favour'
+#          <failed-install-package> <version> `removing'
+#          <conflicting-package> <version>
+# for details, see http://www.debian.org/doc/debian-policy/ or
+# the debian-policy package
+
+lighttpd_setup() {
+	mkdir -p /etc/lighttpd/conf-enabled
+	if [ ! -e /etc/lighttpd/conf-enabled/90-javascript-alias.conf ]
+	then
+		ln -s ../conf-available/90-javascript-alias.conf /etc/lighttpd/conf-enabled/90-javascript-alias.conf
+		if which invoke-rc.d > /dev/null && [ -x /etc/init.d/lighttpd ]
+		then
+			invoke-rc.d lighttpd reload || true
+		fi
+	fi
+}
+
+
+case "${1}" in
+	configure)
+		if dpkg --compare-versions "$2" lt 9
+		then
+			# Fresh install or most-recently-configured-version < 9
+			lighttpd_setup
+		else
+			if [ -e  /etc/javascript-common/lighttpd_disabled_by_user ]
+			then
+				rm /etc/javascript-common/lighttpd_disabled_by_user
+				rmdir --ignore-fail-on-non-empty /etc/javascript-common
+				# Do not reenable javascript/ in lighttpd
+				echo javascript-alias was disabled in lighttpd. >&2
+				echo Hint: Use \"lighttpd-enable-mod javascript-alias\" to re-enable. >&2
+			else
+				lighttpd_setup
+			fi
+		fi
+		;;
+
+	abort-upgrade|abort-remove|abort-deconfigure)
+		;;
+
+	*)
+		echo "postinst called with unknown argument \`${1}'" >&2
+		exit 1
+		;;
+esac
+
+# Automatically added by dh_apache2/UNDECLARED
+if true; then
+	if [ -e /usr/share/apache2/apache2-maintscript-helper ] ; then
+		. /usr/share/apache2/apache2-maintscript-helper
+		for conf in javascript-common  ; do
+			apache2_invoke enconf $conf  || exit 1
+		done
+	fi
+fi
+# End automatically added section
+# Automatically added by dh_installdeb/13.3ubuntu4
+dpkg-maintscript-helper mv_conffile /etc/javascript-common/javascript-common.conf /etc/apache2/conf-available/javascript-common.conf 8 -- "$@"
+# End automatically added section
+# Automatically added by dh_installdeb/13.3ubuntu4
+dpkg-maintscript-helper mv_conffile /etc/javascript-common/lighttpd.conf /etc/lighttpd/conf-available/90-javascript-alias.conf 8 -- "$@"
+# End automatically added section
+
+
+# Will make piupart more happy on upgrades
+if [ "$1" = "configure" ] && dpkg --compare-versions "$2" lt-nl "9"
+then
+	# Remove old /etc/apache2/conf.d if empty and not already removed by user:
+        if [ -d /etc/apache2/conf.d ]
+        then
+		rmdir --ignore-fail-on-non-empty /etc/apache2/conf.d
+	fi
+	 # This is a work around bug #584185:
+	if [ -d /etc/javascript-common ]
+	then
+		rmdir --ignore-fail-on-non-empty /etc/javascript-common
+	fi
+fi
+
+exit 0

@@ -1,0 +1,7 @@
+# dpkg shlibs defaults file
+#
+# This file contains shlibs entries that are used as a last resort when
+# no matching entries are found elsewhere.  For more information see the
+# dpkg-shlibdeps(1) manual page. 
+#
+# <library name>	<version/soname>	<dependencies>

@@ -1,0 +1,12 @@
+/.
+/usr
+/usr/bin
+/usr/bin/gencat
+/usr/share
+/usr/share/doc
+/usr/share/doc/libc-dev-bin
+/usr/share/doc/libc-dev-bin/copyright
+/usr/share/man
+/usr/share/man/man1
+/usr/share/man/man1/gencat.1.gz
+/usr/share/doc/libc-dev-bin/changelog.Debian.gz

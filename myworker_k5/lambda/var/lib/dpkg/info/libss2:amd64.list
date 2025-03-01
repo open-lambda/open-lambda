@@ -1,0 +1,11 @@
+/.
+/lib
+/lib/x86_64-linux-gnu
+/lib/x86_64-linux-gnu/libss.so.2.0
+/usr
+/usr/share
+/usr/share/doc
+/usr/share/doc/libss2
+/usr/share/doc/libss2/copyright
+/lib/x86_64-linux-gnu/libss.so.2
+/usr/share/doc/libss2/changelog.Debian.gz

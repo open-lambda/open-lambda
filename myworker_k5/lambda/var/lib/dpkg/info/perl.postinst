@@ -1,0 +1,21 @@
+#!/bin/sh -e
+
+if [ "$1" = configure ]
+then
+    # rename (and prename) is now only provided by the rename package
+    update-alternatives --remove rename /usr/bin/prename
+
+    if which dpkg-trigger >/dev/null 2>&1 && \
+       [ -n "$2" ] && \
+       dpkg --compare-versions "$2" lt 5.34.0~
+    then
+        dpkg-trigger --no-await perl-major-upgrade
+    fi
+fi
+
+# Automatically added by dh_installdeb/13.6ubuntu1
+dpkg-maintscript-helper rm_conffile /etc/perl/sitecustomize.pl 5.26.0\~rc1-2\~ perl -- "$@"
+# End automatically added section
+
+
+exit 0

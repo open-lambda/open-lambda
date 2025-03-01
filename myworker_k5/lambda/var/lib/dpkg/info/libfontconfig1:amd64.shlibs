@@ -1,0 +1,2 @@
+libfontconfig 1 libfontconfig1 (>= 2.13)
+udeb: libfontconfig 1 fontconfig-udeb (>= 2.13)

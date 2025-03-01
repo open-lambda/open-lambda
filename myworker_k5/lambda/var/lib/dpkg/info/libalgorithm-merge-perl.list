@@ -1,0 +1,13 @@
+/.
+/usr
+/usr/share
+/usr/share/perl5
+/usr/share/perl5/Algorithm
+/usr/share/perl5/Algorithm/Merge.pm
+/usr/share/doc
+/usr/share/doc/libalgorithm-merge-perl
+/usr/share/doc/libalgorithm-merge-perl/copyright
+/usr/share/doc/libalgorithm-merge-perl/changelog.Debian.gz
+/usr/share/man
+/usr/share/man/man3
+/usr/share/man/man3/Algorithm::Merge.3pm.gz

@@ -1,0 +1,8 @@
+d22c80e7c83c4d8da19f87777f1a50f9  usr/bin/memusage
+7dd18b9b6b136e0c03390eb6909ef931  usr/bin/memusagestat
+52972988b75cede9c5edbcbc5cef36fa  usr/bin/mtrace
+7c5ab4a54f6673d238313399557b80d5  usr/bin/sotruss
+12bf8835b0a59f1c12531439588bdfa4  usr/bin/sprof
+86b2eaa030ceefc59ea39579ec51120d  usr/share/doc/libc-devtools/copyright
+786743655bbb6605ea26107bfe9c2d61  usr/share/lintian/overrides/libc-devtools
+5bcb4efe618ed89d610edcd6c26aa159  usr/share/man/man1/sotruss.1.gz

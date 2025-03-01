@@ -1,0 +1,9 @@
+auto
+/usr/bin/pinentry
+pinentry.1.gz
+/usr/share/man/man1/pinentry.1.gz
+
+/usr/bin/pinentry-curses
+50
+/usr/share/man/man1/pinentry-curses.1.gz
+

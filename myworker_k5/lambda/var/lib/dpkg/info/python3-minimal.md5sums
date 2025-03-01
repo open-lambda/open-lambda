@@ -1,0 +1,15 @@
+9dca75d5aa3ceade81ba23cad20689ed  usr/bin/py3clean
+d794f490f268c95fe6da4ffca8fb21f2  usr/bin/py3compile
+c1911a58376d9def2e202b5057d5e17e  usr/share/doc/python3-minimal/README.Debian
+17fcbe80021dc73debadee9d527d1cbe  usr/share/doc/python3-minimal/changelog.Debian.gz
+5d52ee1b68c656621c6e2245d07f174c  usr/share/doc/python3-minimal/copyright
+c33e64cbf28db6e25672e31998cc07bb  usr/share/man/man1/py3clean.1.gz
+a78eb3eb9e84819f7fdf959e5f93297e  usr/share/man/man1/py3compile.1.gz
+ae69f5f9fd3735f2f611d6974cf3e0a7  usr/share/man/man1/py3versions.1.gz
+abe4334883c3951302637ab213f0e1d2  usr/share/python3/debian_defaults
+0f6022a56575dea087f259687be536a7  usr/share/python3/debpython/__init__.py
+ace0f8e42515a735bbe3ea704f942313  usr/share/python3/debpython/files.py
+e8db0a11bac9ec701f753fd449d472de  usr/share/python3/debpython/interpreter.py
+3bf0a76547d108836fb9783248b6b8d4  usr/share/python3/debpython/option.py
+b50be770e81c12e2e86fb270e9470682  usr/share/python3/debpython/version.py
+f7f9cee688e21fe3274eaa17292db3b8  usr/share/python3/py3versions.py

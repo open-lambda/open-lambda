@@ -1,0 +1,11 @@
+#! /bin/sh -e
+
+if [ $1 != "upgrade" ]; then
+    update-alternatives --quiet --remove cc /usr/bin/gcc
+    update-alternatives --quiet --remove c89 /usr/bin/c89-gcc
+    update-alternatives --quiet --remove c99 /usr/bin/c99-gcc
+fi
+
+
+
+exit 0

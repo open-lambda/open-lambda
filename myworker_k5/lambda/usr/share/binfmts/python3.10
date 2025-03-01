@@ -1,0 +1,3 @@
+package python3.10
+interpreter /usr/bin/python3.10
+magic \x6f\x0d\x0d\x0a

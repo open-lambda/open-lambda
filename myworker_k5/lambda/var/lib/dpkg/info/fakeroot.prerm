@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "remove" ] || [ "$1" = "deconfigure" ]
+then
+	update-alternatives --remove fakeroot /usr/bin/fakeroot-sysv
+	update-alternatives --remove fakeroot /usr/bin/fakeroot-tcp
+fi
+
+

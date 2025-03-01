@@ -1,0 +1,9 @@
+#!/bin/sh
+#
+# This file is not managed by a package.  If you no longer want to
+# see this message you can safely remove the file.
+echo ""
+echo "This system has been minimized by removing packages and content that are"
+echo "not required on a system that users do not log into."
+echo ""
+echo "To restore this content, you can run the 'unminimize' command."

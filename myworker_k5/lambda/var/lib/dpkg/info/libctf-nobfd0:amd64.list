@@ -1,0 +1,11 @@
+/.
+/usr
+/usr/lib
+/usr/lib/x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu/libctf-nobfd.so.0.0.0
+/usr/share
+/usr/share/doc
+/usr/share/doc/libctf-nobfd0
+/usr/share/doc/libctf-nobfd0/changelog.Debian.gz
+/usr/share/doc/libctf-nobfd0/copyright
+/usr/lib/x86_64-linux-gnu/libctf-nobfd.so.0

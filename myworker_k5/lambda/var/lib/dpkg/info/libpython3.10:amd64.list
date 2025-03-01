@@ -1,0 +1,15 @@
+/.
+/usr
+/usr/lib
+/usr/lib/python3.10
+/usr/lib/python3.10/config-3.10-x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu/libpython3.10.so.1.0
+/usr/share
+/usr/share/doc
+/usr/share/lintian
+/usr/share/lintian/overrides
+/usr/share/lintian/overrides/libpython3.10
+/usr/lib/python3.10/config-3.10-x86_64-linux-gnu/libpython3.10.so
+/usr/lib/x86_64-linux-gnu/libpython3.10.so.1
+/usr/share/doc/libpython3.10

@@ -1,0 +1,20 @@
+#! /bin/sh
+
+set -e
+
+case "$1" in
+    configure)
+    files=$(dpkg -L libpython3.10-stdlib:amd64 | sed -n '/^\/usr\/lib\/python3.10\/.*\.py$/p')
+    if [ -n "$files" ]; then
+	/usr/bin/python3.10 -E -S /usr/lib/python3.10/py_compile.py $files
+	if grep -sq '^byte-compile[^#]*optimize' /etc/python/debian_config; then
+	    /usr/bin/python3.10 -E -S -O /usr/lib/python3.10/py_compile.py $files
+	fi
+    else
+	echo >&2 "python3.10: can't get files for byte-compilation"
+    fi
+esac
+
+
+
+exit 0

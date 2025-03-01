@@ -1,0 +1,15 @@
+/.
+/usr
+/usr/lib
+/usr/lib/x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu/libgcrypt.so.20.3.4
+/usr/share
+/usr/share/doc
+/usr/share/doc/libgcrypt20
+/usr/share/doc/libgcrypt20/AUTHORS.gz
+/usr/share/doc/libgcrypt20/NEWS.gz
+/usr/share/doc/libgcrypt20/README.gz
+/usr/share/doc/libgcrypt20/THANKS.gz
+/usr/share/doc/libgcrypt20/changelog.Debian.gz
+/usr/share/doc/libgcrypt20/copyright
+/usr/lib/x86_64-linux-gnu/libgcrypt.so.20

@@ -1,0 +1,5 @@
+#!/bin/sh
+set -e
+# Automatically added by dh_installdeb/13.6ubuntu1
+dpkg-maintscript-helper rm_conffile /etc/cron.weekly/fstrim 2.31.1-0.4ubuntu1\~ -- "$@"
+# End automatically added section

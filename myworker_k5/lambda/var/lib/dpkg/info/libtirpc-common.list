@@ -1,0 +1,13 @@
+/.
+/etc
+/etc/netconfig
+/usr
+/usr/share
+/usr/share/doc
+/usr/share/doc/libtirpc-common
+/usr/share/doc/libtirpc-common/NEWS.Debian.gz
+/usr/share/doc/libtirpc-common/changelog.Debian.gz
+/usr/share/doc/libtirpc-common/copyright
+/usr/share/man
+/usr/share/man/man5
+/usr/share/man/man5/netconfig.5.gz

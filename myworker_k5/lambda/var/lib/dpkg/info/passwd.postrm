@@ -1,0 +1,6 @@
+#!/bin/sh
+set -e
+# Automatically added by dh_installdeb/13.6ubuntu1
+dpkg-maintscript-helper rm_conffile /etc/cron.daily/passwd 1:4.7-2\~ -- "$@"
+dpkg-maintscript-helper rm_conffile /etc/init/passwd.conf 1:4.2-3.2ubuntu4\~ passwd -- "$@"
+# End automatically added section

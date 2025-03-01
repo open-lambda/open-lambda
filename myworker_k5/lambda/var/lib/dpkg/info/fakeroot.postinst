@@ -1,0 +1,47 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "configure" ]
+then
+
+update-alternatives --install /usr/bin/fakeroot fakeroot \
+			/usr/bin/fakeroot-sysv 50 \
+		--slave /usr/share/man/man1/fakeroot.1.gz \
+		fakeroot.1.gz /usr/share/man/man1/fakeroot-sysv.1.gz \
+		--slave /usr/share/man/man1/faked.1.gz \
+		faked.1.gz /usr/share/man/man1/faked-sysv.1.gz \
+		--slave /usr/share/man/es/man1/fakeroot.1.gz \
+		fakeroot.es.1.gz /usr/share/man/es/man1/fakeroot-sysv.1.gz \
+		--slave /usr/share/man/es/man1/faked.1.gz \
+		faked.es.1.gz /usr/share/man/es/man1/faked-sysv.1.gz \
+		--slave /usr/share/man/fr/man1/fakeroot.1.gz \
+		fakeroot.fr.1.gz /usr/share/man/fr/man1/fakeroot-sysv.1.gz \
+		--slave /usr/share/man/fr/man1/faked.1.gz \
+		faked.fr.1.gz /usr/share/man/fr/man1/faked-sysv.1.gz \
+		--slave /usr/share/man/sv/man1/fakeroot.1.gz \
+		fakeroot.sv.1.gz /usr/share/man/sv/man1/fakeroot-sysv.1.gz \
+		--slave /usr/share/man/sv/man1/faked.1.gz \
+		faked.sv.1.gz /usr/share/man/sv/man1/faked-sysv.1.gz
+
+update-alternatives --install /usr/bin/fakeroot fakeroot \
+			/usr/bin/fakeroot-tcp 30 \
+		--slave /usr/share/man/man1/fakeroot.1.gz \
+		fakeroot.1.gz /usr/share/man/man1/fakeroot-tcp.1.gz \
+		--slave /usr/share/man/man1/faked.1.gz \
+		faked.1.gz /usr/share/man/man1/faked-tcp.1.gz \
+		--slave /usr/share/man/es/man1/fakeroot.1.gz \
+		fakeroot.es.1.gz /usr/share/man/es/man1/fakeroot-tcp.1.gz \
+		--slave /usr/share/man/es/man1/faked.1.gz \
+		faked.es.1.gz /usr/share/man/es/man1/faked-tcp.1.gz \
+		--slave /usr/share/man/fr/man1/fakeroot.1.gz \
+		fakeroot.fr.1.gz /usr/share/man/fr/man1/fakeroot-tcp.1.gz \
+		--slave /usr/share/man/fr/man1/faked.1.gz \
+		faked.fr.1.gz /usr/share/man/fr/man1/faked-tcp.1.gz \
+		--slave /usr/share/man/sv/man1/fakeroot.1.gz \
+		fakeroot.sv.1.gz /usr/share/man/sv/man1/fakeroot-tcp.1.gz \
+		--slave /usr/share/man/sv/man1/faked.1.gz \
+		faked.sv.1.gz /usr/share/man/sv/man1/faked-tcp.1.gz
+
+fi
+
+

@@ -1,0 +1,16 @@
+/.
+/lib
+/lib/x86_64-linux-gnu
+/lib/x86_64-linux-gnu/libtinfo.so.6.3
+/usr
+/usr/lib
+/usr/lib/x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu/libtic.so.6.3
+/usr/share
+/usr/share/doc
+/usr/share/doc/libtinfo6
+/usr/share/doc/libtinfo6/FAQ
+/usr/share/doc/libtinfo6/changelog.Debian.gz
+/usr/share/doc/libtinfo6/copyright
+/lib/x86_64-linux-gnu/libtinfo.so.6
+/usr/lib/x86_64-linux-gnu/libtic.so.6

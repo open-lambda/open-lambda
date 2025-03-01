@@ -1,0 +1,11 @@
+/.
+/usr
+/usr/lib
+/usr/lib/x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu/libmount.so.1.1.0
+/usr/share
+/usr/share/doc
+/usr/share/doc/libmount1
+/usr/share/doc/libmount1/copyright
+/usr/lib/x86_64-linux-gnu/libmount.so.1
+/usr/share/doc/libmount1/changelog.Debian.gz

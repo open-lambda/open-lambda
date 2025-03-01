@@ -1,0 +1,3 @@
+# these binaries are stored in /usr/lib/gnupg, as recommended by upstream:
+gpg-agent: spare-manual-page usr/share/man/man1/gpg-check-pattern.1.gz
+gpg-agent: spare-manual-page usr/share/man/man1/gpg-preset-passphrase.1.gz

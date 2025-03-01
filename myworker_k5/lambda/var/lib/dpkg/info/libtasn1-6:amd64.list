@@ -1,0 +1,14 @@
+/.
+/usr
+/usr/lib
+/usr/lib/x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu/libtasn1.so.6.6.2
+/usr/share
+/usr/share/doc
+/usr/share/doc/libtasn1-6
+/usr/share/doc/libtasn1-6/AUTHORS
+/usr/share/doc/libtasn1-6/README.md
+/usr/share/doc/libtasn1-6/THANKS
+/usr/share/doc/libtasn1-6/changelog.Debian.gz
+/usr/share/doc/libtasn1-6/copyright
+/usr/lib/x86_64-linux-gnu/libtasn1.so.6

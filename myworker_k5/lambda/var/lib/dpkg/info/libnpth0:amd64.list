@@ -1,0 +1,11 @@
+/.
+/usr
+/usr/lib
+/usr/lib/x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu/libnpth.so.0.1.2
+/usr/share
+/usr/share/doc
+/usr/share/doc/libnpth0
+/usr/share/doc/libnpth0/changelog.Debian.gz
+/usr/share/doc/libnpth0/copyright
+/usr/lib/x86_64-linux-gnu/libnpth.so.0

@@ -1,0 +1,2 @@
+# these binaries are stored in /usr/lib/gnupg, as recommended by upstream:
+gpg-wks-client: spare-manual-page usr/share/man/man1/gpg-wks-client.1.gz

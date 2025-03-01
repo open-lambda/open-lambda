@@ -1,0 +1,17 @@
+/.
+/usr
+/usr/share
+/usr/share/doc
+/usr/share/doc/libjs-jquery
+/usr/share/doc/libjs-jquery/NEWS.Debian.gz
+/usr/share/doc/libjs-jquery/changelog.Debian.gz
+/usr/share/doc/libjs-jquery/copyright
+/usr/share/javascript
+/usr/share/javascript/jquery
+/usr/share/javascript/jquery/jquery.js
+/usr/share/javascript/jquery/jquery.min.js
+/usr/share/javascript/jquery/jquery.min.js.brotli
+/usr/share/javascript/jquery/jquery.min.js.gz
+/usr/share/javascript/jquery/jquery.min.map
+/usr/share/javascript/jquery/jquery.min.map.brotli
+/usr/share/javascript/jquery/jquery.min.map.gz

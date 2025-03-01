@@ -1,0 +1,11 @@
+# the private library is for internal sharing only
+apt: package-name-doesnt-match-sonames
+apt: exit-in-shared-library usr/lib*/libapt-private.so.0.0.0
+apt: no-symbols-control-file usr/lib*/libapt-private.so.0.0.0
+# we are implementing our own fallback and it is a minor usecase only
+apt: missing-depends-on-sensible-utils sensible-pager usr/lib*/libapt-private.so.0.0.0
+# these man pages document usage/config for things called via apt
+apt: spare-manual-page usr/share/man*/man1/apt-transport-http.1.gz
+apt: spare-manual-page usr/share/man*/man1/apt-transport-https.1.gz
+apt: spare-manual-page usr/share/man*/man1/apt-transport-mirror.1.gz
+apt: spare-manual-page usr/share/man*/man8/apt-secure.8.gz

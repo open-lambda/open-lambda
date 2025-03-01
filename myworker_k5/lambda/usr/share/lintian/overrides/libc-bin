@@ -1,0 +1,26 @@
+# ldconfig must be executable even when the libc is not configured, and
+# thus must be linked statically
+libc-bin: shared-library-lacks-prerequisites sbin/ldconfig.real
+
+# pt_chown must be setuid root and in /usr/lib, otherwise non-root users
+# won't be able to login
+libc-bin: setuid-binary usr/lib/pt_chown 4755 root/root
+libc-bin: sharedobject-in-library-directory-missing-soname usr/lib/pt_chown
+
+# ldconfig.real doesn't have a manpage, since it's just ldconfig renamed
+libc-bin: no-manual-page sbin/ldconfig.real
+
+# ldconfig is called in the postinst for trigger support
+libc-bin: postinst-has-useless-call-to-ldconfig
+
+# these manpages are provided by the manpages package
+libc-bin: no-manual-page sbin/ldconfig
+libc-bin: no-manual-page usr/bin/getent
+libc-bin: no-manual-page usr/bin/iconv
+libc-bin: no-manual-page usr/bin/ldd
+libc-bin: no-manual-page usr/bin/locale
+libc-bin: no-manual-page usr/bin/localedef
+libc-bin: no-manual-page usr/bin/pldd
+libc-bin: no-manual-page usr/bin/zdump
+libc-bin: no-manual-page usr/sbin/iconvconfig
+libc-bin: no-manual-page usr/sbin/zic

@@ -1,0 +1,5 @@
+dd43d95a0e92fee99f21530f6907237c  usr/lib/x86_64-linux-gnu/libssh.so.4.8.7
+3546149bd648f5173575acae381c75f0  usr/share/doc/libssh-4/README.Debian
+a7f54445120a8a57273957e96d90ad32  usr/share/doc/libssh-4/changelog.Debian.gz
+b809dee28e593a3fa8a3a1b94c4cafe8  usr/share/doc/libssh-4/copyright
+da6d38b8f271c44275a864675c3c3165  usr/share/lintian/overrides/libssh-4

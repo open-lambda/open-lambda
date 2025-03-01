@@ -1,0 +1,11 @@
+/.
+/usr
+/usr/lib
+/usr/lib/x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu/libbsd.so.0.11.5
+/usr/share
+/usr/share/doc
+/usr/share/doc/libbsd0
+/usr/share/doc/libbsd0/changelog.Debian.gz
+/usr/share/doc/libbsd0/copyright
+/usr/lib/x86_64-linux-gnu/libbsd.so.0

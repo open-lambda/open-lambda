@@ -1,0 +1,12 @@
+/.
+/lib
+/lib/x86_64-linux-gnu
+/lib/x86_64-linux-gnu/libgpg-error.so.0.32.1
+/usr
+/usr/share
+/usr/share/doc
+/usr/share/doc/libgpg-error0
+/usr/share/doc/libgpg-error0/README.gz
+/usr/share/doc/libgpg-error0/changelog.Debian.gz
+/usr/share/doc/libgpg-error0/copyright
+/lib/x86_64-linux-gnu/libgpg-error.so.0

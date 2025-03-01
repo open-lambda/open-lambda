@@ -1,0 +1,14 @@
+/.
+/usr
+/usr/lib
+/usr/lib/x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu/libjpeg.so.8.2.2
+/usr/share
+/usr/share/doc
+/usr/share/doc/libjpeg-turbo8
+/usr/share/doc/libjpeg-turbo8/changelog.Debian.gz
+/usr/share/doc/libjpeg-turbo8/copyright
+/usr/share/lintian
+/usr/share/lintian/overrides
+/usr/share/lintian/overrides/libjpeg-turbo8
+/usr/lib/x86_64-linux-gnu/libjpeg.so.8

@@ -1,0 +1,205 @@
+#!/usr/bin/perl
+use warnings;
+use strict;
+use Getopt::Long;
+use IPC::Open3;
+use Carp;
+
+our $VERSION = 1.0;
+
+sub usage {
+  print STDERR 'usage: make-first-existing-target [-c cmd] '
+    . "target1 [target2 ...] -- [make-options]\n"
+    or croak "Could not print: $!";
+  exit 1;
+} ## end sub usage
+
+my ( @targets, @makeopts );
+my $makecmd = 'make';
+
+getopt();
+
+# Observe make's stderr on a non-existing target.
+my $dummy_target = 'make-first-existing-target-dummy-nonexistant-target';
+my $dummy_result = observe_dummy();
+
+foreach my $target (@targets) {
+  make( $target, $dummy_result );
+}
+error("*** No rules to make targets: @targets");
+
+sub make {
+
+  # Runs make on a target, passing stdout, and observing stderr
+  # to see if it is similar to that observed when running the dummy
+  # target.
+  # Only returns if the target appears not to exist.
+  my $target = shift;
+
+  # make's stderr will vary from dummy by target name
+  my @dummy = map { s/$dummy_target/$target/msxg; $_ } split /\n/msx, shift;
+
+  my $same = 1;
+  my @stderr_buf;
+  my $code = make_stderr(
+    $target,
+    sub {
+      chomp;
+      if ( @dummy && $_ eq $dummy[0] ) {
+        push @stderr_buf, "$_\n";
+        shift @dummy;
+      }
+      else {
+        print STDERR @stderr_buf or croak "Could not print: $!";
+        print STDERR "$_\n" or croak "Could not print: $!";
+        $same = 0;
+        @stderr_buf = @dummy = ();
+      } ## end else [ if ( @dummy && $_ eq $dummy...)]
+    }
+  );
+
+  if ( !$same || @dummy ) {
+    print @stderr_buf or croak "Could not print: $!";
+    exit exitcode();
+  }
+} ## end sub make
+
+sub observe_dummy {
+  my $stderr = q{};
+  my $code = make_stderr( $dummy_target, sub { $stderr .= shift }, 1 );
+
+  if ( $code != 2 || !length $stderr ) {
+
+    # Could loop and try another target, but in the unlikely
+    # case the dummpy target exists, we don't know what it did,
+    # so best to treat this as a failure.
+    error("unexpected result running $dummy_target: $stderr");
+  } ## end if ( $code != 2 || !length...)
+
+  return $stderr;
+} ## end sub observe_dummy
+
+sub make_stderr {
+
+  # Runs make on a target, passing each line of stderr to a callback
+  # function. Returns make's exit code.
+  my $target   = shift;
+  my $callback = shift;
+  my $silent   = shift;
+
+  # Normally open3 will close the stdin filehandle when done.
+  # But we want to call it repeatedly until one target successfully
+  # runs; and that target should be able to read from stdin.
+  # So, make a dup filehandle, in order to leave stdin open.
+  open( MAKEIN, "<&STDIN" ) || die "$!";
+
+  if ( !$silent ) {
+    open( MAKEOUT, ">&STDOUT" ) || die "$!";
+  }
+  else {
+    open( MAKEOUT, ">/dev/null" ) || die "$!";
+  }
+
+  my $pid = open3( '<&MAKEIN', '>&MAKEOUT', \*MAKEERR,
+    $makecmd, @makeopts, $target );
+  while (<MAKEERR>) {
+    $callback->($_);
+  }
+  waitpid( $pid, 0 );
+  close MAKEIN;
+  close MAKEOUT;
+  return exitcode();
+} ## end sub make_stderr
+
+sub exitcode {
+  my $code = $? >> 8;
+  if ( !$code && $? ) {
+    $code = $?;
+  }
+  return $code;
+} ## end sub exitcode
+
+sub error {
+  print STDERR "make-first-existing-target: @_\n";
+  exit 2;
+}
+
+sub getopt {
+  GetOptions(
+    "h|help" => \&usage,
+    "c=s"    => \$makecmd,
+  ) || usage();
+
+  # remainder are targets, possibly followed by makeopts
+  my $end = 0;
+  foreach my $a (@ARGV) {
+    if ( $end || $a =~ /^-/ ) {
+      $end = 1;
+      push @makeopts, $a;
+    }
+    else {
+      push @targets, $a;
+    }
+  } ## end foreach my $a (@ARGV)
+
+  @targets || usage();
+} ## end sub getopt
+
+__END__
+
+=head1 NAME
+
+make-first-existing-target - runs make on one of several targets
+
+=head1 SYNOPSIS
+
+make-first-existing-target [-c cmd] target1 [target2 ...] -- [make-options]
+
+=cut
+
+=head1 DESCRIPTION
+
+The design of L<make(1)> causes difficulty when you know that a Makefile
+probably has one of several standardized target names, and want build
+machinery to run exactly one of them, propagating any errors. L<make(1)>
+will exit 2 if a target does not exist, but an existing target may also
+exit 2 due to some other failure. Makefiles cannot be reliably parsed
+to find targets by anything less turing complete than make; and make itself
+does not provide a way to enumerate the targets in a Makefile. It may not
+even be possible to enumerate the targets in a Makefile without executing
+part of it. (Proof of this is left as an exercise for the reader.)
+
+This program avoids the problems described above, by attempting to call
+each specified target in turn, until it observes make actually doing
+something for one of them.
+
+=head1 OPTIONS
+
+=over 4
+
+=item -c cmd
+
+This can be used to specify the make command to run. Default is "make".
+
+=back
+
+=cut
+
+=head1 EXIT STATUS
+
+The exit status is 0 if at least one target existed and was successfully
+run, and nonzero otherwise.
+
+=head1 AUTHOR
+
+Joey Hess <joey@kitenet.net>
+
+=head1 LICENSE
+
+Same as GNU make.
+
+=head1 SEE ALSO
+
+L<make(1)>
+
+=cut

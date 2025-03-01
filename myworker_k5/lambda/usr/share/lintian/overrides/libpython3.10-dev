@@ -1,0 +1,6 @@
+libpython3.10-dev binary: python-script-but-no-python-dep
+
+libpython3.10-dev binary: arch-dependent-file-not-in-arch-specific-directory
+
+# lintian needs an update for 3.8
+libpython3.10-dev binary: package-contains-python-header-in-incorrect-directory

@@ -1,0 +1,29 @@
+Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: Algorithm-Merge
+Upstream-Contact: James G. Smith <jsmith@cpan.org>
+Source: https://metacpan.org/release/Algorithm-Merge
+
+Files: *
+Copyright: 2003, 2007 Texas A&M University
+License: Artistic or GPL-1+
+
+Files: debian/*
+Copyright: 2009, Jonathan Yu <frequency@cpan.org>
+ 2010, Salvatore Bonaccorso <carnil@debian.org>
+License: Artistic or GPL-1+
+
+License: Artistic
+ This program is free software; you can redistribute it and/or modify
+ it under the terms of the Artistic License, which comes with Perl.
+ .
+ On Debian GNU/Linux systems, the complete text of the Artistic License
+ can be found in `/usr/share/common-licenses/Artistic'.
+
+License: GPL-1+
+ This program is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; either version 1, or (at your option)
+ any later version.
+ .
+ On Debian GNU/Linux systems, the complete text of version 1 of the
+ General Public License can be found in `/usr/share/common-licenses/GPL-1'.

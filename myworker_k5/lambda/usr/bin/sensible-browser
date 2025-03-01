@@ -1,0 +1,45 @@
+#!/bin/sh
+
+# Prevent recursive loops, where these values are set to this script
+p="$(command -v "$0")"
+[ -n "$BROWSER" ] && [ "$(command -v "$BROWSER" || true)" = "$p" ] && BROWSER=
+
+IsError()
+{
+	# Operating system command not found
+	[ "$1" -ne 126 ] && [ $1 -ne 127 ]
+}
+
+Run()
+{
+	"$@"
+	ret=$?
+	IsError "$ret"
+}
+
+if test -n "$BROWSER"; then
+    Run "${BROWSER}" "$@" && exit "$ret"
+fi
+
+if test -n "$DISPLAY"; then
+    if test -n "$GNOME_DESKTOP_SESSION_ID"; then
+        if test -x /usr/bin/gnome-www-browser; then
+            exec /usr/bin/gnome-www-browser "$@"
+        elif test -x /usr/bin/x-www-browser; then
+            exec /usr/bin/x-www-browser "$@"
+        elif test -x /usr/bin/gnome-terminal && test -x /usr/bin/www-browser; then
+            exec /usr/bin/gnome-terminal -x /usr/bin/www-browser "$@"
+        fi
+    fi
+    if test -x /usr/bin/x-www-browser; then
+        exec /usr/bin/x-www-browser "$@"
+    elif test -x /usr/bin/x-terminal-emulator && test -x /usr/bin/www-browser; then
+        exec /usr/bin/x-terminal-emulator -x /usr/bin/www-browser "$@"
+    fi
+elif test -x /usr/bin/www-browser; then
+    exec /usr/bin/www-browser "$@"
+fi
+
+echo "Couldn't find a suitable web browser!\n" >&2
+echo "Set the BROWSER environment variable to your desired browser.\n" >&2
+exit 1;

@@ -1,0 +1,13 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "configure" ]; then
+	if dpkg --compare-versions "$2" lt-nl "2.1.27~101-g0780600+dfsg-3~" ; then
+		# fix permissions 0755 -> 0644 upon upgrades from jessie
+		if [ -f /etc/logcheck/ignore.d.server/libsasl2-modules ]; then
+			chmod a-x /etc/logcheck/ignore.d.server/libsasl2-modules
+		fi
+	fi
+fi
+
+

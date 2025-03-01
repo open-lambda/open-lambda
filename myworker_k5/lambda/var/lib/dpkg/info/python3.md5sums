@@ -1,0 +1,7 @@
+edace46345e940177c40892e87457393  usr/lib/valgrind/python3.supp
+5d52ee1b68c656621c6e2245d07f174c  usr/share/doc/python3/copyright
+1879d99df6952d44238ce53ae3098378  usr/share/doc/python3/python-policy.txt.gz
+02a6929d5ce40552f26a982fc1a713ea  usr/share/lintian/overrides/python3
+cd182f79cebb447d6fbcb88196b34c30  usr/share/python3/python.mk
+6cdf3584613fc83a497566d5d23bde45  usr/share/python3/runtime.d/public_modules.rtinstall
+23238a52069b9f06b28ef52805c974ae  usr/share/python3/runtime.d/public_modules.rtremove

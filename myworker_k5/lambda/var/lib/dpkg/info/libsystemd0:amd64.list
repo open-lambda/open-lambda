@@ -1,0 +1,11 @@
+/.
+/usr
+/usr/lib
+/usr/lib/x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu/libsystemd.so.0.32.0
+/usr/share
+/usr/share/doc
+/usr/share/doc/libsystemd0
+/usr/share/doc/libsystemd0/changelog.Debian.gz
+/usr/share/doc/libsystemd0/copyright
+/usr/lib/x86_64-linux-gnu/libsystemd.so.0

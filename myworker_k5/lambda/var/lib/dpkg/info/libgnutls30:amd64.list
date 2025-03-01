@@ -1,0 +1,16 @@
+/.
+/usr
+/usr/lib
+/usr/lib/x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu/libgnutls.so.30.31.0
+/usr/share
+/usr/share/doc
+/usr/share/doc/libgnutls30
+/usr/share/doc/libgnutls30/AUTHORS.gz
+/usr/share/doc/libgnutls30/NEWS.Debian.gz
+/usr/share/doc/libgnutls30/NEWS.gz
+/usr/share/doc/libgnutls30/README.md.gz
+/usr/share/doc/libgnutls30/THANKS.gz
+/usr/share/doc/libgnutls30/changelog.Debian.gz
+/usr/share/doc/libgnutls30/copyright
+/usr/lib/x86_64-linux-gnu/libgnutls.so.30

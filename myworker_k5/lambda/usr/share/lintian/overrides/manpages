@@ -1,0 +1,11 @@
+# /var/catman/ only described as alternate path
+manpages: FSSTND-dir-in-manual-page usr/share/man/man7/hier.7.gz* /var/catman/
+
+# /usr/man/ only described as alternate path
+manpages: FSSTND-dir-in-manual-page usr/share/man/man7/man.7.gz* /usr/man/
+
+# "nam" stands for "no automatic margins"
+manpages: spelling-error-in-manpage usr/share/man/man5/termcap.5.gz nam name
+
+# /usr/doc/ only described as alternate path
+manpages: FSSTND-dir-in-manual-page usr/share/man/man7/uri.7.gz* /usr/doc/

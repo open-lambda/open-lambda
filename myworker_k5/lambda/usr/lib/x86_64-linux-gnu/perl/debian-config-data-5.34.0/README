@@ -1,0 +1,40 @@
+These config.sh.* files are generated during the package build
+and installed into the libperl5.xx package, in the directory
+/usr/lib/<triplet>/perl/config-data-<version>. They contain probed values
+about system configuration, used for cross building the package.
+
+The probes currently need to run on the native architecture, so they
+cannot be used for cross building. As a workaround, we store the results
+in the built binary package and then manually copy them back to the
+source package as needed.
+
+The process is currently experimental, and no commitment is made on long
+term feasibility of this. We will see how it goes.
+
+For more information, see the thread starting at
+ http://lists.alioth.debian.org/pipermail/perl-maintainers/2016-January/005241.html
+
+ -- Niko Tyni <ntyni@debian.org>  Fri, 29 Jan 2016 10:28:42 +0200
+
+There is some tooling to help the process of incorporating the generated
+config.sh.* files from architecture specific binary packages back into
+the source package:
+
+- debian/cross/download-deb can be used to pull in the required binary package
+
+- debian/cross/extract-config-sh can then be run on the downloaded
+  package(s) to copy the config.sh.* files into the source tree and commit
+  the changes into the git repository.
+
+An example transcript would be:
+
+$ for arch in amd64 arm64 armel armhf i386 mips64el mipsel ppc64 s390x; do ./debian/cross/download-deb -p libperl5.32 -v 5.32.1-2 -s 'deb http://deb.debian.org/debian unstable main' $arch; done
+$ for arch in alpha hppa hurd-i386 ia64 m68k powerpc ppc64 riscv64 sh4 sparc64 x32; do ./debian/cross/download-deb -p libperl5.32 -v 5.32.1-2 -s 'deb http://deb.debian.org/debian-ports unstable main' $arch; done
+$ ./debian/cross/extract-config-sh libperl*.deb
+
+The debian-ports part needs the debian-ports-archive-keyring package installed
+(but could be done in an ephemeral chroot if that seems preferrable.)
+
+As always, this is still work in progress and will hopefully improve over time.
+
+ -- Niko Tyni <ntyni@debian.org>  Mon, 22 Feb 2021 17:24:27 +0200

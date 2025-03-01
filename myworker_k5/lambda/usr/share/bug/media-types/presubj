@@ -1,0 +1,15 @@
+Please consider registering media types to the Internet Assigned Numbers
+Authority (IANA) before requiring their inclusion in /etc/mime.types.
+
+https://www.iana.org/form/media-types
+
+Simplified registration procedures for vendor and personal trees have been
+implemented since RFC 6838, that states: "it should rarely, if ever, be
+necessary to use unregistered types."
+
+https://tools.ietf.org/html/rfc6838
+
+I have confirmed that the process is fairly quick and painless by registering
+various media types in 2012, 2014 and 2020.
+
+ -- Charles Plessy

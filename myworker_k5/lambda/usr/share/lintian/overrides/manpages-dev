@@ -1,0 +1,8 @@
+# /var/adm/ only described as alternate path
+manpages-dev: FSSTND-dir-in-manual-page usr/share/man/man3/gethostid.3.gz* /var/adm/
+
+# /var/adm/ only described as alternate path
+manpages-dev: FSSTND-dir-in-manual-page usr/share/man/man3/getlogin.3.gz* /var/adm/
+
+# /var/adm/ only described as alternate path
+manpages-dev: FSSTND-dir-in-manual-page usr/share/man/man3/ttyslot.3.gz* /var/adm/

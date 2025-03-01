@@ -1,0 +1,17 @@
+/.
+/usr
+/usr/lib
+/usr/lib/x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu/liblber-2.5.so.0.1.13
+/usr/lib/x86_64-linux-gnu/libldap-2.5.so.0.1.13
+/usr/share
+/usr/share/doc
+/usr/share/doc/libldap-2.5-0
+/usr/share/doc/libldap-2.5-0/README.Debian
+/usr/share/doc/libldap-2.5-0/changelog.Debian.gz
+/usr/share/doc/libldap-2.5-0/copyright
+/usr/share/lintian
+/usr/share/lintian/overrides
+/usr/share/lintian/overrides/libldap-2.5-0
+/usr/lib/x86_64-linux-gnu/liblber-2.5.so.0
+/usr/lib/x86_64-linux-gnu/libldap-2.5.so.0

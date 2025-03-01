@@ -1,0 +1,299 @@
+{
+  "packages": [],
+  "split_generation": 0,
+  "children": [
+    {
+      "packages": [
+        "numpy"
+      ],
+      "split_generation": 1,
+      "children": [
+        {
+          "packages": [
+            "setuptools"
+          ],
+          "split_generation": 3,
+          "children": [
+            {
+              "packages": [
+                "pyparsing"
+              ],
+              "split_generation": 4,
+              "children": [
+                {
+                  "packages": [
+                    "six"
+                  ],
+                  "split_generation": 11,
+                  "children": [
+                    {
+                      "packages": [
+                        "python-dateutil"
+                      ],
+                      "split_generation": 13,
+                      "children": [
+                        {
+                          "packages": [
+                            "kiwisolver"
+                          ],
+                          "split_generation": 18,
+                          "children": [
+                            {
+                              "packages": [
+                                "cycler"
+                              ],
+                              "split_generation": 20,
+                              "children": [
+                                {
+                                  "packages": [
+                                    "matplotlib"
+                                  ],
+                                  "split_generation": 21,
+                                  "children": [
+                                    {
+                                      "packages": [
+                                        "pytz"
+                                      ],
+                                      "split_generation": 31,
+                                      "children": []
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "packages": [
+                "six"
+              ],
+              "split_generation": 32,
+              "children": []
+            }
+          ]
+        },
+        {
+          "packages": [
+            "six"
+          ],
+          "split_generation": 7,
+          "children": [
+            {
+              "packages": [
+                "python-dateutil"
+              ],
+              "split_generation": 8,
+              "children": [
+                {
+                  "packages": [
+                    "pytz"
+                  ],
+                  "split_generation": 14,
+                  "children": [
+                    {
+                      "packages": [
+                        "pandas"
+                      ],
+                      "split_generation": 24,
+                      "children": []
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "packages": [
+                "cycler"
+              ],
+              "split_generation": 36,
+              "children": []
+            }
+          ]
+        },
+        {
+          "packages": [
+            "pytz"
+          ],
+          "split_generation": 33,
+          "children": []
+        },
+        {
+          "packages": [
+            "sqlalchemy"
+          ],
+          "split_generation": 37,
+          "children": []
+        }
+      ]
+    },
+    {
+      "packages": [
+        "six"
+      ],
+      "split_generation": 2,
+      "children": [
+        {
+          "packages": [
+            "setuptools"
+          ],
+          "split_generation": 5,
+          "children": [
+            {
+              "packages": [
+                "python-dateutil"
+              ],
+              "split_generation": 29,
+              "children": []
+            }
+          ]
+        },
+        {
+          "packages": [
+            "python-dateutil"
+          ],
+          "split_generation": 10,
+          "children": []
+        },
+        {
+          "packages": [
+            "cycler"
+          ],
+          "split_generation": 17,
+          "children": [
+            {
+              "packages": [
+                "urllib3"
+              ],
+              "split_generation": 34,
+              "children": []
+            }
+          ]
+        },
+        {
+          "packages": [
+            "urllib3"
+          ],
+          "split_generation": 28,
+          "children": []
+        },
+        {
+          "packages": [
+            "mock"
+          ],
+          "split_generation": 30,
+          "children": []
+        }
+      ]
+    },
+    {
+      "packages": [
+        "setuptools"
+      ],
+      "split_generation": 6,
+      "children": [
+        {
+          "packages": [
+            "kiwisolver"
+          ],
+          "split_generation": 16,
+          "children": [
+            {
+              "packages": [
+                "pytz"
+              ],
+              "split_generation": 39,
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "packages": [
+        "urllib3"
+      ],
+      "split_generation": 9,
+      "children": [
+        {
+          "packages": [
+            "chardet"
+          ],
+          "split_generation": 25,
+          "children": []
+        }
+      ]
+    },
+    {
+      "packages": [
+        "pytz"
+      ],
+      "split_generation": 12,
+      "children": [
+        {
+          "packages": [
+            "sqlparse"
+          ],
+          "split_generation": 26,
+          "children": []
+        }
+      ]
+    },
+    {
+      "packages": [
+        "pyparsing"
+      ],
+      "split_generation": 15,
+      "children": [
+        {
+          "packages": [
+            "sqlalchemy"
+          ],
+          "split_generation": 38,
+          "children": []
+        }
+      ]
+    },
+    {
+      "packages": [
+        "sqlalchemy"
+      ],
+      "split_generation": 19,
+      "children": []
+    },
+    {
+      "packages": [
+        "werkzeug"
+      ],
+      "split_generation": 22,
+      "children": [
+        {
+          "packages": [
+            "click"
+          ],
+          "split_generation": 23,
+          "children": []
+        }
+      ]
+    },
+    {
+      "packages": [
+        "markupsafe"
+      ],
+      "split_generation": 27,
+      "children": []
+    },
+    {
+      "packages": [
+        "sqlparse"
+      ],
+      "split_generation": 35,
+      "children": []
+    }
+  ]
+}

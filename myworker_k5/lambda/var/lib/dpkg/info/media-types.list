@@ -1,0 +1,12 @@
+/.
+/etc
+/etc/mime.types
+/usr
+/usr/share
+/usr/share/bug
+/usr/share/bug/media-types
+/usr/share/bug/media-types/presubj
+/usr/share/doc
+/usr/share/doc/media-types
+/usr/share/doc/media-types/changelog.gz
+/usr/share/doc/media-types/copyright

@@ -1,0 +1,15 @@
+/.
+/usr
+/usr/lib
+/usr/lib/x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu/libssh.so.4.8.7
+/usr/share
+/usr/share/doc
+/usr/share/doc/libssh-4
+/usr/share/doc/libssh-4/README.Debian
+/usr/share/doc/libssh-4/changelog.Debian.gz
+/usr/share/doc/libssh-4/copyright
+/usr/share/lintian
+/usr/share/lintian/overrides
+/usr/share/lintian/overrides/libssh-4
+/usr/lib/x86_64-linux-gnu/libssh.so.4

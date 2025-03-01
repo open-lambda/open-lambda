@@ -1,0 +1,7 @@
+f0a4fbea387c2682ba88b328b9ee3d75  usr/share/doc/cpp/README.Debian
+e7eb33676dbe08dec0e41b638cb65980  usr/share/doc/cpp/changelog.gz
+48ec1c434f8957203a04e1538f63daee  usr/share/doc/cpp/copyright
+d7b3d7ad5a128ba21d4222d3e37e4490  usr/share/lintian/overrides/cpp
+7f6931a23815b54379ff94aae3d33080  usr/share/man/man7/fsf-funding.7gcc.gz
+04ab7aaa8286a2a537810a2b032eac56  usr/share/man/man7/gfdl.7gcc.gz
+d4c25b03566c0e43740f8acb2f72f4a0  usr/share/man/man7/gpl.7gcc.gz

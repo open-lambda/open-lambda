@@ -1,0 +1,3 @@
+# python-pip-whl is a unique package that works for both python and python3
+# so the check is wrong.  See lintian bug #956698.
+python3-pip: python-package-depends-on-package-from-other-python-variant Depends: python-pip-whl

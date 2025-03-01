@@ -1,0 +1,94 @@
+#!/bin/sh
+# See deb-postinst(5).
+
+set -e
+
+# Version 1.21.0 had bogus handling of DPKG_ADMINDIR in update-alternatives,
+# and misplaced them, fix them up.
+fixup_misplaced_alternatives()
+(
+  admindir=${DPKG_ADMINDIR:-/var/lib/dpkg}
+
+  cd "$admindir"
+
+  for file in *; do
+    if ! [ -f "$file" ]; then
+      # Ignore anything that is not a file.
+      continue
+    fi
+
+    # Check whether this is a known file we do not want to act on.
+    case "$file" in
+    arch|\
+    available|available-old|\
+    cmethopt|methlock|\
+    diversions|diversions-old|\
+    lock|lock-frontend|\
+    statoverride|statoverride-old|\
+    status|status-old)
+      # Ignore known files just to make sure.
+      continue
+      ;;
+    *)
+    esac
+
+    # Check whether the file looks like an alternative state file.
+    mode="$(head -1 "$file")"
+    case "$mode" in
+    auto|manual)
+      # Looks like a state file, we will handle this one.
+      echo "Moving misplaced alternative state file $admindir/$file..."
+      mv "$file" "alternatives/$file"
+      ;;
+    *)
+      echo "warning: unknown dpkg database file $admindir/$file is not a misplaced alternative state... leaving as is" 1>&2
+      continue
+      ;;
+    esac
+  done
+)
+
+case "$1" in
+configure)
+  fixup_misplaced_alternatives
+  ;;
+abort-upgrade|abort-deconfigure|abort-remove)
+  ;;
+*)
+  echo "$0 called with unknown argument '$1'" 1>&2
+  exit 1
+  ;;
+esac
+
+# Automatically added by dh_installsystemd/13.6ubuntu1
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+	# This will only remove masks created by d-s-h on package removal.
+	deb-systemd-helper unmask 'dpkg-db-backup.timer' >/dev/null || true
+
+	# was-enabled defaults to true, so new installations run enable.
+	if deb-systemd-helper --quiet was-enabled 'dpkg-db-backup.timer'; then
+		# Enables the unit on first installation, creates new
+		# symlinks on upgrades if the unit file has changed.
+		deb-systemd-helper enable 'dpkg-db-backup.timer' >/dev/null || true
+	else
+		# Update the statefile to add new symlinks (if any), which need to be
+		# cleaned up on purge. Also remove old symlinks.
+		deb-systemd-helper update-state 'dpkg-db-backup.timer' >/dev/null || true
+	fi
+fi
+# End automatically added section
+# Automatically added by dh_installsystemd/13.6ubuntu1
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+	if [ -d /run/systemd/system ]; then
+		systemctl --system daemon-reload >/dev/null || true
+		if [ -n "$2" ]; then
+			_dh_action=restart
+		else
+			_dh_action=start
+		fi
+		deb-systemd-invoke $_dh_action 'dpkg-db-backup.service' 'dpkg-db-backup.timer' >/dev/null || true
+	fi
+fi
+# End automatically added section
+
+exit 0

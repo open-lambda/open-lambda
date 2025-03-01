@@ -1,0 +1,14 @@
+/.
+/usr
+/usr/lib
+/usr/lib/x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu/libksba.so.8.14.0
+/usr/share
+/usr/share/doc
+/usr/share/doc/libksba8
+/usr/share/doc/libksba8/AUTHORS
+/usr/share/doc/libksba8/NEWS.gz
+/usr/share/doc/libksba8/README
+/usr/share/doc/libksba8/changelog.Debian.gz
+/usr/share/doc/libksba8/copyright
+/usr/lib/x86_64-linux-gnu/libksba.so.8

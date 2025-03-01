@@ -1,0 +1,9 @@
+#!/bin/sh
+
+for d in /bin /sbin /lib /lib32 /libo32 /libx32 /lib64; do
+  linkname="$(readlink $d)"
+  if [ "$linkname" = "usr$d" ] || [ "$linkname" = "/usr$d" ]; then
+    echo "System tainted due to merged-usr-via-aliased-dirs." >&3
+    break
+  fi
+done

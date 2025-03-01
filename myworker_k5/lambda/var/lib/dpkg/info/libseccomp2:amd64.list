@@ -1,0 +1,11 @@
+/.
+/usr
+/usr/lib
+/usr/lib/x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu/libseccomp.so.2.5.3
+/usr/share
+/usr/share/doc
+/usr/share/doc/libseccomp2
+/usr/share/doc/libseccomp2/changelog.Debian.gz
+/usr/share/doc/libseccomp2/copyright
+/usr/lib/x86_64-linux-gnu/libseccomp.so.2

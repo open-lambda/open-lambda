@@ -1,0 +1,5 @@
+#!/bin/sh
+set -e
+# Automatically added by dh_installdeb/13.6ubuntu1
+dpkg-maintscript-helper rm_conffile /etc/perl/sitecustomize.pl 5.26.0\~rc1-2\~ perl -- "$@"
+# End automatically added section

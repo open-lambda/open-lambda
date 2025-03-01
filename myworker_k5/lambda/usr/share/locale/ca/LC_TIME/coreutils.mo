@@ -1,0 +1,1 @@
+../LC_MESSAGES/coreutils.mo

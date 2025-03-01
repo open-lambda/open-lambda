@@ -1,0 +1,4 @@
+079207333752121c956ab203c9e979e4  usr/lib/gnupg/gpg-wks-client
+611841fd2504d910d4b8ea4007edbf14  usr/share/doc/gpg-wks-client/copyright
+578b2499979a97e6bf9debb0166f93d5  usr/share/lintian/overrides/gpg-wks-client
+0da08998fd5b1e24935504309b53f5be  usr/share/man/man1/gpg-wks-client.1.gz

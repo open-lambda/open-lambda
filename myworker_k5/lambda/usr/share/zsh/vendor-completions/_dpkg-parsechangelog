@@ -1,0 +1,23 @@
+#compdef dpkg-parsechangelog
+
+local -a args
+args=(
+  '(-l --file)'{-l+,--file=}'[specify path to d/changelog]: :_files'
+  # Note: We have to use "= " since _perl_modules in zsh ≤5.8 assumes ${words[1]} is a perl. (See workers/48321)
+  '-F+[specify changelog format]:changelog format:= _perl_modules --strip-prefix --perl-hierarchy=Dpkg\:\:Changelog'
+  '!-L+'
+  '(-S --show-field)'{-S+,--show-field=}'[show only one field]:changelog field:(Source Version Distribution Urgency Maintainer Date Timestamp Closes Changelog)'
+  '(-)'{-\?,--help}'[show the usage message]'
+  '(-)--version[show the version information]'
+  '--format=[set the output format]:output format:((dpkg\:classic rfc822))'
+  '(--all)--reverse[print all changes, oldest to newest]'
+  '(--reverse)--all[print all changes, newest to oldest]'
+  # TODO: all these should complete version numbers from ${(Q)opt_args[-l]:-debian/changelog}
+  '(-s --since -v)'{-s+,--since=,-v+}'[specify strict lower bound]:version number'
+  '(-u --until)'{-u+,--until=}'[specify strict upper bound]:version number'
+  '(-f --from)'{-f+,--from=}'[specify weak lower bound]:version number'
+  '(-t --to)'{-t+,-to=}'[specify weak upper bound]:version number'
+  '(-c --count -n)'{-c+,-n+,--count=}'[specify number of entries to print]:limit (integer)'
+  '(-o --offset)'{-o+,--offset=}'[offset the number of entries to print]:offset (integer)'
+)
+_arguments : "${args[@]}"

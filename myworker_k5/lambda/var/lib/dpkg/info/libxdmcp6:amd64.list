@@ -1,0 +1,11 @@
+/.
+/usr
+/usr/lib
+/usr/lib/x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu/libXdmcp.so.6.0.0
+/usr/share
+/usr/share/doc
+/usr/share/doc/libxdmcp6
+/usr/share/doc/libxdmcp6/changelog.Debian.gz
+/usr/share/doc/libxdmcp6/copyright
+/usr/lib/x86_64-linux-gnu/libXdmcp.so.6

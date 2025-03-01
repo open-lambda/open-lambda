@@ -1,0 +1,28 @@
+#!/bin/sh
+set -e
+# Automatically added by dh_installsystemduser/13.6ubuntu1
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+	if [ -z "${DPKG_ROOT:-}" ] ; then
+		# This will only remove masks created by d-s-h on package removal.
+		deb-systemd-helper --user unmask 'dirmngr.socket' >/dev/null || true
+
+		# was-enabled defaults to true, so new installations run enable.
+		if deb-systemd-helper --quiet --user was-enabled 'dirmngr.socket' ; then
+			# Enables the unit on first installation, creates new
+			# symlinks on upgrades if the unit file has changed.
+			deb-systemd-helper --user enable 'dirmngr.socket' >/dev/null || true
+		else
+			# Update the statefile to add new symlinks (if any), which need to be
+			# cleaned up on purge. Also remove old symlinks.
+			deb-systemd-helper --user update-state 'dirmngr.socket' >/dev/null || true
+		fi
+	fi
+fi
+# End automatically added section
+# Automatically added by dh_installdeb/13.6ubuntu1
+dpkg-maintscript-helper rm_conffile /etc/default/dirmngr -- "$@"
+dpkg-maintscript-helper rm_conffile /etc/dirmngr/dirmngr.conf -- "$@"
+dpkg-maintscript-helper rm_conffile /etc/dirmngr/ldapservers.conf -- "$@"
+dpkg-maintscript-helper rm_conffile /etc/init.d/dirmngr -- "$@"
+dpkg-maintscript-helper rm_conffile /etc/logrotate.d/dirmngr -- "$@"
+# End automatically added section

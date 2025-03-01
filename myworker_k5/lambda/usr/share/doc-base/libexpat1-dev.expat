@@ -1,0 +1,9 @@
+Document: expat
+Title: Expat XML Parser
+Author: Clark Cooper <coopercc@netheaven.com>
+Abstract: This manual describes the Expat XML Parser library.
+Section: Text
+
+Format: HTML
+Index: /usr/share/doc/libexpat1-dev/expat.html/index.html
+Files: /usr/share/doc/libexpat1-dev/expat.html/*.html

@@ -1,0 +1,11 @@
+/.
+/lib
+/lib/x86_64-linux-gnu
+/lib/x86_64-linux-gnu/libkeyutils.so.1.9
+/usr
+/usr/share
+/usr/share/doc
+/usr/share/doc/libkeyutils1
+/usr/share/doc/libkeyutils1/changelog.Debian.gz
+/usr/share/doc/libkeyutils1/copyright
+/lib/x86_64-linux-gnu/libkeyutils.so.1

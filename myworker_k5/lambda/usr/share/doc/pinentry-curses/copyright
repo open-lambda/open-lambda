@@ -1,0 +1,167 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: Pinentry
+Upstream-Contact: gnupg-devel@gnupg.org
+Source: https://gnupg.org/ftp/gcrypt/pinentry/
+
+Files: *
+Copyright: 2002-2015, g10 Code GmbH
+License: GPL-2+
+
+Files: fltk/*
+Copyright: 2016 Anatoly madRat L. Berenblit
+License: GPL-2+
+
+Files: tqt/Makefile.am tqt/main.cpp tqt/pinentrydialog.h tqt/pinentrydialog.cpp
+Copyright: 2002-2015 g10 Code GmbH
+ 2002 Klarälvdalens Datakonsult AB
+License: GPL-2+
+
+Files: tqt/secqinternal.cpp tqt/secqinternal_p.h
+Copyright: 1992-2000 Trolltech AS
+License: GPL-2
+
+Files: tqt/secqlineedit.cpp tqt/secqlineedit.h tqt/secqstring.cpp tqt/secqstring.h
+Copyright: 1992-2002 Trolltech AS
+ 2003 g10 Code GmbH
+License: GPL-2
+
+Files: build-aux/* depcomp doc/mdate-sh doc/texinfo.tex m4/curses.m4 m4/iconv.m4 missing secmem/secmem.c
+Copyright: 1996-2007, Free Software Foundation
+License: GPL-2+
+
+Files: install-sh
+Copyright: 1994 X Consortium
+License: X11
+
+Files: gtk+-2/pinentry-gtk-2.c
+Copyright: 1999 Robert Bihlmeyer <robbe@orcus.priv.at>
+ 2001, 2002, 2007 g10 Code GmbH
+ 2004 Albrecht Dreß
+License: GPL-2+
+
+Files: m4/pkg.m4
+Copyright: 2004 Scott James Remnant <scott@netsplit.com>
+License: GPL-2+
+
+Files: m4/qt.m4
+Copyright: 1997 Janos Farkas (chexum@shadow.banki.hu)o
+ 1997,98,99 Stephan Kulow (coolo@kde.org)
+ 2002 g10 Code GmbH
+License: GPL-2+
+
+Files: pinentry/argparse.c
+Copyright:  1998-2001, 2006-2008, 2012 Free Software Foundation, Inc.
+ 1997-2001, 2006-2008, 2013-2015 Werner Koch
+License: LGPL-3+ or GPL-2+
+
+Files: configure.ac secmem/util.*
+Copyright: 1999, Robert Bihlmeyer <robbe@orcus.priv.at>
+ 2001, 2002, 2003, 2004, 2007 g10 Code GmbH
+License: GPL-2+
+
+Files: secmem/memory.h
+Copyright: 1998,1999 Free Software Foundation, Inc.
+ 1999,2000 Robert Bihlmeyer <robbe@orcus.priv.at>
+License: GPL-2+
+
+Files: secmem/secmem++.h
+Copyright: 2008 Marc Mutz <marc@kdab.com>
+License: GPL-2+
+
+Files: tty/pinentry-tty.c
+Copyright: 2014 Serge Voilokov
+License: GPL-2+
+
+Files: qt/pinentrydialog.*
+Copyright: 2002, 2008 Klarälvdalens Datakonsult AB <steffen@klaralvdalens-datakonsult.se>
+ 2007 Ingo Klöcker
+License: GPL-2+
+
+Files: qt/pinentryconfirm.*
+Copyright: 2011 Ben Kibbey <bjk@luxsci.net>
+License: GPL-2+
+
+Files: qt/main.cpp
+Copyright: 2002, 2008 Klarälvdalens Datakonsult AB (KDAB)
+ 2003 g10 Code GmbH
+ 2007 Ingo Klöcker
+License: GPL-2+
+
+Files: qt/Makefile.am
+Copyright: 2002 Klarälvdalens Datakonsult AB (KDAB)
+ 2008 g10 Code GmbH
+License: GPL-2+
+
+Files: debian/*
+Copyright: 2004-2015 Peter Eisentraut <petere@debian.org>
+ Marcus Brinkmann
+ Michael Brame
+ Daniel Kahn Gillmor <dkg@fifthhorseman.net>
+License: GPL-2+
+
+License: X11
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to
+ deal in the Software without restriction, including without limitation the
+ rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+ sell copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
+ .
+ The above copyright notice and this permission notice shall be included in
+ all copies or substantial portions of the Software.
+ .
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+ X CONSORTIUM BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN
+ AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNEC-
+ TION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ .
+ Except as contained in this notice, the name of the X Consortium shall not
+ be used in advertising or otherwise to promote the sale, use or other deal-
+ ings in this Software without prior written authorization from the X Consor-
+ tium.
+
+License: GPL-2+
+ This is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; either version 2 of the License, or
+ (at your option) any later version.
+ .
+ It is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+ .
+ On Debian systems, the full text of the GNU General Public
+ License version 2 can be found in the file
+ `/usr/share/common-licenses/GPL-2'.
+
+License: GPL-2
+ This is free software; you can redistribute it and/or modify
+ it under the terms of version 2 of the GNU General Public License
+ as published by  the Free Software Foundation.
+ .
+ It is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+ .
+ On Debian systems, the full text of the GNU General Public
+ License version 2 can be found in the file
+ `/usr/share/common-licenses/GPL-2'.
+
+License: LGPL-3+
+ This is free software; you can redistribute it and/or modify it under
+ the terms of the GNU Lesser General Public License as published by
+ the Free Software Foundation; either version 3 of the License, or
+ (at your option) any later version.
+ .
+ It is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU Lesser General Public License for more details.
+ .
+ On Debian systems, the full text of the GNU General Public
+ License version 2.1 can be found in the file
+ `/usr/share/common-licenses/LGPL-3.

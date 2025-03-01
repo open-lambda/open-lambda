@@ -1,0 +1,6 @@
+0db2e7e27fc6c91658dc0a39366b0278  usr/lib/x86_64-linux-gnu/libX11.so.6.4.0
+73935a46de4281fc0b11e9913b06aace  usr/share/doc/libx11-6/NEWS.Debian.gz
+af25483e013c3c454e31550803c5718a  usr/share/doc/libx11-6/NEWS.gz
+2ddd614e8299f61e9cd0a7b898a1ee6c  usr/share/doc/libx11-6/changelog.Debian.gz
+6121e1d103eb0c51500be21cdd73e4b4  usr/share/doc/libx11-6/copyright
+7b3bf08e452bf55411aac9e4fe527e99  usr/share/lintian/overrides/libx11-6

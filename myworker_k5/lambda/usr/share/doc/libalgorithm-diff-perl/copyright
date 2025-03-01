@@ -1,0 +1,43 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: Algorithm-Diff
+Upstream-Contact: Ricardo Signes <rjbs@cpan.org>
+Source: https://metacpan.org/release/Algorithm-Diff
+
+Files: *
+Copyright: 2000-2004, Ned Konz <perl@bike-nomad.com>
+ Tye McQueen <tyemq@cpan.org>
+ Mark-Jason Dominus <mjd-perl-diff@plover.com>
+License: Artistic or GPL-1+
+Comment: The upstream distribution does not contain an explicit statement of
+ copyright ownership. Pursuant to the Berne Convention for the Protection of
+ Literary and Artistic Works, it is assumed that all content is copyright by
+ its respective authors unless otherwise stated.
+
+Files: bin/cdiff.pl bin/diff.pl bin/diffnew.pl
+Copyright: 1998, M-J. Dominus <mjd-perl-diff@plover.com>
+License: Artistic or GPL-1+
+
+Files: debian/*
+Copyright: 2000, 2001, 2002, 2003, Michael Alan Dorman <mdorman@debian.org>
+ 2004, 2005, Florian Weimer <fw@deneb.enyo.de>
+ 2008-2020, gregor herrmann <gregoa@debian.org>
+ 2009, Jonathan Yu <jawnsy@cpan.org>
+ 2010-2015, Salvatore Bonaccorso <carnil@debian.org>
+ 2012-2018, Xavier Guimard <yadd@debian.org>
+License: Artistic or GPL-1+
+
+License: Artistic
+ This program is free software; you can redistribute it and/or modify
+ it under the terms of the Artistic License, which comes with Perl.
+ .
+ On Debian GNU/Linux systems, the complete text of the Artistic License
+ can be found in `/usr/share/common-licenses/Artistic'.
+
+License: GPL-1+
+ This program is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; either version 1, or (at your option)
+ any later version.
+ .
+ On Debian GNU/Linux systems, the complete text of version 1 of the
+ General Public License can be found in `/usr/share/common-licenses/GPL-1'.

@@ -1,0 +1,29 @@
+# Edit this file for local setup changes
+array -DPy_BUILD_CORE_MODULE arraymodule.c	# array objects
+cmath cmathmodule.c _math.c -DPy_BUILD_CORE_MODULE # -lm # complex math library functions
+math mathmodule.c _math.c -DPy_BUILD_CORE_MODULE # -lm # math library functions, e.g. sin()
+_struct -DPy_BUILD_CORE_MODULE _struct.c	# binary structure packing/unpacking
+_random _randommodule.c -DPy_BUILD_CORE_MODULE	# Random number generator
+_elementtree _elementtree.c -lexpat	# elementtree accelerator
+_pickle -DPy_BUILD_CORE_MODULE _pickle.c	# pickle accelerator
+_datetime _datetimemodule.c	# datetime accelerator
+_bisect _bisectmodule.c	# Bisection algorithms
+_heapq _heapqmodule.c -DPy_BUILD_CORE_MODULE	# Heap queue algorithm
+_statistics _statisticsmodule.c # statistics accelerator
+unicodedata unicodedata.c -DPy_BUILD_CORE_BUILTIN   # static Unicode character database
+fcntl fcntlmodule.c	# fcntl(2) and ioctl(2)
+spwd spwdmodule.c		# spwd(3)
+grp grpmodule.c		# grp(3)
+select selectmodule.c	# select(2); not on ancient System V
+_csv _csv.c
+_socket socketmodule.c
+_posixsubprocess  -DPy_BUILD_CORE_BUILTIN _posixsubprocess.c  # POSIX subprocess module helper
+_md5 md5module.c
+_sha1 sha1module.c
+_sha256 sha256module.c -DPy_BUILD_CORE_BUILTIN
+_sha512 sha512module.c -DPy_BUILD_CORE_BUILTIN
+_sha3 _sha3/sha3module.c
+_blake2 _blake2/blake2module.c _blake2/blake2b_impl.c _blake2/blake2s_impl.c
+syslog syslogmodule.c		# syslog daemon interface
+binascii binascii.c
+zlib zlibmodule.c -I$(prefix)/include -L$(exec_prefix)/lib -lz

@@ -1,0 +1,9 @@
+#! /bin/sh
+
+set -e
+
+if [ "$1" != upgrade ]; then
+    update-alternatives --quiet --install /lib/cpp cpp /usr/bin/cpp 10
+fi
+
+

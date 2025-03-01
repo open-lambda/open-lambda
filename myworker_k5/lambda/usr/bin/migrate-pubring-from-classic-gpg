@@ -1,0 +1,108 @@
+#!/bin/bash
+
+# script to migrate fully from pubring.gpg to pubring.kbx
+
+# Author: Daniel Kahn Gillmor <dkg@fifthhorseman.net>
+# Date: 2016-04-01
+# License: GPLv3+
+
+# This was written for the Debian project
+
+set -e
+
+GPG="${GPG:-gpg}"
+
+# select the default GnuPG home directory to work from:
+GHD=${GNUPGHOME:-${HOME:-$(getent passwd "$(id -u)" | cut -f6 -d:)}/.gnupg}
+
+# Check that this is gnupg 2.1 or 2.2:
+VERSION=$("$GPG" --version | head -n1 | cut -f3 -d\  | cut -f1,2 -d.)
+if [ "$VERSION" != 2.1 ] && [ "$VERSION" != 2.2 ] ; then
+    printf '%s is version %s not version 2.1 or 2.2, this script might be wrong\n' "$GPG" "$VERSION" >&2
+    exit 1
+fi    
+
+usage() {
+    printf 'Usage: %s [GPGHOMEDIR|--default]
+\tMigrate public keyring in GPGHOMEDIR from "classic" to "modern" GnuPG
+\tusing %s version %s.
+
+\t--default migrates the GnuPG home directory at "%s"
+' "$0" "$GPG" "$VERSION" "$GHD"
+}
+
+if [ -z "$1" ]; then
+    usage >&2
+    exit 1
+else
+    case "$1" in
+        --help|--usage|-h)
+            usage
+            exit
+            ;;
+        --default)
+            ;;
+        *)
+            GHD="$1"
+            ;;
+    esac
+fi
+
+GPG=("$GPG" --homedir "$GHD" --batch)
+
+# ensure that there is a pubring.gpg to migrate:
+if ! [ -f "$GHD/pubring.gpg" ]; then
+    printf 'There is no %s/pubring.gpg, no need to migrate\n' "$GHD" >&2
+    exit
+fi
+if ! [ -s "$GHD/pubring.gpg" ]; then
+    mv -- "$GHD/pubring.gpg" "$GHD/pubring.gpg.empty"
+    printf '%s/pubring.gpg was empty (and has been moved out of the way), no need to migrate\n' "$GHD" >&2
+    exit
+fi
+
+BACKUP="$(mktemp -d "$GHD/migrate-from-classic-backup.$(date +%F).XXXXXX")"
+printf 'Migrating from:\n%s\n[Backing up to %s]\n' "$(ls -l "$GHD/pubring.gpg")" "$BACKUP" >&2
+
+"${GPG[@]}" --export-ownertrust > "$BACKUP/ownertrust.txt"
+mv "$GHD/pubring.gpg" "$BACKUP/"
+
+revert() {
+    printf >&2 'Restoring pubring.gpg...\n'
+    cp "$BACKUP/pubring.gpg" "$GHD/pubring.gpg"
+}
+
+trap revert EXIT
+
+if ! "${GPG[@]}" --status-file "$BACKUP/import-status" --import-options import-local-sigs,keep-ownertrust,repair-pks-subkey-bug --import < "$BACKUP/pubring.gpg" ; then
+    cat >&2 <<EOF
+Keyring import was not completely successful (see error message above,
+and the LIMITATIONS section of migrate-pubring-from-classic-gpg(1) for
+more details).
+
+If you suspect a bug in the migration script, please use:
+
+    reportbug gnupg-utils --subject='migrate-pubring-from-classic-gpg partial failure'
+
+And include the above output (redacted for privacy as needed) in the
+body of the report.
+
+Continuing with the rest of the migration anyway...
+EOF
+fi
+"${GPG[@]}" --import-ownertrust < "$BACKUP/ownertrust.txt"
+"${GPG[@]}" --check-trustdb
+
+if ! [ -f "$GHD/pubring.kbx" ]; then
+    cat >&2 <<EOF
+No keybox was created at $GHD/pubring.kbx.  Something went wrong!
+
+Please report a bug in the migration script, using:
+
+    reportbug gnupg-utils --subject='migrate-pubring-from-classic-gpg no pubring.kbx ($BACKUP)'
+EOF
+    exit 1
+fi
+trap - EXIT
+
+printf 'Migration completed successfully:\n%s\n' "$(ls -l "$GHD/pubring.kbx")" >&2 

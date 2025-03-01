@@ -1,0 +1,9 @@
+# intentional
+libpython3.10-minimal binary: python-script-but-no-python-dep
+
+# lintian omission, multiarch string is encoded in the filename
+libpython3.10-minimal binary: arch-dependent-file-not-in-arch-specific-directory
+
+# yes, some extensions don't have references to any external lib
+libpython3.10-minimal binary: shared-lib-without-dependency-information
+libpython3.10-minimal binary: library-not-linked-against-libc

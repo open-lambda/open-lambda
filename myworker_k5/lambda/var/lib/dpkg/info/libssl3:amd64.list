@@ -1,0 +1,17 @@
+/.
+/usr
+/usr/lib
+/usr/lib/x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu/engines-3
+/usr/lib/x86_64-linux-gnu/engines-3/afalg.so
+/usr/lib/x86_64-linux-gnu/engines-3/loader_attic.so
+/usr/lib/x86_64-linux-gnu/engines-3/padlock.so
+/usr/lib/x86_64-linux-gnu/libcrypto.so.3
+/usr/lib/x86_64-linux-gnu/libssl.so.3
+/usr/lib/x86_64-linux-gnu/ossl-modules
+/usr/lib/x86_64-linux-gnu/ossl-modules/legacy.so
+/usr/share
+/usr/share/doc
+/usr/share/doc/libssl3
+/usr/share/doc/libssl3/changelog.Debian.gz
+/usr/share/doc/libssl3/copyright

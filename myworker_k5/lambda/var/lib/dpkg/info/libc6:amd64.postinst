@@ -1,0 +1,208 @@
+#!/bin/sh
+set -e
+export LC_ALL=C
+
+type=$1
+preversion=$2
+
+checkpkgver () {
+    local status pkg
+    pkg=$1
+    status=$(dpkg -s $pkg 2>/dev/null | grep ^Status: | sed -e 's/^Status: \(.*\) \(.*\) \(.*\)/\3/g')
+    if [ -n "$status" ] && [ "$status" != "not-installed" ] && [ "$status" != "config-files" ]; then
+	echo $(dpkg -s $pkg 2>/dev/null | grep ^Version: | sed -e 's/^Version: *//');
+    fi
+}
+
+if [ "$type" = "configure" ]
+then
+    # /etc/ld.so.nohwcap code:
+        # Handle upgrades when libc-opt package has been installed.
+    # When a /etc/ld.so.nohwcap file exists, ld.so only use libraries
+    # from /lib, and ignore all optimised libraries. This file is
+    # inconditionaly created in the preinst script of libc.
+ 
+    # We check the version between the current installed libc and
+    # all optimized packages. Due to multiarch, this has to be done
+    # independently of the architecture of the package.
+    all_upgraded=yes
+    for pkg in libc6.1-alphaev67 libc6-xen ; do
+        ver=$(dpkg-query -l $pkg 2>/dev/null | sed -e '/^[a-z][a-z]\s/!d;/^.[nc]/d;' -e "s/^..\s\+$pkg[0-9a-z:]*\s\+//;s/\s.*//g")
+        if [ -n "$ver" ] && [ "$ver" != "2.35-0ubuntu3.8" ]; then
+            all_upgraded=no
+        fi
+    done
+
+    # If the versions of all optimized packages are the same as the libc
+    # one, we could remove /etc/ld.so.nohwcap. Otherwise, it will be removed
+    # when all optimized packages are upgraded or removed.
+    if [ "$all_upgraded" = yes ] ; then
+        rm -f "$DPKG_ROOT/etc/ld.so.nohwcap"
+    fi
+
+fi
+
+if [ "$type" = configure -a -z "$DPKG_ROOT" ]
+then
+    # Load debconf module if available
+    if [ -f /usr/share/debconf/confmodule ] ; then
+	. /usr/share/debconf/confmodule
+    fi
+
+    if [ -n "$preversion" ] && [ -x "$(which ischroot)" ] && ! ischroot; then
+	if dpkg --compare-versions "$preversion" lt 2.35; then
+	    check=""
+	    [ -f /var/run/services.need_restart ] && check=$(sort -u /var/run/services.need_restart 2>/dev/null)
+	    # Change service names back into package names, so that we can
+	    # double-check package installation.
+	    check=$(echo "$check" | \
+                    sed -e's/\batd\b/at/g' \
+                        -e's/\bdovecot\b/dovecot-common/g' \
+                        -e's/\bexim4\b/exim4-base/g' \
+                        -e's/\blpd\b/lpr/g' \
+                        -e's/\blpd-ppd\b/lpr-ppd/g' \
+                        -e's/\bmysql\b/mysql-server/g' \
+                        -e's/\bsaslauthd\b/sasl2-bin/g' \
+                        -e's/\bsmbd\b/samba/g' \
+                        -e's/\bpostgresql\b/postgresql-common/g' \
+                    )
+
+	    # Check to see which of the services that were running at unpack
+	    # time are still around
+            # the following substitution processes the check variable
+            # and returns results in the services variable
+	    # NSS services check:
+	    	    echo -n "Checking for services that may need to be restarted..."
+	    # Only get the ones that are installed, of the same architecture
+	    # as libc (or arch all) and configured
+	    [ -n "$check" ] && check=$(dpkg-query -W -f='${binary:Package} ${Status} ${Architecture}\n' $check 2> /dev/null | \
+			grep -E "installed (all|${DPKG_MAINTSCRIPT_ARCH})$" | sed 's/[: ].*//')
+	    # some init scripts don't match the package names
+	    check=$(echo $check | \
+		    sed -e's/\bat\b/atd/g' \
+			-e's/\bdovecot-common\b/dovecot/g' \
+			-e's/\bexim4-base\b/exim4/g' \
+			-e's/\blpr\b/lpd/g' \
+			-e's/\blpr-ppd\b/lpd-ppd/g' \
+			-e's/\bmysql-server\b/mysql/g' \
+			-e's/\bsasl2-bin\b/saslauthd/g' \
+			-e's/\bsamba\b/smbd/g' \
+			-e's/\bpostgresql-common\b/postgresql/g' \
+		    )
+	    echo
+	    echo "Checking init scripts..."
+	    for service in $check; do
+		invoke-rc.d ${service} status >/dev/null 2>/dev/null && status=0 || status=$?
+		if [ "$status" = "0" ] || [ "$status" = "2" ] ; then
+		    services="$service $services"
+		elif [ "$status" = "100" ] ; then
+		    echo "WARNING: init script for $service not found."
+		fi
+	    done
+
+	    # If there are services that we *stopped* in the preinst, don't
+	    # forget to restart them now
+	    if [ -e /var/run/services.need_start ]; then
+		services="$(sort -u /var/run/services.need_start) $services"
+	    fi
+	    if [ -n "$services" ]; then
+		echo "Restarting services possibly affected by the upgrade:"
+		failed=""
+		for service in $services; do
+		    case "$service" in
+			gdm*)
+			    idlopt="reload"
+			    ;;
+			*)
+			    idlopt="restart"
+			    ;;
+		    esac
+		    echo -n "  $service: restarting..."
+		    if invoke-rc.d ${service} $idlopt > /dev/null 2>&1; then
+			echo "done."
+		    else
+			echo "FAILED! ($?)"
+			failed="$service $failed"
+		    fi
+		done
+	
+		echo
+		if [ -n "$failed" ]; then
+		    if [ -f /usr/share/debconf/confmodule ] ; then
+			db_fset glibc/restart-failed seen false
+			db_subst glibc/restart-failed services "$failed"
+			if [ "$RELEASE_UPGRADE_MODE" = desktop ]; then
+			    db_input medium glibc/restart-failed || true
+			else
+			    db_input critical glibc/restart-failed || true
+			fi
+			db_go || true
+		    else
+			echo "The following services failed to start: $failed"
+			echo
+			echo "You will need to start these manually by running \`invoke-rc.d <service> start'"
+			echo "If the service still fails to start, you may need to file a bug on"
+			echo "${DPKG_MAINTSCRIPT_PACKAGE}:${DPKG_MAINTSCRIPT_ARCH} or the service involved."
+			frontend=`echo "$DEBIAN_FRONTEND" | tr '[:upper:]' '[:lower:]'`
+			if [ "$frontend" != noninteractive ]; then
+			    echo
+			    echo -n "Press ENTER to continue: "
+			    read foo
+			fi
+		    fi
+		else
+		    echo "Services restarted successfully."
+		    rm -f /var/run/services.need_start /var/run/services.need_restart
+		fi
+	
+		# Shut down the frontend, to make sure none of the
+		# restarted services keep a connection open to it
+		if [ -f /usr/share/debconf/confmodule ] ; then
+		    db_stop
+		fi
+	    else
+		echo "Nothing to restart."
+	    fi
+	fi # end upgrading and $preversion lt 2.35
+	# give a reboot notification on al upgrades (LP: #1546457)
+	if [ -x /usr/share/update-notifier/notify-reboot-required ]; then
+	    /usr/share/update-notifier/notify-reboot-required
+	fi
+    fi # Upgrading
+
+    # Restart init.  Currently handles chroots, systemd and upstart, and
+    # assumes anything else is going to not fail at behaving like
+    # sysvinit:
+    TELINIT=yes
+    if ischroot 2>/dev/null; then
+        # Don't bother trying to re-exec init from a chroot:
+        TELINIT=no
+    elif [ -d /run/systemd/system ]; then
+        # Restart systemd on upgrade, but carefully.
+        # The restart is wanted because of LP: #1942276
+        # The care is needed because of https://bugs.debian.org/753725
+        # (if systemd --help fails the system might still be quite broken but
+        # that seems better than the kernel panic that results if systemd
+        # cannot reexec itself).
+        TELINIT=no
+        if systemd --help >/dev/null 2>/dev/null; then
+            systemctl daemon-reexec
+        else
+            echo "Error: Could not restart systemd, systemd binary not working" >&2
+        fi
+    elif [ -x "`which initctl`" ]; then
+        UPSTART=$(initctl version 2>/dev/null | awk '/upstart/ {print $3}' | tr -d ')')
+        if dpkg --compare-versions "$UPSTART" lt-nl 1.6.1; then
+            # This is an old upstart that can't re-exec statefully:
+            TELINIT=no
+            touch /var/run/init.upgraded
+        fi
+    fi
+    if [ "$TELINIT" = "yes" ]; then
+        telinit u 2>/dev/null || true ; sleep 1
+    fi
+fi
+
+
+
+exit 0

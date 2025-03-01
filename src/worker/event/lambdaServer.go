@@ -95,11 +95,9 @@ func (s *LambdaServer) RunLambda(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *LambdaServer) LaunchKafkaConsumer() {
-	// olPath := common.Conf.Worker_dir
-	// kafkaConfigPath := common.Conf.KafkaConfigPath
-	// err := common.LoadKafkaConf(filepath.Join(olPath, kafkaConfigPath))
-	// TODO: Get the path to the ol dir better
-	err := common.LoadKafkaConf("/home/vboxuser/Documents/openl/open-lambda/myworker_k5/kafkaConfig.json")
+	olPath := common.Conf.Base_dir
+	kafkaConfigPath := common.Conf.KafkaConfigPath
+	err := common.LoadKafkaConf(filepath.Join(olPath, kafkaConfigPath))
 	if err != nil {
 		log.Fatalf("Failed to Load Kafka config: %s", err)
 	}

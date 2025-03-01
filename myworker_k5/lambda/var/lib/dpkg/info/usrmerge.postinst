@@ -1,0 +1,35 @@
+#!/bin/sh -e
+
+is_nfs() {
+  local fs_type="$(stat --file-system --format=%T "$1" 2> /dev/null)"
+
+  if [ "$fs_type" = 'nfs' ]; then return 0; fi
+  return 1
+}
+
+maybe_convert() {
+  # do not try to run the program if the system has already been converted
+  [ "$(readlink -f /lib)" != '/usr/lib' ] || return 0
+
+  if is_nfs / || is_nfs /usr; then
+    cat << 'END' >&2
+
+Warning: NFS detected, /usr/lib/usrmerge/convert-usrmerge will not be run
+automatically. See #842145 for details.
+
+END
+    return 0
+  fi
+
+  /usr/lib/usrmerge/convert-usrmerge
+}
+
+case "$1" in
+    configure)
+	maybe_convert "$@"
+	/usr/lib/usrmerge/convert-etc-shells
+    ;;
+esac
+
+
+

@@ -1,0 +1,12 @@
+/etc/debian_version
+/etc/dpkg/origins/debian
+/etc/dpkg/origins/ubuntu
+/etc/host.conf
+/etc/issue
+/etc/issue.net
+/etc/legal
+/etc/lsb-release
+/etc/profile.d/01-locale-fix.sh
+/etc/update-motd.d/00-header
+/etc/update-motd.d/10-help-text
+/etc/update-motd.d/50-motd-news

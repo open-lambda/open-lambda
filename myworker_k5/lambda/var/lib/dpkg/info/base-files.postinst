@@ -1,0 +1,178 @@
+#!/bin/sh
+set -e
+
+install_local_dir() {
+  if [ ! -d $1 ]; then
+    mkdir -p $1
+  fi
+}
+
+install_from_default() {
+  if [ ! -f $2 ]; then
+    cp -p /usr/share/base-files/$1 $2
+  fi
+}
+
+install_directory() {
+  if [ ! -d /$1 ]; then
+    mkdir /$1
+    chown root:$3 /$1
+    chmod $2 /$1
+  fi
+}
+
+migrate_directory() {
+  if [ ! -L $1 ]; then
+    rmdir $1
+    ln -s $2 $1
+  fi
+}
+
+update_to_current_default() {
+  if [ -f $2 ]; then
+    md5=`md5sum $2 | cut -f 1 -d " "`
+    if grep -q "$md5" /usr/share/base-files/$1.md5sums; then
+      if ! cmp -s /usr/share/base-files/$1 $2; then
+        cp -p /usr/share/base-files/$1 $2
+        echo Updating $2 to current default.
+      fi
+    fi
+  fi
+}
+
+if [ ! -e /etc/dpkg/origins/default ]; then
+  if [ -e /etc/dpkg/origins/ubuntu ]; then
+    ln -sf ubuntu /etc/dpkg/origins/default
+  fi
+fi
+
+if [ "$1" = "configure" ] && [ "$2" = "" ]; then
+  install_from_default dot.profile   /root/.profile
+  install_from_default dot.bashrc    /root/.bashrc
+  install_from_default profile       /etc/profile
+  install_from_default networks      /etc/networks
+  install_directory mnt       755 root
+  install_directory srv       755 root
+  install_directory opt       755 root
+  install_directory etc/opt   755 root
+  install_directory var/opt   755 root
+  install_directory media     755 root
+  install_directory var/mail 2775 mail
+  if [ ! -L /var/spool/mail ]; then
+    ln -s ../mail /var/spool/mail
+  fi
+  install_directory run/lock 1777 root
+  migrate_directory /var/run /run
+  migrate_directory /var/lock /run/lock
+
+  install_local_dir /usr/local
+  install_local_dir /usr/local/share
+  install_local_dir /usr/local/share/man
+  install_local_dir /usr/local/bin
+  install_local_dir /usr/local/games
+  install_local_dir /usr/local/lib
+  install_local_dir /usr/local/include
+  install_local_dir /usr/local/sbin
+  install_local_dir /usr/local/src
+  install_local_dir /usr/local/etc
+  ln -sf share/man /usr/local/man
+
+  if [ ! -f /var/log/wtmp ]; then
+    echo -n>/var/log/wtmp
+  fi
+  if [ ! -f /var/log/btmp ]; then
+    echo -n>/var/log/btmp
+  fi
+  if [ ! -f /var/log/lastlog ]; then
+    echo -n>/var/log/lastlog
+  fi
+  chown root:utmp /var/log/wtmp /var/log/btmp /var/log/lastlog
+  chmod 664 /var/log/wtmp /var/log/lastlog
+  chmod 660 /var/log/btmp
+fi
+
+if [ -d /usr/share/info ] && [ ! -f /usr/info/dir ] && [ ! -f /usr/share/info/dir ]; then
+  install_from_default info.dir /usr/share/info/dir
+  chmod 644 /usr/share/info/dir
+fi
+
+if [ "$1" = "configure" ] && [ "$2" != "" ]; then
+  # If we're upgrading base-files, remove the upgrade-available flag
+  # maintained by update-manager, and rerun the release-upgrade check
+  # immediately (in the background) to update the flag.
+  rm -f /var/lib/update-notifier/release-upgrade-available
+  if [ -x /usr/lib/update-manager/check-new-release ]; then
+    /usr/lib/update-manager/check-new-release -q > /var/lib/update-notifier/release-upgrade-available  &
+  fi
+
+  update_to_current_default profile       /etc/profile
+  update_to_current_default dot.profile   /root/.profile
+  if dpkg --compare-versions "$2" lt-nl "7.7"; then
+    install_directory mnt 755 root
+  fi
+fi
+
+# special case of having /etc/default/motd-news removed by hand
+# signal the motd-news-config package that this happened, so that
+# it does not put back the file with default contents which would
+# re-enable motd-news
+motd_news_config="/etc/default/motd-news"
+# only in upgrades, never fresh installs like in debootstrap
+if [ "$2" != "" ] && \
+   [ ! -e ${motd_news_config} ] && \
+   [ ! -e ${motd_news_config}.dpkg-remove ] && \
+   [ ! -e ${motd_news_config}.dpkg-backup ]; then
+      # The .wasremoved file only matters if ubuntu-server is installed,
+      # because that's what will pull in motd-news-config
+      if dpkg -l ubuntu-server 2>/dev/null | grep -q ^i; then
+        touch ${motd_news_config}.wasremoved
+      fi
+fi
+
+# Automatically added by dh_installdeb/13.6ubuntu1
+dpkg-maintscript-helper rm_conffile /etc/default/motd-news 11ubuntu11\~ base-files -- "$@"
+# End automatically added section
+# Automatically added by dh_installsystemd/13.6ubuntu1
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+	# This will only remove masks created by d-s-h on package removal.
+	deb-systemd-helper unmask 'motd-news.timer' >/dev/null || true
+
+	# was-enabled defaults to true, so new installations run enable.
+	if deb-systemd-helper --quiet was-enabled 'motd-news.timer'; then
+		# Enables the unit on first installation, creates new
+		# symlinks on upgrades if the unit file has changed.
+		deb-systemd-helper enable 'motd-news.timer' >/dev/null || true
+	else
+		# Update the statefile to add new symlinks (if any), which need to be
+		# cleaned up on purge. Also remove old symlinks.
+		deb-systemd-helper update-state 'motd-news.timer' >/dev/null || true
+	fi
+fi
+# End automatically added section
+# Automatically added by dh_installsystemd/13.6ubuntu1
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+	if [ -d /run/systemd/system ]; then
+		systemctl --system daemon-reload >/dev/null || true
+		if [ -n "$2" ]; then
+			_dh_action=restart
+		else
+			_dh_action=start
+		fi
+		deb-systemd-invoke $_dh_action 'motd-news.timer' >/dev/null || true
+	fi
+fi
+# End automatically added section
+# Automatically added by dh_installsystemd/13.6ubuntu1
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+	if [ -d /run/systemd/system ]; then
+		systemctl --system daemon-reload >/dev/null || true
+		if [ -n "$2" ]; then
+			_dh_action=restart
+		else
+			_dh_action=start
+		fi
+		deb-systemd-invoke $_dh_action 'motd-news.service' >/dev/null || true
+	fi
+fi
+# End automatically added section
+

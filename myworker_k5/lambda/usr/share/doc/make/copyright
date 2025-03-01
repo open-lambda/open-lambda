@@ -1,0 +1,45 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: make
+Upstream-Contact: help-make@gnu.org
+Sources: git://git.savannah.gnu.org/make.git
+Comment: This is the Debian GNU/Linux prepackaged version of GNU Make.  GNU Make
+         was written by Richard Stallman and Roland McGrath. This package was put
+         together by Ian Murdock <imurdock@debian.org>
+         Changes:
+           * added Debian GNU/Linux package maintenance system files
+           * Pared down the package to just the documentation bits, and some
+             build infrastructure.
+         Parts of the GNU Make build structure remain in this package.
+
+Files: *
+Copyright: 1988-2014 Free Software Foundation, Inc.
+ GNU Make is free software; you can redistribute it and/or modify it under the
+ terms of the GNU General Public License as published by the Free Software
+ Foundation; either version 3 of the License, or (at your option) any later
+ version.
+ .
+ GNU Make is distributed in the hope that it will be useful, but WITHOUT ANY
+ WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+License: GPL-3+
+
+Files: debian/*
+Copyright: 1997-2009, 2014-2016  Manoj Srivastava <srivasta@debian.org>
+License: GPL-3+
+
+License: GPL-3+
+ This package is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ .
+ This package is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ GNU General Public License for more details.
+ .
+ You should have received a copy of the GNU General Public License
+ along with this program. If not, see <https://www.gnu.org/licenses/>.
+ .
+ On Debian systems, the complete text of the GNU General
+ Public License can be found in "/usr/share/common-licenses/GPL-3".

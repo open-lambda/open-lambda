@@ -1,0 +1,7 @@
+ccb5fe24467c804ee4e923cdfc028517  lib/lsb/init-functions
+a952ac8590fedfdb51d29175e1dd160b  lib/lsb/init-functions.d/00-verbose
+3c4ceea1be9b5b03739dd435a17c80a6  lib/lsb/init-functions.d/50-ubuntu-logging
+f9e08f607cac3fe2ef6912906b29ebcf  usr/share/doc/lsb-base/NEWS.Debian.gz
+66e4c2999e6889a96048fb42443f37a7  usr/share/doc/lsb-base/README.Debian.gz
+954d118c3cfab27a96579dbff051ad5a  usr/share/doc/lsb-base/changelog.gz
+abc039220c836ef7efeda6e9043fbf10  usr/share/doc/lsb-base/copyright

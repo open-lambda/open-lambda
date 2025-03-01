@@ -28,6 +28,9 @@ type KafkaConfig struct {
 
 // Config represents the configuration for a worker server.
 type Config struct {
+	// base directory of OL. Config is stored here
+	Base_dir string `json:"base_dir"`
+
 	// worker directory, which contains handler code, pid file, logs, etc.
 	Worker_dir string `json:"worker_dir"`
 
@@ -154,6 +157,7 @@ type LimitsConfig struct {
 // Choose reasonable defaults for a worker deployment (based on memory capacity).
 // olPath need not exist (it is used to determine default paths for registry, etc).
 func LoadDefaults(olPath string) error {
+	baseDir := olPath
 	workerDir := filepath.Join(olPath, "worker")
 	registryDir := filepath.Join(olPath, "registry")
 	baseImgDir := filepath.Join(olPath, "lambda")
@@ -170,6 +174,7 @@ func LoadDefaults(olPath string) error {
 	memPoolMb := Max(int(totalMb-500), 500)
 
 	Conf = &Config{
+		Base_dir:          baseDir,
 		Worker_dir:        workerDir,
 		Server_mode:       "lambda",
 		Trigger:           "kafka",

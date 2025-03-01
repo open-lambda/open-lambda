@@ -1,0 +1,13 @@
+/.
+/usr
+/usr/lib
+/usr/lib/x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu/libnettle.so.8.4
+/usr/share
+/usr/share/doc
+/usr/share/doc/libnettle8
+/usr/share/doc/libnettle8/NEWS.gz
+/usr/share/doc/libnettle8/README
+/usr/share/doc/libnettle8/changelog.Debian.gz
+/usr/share/doc/libnettle8/copyright
+/usr/lib/x86_64-linux-gnu/libnettle.so.8

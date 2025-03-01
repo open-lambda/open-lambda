@@ -1,0 +1,12 @@
+# See: man pkg-config
+prefix=/usr
+exec_prefix=${prefix}
+includedir=${prefix}/include
+
+Name: Python
+Description: Build a C extension for Python
+Requires:
+Version: 3.10
+Libs.private: -lcrypt -ldl  -lm
+Libs:
+Cflags: -I${includedir}/python3.10 -I${includedir}/x86_64-linux-gnu/python3.10

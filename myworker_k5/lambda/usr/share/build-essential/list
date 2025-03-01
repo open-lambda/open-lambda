@@ -1,0 +1,93 @@
+                   List of Build-Essential packages
+                    as of 2017-09-17, Debian sid
+
+This file lists the non-essential packages that are build-essential.
+The list is not closed under the "depends on" relation, so one will
+usually need to install more packages than given here.
+
+This list attempts to document the set of build-essential packages as
+well as possible.  However, it is not authoritative (actually, there
+is no authoritative list at all); the definition of the
+"build-essential" class of packages given in Debian Policy Manual
+(version >= 3.6.1.1), section 4 "Source packages" (more precisely
+subsection 4.2 "Package relationships") is the definitive answer.
+Here's the definition (as of Policy 3.6.1.1):
+
+    It is not necessary to explicitly specify build-time relationships
+    on a minimal set of packages that are always needed to compile,
+    link and put in a Debian package a standard "Hello World!" program
+    written in C or C++.  The required packages are called
+    _build-essential_, and an informational list can be found in
+    `/usr/share/doc/build-essential/list' (which is contained in the
+    `build-essential' package).
+
+The list is given below in a format which is readable by both humans and
+programs.  The format is described at the end of this file.
+
+BEGIN LIST OF PACKAGES
+libc6-dev [!alpha !ia64 !hurd-i386] | libc0.3-dev [hurd-i386] | libc6.1-dev [alpha ia64] | libc-dev
+  Provides the ISO C standard library
+  Indirectly depended on by g++, but we'll ignore
+  it since libc6-dev is used for non-C++ programs too.
+
+libc6-dev-sparc64 [sparc]
+  Used only on the sparc architecture.
+
+gcc (>= 4:10.2)
+g++ (>= 4:10.2)
+
+  NOTE:
+  The libstdc++ -dev library is not needed, as g++ depends on it
+
+make
+  Also depended on by dpkg-dev, but make does warrant its own
+  dependency since debian/rules will need it even if dpkg-dev
+  stopped depending on it
+
+dpkg-dev (>= 1.17.11)
+  Provides dpkg-genchanges and other scripts.  Versioned, because
+  of support for the build-time dependency fields in /debian/control
+  and dpkg-architecture support for OS and CPU information.
+
+  NOTE:
+  Although this list does not contain them, all `Essential: yes'
+  packages are build-essential as well.  A list of such packages
+  can be found by executing the following command
+     `grep-status -FEssential -sPackage -ni yes'
+  when the `grep-dctrl' package is installed and in its default
+  configuration.  Such list is installed with this package as
+  the file
+     `/usr/share/doc/build-essential/essential-packages-list'
+ 
+hurd-dev [hurd-i386]
+  Provides libpthread.so (and other such essential components).
+
+END LIST OF PACKAGES
+
+Here's the format definition:
+
+   - First line is the following, without any leading or trailing
+     whitespace:
+        BEGIN LIST OF PACKAGES
+
+   - Last line is the following, without any leading or trailing
+     whitespace:
+        END LIST OF PACKAGES
+
+   - A line with leading whitespace is a comment.
+
+   - Other lines are joined with end-of-line replaced by comma, and
+     the result is parsed like the body of the Build-Depends field.
+     The list of build-essential packages for a particular
+     architecture is constructed from the result list by ignoring all
+     the package name - package version pairs which would be ignored
+     if we were building for that architecture and then removing the
+     architecture specifications.
+
+The Python program list2depends parses stdin as if it were this
+file and outputs one line that is suitable for use in a dependency
+field body of a Debian binary package.
+
+Local Variables:
+mode: text
+End:

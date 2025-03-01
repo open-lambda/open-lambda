@@ -1,0 +1,17 @@
+/.
+/usr
+/usr/bin
+/usr/share
+/usr/share/doc
+/usr/share/doc/python3.10
+/usr/share/doc/python3.10/HISTORY.gz
+/usr/share/doc/python3.10/README.maintainers
+/usr/share/doc/python3.10/README.valgrind.gz
+/usr/share/doc/python3.10/gdbinit.gz
+/usr/share/doc/python3.10/pybench.log
+/usr/share/doc/python3.10/test_results.gz
+/usr/share/man
+/usr/share/man/man1
+/usr/bin/python3.10-config
+/usr/share/doc/python3.10-dev
+/usr/share/man/man1/python3.10-config.1.gz

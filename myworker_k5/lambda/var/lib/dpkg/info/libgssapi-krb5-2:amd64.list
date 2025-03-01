@@ -1,0 +1,17 @@
+/.
+/etc
+/etc/gss
+/etc/gss/mech.d
+/usr
+/usr/lib
+/usr/lib/x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu/libgssapi_krb5.so.2.2
+/usr/share
+/usr/share/doc
+/usr/share/doc/libgssapi-krb5-2
+/usr/share/doc/libgssapi-krb5-2/copyright
+/usr/share/lintian
+/usr/share/lintian/overrides
+/usr/share/lintian/overrides/libgssapi-krb5-2
+/usr/lib/x86_64-linux-gnu/libgssapi_krb5.so.2
+/usr/share/doc/libgssapi-krb5-2/changelog.Debian.gz

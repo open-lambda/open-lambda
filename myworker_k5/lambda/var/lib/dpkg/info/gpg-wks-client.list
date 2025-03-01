@@ -1,0 +1,17 @@
+/.
+/usr
+/usr/lib
+/usr/lib/gnupg
+/usr/lib/gnupg/gpg-wks-client
+/usr/share
+/usr/share/doc
+/usr/share/doc/gpg-wks-client
+/usr/share/doc/gpg-wks-client/copyright
+/usr/share/lintian
+/usr/share/lintian/overrides
+/usr/share/lintian/overrides/gpg-wks-client
+/usr/share/man
+/usr/share/man/man1
+/usr/share/man/man1/gpg-wks-client.1.gz
+/usr/share/doc/gpg-wks-client/NEWS.Debian.gz
+/usr/share/doc/gpg-wks-client/changelog.Debian.gz

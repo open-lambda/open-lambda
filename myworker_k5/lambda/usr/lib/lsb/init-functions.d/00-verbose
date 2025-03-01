@@ -1,0 +1,39 @@
+## Generated automatically. Do not edit! -*- shell-script -*-
+
+vlog_daemon_msg() {
+	if test x"${VERBOSE:-yes}" != x"no" ; then
+		log_daemon_msg "$@"
+	fi
+}
+
+vlog_begin_msg() {
+	if test x"${VERBOSE:-yes}" != x"no" ; then
+		log_begin_msg "$@"
+	fi
+}
+
+vlog_end_msg() {
+	if test x"${VERBOSE:-yes}" != x"no" ; then
+		log_end_msg "$@"
+	fi
+}
+
+vlog_action_msg() {
+	if test x"${VERBOSE:-yes}" != x"no" ; then
+		log_action_msg "$@"
+	fi
+}
+
+vlog_action_begin_msg() {
+	if test x"${VERBOSE:-yes}" != x"no" ; then
+		log_action_begin_msg "$@"
+	fi
+}
+
+vlog_action_end_msg() {
+	if test x"${VERBOSE:-yes}" != x"no" ; then
+		log_action_end_msg "$@"
+	fi
+}
+
+# vim: ft=sh

@@ -1,0 +1,12 @@
+/.
+/lib
+/lib/x86_64-linux-gnu
+/lib/x86_64-linux-gnu/libtirpc.so.3.0.0
+/usr
+/usr/share
+/usr/share/doc
+/usr/share/doc/libtirpc3
+/usr/share/doc/libtirpc3/NEWS.Debian.gz
+/usr/share/doc/libtirpc3/changelog.Debian.gz
+/usr/share/doc/libtirpc3/copyright
+/lib/x86_64-linux-gnu/libtirpc.so.3

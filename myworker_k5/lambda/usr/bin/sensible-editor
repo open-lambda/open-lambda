@@ -1,0 +1,57 @@
+#!/bin/sh
+# Copyright 2007 Jari Aalto; Released under GNU GPL v2 or any later version
+# Copyright 201
+ret="$?"
+
+# Prevent recursive loops, where these values are set to this script
+p="$(command -v "$0")"
+[ -n "$EDITOR" ] && [ "$(command -v "$EDITOR" || true)" = "$p" ] && EDITOR=
+[ -n "$VISUAL" ] && [ "$(command -v "$VISUAL" || true)" = "$p" ] && VISUAL=
+[ -n "$SELECTED_EDITOR" ] && [ "$(command -v "$SELECTED_EDITOR" || true)" = "$p" ] && SELECTED_EDITOR=
+
+IsError()
+{
+	# Operating system command not found
+	[ "$1" -ne 126 ] && [ $1 -ne 127 ]
+}
+
+Run()
+{
+	"$@"
+	ret=$?
+	IsError "$ret"
+}
+
+# workarround #991982
+nano ()
+{
+    if [ -z "$TERM" ]; then
+	return 126
+    else
+	command nano "$@"
+    fi
+}
+
+if [ -n "$VISUAL" ]; then
+	Run "$VISUAL" "$@" && exit "$ret"
+fi
+
+# fix #987675
+if [ -n "$HOME" ]; then
+    if [ -r ~/.selected_editor ]; then
+	. ~/.selected_editor 2>/dev/null || true
+    elif [ -z "$EDITOR" ] && [ -z "$SELECTED_EDITOR" ] && [ -t 0 ]; then
+	select-editor && . ~/.selected_editor 2>/dev/null || true
+    fi
+fi
+
+Run ${EDITOR:-${SELECTED_EDITOR:-editor}} "$@" ||
+Run nano "$@" ||
+Run nano-tiny "$@" ||
+Run vi "$@" ||
+{
+	echo "Couldn't find an editor!" 1>&2
+	echo "Set the \$EDITOR environment variable to your desired editor." 1>&2
+	exit 1;
+}
+exit "$ret"

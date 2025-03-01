@@ -1,0 +1,18 @@
+
+Template: adduser/title
+Type: title
+Description: Adduser
+Description-de.UTF-8: Adduser
+Description-fr.UTF-8: Adduser
+Description-nl.UTF-8: Adduser
+
+Template: adduser/homedir-permission
+Type: boolean
+Default: false
+Description: Do you want system-wide readable home directories?
+ By default, users' home directories are readable only by their owners.
+ To allow files to be easily shared with other users you might want to
+ make them readable by all other users.
+ .
+ This will only affect home directories of users added from now
+ on with the adduser command.

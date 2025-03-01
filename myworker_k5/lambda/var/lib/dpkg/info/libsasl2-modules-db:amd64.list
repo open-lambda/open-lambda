@@ -1,0 +1,14 @@
+/.
+/usr
+/usr/lib
+/usr/lib/x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu/sasl2
+/usr/lib/x86_64-linux-gnu/sasl2/libsasldb.so.2.0.25
+/usr/share
+/usr/share/doc
+/usr/share/doc/libsasl2-modules-db
+/usr/share/doc/libsasl2-modules-db/NEWS.Debian.gz
+/usr/share/doc/libsasl2-modules-db/changelog.Debian.gz
+/usr/share/doc/libsasl2-modules-db/copyright
+/usr/lib/x86_64-linux-gnu/sasl2/libsasldb.so
+/usr/lib/x86_64-linux-gnu/sasl2/libsasldb.so.2

@@ -1,0 +1,11 @@
+/.
+/lib
+/lib/x86_64-linux-gnu
+/lib/x86_64-linux-gnu/libaudit.so.1.0.0
+/usr
+/usr/share
+/usr/share/doc
+/usr/share/doc/libaudit1
+/usr/share/doc/libaudit1/changelog.Debian.gz
+/usr/share/doc/libaudit1/copyright
+/lib/x86_64-linux-gnu/libaudit.so.1
