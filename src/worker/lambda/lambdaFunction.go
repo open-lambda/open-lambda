@@ -269,7 +269,12 @@ func (f *LambdaFunc) Task() {
 			// Check if the HTTP method is valid
 			if !f.Meta.Config.IsHTTPMethodAllowed(req.r.Method) {
 				req.w.WriteHeader(http.StatusMethodNotAllowed)
-				req.w.Write([]byte("HTTP method not allowed\n"))
+				req.w.Write([]byte(fmt.Sprintf(
+					"HTTP method not allowed. Sent: %s, Allowed: %v\n",
+					req.r.Method,
+					f.Meta.Config.AllowedHTTPMethods(),
+				)))
+
 				req.done <- true
 				continue
 			}
