@@ -266,15 +266,12 @@ func (f *LambdaFunc) Task() {
 				continue
 			}
 
-			// only parsing the metadata when rtType is RT_PYTHON so need to access only when the rtType is RT_PYTHON
-			if f.rtType == common.RT_PYTHON {
-				// Check if the HTTP method is valid
-				if !f.Meta.Config.IsHTTPMethodAllowed(req.r.Method) {
-					req.w.WriteHeader(http.StatusMethodNotAllowed)
-					req.w.Write([]byte("HTTP method not allowed\n"))
-					req.done <- true
-					continue
-				}
+			// Check if the HTTP method is valid
+			if !f.Meta.Config.IsHTTPMethodAllowed(req.r.Method) {
+				req.w.WriteHeader(http.StatusMethodNotAllowed)
+				req.w.Write([]byte("HTTP method not allowed\n"))
+				req.done <- true
+				continue
 			}
 
 			if oldCodeDir != "" && oldCodeDir != f.codeDir {
