@@ -102,3 +102,12 @@ func (config *LambdaConfig) IsHTTPMethodAllowed(method string) bool {
 	}
 	return false
 }
+
+// returns allowed HTTP methods. Used to notify users the allowed https methods when invalid http request was sent.
+func (c *LambdaConfig) AllowedHTTPMethods() []string {
+	var allowedMethods []string
+	for _, trigger := range c.Triggers.HTTP {
+		allowedMethods = append(allowedMethods, trigger.Method)
+	}
+	return allowedMethods
+}
