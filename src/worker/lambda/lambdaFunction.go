@@ -275,6 +275,14 @@ func (f *LambdaFunc) Task() {
 				cleanupChan <- oldCodeDir
 			}
 
+			// Check if the HTTP method is valid
+			if !f.Meta.Config.IsHTTPMethodAllowed(req.r.Method) {
+				req.w.WriteHeader(http.StatusMethodNotAllowed)
+				req.w.Write([]byte("HTTP method not allowed\n"))
+				req.done <- true
+				continue
+			}
+
 			f.lmgr.DepTracer.TraceInvocation(f.codeDir)
 
 			select {
