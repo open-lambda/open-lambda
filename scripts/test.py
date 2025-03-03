@@ -270,7 +270,7 @@ def test_http_method_restrictions():
         
         error_message = (
             f"{method} request returned status code {response.status_code}, "
-            f"but expected {expected_status}. Response: {response.text}"
+            f"but expected {expected_status}."
         )
         assert response.status_code == expected_status, error_message
 

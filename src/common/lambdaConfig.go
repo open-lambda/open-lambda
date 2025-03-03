@@ -71,6 +71,7 @@ func checkLambdaConfig(config *LambdaConfig) error {
 // ParseYaml reads and parses the YAML configuration file.
 func LoadLambdaConfig(codeDir string) (*LambdaConfig, error) {
 	path := filepath.Join(codeDir, "ol.yaml")
+	fmt.Printf("Loading config from: %s\n", path)
 	file, err := os.Open(path)
 
 	if errors.Is(err, os.ErrNotExist) {
@@ -90,6 +91,7 @@ func LoadLambdaConfig(codeDir string) (*LambdaConfig, error) {
 		return nil, fmt.Errorf("failed to parse YAML file: %v", err)
 	}
 
+	fmt.Printf("Parsed config: %+v\n", config)
 	return &config, checkLambdaConfig(&config)
 }
 
