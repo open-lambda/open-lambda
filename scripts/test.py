@@ -255,23 +255,24 @@ def flask_test():
 def test_http_method_restrictions():
     """Test that only allowed HTTP methods are accepted by the lambda function."""
     
-    BASE_URL = "http://localhost:5000/run"
-    LAMBDA_NAME = "lambda-config-test"
+    url = "http://localhost:5000/run/lambda-config-test"
     
+    # Define test cases: method -> expected status code
     test_cases = {
-        "GET": True,   # Expected to be allowed
-        "POST": False, # Expected to be blocked
-        "PUT": False,  # Expected to be blocked
-        "DELETE": True # Expected to be allowed
+        "GET": 200,   # Expected to be allowed
+        "POST": 200,  # Expected to be allowed
+        "PUT": 405,   # Expected to be blocked
+        "DELETE": 405 # Expected to be blocked
     }
 
-    for method, should_pass in test_cases.items():
-        response = requests.request(method, f"{BASE_URL}/{LAMBDA_NAME}")
+    for method, expected_status in test_cases.items():
+        response = requests.request(method, url)
         
-        if should_pass:
-            assert response.status_code == 200, f"{method} should be allowed but got {response.status_code}"
-        else:
-            assert response.status_code == 405, f"{method} should be blocked but got {response.status_code}"
+        error_message = (
+            f"{method} request returned status code {response.status_code}, "
+            f"but expected {expected_status}. Response: {response.text}"
+        )
+        assert response.status_code == expected_status, error_message
 
     print("✅ HTTP method restriction test passed.")
 
@@ -297,6 +298,7 @@ def run_tests():
 
     # make sure we can use WSGI apps based on frameworks like Flask
     flask_test()
+    test_http_method_restrictions()
 
     # make sure code updates get pulled within the cache time
     with tempfile.TemporaryDirectory() as reg_dir:
