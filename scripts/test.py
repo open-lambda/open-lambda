@@ -251,6 +251,31 @@ def flask_test():
     if r.text != "hi\n":
         raise ValueError(f"r.text should be 'hi\n', not {repr(r.text)}")
 
+@test
+def test_http_method_restrictions():
+    """Test that only allowed HTTP methods are accepted by the lambda function."""
+    
+    BASE_URL = "http://localhost:5000/run"
+    LAMBDA_NAME = "lambda-config-test"
+    
+    test_cases = {
+        "GET": True,   # Expected to be allowed
+        "POST": False, # Expected to be blocked
+        "PUT": False,  # Expected to be blocked
+        "DELETE": True # Expected to be allowed
+    }
+
+    for method, should_pass in test_cases.items():
+        response = requests.request(method, f"{BASE_URL}/{LAMBDA_NAME}")
+        
+        if should_pass:
+            assert response.status_code == 200, f"{method} should be allowed but got {response.status_code}"
+        else:
+            assert response.status_code == 405, f"{method} should be blocked but got {response.status_code}"
+
+    print("✅ HTTP method restriction test passed.")
+
+
 def run_tests():
     ping_test()
 
