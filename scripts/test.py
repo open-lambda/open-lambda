@@ -266,7 +266,18 @@ def test_http_method_restrictions():
     }
 
     for method, expected_status in test_cases.items():
-        response = requests.request(method, url)
+        if method == "POST" or method == "PUT":
+            # Add a payload for POST requests
+            payload = {
+                "key1": "value1",
+                "key2": "value2",
+                "key3": "value3"
+            }
+            headers = {"Content-Type": "application/json"}
+            response = requests.request(method, url, data=json.dumps(payload), headers=headers)
+        else:
+            # No payload for other methods
+            response = requests.request(method, url)
         
         error_message = (
             f"{method} request returned status code {response.status_code}, "
