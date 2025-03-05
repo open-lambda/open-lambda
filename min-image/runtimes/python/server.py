@@ -28,19 +28,59 @@ def web_server():
     import f
 
     class SockFileHandler(tornado.web.RequestHandler):
-        def post(self):
+        # Override SUPPORTED_METHODS to allow all HTTP methods
+        SUPPORTED_METHODS = ("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
+        
+        def handle_request(self):
             try:
-                data = self.request.body
-                try :
-                    event = json.loads(data)
-                except:
-                    self.set_status(400)
-                    self.write(f'bad POST data: "{data}"')
-                    return
-                self.write(json.dumps(f.f(event)))
+                # Check if the request method requires a payload
+                if self.request.method in ["POST", "PUT", "PATCH"]:
+                    data = self.request.body
+                    
+                    # Check if the body is empty
+                    if not data:
+                        self.set_status(400)  # Bad request if body is empty
+                        self.write('Request body is empty')
+                        return
+
+                    # Validate and parse JSON data for methods that require a payload
+                    try:
+                        event = json.loads(data) # Parse JSON
+                    except:
+                        self.set_status(400)  # Bad request if JSON parsing fails
+                        self.write(f'bad request data: "{data}"')
+                        return
+                else:
+                    # For methods that do not require a payload (e.g., GET, OPTIONS)
+                    event = None  # No payload data to parse
+
+                # Call the function `f` with the parsed event (or None if no data)
+                result = f.f(event) if event is not None else f.f({})  # Pass empty dict or None
+                self.write(json.dumps(result))  # Return the result as JSON
             except Exception:
-                self.set_status(500) # internal error
-                self.write(traceback.format_exc())
+                self.set_status(500)  # Internal server error for unhandled exceptions
+                self.write(traceback.format_exc())  # Include traceback in response
+        
+        
+        # Define methods for each HTTP method
+        def get(self):
+            self.handle_request()
+
+        def post(self):
+            self.handle_request()
+
+        def put(self):
+            self.handle_request()
+
+        def delete(self):
+            self.handle_request()
+
+        def patch(self):
+            self.handle_request()
+
+        def options(self):
+            self.handle_request()
+    
 
     if hasattr(f, "app"):
         # use WSGI entry
