@@ -279,6 +279,8 @@ func (f *LambdaFunc) Task() {
 				continue
 			}
 
+			log.Printf("Method is allowed based on the lambdaConfig")
+
 			if oldCodeDir != "" && oldCodeDir != f.codeDir {
 				el := f.instances.Front()
 				for el != nil {
