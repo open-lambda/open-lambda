@@ -1,7 +1,7 @@
 package common
 
 import (
-	"encoding/json"
+	//"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"syscall"
 
+	"gopkg.in/yaml.v3"
 	"github.com/urfave/cli/v2"
 )
 
@@ -18,76 +19,76 @@ var Conf *Config
 // Config represents the configuration for a worker server.
 type Config struct {
 	// worker directory, which contains handler code, pid file, logs, etc.
-	Worker_dir string `json:"worker_dir"`
+	Worker_dir string `yaml:"worker_dir"`
 
 	// Url/ip the worker server listens to
-	Worker_url string `json:"worker_url"`
+	Worker_url string `yaml:"worker_url"`
 
 	// port the worker server listens to
-	Worker_port string `json:"worker_port"`
+	Worker_port string `yaml:"worker_port"`
 
 	// log output of the runtime and proxy?
-	Log_output bool `json:"log_output"`
+	Log_output bool `yaml:"log_output"`
 
 	// sandbox type: "docker" or "sock"
 	// currently ignored as cgroup sandbox is not fully integrated
-	Sandbox string `json:"sandbox"`
+	Sandbox string `yaml:"sandbox"`
 
 	// what kind of server should be launched?  (e.g., lambda or sock)
-	Server_mode string `json:"server_mode"`
+	Server_mode string `yaml:"server_mode"`
 
 	// location where code packages are stored.  Could be URL or local file path.
-	Registry string `json:"registry"`
+	Registry string `yaml:"registry"`
 
 	// how long should some previously pulled code be used without a check for a newer version?
-	Registry_cache_ms int `json:"registry_cache_ms"`
+	Registry_cache_ms int `yaml:"registry_cache_ms"`
 
 	// directory to install packages to, that sandboxes will read from
 	Pkgs_dir string
 
 	// pip index address for installing python packages
-	Pip_index string `json:"pip_mirror"`
+	Pip_index string `yaml:"pip_mirror"`
 
 	// CACHE OPTIONS
-	Mem_pool_mb int `json:"mem_pool_mb"`
+	Mem_pool_mb int `yaml:"mem_pool_mb"`
 
-	// can be empty (use root zygote only), a JSON obj (specifying
+	// can be empty (use root zygote only), a YAML obj (specifying
 	// the tree), or a path (to a file specifying the tree)
-	Import_cache_tree any `json:"import_cache_tree"`
+	Import_cache_tree any `yaml:"import_cache_tree"`
 
 	// base image path for sock containers
-	SOCK_base_path string `json:"sock_base_path"`
+	SOCK_base_path string `yaml:"sock_base_path"`
 
 	// pass through to sandbox envirenment variable
-	Sandbox_config any `json:"sandbox_config"`
+	Sandbox_config any `yaml:"sandbox_config"`
 
-	Docker   DockerConfig   `json:"docker"`
-	Limits   LimitsConfig   `json:"limits"`
-	Features FeaturesConfig `json:"features"`
-	Trace    TraceConfig    `json:"trace"`
-	Storage  StorageConfig  `json:"storage"`
-}
+	Docker   DockerConfig   `yaml:"docker"`
+	Limits   LimitsConfig   `yaml:"limits"`
+	Features FeaturesConfig `yaml:"features"`
+	Trace    TraceConfig    `yaml:"trace"`
+	Storage  StorageConfig  `yaml:"storage"`
+}	
 
 type DockerConfig struct {
 	// which OCI implementation to use for the docker sandbox (e.g., runc or runsc)
-	Runtime string `json:"runtime"`
+	Runtime string `yaml:"runtime"`
 	// name of the image used for Docker containers
-	Base_image string `json:"base_image"`
+	Base_image string `yaml:"base_image"`
 }
 
 type FeaturesConfig struct {
-	Reuse_cgroups       bool   `json:"reuse_cgroups"`
-	Import_cache        string `json:"import_cache"`
-	Downsize_paused_mem bool   `json:"downsize_paused_mem"`
-	Enable_seccomp      bool   `json:"enable_seccomp"`
+	Reuse_cgroups       bool   `yaml:"reuse_cgroups"`
+	Import_cache        string `yaml:"import_cache"`
+	Downsize_paused_mem bool   `yaml:"downsize_paused_mem"`
+	Enable_seccomp      bool   `yaml:"enable_seccomp"`
 }
 
 type TraceConfig struct {
-	Cgroups bool `json:"cgroups"`
-	Memory  bool `json:"memory"`
-	Evictor bool `json:"evictor"`
-	Package bool `json:"package"`
-	Latency bool `json:"latency"`
+	Cgroups bool `yaml:"cgroups"`
+	Memory  bool `yaml:"memory"`
+	Evictor bool `yaml:"evictor"`
+	Package bool `yaml:"package"`
+	Latency bool `yaml:"latency"`
 }
 
 type StoreString string
@@ -107,31 +108,31 @@ func (s StoreString) Mode() StoreMode {
 
 type StorageConfig struct {
 	// should be empty, "memory", or "private"
-	Root    StoreString `json:"root"`
-	Scratch StoreString `json:"scratch"`
-	Code    StoreString `json:"code"`
+	Root    StoreString `yaml:"root"`
+	Scratch StoreString `yaml:"scratch"`
+	Code    StoreString `yaml:"code"`
 }
 
 type LimitsConfig struct {
 	// how many processes can be created within a Sandbox?
-	Procs int `json:"procs"`
+	Procs int `yaml:"procs"`
 
 	// how much memory can a regular lambda use?  The lambda can
 	// always set a lower limit for itself.
-	Mem_mb int `json:"mem_mb"`
+	Mem_mb int `yaml:"mem_mb"`
 
 	// what percent of a core can it use per period?  (0-100, or more for multiple cores)
-	CPU_percent int `json:"cpu_percent"`
+	CPU_percent int `yaml:"cpu_percent"`
 
 	// how many seconds can Lambdas run?  (maybe be overridden on per-lambda basis)
-	Max_runtime_default int `json:"max_runtime_default"`
+	Max_runtime_default int `yaml:"max_runtime_default"`
 
 	// how aggressively will the mem of the Sandbox be swapped?
-	Swappiness int `json:"swappiness"`
+	Swappiness int `yaml:"swappiness"`
 
 	// how much memory do we use for an admin lambda that is used
 	// for pip installs?
-	Installer_mem_mb int `json:"installer_mem_mb"`
+	Installer_mem_mb int `yaml:"installer_mem_mb"`
 }
 
 // Choose reasonable defaults for a worker deployment (based on memory capacity).
@@ -199,7 +200,7 @@ func LoadDefaults(olPath string) error {
 	return checkConf()
 }
 
-// ParseConfig reads a file and tries to parse it as a JSON string to a Config
+// ParseConfig reads a file and tries to parse it as a YAML string to a Config
 // instance.
 func LoadConf(path string) error {
 	configRaw, err := ioutil.ReadFile(path)
@@ -207,7 +208,7 @@ func LoadConf(path string) error {
 		return fmt.Errorf("could not open config (%v): %v", path, err.Error())
 	}
 
-	if err := json.Unmarshal(configRaw, &Conf); err != nil {
+	if err := yaml.Unmarshal(configRaw, &Conf); err != nil {
 		fmt.Printf("Bad config file (%s):\n%s\n", path, string(configRaw))
 		return fmt.Errorf("could not parse config (%v): %v", path, err.Error())
 	}
@@ -259,36 +260,36 @@ func checkConf() error {
 	return nil
 }
 
-// SandboxConfJson marshals the Sandbox_config of the Config into a JSON string.
+// SandboxConfJson marshals the Sandbox_config of the Config into a YAML string.
 func SandboxConfJson() string {
-	s, err := json.Marshal(Conf.Sandbox_config)
+	s, err := yaml.Marshal(Conf.Sandbox_config)
 	if err != nil {
 		panic(err)
 	}
 	return string(s)
 }
 
-// Dump prints the Config as a JSON string.
+// Dump prints the Config as a YAML string.
 func DumpConf() {
-	s, err := json.Marshal(Conf)
+	s, err := yaml.Marshal(Conf)
 	if err != nil {
 		panic(err)
 	}
 	log.Printf("CONFIG = %v\n", string(s))
 }
 
-// DumpStr returns the Config as an indented JSON string.
+// DumpStr returns the Config as an indented YAML string.
 func DumpConfStr() string {
-	s, err := json.MarshalIndent(Conf, "", "\t")
+	s, err := yaml.Marshal(Conf, "", "\t")
 	if err != nil {
 		panic(err)
 	}
 	return string(s)
 }
 
-// Save writes the Config as an indented JSON to path with 644 mode.
+// Save writes the Config as an indented YAML to path with 644 mode.
 func SaveConf(path string) error {
-	s, err := json.MarshalIndent(Conf, "", "\t")
+	s, err := yaml.Marshal(Conf, "", "\t")
 	if err != nil {
 		return err
 	}
