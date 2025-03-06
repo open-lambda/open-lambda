@@ -33,7 +33,7 @@ func initCmd(ctx *cli.Context) error {
 		return err
 	}
 	fmt.Printf("\nYou may optionally modify the defaults here: %s\n\n",
-		filepath.Join(olPath, "config.json"))
+		filepath.Join(olPath, "config.yaml"))
 	fmt.Printf("Next start a worker using the \"ol worker up\" command.\n")
 	return nil
 }
@@ -60,7 +60,7 @@ func upCmd(ctx *cli.Context) error {
 	}
 
 	// PREP STEP 2: load config file and apply any command-line overrides
-	confPath := filepath.Join(olPath, "config.json")
+	confPath := filepath.Join(olPath, "config.yaml")
 	overrides := ctx.String("options")
 	if overrides != "" {
 		overridesPath := confPath + ".overrides"
@@ -188,7 +188,7 @@ func statusCmd(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	err = common.LoadConf(filepath.Join(olPath, "config.json"))
+	err = common.LoadConf(filepath.Join(olPath, "config.yaml"))
 	if err != nil {
 		return err
 	}
@@ -216,7 +216,7 @@ func downCmd(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	err = common.LoadConf(filepath.Join(olPath, "config.json"))
+	err = common.LoadConf(filepath.Join(olPath, "config.yaml"))
 	if err != nil {
 		return err
 	}
@@ -229,7 +229,7 @@ func cleanupCmd(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-  	err = common.LoadConf(filepath.Join(olPath, "config.json"))
+  	err = common.LoadConf(filepath.Join(olPath, "config.yaml"))
 	if err != nil {
 		return fmt.Errorf("failed to load OL config: %s", err)
 	}
