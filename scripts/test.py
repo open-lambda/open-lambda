@@ -253,7 +253,7 @@ def flask_test():
 
 @test
 def test_http_method_restrictions():
-    url = 'http://localhost:5000/run/flask-test'
+    url = 'http://localhost:5000/run/lambda-config-test'
     print("URL", url)
     print("Testing POST request...")
     r = requests.post(url)
