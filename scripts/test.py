@@ -267,7 +267,6 @@ def test_http_method_restrictions():
     if r.text != "hi\n":
         raise ValueError(f"r.text should be 'hi\n', not {repr(r.text)}")
     
-    
     # Test PUT request
     print("Testing PUT request...")
     r = requests.put(url)
@@ -276,7 +275,10 @@ def test_http_method_restrictions():
     if r.status_code != 405:
         raise ValueError(f"Expected status code 405 for PUT, but got {r.status_code}")
     if r.text != "HTTP method not allowed. Sent: PUT, Allowed: [GET POST]\n":
-        raise ValueError(f"r.text should be 'HTTP method not allowed. Sent: PUT, Allowed: [GET POST]\n' for PUT, not {repr(r.text)}")
+        raise ValueError(
+            f"r.text should be 'HTTP method not allowed. Sent: PUT, Allowed: [GET POST]\n' "
+            f"for PUT, not {repr(r.text)}"
+        )
 
 
 def run_tests():
