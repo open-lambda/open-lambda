@@ -1,7 +1,6 @@
 package common
 
 import (
-	//"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -260,8 +259,8 @@ func checkConf() error {
 	return nil
 }
 
-// SandboxConfJson marshals the Sandbox_config of the Config into a YAML string.
-func SandboxConfJson() string {
+// SandboxConfYaml marshals the Sandbox_config of the Config into a YAML string.
+func SandboxConfYaml() string {
 	s, err := yaml.Marshal(Conf.Sandbox_config)
 	if err != nil {
 		panic(err)
