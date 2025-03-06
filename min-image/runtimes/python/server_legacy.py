@@ -55,7 +55,7 @@ class SockFileHandler(tornado.web.RequestHandler):
         try:
             data = self.request.body
             try:
-                event = json.loads(data) if data else None # parse the data if its there, if not, set to None
+                event = json.loads(data) if data else None
             except:
                 self.set_status(400)  # Bad request if JSON parsing fails
                 self.write(f'bad request data: "{data}"')
