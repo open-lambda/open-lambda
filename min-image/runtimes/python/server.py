@@ -28,34 +28,19 @@ def web_server():
     import f
 
     class SockFileHandler(tornado.web.RequestHandler):
-        # Override SUPPORTED_METHODS to allow all HTTP methods
-        SUPPORTED_METHODS = ("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
-        
+        # TODO: we should consider how are the different requests used in the context of different applications and functions
+        # and consider what does the validations should look like for example, should we allow POST requests with no payload etc.
         def handle_request(self):
             try:
-                # Check if the request method requires a payload
-                if self.request.method in ["POST", "PUT", "PATCH"]:
-                    data = self.request.body
-                    
-                    # Check if the body is empty
-                    if not data:
-                        self.set_status(400)  # Bad request if body is empty
-                        self.write('Request body is empty')
-                        return
+                data = self.request.body
+                try:
+                    event = json.loads(data) if data else None # parse the data if its there, if not, set to None
+                except:
+                    self.set_status(400)  # Bad request if JSON parsing fails
+                    self.write(f'bad request data: "{data}"')
+                    return
 
-                    # Validate and parse JSON data for methods that require a payload
-                    try:
-                        event = json.loads(data) # Parse JSON
-                    except:
-                        self.set_status(400)  # Bad request if JSON parsing fails
-                        self.write(f'bad request data: "{data}"')
-                        return
-                else:
-                    # For methods that do not require a payload (e.g., GET, OPTIONS)
-                    event = None  # No payload data to parse
-
-                # Call the function `f` with the parsed event (or None if no data)
-                result = f.f(event) if event is not None else f.f({})  # Pass empty dict or None
+                result = f.f(event) if event is not None else f.f({}) 
                 self.write(json.dumps(result))  # Return the result as JSON
             except Exception:
                 self.set_status(500)  # Internal server error for unhandled exceptions
