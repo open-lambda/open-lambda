@@ -266,7 +266,7 @@ def test_http_method_restrictions():
         raise ValueError(f"headers['A'] should be 'B', not {r.headers['A']}")
     if r.text != "hi\n":
         raise ValueError(f"r.text should be 'hi\n', not {repr(r.text)}")
-    
+
     # Test PUT request
     print("Testing PUT request...")
     r = requests.put(url)
