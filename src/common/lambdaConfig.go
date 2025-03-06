@@ -90,7 +90,6 @@ func LoadLambdaConfig(codeDir string) (*LambdaConfig, error) {
 		return nil, fmt.Errorf("failed to parse YAML file: %v", err)
 	}
 
-	fmt.Printf("Parsed config: %+v\n", config)
 	return &config, checkLambdaConfig(&config)
 }
 
