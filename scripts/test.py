@@ -253,39 +253,30 @@ def flask_test():
 
 @test
 def test_http_method_restrictions():
-    """Test that only allowed HTTP methods are accepted by the lambda function."""
-    
-    url = "http://localhost:5000/run/lambda-config-test"
-    
-    # Define test cases: method -> expected status code
-    test_cases = {
-        "GET": 200,   # Expected to be allowed
-        "POST": 200,  # Expected to be allowed
-        "PUT": 405,   # Expected to be blocked
-        "DELETE": 405 # Expected to be blocked
-    }
+    url = 'http://localhost:5000/run/flask-test'
+    print("URL", url)
+    print("Testing POST request...")
+    r = requests.post(url)
 
-    for method, expected_status in test_cases.items():
-        if method == "POST" or method == "PUT":
-            # Add a payload for POST requests
-            payload = {
-                "key1": "value1",
-                "key2": "value2",
-                "key3": "value3"
-            }
-            headers = {"Content-Type": "application/json"}
-            response = requests.request(method, url, data=json.dumps(payload), headers=headers)
-        else:
-            # No payload for other methods
-            response = requests.request(method, url)
-        
-        error_message = (
-            f"{method} request returned status code {response.status_code}, "
-            f"but expected {expected_status}."
-        )
-        assert response.status_code == expected_status, error_message
+    if r.status_code != 418:
+        raise ValueError(f"expected status code 418, but got {r.status_code}")
+    if not "A" in r.headers:
+        raise ValueError(f"'A' not found in headers, as expected: {r.headers}")
+    if r.headers["A"] != "B":
+        raise ValueError(f"headers['A'] should be 'B', not {r.headers['A']}")
+    if r.text != "hi\n":
+        raise ValueError(f"r.text should be 'hi\n', not {repr(r.text)}")
+    
+    
+    # Test PUT request
+    print("Testing PUT request...")
+    r = requests.put(url)
 
-    print("✅ HTTP method restriction test passed.")
+    # Verify response for PUT request
+    if r.status_code != 405:
+        raise ValueError(f"Expected status code 405 for PUT, but got {r.status_code}")
+    if r.text != "Method Not Allowed\n":
+        raise ValueError(f"r.text should be 'Method Not Allowed\n' for PUT, not {repr(r.text)}")
 
 
 def run_tests():
