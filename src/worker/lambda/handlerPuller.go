@@ -250,6 +250,16 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type common.R
 		return rt_type, "", fmt.Errorf("lambda file %s not a .tar.gz or .py", src)
 	}
 
+	if _, err := os.Stat(filepath.Join(filepath.Dir(src), "requirements.txt")); err == nil {
+		log.Printf("Optional: Copying `requirements.txt` for lambda `%s`", lambdaName)
+		err := Copy(filepath.Join(filepath.Dir(src), "requirements.txt"), filepath.Join(targetDir, "requirements.txt"))
+		if err != nil {
+			return rt_type, "", fmt.Errorf("Error copying requirements.txt: %s", err)
+		}
+	} else if !os.IsNotExist(err) {
+		log.Printf("Error checking for requirements.txt: %s", err)
+	}
+
 	if !cp.isRemote() {
 		cp.putCache(lambdaName, version, targetDir)
 	}
