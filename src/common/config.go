@@ -48,6 +48,9 @@ type Config struct {
 	// pip index address for installing python packages
 	Pip_index string `json:"pip_mirror"`
 
+	// trusted hosts for pip index
+	Mirror_host string `json:"mirror_host"`
+
 	// CACHE OPTIONS
 	Mem_pool_mb int `json:"mem_pool_mb"`
 
@@ -161,6 +164,8 @@ func LoadDefaults(olPath string) error {
 		Registry_cache_ms: 5000, // 5 seconds
 		Mem_pool_mb:       memPoolMb,
 		Import_cache_tree: zygoteTreePath,
+		Pip_index:         "",
+		Mirror_host:       "",
 		Limits: LimitsConfig{
 			Procs:               10,
 			Mem_mb:              50,

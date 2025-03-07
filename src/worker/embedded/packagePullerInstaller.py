@@ -65,21 +65,17 @@ def deps(dirname):
 def f(event):
     pkg = event["pkg"]
     alreadyInstalled = event["alreadyInstalled"]
-    pip_mirror = event.get("pip_mirror", "")
+    pip_mirror = event["pip_mirror"]
+    mirror_host = event["mirror_host"]
+    install_cmds = ['pip3', 'install', '--no-deps', pkg, '--cache-dir', '/tmp/.cache', '-t', '/host/files']
     if not alreadyInstalled:
+        if not pip_mirror:
+            install_cmds += [f"--trusted-host={mirror_host}", f"--index-url={pip_mirror}",  "-vvv"]
+
         try:
-            if pip_mirror == "":
-                subprocess.check_output(
-                    ['pip3', 'install', '--no-deps', pkg, '--cache-dir', '/tmp/.cache', '-t', '/host/files'])
-            else:
-                pip_mirror = pip_mirror.rstrip('/') + '/simple/' # make sure it ends with / and has simple at the end
-                host_start_index = pip_mirror.find('://') + 3
-                host_end_index = pip_mirror.find('/', host_start_index)
-                mirror_host = pip_mirror[host_start_index:host_end_index]
-                cmds = ['pip3', 'install', '--no-deps', pkg, '--cache-dir', '/tmp/.cache', '-t', '/host/files', f"--trusted-host={mirror_host}", f"--index-url={pip_mirror}",  "-vvv"]
-                print(f"[packaagePullerInstaller.py] attempting install with command: {cmds}")
-                out = subprocess.check_output(cmds)
-                print(f"[packagePullerInstaller.py] Install output: {out}")
+            print(f"[packagePullerInstaller.py] attempting install with command: {install_cmds}")
+            out = subprocess.check_output(install_cmds)
+            print(f"[packagePullerInstaller.py] Install output: {out}")
         except subprocess.CalledProcessError as e:
             print(f'[packagePullerInstaller.py] pip install failed with error code {e.returncode}')
             print(f'[packagePullerInstaller.py] Output: {e.output}')

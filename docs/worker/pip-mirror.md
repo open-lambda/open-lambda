@@ -1,27 +1,32 @@
 # Installing a Pip Mirror
 
-When running python based lambdas in OpenLambda packages
+When running python-based lambdas in OpenLambda packages
 are installed with pip. By default, pip installs packages
 through an API to pypi.org, which cannot always be trusted.
 
 Pypi.org cannot guarantee that every indexed package is safe,
-thus a local mirrored index for pip may be beneficial.
+thus a local mirrored index for pip allows the user to control
+what packages are installed ensuring a more secure environment.
+
+Additionally, a pip mirror allows for offline installs which 
+are useful when the machine running OpenLambda does not have
+internet access or when pypi.org is down.
+
+Furthermore, installation of packages from a pip mirror is faster
+as the packages are downloaded in parallel and do not require network 
+transactions.
 
 ### Creating and Defining the Bandersnatch Mirror
 
-In order to setup a bandersnatch pip mirror first install bandersnatch with:
+Install bandersnatch with:
 ```
 pip install bandersnatch
 ```
 
-Once you have installled bandersnatch, you will have to create the config file.
-To do this run:
+Create the config file:
 ```
 bandersnatch mirror
 ```
-
-This will create a bandersnatch.conf file. In this configuration
-file you can set different settings for the mirror.
 
 Furthermore, you can decide the backend for the bandersnatch mirror.
 This can be a docker container, web server (such as nginx), or a filesystem.
@@ -34,27 +39,50 @@ It is important to note that if you do not use an allowlist or
 blacklist for configuration you will be installing the whole 
 pypi index which is several terabytes.
 
-When deciding which packages to install into the mirror it is important
-to note that the current implementation of the package puller, when
-a pip mirror is defined, is to not use pypi.org even upon install
-failure.
+
+An example bandersnatch.conf file is:
+```
+[mirror]
+; Storage directory (where the mirror will be stored)
+directory = /path/to/nginx
+; Upstream repo
+master = https://pypi.org
+; Number of workers
+workers = 3
+; Request timeout (sec)
+timeout = 15
+; Global timeout (sec)
+global-timeout = 18000
+
+[plugins]
+; Enabled plugins
+enabled =
+    project_requirements
+    project_requirements_pinned
+
+[allowlist]
+; Directory where the requirements file is located
+requirements_path = /path/to/requirements_file
+; Name of the requirements file
+requirements = requirements.txt
+```
+To create the requirements file read: [pypi-packages](pypi-packages.md).
 
 Furthermore, since OpenLambda does not install dependencies with 
 pip's `--no-deps` please ensure that any packages you wish to 
 install have all required dependencies
-within the mirror as well. For more information on how OpenLambda
-installs packages view: [pypi-packages](pypi-packages.md). 
+within the mirror as well.
 
-Once you have set up the bandersnatch mirror and are happy with the
-configuration file you can run `bandersnatch mirror` once more to 
-begin installation. This may take several minutes.
+Run the following command to begin installation:
+```
+bandersnatch mirror
+```
 
 ### Nginx Support
 
 One possible way to serve the pip mirror is with a web server.
 
 To setup a webserver with nginx first run:
-
 ```
 sudo apt update
 sudo apt install nginx
@@ -78,7 +106,7 @@ server {
 Edit the location section of this file such that you have:
 ```
 location /pypi/ {
-    alias {path to pip mirror with /web/ at the end};
+    alias {path to pip mirror with /web/simple/ at the end};
     autoindex on;
 }
 ```
@@ -126,37 +154,7 @@ sudo chown -R www-data:www-data {path to mirror} # for ownership
 ### Worker Setup
 
 After the mirror has finished installation and you have set up a method to serve the mirror, 
-you should initialize a worker with:
-```
-ol worker init -p worker_name -i base_image
-```
-You can choose the worker name and the base image to initialize.
-
-Then in `config.json` edit the `pip_mirror` field with the url to your pip mirror.
-Do not include simple at the end, and ensure that it is the url with the location field.
-`{url}/{location}`.
-
-Before starting the worker ensure that in the registry directory
-you have created a `requirements.in` file with the required packages.
-Then get the required dependencies with:
-```
-pip-compile /path/to/worker/registry/requirements.in
-```
-
-If you do not yet have `pip-compile` run:
-```
-pip install pip-tools
-```
-This will create a `requirements.txt` which contains all packages that
-will be installed.
-
-Then you can start the worker with:
-```
-ol worker up
-```
-
-This will not start any installs until you have sent it a 
-POST request. 
+you should initialize a worker. Check: [getting-started](getting-started.md) for more information.
 
 ### Potential Issues
 

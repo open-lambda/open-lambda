@@ -186,7 +186,8 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 	defer sb.Destroy("package installation complete")
 
 	mirrorURL := common.Conf.Pip_index
-	msg := fmt.Sprintf(`{"pkg": "%s", "alreadyInstalled": %v, "pip_mirror":"%s"}`, p.Name, alreadyInstalled, mirrorURL)
+	mirrorHost := common.Conf.Mirror_host
+	msg := fmt.Sprintf(`{"pkg": "%s", "alreadyInstalled": %v, "pip_mirror":"%s", "mirror_host":"%s"}`, p.Name, alreadyInstalled, mirrorURL, mirrorHost)
 	reqBody := bytes.NewReader([]byte(msg))
 
 	// the URL doesn't matter, since it is local anyway
