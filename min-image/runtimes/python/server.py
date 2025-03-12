@@ -28,19 +28,44 @@ def web_server():
     import f
 
     class SockFileHandler(tornado.web.RequestHandler):
-        def post(self):
+        # TODO: we should consider how are the different requests used in the context of different applications and functions
+        # and consider what does the validations should look like for example, should we allow POST requests with no payload etc.
+        def handle_request(self):
             try:
                 data = self.request.body
-                try :
-                    event = json.loads(data)
+                try:
+                    event = json.loads(data) if data else None
                 except:
-                    self.set_status(400)
-                    self.write(f'bad POST data: "{data}"')
+                    self.set_status(400)  # Bad request if JSON parsing fails
+                    self.write(f'bad request data: "{data}"')
                     return
-                self.write(json.dumps(f.f(event)))
+
+                result = f.f(event) if event is not None else f.f({}) 
+                self.write(json.dumps(result))  # Return the result as JSON
             except Exception:
-                self.set_status(500) # internal error
-                self.write(traceback.format_exc())
+                self.set_status(500)  # Internal server error for unhandled exceptions
+                self.write(traceback.format_exc())  # Include traceback in response
+        
+        
+        # Define methods for each HTTP method
+        def get(self):
+            self.handle_request()
+
+        def post(self):
+            self.handle_request()
+
+        def put(self):
+            self.handle_request()
+
+        def delete(self):
+            self.handle_request()
+
+        def patch(self):
+            self.handle_request()
+
+        def options(self):
+            self.handle_request()
+    
 
     if hasattr(f, "app"):
         # use WSGI entry

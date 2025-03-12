@@ -17,6 +17,11 @@ import (
 	"github.com/open-lambda/open-lambda/ol/worker/sandbox"
 )
 
+type FunctionMeta struct {
+	Sandbox *sandbox.SandboxMeta `json:"sandbox"` // Existing sandbox metadata
+	Config  *common.LambdaConfig `json:"config"`  // New Lambda config (from YAML)
+}
+
 // LambdaFunc represents a single lambda function (the code)
 type LambdaFunc struct {
 	lmgr *LambdaMgr
@@ -27,7 +32,7 @@ type LambdaFunc struct {
 	// lambda code
 	lastPull *time.Time
 	codeDir  string
-	meta     *sandbox.SandboxMeta
+	Meta     *FunctionMeta
 
 	// lambda execution
 	funcChan  chan *Invocation // server to func
@@ -68,8 +73,8 @@ func (f *LambdaFunc) printf(format string, args ...any) {
 }
 
 // parseMeta reads in a requirements.txt file that was built from pip-compile
-func parseMeta(codeDir string) (meta *sandbox.SandboxMeta, err error) {
-	meta = &sandbox.SandboxMeta{
+func parseMeta(codeDir string) (*FunctionMeta, error) {
+	sandboxMeta := &sandbox.SandboxMeta{
 		Installs: []string{},
 		Imports:  []string{},
 	}
@@ -78,7 +83,6 @@ func parseMeta(codeDir string) (meta *sandbox.SandboxMeta, err error) {
 	file, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
 		// having a requirements.txt is optional
-		return meta, nil
 	} else if err != nil {
 		return nil, err
 	}
@@ -90,11 +94,21 @@ func parseMeta(codeDir string) (meta *sandbox.SandboxMeta, err error) {
 		pkg := strings.Split(line, "#")[0]
 		if pkg != "" {
 			pkg = packages.NormalizePkg(pkg)
-			meta.Installs = append(meta.Installs, pkg)
+			sandboxMeta.Installs = append(sandboxMeta.Installs, pkg)
 		}
 	}
 
-	return meta, nil
+	// Load Lambda configuration from ol.yaml
+	lambdaConfig, err := common.LoadLambdaConfig(codeDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse ol.yaml: %v", err)
+	}
+
+	// Return combined FunctionMeta
+	return &FunctionMeta{
+		Sandbox: sandboxMeta,
+		Config:  lambdaConfig,
+	}, nil
 }
 
 // if there is any error:
@@ -148,16 +162,22 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 
 		// make sure all specified dependencies are installed
 		// (but don't recursively find others)
-		for _, pkg := range meta.Installs {
+		for _, pkg := range meta.Sandbox.Installs {
 			if _, err := f.lmgr.PackagePuller.GetPkg(pkg); err != nil {
 				return err
 			}
 		}
 
-		f.lmgr.DepTracer.TraceFunction(codeDir, meta.Installs)
-		f.meta = meta
+		f.lmgr.DepTracer.TraceFunction(codeDir, meta.Sandbox.Installs)
+		f.Meta = meta
 	} else if rtType == common.RT_NATIVE {
 		log.Printf("Got native function")
+
+		// Initialize f.Meta for native functions for consistensy.
+		f.Meta = &FunctionMeta{
+			Sandbox: nil,                              // Sandbox is nil for native functions
+			Config:  common.LoadDefaultLambdaConfig(), // Load default configuration
+		}
 	}
 
 	f.codeDir = codeDir
@@ -242,6 +262,19 @@ func (f *LambdaFunc) Task() {
 				f.printf("Error checking for new lambda code at `%s`: %v", f.codeDir, err)
 				req.w.WriteHeader(http.StatusInternalServerError)
 				req.w.Write([]byte(err.Error() + "\n"))
+				req.done <- true
+				continue
+			}
+
+			// Check if the HTTP method is valid
+			if !f.Meta.Config.IsHTTPMethodAllowed(req.r.Method) {
+				req.w.WriteHeader(http.StatusMethodNotAllowed)
+				req.w.Write([]byte(fmt.Sprintf(
+					"HTTP method not allowed. Sent: %s, Allowed: %v\n",
+					req.r.Method,
+					f.Meta.Config.AllowedHTTPMethods(),
+				)))
+
 				req.done <- true
 				continue
 			}
@@ -369,7 +402,7 @@ func (f *LambdaFunc) newInstance() {
 	linst := &LambdaInstance{
 		lfunc:    f,
 		codeDir:  f.codeDir,
-		meta:     f.meta,
+		meta:     f.Meta,
 		killChan: make(chan chan bool, 1),
 	}
 

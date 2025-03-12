@@ -251,6 +251,36 @@ def flask_test():
     if r.text != "hi\n":
         raise ValueError(f"r.text should be 'hi\n', not {repr(r.text)}")
 
+@test
+def test_http_method_restrictions():
+    url = 'http://localhost:5000/run/lambda-config-test'
+    print("URL", url)
+    print("Testing POST request...")
+    r = requests.post(url)
+
+    if r.status_code != 418:
+        raise ValueError(f"expected status code 418, but got {r.status_code}")
+    if not "A" in r.headers:
+        raise ValueError(f"'A' not found in headers, as expected: {r.headers}")
+    if r.headers["A"] != "B":
+        raise ValueError(f"headers['A'] should be 'B', not {r.headers['A']}")
+    if r.text != "hi\n":
+        raise ValueError(f"r.text should be 'hi\n', not {repr(r.text)}")
+
+    # Test PUT request
+    print("Testing PUT request...")
+    r = requests.put(url)
+
+    # Verify response for PUT request
+    if r.status_code != 405:
+        raise ValueError(f"Expected status code 405 for PUT, but got {r.status_code}")
+    if r.text != "HTTP method not allowed. Sent: PUT, Allowed: [GET POST]\n":
+        raise ValueError(
+            f"r.text should be 'HTTP method not allowed. Sent: PUT, Allowed: [GET POST]\n' "
+            f"for PUT, not {repr(r.text)}"
+        )
+
+
 def run_tests():
     ping_test()
 
@@ -272,6 +302,7 @@ def run_tests():
 
     # make sure we can use WSGI apps based on frameworks like Flask
     flask_test()
+    test_http_method_restrictions()
 
     # make sure code updates get pulled within the cache time
     with tempfile.TemporaryDirectory() as reg_dir:
