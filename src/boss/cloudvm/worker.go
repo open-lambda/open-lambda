@@ -1,6 +1,7 @@
 package cloudvm
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -10,7 +11,6 @@ import (
 	"os/user"
 	"sync/atomic"
 	"time"
-	"errors"
 )
 
 func NewWorkerPool(platform string, worker_cap int) (*WorkerPool, error) {
@@ -23,13 +23,15 @@ func NewWorkerPool(platform string, worker_cap int) (*WorkerPool, error) {
 
 	var pool *WorkerPool
 	switch {
-    case platform == "mock":
-        pool = NewMockWorkerPool()
+	case platform == "mock":
+		pool = NewMockWorkerPool()
 	case platform == "gcp":
-        pool = NewGcpWorkerPool()
-    default:
-        return nil, errors.New("invalid cloud platform")
-    }
+		pool = NewGcpWorkerPool()
+	case platform == "local":
+		pool = NewLocalWorkerPool()
+	default:
+		return nil, errors.New("invalid cloud platform")
+	}
 
 	pool.nextId = 1
 	pool.workers = []map[string]*Worker{
@@ -164,7 +166,7 @@ func (pool *WorkerPool) recoverWorker(worker *Worker) {
 		len(pool.workers[RUNNING]),
 		len(pool.workers[CLEANING]),
 		len(pool.workers[DESTROYING]))
-		
+
 	pool.Unlock()
 
 	pool.updateCluster()
