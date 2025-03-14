@@ -1,95 +1,65 @@
 package cloudvm
 
 import (
-	"fmt"
 	"log"
-	"net"
 	"net/http"
 	"os/exec"
-	"sync"
 )
 
-type LocalWorkerPool struct {
-	mu      sync.Mutex              // Mutex to protect concurrent access to the map
-	workers map[string]*LocalWorker // Map to store workers by workerId
-}
-
-type LocalWorker struct {
-	workerId string
-	cmd      *exec.Cmd
-	port     int
+// WORKER IMPLEMENTATION: LocalWorker
+type LocalWorkerPoolPlatform struct {
+	// no platform specific attributes
 }
 
 func NewLocalWorkerPool() *WorkerPool {
 	return &WorkerPool{
-		WorkerPoolPlatform: &LocalWorkerPool{
-			workers: make(map[string]*LocalWorker), // Initialize the map
-		},
+		WorkerPoolPlatform: &LocalWorkerPoolPlatform{},
 	}
 }
 
-func getAvailablePort() int {
-	// Example: Start from port 5000 and increment until an available port is found
-	port := 5000
-	for {
-		addr := fmt.Sprintf(":%d", port)
-		listener, err := net.Listen("tcp", addr)
-		if err == nil {
-			listener.Close()
-			return port
-		}
-		port++
-	}
-}
-
-func (pool *LocalWorkerPool) NewWorker(workerId string, command string, args ...string) *LocalWorker {
-	pool.mu.Lock()         // Lock the map for concurrent access
-	defer pool.mu.Unlock() // Unlock when the function returns
-
-	port := getAvailablePort()
-
-	argsWithPort := append(args, fmt.Sprintf("--port=%d", port))
-
-	// TODO: create a worker script that starts a HTTP server and listen to the port
-	cmd := exec.Command(command, argsWithPort...)
-	err := cmd.Start()
-	if err != nil {
-		log.Fatalf("Failed to start worker %s: %v", workerId, err)
-	}
-
-	worker := &LocalWorker{
+func (_ *LocalWorkerPoolPlatform) NewWorker(workerId string) *Worker {
+	return &Worker{
 		workerId: workerId,
-		cmd:      cmd,
-		port:     port,
+		workerIp: "localhost",
 	}
-
-	pool.workers[workerId] = worker // Add the worker to the map
-	fmt.Printf("Worker %s started on port %d\n", workerId, port)
-	return worker
 }
 
-func (_ *LocalWorkerPool) CreateInstance(worker *LocalWorker) {
-	log.Printf("create new instance of local worker: %s\n", worker.workerId)
-}
+func (_ *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) {
+	log.Printf("Creating new local worker: %s\n", worker.workerId)
 
-func (pool *LocalWorkerPool) DeleteInstance(workerId string) {
-	pool.mu.Lock()         // Lock the map for concurrent access
-	defer pool.mu.Unlock() // Unlock when the function returns
-
-	worker, exists := pool.workers[workerId] // Retrieve the worker from the map
-	if !exists {
-		log.Printf("Worker %s not found", workerId)
+	// Initialize the worker directory if it doesn't exist
+	initCmd := exec.Command("./ol", "worker", "init", "-p", worker.workerId, "-i", "ol-min")
+	err := initCmd.Run()
+	if err != nil {
+		log.Printf("Failed to initialize worker %s: %v\n", worker.workerId, err)
 		return
 	}
 
-	log.Printf("Stopping worker: %s\n", workerId)
-	err := worker.cmd.Process.Kill()
+	// Start the worker in detached mode
+	upCmd := exec.Command("./ol", "worker", "up", "-p", worker.workerId, "-i", "ol-min", "-d")
+	err = upCmd.Start()
 	if err != nil {
-		log.Printf("Failed to kill worker %s: %v", workerId, err)
+		log.Printf("Failed to start worker %s: %v\n", worker.workerId, err)
+		return
 	}
-	delete(pool.workers, workerId) // Remove the worker from the map
+
+	log.Printf("Worker %s started on %s\n", worker.workerId, worker.workerIp)
 }
 
-func (pool *LocalWorkerPool) ForwardTask(w http.ResponseWriter, r *http.Request, worker *LocalWorker) {
-	forwardTaskHelper(w, r, "localhost") // TODO: pass the port.
+func (_ *LocalWorkerPoolPlatform) DeleteInstance(worker *Worker) {
+	log.Printf("Deleting local worker: %s\n", worker.workerId)
+
+	// Stop the worker process
+	downCmd := exec.Command("./ol", "worker", "down", "-p", worker.workerId)
+	err := downCmd.Run()
+	if err != nil {
+		log.Printf("Failed to stop worker %s: %v\n", worker.workerId, err)
+		return
+	}
+
+	log.Printf("Worker %s stopped\n", worker.workerId)
+}
+
+func (_ *LocalWorkerPoolPlatform) ForwardTask(w http.ResponseWriter, r *http.Request, worker *Worker) {
+	forwardTaskHelper(w, r, worker.workerIp)
 }
