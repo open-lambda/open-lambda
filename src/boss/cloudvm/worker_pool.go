@@ -124,7 +124,7 @@ func (pool *WorkerPool) startNewWorker() {
 		worker.numTask = 1
 		pool.CreateInstance(worker) // c`reate new instance
 
-		if pool.platform != "mock" {
+		if pool.platform != "mock" && pool.platform != "local" {
 			worker.runCmd("./ol worker up -d") // start worker
 		}
 
