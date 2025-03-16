@@ -12,12 +12,14 @@ import (
 var Conf *Config
 
 type Config struct {
-	Platform   string             `json:"platform"`
-	Scaling    string             `json:"scaling"`
-	API_key    string             `json:"api_key"`
-	Boss_port  string             `json:"boss_port"`
-	Worker_Cap int                `json:"worker_cap"`
-	Gcp        *cloudvm.GcpConfig `json:"gcp"`
+	Platform              string             `json:"platform"`
+	Scaling               string             `json:"scaling"`
+	API_key               string             `json:"api_key"`
+	Boss_port             string             `json:"boss_port"`
+	Worker_Cap            int                `json:"worker_cap"`
+	Gcp                   *cloudvm.GcpConfig `json:"gcp"`
+	Worker_Starting_Port  int                `json:"worker_starting_port"`
+	Path_To_Json_Template string             `json:"path_to_json_template"`
 }
 
 func LoadDefaults() error {
