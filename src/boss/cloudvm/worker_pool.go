@@ -11,6 +11,8 @@ import (
 	"os/user"
 	"sync/atomic"
 	"time"
+
+	"github.com/open-lambda/open-lambda/ol/common"
 )
 
 func NewWorkerPool(platform string, worker_cap int) (*WorkerPool, error) {
@@ -397,7 +399,7 @@ func (pool *WorkerPool) StatusCluster() map[string]int {
 // forward request to worker
 // TODO: this is kept for other platforms
 func forwardTaskHelper(w http.ResponseWriter, req *http.Request, workerIp string) error {
-	host := fmt.Sprintf("%s:%d", workerIp, 5000) // TODO: read from config
+	host := fmt.Sprintf("%s:%d", workerIp, common.Conf.Worker_port)
 	req.URL.Scheme = "http"
 	req.URL.Host = host
 	req.Host = host

@@ -4,6 +4,9 @@ import (
 	"log"
 	"net/http"
 	"os/exec"
+	"path/filepath"
+
+	"github.com/open-lambda/open-lambda/ol/common"
 )
 
 // WORKER IMPLEMENTATION: LocalWorker
@@ -20,7 +23,7 @@ func NewLocalWorkerPool() *WorkerPool {
 func (_ *LocalWorkerPoolPlatform) NewWorker(workerId string) *Worker {
 	return &Worker{
 		workerId: workerId,
-		workerIp: "localhost",
+		workerIp: "",
 	}
 }
 
@@ -33,6 +36,15 @@ func (_ *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) {
 	if err != nil {
 		log.Printf("Failed to initialize worker %s: %v\n", worker.workerId, err)
 		return
+	}
+
+	// Load the template json file from OL directory.
+	configPath := filepath.Join(filepath.Dir(common.Conf.Worker_dir), "template.json")
+
+	log.Printf("Current worker config dir trying to read: %s\n", configPath)
+
+	if LoadWorkerConfigTemplate(configPath) != nil {
+		log.Fatalf("Failed to load template.json: %v", err)
 	}
 
 	// Start the worker in detached mode
