@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/open-lambda/open-lambda/ol/common"
 	"github.com/open-lambda/open-lambda/ol/worker/lambda"
 )
@@ -97,6 +98,9 @@ func NewLambdaServer() (*LambdaServer, error) {
 
 	log.Printf("Execute handler by POSTing to localhost%s%s%s\n", port, RUN_PATH, "<lambda>")
 	log.Printf("Get status by sending request to localhost%s%s\n", port, STATUS_PATH)
+	libraryVersion, _ := kafka.LibraryVersion()
+	// Just to import the package, TODO: Remove when using kafka
+	fmt.Printf("Confluent Kafka Go Library Version: %d", libraryVersion)
 
 	return server, nil
 }
