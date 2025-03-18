@@ -1,8 +1,10 @@
 package cloudvm
 
 import (
+	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"os/exec"
 	"path/filepath"
 
@@ -32,27 +34,47 @@ func (_ *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) {
 
 	// Initialize the worker directory if it doesn't exist
 	initCmd := exec.Command("./ol", "worker", "init", "-p", worker.workerId, "-i", "ol-min")
-	err := initCmd.Run()
-	if err != nil {
+	initCmd.Stderr = os.Stderr // Capture stderr
+	if err := initCmd.Run(); err != nil {
 		log.Printf("Failed to initialize worker %s: %v\n", worker.workerId, err)
-		return
+		panic(err)
 	}
 
-	// Load the template json file from OL directory.
-	configPath := filepath.Join(filepath.Dir(common.Conf.Worker_dir), "template.json")
-
-	log.Printf("Current worker config dir trying to read: %s\n", configPath)
-
-	if LoadWorkerConfigTemplate(configPath) != nil {
-		log.Fatalf("Failed to load template.json: %v", err)
+	// Get the executable directory
+	execPath, err := os.Executable()
+	if err != nil {
+		log.Printf("Failed to get executable directory: %v\n", err)
+		panic(err)
 	}
+	appDir := filepath.Dir(execPath)
+
+	// Load worker configuration
+	workerConfigPath := fmt.Sprintf("%s/%s/config.json", appDir, worker.workerId)
+	templatePath := filepath.Join(appDir, "template.json")
+	if err := LoadWorkerConfigTemplate(templatePath, workerConfigPath); err != nil {
+		log.Printf("Failed to load template.json: %v", err)
+		panic(err)
+	}
+
+	free, err := isPortFree(common.Conf.Worker_port)
+	if err != nil {
+		log.Printf("Error checking port: %v\n", err)
+		panic(err)
+	}
+
+	if !free {
+		log.Printf("The port %s is in use. Please change the port number in template.json\n", common.Conf.Worker_port)
+		panic("port is in use")
+	}
+
+	worker.workerIp = fmt.Sprintf("localhost:%s", common.Conf.Worker_port)
 
 	// Start the worker in detached mode
 	upCmd := exec.Command("./ol", "worker", "up", "-p", worker.workerId, "-i", "ol-min", "-d")
-	err = upCmd.Start()
-	if err != nil {
+	upCmd.Stderr = os.Stderr // Capture stderr
+	if err := upCmd.Start(); err != nil {
 		log.Printf("Failed to start worker %s: %v\n", worker.workerId, err)
-		return
+		panic(err)
 	}
 
 	log.Printf("Worker %s started on %s\n", worker.workerId, worker.workerIp)
