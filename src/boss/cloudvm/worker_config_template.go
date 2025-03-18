@@ -62,7 +62,7 @@ func LoadWorkerConfigTemplate(path string, workerConfigPath string) error {
 }
 
 // updateConfig dynamically updates the target Config with values from the source Config
-func updateConfig(target, source interface{}) error {
+func updateConfig(target, source any) error {
 	targetVal := reflect.ValueOf(target).Elem()
 	sourceVal := reflect.ValueOf(source).Elem()
 
