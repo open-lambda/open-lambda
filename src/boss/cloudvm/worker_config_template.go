@@ -16,9 +16,18 @@ func LoadWorkerConfigTemplate(templatePath string, workerPath string) error {
 			return fmt.Errorf("failed to load defaults: %v", err)
 		}
 
+		// Set the worker port (TODO: read from boss config)
+		common.Conf.Worker_port = "6000"
+
+		// Save the updated configuration to the worker's config directory
+		configPath := filepath.Join(workerPath, "config.json")
+		if err := common.SaveConf(configPath); err != nil {
+			return fmt.Errorf("failed to save updated configuration to worker config: %v", err)
+		}
+
 		// Save the updated configuration to template.json
 		if err := common.SaveConf(templatePath); err != nil {
-			return fmt.Errorf("failed to save updated configuration: %v", err)
+			return fmt.Errorf("failed to save updated configuration to template.json: %v", err)
 		}
 
 		return nil
@@ -34,7 +43,7 @@ func LoadWorkerConfigTemplate(templatePath string, workerPath string) error {
 	// Save the template configuration to the worker's config directory
 	configPath := filepath.Join(workerPath, "config.json")
 	if err := common.SaveConf(configPath); err != nil {
-		return fmt.Errorf("failed to save updated configuration: %v", err)
+		return fmt.Errorf("failed to save updated configuration to worker config: %v", err)
 	}
 
 	return nil
