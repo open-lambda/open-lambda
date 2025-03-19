@@ -1,7 +1,6 @@
 package cloudvm
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -9,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
-	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -31,7 +29,7 @@ func NewWorkerPool(platform string, worker_cap int) (*WorkerPool, error) {
 	case platform == "local":
 		pool = NewLocalWorkerPool()
 	default:
-		return nil, errors.New("invalid cloud platform")
+		return nil, fmt.Errorf("invalid cloud platform: %s", platform)
 	}
 
 	pool.nextId = 1
@@ -124,10 +122,6 @@ func (pool *WorkerPool) startNewWorker() {
 	go func() { // should be able to create multiple instances simultaneously
 		worker.numTask = 1
 		pool.CreateInstance(worker) // c`reate new instance
-
-		if pool.platform != "mock" && pool.platform != "local" {
-			worker.runCmd("./ol worker up -d") // start worker
-		}
 
 		// change state starting -> running
 		pool.Lock()
@@ -398,11 +392,7 @@ func (pool *WorkerPool) StatusCluster() map[string]int {
 // forward request to worker
 // TODO: this is kept for other platforms
 func forwardTaskHelper(w http.ResponseWriter, req *http.Request, workerIp string) error {
-	host := fmt.Sprintf("%s:%d", workerIp, 5000) // TODO: read from config
-
-	if strings.HasPrefix(workerIp, "localhost") { // if it is a local worker, workerIp contains the port
-		host = workerIp
-	}
+	host := workerIp
 
 	req.URL.Scheme = "http"
 	req.URL.Host = host

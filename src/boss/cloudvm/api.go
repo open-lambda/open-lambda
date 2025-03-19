@@ -62,4 +62,6 @@ type Worker struct {
 	numTask  int32
 	pool     *WorkerPool
 	state    WorkerState
+	port     string
+	host     string
 }
