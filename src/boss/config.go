@@ -25,11 +25,10 @@ type Config struct {
 }
 
 func LoadDefaults() error {
-	execPath, err := os.Executable()
+	currPath, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("failed to get executable path: %v", err)
 	}
-	appDir := filepath.Dir(execPath)
 
 	Conf = &Config{
 		Platform:                       "local",
@@ -39,7 +38,7 @@ func LoadDefaults() error {
 		Worker_Cap:                     4,
 		Gcp:                            cloudvm.GetGcpConfigDefaults(),
 		Worker_Starting_Port:           "6000",
-		Path_To_Worker_Config_Template: filepath.Join(appDir, "template.json"),
+		Path_To_Worker_Config_Template: filepath.Join(currPath, "template.json"),
 	}
 
 	return checkConf()

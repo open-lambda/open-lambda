@@ -25,7 +25,8 @@ func NewLocalWorkerPool() *WorkerPool {
 func (_ *LocalWorkerPoolPlatform) NewWorker(workerId string) *Worker {
 	return &Worker{
 		workerId: workerId,
-		workerIp: "",
+		host:     "localhost",
+		port:     "",
 	}
 }
 
@@ -33,51 +34,40 @@ func (_ *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) {
 	log.Printf("Creating new local worker: %s\n", worker.workerId)
 
 	// Initialize the worker directory if it doesn't exist
-	initCmd := exec.Command("./ol", "worker", "init", "-p", worker.workerId, "-i", "ol-min")
-	initCmd.Stderr = os.Stderr // Capture stderr
+	initCmd := exec.Command("./ol", "worker", "init", "-p", worker.workerId, "-i", "ol-min") // TODO fix the "ol-min hardcoding"
+	initCmd.Stderr = os.Stderr
 	if err := initCmd.Run(); err != nil {
 		log.Printf("Failed to initialize worker %s: %v\n", worker.workerId, err)
-		panic(err)
+		return // TODO return the error
 	}
 
-	// Get the executable directory
-	execPath, err := os.Executable()
+	// Get the current directory
+	currPath, err := os.Getwd()
 	if err != nil {
 		log.Printf("Failed to get executable directory: %v\n", err)
-		panic(err)
+		return // TODO return the error
 	}
-	appDir := filepath.Dir(execPath)
+
+	workerPath := fmt.Sprintf("%s/%s", currPath, worker.workerId)
+	templatePath := filepath.Join(currPath, "template.json")
 
 	// Load worker configuration
-	workerConfigPath := fmt.Sprintf("%s/%s/config.json", appDir, worker.workerId)
-	templatePath := filepath.Join(appDir, "template.json")
-	if err := LoadWorkerConfigTemplate(templatePath, workerConfigPath); err != nil {
+	if err := LoadWorkerConfigTemplate(templatePath, workerPath); err != nil {
 		log.Printf("Failed to load template.json: %v", err)
-		panic(err)
+		return // TODO return the error
 	}
 
-	free, err := isPortFree(common.Conf.Worker_port)
-	if err != nil {
-		log.Printf("Error checking port: %v\n", err)
-		panic(err)
-	}
-
-	if !free {
-		log.Printf("The port %s is in use. Please change the port number in template.json\n", common.Conf.Worker_port)
-		panic("port is in use")
-	}
-
-	worker.workerIp = fmt.Sprintf("localhost:%s", common.Conf.Worker_port)
+	worker.port = common.Conf.Worker_port
 
 	// Start the worker in detached mode
-	upCmd := exec.Command("./ol", "worker", "up", "-p", worker.workerId, "-i", "ol-min", "-d")
-	upCmd.Stderr = os.Stderr // Capture stderr
+	upCmd := exec.Command("./ol", "worker", "up", "-p", worker.workerId, "-i", "ol-min", "-d") // TODO fix the "ol-min hardcoding"
+	upCmd.Stderr = os.Stderr
 	if err := upCmd.Start(); err != nil {
 		log.Printf("Failed to start worker %s: %v\n", worker.workerId, err)
-		panic(err)
+		return // TODO return the error
 	}
 
-	log.Printf("Worker %s started on %s\n", worker.workerId, worker.workerIp)
+	log.Printf("Worker %s started on %s\n", worker.workerId, worker.port)
 }
 
 func (_ *LocalWorkerPoolPlatform) DeleteInstance(worker *Worker) {
@@ -88,12 +78,12 @@ func (_ *LocalWorkerPoolPlatform) DeleteInstance(worker *Worker) {
 	err := downCmd.Run()
 	if err != nil {
 		log.Printf("Failed to stop worker %s: %v\n", worker.workerId, err)
-		return
+		return // TODO return the error
 	}
 
 	log.Printf("Worker %s stopped\n", worker.workerId)
 }
 
 func (_ *LocalWorkerPoolPlatform) ForwardTask(w http.ResponseWriter, r *http.Request, worker *Worker) {
-	forwardTaskHelper(w, r, worker.workerIp)
+	forwardTaskHelper(w, r, fmt.Sprintf("%s:%s", worker.host, worker.port))
 }

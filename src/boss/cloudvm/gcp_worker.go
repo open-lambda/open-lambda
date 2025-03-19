@@ -3,10 +3,10 @@ package cloudvm
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
-	"net/http"
 )
 
 type GcpWorkerPool struct {
@@ -81,8 +81,8 @@ func NewGcpWorkerPool() *WorkerPool {
 
 func (_ *GcpWorkerPool) NewWorker(workerId string) *Worker {
 	return &Worker{
-		workerId:       workerId,
-		workerIp:       "",
+		workerId: workerId,
+		workerIp: "",
 	}
 }
 
@@ -105,6 +105,8 @@ func (pool *GcpWorkerPool) CreateInstance(worker *Worker) {
 	}
 
 	worker.workerIp = lookup[worker.workerId]
+
+	worker.runCmd("./ol worker up -d")
 }
 
 func (pool *GcpWorkerPool) DeleteInstance(worker *Worker) {
@@ -114,5 +116,5 @@ func (pool *GcpWorkerPool) DeleteInstance(worker *Worker) {
 }
 
 func (_ *GcpWorkerPool) ForwardTask(w http.ResponseWriter, r *http.Request, worker *Worker) {
-	forwardTaskHelper(w, r, worker.workerIp)
+	forwardTaskHelper(w, r, fmt.Sprintf("%s:%d", worker.workerIp, 5000))
 }
