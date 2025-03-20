@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 )
@@ -38,8 +39,13 @@ func (_ *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) {
 		return // TODO return the error
 	}
 
-	workerPath := worker.workerId
-	templatePath := GetLocalPlatConfigDefaults().Path_To_Worker_Config_Template
+	currPath, err := os.Getwd()
+	if err != nil {
+		log.Printf("failed to get current path: %v", err)
+	}
+
+	workerPath := filepath.Join(currPath, worker.workerId)
+	templatePath := GetLocalPlatformConfigDefaults().Path_To_Worker_Config_Template
 
 	// Load worker configuration
 	if err := LoadWorkerConfigTemplate(templatePath, workerPath); err != nil {

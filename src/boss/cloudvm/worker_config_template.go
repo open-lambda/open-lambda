@@ -17,13 +17,12 @@ func LoadWorkerConfigTemplate(templatePath string, workerPath string) error {
 		}
 
 		// Set the worker port
-		common.Conf.Worker_port = GetLocalPlatConfigDefaults().Worker_Starting_Port
+		common.Conf.Worker_port = GetLocalPlatformConfigDefaults().Worker_Starting_Port
 
 		// Save the updated configuration to template.json
 		if err := common.SaveConf(templatePath); err != nil {
 			return fmt.Errorf("failed to save updated configuration to template.json: %v", err)
 		}
-
 	} else if err != nil {
 		return fmt.Errorf("error checking template.json: %v", err)
 	}

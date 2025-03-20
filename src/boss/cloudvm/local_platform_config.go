@@ -11,10 +11,10 @@ type LocalPlatConfig struct {
 	Path_To_Worker_Config_Template string `json:"path_to_worker_config_template"`
 }
 
-func GetLocalPlatConfigDefaults() *LocalPlatConfig {
+func GetLocalPlatformConfigDefaults() *LocalPlatConfig {
 	currPath, err := os.Getwd()
 	if err != nil {
-		log.Printf("failed to get executable path: %v", err)
+		log.Printf("failed to get current path: %v", err)
 	}
 
 	return &LocalPlatConfig{
