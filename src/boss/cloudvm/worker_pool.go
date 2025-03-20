@@ -390,8 +390,8 @@ func (pool *WorkerPool) StatusCluster() map[string]int {
 }
 
 // forward request to worker
-func forwardTaskHelper(w http.ResponseWriter, req *http.Request, workerIp string) error {
-	host := workerIp
+func forwardTaskHelper(w http.ResponseWriter, req *http.Request, workerHost string, workerPort string) error {
+	host := fmt.Sprintf("%s:%s", workerHost, workerPort)
 
 	req.URL.Scheme = "http"
 	req.URL.Host = host
