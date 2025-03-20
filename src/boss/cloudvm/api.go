@@ -58,7 +58,6 @@ Defines the Worker structure
 */
 type Worker struct {
 	workerId string
-	workerIp string
 	numTask  int32
 	pool     *WorkerPool
 	state    WorkerState

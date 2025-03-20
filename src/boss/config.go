@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"os"
-	"path/filepath"
 
 	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
 )
@@ -14,31 +12,22 @@ import (
 var Conf *Config
 
 type Config struct {
-	Platform                       string             `json:"platform"`
-	Scaling                        string             `json:"scaling"`
-	API_key                        string             `json:"api_key"`
-	Boss_port                      string             `json:"boss_port"`
-	Worker_Cap                     int                `json:"worker_cap"`
-	Gcp                            *cloudvm.GcpConfig `json:"gcp"`
-	Worker_Starting_Port           string             `json:"worker_starting_port"`
-	Path_To_Worker_Config_Template string             `json:"path_to_worker_config_template"`
+	Platform   string             `json:"platform"`
+	Scaling    string             `json:"scaling"`
+	API_key    string             `json:"api_key"`
+	Boss_port  string             `json:"boss_port"`
+	Worker_Cap int                `json:"worker_cap"`
+	Gcp        *cloudvm.GcpConfig `json:"gcp"`
 }
 
 func LoadDefaults() error {
-	currPath, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("failed to get executable path: %v", err)
-	}
-
 	Conf = &Config{
-		Platform:                       "local",
-		Scaling:                        "manual",
-		API_key:                        "abc", // TODO: autogenerate a random key
-		Boss_port:                      "5000",
-		Worker_Cap:                     4,
-		Gcp:                            cloudvm.GetGcpConfigDefaults(),
-		Worker_Starting_Port:           "6000",
-		Path_To_Worker_Config_Template: filepath.Join(currPath, "template.json"),
+		Platform:   "local",
+		Scaling:    "manual",
+		API_key:    "abc", // TODO: autogenerate a random key
+		Boss_port:  "5000",
+		Worker_Cap: 4,
+		Gcp:        cloudvm.GetGcpConfigDefaults(),
 	}
 
 	return checkConf()
