@@ -1,7 +1,6 @@
 package cloudvm
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -76,5 +75,5 @@ func (_ *LocalWorkerPoolPlatform) DeleteInstance(worker *Worker) {
 }
 
 func (_ *LocalWorkerPoolPlatform) ForwardTask(w http.ResponseWriter, r *http.Request, worker *Worker) {
-	forwardTaskHelper(w, r, fmt.Sprintf("%s:%s", worker.host, worker.port))
+	forwardTaskHelper(w, r, worker.host, worker.port)
 }

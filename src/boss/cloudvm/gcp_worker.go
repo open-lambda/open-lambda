@@ -117,5 +117,5 @@ func (pool *GcpWorkerPool) DeleteInstance(worker *Worker) {
 }
 
 func (_ *GcpWorkerPool) ForwardTask(w http.ResponseWriter, r *http.Request, worker *Worker) {
-	forwardTaskHelper(w, r, fmt.Sprintf("%s:%s", worker.host, worker.port))
+	forwardTaskHelper(w, r, worker.host, worker.port)
 }
