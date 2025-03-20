@@ -7,12 +7,11 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/signal"
 	"strconv"
+	"os/signal"
 	"syscall"
-
-	"github.com/open-lambda/open-lambda/ol/boss/autoscaling"
 	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
+	"github.com/open-lambda/open-lambda/ol/boss/autoscaling"
 )
 
 const (
@@ -24,7 +23,7 @@ const (
 
 type Boss struct {
 	workerPool *cloudvm.WorkerPool
-	autoScaler autoscaling.Scaling
+	autoScaler  autoscaling.Scaling
 }
 
 // BossStatus handles the request to get the status of the boss.
@@ -95,7 +94,7 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 
 	// STEP 2: adjust target worker count
 	b.workerPool.SetTarget(worker_count)
-
+	
 	// respond with status
 	b.BossStatus(w, r)
 }
