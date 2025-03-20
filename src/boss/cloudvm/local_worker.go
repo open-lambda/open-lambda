@@ -48,7 +48,7 @@ func (_ *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) {
 		return // TODO return the error
 	}
 
-	workerPath := fmt.Sprintf("%s/%s", currPath, worker.workerId)
+	workerPath := filepath.Join(currPath, worker.workerId)
 	templatePath := filepath.Join(currPath, "template.json")
 
 	// Load worker configuration
