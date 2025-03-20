@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"path/filepath"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 )
@@ -26,7 +25,6 @@ func (_ *LocalWorkerPoolPlatform) NewWorker(workerId string) *Worker {
 	return &Worker{
 		workerId: workerId,
 		host:     "localhost",
-		port:     "",
 	}
 }
 
@@ -41,15 +39,8 @@ func (_ *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) {
 		return // TODO return the error
 	}
 
-	// Get the current directory
-	currPath, err := os.Getwd()
-	if err != nil {
-		log.Printf("Failed to get executable directory: %v\n", err)
-		return // TODO return the error
-	}
-
-	workerPath := filepath.Join(currPath, worker.workerId)
-	templatePath := filepath.Join(currPath, "template.json")
+	workerPath := worker.workerId
+	templatePath := GetLocalPlatConfigDefaults().Path_To_Worker_Config_Template
 
 	// Load worker configuration
 	if err := LoadWorkerConfigTemplate(templatePath, workerPath); err != nil {

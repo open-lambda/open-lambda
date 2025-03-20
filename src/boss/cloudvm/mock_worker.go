@@ -24,7 +24,7 @@ func NewMockWorkerPool() *WorkerPool {
 func (_ *MockWorkerPoolPlatform) NewWorker(workerId string) *Worker {
 	return &Worker{
 		workerId: workerId,
-		workerIp: "",
+		host:     "",
 	}
 }
 

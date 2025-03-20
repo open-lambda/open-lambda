@@ -338,7 +338,7 @@ func (w *Worker) runCmd(command string) {
 
 	tries := 10
 	for tries > 0 {
-		sshcmd := exec.Command("ssh", user.Username+"@"+w.workerIp, "-o", "StrictHostKeyChecking=no", "-C", cmd)
+		sshcmd := exec.Command("ssh", user.Username+"@"+w.host, "-o", "StrictHostKeyChecking=no", "-C", cmd)
 		stdoutStderr, err := sshcmd.CombinedOutput()
 		log.Printf("%s\n", stdoutStderr)
 		if err == nil {
@@ -390,7 +390,6 @@ func (pool *WorkerPool) StatusCluster() map[string]int {
 }
 
 // forward request to worker
-// TODO: this is kept for other platforms
 func forwardTaskHelper(w http.ResponseWriter, req *http.Request, workerIp string) error {
 	host := workerIp
 
