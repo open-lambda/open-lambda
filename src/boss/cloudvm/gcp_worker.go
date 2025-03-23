@@ -87,7 +87,7 @@ func (_ *GcpWorkerPool) NewWorker(workerId string) *Worker {
 	}
 }
 
-func (pool *GcpWorkerPool) CreateInstance(worker *Worker) {
+func (pool *GcpWorkerPool) CreateInstance(worker *Worker) error {
 	client := pool.client
 	fmt.Printf("creating new VM from snapshot\n")
 
@@ -108,12 +108,16 @@ func (pool *GcpWorkerPool) CreateInstance(worker *Worker) {
 	worker.host = lookup[worker.workerId]
 
 	worker.runCmd("./ol worker up -d")
+
+	return nil
 }
 
-func (pool *GcpWorkerPool) DeleteInstance(worker *Worker) {
+func (pool *GcpWorkerPool) DeleteInstance(worker *Worker) error {
 	log.Printf("deleting gcp worker: %s\n", worker.workerId)
 	worker.runCmd("./ol worker down")
 	pool.client.Wait(pool.client.deleteGcpInstance(worker.workerId)) // wait until instance is completely deleted
+
+	return nil
 }
 
 func (_ *GcpWorkerPool) ForwardTask(w http.ResponseWriter, r *http.Request, worker *Worker) {

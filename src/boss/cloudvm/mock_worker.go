@@ -28,12 +28,14 @@ func (_ *MockWorkerPoolPlatform) NewWorker(workerId string) *Worker {
 	}
 }
 
-func (_ *MockWorkerPoolPlatform) CreateInstance(worker *Worker) {
+func (_ *MockWorkerPoolPlatform) CreateInstance(worker *Worker) error {
 	log.Printf("created new mock worker: %s\n", worker.workerId)
+	return nil
 }
 
-func (_ *MockWorkerPoolPlatform) DeleteInstance(worker *Worker) {
+func (_ *MockWorkerPoolPlatform) DeleteInstance(worker *Worker) error {
 	log.Printf("deleted mock worker: %s\n", worker.workerId)
+	return nil
 }
 
 func (_ *MockWorkerPoolPlatform) ForwardTask(w http.ResponseWriter, _ *http.Request, worker *Worker) {
