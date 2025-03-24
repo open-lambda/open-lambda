@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 )
@@ -36,6 +37,32 @@ func LoadWorkerConfigTemplate(templatePath string, workerPath string) error {
 	configPath := filepath.Join(workerPath, "config.json")
 	if err := common.SaveConf(configPath); err != nil {
 		return fmt.Errorf("failed to save updated configuration to worker config: %v", err)
+	}
+
+	return nil
+}
+
+func IncrementPortInWorkerConfigTemplate(templatePath string) error {
+	// Load template.json (if increment was called template.json should exist already)
+	if err := common.LoadConf(templatePath); err != nil {
+		return fmt.Errorf("failed to load template.json: %v", err)
+	}
+
+	// Convert Worker_port from string to integer
+	port, err := strconv.Atoi(common.Conf.Worker_port)
+	if err != nil {
+		return fmt.Errorf("failed to parse Worker_port: %v", err)
+	}
+
+	// Increment the port number
+	port++
+
+	// Convert the port number back to a string
+	common.Conf.Worker_port = strconv.Itoa(port)
+
+	// Save the updated configuration to template.json
+	if err := common.SaveConf(templatePath); err != nil {
+		return fmt.Errorf("failed to save updated configuration to template.json: %v", err)
 	}
 
 	return nil
