@@ -121,7 +121,12 @@ func (pool *WorkerPool) startNewWorker() {
 
 	go func() { // should be able to create multiple instances simultaneously
 		worker.numTask = 1
-		pool.CreateInstance(worker) // c`reate new instance
+		err := pool.CreateInstance(worker) // c`reate new instance
+
+		if err != nil {
+			log.Printf("Failed to create instance for worker %s: %v\n", worker.workerId, err)
+			panic(err)
+		}
 
 		// change state starting -> running
 		pool.Lock()
@@ -218,7 +223,12 @@ func (pool *WorkerPool) detroyWorker(worker *Worker) {
 	pool.Unlock()
 
 	go func() { // should be able to destroy multiple instances simultaneously
-		pool.DeleteInstance(worker) // delete new instance
+		err := pool.DeleteInstance(worker) // delete new instance
+
+		if err != nil {
+			log.Printf("Failed to delete instance for worker %s: %v\n", worker.workerId, err)
+			panic(err)
+		}
 
 		// remove from cluster
 		pool.Lock()
