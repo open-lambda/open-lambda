@@ -7,11 +7,12 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 	"os/signal"
+	"strconv"
 	"syscall"
-	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
+
 	"github.com/open-lambda/open-lambda/ol/boss/autoscaling"
+	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
 )
 
 const (
@@ -19,11 +20,15 @@ const (
 	BOSS_STATUS_PATH = "/status"
 	SCALING_PATH     = "/scaling/worker_count"
 	SHUTDOWN_PATH    = "/shutdown"
+	LAMBDA_UPLOAD    = "/lambda/upload/" // POST - upload lambda tar
+	LAMBDA_LIST      = "/lambda/list"    // GET - list lambdas
+	LAMBDA_DELETE    = "/lambda/"        // DELETE - delete lambda tar
+	LAMBDA_UPDATE    = "/lambda/update/" // PUT - update lambda tar
 )
 
 type Boss struct {
 	workerPool *cloudvm.WorkerPool
-	autoScaler  autoscaling.Scaling
+	autoScaler autoscaling.Scaling
 }
 
 // BossStatus handles the request to get the status of the boss.
@@ -94,7 +99,7 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 
 	// STEP 2: adjust target worker count
 	b.workerPool.SetTarget(worker_count)
-	
+
 	// respond with status
 	b.BossStatus(w, r)
 }
@@ -121,6 +126,12 @@ func BossMain() (err error) {
 	http.HandleFunc(SCALING_PATH, boss.ScalingWorker)
 	http.HandleFunc(RUN_PATH, boss.workerPool.RunLambda)
 	http.HandleFunc(SHUTDOWN_PATH, boss.Close)
+
+	// Register LambdaStore CRUD routes
+	http.HandleFunc(LAMBDA_UPLOAD, UploadLambda)
+	http.HandleFunc(LAMBDA_LIST, ListLambda)
+	http.HandleFunc(LAMBDA_DELETE, DeleteLambda)
+	http.HandleFunc(LAMBDA_UPDATE, UpdateLambda)
 
 	// clean up if signal hits us
 	c := make(chan os.Signal, 1)
