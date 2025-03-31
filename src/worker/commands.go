@@ -229,7 +229,7 @@ func cleanupCmd(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-  	err = common.LoadConf(filepath.Join(olPath, "config.json"))
+	err = common.LoadConf(filepath.Join(olPath, "config.json"))
 	if err != nil {
 		return fmt.Errorf("failed to load OL config: %s", err)
 	}

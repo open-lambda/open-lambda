@@ -27,13 +27,18 @@ type CgroupPool struct {
 
 // NewCgroupPool creates a new CgroupPool with the specified name.
 func NewCgroupPool(name string) (*CgroupPool, error) {
+	// Load the pool logger with a certain level
+	poolLogger, err := common.LoadCgroupLogger(common.Conf.Trace.Cgroups)
+	if err != nil {
+		return nil, err
+	}
 	pool := &CgroupPool{
 		Name:     path.Base(path.Dir(common.Conf.Worker_dir)) + "-" + name,
 		ready:    make(chan *CgroupImpl, CGROUP_RESERVE),
 		recycled: make(chan *CgroupImpl, CGROUP_RESERVE),
 		quit:     make(chan chan bool),
 		nextID:   0,
-		log:      common.LoadCgroupLogger("cg-pool", path.Base(path.Dir(common.Conf.Worker_dir))+"-"+name),
+		log:      poolLogger,
 	}
 
 	// create cgroup
@@ -57,10 +62,12 @@ func NewCgroupPool(name string) (*CgroupPool, error) {
 func (pool *CgroupPool) NewCgroup() Cgroup {
 	pool.nextID++
 
+	// store the name instead of copy pasting
+	cgname := fmt.Sprintf("cg-%d", pool.nextID)
 	cg := &CgroupImpl{
-		name: fmt.Sprintf("cg-%d", pool.nextID),
+		name: cgname,
 		pool: pool,
-		log:  pool.log.With("cg", fmt.Sprintf("cg-%d", pool.nextID)),
+		log:  pool.log.With("cg", cgname),
 	}
 
 	groupPath := cg.GroupPath()

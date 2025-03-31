@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"log/slog"
 	"os"
 	"strconv"
@@ -20,13 +19,6 @@ type CgroupImpl struct {
 	pool       *CgroupPool
 	memLimitMB int
 	log        *slog.Logger
-}
-
-func (cg *CgroupImpl) printf(format string, args ...any) {
-	if common.Conf.Trace.Cgroups {
-		msg := fmt.Sprintf(format, args...)
-		log.Printf("%s [CGROUP %s: %s]", strings.TrimRight(msg, "\n"), cg.pool.Name, cg.name)
-	}
 }
 
 // Name returns the name of the cgroup.
