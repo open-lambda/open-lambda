@@ -18,7 +18,7 @@ type LambdaInstance struct {
 
 	// snapshot of LambdaFunc, at the time the LambdaInstance is created
 	codeDir string
-	meta    *sandbox.SandboxMeta
+	meta    *FunctionMeta
 
 	// send chan to the kill chan to destroy the instance, then
 	// wait for msg on sent chan to block until it is done
@@ -102,7 +102,7 @@ func (linst *LambdaInstance) Task() {
 				scratchDir := f.lmgr.scratchDirs.Make(f.name)
 
 				// we don't specify parent SB, because ImportCache.Create chooses it for us
-				sb, err = f.lmgr.ZygoteProvider.Create(f.lmgr.sbPool, true, linst.codeDir, scratchDir, linst.meta, f.rtType)
+				sb, err = f.lmgr.ZygoteProvider.Create(f.lmgr.sbPool, true, linst.codeDir, scratchDir, linst.meta.Sandbox, f.rtType)
 				if err != nil {
 					f.printf("failed to get Sandbox from import cache")
 					sb = nil
@@ -115,7 +115,7 @@ func (linst *LambdaInstance) Task() {
 			if sb == nil {
 				t2 := common.T0("LambdaInstance-WaitSandbox-NoImportCache")
 				scratchDir := f.lmgr.scratchDirs.Make(f.name)
-				sb, err = f.lmgr.sbPool.Create(nil, true, linst.codeDir, scratchDir, linst.meta, f.rtType)
+				sb, err = f.lmgr.sbPool.Create(nil, true, linst.codeDir, scratchDir, linst.meta.Sandbox, f.rtType)
 				t2.T1()
 			}
 
@@ -171,7 +171,7 @@ func (linst *LambdaInstance) Task() {
 
 			// notify instance that we're done
 			t2.T1()
-            // Record at least 1 ms of elapsed time
+			// Record at least 1 ms of elapsed time
 			v := int(t2.Milliseconds)
 			if v == 0 {
 				req.execMs = 1

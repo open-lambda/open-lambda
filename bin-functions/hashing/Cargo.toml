@@ -1,12 +1,11 @@
 [package]
 name = "hashing"
 version = "0.1.0"
-authors = ["Kai Mast <kaimast@cs.wisc.edu>"]
-edition = "2021"
+authors = ["Kai Mast <kai@kaimast.com>"]
+edition = "2024"
 
 [dependencies]
 open-lambda = { path="../bindings" }
 open-lambda-macros = { path="../macros" }
 sha2 = "0.10"
-rand = { version="0.8", default-features=false, features=["getrandom", "small_rng"] }
-getrandom = { version="*", features=["open-lambda"] }
+rand = { version="0.9", default-features=false }

@@ -293,6 +293,11 @@ def get_mem_stat_mb(stat):
                 return int(parts[1]) / 1024
     raise ValueError('could not get stat')
 
+def assert_true(val):
+    ''' Test helper. Will fail if val is not true '''
+
+    if not val:
+        raise ValueError('Expected value to be true')
 
 def assert_eq(actual, expected):
     ''' Test helper. Will fail if actual != expected '''

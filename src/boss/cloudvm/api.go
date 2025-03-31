@@ -34,7 +34,7 @@ WorkerPoolPlatform.
 */
 type WorkerPool struct {
 	WorkerPoolPlatform
-	platform string
+	platform   string
 	worker_cap int
 	sync.Mutex
 	nextId  int                  // the next new worker's id
@@ -58,8 +58,9 @@ Defines the Worker structure
 */
 type Worker struct {
 	workerId string
-	workerIp string
 	numTask  int32
 	pool     *WorkerPool
 	state    WorkerState
+	port     string
+	host     string
 }

@@ -2,7 +2,7 @@ use open_lambda_proxy_protocol::CallResult;
 
 mod internal {
     #[link(wasm_import_module = "ol_ipc")]
-    extern "C" {
+    unsafe extern "C" {
         pub fn http_post(
             address_ptr: *const u8,
             address_len: u32,

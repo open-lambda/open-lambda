@@ -9,7 +9,7 @@ fn parse_config_file() -> Result<HashMap<String, String>, String> {
 }
 
 pub fn get_config_value(key: &str) -> Result<String, String> {
-    lazy_static!{
+    lazy_static! {
         static ref CONFIG: Result<HashMap<String, String>, String> = parse_config_file();
     };
 
@@ -21,6 +21,6 @@ pub fn get_config_value(key: &str) -> Result<String, String> {
                 Err(format!("No such config entry: {key}"))
             }
         }
-        Err(err) => Err(err.clone())
+        Err(err) => Err(err.clone()),
     }
 }

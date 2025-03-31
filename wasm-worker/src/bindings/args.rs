@@ -4,11 +4,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use parking_lot::Mutex;
 
-use rand::Fill;
+use rand::TryRngCore;
 
 use wasmtime::{Caller, Linker, Val};
 
-use super::{fill_slice, get_slice, get_slice_mut, set_u64, BindingsData};
+use super::{BindingsData, fill_slice, get_slice, get_slice_mut, set_u64};
 
 pub type ResultHandle = Arc<Mutex<Option<Vec<u8>>>>;
 
@@ -103,9 +103,8 @@ fn get_random_value(mut caller: Caller<'_, BindingsData>, buf_ptr: i32, buf_len:
 
     let buf_slice = get_slice_mut(&caller, &memory, buf_ptr, buf_len);
 
-    let mut rng = rand::thread_rng();
-    buf_slice
-        .try_fill(&mut rng)
+    let mut rng = rand::rng();
+    rng.try_fill_bytes(buf_slice)
         .expect("Failed to fill buffer with random data");
 }
 

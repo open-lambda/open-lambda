@@ -2,10 +2,13 @@
 
 ''' Various integration tests for the open lambda framwork '''
 
-# pylint: disable=global-statement, too-many-statements, fixme, broad-except, too-many-locals, missing-function-docstring
+# pylint: disable=global-statement,too-many-statements,fixme
+# pylint: disable=broad-except,too-many-locals
+# pylint: disable=missing-function-docstring,wrong-import-position
 
 import argparse
 import os
+import sys
 import tempfile
 
 from time import time
@@ -15,7 +18,7 @@ from multiprocessing import Pool
 import requests
 
 from helper import DockerWorker, SockWorker, prepare_open_lambda, setup_config
-from helper import get_current_config, TestConfContext, assert_eq
+from helper import get_current_config, TestConfContext, assert_true, assert_eq
 
 from helper.test import (
     set_test_filter,
@@ -26,6 +29,9 @@ from helper.test import (
     test
 )
 
+# You can either install the OpenLambda Python bindings
+# or run the test from the project's root folder
+sys.path.append('python/src')
 from open_lambda import OpenLambda
 
 # These will be set by argparse in main()
@@ -79,25 +85,25 @@ def numpy_test():
 
     # try adding the nums in a few different matrixes.  Also make sure
     # we can have two different numpy versions co-existing.
-    result = open_lambda.run("numpy23", [1, 2])
+    result = open_lambda.run("numpy21", [1, 2])
     assert_eq(result['result'], 3)
-    assert result['numpy-version'].startswith('1.23')
+    assert_true(result['numpy-version'].startswith('2.1'))
 
-    result = open_lambda.run("numpy24", [[1, 2], [3, 4]])
+    result = open_lambda.run("numpy22", [[1, 2], [3, 4]])
     assert_eq(result['result'], 10)
-    assert result['numpy-version'].startswith('1.24')
+    assert_true(result['numpy-version'].startswith('2.2'))
 
-    result = open_lambda.run("numpy24", [[[1, 2], [3, 4]], [[1, 2], [3, 4]]])
+    result = open_lambda.run("numpy22", [[[1, 2], [3, 4]], [[1, 2], [3, 4]]])
     assert_eq(result['result'], 20)
-    assert result['numpy-version'].startswith('1.24')
+    assert_true(result['numpy-version'].startswith('2.2'))
 
     result = open_lambda.run("pandas", [[0, 1, 2], [3, 4, 5]])
     assert_eq(result['result'], 15)
-    assert float(".".join(result['numpy-version'].split('.')[:2])) >= 1.24
+    assert_true(float(".".join(result['numpy-version'].split('.')[:2])) >= 2.2)
 
     result = open_lambda.run("pandas-v1", [[1, 2, 3], [1, 2, 3]])
     assert_eq(result['result'], 12)
-    assert result['numpy-version'].startswith('1.24')
+    assert_true(result['numpy-version'].startswith('1.26'))
 
 def stress_one_lambda_task(args):
     open_lambda = OpenLambda()
@@ -245,6 +251,36 @@ def flask_test():
     if r.text != "hi\n":
         raise ValueError(f"r.text should be 'hi\n', not {repr(r.text)}")
 
+@test
+def test_http_method_restrictions():
+    url = 'http://localhost:5000/run/lambda-config-test'
+    print("URL", url)
+    print("Testing POST request...")
+    r = requests.post(url)
+
+    if r.status_code != 418:
+        raise ValueError(f"expected status code 418, but got {r.status_code}")
+    if not "A" in r.headers:
+        raise ValueError(f"'A' not found in headers, as expected: {r.headers}")
+    if r.headers["A"] != "B":
+        raise ValueError(f"headers['A'] should be 'B', not {r.headers['A']}")
+    if r.text != "hi\n":
+        raise ValueError(f"r.text should be 'hi\n', not {repr(r.text)}")
+
+    # Test PUT request
+    print("Testing PUT request...")
+    r = requests.put(url)
+
+    # Verify response for PUT request
+    if r.status_code != 405:
+        raise ValueError(f"Expected status code 405 for PUT, but got {r.status_code}")
+    if r.text != "HTTP method not allowed. Sent: PUT, Allowed: [GET POST]\n":
+        raise ValueError(
+            f"r.text should be 'HTTP method not allowed. Sent: PUT, Allowed: [GET POST]\n' "
+            f"for PUT, not {repr(r.text)}"
+        )
+
+
 def run_tests():
     ping_test()
 
@@ -258,12 +294,15 @@ def run_tests():
     fork_bomb()
     max_mem_alloc()
 
-    # numpy pip install needs a larger mem cap
-    with TestConfContext(mem_pool_mb=1000, trace={"cgroups": True}):
+    # numpy pip install needs a larger memory cap.
+    # numpy also spawns threads using OpenBLAS, so a higher
+    # process limit is needed.
+    with TestConfContext(mem_pool_mb=1000, limits={'procs': 32}, trace={"cgroups": True}):
         numpy_test()
 
     # make sure we can use WSGI apps based on frameworks like Flask
     flask_test()
+    test_http_method_restrictions()
 
     # make sure code updates get pulled within the cache time
     with tempfile.TemporaryDirectory() as reg_dir:

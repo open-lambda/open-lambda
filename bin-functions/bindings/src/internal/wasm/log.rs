@@ -1,6 +1,6 @@
 pub mod wasm_calls {
     #[link(wasm_import_module = "ol_log")]
-    extern "C" {
+    unsafe extern "C" {
         pub fn log_info(msg_ptr: *const u8, msg_len: u32);
         pub fn log_debug(msg_ptr: *const u8, msg_len: u32);
         pub fn log_error(msg_ptr: *const u8, msg_len: u32);

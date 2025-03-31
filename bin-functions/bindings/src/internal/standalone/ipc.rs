@@ -13,38 +13,30 @@ pub fn function_call<S: ToString>(func_name: S, args: Vec<u8>) -> CallResult {
 
 pub fn http_get(address: &str, path: &str) -> CallResult {
     assert!(path.starts_with('/'));
-
     let url = format!("http://{address}{path}");
-    let mut result = vec![];
 
     match ureq::get(&url)
         .call()
-        .map_err(|err| {
-            format!("Failed to send request to {url}: {err}")
-        })?
-        .into_reader()
-        .read_to_end(&mut result)
+        .map_err(|err| format!("Failed to send request to {url}: {err}"))?
+        .into_body()
+        .read_to_vec()
     {
-        Ok(_) => Ok(ByteBuf::from(result)),
+        Ok(data) => Ok(ByteBuf::from(data)),
         Err(err) => Err(err.to_string()),
     }
 }
 
 pub fn http_post(address: &str, path: &str, args: Vec<u8>) -> CallResult {
     assert!(path.starts_with('/'));
-
     let url = format!("http://{address}{path}");
-    let mut result = vec![];
 
     match ureq::post(&url)
-        .send_bytes(&args)
-        .map_err(|err| {
-            format!("Failed to send request to {url}: {err}")
-        })?
-        .into_reader()
-        .read_to_end(&mut result)
+        .send(&args)
+        .map_err(|err| format!("Failed to send request to {url}: {err}"))?
+        .into_body()
+        .read_to_vec()
     {
-        Ok(_) => Ok(ByteBuf::from(result)),
+        Ok(data) => Ok(ByteBuf::from(data)),
         Err(err) => Err(err.to_string()),
     }
 }
