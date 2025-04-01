@@ -1,6 +1,8 @@
 package boss
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,45 +11,96 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/open-lambda/open-lambda/ol/common"
 )
 
-const LAMBDA_STORE_PATH = "./lambdaStore/" // Directory for storing lambdas
+const LAMBDA_STORE_PATH = "./lambdaStore/"
 
-// Ensure lambdaStore directory exists at initialization
+var (
+	lambdaRegistry      []LambdaEntry
+	httpTriggerRegistry []HTTPEntry
+	cronTriggerRegistry []CronEntry
+)
+
+type LambdaEntry struct {
+	FunctionName string
+	Config       *common.LambdaConfig
+}
+
+type HTTPEntry struct {
+	FunctionName string
+	Method       string
+}
+
+type CronEntry struct {
+	FunctionName string
+	Schedule     string
+}
+
 func init() {
-	if err := os.MkdirAll(LAMBDA_STORE_PATH, 0755); err != nil {
-		log.Fatalf("Failed to create lambda store directory: %v", err)
+	info, err := os.Stat(LAMBDA_STORE_PATH)
+	if os.IsNotExist(err) {
+		if err := os.MkdirAll(LAMBDA_STORE_PATH, 0755); err != nil {
+			log.Fatalf("Failed to create lambda store directory: %v", err)
+		}
+	} else if err == nil && info.IsDir() {
+		files, _ := os.ReadDir(LAMBDA_STORE_PATH)
+		for _, file := range files {
+			if file.IsDir() {
+				funcName := file.Name()
+				if err := loadConfigAndRegister(funcName); err != nil {
+					log.Printf("Failed to load existing lambda %s: %v", funcName, err)
+				}
+			}
+		}
+	} else if err != nil {
+		log.Fatalf("Error checking lambda store directory: %v", err)
 	}
 }
 
-// UploadLambda handles POST requests to upload a tar file to the lambda store
-// URL Format: /lambda/upload/{function_name}
-// Request Body: Contains the tar.gz file.
 func UploadLambda(w http.ResponseWriter, r *http.Request) {
 	functionName := strings.TrimPrefix(r.URL.Path, "/lambda/upload/")
-	log.Printf("Received request to upload lambda: %s\n", functionName)
+	destDir := filepath.Join(LAMBDA_STORE_PATH, functionName)
 
-	tarFilePath := filepath.Join(LAMBDA_STORE_PATH, functionName+".tar.gz")
-	file, err := os.Create(tarFilePath)
-	if err != nil {
-		http.Error(w, "Failed to create tar file", http.StatusInternalServerError)
+	// Clean any existing code
+	os.RemoveAll(destDir)
+	if err := os.MkdirAll(destDir, 0755); err != nil {
+		http.Error(w, "Failed to create lambda directory", http.StatusInternalServerError)
 		return
 	}
-	defer file.Close()
 
-	_, err = io.Copy(file, r.Body)
+	// Temporarily save uploaded tar.gz
+	tempTarPath := filepath.Join(os.TempDir(), functionName+".tar.gz")
+	tempFile, err := os.Create(tempTarPath)
 	if err != nil {
-		http.Error(w, "Failed to save tar file", http.StatusInternalServerError)
+		http.Error(w, "Failed to create temp file", http.StatusInternalServerError)
 		return
 	}
-	log.Printf("Lambda %s uploaded successfully!", functionName)
+	if _, err := io.Copy(tempFile, r.Body); err != nil {
+		http.Error(w, "Failed to save uploaded file", http.StatusInternalServerError)
+		tempFile.Close()
+		return
+	}
+	tempFile.Close()
+
+	// Extract into lambdaStore/{functionName}/
+	if err := ExtractTarGz(tempTarPath, destDir); err != nil {
+		http.Error(w, "Failed to extract lambda archive", http.StatusInternalServerError)
+		os.Remove(tempTarPath)
+		return
+	}
+	os.Remove(tempTarPath) // Clean up temp file
+
+	// Register the lambda config
+	if err := loadConfigAndRegister(functionName); err != nil {
+		log.Printf("Warning: Lambda %s uploaded but failed to register config: %v", functionName, err)
+	}
+
 	w.WriteHeader(http.StatusCreated)
-	fmt.Fprintf(w, "Lambda %s uploaded successfully", functionName)
+	fmt.Fprintf(w, "Lambda %s uploaded and registered successfully", functionName)
 }
 
-// ListLambda lists all lambdas in the store
-// URL: /lambda/list
-// Lists all tar.gz files in the lambdaStore directory, returning the function names without the .tar.gz suffix.
 func ListLambda(w http.ResponseWriter, r *http.Request) {
 	files, err := os.ReadDir(LAMBDA_STORE_PATH)
 	if err != nil {
@@ -57,51 +110,148 @@ func ListLambda(w http.ResponseWriter, r *http.Request) {
 
 	var lambdaFunctions []string
 	for _, file := range files {
-		if strings.HasSuffix(file.Name(), ".tar.gz") {
-			lambdaFunctions = append(lambdaFunctions, strings.TrimSuffix(file.Name(), ".tar.gz"))
+		if file.IsDir() {
+			lambdaFunctions = append(lambdaFunctions, file.Name())
 		}
 	}
 
 	json.NewEncoder(w).Encode(lambdaFunctions)
 }
 
-// DeleteLambda deletes a lambda function tar from the
-// URL Format: /lambda/{function_name}
-// Deletes the corresponding tar.gz file from the lambdaStore directory.
 func DeleteLambda(w http.ResponseWriter, r *http.Request) {
 	functionName := strings.TrimPrefix(r.URL.Path, "/lambda/")
-	filePath := filepath.Join(LAMBDA_STORE_PATH, functionName+".tar.gz")
+	dirPath := filepath.Join(LAMBDA_STORE_PATH, functionName)
 
-	if err := os.Remove(filePath); err != nil {
+	if err := os.RemoveAll(dirPath); err != nil {
 		http.Error(w, "Failed to delete lambda function", http.StatusInternalServerError)
 		return
 	}
-	log.Printf("Lambda %s deleted successfully!", functionName)
+	unregisterTriggers(functionName)
+	removeFromRegistry(functionName)
+
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, "Lambda %s deleted successfully", functionName)
 }
 
-// UpdateLambda updates the tar file of an existing lambda
-// URL Format: /lambda/update/{function_name}
-// Request Body: Contains the new tar.gz file to overwrite the existing file with the same name.
 func UpdateLambda(w http.ResponseWriter, r *http.Request) {
-	functionName := strings.TrimPrefix(r.URL.Path, "/lambda/update/")
-	log.Printf("Received request to update lambda: %s\n", functionName)
+	UploadLambda(w, r) // should we keep this at all? or just do update thru upload?
+}
 
-	tarFilePath := filepath.Join(LAMBDA_STORE_PATH, functionName+".tar.gz")
-	file, err := os.Create(tarFilePath)
-	if err != nil {
-		http.Error(w, "Failed to create tar file", http.StatusInternalServerError)
-		return
-	}
-	defer file.Close()
+func ListHTTPTriggers(w http.ResponseWriter, r *http.Request) {
+	json.NewEncoder(w).Encode(httpTriggerRegistry)
+}
 
-	_, err = io.Copy(file, r.Body)
+func ListCronTriggers(w http.ResponseWriter, r *http.Request) {
+	json.NewEncoder(w).Encode(cronTriggerRegistry)
+}
+
+func loadConfigAndRegister(functionName string) error {
+	destDir := filepath.Join(LAMBDA_STORE_PATH, functionName)
+
+	lambdaConfig, err := common.LoadLambdaConfig(destDir)
 	if err != nil {
-		http.Error(w, "Failed to update tar file", http.StatusInternalServerError)
-		return
+		return fmt.Errorf("failed to load config: %v", err)
 	}
-	log.Printf("Lambda %s updated successfully!", functionName)
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "Lambda %s updated successfully", functionName)
+
+	unregisterTriggers(functionName)
+	removeFromRegistry(functionName)
+
+	addToRegistry(functionName, lambdaConfig)
+	registerTriggers(functionName, lambdaConfig)
+
+	return nil
+}
+
+func ExtractTarGz(src, dest string) error {
+	f, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	gzr, err := gzip.NewReader(f)
+	if err != nil {
+		return err
+	}
+	defer gzr.Close()
+
+	tr := tar.NewReader(gzr)
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+
+		target := filepath.Join(dest, header.Name)
+		switch header.Typeflag {
+		case tar.TypeDir:
+			os.MkdirAll(target, 0755)
+		case tar.TypeReg:
+			os.MkdirAll(filepath.Dir(target), 0755)
+			outFile, err := os.Create(target)
+			if err != nil {
+				return err
+			}
+			if _, err := io.Copy(outFile, tr); err != nil {
+				outFile.Close()
+				return err
+			}
+			outFile.Close()
+		}
+	}
+	return nil
+}
+
+func registerTriggers(functionName string, cfg *common.LambdaConfig) {
+	for _, trigger := range cfg.Triggers.HTTP {
+		httpTriggerRegistry = append(httpTriggerRegistry, HTTPEntry{
+			FunctionName: functionName,
+			Method:       strings.ToUpper(trigger.Method),
+		})
+	}
+
+	for _, trigger := range cfg.Triggers.Cron {
+		cronTriggerRegistry = append(cronTriggerRegistry, CronEntry{
+			FunctionName: functionName,
+			Schedule:     trigger.Schedule,
+		})
+	}
+}
+
+func unregisterTriggers(functionName string) {
+	newHTTP := []HTTPEntry{}
+	for _, entry := range httpTriggerRegistry {
+		if entry.FunctionName != functionName {
+			newHTTP = append(newHTTP, entry)
+		}
+	}
+	httpTriggerRegistry = newHTTP
+
+	newCronList := []CronEntry{}
+	for _, entry := range cronTriggerRegistry {
+		if entry.FunctionName != functionName {
+			newCronList = append(newCronList, entry)
+		}
+	}
+	cronTriggerRegistry = newCronList
+}
+
+func addToRegistry(functionName string, config *common.LambdaConfig) {
+	lambdaRegistry = append(lambdaRegistry, LambdaEntry{
+		FunctionName: functionName,
+		Config:       config,
+	})
+}
+
+func removeFromRegistry(functionName string) {
+	newRegistry := []LambdaEntry{}
+	for _, entry := range lambdaRegistry {
+		if entry.FunctionName != functionName {
+			newRegistry = append(newRegistry, entry)
+		}
+	}
+	lambdaRegistry = newRegistry
 }
