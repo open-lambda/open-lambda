@@ -38,6 +38,7 @@ type CronEntry struct {
 	Schedule     string
 }
 
+// init sets up the lambda store and loads existing lambda configs.
 func init() {
 	info, err := os.Stat(LAMBDA_STORE_PATH)
 	if os.IsNotExist(err) {
@@ -59,8 +60,16 @@ func init() {
 	}
 }
 
+// UploadLambda handles lambda uploads and registers them.
 func UploadLambda(w http.ResponseWriter, r *http.Request) {
-	functionName := strings.TrimPrefix(r.URL.Path, "/lambda/upload/")
+	rawFunctionName := strings.TrimPrefix(r.URL.Path, "/lambda/upload/")
+	functionName, err := sanitizeFunctionName(rawFunctionName)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	destDir := filepath.Join(LAMBDA_STORE_PATH, functionName)
 
 	// Clean any existing code
@@ -101,6 +110,7 @@ func UploadLambda(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Lambda %s uploaded and registered successfully", functionName)
 }
 
+// ListLambda lists all registered lambda function names.
 func ListLambda(w http.ResponseWriter, r *http.Request) {
 	files, err := os.ReadDir(LAMBDA_STORE_PATH)
 	if err != nil {
@@ -118,8 +128,15 @@ func ListLambda(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(lambdaFunctions)
 }
 
+// DeleteLambda deletes a lambda and unregisters its config and triggers.
 func DeleteLambda(w http.ResponseWriter, r *http.Request) {
-	functionName := strings.TrimPrefix(r.URL.Path, "/lambda/")
+	rawFunctionName := strings.TrimPrefix(r.URL.Path, "/lambda/")
+	functionName, err := sanitizeFunctionName(rawFunctionName)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	dirPath := filepath.Join(LAMBDA_STORE_PATH, functionName)
 
 	if err := os.RemoveAll(dirPath); err != nil {
@@ -133,18 +150,22 @@ func DeleteLambda(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Lambda %s deleted successfully", functionName)
 }
 
+// UpdateLambda updates a lambda by re-uploading it.
 func UpdateLambda(w http.ResponseWriter, r *http.Request) {
 	UploadLambda(w, r) // should we keep this at all? or just do update thru upload?
 }
 
+// ListHTTPTriggers lists all registered HTTP triggers.
 func ListHTTPTriggers(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(httpTriggerRegistry)
 }
 
+// ListCronTriggers lists all registered Cron triggers.
 func ListCronTriggers(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(cronTriggerRegistry)
 }
 
+// loadConfigAndRegister loads a lambda's config and registers its triggers.
 func loadConfigAndRegister(functionName string) error {
 	destDir := filepath.Join(LAMBDA_STORE_PATH, functionName)
 
@@ -162,49 +183,65 @@ func loadConfigAndRegister(functionName string) error {
 	return nil
 }
 
+// ExtractTarGz extracts a .tar.gz archive to the target directory.
 func ExtractTarGz(src, dest string) error {
+	// Open the uploaded file
 	f, err := os.Open(src)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open uploaded file: %w", err)
 	}
 	defer f.Close()
 
+	// Try to open it as a gzip archive
 	gzr, err := gzip.NewReader(f)
 	if err != nil {
-		return err
+		return fmt.Errorf("invalid archive format: not a valid .gz file")
 	}
 	defer gzr.Close()
 
+	// Wrap it in a tar reader
 	tr := tar.NewReader(gzr)
+
 	for {
 		header, err := tr.Next()
+
 		if err == io.EOF {
-			break
+			break // End of archive
 		}
 		if err != nil {
-			return err
+			return fmt.Errorf("invalid tar structure inside archive: %w", err)
 		}
 
+		// Determine the target path
 		target := filepath.Join(dest, header.Name)
+
 		switch header.Typeflag {
 		case tar.TypeDir:
-			os.MkdirAll(target, 0755)
+			if err := os.MkdirAll(target, 0755); err != nil {
+				return fmt.Errorf("failed to create directory %s: %w", target, err)
+			}
 		case tar.TypeReg:
-			os.MkdirAll(filepath.Dir(target), 0755)
+			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+				return fmt.Errorf("failed to create parent directory for %s: %w", target, err)
+			}
 			outFile, err := os.Create(target)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to create file %s: %w", target, err)
 			}
 			if _, err := io.Copy(outFile, tr); err != nil {
 				outFile.Close()
-				return err
+				return fmt.Errorf("failed to write file %s: %w", target, err)
 			}
 			outFile.Close()
+		default:
+			log.Printf("Skipping unknown tar entry type: %c in %s", header.Typeflag, header.Name)
 		}
 	}
+
 	return nil
 }
 
+// registerTriggers adds a lambda's triggers to the trigger registries.
 func registerTriggers(functionName string, cfg *common.LambdaConfig) {
 	for _, trigger := range cfg.Triggers.HTTP {
 		httpTriggerRegistry = append(httpTriggerRegistry, HTTPEntry{
@@ -221,6 +258,7 @@ func registerTriggers(functionName string, cfg *common.LambdaConfig) {
 	}
 }
 
+// unregisterTriggers removes all triggers for a lambda.
 func unregisterTriggers(functionName string) {
 	newHTTP := []HTTPEntry{}
 	for _, entry := range httpTriggerRegistry {
@@ -239,6 +277,7 @@ func unregisterTriggers(functionName string) {
 	cronTriggerRegistry = newCronList
 }
 
+// addToRegistry adds a lambda and its config to the registry.
 func addToRegistry(functionName string, config *common.LambdaConfig) {
 	lambdaRegistry = append(lambdaRegistry, LambdaEntry{
 		FunctionName: functionName,
@@ -246,6 +285,7 @@ func addToRegistry(functionName string, config *common.LambdaConfig) {
 	})
 }
 
+// removeFromRegistry removes a lambda from the registry.
 func removeFromRegistry(functionName string) {
 	newRegistry := []LambdaEntry{}
 	for _, entry := range lambdaRegistry {
@@ -254,4 +294,16 @@ func removeFromRegistry(functionName string) {
 		}
 	}
 	lambdaRegistry = newRegistry
+}
+
+func sanitizeFunctionName(name string) (string, error) {
+	name = strings.TrimSpace(name)
+
+	if name == "" {
+		return "", fmt.Errorf("function name cannot be empty")
+	}
+	if strings.Contains(name, "/") || strings.Contains(name, "..") {
+		return "", fmt.Errorf("function name contains invalid characters")
+	}
+	return name, nil
 }

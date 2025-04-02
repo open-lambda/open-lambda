@@ -20,10 +20,10 @@ const (
 	BOSS_STATUS_PATH = "/status"
 	SCALING_PATH     = "/scaling/worker_count"
 	SHUTDOWN_PATH    = "/shutdown"
-	LAMBDA_UPLOAD    = "/lambda/upload/" // POST - upload lambda tar
-	LAMBDA_LIST      = "/lambda/list"    // GET - list lambdas
-	LAMBDA_DELETE    = "/lambda/"        // DELETE - delete lambda tar
-	LAMBDA_UPDATE    = "/lambda/update/" // PUT - update lambda tar
+	LAMBDA_UPLOAD    = "/lambda/upload/" // POST - /lambda/upload/{function_name}
+	LAMBDA_LIST      = "/lambda/list"    // GET - /lambda/list
+	LAMBDA_DELETE    = "/lambda/"        // DELETE - /lambda/{function_name}
+	LAMBDA_UPDATE    = "/lambda/update/" // PUT - /lambda/update/{function_name}
 )
 
 type Boss struct {
