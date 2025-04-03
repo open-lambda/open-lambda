@@ -23,7 +23,6 @@ const (
 	LAMBDA_UPLOAD    = "/lambda/upload/" // POST - /lambda/upload/{function_name}
 	LAMBDA_LIST      = "/lambda/list"    // GET - /lambda/list
 	LAMBDA_DELETE    = "/lambda/"        // DELETE - /lambda/{function_name}
-	LAMBDA_UPDATE    = "/lambda/update/" // PUT - /lambda/update/{function_name}
 )
 
 type Boss struct {
@@ -131,7 +130,6 @@ func BossMain() (err error) {
 	http.HandleFunc(LAMBDA_UPLOAD, UploadLambda)
 	http.HandleFunc(LAMBDA_LIST, ListLambda)
 	http.HandleFunc(LAMBDA_DELETE, DeleteLambda)
-	http.HandleFunc(LAMBDA_UPDATE, UpdateLambda)
 
 	// clean up if signal hits us
 	c := make(chan os.Signal, 1)

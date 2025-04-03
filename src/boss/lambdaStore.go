@@ -150,21 +150,6 @@ func DeleteLambda(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Lambda %s deleted successfully", functionName)
 }
 
-// UpdateLambda updates a lambda by re-uploading it.
-func UpdateLambda(w http.ResponseWriter, r *http.Request) {
-	UploadLambda(w, r) // should we keep this at all? or just do update thru upload?
-}
-
-// ListHTTPTriggers lists all registered HTTP triggers.
-func ListHTTPTriggers(w http.ResponseWriter, r *http.Request) {
-	json.NewEncoder(w).Encode(httpTriggerRegistry)
-}
-
-// ListCronTriggers lists all registered Cron triggers.
-func ListCronTriggers(w http.ResponseWriter, r *http.Request) {
-	json.NewEncoder(w).Encode(cronTriggerRegistry)
-}
-
 // loadConfigAndRegister loads a lambda's config and registers its triggers.
 func loadConfigAndRegister(functionName string) error {
 	destDir := filepath.Join(LAMBDA_STORE_PATH, functionName)
