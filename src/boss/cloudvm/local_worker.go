@@ -42,6 +42,7 @@ func (_ *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) error {
 	currPath, err := os.Getwd()
 	if err != nil {
 		log.Printf("failed to get current path: %v", err)
+		return err
 	}
 
 	workerPath := filepath.Join(currPath, worker.workerId)
@@ -85,6 +86,10 @@ func (_ *LocalWorkerPoolPlatform) DeleteInstance(worker *Worker) error {
 }
 
 func (_ *LocalWorkerPoolPlatform) ForwardTask(w http.ResponseWriter, r *http.Request, worker *Worker) error {
-	forwardTaskHelper(w, r, worker.host, worker.port)
+	err := forwardTaskHelper(w, r, worker.host, worker.port)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

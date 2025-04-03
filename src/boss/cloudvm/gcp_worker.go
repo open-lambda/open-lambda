@@ -121,6 +121,10 @@ func (pool *GcpWorkerPool) DeleteInstance(worker *Worker) error {
 }
 
 func (_ *GcpWorkerPool) ForwardTask(w http.ResponseWriter, r *http.Request, worker *Worker) error {
-	forwardTaskHelper(w, r, worker.host, worker.port)
+	err := forwardTaskHelper(w, r, worker.host, worker.port)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
