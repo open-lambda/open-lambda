@@ -97,12 +97,12 @@ func (pool *GcpWorkerPool) CreateInstance(worker *Worker) error {
 		fmt.Printf("instance alreay exists!\n")
 		client.startGcpInstance(worker.workerId)
 	} else if err != nil {
-		panic(err)
+		return err
 	}
 
 	lookup, err := client.GcpInstancetoIP()
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	worker.host = lookup[worker.workerId]
