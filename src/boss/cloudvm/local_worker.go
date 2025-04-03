@@ -64,8 +64,6 @@ func (_ *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) {
 	}
 
 	log.Printf("Worker %s started on %s\n", worker.workerId, worker.port)
-
-	IncrementPortInWorkerConfigTemplate(templatePath)
 }
 
 func (_ *LocalWorkerPoolPlatform) DeleteInstance(worker *Worker) {

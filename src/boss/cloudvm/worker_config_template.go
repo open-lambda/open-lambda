@@ -33,21 +33,6 @@ func LoadWorkerConfigTemplate(templatePath string, workerPath string) error {
 		return fmt.Errorf("failed to load template.json: %v", err)
 	}
 
-	// Save the template configuration to the worker's config directory
-	configPath := filepath.Join(workerPath, "config.json")
-	if err := common.SaveConf(configPath); err != nil {
-		return fmt.Errorf("failed to save updated configuration to worker config: %v", err)
-	}
-
-	return nil
-}
-
-func IncrementPortInWorkerConfigTemplate(templatePath string) error {
-	// Load template.json (if increment was called template.json should exist already)
-	if err := common.LoadConf(templatePath); err != nil {
-		return fmt.Errorf("failed to load template.json: %v", err)
-	}
-
 	// Convert Worker_port from string to integer
 	port, err := strconv.Atoi(common.Conf.Worker_port)
 	if err != nil {
@@ -60,9 +45,10 @@ func IncrementPortInWorkerConfigTemplate(templatePath string) error {
 	// Convert the port number back to a string
 	common.Conf.Worker_port = strconv.Itoa(port)
 
-	// Save the updated configuration to template.json
-	if err := common.SaveConf(templatePath); err != nil {
-		return fmt.Errorf("failed to save updated configuration to template.json: %v", err)
+	// Save the template configuration to the worker's config directory
+	configPath := filepath.Join(workerPath, "config.json")
+	if err := common.SaveConf(configPath); err != nil {
+		return fmt.Errorf("failed to save updated configuration to worker config: %v", err)
 	}
 
 	return nil
