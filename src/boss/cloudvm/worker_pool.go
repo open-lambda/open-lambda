@@ -305,7 +305,12 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 	atomic.AddInt32(&worker.numTask, 1)
 	atomic.AddInt32(&pool.totalTask, 1)
 
-	pool.ForwardTask(w, r, worker)
+	err := pool.ForwardTask(w, r, worker)
+
+	if err != nil {
+		log.Printf("Failed to forward the task %s: %v\n", worker.workerId, err)
+		// TODO: handle the error better. retry?
+	}
 
 	atomic.AddInt32(&worker.numTask, -1)
 	atomic.AddInt32(&pool.totalTask, -1)
