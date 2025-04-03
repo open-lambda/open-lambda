@@ -125,7 +125,7 @@ func (pool *WorkerPool) startNewWorker() {
 
 		if err != nil {
 			log.Printf("Failed to create instance for worker %s: %v\n", worker.workerId, err)
-			panic(err)
+			panic(err) // TODO: handle error in better way.
 		}
 
 		// change state starting -> running
@@ -227,7 +227,7 @@ func (pool *WorkerPool) detroyWorker(worker *Worker) {
 
 		if err != nil {
 			log.Printf("Failed to delete instance for worker %s: %v\n", worker.workerId, err)
-			panic(err)
+			panic(err) // TODO: handle the error in a better way, retry?
 		}
 
 		// remove from cluster
