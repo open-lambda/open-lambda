@@ -16,13 +16,14 @@ import (
 )
 
 const (
-	RUN_PATH         = "/run/"
-	BOSS_STATUS_PATH = "/status"
-	SCALING_PATH     = "/scaling/worker_count"
-	SHUTDOWN_PATH    = "/shutdown"
-	LAMBDA_UPLOAD    = "/lambda/upload/" // POST - /lambda/upload/{function_name}
-	LAMBDA_LIST      = "/lambda/list"    // GET - /lambda/list
-	LAMBDA_DELETE    = "/lambda/"        // DELETE - /lambda/{function_name}
+	RUN_PATH           = "/run/"
+	BOSS_STATUS_PATH   = "/status"
+	SCALING_PATH       = "/scaling/worker_count"
+	SHUTDOWN_PATH      = "/shutdown"
+	LAMBDA_UPLOAD_PATH = "/lambda/upload/" // POST - /lambda/upload/{function_name}
+	LAMBDA_LIST_PATH   = "/lambda/list"    // GET - /lambda/list
+	LAMBDA_DELETE_PATH = "/lambda/"        // DELETE - /lambda/{function_name}
+	LAMBDA_CONFIG_PATH = "/lambda/config/" // GET - /lambda/config/{function_name}
 )
 
 type Boss struct {
@@ -121,7 +122,7 @@ func BossMain() (err error) {
 		boss.autoScaler.Launch(boss.workerPool)
 	}
 
-	store, err := NewLambdaStore("./lambdaStore")
+	store, err := NewLambdaStore(Conf.Lambda_Store_Path)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -132,9 +133,10 @@ func BossMain() (err error) {
 	http.HandleFunc(SHUTDOWN_PATH, boss.Close)
 
 	// Register LambdaStore CRUD routes
-	http.HandleFunc(LAMBDA_UPLOAD, store.UploadLambda)
-	http.HandleFunc(LAMBDA_LIST, store.ListLambda)
-	http.HandleFunc(LAMBDA_DELETE, store.DeleteLambda)
+	http.HandleFunc(LAMBDA_UPLOAD_PATH, store.UploadLambda)
+	http.HandleFunc(LAMBDA_LIST_PATH, store.ListLambda)
+	http.HandleFunc(LAMBDA_DELETE_PATH, store.DeleteLambda)
+	http.HandleFunc(LAMBDA_CONFIG_PATH, store.GetLambdaConfig)
 
 	// clean up if signal hits us
 	c := make(chan os.Signal, 1)

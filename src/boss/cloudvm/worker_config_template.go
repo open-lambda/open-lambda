@@ -19,6 +19,9 @@ func LoadWorkerConfigTemplate(templatePath string, workerPath string) error {
 		// Set the worker port
 		common.Conf.Worker_port = GetLocalPlatformConfigDefaults().Worker_Starting_Port
 
+		parentDir := filepath.Dir(workerPath)
+		common.Conf.Registry = filepath.Join(parentDir, "lambdaStore") // TODO: read from boss config
+
 		// Save the updated configuration to template.json
 		if err := common.SaveConf(templatePath); err != nil {
 			return fmt.Errorf("failed to save updated configuration to template.json: %v", err)

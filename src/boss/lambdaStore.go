@@ -66,36 +66,45 @@ func (s *LambdaStore) UploadLambda(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	destDir := filepath.Join(s.StorePath, functionName)
-	os.RemoveAll(destDir)
-	if err := os.MkdirAll(destDir, 0755); err != nil {
+	// Save tar.gz to permanent store
+	lambdaDir := filepath.Join(s.StorePath, functionName)
+	os.RemoveAll(lambdaDir)
+	if err := os.MkdirAll(lambdaDir, 0755); err != nil {
 		http.Error(w, "Failed to create lambda directory", http.StatusInternalServerError)
 		return
 	}
 
-	tempPath := filepath.Join(os.TempDir(), functionName+".tar.gz")
-	tempFile, err := os.Create(tempPath)
+	tarPath := filepath.Join(lambdaDir, "lambda.tar.gz")
+	tarFile, err := os.Create(tarPath)
 	if err != nil {
-		http.Error(w, "Failed to create temp file", http.StatusInternalServerError)
+		http.Error(w, "Failed to create lambda file", http.StatusInternalServerError)
 		return
 	}
-	if _, err := io.Copy(tempFile, r.Body); err != nil {
+	if _, err := io.Copy(tarFile, r.Body); err != nil {
 		http.Error(w, "Failed to save uploaded file", http.StatusInternalServerError)
-		tempFile.Close()
+		tarFile.Close()
 		return
 	}
-	tempFile.Close()
+	tarFile.Close()
 
-	if err := ExtractTarGz(tempPath, destDir); err != nil {
-		http.Error(w, "Failed to extract archive", http.StatusInternalServerError)
-		os.Remove(tempPath)
+	// Reopen tarball to extract just config.json
+	f, err := os.Open(tarPath)
+	if err != nil {
+		http.Error(w, "Failed to reopen uploaded tarball", http.StatusInternalServerError)
 		return
 	}
-	os.Remove(tempPath)
+	defer f.Close()
 
-	if err := s.loadConfigAndRegister(functionName); err != nil {
-		log.Printf("Lambda %s uploaded but failed to register: %v", functionName, err)
+	cfg, err := extractConfigFromTarGz(f)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to extract config.json: %v", err), http.StatusBadRequest)
+		return
 	}
+
+	s.unregisterTriggers(functionName)
+	s.removeFromRegistry(functionName)
+	s.addToRegistry(functionName, cfg)
+	s.registerTriggers(functionName, cfg)
 
 	w.WriteHeader(http.StatusCreated)
 	fmt.Fprintf(w, "Lambda %s uploaded successfully", functionName)
@@ -138,13 +147,49 @@ func (s *LambdaStore) ListLambda(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(names)
 }
 
+func (s *LambdaStore) GetLambdaConfig(w http.ResponseWriter, r *http.Request) {
+	raw := strings.TrimPrefix(r.URL.Path, "/lambda/config/")
+	functionName, err := sanitizeFunctionName(raw)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	tarPath := filepath.Join(s.StorePath, functionName, "lambda.tar.gz")
+	f, err := os.Open(tarPath)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to open tarball: %v", err), http.StatusNotFound)
+		return
+	}
+	defer f.Close()
+
+	cfg, err := extractConfigFromTarGz(f)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to extract config: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(cfg); err != nil {
+		http.Error(w, "failed to encode config as JSON", http.StatusInternalServerError)
+		return
+	}
+}
+
 // ------------------- Core Logic ----------------------
 
 func (s *LambdaStore) loadConfigAndRegister(functionName string) error {
-	path := filepath.Join(s.StorePath, functionName)
-	cfg, err := common.LoadLambdaConfig(path)
+	tarPath := filepath.Join(s.StorePath, functionName, "lambda.tar.gz")
+
+	f, err := os.Open(tarPath)
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+		return fmt.Errorf("failed to open lambda tarball: %w", err)
+	}
+	defer f.Close()
+
+	cfg, err := extractConfigFromTarGz(f)
+	if err != nil {
+		return fmt.Errorf("failed to extract config.json: %w", err)
 	}
 
 	s.unregisterTriggers(functionName)
@@ -196,7 +241,7 @@ func (s *LambdaStore) addToRegistry(name string, cfg *common.LambdaConfig) {
 }
 
 func (s *LambdaStore) removeFromRegistry(name string) {
-	newList := []LambdaEntry{}
+	var newList []LambdaEntry
 	for _, entry := range s.Lambdas {
 		if entry.FunctionName != name {
 			newList = append(newList, entry)
@@ -207,16 +252,10 @@ func (s *LambdaStore) removeFromRegistry(name string) {
 
 // ------------------- Utils ----------------------
 
-func ExtractTarGz(src, dest string) error {
-	f, err := os.Open(src)
+func extractConfigFromTarGz(r io.Reader) (*common.LambdaConfig, error) {
+	gzr, err := gzip.NewReader(r)
 	if err != nil {
-		return fmt.Errorf("failed to open file: %w", err)
-	}
-	defer f.Close()
-
-	gzr, err := gzip.NewReader(f)
-	if err != nil {
-		return fmt.Errorf("invalid .gz file: %w", err)
+		return nil, fmt.Errorf("invalid .gz file: %w", err)
 	}
 	defer gzr.Close()
 
@@ -227,33 +266,19 @@ func ExtractTarGz(src, dest string) error {
 			break
 		}
 		if err != nil {
-			return fmt.Errorf("invalid tar: %w", err)
+			return nil, fmt.Errorf("invalid tar: %w", err)
 		}
 
-		target := filepath.Join(dest, header.Name)
-		switch header.Typeflag {
-		case tar.TypeDir:
-			if err := os.MkdirAll(target, 0755); err != nil {
-				return err
+		if filepath.Base(header.Name) == "config.json" {
+			var cfg common.LambdaConfig
+			decoder := json.NewDecoder(tr)
+			if err := decoder.Decode(&cfg); err != nil {
+				return nil, fmt.Errorf("failed to parse config.json: %w", err)
 			}
-		case tar.TypeReg:
-			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
-				return err
-			}
-			outFile, err := os.Create(target)
-			if err != nil {
-				return err
-			}
-			if _, err := io.Copy(outFile, tr); err != nil {
-				outFile.Close()
-				return err
-			}
-			outFile.Close()
-		default:
-			log.Printf("Skipping unknown tar entry: %s", header.Name)
+			return &cfg, nil
 		}
 	}
-	return nil
+	return nil, fmt.Errorf("config.json not found in archive")
 }
 
 func sanitizeFunctionName(name string) (string, error) {
