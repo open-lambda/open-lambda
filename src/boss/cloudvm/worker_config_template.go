@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 )
@@ -33,17 +32,7 @@ func LoadWorkerConfigTemplate(templatePath string, workerPath string) error {
 		return fmt.Errorf("failed to load template.json: %v", err)
 	}
 
-	// Convert Worker_port from string to integer
-	port, err := strconv.Atoi(common.Conf.Worker_port)
-	if err != nil {
-		return fmt.Errorf("failed to parse Worker_port: %v", err)
-	}
-
-	// Increment the port number
-	port++
-
-	// Convert the port number back to a string
-	common.Conf.Worker_port = strconv.Itoa(port)
+	common.Conf.Worker_port = GetNextWorkerPort()
 
 	// Save the template configuration to the worker's config directory
 	configPath := filepath.Join(workerPath, "config.json")
