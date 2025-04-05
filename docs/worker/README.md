@@ -10,7 +10,7 @@ See how to build the code, deploy a worker, and write/run lambdas [here](getting
 * [dependency management](pypi-packages.md)
 * [manual cleanup](manual-cleanup.md)
 * [lambda configuration](lambda-config.md)
-* [setup development environment](setup-dev-env.md)
+* [setup development environment](../boss/setup-dev-env.md)
 * registry config (TODO)
 * Zygote tree (TODO)
 * resource limits (TODO)
