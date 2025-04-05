@@ -42,9 +42,5 @@ func (_ *MockWorkerPoolPlatform) ForwardTask(w http.ResponseWriter, _ *http.Requ
 	s := fmt.Sprintf("hello from %s\n", worker.workerId)
 	w.WriteHeader(http.StatusOK)
 	_, err := w.Write([]byte(s))
-	if err != nil {
-		panic(err)
-	}
-
-	return nil
+	return err
 }
