@@ -121,15 +121,20 @@ func BossMain() (err error) {
 		boss.autoScaler.Launch(boss.workerPool)
 	}
 
+	store, err := NewLambdaStore("./lambdaStore")
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	http.HandleFunc(BOSS_STATUS_PATH, boss.BossStatus)
 	http.HandleFunc(SCALING_PATH, boss.ScalingWorker)
 	http.HandleFunc(RUN_PATH, boss.workerPool.RunLambda)
 	http.HandleFunc(SHUTDOWN_PATH, boss.Close)
 
 	// Register LambdaStore CRUD routes
-	http.HandleFunc(LAMBDA_UPLOAD, UploadLambda)
-	http.HandleFunc(LAMBDA_LIST, ListLambda)
-	http.HandleFunc(LAMBDA_DELETE, DeleteLambda)
+	http.HandleFunc(LAMBDA_UPLOAD, store.UploadLambda)
+	http.HandleFunc(LAMBDA_LIST, store.ListLambda)
+	http.HandleFunc(LAMBDA_DELETE, store.DeleteLambda)
 
 	// clean up if signal hits us
 	c := make(chan os.Signal, 1)
