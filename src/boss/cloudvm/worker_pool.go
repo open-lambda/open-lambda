@@ -121,9 +121,8 @@ func (pool *WorkerPool) startNewWorker() {
 
 	go func() { // should be able to create multiple instances simultaneously
 		worker.numTask = 1
-		err := pool.CreateInstance(worker) // c`reate new instance
 
-		if err != nil {
+		if err := pool.CreateInstance(worker); err != nil {
 			log.Printf("Failed to create instance for worker %s: %v\n", worker.workerId, err)
 			panic(err) // TODO: handle error in better way.
 		}

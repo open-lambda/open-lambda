@@ -86,10 +86,5 @@ func (_ *LocalWorkerPoolPlatform) DeleteInstance(worker *Worker) error {
 }
 
 func (_ *LocalWorkerPoolPlatform) ForwardTask(w http.ResponseWriter, r *http.Request, worker *Worker) error {
-	err := forwardTaskHelper(w, r, worker.host, worker.port)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return forwardTaskHelper(w, r, worker.host, worker.port)
 }
