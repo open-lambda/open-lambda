@@ -48,20 +48,6 @@ curl -X POST http://localhost:5000/scaling/worker_count -d "2"
 - A **second worker** starts on port **6001**
 - Each new worker increments the port number
 
-## 4. Customizing Workers
-
-If you need workers with different configurations:
-
-Modify **template.json**:
-
-```bash
-vim template.json
-```
-
-### New Workers Use Updated Config
-When scaling up, **new workers** will use the modified `template.json`.
-(Existing workers keep their original config.)
-
-## 5. Shutting Down
-Press Ctrl + C in the terminal where the boss process is running. This will clean up the workers and stop the boss.
+## 4. Shutting Down
+When the boss receives a kill signal, it will automatically clean up the workers as well.
 
