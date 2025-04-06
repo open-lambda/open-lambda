@@ -74,7 +74,7 @@ func (s *LambdaStore) UploadLambda(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tarPath := filepath.Join(lambdaDir, "lambda.tar.gz")
+	tarPath := filepath.Join(lambdaDir, functionName+".tar.gz")
 	tarFile, err := os.Create(tarPath)
 	if err != nil {
 		http.Error(w, "Failed to create lambda file", http.StatusInternalServerError)
@@ -260,6 +260,14 @@ func extractConfigFromTarGz(r io.Reader) (*common.LambdaConfig, error) {
 	defer gzr.Close()
 
 	tr := tar.NewReader(gzr)
+
+	// Create a temp dir to extract ol.yaml
+	tempDir, err := os.MkdirTemp("", "lambda-config-*")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create temp dir: %w", err)
+	}
+	defer os.RemoveAll(tempDir) // clean up
+
 	for {
 		header, err := tr.Next()
 		if err == io.EOF {
@@ -269,16 +277,24 @@ func extractConfigFromTarGz(r io.Reader) (*common.LambdaConfig, error) {
 			return nil, fmt.Errorf("invalid tar: %w", err)
 		}
 
-		if filepath.Base(header.Name) == "config.json" {
-			var cfg common.LambdaConfig
-			decoder := json.NewDecoder(tr)
-			if err := decoder.Decode(&cfg); err != nil {
-				return nil, fmt.Errorf("failed to parse config.json: %w", err)
+		if filepath.Base(header.Name) == "ol.yaml" {
+			// Save ol.yaml to temp dir
+			outPath := filepath.Join(tempDir, "ol.yaml")
+			outFile, err := os.Create(outPath)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create temp ol.yaml: %w", err)
 			}
-			return &cfg, nil
+			if _, err := io.Copy(outFile, tr); err != nil {
+				outFile.Close()
+				return nil, fmt.Errorf("failed to write ol.yaml: %w", err)
+			}
+			outFile.Close()
+
+			return common.LoadLambdaConfig(tempDir)
 		}
 	}
-	return nil, fmt.Errorf("config.json not found in archive")
+
+	return nil, fmt.Errorf("ol.yaml not found in archive")
 }
 
 func sanitizeFunctionName(name string) (string, error) {
