@@ -66,15 +66,9 @@ func (s *LambdaStore) UploadLambda(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Save tar.gz to permanent store
-	lambdaDir := filepath.Join(s.StorePath, functionName)
-	os.RemoveAll(lambdaDir)
-	if err := os.MkdirAll(lambdaDir, 0755); err != nil {
-		http.Error(w, "Failed to create lambda directory", http.StatusInternalServerError)
-		return
-	}
+	tarPath := filepath.Join(s.StorePath, functionName+".tar.gz")
+	os.Remove(tarPath)
 
-	tarPath := filepath.Join(lambdaDir, functionName+".tar.gz")
 	tarFile, err := os.Create(tarPath)
 	if err != nil {
 		http.Error(w, "Failed to create lambda file", http.StatusInternalServerError)
@@ -155,7 +149,7 @@ func (s *LambdaStore) GetLambdaConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tarPath := filepath.Join(s.StorePath, functionName, "lambda.tar.gz")
+	tarPath := filepath.Join(s.StorePath, functionName+".tar.gz")
 	f, err := os.Open(tarPath)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to open tarball: %v", err), http.StatusNotFound)
@@ -179,7 +173,7 @@ func (s *LambdaStore) GetLambdaConfig(w http.ResponseWriter, r *http.Request) {
 // ------------------- Core Logic ----------------------
 
 func (s *LambdaStore) loadConfigAndRegister(functionName string) error {
-	tarPath := filepath.Join(s.StorePath, functionName, "lambda.tar.gz")
+	tarPath := filepath.Join(s.StorePath, functionName+".tar.gz")
 
 	f, err := os.Open(tarPath)
 	if err != nil {
