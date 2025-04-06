@@ -32,6 +32,13 @@ func LoadWorkerConfigTemplate(templatePath string, workerPath string) error {
 		return fmt.Errorf("failed to load template.json: %v", err)
 	}
 
+	// Patch worker-specific paths
+	common.Conf.Worker_dir = filepath.Join(workerPath, "worker")
+	common.Conf.Registry = filepath.Join(workerPath, "registry")
+	common.Conf.Pkgs_dir = filepath.Join(workerPath, "lambda", "packages")
+	common.Conf.SOCK_base_path = filepath.Join(workerPath, "lambda")
+	common.Conf.Import_cache_tree = filepath.Join(workerPath, "default-zygotes-40.json")
+
 	common.Conf.Worker_port = GetNextWorkerPort()
 
 	// Save the template configuration to the worker's config directory
