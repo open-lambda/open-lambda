@@ -1,4 +1,4 @@
-# Open Lambda Development Environment Setup Guide
+# OpenLambda Development Environment Setup Guide
 
 ## Overview
 This document explains how to set up a development environment with:
