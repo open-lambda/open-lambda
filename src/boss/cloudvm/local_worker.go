@@ -6,18 +6,22 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 )
 
 // WORKER IMPLEMENTATION: LocalWorker
 type LocalWorkerPoolPlatform struct {
-	// no platform specific attributes
+	nextWorkerPort int
 }
 
 func NewLocalWorkerPool() *WorkerPool {
+	startPort, _ := strconv.Atoi(GetLocalPlatformConfigDefaults().Worker_Starting_Port)
 	return &WorkerPool{
-		WorkerPoolPlatform: &LocalWorkerPoolPlatform{},
+		WorkerPoolPlatform: &LocalWorkerPoolPlatform{
+			nextWorkerPort: startPort,
+		},
 	}
 }
 
@@ -28,7 +32,7 @@ func (_ *LocalWorkerPoolPlatform) NewWorker(workerId string) *Worker {
 	}
 }
 
-func (_ *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) {
+func (p *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) {
 	log.Printf("Creating new local worker: %s\n", worker.workerId)
 
 	// Initialize the worker directory if it doesn't exist
@@ -47,8 +51,10 @@ func (_ *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) {
 	workerPath := filepath.Join(currPath, worker.workerId)
 	templatePath := GetLocalPlatformConfigDefaults().Path_To_Worker_Config_Template
 
+	workerPort := p.GetNextWorkerPort()
+
 	// Load worker configuration
-	if err := LoadWorkerConfigTemplate(templatePath, workerPath); err != nil {
+	if err := LoadWorkerConfigTemplate(templatePath, workerPath, workerPort); err != nil {
 		log.Printf("Failed to load template.json: %v", err)
 		return // TODO return the error
 	}
@@ -82,4 +88,10 @@ func (_ *LocalWorkerPoolPlatform) DeleteInstance(worker *Worker) {
 
 func (_ *LocalWorkerPoolPlatform) ForwardTask(w http.ResponseWriter, r *http.Request, worker *Worker) {
 	forwardTaskHelper(w, r, worker.host, worker.port)
+}
+
+func (p *LocalWorkerPoolPlatform) GetNextWorkerPort() string {
+	port := p.nextWorkerPort
+	p.nextWorkerPort++
+	return strconv.Itoa(port)
 }
