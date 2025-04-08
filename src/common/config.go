@@ -212,6 +212,11 @@ func LoadConf(path string) error {
 		return fmt.Errorf("could not parse config (%v): %v", path, err.Error())
 	}
 
+	// Skip checkConf if this is template.json since it will need patching later
+	if filepath.Base(path) == "template.json" {
+		return nil
+	}
+
 	return checkConf()
 }
 
