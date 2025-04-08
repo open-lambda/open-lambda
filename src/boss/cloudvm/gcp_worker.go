@@ -107,17 +107,17 @@ func (pool *GcpWorkerPool) CreateInstance(worker *Worker) error {
 
 	worker.host = lookup[worker.workerId]
 
-	worker.runCmd("./ol worker up -d")
+	worker.runCmd("./ol worker up -d") // TODO: check if runCmd fails.
 
 	return nil
 }
 
 func (pool *GcpWorkerPool) DeleteInstance(worker *Worker) error {
 	log.Printf("deleting gcp worker: %s\n", worker.workerId)
-	worker.runCmd("./ol worker down")
+	worker.runCmd("./ol worker down")                                // TODO: check if runCmd fails
 	pool.client.Wait(pool.client.deleteGcpInstance(worker.workerId)) // wait until instance is completely deleted
 
-	return nil
+	return nil // TODO: check for error and make sure it is returning the error. We dont want delete failing and eating the error.
 }
 
 func (_ *GcpWorkerPool) ForwardTask(w http.ResponseWriter, r *http.Request, worker *Worker) error {
