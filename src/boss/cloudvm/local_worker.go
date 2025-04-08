@@ -29,19 +29,19 @@ func (_ *LocalWorkerPoolPlatform) NewWorker(workerId string) *Worker {
 }
 
 func (_ *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) error {
-	log.Printf("Creating new local worker: %s\n", worker.workerId)
+	log.Printf("Creating new local worker: %s\n", worker.workerId) // TODO: protect it with lock
 
 	// Initialize the worker directory if it doesn't exist
 	initCmd := exec.Command("./ol", "worker", "init", "-p", worker.workerId, "-i", "ol-min") // TODO fix the "ol-min hardcoding"
 	initCmd.Stderr = os.Stderr
 	if err := initCmd.Run(); err != nil {
-		log.Printf("Failed to initialize worker %s: %v\n", worker.workerId, err)
+		log.Printf("Failed to initialize worker %s: %v\n", worker.workerId, err) // TODO: protect it with lock
 		return err
 	}
 
 	currPath, err := os.Getwd()
 	if err != nil {
-		log.Printf("failed to get current path: %v", err)
+		log.Printf("failed to get current path: %v", err) // TODO: protect it with lock
 		return err
 	}
 
@@ -50,7 +50,7 @@ func (_ *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) error {
 
 	// Load worker configuration
 	if err := LoadWorkerConfigTemplate(templatePath, workerPath); err != nil {
-		log.Printf("Failed to load template.json: %v", err)
+		log.Printf("Failed to load template.json: %v", err) // TODO: protect it with lock
 		return err
 	}
 
@@ -60,27 +60,27 @@ func (_ *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) error {
 	upCmd := exec.Command("./ol", "worker", "up", "-p", worker.workerId, "-i", "ol-min", "-d") // TODO fix the "ol-min hardcoding"
 	upCmd.Stderr = os.Stderr
 	if err := upCmd.Start(); err != nil {
-		log.Printf("Failed to start worker %s: %v\n", worker.workerId, err)
+		log.Printf("Failed to start worker %s: %v\n", worker.workerId, err) // TODO: protect it with lock
 		return err
 	}
 
-	log.Printf("Worker %s started on %s\n", worker.workerId, worker.port)
+	log.Printf("Worker %s started on %s\n", worker.workerId, worker.port) // TODO: protect it with lock
 
 	return nil
 }
 
 func (_ *LocalWorkerPoolPlatform) DeleteInstance(worker *Worker) error {
-	log.Printf("Deleting local worker: %s\n", worker.workerId)
+	log.Printf("Deleting local worker: %s\n", worker.workerId) // TODO: protect it with lock
 
 	// Stop the worker process
 	downCmd := exec.Command("./ol", "worker", "down", "-p", worker.workerId)
 	err := downCmd.Run()
 	if err != nil {
-		log.Printf("Failed to stop worker %s: %v\n", worker.workerId, err)
+		log.Printf("Failed to stop worker %s: %v\n", worker.workerId, err) // TODO: protect it with lock
 		return err
 	}
 
-	log.Printf("Worker %s stopped\n", worker.workerId)
+	log.Printf("Worker %s stopped\n", worker.workerId) // TODO: protect it with lock
 
 	return nil
 }
