@@ -34,7 +34,8 @@ func (_ *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) error {
 	// Initialize the worker directory if it doesn't exist
 	// TODO fix the "ol-min hardcoding"
 	initCmd := exec.Command("./ol", "worker", "init", "-p", worker.workerId, "-i", "ol-min")
-	// TODO: protect it with lock
+	// TODO: both the boss and this subprocess can write to the same stream concurrently, which may interleave their outputs.
+	// The boss should capture the output from initCmd and then print it using log.Printf which is lock-protected
 	initCmd.Stderr = os.Stderr
 	if err := initCmd.Run(); err != nil {
 		log.Printf("Failed to initialize worker %s: %v\n", worker.workerId, err)
@@ -61,7 +62,8 @@ func (_ *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) error {
 	// Start the worker in detached mode
 	// TODO fix the "ol-min hardcoding"
 	upCmd := exec.Command("./ol", "worker", "up", "-p", worker.workerId, "-i", "ol-min", "-d")
-	// TODO: protect it with lock
+	// TODO: both the boss and this subprocess can write to the same stream concurrently, which may interleave their outputs.
+	// The boss should capture the output from initCmd and then print it using log.Printf which is lock-protected
 	upCmd.Stderr = os.Stderr
 	if err := upCmd.Start(); err != nil {
 		log.Printf("Failed to start worker %s: %v\n", worker.workerId, err)
