@@ -29,19 +29,21 @@ func (_ *LocalWorkerPoolPlatform) NewWorker(workerId string) *Worker {
 }
 
 func (_ *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) error {
-	log.Printf("Creating new local worker: %s\n", worker.workerId) // TODO: protect it with lock
+	log.Printf("Creating new local worker: %s\n", worker.workerId)
 
 	// Initialize the worker directory if it doesn't exist
-	initCmd := exec.Command("./ol", "worker", "init", "-p", worker.workerId, "-i", "ol-min") // TODO fix the "ol-min hardcoding"
+	// TODO fix the "ol-min hardcoding"
+	initCmd := exec.Command("./ol", "worker", "init", "-p", worker.workerId, "-i", "ol-min")
+	// TODO: protect it with lock
 	initCmd.Stderr = os.Stderr
 	if err := initCmd.Run(); err != nil {
-		log.Printf("Failed to initialize worker %s: %v\n", worker.workerId, err) // TODO: protect it with lock
+		log.Printf("Failed to initialize worker %s: %v\n", worker.workerId, err)
 		return err
 	}
 
 	currPath, err := os.Getwd()
 	if err != nil {
-		log.Printf("failed to get current path: %v", err) // TODO: protect it with lock
+		log.Printf("failed to get current path: %v", err)
 		return err
 	}
 
@@ -50,37 +52,39 @@ func (_ *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) error {
 
 	// Load worker configuration
 	if err := LoadWorkerConfigTemplate(templatePath, workerPath); err != nil {
-		log.Printf("Failed to load template.json: %v", err) // TODO: protect it with lock
+		log.Printf("Failed to load template.json: %v", err)
 		return err
 	}
 
 	worker.port = common.Conf.Worker_port
 
 	// Start the worker in detached mode
-	upCmd := exec.Command("./ol", "worker", "up", "-p", worker.workerId, "-i", "ol-min", "-d") // TODO fix the "ol-min hardcoding"
+	// TODO fix the "ol-min hardcoding"
+	upCmd := exec.Command("./ol", "worker", "up", "-p", worker.workerId, "-i", "ol-min", "-d")
+	// TODO: protect it with lock
 	upCmd.Stderr = os.Stderr
 	if err := upCmd.Start(); err != nil {
-		log.Printf("Failed to start worker %s: %v\n", worker.workerId, err) // TODO: protect it with lock
+		log.Printf("Failed to start worker %s: %v\n", worker.workerId, err)
 		return err
 	}
 
-	log.Printf("Worker %s started on %s\n", worker.workerId, worker.port) // TODO: protect it with lock
+	log.Printf("Worker %s started on %s\n", worker.workerId, worker.port)
 
 	return nil
 }
 
 func (_ *LocalWorkerPoolPlatform) DeleteInstance(worker *Worker) error {
-	log.Printf("Deleting local worker: %s\n", worker.workerId) // TODO: protect it with lock
+	log.Printf("Deleting local worker: %s\n", worker.workerId)
 
 	// Stop the worker process
 	downCmd := exec.Command("./ol", "worker", "down", "-p", worker.workerId)
 	err := downCmd.Run()
 	if err != nil {
-		log.Printf("Failed to stop worker %s: %v\n", worker.workerId, err) // TODO: protect it with lock
+		log.Printf("Failed to stop worker %s: %v\n", worker.workerId, err)
 		return err
 	}
 
-	log.Printf("Worker %s stopped\n", worker.workerId) // TODO: protect it with lock
+	log.Printf("Worker %s stopped\n", worker.workerId)
 
 	return nil
 }
