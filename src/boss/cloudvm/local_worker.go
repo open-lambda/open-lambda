@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"sync"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 )
@@ -14,13 +15,35 @@ import (
 // WORKER IMPLEMENTATION: LocalWorker
 type LocalWorkerPoolPlatform struct {
 	nextWorkerPort int
+	configTemplate *common.Config
+	lock           sync.Mutex
 }
 
 func NewLocalWorkerPool() *WorkerPool {
 	startPort, _ := strconv.Atoi(GetLocalPlatformConfigDefaults().Worker_Starting_Port)
+
+	templatePath := GetLocalPlatformConfigDefaults().Path_To_Worker_Config_Template
+
+	// Create template.json if it doesn't exist
+	if _, err := os.Stat(templatePath); os.IsNotExist(err) {
+		// TODO: write the loadDeaultTempkate function
+		defaultTemplateConfig := common.LoadDefaultTemplate()
+
+		if err := common.SaveTemplateConf(defaultTemplateConfig, templatePath); err != nil {
+			log.Fatalf("failed to save template.json: %v", err)
+		}
+	}
+
+	// Load the template and save locally
+	cfg, err := common.LoadTemplateConf(templatePath)
+	if err != nil {
+		log.Fatalf("failed to load template config: %v", err)
+	}
+
 	return &WorkerPool{
 		WorkerPoolPlatform: &LocalWorkerPoolPlatform{
 			nextWorkerPort: startPort,
+			configTemplate: cfg,
 		},
 	}
 }
@@ -49,12 +72,10 @@ func (p *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) {
 	}
 
 	workerPath := filepath.Join(currPath, worker.workerId)
-	templatePath := GetLocalPlatformConfigDefaults().Path_To_Worker_Config_Template
-
 	workerPort := p.GetNextWorkerPort()
 
 	// Load worker configuration
-	if err := LoadWorkerConfigTemplate(templatePath, workerPath, workerPort); err != nil {
+	if err := SaveTemplateConfToWorkerDir(p.configTemplate, workerPath, workerPort); err != nil {
 		log.Printf("Failed to load template.json: %v", err)
 		return // TODO return the error
 	}
@@ -91,6 +112,9 @@ func (_ *LocalWorkerPoolPlatform) ForwardTask(w http.ResponseWriter, r *http.Req
 }
 
 func (p *LocalWorkerPoolPlatform) GetNextWorkerPort() string {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
 	port := p.nextWorkerPort
 	p.nextWorkerPort++
 	return strconv.Itoa(port)

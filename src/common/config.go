@@ -199,6 +199,61 @@ func LoadDefaults(olPath string) error {
 	return checkConf()
 }
 
+// GetDefaultWorkerConfig returns a config populated with reasonable defaults.
+func GetDefaultWorkerConfig(olPath string) (*Config, error) {
+	workerDir := filepath.Join(olPath, "worker")
+	registryDir := filepath.Join(olPath, "registry")
+	baseImgDir := filepath.Join(olPath, "lambda")
+	zygoteTreePath := filepath.Join(olPath, "default-zygotes-40.json")
+	packagesDir := filepath.Join(baseImgDir, "packages")
+
+	in := &syscall.Sysinfo_t{}
+	err := syscall.Sysinfo(in)
+	if err != nil {
+		return nil, err
+	}
+	totalMb := uint64(in.Totalram) * uint64(in.Unit) / 1024 / 1024
+	memPoolMb := Max(int(totalMb-500), 500)
+
+	cfg := &Config{
+		Worker_dir:        workerDir,
+		Server_mode:       "lambda",
+		Worker_url:        "localhost",
+		Worker_port:       "5000",
+		Registry:          registryDir,
+		Sandbox:           "sock",
+		Log_output:        true,
+		Pkgs_dir:          packagesDir,
+		Sandbox_config:    map[string]any{},
+		SOCK_base_path:    baseImgDir,
+		Registry_cache_ms: 5000,
+		Mem_pool_mb:       memPoolMb,
+		Import_cache_tree: zygoteTreePath,
+		Docker:            DockerConfig{Base_image: "ol-min"},
+		Limits: LimitsConfig{
+			Procs:               10,
+			Mem_mb:              50,
+			CPU_percent:         100,
+			Max_runtime_default: 30,
+			Installer_mem_mb:    Max(250, Min(500, memPoolMb/2)),
+			Swappiness:          0,
+		},
+		Features: FeaturesConfig{
+			Import_cache:        "tree",
+			Downsize_paused_mem: true,
+			Enable_seccomp:      true,
+		},
+		Trace: TraceConfig{},
+		Storage: StorageConfig{
+			Root:    "private",
+			Scratch: "",
+			Code:    "",
+		},
+	}
+
+	return cfg, nil
+}
+
 // ParseConfig reads a file and tries to parse it as a JSON string to a Config
 // instance.
 func LoadConf(path string) error {
@@ -212,12 +267,22 @@ func LoadConf(path string) error {
 		return fmt.Errorf("could not parse config (%v): %v", path, err.Error())
 	}
 
-	// Skip checkConf if this is template.json since it will need patching later
-	if filepath.Base(path) == "template.json" {
-		return nil
+	return checkConf()
+}
+
+func LoadTemplateConf(path string) (*Config, error) {
+	configRaw, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("could not open config (%v): %v", path, err.Error())
 	}
 
-	return checkConf()
+	var templateConfig Config
+	if err := json.Unmarshal(configRaw, &templateConfig); err != nil {
+		fmt.Printf("Bad config file (%s):\n%s\n", path, string(configRaw))
+		return nil, fmt.Errorf("could not parse config (%v): %v", path, err.Error())
+	}
+
+	return &templateConfig, nil
 }
 
 func checkConf() error {
@@ -294,6 +359,14 @@ func DumpConfStr() string {
 // Save writes the Config as an indented JSON to path with 644 mode.
 func SaveConf(path string) error {
 	s, err := json.MarshalIndent(Conf, "", "\t")
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(path, s, 0644)
+}
+
+func SaveTemplateConf(cfg *Config, path string) error {
+	s, err := json.MarshalIndent(cfg, "", "\t")
 	if err != nil {
 		return err
 	}
