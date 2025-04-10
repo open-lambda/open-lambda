@@ -82,7 +82,7 @@ func (p *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) {
 		return // TODO return the error
 	}
 
-	worker.port = common.Conf.Worker_port
+	worker.port = workerPort
 
 	// Start the worker in detached mode
 	upCmd := exec.Command("./ol", "worker", "up", "-p", worker.workerId, "-i", "ol-min", "-d") // TODO fix the "ol-min hardcoding"
