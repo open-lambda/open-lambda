@@ -274,7 +274,13 @@ func LoadDefaultTemplateConfig() (*Config, error) {
 			Downsize_paused_mem: true,
 			Enable_seccomp:      true,
 		},
-		Trace: TraceConfig{},
+		Trace: TraceConfig{
+			Cgroups: false,
+			Memory:  false,
+			Evictor: false,
+			Package: false,
+			Latency: false,
+		},
 		Storage: StorageConfig{
 			Root:    "private",
 			Scratch: "",
