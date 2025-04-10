@@ -20,22 +20,24 @@ type LocalWorkerPoolPlatform struct {
 }
 
 func NewLocalWorkerPool() *WorkerPool {
-	startPort, _ := strconv.Atoi(GetLocalPlatformConfigDefaults().Worker_Starting_Port)
+	startPort, _ := strconv.Atoi(LocalPlatformConfig.Worker_Starting_Port)
 
 	templatePath := GetLocalPlatformConfigDefaults().Path_To_Worker_Config_Template
 
 	// Create template.json if it doesn't exist
 	if _, err := os.Stat(templatePath); os.IsNotExist(err) {
-		// TODO: write the loadDeaultTempkate function
-		defaultTemplateConfig := common.LoadDefaultTemplate()
+		defaultTemplateConfig, err := common.LoadDefaultTemplateConfig()
+		if err != nil {
+			log.Fatalf("failed to load default template config: %v", err)
+		}
 
-		if err := common.SaveTemplateConf(defaultTemplateConfig, templatePath); err != nil {
+		if err := common.ExportConfig(defaultTemplateConfig, templatePath); err != nil {
 			log.Fatalf("failed to save template.json: %v", err)
 		}
 	}
 
 	// Load the template and save locally
-	cfg, err := common.LoadTemplateConf(templatePath)
+	cfg, err := common.ReadInConf(templatePath)
 	if err != nil {
 		log.Fatalf("failed to load template config: %v", err)
 	}

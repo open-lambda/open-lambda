@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 )
 
+var LocalPlatformConfig *LocalPlatConfig
+
 type LocalPlatConfig struct {
 	Worker_Starting_Port           string `json:"worker_starting_port"`
 	Path_To_Worker_Config_Template string `json:"path_to_worker_config_template"`
@@ -21,4 +23,8 @@ func GetLocalPlatformConfigDefaults() *LocalPlatConfig {
 		Worker_Starting_Port:           "6000",
 		Path_To_Worker_Config_Template: filepath.Join(currPath, "template.json"),
 	}
+}
+
+func LoadLocalPlatformConfig(cfg *LocalPlatConfig) {
+	LocalPlatformConfig = cfg
 }

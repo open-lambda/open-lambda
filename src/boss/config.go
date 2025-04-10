@@ -12,12 +12,13 @@ import (
 var Conf *Config
 
 type Config struct {
-	Platform   string             `json:"platform"`
-	Scaling    string             `json:"scaling"`
-	API_key    string             `json:"api_key"`
-	Boss_port  string             `json:"boss_port"`
-	Worker_Cap int                `json:"worker_cap"`
-	Gcp        *cloudvm.GcpConfig `json:"gcp"`
+	Platform   string                   `json:"platform"`
+	Scaling    string                   `json:"scaling"`
+	API_key    string                   `json:"api_key"`
+	Boss_port  string                   `json:"boss_port"`
+	Worker_Cap int                      `json:"worker_cap"`
+	Gcp        *cloudvm.GcpConfig       `json:"gcp"`
+	Local      *cloudvm.LocalPlatConfig `json:"local"`
 }
 
 func LoadDefaults() error {
@@ -28,6 +29,7 @@ func LoadDefaults() error {
 		Boss_port:  "5000",
 		Worker_Cap: 4,
 		Gcp:        cloudvm.GetGcpConfigDefaults(),
+		Local:      cloudvm.GetLocalPlatformConfigDefaults(),
 	}
 
 	return checkConf()
@@ -47,6 +49,7 @@ func LoadConf(path string) error {
 	}
 
 	cloudvm.LoadGcpConfig(Conf.Gcp)
+	cloudvm.LoadLocalPlatformConfig(Conf.Local)
 
 	return checkConf()
 }

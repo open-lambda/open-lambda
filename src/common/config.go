@@ -137,65 +137,12 @@ type LimitsConfig struct {
 // Choose reasonable defaults for a worker deployment (based on memory capacity).
 // olPath need not exist (it is used to determine default paths for registry, etc).
 func LoadDefaults(olPath string) error {
-	workerDir := filepath.Join(olPath, "worker")
-	registryDir := filepath.Join(olPath, "registry")
-	baseImgDir := filepath.Join(olPath, "lambda")
-	zygoteTreePath := filepath.Join(olPath, "default-zygotes-40.json")
-	packagesDir := filepath.Join(baseImgDir, "packages")
-
-	// split anything above 512 MB evenly between handler and import cache
-	in := &syscall.Sysinfo_t{}
-	err := syscall.Sysinfo(in)
+	cfg, err := GetDefaultWorkerConfig(olPath)
 	if err != nil {
 		return err
 	}
-	totalMb := uint64(in.Totalram) * uint64(in.Unit) / 1024 / 1024
-	memPoolMb := Max(int(totalMb-500), 500)
 
-	Conf = &Config{
-		Worker_dir:        workerDir,
-		Server_mode:       "lambda",
-		Worker_url:        "localhost",
-		Worker_port:       "5000",
-		Registry:          registryDir,
-		Sandbox:           "sock",
-		Log_output:        true,
-		Pkgs_dir:          packagesDir,
-		Sandbox_config:    map[string]any{},
-		SOCK_base_path:    baseImgDir,
-		Registry_cache_ms: 5000, // 5 seconds
-		Mem_pool_mb:       memPoolMb,
-		Import_cache_tree: zygoteTreePath,
-		Docker: DockerConfig{
-			Base_image: "ol-min",
-		},
-		Limits: LimitsConfig{
-			Procs:               10,
-			Mem_mb:              50,
-			CPU_percent:         100,
-			Max_runtime_default: 30,
-			Installer_mem_mb:    Max(250, Min(500, memPoolMb/2)),
-			Swappiness:          0,
-		},
-		Features: FeaturesConfig{
-			Import_cache:        "tree",
-			Downsize_paused_mem: true,
-			Enable_seccomp:      true,
-		},
-		Trace: TraceConfig{
-			Cgroups: false,
-			Memory:  false,
-			Evictor: false,
-			Package: false,
-			Latency: false,
-		},
-		Storage: StorageConfig{
-			Root:    "private",
-			Scratch: "",
-			Code:    "",
-		},
-	}
-
+	Conf = cfg
 	return checkConf()
 }
 
@@ -257,20 +204,16 @@ func GetDefaultWorkerConfig(olPath string) (*Config, error) {
 // ParseConfig reads a file and tries to parse it as a JSON string to a Config
 // instance.
 func LoadConf(path string) error {
-	configRaw, err := ioutil.ReadFile(path)
+	cfg, err := ReadInConf(path)
 	if err != nil {
-		return fmt.Errorf("could not open config (%v): %v", path, err.Error())
+		return err
 	}
 
-	if err := json.Unmarshal(configRaw, &Conf); err != nil {
-		fmt.Printf("Bad config file (%s):\n%s\n", path, string(configRaw))
-		return fmt.Errorf("could not parse config (%v): %v", path, err.Error())
-	}
-
+	Conf = cfg
 	return checkConf()
 }
 
-func LoadTemplateConf(path string) (*Config, error) {
+func ReadInConf(path string) (*Config, error) {
 	configRaw, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("could not open config (%v): %v", path, err.Error())
@@ -283,6 +226,55 @@ func LoadTemplateConf(path string) (*Config, error) {
 	}
 
 	return &templateConfig, nil
+}
+
+// this function returns the template confif struct with empty worker specific fields
+func LoadDefaultTemplateConfig() (*Config, error) {
+	in := &syscall.Sysinfo_t{}
+	err := syscall.Sysinfo(in)
+	if err != nil {
+		return nil, err
+	}
+	totalMb := uint64(in.Totalram) * uint64(in.Unit) / 1024 / 1024
+	memPoolMb := Max(int(totalMb-500), 500)
+
+	cfg := &Config{
+		Worker_dir:        "",
+		Server_mode:       "lambda",
+		Worker_url:        "localhost",
+		Worker_port:       "5000",
+		Registry:          "",
+		Sandbox:           "sock",
+		Log_output:        true,
+		Pkgs_dir:          "",
+		Sandbox_config:    map[string]any{},
+		SOCK_base_path:    "",
+		Registry_cache_ms: 5000,
+		Mem_pool_mb:       memPoolMb,
+		Import_cache_tree: "",
+		Docker:            DockerConfig{Base_image: "ol-min"},
+		Limits: LimitsConfig{
+			Procs:               10,
+			Mem_mb:              50,
+			CPU_percent:         100,
+			Max_runtime_default: 30,
+			Installer_mem_mb:    Max(250, Min(500, memPoolMb/2)),
+			Swappiness:          0,
+		},
+		Features: FeaturesConfig{
+			Import_cache:        "tree",
+			Downsize_paused_mem: true,
+			Enable_seccomp:      true,
+		},
+		Trace: TraceConfig{},
+		Storage: StorageConfig{
+			Root:    "private",
+			Scratch: "",
+			Code:    "",
+		},
+	}
+
+	return cfg, nil
 }
 
 func checkConf() error {
@@ -365,7 +357,7 @@ func SaveConf(path string) error {
 	return ioutil.WriteFile(path, s, 0644)
 }
 
-func SaveTemplateConf(cfg *Config, path string) error {
+func ExportConfig(cfg *Config, path string) error {
 	s, err := json.MarshalIndent(cfg, "", "\t")
 	if err != nil {
 		return err

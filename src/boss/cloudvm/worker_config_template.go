@@ -38,7 +38,7 @@ func SaveTemplateConfToWorkerDir(cfg *common.Config, workerPath string, workerPo
 
 	// Save the template configuration to the worker's config directory
 	configPath := filepath.Join(workerPath, "config.json")
-	return common.SaveTemplateConf(cfgCopy, configPath)
+	return common.ExportConfig(cfgCopy, configPath)
 }
 
 func deepCopyConfig(src *common.Config) *common.Config {
