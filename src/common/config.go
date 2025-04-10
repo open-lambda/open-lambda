@@ -364,11 +364,7 @@ func DumpConfStr() string {
 
 // Save writes the Config as an indented JSON to path with 644 mode.
 func SaveConf(path string) error {
-	s, err := json.MarshalIndent(Conf, "", "\t")
-	if err != nil {
-		return err
-	}
-	return ioutil.WriteFile(path, s, 0644)
+	return ExportConfig(Conf, path)
 }
 
 func ExportConfig(cfg *Config, path string) error {
