@@ -173,10 +173,12 @@ func GetDefaultWorkerConfig(olPath string) (*Config, error) {
 		Pkgs_dir:          packagesDir,
 		Sandbox_config:    map[string]any{},
 		SOCK_base_path:    baseImgDir,
-		Registry_cache_ms: 5000,
+		Registry_cache_ms: 5000, // 5 seconds
 		Mem_pool_mb:       memPoolMb,
 		Import_cache_tree: zygoteTreePath,
-		Docker:            DockerConfig{Base_image: "ol-min"},
+		Docker: DockerConfig{
+			Base_image: "ol-min",
+		},
 		Limits: LimitsConfig{
 			Procs:               10,
 			Mem_mb:              50,
@@ -190,7 +192,13 @@ func GetDefaultWorkerConfig(olPath string) (*Config, error) {
 			Downsize_paused_mem: true,
 			Enable_seccomp:      true,
 		},
-		Trace: TraceConfig{},
+		Trace: TraceConfig{
+			Cgroups: false,
+			Memory:  false,
+			Evictor: false,
+			Package: false,
+			Latency: false,
+		},
 		Storage: StorageConfig{
 			Root:    "private",
 			Scratch: "",
