@@ -121,7 +121,11 @@ func (pool *WorkerPool) startNewWorker() {
 
 	go func() { // should be able to create multiple instances simultaneously
 		worker.numTask = 1
-		pool.CreateInstance(worker) // c`reate new instance
+
+		if err := pool.CreateInstance(worker); err != nil {
+			log.Printf("Failed to create instance for worker %s: %v\n", worker.workerId, err)
+			panic(err) // TODO: handle error in better way.
+		}
 
 		// change state starting -> running
 		pool.Lock()
@@ -218,7 +222,12 @@ func (pool *WorkerPool) detroyWorker(worker *Worker) {
 	pool.Unlock()
 
 	go func() { // should be able to destroy multiple instances simultaneously
-		pool.DeleteInstance(worker) // delete new instance
+		err := pool.DeleteInstance(worker) // delete new instance
+
+		if err != nil {
+			log.Printf("Failed to delete instance for worker %s: %v\n", worker.workerId, err)
+			panic(err) // TODO: handle the error in a better way, retry?
+		}
 
 		// remove from cluster
 		pool.Lock()
@@ -295,7 +304,12 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 	atomic.AddInt32(&worker.numTask, 1)
 	atomic.AddInt32(&pool.totalTask, 1)
 
-	pool.ForwardTask(w, r, worker)
+	err := pool.ForwardTask(w, r, worker)
+
+	if err != nil {
+		log.Printf("Failed to forward the task %s: %v\n", worker.workerId, err)
+		// TODO: handle the error better. retry?
+	}
 
 	atomic.AddInt32(&worker.numTask, -1)
 	atomic.AddInt32(&pool.totalTask, -1)
