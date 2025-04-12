@@ -28,20 +28,24 @@ func (_ *LocalWorkerPoolPlatform) NewWorker(workerId string) *Worker {
 	}
 }
 
-func (_ *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) {
+func (_ *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) error {
 	log.Printf("Creating new local worker: %s\n", worker.workerId)
 
 	// Initialize the worker directory if it doesn't exist
-	initCmd := exec.Command("./ol", "worker", "init", "-p", worker.workerId, "-i", "ol-min") // TODO fix the "ol-min hardcoding"
+	// TODO fix the "ol-min hardcoding"
+	initCmd := exec.Command("./ol", "worker", "init", "-p", worker.workerId, "-i", "ol-min")
+	// TODO: both the boss and this subprocess can write to the same stream concurrently, which may interleave their outputs.
+	// The boss should capture the output from initCmd and then print it using log.Printf which is lock-protected
 	initCmd.Stderr = os.Stderr
 	if err := initCmd.Run(); err != nil {
 		log.Printf("Failed to initialize worker %s: %v\n", worker.workerId, err)
-		return // TODO return the error
+		return err
 	}
 
 	currPath, err := os.Getwd()
 	if err != nil {
 		log.Printf("failed to get current path: %v", err)
+		return err
 	}
 
 	workerPath := filepath.Join(currPath, worker.workerId)
@@ -50,23 +54,28 @@ func (_ *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) {
 	// Load worker configuration
 	if err := LoadWorkerConfigTemplate(templatePath, workerPath); err != nil {
 		log.Printf("Failed to load template.json: %v", err)
-		return // TODO return the error
+		return err
 	}
 
 	worker.port = common.Conf.Worker_port
 
 	// Start the worker in detached mode
-	upCmd := exec.Command("./ol", "worker", "up", "-p", worker.workerId, "-i", "ol-min", "-d") // TODO fix the "ol-min hardcoding"
+	// TODO fix the "ol-min hardcoding"
+	upCmd := exec.Command("./ol", "worker", "up", "-p", worker.workerId, "-i", "ol-min", "-d")
+	// TODO: both the boss and this subprocess can write to the same stream concurrently, which may interleave their outputs.
+	// The boss should capture the output from initCmd and then print it using log.Printf which is lock-protected
 	upCmd.Stderr = os.Stderr
 	if err := upCmd.Start(); err != nil {
 		log.Printf("Failed to start worker %s: %v\n", worker.workerId, err)
-		return // TODO return the error
+		return err
 	}
 
 	log.Printf("Worker %s started on %s\n", worker.workerId, worker.port)
+
+	return nil
 }
 
-func (_ *LocalWorkerPoolPlatform) DeleteInstance(worker *Worker) {
+func (_ *LocalWorkerPoolPlatform) DeleteInstance(worker *Worker) error {
 	log.Printf("Deleting local worker: %s\n", worker.workerId)
 
 	// Stop the worker process
@@ -74,12 +83,14 @@ func (_ *LocalWorkerPoolPlatform) DeleteInstance(worker *Worker) {
 	err := downCmd.Run()
 	if err != nil {
 		log.Printf("Failed to stop worker %s: %v\n", worker.workerId, err)
-		return // TODO return the error
+		return err
 	}
 
 	log.Printf("Worker %s stopped\n", worker.workerId)
+
+	return nil
 }
 
-func (_ *LocalWorkerPoolPlatform) ForwardTask(w http.ResponseWriter, r *http.Request, worker *Worker) {
-	forwardTaskHelper(w, r, worker.host, worker.port)
+func (_ *LocalWorkerPoolPlatform) ForwardTask(w http.ResponseWriter, r *http.Request, worker *Worker) error {
+	return forwardTaskHelper(w, r, worker.host, worker.port)
 }
