@@ -48,8 +48,8 @@ func LoadConf(path string) error {
 		return fmt.Errorf("could not parse config (%v): %v\n", path, err.Error())
 	}
 
+	// TODO: omit, When we unmarshall the config, we already get the the sub configs from the file.
 	cloudvm.LoadGcpConfig(Conf.Gcp)
-
 	return checkConf()
 }
 
