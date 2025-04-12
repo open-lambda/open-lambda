@@ -145,7 +145,7 @@ func initOLDir(olPath string, dockerBaseImage string, newBase bool) (err error) 
 	}
 
 	confPath := filepath.Join(olPath, "config.json")
-	if err := common.SaveConf(confPath); err != nil {
+	if err := common.SaveGlobalConfig(confPath); err != nil {
 		return err
 	}
 
@@ -187,7 +187,7 @@ const (
 // and an error if it encounters any.
 func checkState() (OlState, error) {
 	if common.Conf == nil {
-		panic("Invalid state: config not initialized");
+		panic("Invalid state: config not initialized")
 	}
 
 	olPath := common.Conf.Worker_dir

@@ -137,7 +137,7 @@ func pprofMem(ctx *cli.Context) error {
 		return err
 	}
 
-	err = common.LoadConf(filepath.Join(olPath, "config.json"))
+	err = common.LoadGlobalConfig(filepath.Join(olPath, "config.json"))
 	if err != nil {
 		return err
 	}
@@ -175,7 +175,7 @@ func pprofCpuStart(ctx *cli.Context) error {
 		return err
 	}
 
-	err = common.LoadConf(filepath.Join(olPath, "config.json"))
+	err = common.LoadGlobalConfig(filepath.Join(olPath, "config.json"))
 	if err != nil {
 		return err
 	}
@@ -211,7 +211,7 @@ func pprofCpuStop(ctx *cli.Context) error {
 		return err
 	}
 
-	err = common.LoadConf(filepath.Join(olPath, "config.json"))
+	err = common.LoadGlobalConfig(filepath.Join(olPath, "config.json"))
 	if err != nil {
 		return err
 	}

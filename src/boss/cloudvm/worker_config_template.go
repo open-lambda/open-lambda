@@ -1,16 +1,20 @@
 package cloudvm
 
 import (
-	"encoding/json"
 	"log"
 	"path/filepath"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 )
 
+// SaveTemplateConfToWorkerDir constructs a worker-specific config using:
+// 1. The global template config (shared defaults)
+// 2. Worker-specific defaults based on its directory path
+// 3. A unique worker port number
+// The final config is then written to <workerPath>/config.json.
 func SaveTemplateConfToWorkerDir(cfg *common.Config, workerPath string, workerPort string) error {
 	// Copy the config so we can safely mutate it
-	cfgCopy := deepCopyConfig(cfg)
+	cfgCopy := *cfg
 	defaultCfg, _ := common.GetDefaultWorkerConfig(workerPath)
 
 	// Patch fields ONLY if they're empty
@@ -38,12 +42,5 @@ func SaveTemplateConfToWorkerDir(cfg *common.Config, workerPath string, workerPo
 
 	// Save the template configuration to the worker's config directory
 	configPath := filepath.Join(workerPath, "config.json")
-	return common.ExportConfig(cfgCopy, configPath)
-}
-
-func deepCopyConfig(src *common.Config) *common.Config {
-	bytes, _ := json.Marshal(src)
-	var dst common.Config
-	json.Unmarshal(bytes, &dst)
-	return &dst
+	return common.SaveConfig(&cfgCopy, configPath)
 }
