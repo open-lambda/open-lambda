@@ -142,7 +142,7 @@ func LoadDefaults(olPath string) error {
 		return err
 	}
 
-	if err := checkConf(); err != nil {
+	if err := checkConf(cfg); err != nil {
 		return err
 	}
 
@@ -221,7 +221,7 @@ func LoadGlobalConfig(path string) error {
 		return err
 	}
 
-	if err := checkConf(); err != nil {
+	if err := checkConf(cfg); err != nil {
 		return err
 	}
 
@@ -244,17 +244,17 @@ func ReadInConfig(path string) (*Config, error) {
 	return &templateConfig, nil
 }
 
-func checkConf() error {
-	if !path.IsAbs(Conf.Worker_dir) {
+func checkConf(cfg *Config) error {
+	if !path.IsAbs(cfg.Worker_dir) {
 		return fmt.Errorf("Worker_dir cannot be relative")
 	}
 
-	if Conf.Sandbox == "sock" {
-		if Conf.SOCK_base_path == "" {
+	if cfg.Sandbox == "sock" {
+		if cfg.SOCK_base_path == "" {
 			return fmt.Errorf("must specify sock_base_path")
 		}
 
-		if !path.IsAbs(Conf.SOCK_base_path) {
+		if !path.IsAbs(cfg.SOCK_base_path) {
 			return fmt.Errorf("sock_base_path cannot be relative")
 		}
 
@@ -265,24 +265,24 @@ func checkConf() error {
 		// evicted.
 		//
 		// TODO: revise evictor and relax this
-		minMem := 2 * Max(Conf.Limits.Installer_mem_mb, Conf.Limits.Mem_mb)
-		if minMem > Conf.Mem_pool_mb {
+		minMem := 2 * Max(cfg.Limits.Installer_mem_mb, cfg.Limits.Mem_mb)
+		if minMem > cfg.Mem_pool_mb {
 			return fmt.Errorf("memPoolMb must be at least %d", minMem)
 		}
-	} else if Conf.Sandbox == "docker" {
-		if Conf.Pkgs_dir == "" {
+	} else if cfg.Sandbox == "docker" {
+		if cfg.Pkgs_dir == "" {
 			return fmt.Errorf("must specify packages directory")
 		}
 
-		if !path.IsAbs(Conf.Pkgs_dir) {
+		if !path.IsAbs(cfg.Pkgs_dir) {
 			return fmt.Errorf("Pkgs_dir cannot be relative")
 		}
 
-		if Conf.Features.Import_cache != "" {
+		if cfg.Features.Import_cache != "" {
 			return fmt.Errorf("features.import_cache must be disabled for docker Sandbox")
 		}
 	} else {
-		return fmt.Errorf("Unknown Sandbox type '%s'", Conf.Sandbox)
+		return fmt.Errorf("Unknown Sandbox type '%s'", cfg.Sandbox)
 	}
 
 	return nil
