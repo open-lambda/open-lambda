@@ -21,10 +21,9 @@ type LocalWorkerPoolPlatform struct {
 	configTemplate *common.Config
 }
 
-func NewLocalWorkerPool() *WorkerPool {
-	startPort, _ := strconv.Atoi("6000") // TODO: read from boss config
-
-	templatePath := "template path" // TODO: read from boss config
+func NewLocalWorkerPool(localPlatformConfig LocalPlatConfig) *WorkerPool {
+	startPort, _ := strconv.Atoi(localPlatformConfig.Worker_Starting_Port)
+	templatePath := localPlatformConfig.Path_To_Worker_Config_Template
 
 	// Create template.json if it doesn't exist
 	if _, err := os.Stat(templatePath); os.IsNotExist(err) {
