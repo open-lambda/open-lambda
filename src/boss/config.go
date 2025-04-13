@@ -27,6 +27,7 @@ func LoadDefaults() error {
 	currPath, err := os.Getwd()
 	if err != nil {
 		log.Printf("failed to get current path: %v", err)
+		return err
 	}
 
 	Conf = &Config{

@@ -1,13 +1,19 @@
 package common
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 
 	"gopkg.in/yaml.v3"
 )
+
+var HandlerNameRegex = regexp.MustCompile(`^[A-Za-z0-9\.\-\_]+$`)
 
 // Triggers defines different ways a lambda can be invoked
 type Triggers struct {
@@ -91,6 +97,43 @@ func LoadLambdaConfig(codeDir string) (*LambdaConfig, error) {
 	}
 
 	return &config, checkLambdaConfig(&config)
+}
+
+func ExtractConfigFromTarGz(tarPath string) (*LambdaConfig, error) {
+	f, err := os.Open(tarPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open lambda tarball: %w", err)
+	}
+	defer f.Close()
+
+	gzr, err := gzip.NewReader(f)
+	if err != nil {
+		return nil, fmt.Errorf("invalid .gz file: %w", err)
+	}
+	defer gzr.Close()
+
+	tr := tar.NewReader(gzr)
+
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("invalid tar: %w", err)
+		}
+
+		if header.Name == "ol.yaml" {
+			var config LambdaConfig
+			decoder := yaml.NewDecoder(tr)
+			if err := decoder.Decode(&config); err != nil {
+				return nil, fmt.Errorf("failed to parse ol.yaml: %w", err)
+			}
+			return &config, checkLambdaConfig(&config)
+		}
+	}
+
+	return nil, fmt.Errorf("ol.yaml not found in archive")
 }
 
 // IsHTTPMethodAllowed checks if a method is permitted for this function

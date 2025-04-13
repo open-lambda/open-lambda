@@ -9,26 +9,32 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/open-lambda/open-lambda/ol/boss/autoscaling"
 	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
+	"github.com/open-lambda/open-lambda/ol/boss/lambdastore"
 )
 
 const (
-	RUN_PATH           = "/run/"
-	BOSS_STATUS_PATH   = "/status"
-	SCALING_PATH       = "/scaling/worker_count"
-	SHUTDOWN_PATH      = "/shutdown"
-	LAMBDA_UPLOAD_PATH = "/lambda/upload/" // POST - /lambda/upload/{function_name}
-	LAMBDA_LIST_PATH   = "/lambda/list"    // GET - /lambda/list
-	LAMBDA_DELETE_PATH = "/lambda/"        // DELETE - /lambda/{function_name}
-	LAMBDA_CONFIG_PATH = "/lambda/config/" // GET - /lambda/config/{function_name}
+	RUN_PATH         = "/run/"
+	BOSS_STATUS_PATH = "/status"
+	SCALING_PATH     = "/scaling/worker_count"
+	SHUTDOWN_PATH    = "/shutdown"
+
+	// GET /registry
+	// POST /registry/{name}
+	// DELETE /registry/{name}
+	// GET /registry/{name} not implemented
+	// GET /registry/{name}/config
+	REGISTRY_BASE_PATH = "/registry/"
 )
 
 type Boss struct {
-	workerPool *cloudvm.WorkerPool
-	autoScaler autoscaling.Scaling
+	workerPool  *cloudvm.WorkerPool
+	autoScaler  autoscaling.Scaling
+	lambdaStore *lambdastore.LambdaStore
 }
 
 // BossStatus handles the request to get the status of the boss.
@@ -113,8 +119,14 @@ func BossMain() (err error) {
 		return err
 	}
 
+	store, err := lambdastore.NewLambdaStore(Conf.Lambda_Store_Path)
+	if err != nil {
+		return err
+	}
+
 	boss := Boss{
-		workerPool: pool,
+		workerPool:  pool,
+		lambdaStore: store,
 	}
 
 	if Conf.Scaling == "threshold-scaler" {
@@ -122,21 +134,44 @@ func BossMain() (err error) {
 		boss.autoScaler.Launch(boss.workerPool)
 	}
 
-	store, err := NewLambdaStore(Conf.Lambda_Store_Path)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	http.HandleFunc(BOSS_STATUS_PATH, boss.BossStatus)
 	http.HandleFunc(SCALING_PATH, boss.ScalingWorker)
 	http.HandleFunc(RUN_PATH, boss.workerPool.RunLambda)
 	http.HandleFunc(SHUTDOWN_PATH, boss.Close)
 
-	// Register LambdaStore CRUD routes
-	http.HandleFunc(LAMBDA_UPLOAD_PATH, store.UploadLambda)
-	http.HandleFunc(LAMBDA_LIST_PATH, store.ListLambda)
-	http.HandleFunc(LAMBDA_DELETE_PATH, store.DeleteLambda)
-	http.HandleFunc(LAMBDA_CONFIG_PATH, store.GetLambdaConfig)
+	http.HandleFunc(REGISTRY_BASE_PATH, func(w http.ResponseWriter, r *http.Request) {
+		relPath := strings.TrimPrefix(r.URL.Path, REGISTRY_BASE_PATH)
+
+		// GET /registry - list all lambda functions in registry
+		if relPath == "" {
+			if r.Method == "GET" {
+				boss.lambdaStore.ListLambda(w, r)
+				return
+			}
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		parts := strings.SplitN(relPath, "/", 2)
+
+		// GET /registry/{name}/config get the config file of the specific function
+		if len(parts) == 2 && parts[1] == "config" && r.Method == "GET" {
+			boss.lambdaStore.GetLambdaConfig(w, r)
+			return
+		}
+
+		// Main resource
+		switch r.Method {
+		case "POST":
+			boss.lambdaStore.UploadLambda(w, r)
+		case "DELETE":
+			boss.lambdaStore.DeleteLambda(w, r)
+		case "GET":
+			http.Error(w, "not implemented", http.StatusNotImplemented)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
 
 	// clean up if signal hits us
 	c := make(chan os.Signal, 1)
