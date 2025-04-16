@@ -1,4 +1,3 @@
-// TODO: move this to common
 package config
 
 import (

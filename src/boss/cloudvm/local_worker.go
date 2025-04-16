@@ -25,9 +25,6 @@ func NewLocalWorkerPool() *WorkerPool {
 	startPort, _ := strconv.Atoi(config.BossConf.Local.Worker_Starting_Port)
 	templatePath := config.BossConf.Local.Path_To_Worker_Config_Template
 
-	log.Printf("templatePath: %s", templatePath)
-	log.Printf("startPort: %d", startPort)
-
 	// Create template.json if it doesn't exist
 	if _, err := os.Stat(templatePath); err != nil {
 		if os.IsNotExist(err) {
