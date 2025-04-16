@@ -14,11 +14,10 @@ import (
 
 // WORKER IMPLEMENTATION: LocalWorker
 type LocalWorkerPoolPlatform struct {
+	configTemplate *common.Config
 	// lock protects nextWorkerPort from race conditions caused by concurrent access.
-	// configTemplate is not protected by lock now, but if it needs to be modified later, it should also be protected by the lock.
 	lock           sync.Mutex
 	nextWorkerPort int
-	configTemplate *common.Config
 }
 
 func NewLocalWorkerPool(localPlatformConfig LocalPlatConfig) *WorkerPool {
@@ -26,21 +25,19 @@ func NewLocalWorkerPool(localPlatformConfig LocalPlatConfig) *WorkerPool {
 	templatePath := localPlatformConfig.Path_To_Worker_Config_Template
 
 	// Create template.json if it doesn't exist
-	if _, err := os.Stat(templatePath); os.IsNotExist(err) {
-		// Get the worker config struct with fake path then setting it to empty string so we can patch it later with worker specific defaults
-		defaultTemplateConfig, err := common.GetDefaultWorkerConfig("/tmp/fake")
-		if err != nil {
-			log.Fatalf("failed to load default template config: %v", err)
-		}
+	if _, err := os.Stat(templatePath); err != nil {
+		if os.IsNotExist(err) {
+			// Get the worker config struct
+			defaultTemplateConfig, err := common.GetDefaultWorkerConfig("")
+			if err != nil {
+				log.Fatalf("failed to load default template config: %v", err)
+			}
 
-		defaultTemplateConfig.Worker_dir = ""
-		defaultTemplateConfig.Registry = ""
-		defaultTemplateConfig.SOCK_base_path = ""
-		defaultTemplateConfig.Import_cache_tree = ""
-		defaultTemplateConfig.Pkgs_dir = ""
-
-		if err := common.SaveConfig(defaultTemplateConfig, templatePath); err != nil {
-			log.Fatalf("failed to save template.json: %v", err)
+			if err := common.SaveConfig(defaultTemplateConfig, templatePath); err != nil {
+				log.Fatalf("failed to save template.json: %v", err)
+			}
+		} else {
+			log.Fatalf("failed to stat template path: %v", err)
 		}
 	}
 

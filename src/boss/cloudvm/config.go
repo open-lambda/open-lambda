@@ -6,7 +6,7 @@ import (
 )
 
 // TODO: omit. this is already saved in boss config Gcp global variable, no need to have another global variable referring to it
-var GcpConf GcpConfig
+var GcpConf *GcpConfig
 
 type GcpConfig struct {
 	DiskSizeGb  int    `json:"disk_size_gb"`
@@ -21,7 +21,7 @@ func GetGcpConfigDefaults() GcpConfig {
 }
 
 // TODO: omit, no need to load the config to second global variable
-func LoadGcpConfig(newConf GcpConfig) {
+func LoadGcpConfig(newConf *GcpConfig) {
 	GcpConf = newConf
 }
 

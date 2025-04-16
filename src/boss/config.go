@@ -50,7 +50,7 @@ func LoadConf(path string) error {
 	}
 
 	// TODO: omit, When we unmarshall the config, we already get the the sub configs from the file.
-	cloudvm.LoadGcpConfig(Conf.Gcp)
+	cloudvm.LoadGcpConfig(&Conf.Gcp)
 	return checkConf()
 }
 

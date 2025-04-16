@@ -153,11 +153,15 @@ func LoadDefaults(olPath string) error {
 
 // GetDefaultWorkerConfig returns a config populated with reasonable defaults.
 func GetDefaultWorkerConfig(olPath string) (*Config, error) {
-	workerDir := filepath.Join(olPath, "worker")
-	registryDir := filepath.Join(olPath, "registry")
-	baseImgDir := filepath.Join(olPath, "lambda")
-	zygoteTreePath := filepath.Join(olPath, "default-zygotes-40.json")
-	packagesDir := filepath.Join(baseImgDir, "packages")
+	var workerDir, registryDir, baseImgDir, zygoteTreePath, packagesDir string
+
+	if olPath != "" {
+		workerDir = filepath.Join(olPath, "worker")
+		registryDir = filepath.Join(olPath, "registry")
+		baseImgDir = filepath.Join(olPath, "lambda")
+		zygoteTreePath = filepath.Join(olPath, "default-zygotes-40.json")
+		packagesDir = filepath.Join(baseImgDir, "packages")
+	}
 
 	in := &syscall.Sysinfo_t{}
 	err := syscall.Sysinfo(in)
