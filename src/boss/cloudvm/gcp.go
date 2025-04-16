@@ -495,8 +495,8 @@ func (c *GcpClient) LaunchGcp(snapshotName string, vmName string) (map[string]an
 		InstanceName:        vmName,
 		// SourceImage: "projects/ubuntu-os-cloud/global/images/ubuntu-2004-focal-v20220204",
 		SnapshotName: snapshotName,
-		DiskSizeGb:   config.Conf.Gcp.DiskSizeGb,
-		MachineType:  config.Conf.Gcp.MachineType,
+		DiskSizeGb:   config.BossConf.Gcp.DiskSizeGb,
+		MachineType:  config.BossConf.Gcp.MachineType,
 	}
 
 	url := fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/zones/%s/instances",

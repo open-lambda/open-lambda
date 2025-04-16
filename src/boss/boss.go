@@ -51,7 +51,7 @@ func (boss *Boss) BossStatus(w http.ResponseWriter, req *http.Request) {
 // Close handles the request to close the boss.
 func (b *Boss) Close(_ http.ResponseWriter, _ *http.Request) {
 	b.workerPool.Close()
-	if config.Conf.Scaling == "threshold-scaler" {
+	if config.BossConf.Scaling == "threshold-scaler" {
 		b.autoScaler.Close()
 	}
 }
@@ -88,8 +88,8 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if worker_count > config.Conf.Worker_Cap {
-		worker_count = config.Conf.Worker_Cap
+	if worker_count > config.BossConf.Worker_Cap {
+		worker_count = config.BossConf.Worker_Cap
 		log.Printf("capping workers at %d to avoid big bills during debugging\n", worker_count)
 	}
 	log.Printf("Receive request to %s, worker_count of %d requested\n", r.URL.Path, worker_count)
@@ -105,7 +105,7 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 func BossMain() (err error) {
 	fmt.Printf("WARNING!  Boss incomplete (only use this as part of development process).\n")
 
-	pool, err := cloudvm.NewWorkerPool(config.Conf.Platform, config.Conf.Worker_Cap, config.Conf.Local)
+	pool, err := cloudvm.NewWorkerPool(config.BossConf.Platform, config.BossConf.Worker_Cap)
 	if err != nil {
 		return err
 	}
@@ -114,7 +114,7 @@ func BossMain() (err error) {
 		workerPool: pool,
 	}
 
-	if config.Conf.Scaling == "threshold-scaler" {
+	if config.BossConf.Scaling == "threshold-scaler" {
 		boss.autoScaler = &autoscaling.ThresholdScaling{}
 		boss.autoScaler.Launch(boss.workerPool)
 	}
@@ -135,7 +135,7 @@ func BossMain() (err error) {
 		os.Exit(0)
 	}()
 
-	port := fmt.Sprintf(":%s", config.Conf.Boss_port)
+	port := fmt.Sprintf(":%s", config.BossConf.Boss_port)
 	fmt.Printf("Listen on port %s\n", port)
 	return http.ListenAndServe(port, nil) // should never return if successful
 }

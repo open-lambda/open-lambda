@@ -8,7 +8,7 @@ import (
 	"log"
 )
 
-var Conf *Config
+var BossConf *Config
 
 type Config struct {
 	Platform   string          `json:"platform"`
@@ -21,7 +21,7 @@ type Config struct {
 }
 
 func LoadDefaults() error {
-	Conf = &Config{
+	BossConf = &Config{
 		Platform:   "local",
 		Scaling:    "manual",
 		API_key:    "abc", // TODO: autogenerate a random key
@@ -42,7 +42,7 @@ func LoadConf(path string) error {
 		return fmt.Errorf("could not open config (%v): %v\n", path, err.Error())
 	}
 
-	if err := json.Unmarshal(config_raw, &Conf); err != nil {
+	if err := json.Unmarshal(config_raw, &BossConf); err != nil {
 		log.Printf("FILE: %v\n", config_raw)
 		return fmt.Errorf("could not parse config (%v): %v\n", path, err.Error())
 	}
@@ -51,8 +51,8 @@ func LoadConf(path string) error {
 }
 
 func checkConf() error {
-	if Conf.Scaling != "manual" && Conf.Scaling != "threshold-scaler" {
-		return fmt.Errorf("Scaling type '%s' not implemented", Conf.Scaling)
+	if BossConf.Scaling != "manual" && BossConf.Scaling != "threshold-scaler" {
+		return fmt.Errorf("Scaling type '%s' not implemented", BossConf.Scaling)
 	}
 
 	return nil
@@ -60,7 +60,7 @@ func checkConf() error {
 
 // Dump prints the Config as a JSON string.
 func DumpConf() {
-	s, err := json.Marshal(Conf)
+	s, err := json.Marshal(BossConf)
 	if err != nil {
 		panic(err)
 	}
@@ -69,7 +69,7 @@ func DumpConf() {
 
 // DumpStr returns the Config as an indented JSON string.
 func DumpConfStr() string {
-	s, err := json.MarshalIndent(Conf, "", "\t")
+	s, err := json.MarshalIndent(BossConf, "", "\t")
 	if err != nil {
 		panic(err)
 	}
@@ -78,7 +78,7 @@ func DumpConfStr() string {
 
 // Save writes the Config as an indented JSON to path with 644 mode.
 func SaveConf(path string) error {
-	s, err := json.MarshalIndent(Conf, "", "\t")
+	s, err := json.MarshalIndent(BossConf, "", "\t")
 	if err != nil {
 		return err
 	}

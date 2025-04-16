@@ -16,6 +16,7 @@ import (
 
 	"github.com/open-lambda/open-lambda/ol/bench"
 	"github.com/open-lambda/open-lambda/ol/boss"
+	"github.com/open-lambda/open-lambda/ol/boss/config"
 	"github.com/open-lambda/open-lambda/ol/common"
 	"github.com/open-lambda/open-lambda/ol/worker"
 
@@ -23,11 +24,11 @@ import (
 )
 
 func newBossConf() error {
-	if err := boss.LoadDefaults(); err != nil {
+	if err := config.LoadDefaults(); err != nil {
 		return err
 	}
 
-	if err := boss.SaveConf("boss.json"); err != nil {
+	if err := config.SaveConf("boss.json"); err != nil {
 		return err
 	}
 
@@ -52,7 +53,7 @@ func runBoss(ctx *cli.Context) error {
 		confPath = overridesPath
 	}
 
-	if err := boss.LoadConf(confPath); err != nil {
+	if err := config.LoadConf(confPath); err != nil {
 		return err
 	}
 
@@ -288,7 +289,7 @@ func bossStart(ctx *cli.Context) error {
 			died <- err
 		}()
 
-		fmt.Printf("Starting boss: pid=%d, port=%s, log=%s\n", proc.Pid, boss.Conf.Boss_port, logPath)
+		fmt.Printf("Starting boss: pid=%d, port=%s, log=%s\n", proc.Pid, config.BossConf.Boss_port, logPath)
 		return nil // TODO: ping status to make sure it is actually running?
 	}
 
