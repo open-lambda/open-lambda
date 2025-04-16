@@ -1,25 +1,23 @@
 // TODO: move this to common
-package boss
+package config
 
 import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
-
-	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
 )
 
 var Conf *Config
 
 type Config struct {
-	Platform   string                  `json:"platform"`
-	Scaling    string                  `json:"scaling"`
-	API_key    string                  `json:"api_key"`
-	Boss_port  string                  `json:"boss_port"`
-	Worker_Cap int                     `json:"worker_cap"`
-	Gcp        cloudvm.GcpConfig       `json:"gcp"`
-	Local      cloudvm.LocalPlatConfig `json:"local"`
+	Platform   string          `json:"platform"`
+	Scaling    string          `json:"scaling"`
+	API_key    string          `json:"api_key"`
+	Boss_port  string          `json:"boss_port"`
+	Worker_Cap int             `json:"worker_cap"`
+	Gcp        GcpConfig       `json:"gcp"`
+	Local      LocalPlatConfig `json:"local"`
 }
 
 func LoadDefaults() error {
@@ -29,8 +27,8 @@ func LoadDefaults() error {
 		API_key:    "abc", // TODO: autogenerate a random key
 		Boss_port:  "5000",
 		Worker_Cap: 4,
-		Gcp:        cloudvm.GetGcpConfigDefaults(),
-		Local:      cloudvm.GetLocalPlatformConfigDefaults(),
+		Gcp:        GetGcpConfigDefaults(),
+		Local:      GetLocalPlatformConfigDefaults(),
 	}
 
 	return checkConf()
@@ -49,8 +47,6 @@ func LoadConf(path string) error {
 		return fmt.Errorf("could not parse config (%v): %v\n", path, err.Error())
 	}
 
-	// TODO: omit, When we unmarshall the config, we already get the the sub configs from the file.
-	cloudvm.LoadGcpConfig(&Conf.Gcp)
 	return checkConf()
 }
 

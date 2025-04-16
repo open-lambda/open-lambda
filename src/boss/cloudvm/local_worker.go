@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/open-lambda/open-lambda/ol/boss/config"
 	"github.com/open-lambda/open-lambda/ol/common"
 )
 
@@ -20,9 +21,9 @@ type LocalWorkerPoolPlatform struct {
 	nextWorkerPort int
 }
 
-func NewLocalWorkerPool(localPlatformConfig LocalPlatConfig) *WorkerPool {
-	startPort, _ := strconv.Atoi(localPlatformConfig.Worker_Starting_Port)
-	templatePath := localPlatformConfig.Path_To_Worker_Config_Template
+func NewLocalWorkerPool() *WorkerPool {
+	startPort, _ := strconv.Atoi(config.Conf.Local.Worker_Starting_Port)
+	templatePath := config.Conf.Local.Path_To_Worker_Config_Template
 
 	// Create template.json if it doesn't exist
 	if _, err := os.Stat(templatePath); err != nil {

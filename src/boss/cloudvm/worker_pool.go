@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-func NewWorkerPool(platform string, worker_cap int, local_plat_config LocalPlatConfig) (*WorkerPool, error) {
+func NewWorkerPool(platform string, worker_cap int) (*WorkerPool, error) {
 	clusterLogFile, _ := os.Create("cluster.log")
 	taskLogFile, _ := os.Create("tasks.log")
 	clusterLog := log.New(clusterLogFile, "", 0)
@@ -27,7 +27,7 @@ func NewWorkerPool(platform string, worker_cap int, local_plat_config LocalPlatC
 	case platform == "gcp":
 		pool = NewGcpWorkerPool()
 	case platform == "local":
-		pool = NewLocalWorkerPool(local_plat_config)
+		pool = NewLocalWorkerPool()
 	default:
 		return nil, fmt.Errorf("invalid cloud platform: %s", platform)
 	}

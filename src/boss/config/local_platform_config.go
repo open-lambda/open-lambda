@@ -1,4 +1,4 @@
-package cloudvm
+package config
 
 import (
 	"log"
