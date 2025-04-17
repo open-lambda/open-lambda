@@ -106,7 +106,7 @@ func KafkaInit(w http.ResponseWriter, r *http.Request) {
 			iter := fetches.RecordIter()
 			for !iter.Done() {
 				record := iter.Next()
-				r, err := ConvertKafkaMessageToHTTPRequest(record.Value, functionName)
+				r, err := ConvertKafkaMessageToHTTPRequest(record.Value)
 				if err != nil {
 					log.Printf("%f", err.Error())
 					panic(err)
