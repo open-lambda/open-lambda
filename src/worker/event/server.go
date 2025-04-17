@@ -16,7 +16,21 @@ import (
 	"syscall"
 
 	"github.com/open-lambda/open-lambda/ol/common"
+	"github.com/open-lambda/open-lambda/ol/worker/lambda"
 )
+
+var lambdaMgr *lambda.LambdaMgr
+var once sync.Once
+
+// LambdaManager is now a singleton, one per worker. This is because lambda manager
+// creates paths in the worker directory
+func GetLambdaManagerInstance() (*lambda.LambdaMgr, error) {
+	var err error
+	once.Do(func() {
+		lambdaMgr, err = lambda.NewLambdaMgr()
+	})
+	return lambdaMgr, err
+}
 
 const (
 	RUN_PATH             = "/run/"
@@ -27,6 +41,7 @@ const (
 	PPROF_MEM_PATH       = "/pprof/mem"
 	PPROF_CPU_START_PATH = "/pprof/cpu-start"
 	PPROF_CPU_STOP_PATH  = "/pprof/cpu-stop"
+	KAFKA_INIT_PATH      = "/kafka-init"
 )
 
 type cleanable interface {
@@ -227,6 +242,7 @@ func Main() (err error) {
 	http.HandleFunc(PPROF_MEM_PATH, PprofMem)
 	http.HandleFunc(PPROF_CPU_START_PATH, PprofCpuStart)
 	http.HandleFunc(PPROF_CPU_STOP_PATH, PprofCpuStop)
+	http.HandleFunc(KAFKA_INIT_PATH, KafkaInit)
 
 	var s cleanable
 	switch common.Conf.Server_mode {

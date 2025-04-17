@@ -149,3 +149,20 @@ Invoke your lambda with `curl` (the result should be the same as the POST body):
 ```
 curl -X POST localhost:5000/run/echo -d '{"hello": "world"}'
 ```
+
+## Launching a Kafka consumer
+
+Once a worker is up, initialize a kafka consumer with `curl`:
+
+```
+curl -X POST http://localhost:5000/kafka-init \
+     -H "Content-Type: application/json" \
+     -d '{
+           "bootstrap_servers": "localhost:9092,localhost:9093",
+           "topic": "test-topic1,test-topic2",
+           "group_id": "my-group-identifier",
+           "auto_offset_reset": "earliest",
+           "functionName": "echo"
+         }'
+```
+Each curl request launches one consumer on a worker. Each consumer belongs to exactly one group and executes a function. Note that each message is consumed at most once by a group.
