@@ -23,7 +23,7 @@ type KafkaServer struct {
 var kafkaServer *KafkaServer
 var kafkaMu sync.Mutex
 
-func ConvertKafkaMessageToHTTPRequest(message []byte, functionName string) (*http.Request, error) {
+func ConvertKafkaMessageToHTTPRequest(message []byte) (*http.Request, error) {
 	// Define the target URL and HTTP method
 
 	url := filepath.Join("/run") // Modify as needed
