@@ -16,10 +16,12 @@ import (
 )
 
 type LambdaStore struct {
-	// lock protects concurrent access to the Lambdas map and file operations
-	lock      sync.RWMutex
 	StorePath string
-	Lambdas   map[string]*common.LambdaConfig
+	// mapLock protects concurrent access to the Lambdas map
+	mapLock sync.RWMutex
+	Lambdas map[string]*common.LambdaConfig
+	// funcLocks stores a mutex per function to synchronize file-level operations (e.g., upload/delete).
+	funcLocks sync.Map
 }
 
 func NewLambdaStore(storePath string) (*LambdaStore, error) {
@@ -55,9 +57,9 @@ func (s *LambdaStore) UploadLambda(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ensure atomic remove + add
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	lock := s.getFuncLock(functionName)
+	lock.Lock()
+	defer lock.Unlock()
 
 	if err := s.removeFromRegistry(functionName); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to clean old version: %v", err), http.StatusInternalServerError)
@@ -80,9 +82,9 @@ func (s *LambdaStore) DeleteLambda(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ensure atomic remove
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	functionLock := s.getFuncLock(functionName)
+	functionLock.Lock()
+	defer functionLock.Unlock()
 
 	if err := s.removeFromRegistry(functionName); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -95,8 +97,8 @@ func (s *LambdaStore) DeleteLambda(w http.ResponseWriter, r *http.Request) {
 
 func (s *LambdaStore) ListLambda(w http.ResponseWriter, r *http.Request) {
 	// read only access to map
-	s.lock.RLock()
-	defer s.lock.RUnlock()
+	s.mapLock.RLock()
+	defer s.mapLock.RUnlock()
 
 	names := make([]string, 0, len(s.Lambdas))
 	for name := range s.Lambdas {
@@ -109,16 +111,17 @@ func (s *LambdaStore) ListLambda(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *LambdaStore) GetLambdaConfig(w http.ResponseWriter, r *http.Request) {
-	// protect against reading file during delete or upload
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-
 	raw := strings.TrimPrefix(r.URL.Path, "/registry/")
 	functionName, err := sanitizeFunctionName(raw)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	// protect against reading file during delete or upload
+	functionLock := s.getFuncLock(functionName)
+	functionLock.Lock()
+	defer functionLock.Unlock()
 
 	tarPath := filepath.Join(s.StorePath, functionName+".tar.gz")
 
@@ -138,10 +141,6 @@ func (s *LambdaStore) GetLambdaConfig(w http.ResponseWriter, r *http.Request) {
 // ------------------- Core Logic ----------------------
 
 func (s *LambdaStore) loadConfigAndRegister(functionName string) error {
-	// ensure atomic mutation of Lambdas map
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
 	tarPath := filepath.Join(s.StorePath, functionName+".tar.gz")
 
 	cfg, err := common.ExtractConfigFromTarGz(tarPath)
@@ -149,7 +148,11 @@ func (s *LambdaStore) loadConfigAndRegister(functionName string) error {
 		return fmt.Errorf("failed to extract config.json: %w", err)
 	}
 
+	// ensure atomic mutation of Lambdas map
+	s.mapLock.Lock()
+	defer s.mapLock.Unlock()
 	s.Lambdas[functionName] = cfg
+
 	return nil
 }
 
@@ -163,7 +166,7 @@ func (s *LambdaStore) unregisterTriggers(functionName string) {
 	// This can eventually end up in boss/event, mirroring worker/event.
 }
 
-// assumes the caller holds the lock
+// assumes the caller holds the function lock
 func (s *LambdaStore) addToRegistry(name string, body io.Reader) error {
 	tarPath := filepath.Join(s.StorePath, name+".tar.gz")
 
@@ -184,18 +187,24 @@ func (s *LambdaStore) addToRegistry(name string, body io.Reader) error {
 		return fmt.Errorf("failed to extract config: %w", err)
 	}
 
+	s.mapLock.Lock()
 	s.Lambdas[name] = cfg
+	s.mapLock.Unlock()
+
 	return nil
 }
 
-// assumes the caller holds the lock
+// assumes the caller holds the function lock
 func (s *LambdaStore) removeFromRegistry(name string) error {
 	tarPath := filepath.Join(s.StorePath, name+".tar.gz")
 	if err := os.Remove(tarPath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove tarball for %s: %w", name, err)
 	}
 
+	s.mapLock.Lock()
 	delete(s.Lambdas, name)
+	s.mapLock.Unlock()
+
 	return nil
 }
 
@@ -205,4 +214,10 @@ func sanitizeFunctionName(name string) (string, error) {
 		return "", errors.New("invalid function name")
 	}
 	return name, nil
+}
+
+// getFuncLock safely returns the lock for a given function name
+func (s *LambdaStore) getFuncLock(name string) *sync.Mutex {
+	actual, _ := s.funcLocks.LoadOrStore(name, &sync.Mutex{})
+	return actual.(*sync.Mutex)
 }
