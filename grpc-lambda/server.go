@@ -13,7 +13,7 @@ import (
 )
 
 const (
-    port          = ":50051"
+    port = ":50051"
     openLambdaURL = "http://localhost:5000/run/"
 )
 
@@ -22,7 +22,7 @@ type server struct {
     pb.UnimplementedLambdaServiceServer
 }
 
-// Invoke calls the specified lambda by name with the given payload
+// invoke calls the specified lambda by name with the given payload
 func (s *server) Invoke(ctx context.Context, req *pb.LambdaRequest) (*pb.LambdaResponse, error) {
     name := req.GetName()
     log.Printf("🔧 Lambda name: %q", name)
