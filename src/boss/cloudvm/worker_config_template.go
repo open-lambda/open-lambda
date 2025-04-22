@@ -5,6 +5,7 @@ import (
 	"log"
 	"path/filepath"
 
+	"github.com/open-lambda/open-lambda/ol/boss/config"
 	"github.com/open-lambda/open-lambda/ol/common"
 )
 
@@ -43,7 +44,11 @@ func SaveTemplateConfToWorkerDir(cfg *common.Config, workerPath string, workerPo
 		cfgCopy.Import_cache_tree = defaultCfg.Import_cache_tree
 		log.Printf("Patched Import_cache_tree: %s", cfg.Import_cache_tree)
 	}
+
 	cfgCopy.Worker_port = workerPort
+
+	// point the worker registry to lambda store
+	cfgCopy.Registry = config.BossConf.Lambda_Store_Path
 
 	// Save the template configuration to the worker's config directory
 	configPath := filepath.Join(workerPath, "config.json")
