@@ -9,19 +9,13 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
-<<<<<<< HEAD
 	"strings"
-=======
->>>>>>> origin/main
 	"syscall"
 
 	"github.com/open-lambda/open-lambda/ol/boss/autoscaling"
 	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
-<<<<<<< HEAD
-	"github.com/open-lambda/open-lambda/ol/boss/lambdastore"
-=======
 	"github.com/open-lambda/open-lambda/ol/boss/config"
->>>>>>> origin/main
+	"github.com/open-lambda/open-lambda/ol/boss/lambdastore"
 )
 
 const (
@@ -39,14 +33,9 @@ const (
 )
 
 type Boss struct {
-<<<<<<< HEAD
 	workerPool  *cloudvm.WorkerPool
 	autoScaler  autoscaling.Scaling
 	lambdaStore *lambdastore.LambdaStore
-=======
-	workerPool *cloudvm.WorkerPool
-	autoScaler autoscaling.Scaling
->>>>>>> origin/main
 }
 
 // BossStatus handles the request to get the status of the boss.
@@ -131,7 +120,7 @@ func BossMain() (err error) {
 		return err
 	}
 
-	store, err := lambdastore.NewLambdaStore(Conf.Lambda_Store_Path)
+	store, err := lambdastore.NewLambdaStore(config.BossConf.Lambda_Store_Path)
 	if err != nil {
 		return err
 	}

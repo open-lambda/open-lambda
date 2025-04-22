@@ -5,26 +5,21 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-<<<<<<< HEAD:src/boss/config.go
 	"os"
 	"path/filepath"
-
-	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
-=======
->>>>>>> origin/main:src/boss/config/config.go
 )
 
 var BossConf *Config
 
 type Config struct {
-<<<<<<< HEAD:src/boss/config.go
-	Platform          string             `json:"platform"`
-	Scaling           string             `json:"scaling"`
-	API_key           string             `json:"api_key"`
-	Boss_port         string             `json:"boss_port"`
-	Worker_Cap        int                `json:"worker_cap"`
-	Gcp               *cloudvm.GcpConfig `json:"gcp"`
-	Lambda_Store_Path string             `json:"lambda_store_path"`
+	Platform          string          `json:"platform"`
+	Scaling           string          `json:"scaling"`
+	API_key           string          `json:"api_key"`
+	Boss_port         string          `json:"boss_port"`
+	Worker_Cap        int             `json:"worker_cap"`
+	Gcp               GcpConfig       `json:"gcp"`
+	Local             LocalPlatConfig `json:"local"`
+	Lambda_Store_Path string          `json:"lambda_store_path"`
 }
 
 func LoadDefaults() error {
@@ -34,34 +29,15 @@ func LoadDefaults() error {
 		return err
 	}
 
-	Conf = &Config{
+	BossConf = &Config{
 		Platform:          "local",
 		Scaling:           "manual",
 		API_key:           "abc", // TODO: autogenerate a random key
 		Boss_port:         "5000",
 		Worker_Cap:        4,
-		Gcp:               cloudvm.GetGcpConfigDefaults(),
+		Gcp:               GetGcpConfigDefaults(),
+		Local:             GetLocalPlatformConfigDefaults(),
 		Lambda_Store_Path: filepath.Join(currPath, "lambdaStore"),
-=======
-	Platform   string          `json:"platform"`
-	Scaling    string          `json:"scaling"`
-	API_key    string          `json:"api_key"`
-	Boss_port  string          `json:"boss_port"`
-	Worker_Cap int             `json:"worker_cap"`
-	Gcp        GcpConfig       `json:"gcp"`
-	Local      LocalPlatConfig `json:"local"`
-}
-
-func LoadDefaults() error {
-	BossConf = &Config{
-		Platform:   "local",
-		Scaling:    "manual",
-		API_key:    "abc", // TODO: autogenerate a random key
-		Boss_port:  "5000",
-		Worker_Cap: 4,
-		Gcp:        GetGcpConfigDefaults(),
-		Local:      GetLocalPlatformConfigDefaults(),
->>>>>>> origin/main:src/boss/config/config.go
 	}
 
 	return checkConf()
