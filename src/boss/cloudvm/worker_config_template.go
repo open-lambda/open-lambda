@@ -1,6 +1,7 @@
 package cloudvm
 
 import (
+	"fmt"
 	"log"
 	"path/filepath"
 
@@ -15,7 +16,11 @@ import (
 func SaveTemplateConfToWorkerDir(cfg *common.Config, workerPath string, workerPort string) error {
 	// Copy the config so we can safely mutate it
 	cfgCopy := *cfg
-	defaultCfg, _ := common.GetDefaultWorkerConfig(workerPath)
+
+	defaultCfg, err := common.GetDefaultWorkerConfig(workerPath)
+	if err != nil {
+		return fmt.Errorf("failed to get default worker config: %v", err)
+	}
 
 	// Patch fields ONLY if they're empty
 	if cfgCopy.Worker_dir == "" {
