@@ -9,12 +9,19 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+<<<<<<< HEAD
 	"strings"
+=======
+>>>>>>> origin/main
 	"syscall"
 
 	"github.com/open-lambda/open-lambda/ol/boss/autoscaling"
 	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
+<<<<<<< HEAD
 	"github.com/open-lambda/open-lambda/ol/boss/lambdastore"
+=======
+	"github.com/open-lambda/open-lambda/ol/boss/config"
+>>>>>>> origin/main
 )
 
 const (
@@ -32,9 +39,14 @@ const (
 )
 
 type Boss struct {
+<<<<<<< HEAD
 	workerPool  *cloudvm.WorkerPool
 	autoScaler  autoscaling.Scaling
 	lambdaStore *lambdastore.LambdaStore
+=======
+	workerPool *cloudvm.WorkerPool
+	autoScaler autoscaling.Scaling
+>>>>>>> origin/main
 }
 
 // BossStatus handles the request to get the status of the boss.
@@ -60,7 +72,7 @@ func (boss *Boss) BossStatus(w http.ResponseWriter, req *http.Request) {
 // Close handles the request to close the boss.
 func (b *Boss) Close(_ http.ResponseWriter, _ *http.Request) {
 	b.workerPool.Close()
-	if Conf.Scaling == "threshold-scaler" {
+	if config.BossConf.Scaling == "threshold-scaler" {
 		b.autoScaler.Close()
 	}
 }
@@ -97,8 +109,8 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if worker_count > Conf.Worker_Cap {
-		worker_count = Conf.Worker_Cap
+	if worker_count > config.BossConf.Worker_Cap {
+		worker_count = config.BossConf.Worker_Cap
 		log.Printf("capping workers at %d to avoid big bills during debugging\n", worker_count)
 	}
 	log.Printf("Receive request to %s, worker_count of %d requested\n", r.URL.Path, worker_count)
@@ -114,7 +126,7 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 func BossMain() (err error) {
 	fmt.Printf("WARNING!  Boss incomplete (only use this as part of development process).\n")
 
-	pool, err := cloudvm.NewWorkerPool(Conf.Platform, Conf.Worker_Cap)
+	pool, err := cloudvm.NewWorkerPool(config.BossConf.Platform, config.BossConf.Worker_Cap)
 	if err != nil {
 		return err
 	}
@@ -129,7 +141,7 @@ func BossMain() (err error) {
 		lambdaStore: store,
 	}
 
-	if Conf.Scaling == "threshold-scaler" {
+	if config.BossConf.Scaling == "threshold-scaler" {
 		boss.autoScaler = &autoscaling.ThresholdScaling{}
 		boss.autoScaler.Launch(boss.workerPool)
 	}
@@ -184,7 +196,7 @@ func BossMain() (err error) {
 		os.Exit(0)
 	}()
 
-	port := fmt.Sprintf(":%s", Conf.Boss_port)
+	port := fmt.Sprintf(":%s", config.BossConf.Boss_port)
 	fmt.Printf("Listen on port %s\n", port)
 	return http.ListenAndServe(port, nil) // should never return if successful
 }

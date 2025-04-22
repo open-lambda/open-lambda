@@ -1,19 +1,23 @@
-package boss
+package config
 
 import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
+<<<<<<< HEAD:src/boss/config.go
 	"os"
 	"path/filepath"
 
 	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
+=======
+>>>>>>> origin/main:src/boss/config/config.go
 )
 
-var Conf *Config
+var BossConf *Config
 
 type Config struct {
+<<<<<<< HEAD:src/boss/config.go
 	Platform          string             `json:"platform"`
 	Scaling           string             `json:"scaling"`
 	API_key           string             `json:"api_key"`
@@ -38,6 +42,26 @@ func LoadDefaults() error {
 		Worker_Cap:        4,
 		Gcp:               cloudvm.GetGcpConfigDefaults(),
 		Lambda_Store_Path: filepath.Join(currPath, "lambdaStore"),
+=======
+	Platform   string          `json:"platform"`
+	Scaling    string          `json:"scaling"`
+	API_key    string          `json:"api_key"`
+	Boss_port  string          `json:"boss_port"`
+	Worker_Cap int             `json:"worker_cap"`
+	Gcp        GcpConfig       `json:"gcp"`
+	Local      LocalPlatConfig `json:"local"`
+}
+
+func LoadDefaults() error {
+	BossConf = &Config{
+		Platform:   "local",
+		Scaling:    "manual",
+		API_key:    "abc", // TODO: autogenerate a random key
+		Boss_port:  "5000",
+		Worker_Cap: 4,
+		Gcp:        GetGcpConfigDefaults(),
+		Local:      GetLocalPlatformConfigDefaults(),
+>>>>>>> origin/main:src/boss/config/config.go
 	}
 
 	return checkConf()
@@ -51,19 +75,17 @@ func LoadConf(path string) error {
 		return fmt.Errorf("could not open config (%v): %v\n", path, err.Error())
 	}
 
-	if err := json.Unmarshal(config_raw, &Conf); err != nil {
+	if err := json.Unmarshal(config_raw, &BossConf); err != nil {
 		log.Printf("FILE: %v\n", config_raw)
 		return fmt.Errorf("could not parse config (%v): %v\n", path, err.Error())
 	}
-
-	cloudvm.LoadGcpConfig(Conf.Gcp)
 
 	return checkConf()
 }
 
 func checkConf() error {
-	if Conf.Scaling != "manual" && Conf.Scaling != "threshold-scaler" {
-		return fmt.Errorf("Scaling type '%s' not implemented", Conf.Scaling)
+	if BossConf.Scaling != "manual" && BossConf.Scaling != "threshold-scaler" {
+		return fmt.Errorf("Scaling type '%s' not implemented", BossConf.Scaling)
 	}
 
 	return nil
@@ -71,7 +93,7 @@ func checkConf() error {
 
 // Dump prints the Config as a JSON string.
 func DumpConf() {
-	s, err := json.Marshal(Conf)
+	s, err := json.Marshal(BossConf)
 	if err != nil {
 		panic(err)
 	}
@@ -80,7 +102,7 @@ func DumpConf() {
 
 // DumpStr returns the Config as an indented JSON string.
 func DumpConfStr() string {
-	s, err := json.MarshalIndent(Conf, "", "\t")
+	s, err := json.MarshalIndent(BossConf, "", "\t")
 	if err != nil {
 		panic(err)
 	}
@@ -89,7 +111,7 @@ func DumpConfStr() string {
 
 // Save writes the Config as an indented JSON to path with 644 mode.
 func SaveConf(path string) error {
-	s, err := json.MarshalIndent(Conf, "", "\t")
+	s, err := json.MarshalIndent(BossConf, "", "\t")
 	if err != nil {
 		return err
 	}
