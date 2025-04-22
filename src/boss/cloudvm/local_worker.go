@@ -6,18 +6,53 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"sync"
 
+	"github.com/open-lambda/open-lambda/ol/boss/config"
 	"github.com/open-lambda/open-lambda/ol/common"
 )
 
 // WORKER IMPLEMENTATION: LocalWorker
 type LocalWorkerPoolPlatform struct {
-	// no platform specific attributes
+	configTemplate *common.Config
+	// lock protects nextWorkerPort from race conditions caused by concurrent access.
+	lock           sync.Mutex
+	nextWorkerPort int
 }
 
 func NewLocalWorkerPool() *WorkerPool {
+	startPort, _ := strconv.Atoi(config.BossConf.Local.Worker_Starting_Port)
+	templatePath := config.BossConf.Local.Path_To_Worker_Config_Template
+
+	// Create template.json if it doesn't exist
+	if _, err := os.Stat(templatePath); err != nil {
+		if os.IsNotExist(err) {
+			// Get the worker config struct
+			defaultTemplateConfig, err := common.GetDefaultWorkerConfig("")
+			if err != nil {
+				log.Fatalf("failed to load default template config: %v", err)
+			}
+
+			if err := common.SaveConfig(defaultTemplateConfig, templatePath); err != nil {
+				log.Fatalf("failed to save template.json: %v", err)
+			}
+		} else {
+			log.Fatalf("failed to stat template path: %v", err)
+		}
+	}
+
+	// Load the template and save locally
+	cfg, err := common.ReadInConfig(templatePath)
+	if err != nil {
+		log.Fatalf("failed to load template config: %v", err)
+	}
+
 	return &WorkerPool{
-		WorkerPoolPlatform: &LocalWorkerPoolPlatform{},
+		WorkerPoolPlatform: &LocalWorkerPoolPlatform{
+			nextWorkerPort: startPort,
+			configTemplate: cfg,
+		},
 	}
 }
 
@@ -28,7 +63,7 @@ func (_ *LocalWorkerPoolPlatform) NewWorker(workerId string) *Worker {
 	}
 }
 
-func (_ *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) error {
+func (p *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) error {
 	log.Printf("Creating new local worker: %s\n", worker.workerId)
 
 	// Initialize the worker directory if it doesn't exist
@@ -49,15 +84,15 @@ func (_ *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) error {
 	}
 
 	workerPath := filepath.Join(currPath, worker.workerId)
-	templatePath := GetLocalPlatformConfigDefaults().Path_To_Worker_Config_Template
+	workerPort := p.GetNextWorkerPort()
 
 	// Load worker configuration
-	if err := LoadWorkerConfigTemplate(templatePath, workerPath); err != nil {
+	if err := SaveTemplateConfToWorkerDir(p.configTemplate, workerPath, workerPort); err != nil {
 		log.Printf("Failed to load template.json: %v", err)
 		return err
 	}
 
-	worker.port = common.Conf.Worker_port
+	worker.port = workerPort
 
 	// Start the worker in detached mode
 	// TODO fix the "ol-min hardcoding"
@@ -93,4 +128,13 @@ func (_ *LocalWorkerPoolPlatform) DeleteInstance(worker *Worker) error {
 
 func (_ *LocalWorkerPoolPlatform) ForwardTask(w http.ResponseWriter, r *http.Request, worker *Worker) error {
 	return forwardTaskHelper(w, r, worker.host, worker.port)
+}
+
+func (p *LocalWorkerPoolPlatform) GetNextWorkerPort() string {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	port := p.nextWorkerPort
+	p.nextWorkerPort++
+	return strconv.Itoa(port)
 }

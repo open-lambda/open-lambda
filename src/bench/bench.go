@@ -2,16 +2,16 @@
 package bench
 
 import (
-	"fmt"
-	"net/http"
-	"io/ioutil"
-	"path/filepath"
 	"bytes"
-	"time"
+	"fmt"
+	"io/ioutil"
 	"math/rand"
+	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
-	
+	"time"
+
 	"github.com/urfave/cli/v2"
 
 	"github.com/open-lambda/open-lambda/ol/common"
@@ -55,7 +55,7 @@ func task(reqQ chan Call, errQ chan error) {
 }
 
 // play_trace_cmd is a CLI command that plays a trace and prints the result.
-func play_trace_cmd(ctx *cli.Context) (error) {
+func play_trace_cmd(ctx *cli.Context) error {
 	result, err := play_trace(ctx)
 
 	if err != nil {
@@ -76,7 +76,7 @@ func play_trace(ctx *cli.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	
+
 	traceCalls := strings.Split(string(traceText), "\n")
 
 	nonEmptyTraceCalls := make([]string, 0)
@@ -102,7 +102,7 @@ func play_trace(ctx *cli.Context) (string, error) {
 		return "", err
 	}
 	configPath := filepath.Join(olPath, "config.json")
-	if err := common.LoadConf(configPath); err != nil {
+	if err := common.LoadGlobalConfig(configPath); err != nil {
 		return "", err
 	}
 
@@ -146,8 +146,8 @@ func play_trace(ctx *cli.Context) (string, error) {
 		}
 
 		// show throughput stats about every 1 seconds
-		if elapsed > progressSnapshot + 1 {
-			fmt.Printf("throughput: %.1f/second\n", float64(progressSuccess) / (elapsed-progressSnapshot))
+		if elapsed > progressSnapshot+1 {
+			fmt.Printf("throughput: %.1f/second\n", float64(progressSuccess)/(elapsed-progressSnapshot))
 			progressSnapshot = elapsed
 			progressSuccess = 0
 		}
@@ -188,7 +188,7 @@ func run_benchmark(ctx *cli.Context, name string, tasks int, functions int, func
 		return "", err
 	}
 	configPath := filepath.Join(olPath, "config.json")
-	if err := common.LoadConf(configPath); err != nil {
+	if err := common.LoadGlobalConfig(configPath); err != nil {
 		return "", err
 	}
 
@@ -275,7 +275,7 @@ func create_lambdas(ctx *cli.Context) error {
 
 	configPath := filepath.Join(olPath, "config.json")
 
-	if err := common.LoadConf(configPath); err != nil {
+	if err := common.LoadGlobalConfig(configPath); err != nil {
 		return err
 	}
 
@@ -342,12 +342,12 @@ func BenchCommands() []*cli.Command {
 			Name:      "init",
 			Usage:     "creates lambdas for benchmarking",
 			UsageText: "ol bench init [--path=NAME]",
-			Action: create_lambdas,
+			Action:    create_lambdas,
 			Flags: []cli.Flag{
 				&cli.StringFlag{
-					Name:  "path",
+					Name:    "path",
 					Aliases: []string{"p"},
-					Usage: "Path location for OL environment",
+					Usage:   "Path location for OL environment",
 				},
 			},
 			// TODO: add param to decide how many to create
@@ -356,27 +356,27 @@ func BenchCommands() []*cli.Command {
 			Name:      "play",
 			Usage:     "play a trace using a .txt file with one lambda function per line",
 			UsageText: "ol bench play --trace=<trace.txt> [--path=NAME]",
-			Action: play_trace_cmd,
+			Action:    play_trace_cmd,
 			Flags: []cli.Flag{
 				&cli.StringFlag{
-					Name:  "path",
+					Name:    "path",
 					Aliases: []string{"p"},
-					Usage: "Path location for OL environment",
+					Usage:   "Path location for OL environment",
 				},
 				&cli.StringFlag{
-					Name:  "trace",
+					Name:    "trace",
 					Aliases: []string{"f"},
-					Usage: "Path to text file with one lambda name per line",
+					Usage:   "Path to text file with one lambda name per line",
 				},
 				&cli.Float64Flag{
-					Name:  "seconds",
+					Name:    "seconds",
 					Aliases: []string{"s"},
-					Usage: "Seconds to run (after warmup)",
+					Usage:   "Seconds to run (after warmup)",
 				},
 				&cli.IntFlag{
-					Name:  "tasks",
+					Name:    "tasks",
 					Aliases: []string{"t"},
-					Usage: "number of parallel tasks to run (only for parallel bench)",
+					Usage:   "number of parallel tasks to run (only for parallel bench)",
 				},
 			},
 		},
@@ -417,30 +417,30 @@ func BenchCommands() []*cli.Command {
 					Action:    action,
 					Flags: []cli.Flag{
 						&cli.StringFlag{
-							Name:  "path",
+							Name:    "path",
 							Aliases: []string{"p"},
-							Usage: "Path location for OL environment",
+							Usage:   "Path location for OL environment",
 						},
 						&cli.Float64Flag{
-							Name:  "seconds",
+							Name:    "seconds",
 							Aliases: []string{"s"},
-							Usage: "Seconds to run (after warmup)",
+							Usage:   "Seconds to run (after warmup)",
 						},
 						&cli.IntFlag{
-							Name:  "tasks",
+							Name:    "tasks",
 							Aliases: []string{"t"},
-							Usage: "number of parallel tasks to run (only for parallel bench)",
+							Usage:   "number of parallel tasks to run (only for parallel bench)",
 						},
 						&cli.BoolFlag{
-							Name:  "warmup",
+							Name:    "warmup",
 							Aliases: []string{"w"},
-							Value: true,
-							Usage: "call lambda each once before benchmark",
+							Value:   true,
+							Usage:   "call lambda each once before benchmark",
 						},
 						&cli.StringFlag{
-							Name:  "output",
+							Name:    "output",
 							Aliases: []string{"o"},
-							Usage: "store the result in json to the output file",
+							Usage:   "store the result in json to the output file",
 						},
 					},
 				}

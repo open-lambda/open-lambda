@@ -70,7 +70,7 @@ func upCmd(ctx *cli.Context) error {
 		}
 		confPath = overridesPath
 	}
-	if err := common.LoadConf(confPath); err != nil {
+	if err := common.LoadGlobalConfig(confPath); err != nil {
 		return err
 	}
 
@@ -188,7 +188,7 @@ func statusCmd(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	err = common.LoadConf(filepath.Join(olPath, "config.json"))
+	err = common.LoadGlobalConfig(filepath.Join(olPath, "config.json"))
 	if err != nil {
 		return err
 	}
@@ -216,7 +216,7 @@ func downCmd(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	err = common.LoadConf(filepath.Join(olPath, "config.json"))
+	err = common.LoadGlobalConfig(filepath.Join(olPath, "config.json"))
 	if err != nil {
 		return err
 	}
@@ -229,7 +229,7 @@ func cleanupCmd(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-  	err = common.LoadConf(filepath.Join(olPath, "config.json"))
+	err = common.LoadGlobalConfig(filepath.Join(olPath, "config.json"))
 	if err != nil {
 		return fmt.Errorf("failed to load OL config: %s", err)
 	}
