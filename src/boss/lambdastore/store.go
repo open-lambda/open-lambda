@@ -112,7 +112,14 @@ func (s *LambdaStore) ListLambda(w http.ResponseWriter, r *http.Request) {
 
 func (s *LambdaStore) GetLambdaConfig(w http.ResponseWriter, r *http.Request) {
 	raw := strings.TrimPrefix(r.URL.Path, "/registry/")
-	functionName, err := sanitizeFunctionName(raw)
+	parts := strings.SplitN(raw, "/", 2)
+
+	if len(parts) != 2 || parts[1] != "config" {
+		http.Error(w, "invalid path", http.StatusBadRequest)
+		return
+	}
+
+	functionName, err := sanitizeFunctionName(parts[0])
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
