@@ -41,7 +41,6 @@ func (c *CronScheduler) Register(functionName string, triggers []common.CronTrig
 		if err == nil {
 			c.jobs[funcName] = append(c.jobs[funcName], entryID)
 		} else {
-			// You might want to log errors here
 			println("[CronScheduler] Failed to add cron job for", funcName, ":", err.Error())
 		}
 	}
