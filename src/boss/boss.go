@@ -9,11 +9,13 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/open-lambda/open-lambda/ol/boss/autoscaling"
 	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
 	"github.com/open-lambda/open-lambda/ol/boss/config"
+	"github.com/open-lambda/open-lambda/ol/boss/lambdastore"
 )
 
 const (
@@ -21,11 +23,19 @@ const (
 	BOSS_STATUS_PATH = "/status"
 	SCALING_PATH     = "/scaling/worker_count"
 	SHUTDOWN_PATH    = "/shutdown"
+
+	// GET /registry
+	// POST /registry/{name}
+	// DELETE /registry/{name}
+	// GET /registry/{name} not implemented
+	// GET /registry/{name}/config
+	REGISTRY_BASE_PATH = "/registry/"
 )
 
 type Boss struct {
-	workerPool *cloudvm.WorkerPool
-	autoScaler autoscaling.Scaling
+	workerPool  *cloudvm.WorkerPool
+	autoScaler  autoscaling.Scaling
+	lambdaStore *lambdastore.LambdaStore
 }
 
 // BossStatus handles the request to get the status of the boss.
@@ -101,6 +111,39 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 	b.BossStatus(w, r)
 }
 
+func (b *Boss) RegistryHandler(w http.ResponseWriter, r *http.Request) {
+	relPath := strings.TrimPrefix(r.URL.Path, REGISTRY_BASE_PATH)
+
+	// GET /registry - list all lambda functions in registry
+	if relPath == "" {
+		if r.Method == "GET" {
+			b.lambdaStore.ListLambda(w, r)
+			return
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	parts := strings.SplitN(relPath, "/", 2)
+
+	// GET /registry/{name}/config
+	if len(parts) == 2 && parts[1] == "config" && r.Method == "GET" {
+		b.lambdaStore.GetLambdaConfig(w, r)
+		return
+	}
+
+	switch r.Method {
+	case "POST":
+		b.lambdaStore.UploadLambda(w, r)
+	case "DELETE":
+		b.lambdaStore.DeleteLambda(w, r)
+	case "GET":
+		http.Error(w, "not implemented", http.StatusNotImplemented)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
 // BossMain is the main function for the boss.
 func BossMain() (err error) {
 	fmt.Printf("WARNING!  Boss incomplete (only use this as part of development process).\n")
@@ -110,8 +153,14 @@ func BossMain() (err error) {
 		return err
 	}
 
+	store, err := lambdastore.NewLambdaStore(config.BossConf.Lambda_Store_Path)
+	if err != nil {
+		return err
+	}
+
 	boss := Boss{
-		workerPool: pool,
+		workerPool:  pool,
+		lambdaStore: store,
 	}
 
 	if config.BossConf.Scaling == "threshold-scaler" {
@@ -123,6 +172,8 @@ func BossMain() (err error) {
 	http.HandleFunc(SCALING_PATH, boss.ScalingWorker)
 	http.HandleFunc(RUN_PATH, boss.workerPool.RunLambda)
 	http.HandleFunc(SHUTDOWN_PATH, boss.Close)
+
+	http.HandleFunc(REGISTRY_BASE_PATH, boss.RegistryHandler)
 
 	// clean up if signal hits us
 	c := make(chan os.Signal, 1)
