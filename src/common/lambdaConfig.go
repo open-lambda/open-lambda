@@ -13,6 +13,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const LambdaConfigFilename = "ol.yaml"
+
 var HandlerNameRegex = regexp.MustCompile(`^[A-Za-z0-9\.\-\_]+$`)
 
 // Triggers defines different ways a lambda can be invoked
@@ -76,7 +78,7 @@ func checkLambdaConfig(config *LambdaConfig) error {
 
 // ParseYaml reads and parses the YAML configuration file.
 func LoadLambdaConfig(codeDir string) (*LambdaConfig, error) {
-	path := filepath.Join(codeDir, "ol.yaml")
+	path := filepath.Join(codeDir, LambdaConfigFilename)
 	file, err := os.Open(path)
 
 	if errors.Is(err, os.ErrNotExist) {
@@ -123,17 +125,17 @@ func ExtractConfigFromTarGz(tarPath string) (*LambdaConfig, error) {
 			return nil, fmt.Errorf("invalid tar: %w", err)
 		}
 
-		if header.Name == "ol.yaml" {
+		if header.Name == LambdaConfigFilename {
 			var config LambdaConfig
 			decoder := yaml.NewDecoder(tr)
 			if err := decoder.Decode(&config); err != nil {
-				return nil, fmt.Errorf("failed to parse ol.yaml: %w", err)
+				return nil, fmt.Errorf("failed to parse %s: %w", LambdaConfigFilename, err)
 			}
 			return &config, checkLambdaConfig(&config)
 		}
 	}
 
-	return nil, fmt.Errorf("ol.yaml not found in archive")
+	return nil, fmt.Errorf("%s not found in archive", LambdaConfigFilename)
 }
 
 // IsHTTPMethodAllowed checks if a method is permitted for this function
@@ -153,4 +155,11 @@ func (c *LambdaConfig) AllowedHTTPMethods() []string {
 		allowedMethods = append(allowedMethods, trigger.Method)
 	}
 	return allowedMethods
+}
+
+func ValidateFunctionName(name string) error {
+	if !HandlerNameRegex.MatchString(name) {
+		return fmt.Errorf(`invalid function name %q; must match %s`, name, HandlerNameRegex.String())
+	}
+	return nil
 }

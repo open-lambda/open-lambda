@@ -101,7 +101,7 @@ func parseMeta(codeDir string) (*FunctionMeta, error) {
 	// Load Lambda configuration from ol.yaml
 	lambdaConfig, err := common.LoadLambdaConfig(codeDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse ol.yaml: %v", err)
+		return nil, fmt.Errorf("failed to parse lambda configuration file: %v", err)
 	}
 
 	// Return combined FunctionMeta

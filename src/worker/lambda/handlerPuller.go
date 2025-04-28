@@ -108,9 +108,8 @@ func (cp *HandlerPuller) Pull(name string) (rt_type common.RuntimeType, targetDi
 	t := common.T0("pull-lambda")
 	defer t.T1()
 
-	if !common.HandlerNameRegex.MatchString(name) {
-		msg := "bad lambda name '%s', can only contain letters, numbers, period, dash, and underscore"
-		return rt_type, "", fmt.Errorf(msg, name)
+	if err := common.ValidateFunctionName(name); err != nil {
+		return rt_type, "", err
 	}
 
 	if cp.isRemote() {
