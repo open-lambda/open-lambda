@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package echo;
+
+service EchoService {
+    rpc SendRequest (EchoRequest) returns (EchoResponse);
+}
+
+message EchoRequest {
+    string json_data = 1;
+}
+
+message EchoResponse {
+    string json_result = 1;
+}
