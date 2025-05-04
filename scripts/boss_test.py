@@ -3,6 +3,8 @@ import json
 import time
 from subprocess import run
 import requests
+import tarfile
+import tempfile
 
 api_key = None
 boss_port = 5000
@@ -45,12 +47,9 @@ def tester(platform):
         run(["rm", "boss.json"]).check_returncode()
 
     # PART 1: config and launch
-
-    # should create new config file
-    run(["./ol", "new-boss"]).check_returncode()
+    run(["./ol", "boss", "--detach"]).check_returncode()
     assert os.path.exists("boss.json")
 
-    # should have options platform (e.g., "aws", etc) and scaling ("manual" or "auto")
     config = read_json("boss.json")
     assert "platform" in config
     assert "scaling" in config
@@ -58,62 +57,75 @@ def tester(platform):
     config["scaling"] = "manual"
     write_json("boss.json", config)
 
-    # config should contain randomly generate secret API key
     assert "api_key" in config
     assert "boss_port" in config
     api_key = config["api_key"]
     boss_port = config["boss_port"]
-    boss_port = 5000
 
-    # should be able to start boss as background process
-    run(["./ol", "boss", "--detach"]).check_returncode()
-    time.sleep(1) # TODO: better ping
+    time.sleep(1)  # give boss time to boot
 
     # PART 2: scaling
+    status = json.loads(boss_get("status"))
+    assert status["state"]["running"] == 0
 
-    # should start with zero workers
-    status = boss_get("status")
-    status = json.loads(status)
-    assert len(status["workers"]) == 0
-
-    # start a worker (because we're chose "manual" scaling)
     boss_post("scaling/worker_count", "1")
+    status = json.loads(boss_get("status"))
+    assert status["state"]["starting"] == 1
 
-    # there should be a worker, though probably not ready
-    status = boss_get("status")
-    status = json.loads(status)
-    assert len(status["workers"]) == 1
-
-    # {workers: [{"name": worker1, "state": ready}, {"name": worker2, "state": ready}]}
-
-    # wait until it is ready (up to 3 minutes)
-    t0 = t1 = time.time()
-    while t1 - t0 < 180:
+    # wait until worker is ready
+    t0 = time.time()
+    while time.time() - t0 < 180:
         time.sleep(1)
-        status = boss_get("status")
-        status = json.loads(status)
-        assert len(status["workers"]) == 1
-        if status["workers"][0]["state"] == "ready":
+        status = json.loads(boss_get("status"))
+        if status["state"]["running"] == 1:
             break
-        t1 = time.time()
+    else:
+        raise RuntimeError("Timeout waiting for worker to be ready")
 
-    # PART 3: registry
-
+    # PART 3: upload lambda
     lambda1_name = "hi"
     code = ["def f(event):", "\treturn 'hello'"]
-    boss_post("registry/upload", {"name": lambda1_name, "code": "\n".join(code)})
+    tar_path = create_lambda_tar(lambda1_name, code)
 
-    # PART 4: load balancing
+    with open(tar_path, "rb") as f:
+        files = {"file": (f"{lambda1_name}.tar.gz", f, "application/gzip")}
+        resp = requests.post(f"http://localhost:{boss_port}/registry/{lambda1_name}", files=files)
+        resp.raise_for_status()
 
-    # does it forward the request to a worker and give us the proper response?
+    os.remove(tar_path)
+
+    # PART 4: invoke lambda
     result = boss_invoke(f"run/{lambda1_name}", None).json()
     assert result == 'hello'
 
-    # if we should down all workers, do we get an error code back?
-    boss_post("scaling/worker_count", 0)
-    assert len(status["workers"]) == 0
+    # PART 5: test after scaling down
+    boss_post("scaling/worker_count", "0")
+    time.sleep(1)
+    status = json.loads(boss_get("status"))
+    assert status["state"]["running"] == 0
+
     resp = boss_invoke(f"run/{lambda1_name}", None, check=False)
     assert resp.status_code != 200
+    
+    
+def create_lambda_tar(lambda_name, code_lines):
+    with tempfile.NamedTemporaryFile(delete=False, mode="w", suffix=".py") as code_file:
+        code_file.write("\n".join(code_lines))
+        code_path = code_file.name
+
+    with tempfile.NamedTemporaryFile(delete=False, mode="w", suffix=".yaml") as ol_file:
+        ol_file.write("triggers:\n  http:\n    - method: \"*\"\n")
+        ol_path = ol_file.name
+
+    temp_tar_path = tempfile.NamedTemporaryFile(delete=False, suffix=".tar.gz").name
+    with tarfile.open(temp_tar_path, "w:gz") as tar:
+        tar.add(code_path, arcname="f.py")
+        tar.add(ol_path, arcname="ol.yaml")
+
+    os.remove(code_path)
+    os.remove(ol_path)
+
+    return temp_tar_path
 
 def main():
     if len(sys.argv) < 2:
