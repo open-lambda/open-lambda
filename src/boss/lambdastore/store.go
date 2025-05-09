@@ -67,11 +67,6 @@ func (s *LambdaStore) UploadLambda(w http.ResponseWriter, r *http.Request) {
 	lock.Lock()
 	defer lock.Unlock()
 
-	// TODO: do not leave a window of time when no function exists betweem remove and add. Because workers don't sync with the boss, so they could have failed invocations.
-	if err := s.removeFromRegistry(functionName); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to clean old version: %v", err), http.StatusInternalServerError)
-		return
-	}
 	if err := s.addToRegistry(functionName, r.Body); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to add lambda: %v", err), http.StatusInternalServerError)
 		return
