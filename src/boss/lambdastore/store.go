@@ -67,11 +67,6 @@ func (s *LambdaStore) UploadLambda(w http.ResponseWriter, r *http.Request) {
 	lock.Lock()
 	defer lock.Unlock()
 
-	// TODO: do not leave a window of time when no function exists betweem remove and add. Because workers don't sync with the boss, so they could have failed invocations.
-	if err := s.removeFromRegistry(functionName); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to clean old version: %v", err), http.StatusInternalServerError)
-		return
-	}
 	if err := s.addToRegistry(functionName, r.Body); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to add lambda: %v", err), http.StatusInternalServerError)
 		return
@@ -188,23 +183,34 @@ func (s *LambdaStore) unregisterTriggers(functionName string) {
 // assumes the caller holds the function lock
 func (s *LambdaStore) addToRegistry(name string, body io.Reader) error {
 	tarPath := filepath.Join(s.StorePath, name+".tar.gz")
+	tmpPath := tarPath + ".tmp"
 
-	tarFile, err := os.Create(tarPath)
+	tarFile, err := os.Create(tmpPath)
 	if err != nil {
-		return fmt.Errorf("failed to create lambda tarball: %w", err)
+		return fmt.Errorf("failed to create temp tarball: %w", err)
 	}
-	defer tarFile.Close()
 
-	// TODO: atomically write tarball by writing to a temp file and renaming
 	if _, err := io.Copy(tarFile, body); err != nil {
-		return fmt.Errorf("failed to write tarball: %w", err)
+		tarFile.Close()
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("failed to write to temp tarball: %w", err)
 	}
 
-	cfg, err := common.ExtractConfigFromTarGz(tarPath)
+	if err := tarFile.Close(); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("failed to close temp tarball: %w", err)
+	}
+
+	cfg, err := common.ExtractConfigFromTarGz(tmpPath)
 	if err != nil {
-		// Clean up the bad tarball file
-		_ = os.Remove(tarPath)
-		return fmt.Errorf("failed to extract config: %w", err)
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("failed to extract config from temp tarball: %w", err)
+	}
+
+	// Atomically replace the old file
+	if err := os.Rename(tmpPath, tarPath); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("failed to rename temp tarball: %w", err)
 	}
 
 	s.mapLock.Lock()
@@ -212,9 +218,7 @@ func (s *LambdaStore) addToRegistry(name string, body io.Reader) error {
 
 	entry, ok := s.Lambdas[name]
 	if !ok {
-		entry = &LambdaEntry{
-			Lock: &sync.Mutex{},
-		}
+		entry = &LambdaEntry{Lock: &sync.Mutex{}}
 		s.Lambdas[name] = entry
 	}
 	entry.Config = cfg
