@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -135,7 +136,8 @@ func ExtractConfigFromTarGz(tarPath string) (*LambdaConfig, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("%s not found in archive", LambdaConfigFilename)
+	log.Printf("[%s] %s not found, using default config", tarPath, LambdaConfigFilename)
+	return LoadDefaultLambdaConfig(), nil
 }
 
 // IsHTTPMethodAllowed checks if a method is permitted for this function
