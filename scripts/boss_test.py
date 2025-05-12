@@ -99,7 +99,7 @@ def create_lambda_tar(code_lines):
     return temp_tar_path
 
 def upload_lambda(lambda_name, code_lines):
-    tar_path = create_lambda_tar(lambda_name, code_lines)
+    tar_path = create_lambda_tar(code_lines)
     with open(tar_path, "rb") as f:
         files = {
             "file": (f"{lambda_name}.tar.gz", f, "application/gzip")
