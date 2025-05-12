@@ -4,8 +4,9 @@ import json
 import time
 import tarfile
 import tempfile
-import requests
 from subprocess import run
+
+import requests
 
 # Globals for API interaction
 api_key = None
@@ -72,7 +73,9 @@ def wait_for_workers(expected_running, timeout=180):
         status = json.loads(boss_get("status"))
         if status["state"]["running"] == expected_running:
             return
-    raise RuntimeError(f"Timeout waiting for {expected_running} workers to be running")
+    raise RuntimeError(
+        f"Timeout waiting for {expected_running} workers to be running"
+    )
 
 ### ------------------ Lambda Operations ------------------ ###
 
@@ -85,7 +88,8 @@ def create_lambda_tar(lambda_name, code_lines):
         ol_file.write("triggers:\n  http:\n    - method: \"*\"\n")
         ol_path = ol_file.name
 
-    temp_tar_path = tempfile.NamedTemporaryFile(delete=False, suffix=".tar.gz").name
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".tar.gz") as temp_tar:
+        temp_tar_path = temp_tar.name
     with tarfile.open(temp_tar_path, "w:gz") as tar:
         tar.add(code_path, arcname="f.py")
         tar.add(ol_path, arcname="ol.yaml")
@@ -97,8 +101,11 @@ def create_lambda_tar(lambda_name, code_lines):
 def upload_lambda(lambda_name, code_lines):
     tar_path = create_lambda_tar(lambda_name, code_lines)
     with open(tar_path, "rb") as f:
-        files = {"file": (f"{lambda_name}.tar.gz", f, "application/gzip")}
-        resp = requests.post(f"http://localhost:{boss_port}/registry/{lambda_name}", files=files)
+        files = {
+            "file": (f"{lambda_name}.tar.gz", f, "application/gzip")
+        }
+        url = f"http://localhost:{boss_port}/registry/{lambda_name}"
+        resp = requests.post(url, files=files)
         resp.raise_for_status()
     os.remove(tar_path)
 
@@ -114,35 +121,44 @@ def verify_lambda_config(lambda_name):
             "http": [{"method": "*"}]
         }
     }
-    assert actual_config == expected_config, f"Lambda config mismatch!\nExpected: {expected_config}\nActual: {actual_config}"
+    assert actual_config == expected_config, (
+        f"Lambda config mismatch!\nExpected: {expected_config}\nActual: {actual_config}"
+    )
 
 def shutdown_and_check(lambda_name):
+    print(f"Shutting down workers for lambda '{lambda_name}'")
     scale_workers(0)
     time.sleep(1)
     status = json.loads(boss_get("status"))
-    assert status["state"]["running"] == 0, f"Expected 0 running workers, got: {status['state']['running']}"
-
+    assert status["state"]["running"] == 0, (
+        f"Expected 0 running workers, got: {status['state']['running']}"
+    )
     resp = invoke_lambda(lambda_name, check=False)
-    assert resp.status_code != 200, f"Expected invocation to fail after shutdown, got: {resp.status_code}"
+    assert resp.status_code != 200, (
+        f"Expected invocation to fail after shutdown, got: {resp.status_code}"
+    )
 
 def delete_lambda_and_verify(lambda_name):
-    # Delete the lambda
     url = f"http://localhost:{boss_port}/registry/{lambda_name}"
     resp = requests.delete(url, headers={"api_key": api_key})
     resp.raise_for_status()
 
-    # Check config no longer exists
-    config_resp = requests.get(f"http://localhost:{boss_port}/registry/{lambda_name}/config")
-    assert config_resp.status_code == 404, f"Expected 404 for deleted lambda config, got {config_resp.status_code}"
+    config_url = f"http://localhost:{boss_port}/registry/{lambda_name}/config"
+    config_resp = requests.get(config_url)
+    assert config_resp.status_code == 404, (
+        f"Expected 404 for deleted lambda config, got {config_resp.status_code}"
+    )
 
-    # Check invocation fails
     run_resp = boss_invoke(lambda_name, None, check=False)
-    assert run_resp.status_code >= 400, f"Expected error invoking deleted lambda, got {run_resp.status_code}"
+    assert run_resp.status_code >= 400, (
+        f"Expected error invoking deleted lambda, got {run_resp.status_code}"
+    )
 
-    # Ensure lambda is not listed
     list_resp = boss_get("registry")
     lambda_list = json.loads(list_resp)
-    assert lambda_name not in lambda_list, f"Deleted lambda '{lambda_name}' still listed: {lambda_list}"
+    assert lambda_name not in lambda_list, (
+        f"Deleted lambda '{lambda_name}' still listed: {lambda_list}"
+    )
 
 ### ------------------ End-to-End Test ------------------ ###
 
