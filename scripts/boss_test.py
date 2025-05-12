@@ -79,7 +79,7 @@ def wait_for_workers(expected_running, timeout=180):
 
 ### ------------------ Lambda Operations ------------------ ###
 
-def create_lambda_tar(lambda_name, code_lines):
+def create_lambda_tar(code_lines):
     with tempfile.NamedTemporaryFile(delete=False, mode="w", suffix=".py") as code_file:
         code_file.write("\n".join(code_lines))
         code_path = code_file.name
