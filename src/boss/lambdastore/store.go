@@ -99,13 +99,12 @@ func (s *LambdaStore) DeleteLambda(w http.ResponseWriter, r *http.Request) {
 
 func (s *LambdaStore) ListLambda(w http.ResponseWriter, r *http.Request) {
 	s.mapLock.Lock()
+	defer s.mapLock.Unlock()
 
 	names := make([]string, 0, len(s.Lambdas))
 	for name := range s.Lambdas {
 		names = append(names, name)
 	}
-
-	s.mapLock.Unlock()
 
 	if err := json.NewEncoder(w).Encode(names); err != nil {
 		http.Error(w, "failed to encode lambda list", http.StatusInternalServerError)
@@ -218,8 +217,7 @@ func (s *LambdaStore) addToRegistry(name string, body io.Reader) error {
 
 	entry, ok := s.Lambdas[name]
 	if !ok {
-		entry = &LambdaEntry{Lock: &sync.Mutex{}}
-		s.Lambdas[name] = entry
+		return fmt.Errorf("LambdaEntry for %s missing — expected getFuncLock to create it", name)
 	}
 	entry.Config = cfg
 
