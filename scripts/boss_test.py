@@ -195,7 +195,7 @@ def tester(platform):
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python3 boss_test.py (aws|azure|gcp) [platform2, ...]")
+        print("Usage: python3 boss_test.py (aws|azure|gcp|local) [platform2, ...]")
         sys.exit(1)
 
     for platform in sys.argv[1:]:

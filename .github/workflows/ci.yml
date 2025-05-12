@@ -64,6 +64,9 @@ jobs:
     - name: Test Python (SOCK)
       run: sudo env "PATH=$PATH" ./scripts/test.py --worker_type=sock
       timeout-minutes: 20
+    - name: Boss/Lambda Store Tests
+      run: sudo env "PATH=$PATH" python3 scripts/boss_test.py local
+      timeout-minutes: 5
     - name: Test Binaries (WebAssembly)
       timeout-minutes: 10
       run: |
