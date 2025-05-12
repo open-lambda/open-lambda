@@ -87,7 +87,7 @@ func (_ *GcpWorkerPool) NewWorker(workerId string) *Worker {
 	}
 }
 
-func (pool *GcpWorkerPool) CreateInstance(worker *Worker) {
+func (pool *GcpWorkerPool) CreateInstance(worker *Worker) error {
 	client := pool.client
 	fmt.Printf("creating new VM from snapshot\n")
 
@@ -97,25 +97,29 @@ func (pool *GcpWorkerPool) CreateInstance(worker *Worker) {
 		fmt.Printf("instance alreay exists!\n")
 		client.startGcpInstance(worker.workerId)
 	} else if err != nil {
-		panic(err)
+		return err
 	}
 
 	lookup, err := client.GcpInstancetoIP()
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	worker.host = lookup[worker.workerId]
 
-	worker.runCmd("./ol worker up -d")
+	worker.runCmd("./ol worker up -d") // TODO: check if runCmd fails.
+
+	return nil
 }
 
-func (pool *GcpWorkerPool) DeleteInstance(worker *Worker) {
+func (pool *GcpWorkerPool) DeleteInstance(worker *Worker) error {
 	log.Printf("deleting gcp worker: %s\n", worker.workerId)
-	worker.runCmd("./ol worker down")
+	worker.runCmd("./ol worker down")                                // TODO: check if runCmd fails
 	pool.client.Wait(pool.client.deleteGcpInstance(worker.workerId)) // wait until instance is completely deleted
+
+	return nil // TODO: check for error and make sure it is returning the error. We dont want delete failing and eating the error.
 }
 
-func (_ *GcpWorkerPool) ForwardTask(w http.ResponseWriter, r *http.Request, worker *Worker) {
-	forwardTaskHelper(w, r, worker.host, worker.port)
+func (_ *GcpWorkerPool) ForwardTask(w http.ResponseWriter, r *http.Request, worker *Worker) error {
+	return forwardTaskHelper(w, r, worker.host, worker.port)
 }

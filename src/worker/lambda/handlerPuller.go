@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -20,7 +19,6 @@ import (
 )
 
 var errNotFound404 = errors.New("file does not exist")
-var handlerNameRegex = regexp.MustCompile(`^[A-Za-z0-9\.\-\_]+$`)
 
 // TODO: for web registries, support an HTTP-based access key
 // (https://en.wikipedia.org/wiki/Basic_access_authentication)
@@ -110,9 +108,8 @@ func (cp *HandlerPuller) Pull(name string) (rt_type common.RuntimeType, targetDi
 	t := common.T0("pull-lambda")
 	defer t.T1()
 
-	if !handlerNameRegex.MatchString(name) {
-		msg := "bad lambda name '%s', can only contain letters, numbers, period, dash, and underscore"
-		return rt_type, "", fmt.Errorf(msg, name)
+	if err := common.ValidateFunctionName(name); err != nil {
+		return rt_type, "", err
 	}
 
 	if cp.isRemote() {
