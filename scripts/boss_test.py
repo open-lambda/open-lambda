@@ -1,13 +1,17 @@
-import os, sys
+import os
+import sys
 import json
 import time
-from subprocess import run
-import requests
 import tarfile
 import tempfile
+import requests
+from subprocess import run
 
+# Globals for API interaction
 api_key = None
 boss_port = 5000
+
+### ------------------ Utility Functions ------------------ ###
 
 def read_json(path):
     with open(path, encoding="utf-8") as f:
@@ -22,7 +26,7 @@ def boss_get(resource, check=True):
     resp = requests.get(url)
     if check:
         resp.raise_for_status()
-    return resp.text
+    return resp.text.strip()
 
 def boss_post(resource, data, check=True):
     url = f"http://localhost:{boss_port}/{resource}"
@@ -38,76 +42,40 @@ def boss_invoke(lambda_name, data, check=True):
         resp.raise_for_status()
     return resp
 
-def tester(platform):
-    global api_key, boss_port
-    print(f"Testing {platform}")
+### ------------------ Setup Functions ------------------ ###
 
-    # PART 0: clear existing config
+def clear_config():
     if os.path.exists("boss.json"):
         run(["rm", "boss.json"]).check_returncode()
 
-    # PART 1: config and launch
+def launch_boss(platform):
+    global api_key, boss_port
     run(["./ol", "boss", "--detach"]).check_returncode()
     assert os.path.exists("boss.json")
 
     config = read_json("boss.json")
-    assert "platform" in config
-    assert "scaling" in config
     config["platform"] = platform
     config["scaling"] = "manual"
     write_json("boss.json", config)
 
-    assert "api_key" in config
-    assert "boss_port" in config
     api_key = config["api_key"]
     boss_port = config["boss_port"]
+    time.sleep(1)  # Give boss time to boot
 
-    time.sleep(1)  # give boss time to boot
+def scale_workers(count):
+    boss_post("scaling/worker_count", str(count))
 
-    # PART 2: scaling
-    status = json.loads(boss_get("status"))
-    assert status["state"]["running"] == 0
-
-    boss_post("scaling/worker_count", "1")
-    status = json.loads(boss_get("status"))
-    assert status["state"]["starting"] == 1
-
-    # wait until worker is ready
+def wait_for_workers(expected_running, timeout=180):
     t0 = time.time()
-    while time.time() - t0 < 180:
+    while time.time() - t0 < timeout:
         time.sleep(1)
         status = json.loads(boss_get("status"))
-        if status["state"]["running"] == 1:
-            break
-    else:
-        raise RuntimeError("Timeout waiting for worker to be ready")
+        if status["state"]["running"] == expected_running:
+            return
+    raise RuntimeError(f"Timeout waiting for {expected_running} workers to be running")
 
-    # PART 3: upload lambda
-    lambda1_name = "hi"
-    code = ["def f(event):", "\treturn 'hello'"]
-    tar_path = create_lambda_tar(lambda1_name, code)
+### ------------------ Lambda Operations ------------------ ###
 
-    with open(tar_path, "rb") as f:
-        files = {"file": (f"{lambda1_name}.tar.gz", f, "application/gzip")}
-        resp = requests.post(f"http://localhost:{boss_port}/registry/{lambda1_name}", files=files)
-        resp.raise_for_status()
-
-    os.remove(tar_path)
-
-    # PART 4: invoke lambda
-    result = boss_invoke(f"run/{lambda1_name}", None).json()
-    assert result == 'hello'
-
-    # PART 5: test after scaling down
-    boss_post("scaling/worker_count", "0")
-    time.sleep(1)
-    status = json.loads(boss_get("status"))
-    assert status["state"]["running"] == 0
-
-    resp = boss_invoke(f"run/{lambda1_name}", None, check=False)
-    assert resp.status_code != 200
-    
-    
 def create_lambda_tar(lambda_name, code_lines):
     with tempfile.NamedTemporaryFile(delete=False, mode="w", suffix=".py") as code_file:
         code_file.write("\n".join(code_lines))
@@ -124,16 +92,98 @@ def create_lambda_tar(lambda_name, code_lines):
 
     os.remove(code_path)
     os.remove(ol_path)
-
     return temp_tar_path
+
+def upload_lambda(lambda_name, code_lines):
+    tar_path = create_lambda_tar(lambda_name, code_lines)
+    with open(tar_path, "rb") as f:
+        files = {"file": (f"{lambda_name}.tar.gz", f, "application/gzip")}
+        resp = requests.post(f"http://localhost:{boss_port}/registry/{lambda_name}", files=files)
+        resp.raise_for_status()
+    os.remove(tar_path)
+
+def invoke_lambda(lambda_name, check=True):
+    resp = boss_invoke(lambda_name, None, check=check)
+    return resp.json() if check else resp
+
+def verify_lambda_config(lambda_name):
+    resp = boss_get(f"registry/{lambda_name}/config")
+    actual_config = json.loads(resp)
+    expected_config = {
+        "triggers": {
+            "http": [{"method": "*"}]
+        }
+    }
+    assert actual_config == expected_config, f"Lambda config mismatch!\nExpected: {expected_config}\nActual: {actual_config}"
+
+def shutdown_and_check(lambda_name):
+    scale_workers(0)
+    time.sleep(1)
+    status = json.loads(boss_get("status"))
+    assert status["state"]["running"] == 0, f"Expected 0 running workers, got: {status['state']['running']}"
+
+    resp = invoke_lambda(lambda_name, check=False)
+    assert resp.status_code != 200, f"Expected invocation to fail after shutdown, got: {resp.status_code}"
+
+def delete_lambda_and_verify(lambda_name):
+    # Delete the lambda
+    url = f"http://localhost:{boss_port}/registry/{lambda_name}"
+    resp = requests.delete(url, headers={"api_key": api_key})
+    resp.raise_for_status()
+
+    # Check config no longer exists
+    config_resp = requests.get(f"http://localhost:{boss_port}/registry/{lambda_name}/config")
+    assert config_resp.status_code == 404, f"Expected 404 for deleted lambda config, got {config_resp.status_code}"
+
+    # Check invocation fails
+    run_resp = boss_invoke(lambda_name, None, check=False)
+    assert run_resp.status_code >= 400, f"Expected error invoking deleted lambda, got {run_resp.status_code}"
+
+    # Ensure lambda is not listed
+    list_resp = boss_get("registry")
+    lambda_list = json.loads(list_resp)
+    assert lambda_name not in lambda_list, f"Deleted lambda '{lambda_name}' still listed: {lambda_list}"
+
+### ------------------ End-to-End Test ------------------ ###
+
+def tester(platform):
+    print(f"=== Testing platform: {platform} ===")
+
+    clear_config()
+    launch_boss(platform)
+
+    # Step 1: scale up worker
+    status = json.loads(boss_get("status"))
+    assert status["state"]["running"] == 0
+    scale_workers(1)
+    assert json.loads(boss_get("status"))["state"]["starting"] == 1
+    wait_for_workers(1)
+
+    # Step 2: upload and verify lambda
+    lambda_name = "hi"
+    code = ["def f(event):", "\treturn 'hello'"]
+    upload_lambda(lambda_name, code)
+    verify_lambda_config(lambda_name)
+
+    # Step 3: invoke
+    result = invoke_lambda(lambda_name)
+    assert result == "hello", f"Unexpected lambda result: {result}"
+
+    # Step 4: scale down and verify unavailability
+    shutdown_and_check(lambda_name)
+
+    # Step 5: delete lambda and verify it's gone
+    delete_lambda_and_verify(lambda_name)
+
+    print(f"✅ Test passed for platform: {platform}")
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python3 boss-test.py (aws|azure|gcp) [platform2, ...]")
+        print("Usage: python3 boss_test.py (aws|azure|gcp) [platform2, ...]")
+        sys.exit(1)
 
     for platform in sys.argv[1:]:
         tester(platform)
-
 
 if __name__ == "__main__":
     main()
