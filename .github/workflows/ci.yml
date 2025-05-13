@@ -26,7 +26,7 @@ jobs:
          sudo apt-get update
          sudo apt-get install build-essential curl -y
          sudo apt-get install runc containerd docker.io -y || true
-         sudo rm /etc/docker/daemon.json
+         sudo rm -f /etc/docker/daemon.json
          sudo systemctl restart docker
          sudo gpasswd -a $USER docker
     - name: Install rustc and clippy nightly
