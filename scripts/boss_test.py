@@ -162,7 +162,7 @@ def delete_lambda_and_verify(lambda_name):
         f"Deleted lambda '{lambda_name}' still listed: {lambda_list}"
     )
     print(f"[DELETE] Lambda '{lambda_name}' deleted and verified.\n")
-    
+
 def shutdown_boss():
     print("[SHUTDOWN] Shutting down Boss...")
     try:
