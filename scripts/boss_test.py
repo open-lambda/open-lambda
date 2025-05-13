@@ -61,6 +61,7 @@ def launch_boss(platform):
 
     api_key = config["api_key"]
     boss_port = config["boss_port"]
+    time.sleep(5)  # Give boss time to boot
 
 def scale_workers(count):
     boss_post("scaling/worker_count", str(count))
@@ -100,11 +101,9 @@ def create_lambda_tar(code_lines):
 def upload_lambda(lambda_name, code_lines):
     tar_path = create_lambda_tar(code_lines)
     with open(tar_path, "rb") as f:
-        files = {
-            "file": (f"{lambda_name}.tar.gz", f, "application/gzip")
-        }
         url = f"http://localhost:{boss_port}/registry/{lambda_name}"
-        resp = requests.post(url, files=files)
+        headers = {"Content-Type": "application/octet-stream"}
+        resp = requests.post(url, data=f, headers=headers)
         resp.raise_for_status()
     os.remove(tar_path)
 
@@ -166,8 +165,6 @@ def tester(platform):
 
     clear_config()
     launch_boss(platform)
-    
-    time.sleep(10)  # Give boss time to boot
 
     # Step 1: scale up worker
     status = json.loads(boss_get("status"))
