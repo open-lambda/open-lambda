@@ -61,7 +61,7 @@ def launch_boss(platform):
 
     api_key = config["api_key"]
     boss_port = config["boss_port"]
-    time.sleep(1)  # Give boss time to boot
+    time.sleep(5)  # Give boss time to boot
 
 def scale_workers(count):
     boss_post("scaling/worker_count", str(count))
