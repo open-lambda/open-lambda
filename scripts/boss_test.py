@@ -102,7 +102,6 @@ def create_lambda_tar(code_lines):
     with tarfile.open(temp_tar_path, "w:gz") as tar:
         tar.add(code_path, arcname="f.py")
         tar.add(ol_path, arcname="ol.yaml")
-
     # Clean up the temporary source files
     os.remove(code_path)
     os.remove(ol_path)
