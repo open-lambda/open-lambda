@@ -84,10 +84,6 @@ def wait_for_workers(expected_running, timeout=180):
 
 ### ------------------ Lambda Operations ------------------ ###
 
-import os
-import tarfile
-import tempfile
-
 def create_lambda_tar(code_lines):
     print("[BUILD] Creating lambda tarball...")
     # Create temp files for f.py and ol.yaml
@@ -198,9 +194,9 @@ def cleanup_boss():
 ### ------------------ End-to-End Test ------------------ ###
 
 def tester(platform):
-    print(f"\n========================================")
+    print("\n========================================")
     print(f"Running Boss Test for platform: {platform}")
-    print(f"========================================\n")
+    print("========================================\n")
 
     clear_config()
     launch_boss(platform)
