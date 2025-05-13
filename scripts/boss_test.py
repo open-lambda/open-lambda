@@ -61,7 +61,6 @@ def launch_boss(platform):
 
     api_key = config["api_key"]
     boss_port = config["boss_port"]
-    time.sleep(4)  # Give boss time to boot
 
 def scale_workers(count):
     boss_post("scaling/worker_count", str(count))
@@ -167,6 +166,8 @@ def tester(platform):
 
     clear_config()
     launch_boss(platform)
+    
+    time.sleep(10)  # Give boss time to boot
 
     # Step 1: scale up worker
     status = json.loads(boss_get("status"))
