@@ -4,6 +4,7 @@ import json
 import time
 import tarfile
 import tempfile
+import subprocess
 from subprocess import run
 
 import requests
@@ -62,8 +63,7 @@ def launch_boss(platform):
 
     api_key = config["api_key"]
     boss_port = config["boss_port"]
-    time.sleep(5)  # Give boss time to boot
-    
+    time.sleep(1)  # Give boss time to boot
     print("[BOOT] Boss launched and config written.\n")
 
 def scale_workers(count):
@@ -176,7 +176,6 @@ def shutdown_boss():
         print(f"[SHUTDOWN] Failed to shut down Boss: {e}")
 
 def kill_boss_on_port(port=5000):
-    import subprocess
     try:
         output = subprocess.check_output(["lsof", "-t", f"-i:{port}"])
         for pid in output.decode().splitlines():
@@ -225,7 +224,6 @@ def tester(platform):
     delete_lambda_and_verify(lambda_name)
 
     print(f"Test passed for platform: {platform}\n")
-    
     cleanup_boss()
 
 def main():
