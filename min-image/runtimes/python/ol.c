@@ -1,3 +1,4 @@
+// #include <python3.13/Python.h>
 #include <Python.h>
 #include <arpa/inet.h>
 #include <stdlib.h>
@@ -8,6 +9,71 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <seccomp.h>
+#include <sys/capability.h>
+
+static int modify_cap_impl(int cap, int setting) {
+  cap_t caps;
+  cap_value_t capList[1];
+  int rc = 0;
+
+  caps = cap_get_proc();
+  if (caps == NULL) {
+    rc = -1;
+    goto out;
+  }
+
+  capList[0] = cap;
+  if (cap_set_flag(caps, CAP_EFFECTIVE, 1, capList, setting) == -1) {
+    cap_free(caps);
+    rc = -1;
+    goto out;
+  }
+
+  if (cap_set_proc(caps) == -1) {
+    cap_free(caps);
+    rc = -1;
+    goto out;
+  }
+
+  out:
+   return rc;
+}
+
+static PyObject *ol_modify_cap(PyObject *module, PyObject *args) {
+  int cap, setting;
+  int rc = 0;
+
+  if (!PyArg_ParseTuple(args, "ii", &cap, &setting)) {
+    rc = -1;
+    goto out;
+  }
+
+  rc = modify_cap_impl(cap, setting);
+
+  out:
+   return Py_BuildValue("i", rc);
+}
+
+static PyObject *ol_drop_all_caps(PyObject *module) {
+  cap_t empty;
+  int rc = 0;
+
+  empty = cap_init();
+  if (empty == NULL) {
+    rc = -1;
+    goto out;
+  }
+
+  rc = cap_set_proc(empty);
+
+  if (cap_free(empty) == -1) {
+    rc = -1;
+    goto out;
+  }
+
+  out:
+   return Py_BuildValue("i", rc);
+}
 
 static PyObject *ol_unshare(PyObject *module) {
   int res = unshare(CLONE_NEWUTS|CLONE_NEWPID|CLONE_NEWIPC);
@@ -388,6 +454,8 @@ static PyMethodDef OlMethods[] = {
                                   {"unshare", (PyCFunction)ol_unshare, METH_NOARGS, "unshare"},
                                   {"fork", (PyCFunction)ol_fork, METH_NOARGS, "fork"},
                                   {"enable_seccomp", (PyCFunction)ol_enable_seccomp, METH_NOARGS, "enable_seccomp"},
+                                  {"modify_cap", (PyCFunction)ol_modify_cap, METH_VARARGS, "modify_cap"},
+                                  {"drop_all_caps", (PyCFunction)ol_drop_all_caps, METH_NOARGS, "drop_all_caps"},
                                   {NULL, NULL, 0, NULL}
 };
 

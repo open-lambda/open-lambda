@@ -208,6 +208,7 @@ def main():
             file.write(pid)
             print(f'server.py: joined cgroup, close FD {fd_id}')
 
+    # drop privileges here
     start_container()
 
 
