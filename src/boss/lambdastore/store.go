@@ -11,11 +11,13 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/open-lambda/open-lambda/ol/boss/event"
 	"github.com/open-lambda/open-lambda/ol/common"
 )
 
 type LambdaStore struct {
 	StorePath string
+	events    *event.Manager
 	// mapLock protects concurrent access to the Lambdas map
 	mapLock sync.Mutex
 	Lambdas map[string]*LambdaEntry
@@ -29,6 +31,7 @@ type LambdaEntry struct {
 func NewLambdaStore(storePath string) (*LambdaStore, error) {
 	store := &LambdaStore{
 		StorePath: storePath,
+		events:    event.NewManager(),
 		Lambdas:   make(map[string]*LambdaEntry),
 	}
 
@@ -172,17 +175,17 @@ func (s *LambdaStore) loadConfigAndRegister(functionName string) error {
 		Lock:   &sync.Mutex{},
 	}
 
+	s.registerTriggers(functionName, cfg)
+
 	return nil
 }
 
 func (s *LambdaStore) registerTriggers(functionName string, cfg *common.LambdaConfig) {
-	// TODO: events should be a separate subsystem that the registry interacts with instead of having that logic here.
-	// This can eventually end up in boss/event, mirroring worker/event.
+	s.events.Register(functionName, cfg.Triggers)
 }
 
 func (s *LambdaStore) unregisterTriggers(functionName string) {
-	// TODO: events should be a separate subsystem that the registry interacts with instead of having that logic here.
-	// This can eventually end up in boss/event, mirroring worker/event.
+	s.events.Unregister(functionName)
 }
 
 // assumes the caller holds the function lock
@@ -208,7 +211,6 @@ func (s *LambdaStore) addToRegistry(name string, body io.Reader) error {
 	}
 
 	s.mapLock.Lock()
-	defer s.mapLock.Unlock()
 
 	entry, ok := s.Lambdas[name]
 	if !ok {
@@ -218,6 +220,10 @@ func (s *LambdaStore) addToRegistry(name string, body io.Reader) error {
 		s.Lambdas[name] = entry
 	}
 	entry.Config = cfg
+
+	s.mapLock.Unlock()
+
+	s.registerTriggers(name, cfg)
 
 	return nil
 }
@@ -230,9 +236,11 @@ func (s *LambdaStore) removeFromRegistry(name string) error {
 	}
 
 	s.mapLock.Lock()
-	defer s.mapLock.Unlock()
-
 	delete(s.Lambdas, name)
+	s.mapLock.Unlock()
+
+	s.unregisterTriggers(name)
+
 	return nil
 }
 

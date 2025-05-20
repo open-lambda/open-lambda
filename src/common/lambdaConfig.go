@@ -19,9 +19,9 @@ var HandlerNameRegex = regexp.MustCompile(`^[A-Za-z0-9\.\-\_]+$`)
 
 // Triggers defines different ways a lambda can be invoked
 type Triggers struct {
-	HTTP []HTTPTrigger `yaml:"http,omitempty"` // List of HTTP triggers
-	Cron []CronTrigger `yaml:"cron,omitempty"` // List of cron triggers
-	// TODO: Add Kafka triggers
+	HTTP  []HTTPTrigger  `yaml:"http,omitempty"`  // List of HTTP triggers
+	Cron  []CronTrigger  `yaml:"cron,omitempty"`  // List of cron triggers
+	Kafka []KafkaTrigger `yaml:"kafka,omitempty"` // List of kafka triggers
 }
 
 type HTTPTrigger struct {
@@ -32,7 +32,12 @@ type CronTrigger struct {
 	Schedule string `yaml:"schedule"` // Cron schedule (e.g., "*/5 * * * *")
 }
 
-// TODO: add KafkaTrigger struct
+type KafkaTrigger struct {
+	Bootstrap_servers []string `yaml:"bootstrap_servers" json:"bootstrap_servers"` // e.g., ["localhost:9092"]
+	Topics            []string `yaml:"topics" json:"topics"`                       // e.g., ["events", "logs"]
+	Group_id          string   `yaml:"group_id" json:"group_id"`                   // e.g., "lambda-group"
+	Auto_offset_reset string   `yaml:"auto_offset_reset" json:"auto_offset_reset"` // "earliest" or "latest"
+}
 
 // LambdaConfig defines the overall configuration for the lambda function.
 type LambdaConfig struct {
