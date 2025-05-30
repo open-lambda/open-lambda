@@ -9,6 +9,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v0.4.1
 	github.com/fsouza/go-dockerclient v1.10.1
 	github.com/golang-jwt/jwt v3.2.2+incompatible
+	github.com/robfig/cron/v3 v3.0.1
 	github.com/twmb/franz-go v1.18.1
 	github.com/urfave/cli/v2 v2.25.3
 	gopkg.in/yaml.v3 v3.0.1
