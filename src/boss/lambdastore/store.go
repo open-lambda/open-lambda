@@ -11,11 +11,14 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
+	"github.com/open-lambda/open-lambda/ol/boss/event"
 	"github.com/open-lambda/open-lambda/ol/common"
 )
 
 type LambdaStore struct {
-	StorePath string
+	StorePath    string
+	eventManager *event.Manager
 	// mapLock protects concurrent access to the Lambdas map
 	mapLock sync.Mutex
 	Lambdas map[string]*LambdaEntry
@@ -26,10 +29,11 @@ type LambdaEntry struct {
 	Lock   *sync.Mutex
 }
 
-func NewLambdaStore(storePath string) (*LambdaStore, error) {
+func NewLambdaStore(storePath string, pool *cloudvm.WorkerPool) (*LambdaStore, error) {
 	store := &LambdaStore{
-		StorePath: storePath,
-		Lambdas:   make(map[string]*LambdaEntry),
+		StorePath:    storePath,
+		eventManager: event.NewManager(pool),
+		Lambdas:      make(map[string]*LambdaEntry),
 	}
 
 	if err := os.MkdirAll(store.StorePath, 0755); err != nil {
@@ -172,17 +176,12 @@ func (s *LambdaStore) loadConfigAndRegister(functionName string) error {
 		Lock:   &sync.Mutex{},
 	}
 
+	err = s.eventManager.Register(functionName, cfg.Triggers)
+	if err != nil {
+		return err
+	}
+
 	return nil
-}
-
-func (s *LambdaStore) registerTriggers(functionName string, cfg *common.LambdaConfig) {
-	// TODO: events should be a separate subsystem that the registry interacts with instead of having that logic here.
-	// This can eventually end up in boss/event, mirroring worker/event.
-}
-
-func (s *LambdaStore) unregisterTriggers(functionName string) {
-	// TODO: events should be a separate subsystem that the registry interacts with instead of having that logic here.
-	// This can eventually end up in boss/event, mirroring worker/event.
 }
 
 // assumes the caller holds the function lock
@@ -208,7 +207,6 @@ func (s *LambdaStore) addToRegistry(name string, body io.Reader) error {
 	}
 
 	s.mapLock.Lock()
-	defer s.mapLock.Unlock()
 
 	entry, ok := s.Lambdas[name]
 	if !ok {
@@ -218,6 +216,13 @@ func (s *LambdaStore) addToRegistry(name string, body io.Reader) error {
 		s.Lambdas[name] = entry
 	}
 	entry.Config = cfg
+
+	s.mapLock.Unlock()
+
+	err = s.eventManager.Register(name, cfg.Triggers)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -230,9 +235,11 @@ func (s *LambdaStore) removeFromRegistry(name string) error {
 	}
 
 	s.mapLock.Lock()
-	defer s.mapLock.Unlock()
-
 	delete(s.Lambdas, name)
+	s.mapLock.Unlock()
+
+	s.eventManager.Unregister(name)
+
 	return nil
 }
 
