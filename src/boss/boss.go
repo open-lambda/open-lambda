@@ -117,7 +117,7 @@ func (b *Boss) RegistryHandler(w http.ResponseWriter, r *http.Request) {
 	// GET /registry - list all lambda functions in registry
 	if relPath == "" {
 		if r.Method == "GET" {
-			b.lambdaStore.ListLambda(w, r)
+			b.lambdaStore.ListLambda(w)
 			return
 		}
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -128,7 +128,7 @@ func (b *Boss) RegistryHandler(w http.ResponseWriter, r *http.Request) {
 
 	// GET /registry/{name}/config
 	if len(parts) == 2 && parts[1] == "config" && r.Method == "GET" {
-		b.lambdaStore.GetLambdaConfig(w, r)
+		b.lambdaStore.RetrieveLambdaConfig(w, r)
 		return
 	}
 
