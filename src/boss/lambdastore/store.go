@@ -11,13 +11,14 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
 	"github.com/open-lambda/open-lambda/ol/boss/event"
 	"github.com/open-lambda/open-lambda/ol/common"
 )
 
 type LambdaStore struct {
-	StorePath string
-	events    *event.Manager
+	StorePath    string
+	eventManager *event.Manager
 	// mapLock protects concurrent access to the Lambdas map
 	mapLock sync.Mutex
 	Lambdas map[string]*LambdaEntry
@@ -28,11 +29,11 @@ type LambdaEntry struct {
 	Lock   *sync.Mutex
 }
 
-func NewLambdaStore(storePath string) (*LambdaStore, error) {
+func NewLambdaStore(storePath string, pool *cloudvm.WorkerPool) (*LambdaStore, error) {
 	store := &LambdaStore{
-		StorePath: storePath,
-		events:    event.NewManager(),
-		Lambdas:   make(map[string]*LambdaEntry),
+		StorePath:    storePath,
+		eventManager: event.NewManager(pool),
+		Lambdas:      make(map[string]*LambdaEntry),
 	}
 
 	if err := os.MkdirAll(store.StorePath, 0755); err != nil {
@@ -175,17 +176,12 @@ func (s *LambdaStore) loadConfigAndRegister(functionName string) error {
 		Lock:   &sync.Mutex{},
 	}
 
-	s.registerTriggers(functionName, cfg)
+	err = s.eventManager.Register(functionName, cfg.Triggers)
+	if err != nil {
+		return err
+	}
 
 	return nil
-}
-
-func (s *LambdaStore) registerTriggers(functionName string, cfg *common.LambdaConfig) {
-	s.events.Register(functionName, cfg.Triggers)
-}
-
-func (s *LambdaStore) unregisterTriggers(functionName string) {
-	s.events.Unregister(functionName)
 }
 
 // assumes the caller holds the function lock
@@ -223,7 +219,10 @@ func (s *LambdaStore) addToRegistry(name string, body io.Reader) error {
 
 	s.mapLock.Unlock()
 
-	s.registerTriggers(name, cfg)
+	err = s.eventManager.Register(name, cfg.Triggers)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -239,7 +238,7 @@ func (s *LambdaStore) removeFromRegistry(name string) error {
 	delete(s.Lambdas, name)
 	s.mapLock.Unlock()
 
-	s.unregisterTriggers(name)
+	s.eventManager.Unregister(name)
 
 	return nil
 }
