@@ -67,15 +67,10 @@ func (s *LambdaStore) UploadLambda(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	lock := s.getFuncLock(functionName)
-	lock.Lock()
-	defer lock.Unlock()
+	lambdaEntry := s.getEntry(functionName)
+	lambdaEntry.Lock.Lock()
+	defer lambdaEntry.Lock.Unlock()
 
-	// TODO: do not leave a window of time when no function exists betweem remove and add. Because workers don't sync with the boss, so they could have failed invocations.
-	if err := s.removeFromRegistry(functionName); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to clean old version: %v", err), http.StatusInternalServerError)
-		return
-	}
 	if err := s.addToRegistry(functionName, r.Body); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to add lambda: %v", err), http.StatusInternalServerError)
 		return
@@ -93,9 +88,9 @@ func (s *LambdaStore) DeleteLambda(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	functionLock := s.getFuncLock(functionName)
-	functionLock.Lock()
-	defer functionLock.Unlock()
+	lambdaEntry := s.getEntry(functionName)
+	lambdaEntry.Lock.Lock()
+	defer lambdaEntry.Lock.Unlock()
 
 	if err := s.removeFromRegistry(functionName); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -106,7 +101,7 @@ func (s *LambdaStore) DeleteLambda(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Lambda %s deleted successfully", functionName)
 }
 
-func (s *LambdaStore) ListLambda(w http.ResponseWriter, r *http.Request) {
+func (s *LambdaStore) ListLambda(w http.ResponseWriter) {
 	s.mapLock.Lock()
 
 	names := make([]string, 0, len(s.Lambdas))
@@ -121,7 +116,7 @@ func (s *LambdaStore) ListLambda(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *LambdaStore) GetLambdaConfig(w http.ResponseWriter, r *http.Request) {
+func (s *LambdaStore) RetrieveLambdaConfig(w http.ResponseWriter, r *http.Request) {
 	raw := strings.TrimPrefix(r.URL.Path, "/registry/")
 	parts := strings.SplitN(raw, "/", 2)
 
@@ -138,9 +133,9 @@ func (s *LambdaStore) GetLambdaConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// protect against reading file during delete or upload
-	functionLock := s.getFuncLock(functionName)
-	functionLock.Lock()
-	defer functionLock.Unlock()
+	lambdaEntry := s.getEntry(functionName)
+	lambdaEntry.Lock.Lock()
+	defer lambdaEntry.Lock.Unlock()
 
 	tarPath := filepath.Join(s.StorePath, functionName+".tar.gz")
 
@@ -187,37 +182,39 @@ func (s *LambdaStore) loadConfigAndRegister(functionName string) error {
 // assumes the caller holds the function lock
 func (s *LambdaStore) addToRegistry(name string, body io.Reader) error {
 	tarPath := filepath.Join(s.StorePath, name+".tar.gz")
+	tmpPath := tarPath + ".tmp"
 
-	tarFile, err := os.Create(tarPath)
+	tarFile, err := os.Create(tmpPath)
 	if err != nil {
-		return fmt.Errorf("failed to create lambda tarball: %w", err)
+		return fmt.Errorf("failed to create temp tarball: %w", err)
 	}
-	defer tarFile.Close()
 
-	// TODO: atomically write tarball by writing to a temp file and renaming
+	// always try to clean up temp file on return
+	defer func() {
+		_ = os.Remove(tmpPath)
+	}()
+
 	if _, err := io.Copy(tarFile, body); err != nil {
-		return fmt.Errorf("failed to write tarball: %w", err)
+		tarFile.Close()
+		return fmt.Errorf("failed to write to temp tarball: %w", err)
 	}
 
-	cfg, err := common.ExtractConfigFromTarGz(tarPath)
+	if err := tarFile.Close(); err != nil {
+		return fmt.Errorf("failed to close temp tarball: %w", err)
+	}
+
+	cfg, err := common.ExtractConfigFromTarGz(tmpPath)
 	if err != nil {
-		// Clean up the bad tarball file
-		_ = os.Remove(tarPath)
-		return fmt.Errorf("failed to extract config: %w", err)
+		return fmt.Errorf("failed to extract config from temp tarball: %w", err)
 	}
 
-	s.mapLock.Lock()
-
-	entry, ok := s.Lambdas[name]
-	if !ok {
-		entry = &LambdaEntry{
-			Lock: &sync.Mutex{},
-		}
-		s.Lambdas[name] = entry
+	// Atomically replace the old file
+	if err := os.Rename(tmpPath, tarPath); err != nil {
+		return fmt.Errorf("failed to rename temp tarball: %w", err)
 	}
-	entry.Config = cfg
 
-	s.mapLock.Unlock()
+	lambdaEntry := s.getEntry(name)
+	lambdaEntry.Config = cfg
 
 	err = s.eventManager.Register(name, cfg.Triggers)
 	if err != nil {
@@ -243,8 +240,7 @@ func (s *LambdaStore) removeFromRegistry(name string) error {
 	return nil
 }
 
-// getFuncLock safely returns the lock for a given function name
-func (s *LambdaStore) getFuncLock(name string) *sync.Mutex {
+func (s *LambdaStore) getEntry(name string) *LambdaEntry {
 	s.mapLock.Lock()
 	defer s.mapLock.Unlock()
 
@@ -256,5 +252,6 @@ func (s *LambdaStore) getFuncLock(name string) *sync.Mutex {
 		}
 		s.Lambdas[name] = entry
 	}
-	return entry.Lock
+
+	return entry
 }
