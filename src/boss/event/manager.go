@@ -16,6 +16,8 @@ func NewManager(pool *cloudvm.WorkerPool) *Manager {
 }
 
 func (m *Manager) Register(functionName string, triggers common.Triggers) error {
+	// clean up stale cron job
+	m.Unregister(functionName)
 	return m.cronScheduler.Register(functionName, triggers.Cron)
 }
 
