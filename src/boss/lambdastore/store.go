@@ -18,6 +18,7 @@ import (
 
 type LambdaStore struct {
 	StorePath    string
+	trashPath    string
 	eventManager *event.Manager
 	// mapLock protects concurrent access to the Lambdas map
 	mapLock sync.Mutex
@@ -30,14 +31,22 @@ type LambdaEntry struct {
 }
 
 func NewLambdaStore(storePath string, pool *cloudvm.WorkerPool) (*LambdaStore, error) {
+	trashDir := filepath.Join(storePath, ".trash")
+
 	store := &LambdaStore{
 		StorePath:    storePath,
+		trashPath:    trashDir,
 		eventManager: event.NewManager(pool),
 		Lambdas:      make(map[string]*LambdaEntry),
 	}
 
 	if err := os.MkdirAll(store.StorePath, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create lambda store directory: %w", err)
+	}
+
+	// Ensure the .trash directory exists for safe async deletion
+	if err := os.MkdirAll(trashDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create .trash directory: %w", err)
 	}
 
 	files, err := os.ReadDir(store.StorePath)
@@ -211,16 +220,8 @@ func (s *LambdaStore) removeFromRegistry(funcName string) error {
 	// hold both locks
 	entry.Lock.Lock()
 
-	// Ensure .trash directory exists
-	trashDir := filepath.Join(s.StorePath, ".trash")
-	if err := os.MkdirAll(trashDir, 0755); err != nil {
-		entry.Lock.Unlock()
-		s.mapLock.Unlock()
-		return fmt.Errorf("failed to create .trash directory: %w", err)
-	}
-
 	tarPath := filepath.Join(s.StorePath, funcName+".tar.gz")
-	trashPath := filepath.Join(trashDir, funcName+".tar.gz")
+	trashPath := filepath.Join(s.trashPath, funcName+".tar.gz")
 
 	// Rename the file (fast + atomic)
 	if err := os.Rename(tarPath, trashPath); err != nil && !os.IsNotExist(err) {
@@ -235,7 +236,9 @@ func (s *LambdaStore) removeFromRegistry(funcName string) error {
 
 	// Background deletion
 	go func() {
-		_ = os.Remove(trashPath)
+		if err := os.Remove(trashPath); err != nil {
+			log.Printf("warning: failed to remove %s from trash: %v", trashPath, err)
+		}
 	}()
 
 	s.eventManager.Unregister(funcName)
