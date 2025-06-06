@@ -60,58 +60,43 @@ func NewLambdaStore(storePath string, pool *cloudvm.WorkerPool) (*LambdaStore, e
 // ------------------- HTTP Handlers ----------------------
 
 func (s *LambdaStore) UploadLambda(w http.ResponseWriter, r *http.Request) {
-	functionName := strings.TrimPrefix(r.URL.Path, "/registry/")
+	funcName := strings.TrimPrefix(r.URL.Path, "/registry/")
 
-	if err := common.ValidateFunctionName(functionName); err != nil {
+	if err := common.ValidateFunctionName(funcName); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	lambdaEntry := s.getEntry(functionName)
-	lambdaEntry.Lock.Lock()
-	defer lambdaEntry.Lock.Unlock()
-
-	if err := s.addToRegistry(functionName, r.Body); err != nil {
+	if err := s.addToRegistry(funcName, r.Body); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to add lambda: %v", err), http.StatusInternalServerError)
 		return
 	}
 
 	w.WriteHeader(http.StatusCreated)
-	fmt.Fprintf(w, "Lambda %s uploaded successfully", functionName)
+	fmt.Fprintf(w, "Lambda %s uploaded successfully", funcName)
 }
 
 func (s *LambdaStore) DeleteLambda(w http.ResponseWriter, r *http.Request) {
-	functionName := strings.TrimPrefix(r.URL.Path, "/registry/")
+	funcName := strings.TrimPrefix(r.URL.Path, "/registry/")
 
-	if err := common.ValidateFunctionName(functionName); err != nil {
+	if err := common.ValidateFunctionName(funcName); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	lambdaEntry := s.getEntry(functionName)
-	lambdaEntry.Lock.Lock()
-	defer lambdaEntry.Lock.Unlock()
-
-	if err := s.removeFromRegistry(functionName); err != nil {
+	if err := s.removeFromRegistry(funcName); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "Lambda %s deleted successfully", functionName)
+	fmt.Fprintf(w, "Lambda %s deleted successfully", funcName)
 }
 
 func (s *LambdaStore) ListLambda(w http.ResponseWriter) {
-	s.mapLock.Lock()
+	funcNames := s.listEntries()
 
-	names := make([]string, 0, len(s.Lambdas))
-	for name := range s.Lambdas {
-		names = append(names, name)
-	}
-
-	s.mapLock.Unlock()
-
-	if err := json.NewEncoder(w).Encode(names); err != nil {
+	if err := json.NewEncoder(w).Encode(funcNames); err != nil {
 		http.Error(w, "failed to encode lambda list", http.StatusInternalServerError)
 	}
 }
@@ -125,23 +110,16 @@ func (s *LambdaStore) RetrieveLambdaConfig(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	functionName := parts[0]
+	funcName := parts[0]
 
-	if err := common.ValidateFunctionName(functionName); err != nil {
+	if err := common.ValidateFunctionName(funcName); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	// protect against reading file during delete or upload
-	lambdaEntry := s.getEntry(functionName)
-	lambdaEntry.Lock.Lock()
-	defer lambdaEntry.Lock.Unlock()
-
-	tarPath := filepath.Join(s.StorePath, functionName+".tar.gz")
-
-	cfg, err := common.ExtractConfigFromTarGz(tarPath)
+	cfg, err := s.getConfig(funcName)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("failed to extract config: %v", err), http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
 
@@ -154,24 +132,21 @@ func (s *LambdaStore) RetrieveLambdaConfig(w http.ResponseWriter, r *http.Reques
 
 // ------------------- Core Logic ----------------------
 
-func (s *LambdaStore) loadConfigAndRegister(functionName string) error {
-	tarPath := filepath.Join(s.StorePath, functionName+".tar.gz")
+func (s *LambdaStore) loadConfigAndRegister(funcName string) error {
+	tarPath := filepath.Join(s.StorePath, funcName+".tar.gz")
 
 	cfg, err := common.ExtractConfigFromTarGz(tarPath)
 	if err != nil {
 		return fmt.Errorf("failed to extract config.json: %w", err)
 	}
 
-	// ensure atomic mutation of Lambdas map
-	s.mapLock.Lock()
-	defer s.mapLock.Unlock()
+	entry := s.getOrCreateEntry(funcName)
 
-	s.Lambdas[functionName] = &LambdaEntry{
-		Config: cfg,
-		Lock:   &sync.Mutex{},
-	}
+	entry.Lock.Lock()
+	entry.Config = cfg
+	entry.Lock.Unlock()
 
-	err = s.eventManager.Register(functionName, cfg.Triggers)
+	err = s.eventManager.Register(funcName, cfg.Triggers)
 	if err != nil {
 		return err
 	}
@@ -179,9 +154,12 @@ func (s *LambdaStore) loadConfigAndRegister(functionName string) error {
 	return nil
 }
 
-// assumes the caller holds the function lock
-func (s *LambdaStore) addToRegistry(name string, body io.Reader) error {
-	tarPath := filepath.Join(s.StorePath, name+".tar.gz")
+func (s *LambdaStore) addToRegistry(funcName string, body io.Reader) error {
+	lambdaEntry := s.getOrCreateEntry(funcName)
+	lambdaEntry.Lock.Lock()
+	defer lambdaEntry.Lock.Unlock()
+
+	tarPath := filepath.Join(s.StorePath, funcName+".tar.gz")
 	tmpPath := tarPath + ".tmp"
 
 	tarFile, err := os.Create(tmpPath)
@@ -213,10 +191,9 @@ func (s *LambdaStore) addToRegistry(name string, body io.Reader) error {
 		return fmt.Errorf("failed to rename temp tarball: %w", err)
 	}
 
-	lambdaEntry := s.getEntry(name)
 	lambdaEntry.Config = cfg
 
-	err = s.eventManager.Register(name, cfg.Triggers)
+	err = s.eventManager.Register(funcName, cfg.Triggers)
 	if err != nil {
 		return err
 	}
@@ -224,34 +201,87 @@ func (s *LambdaStore) addToRegistry(name string, body io.Reader) error {
 	return nil
 }
 
-// assumes the caller holds the function lock
-func (s *LambdaStore) removeFromRegistry(name string) error {
-	tarPath := filepath.Join(s.StorePath, name+".tar.gz")
-	if err := os.Remove(tarPath); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to remove tarball for %s: %w", name, err)
+func (s *LambdaStore) removeFromRegistry(funcName string) error {
+	s.mapLock.Lock()
+	entry, ok := s.Lambdas[funcName]
+	if !ok {
+		s.mapLock.Unlock()
+		return fmt.Errorf("lambda %s not found", funcName)
+	}
+	// hold both locks
+	entry.Lock.Lock()
+
+	// Ensure .trash directory exists
+	trashDir := filepath.Join(s.StorePath, ".trash")
+	if err := os.MkdirAll(trashDir, 0755); err != nil {
+		entry.Lock.Unlock()
+		s.mapLock.Unlock()
+		return fmt.Errorf("failed to create .trash directory: %w", err)
 	}
 
-	s.mapLock.Lock()
-	delete(s.Lambdas, name)
+	tarPath := filepath.Join(s.StorePath, funcName+".tar.gz")
+	trashPath := filepath.Join(trashDir, funcName+".tar.gz")
+
+	// Rename the file (fast + atomic)
+	if err := os.Rename(tarPath, trashPath); err != nil && !os.IsNotExist(err) {
+		entry.Lock.Unlock()
+		s.mapLock.Unlock()
+		return fmt.Errorf("failed to rename tarball for %s: %w", funcName, err)
+	}
+
+	delete(s.Lambdas, funcName)
+	entry.Lock.Unlock()
 	s.mapLock.Unlock()
 
-	s.eventManager.Unregister(name)
+	// Background deletion
+	go func() {
+		_ = os.Remove(trashPath)
+	}()
 
+	s.eventManager.Unregister(funcName)
 	return nil
 }
 
-func (s *LambdaStore) getEntry(name string) *LambdaEntry {
+func (s *LambdaStore) getConfig(funcName string) (*common.LambdaConfig, error) {
+	lambdaEntry := s.getOrCreateEntry(funcName)
+	lambdaEntry.Lock.Lock()
+	defer lambdaEntry.Lock.Unlock()
+
+	tarPath := filepath.Join(s.StorePath, funcName+".tar.gz")
+	cfg, err := common.ExtractConfigFromTarGz(tarPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("lambda %q not found", funcName)
+		}
+		return nil, fmt.Errorf("failed to extract config: %w", err)
+	}
+
+	return cfg, nil
+}
+
+func (s *LambdaStore) getOrCreateEntry(funcName string) *LambdaEntry {
 	s.mapLock.Lock()
 	defer s.mapLock.Unlock()
 
-	entry, ok := s.Lambdas[name]
+	entry, ok := s.Lambdas[funcName]
 	if !ok {
 		entry = &LambdaEntry{
 			Lock:   &sync.Mutex{},
 			Config: nil,
 		}
-		s.Lambdas[name] = entry
+		s.Lambdas[funcName] = entry
 	}
 
 	return entry
+}
+
+func (s *LambdaStore) listEntries() []string {
+	s.mapLock.Lock()
+	defer s.mapLock.Unlock()
+
+	funcNames := make([]string, 0, len(s.Lambdas))
+	for name := range s.Lambdas {
+		funcNames = append(funcNames, name)
+	}
+	return funcNames
 }
