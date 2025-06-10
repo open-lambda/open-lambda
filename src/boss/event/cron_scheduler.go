@@ -40,21 +40,16 @@ func (c *CronScheduler) Register(functionName string, triggers []common.CronTrig
 	defer c.mapLock.Unlock()
 
 	for _, trigger := range triggers {
+		funcName := functionName
 		schedule := trigger.Schedule
 
 		entryID, err := c.cron.AddFunc(schedule, func() {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("[CronScheduler] Panic invoking lambda %s: %v", functionName, r)
-				}
-			}()
-
-			c.Invoke(functionName)
+			c.Invoke(funcName)
 		})
 		if err != nil {
-			return fmt.Errorf("[CronScheduler] Failed to add cron job for %s: %v", functionName, err)
+			return fmt.Errorf("[CronScheduler] Failed to add cron job for %s: %v", funcName, err)
 		}
-		c.jobs[functionName] = append(c.jobs[functionName], entryID)
+		c.jobs[funcName] = append(c.jobs[funcName], entryID)
 	}
 
 	return nil

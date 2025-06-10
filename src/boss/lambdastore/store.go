@@ -17,8 +17,15 @@ import (
 )
 
 type LambdaStore struct {
-	StorePath    string
-	trashPath    string
+	// StorePath is the directory where active lambda tarballs are stored.
+	StorePath string
+
+	// trashPath is a subdirectory used to temporarily move deleted lambda tarballs.
+	// The tarball is atomically moved here while holding both mapLock and the lambda’s entry.Lock,
+	// ensuring consistency between in-memory and on-disk state. Actual deletion from disk
+	// is deferred to a background goroutine to avoid holding locks during slow I/O.
+	trashPath string
+
 	eventManager *event.Manager
 	// mapLock protects concurrent access to the Lambdas map
 	mapLock sync.Mutex
