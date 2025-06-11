@@ -2,48 +2,57 @@ package event
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"net/http/httptest"
 	"sync"
 
+	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
 	"github.com/open-lambda/open-lambda/ol/common"
 	"github.com/robfig/cron/v3"
 )
 
 type CronScheduler struct {
-	cron    *cron.Cron
-	mapLock sync.Mutex                // protects jobs map
-	jobs    map[string][]cron.EntryID // functionName -> list of job IDs
+	cron       *cron.Cron
+	mapLock    sync.Mutex                // protects jobs map
+	jobs       map[string][]cron.EntryID // functionName -> list of job IDs
+	workerPool *cloudvm.WorkerPool       // to forward the req to worker
 }
 
-func NewCronScheduler() *CronScheduler {
+func NewCronScheduler(pool *cloudvm.WorkerPool) *CronScheduler {
 	c := &CronScheduler{
-		cron: cron.New(),
-		jobs: make(map[string][]cron.EntryID),
+		cron:       cron.New(),
+		jobs:       make(map[string][]cron.EntryID),
+		workerPool: pool,
 	}
 	c.cron.Start()
 	return c
 }
 
-func (c *CronScheduler) Register(functionName string, triggers []common.CronTrigger) {
+func (c *CronScheduler) Register(functionName string, triggers []common.CronTrigger) error {
+	if len(triggers) == 0 {
+		return nil
+	}
+
 	c.mapLock.Lock()
 	defer c.mapLock.Unlock()
 
 	for _, trigger := range triggers {
-		// save functionName for job context
 		funcName := functionName
 		schedule := trigger.Schedule
 
 		entryID, err := c.cron.AddFunc(schedule, func() {
-			c.Invoke(functionName)
+			c.Invoke(funcName)
 		})
-		if err == nil {
-			c.jobs[funcName] = append(c.jobs[funcName], entryID)
-		} else {
-			println("[CronScheduler] Failed to add cron job for", funcName, ":", err.Error())
+		if err != nil {
+			return fmt.Errorf("[CronScheduler] Failed to add cron job for %s: %v", funcName, err)
 		}
+		c.jobs[funcName] = append(c.jobs[funcName], entryID)
 	}
+
+	return nil
 }
 
 func (c *CronScheduler) Unregister(functionName string) {
@@ -62,26 +71,19 @@ func (c *CronScheduler) Unregister(functionName string) {
 	delete(c.jobs, functionName)
 }
 
-func (c *CronScheduler) Stop() {
-	c.cron.Stop()
-}
-
 func (c *CronScheduler) Invoke(functionName string) {
-	url := "http://localhost:5000/run/" + functionName
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer([]byte(`{}`))) // empty JSON payload
-	if err != nil {
-		log.Printf("failed to invoke lambda %s: %v", functionName, err)
-		return
-	}
-	defer resp.Body.Close()
+	// Simulate HTTP request to /run/<function>
+	req := httptest.NewRequest(http.MethodPost, "/run/"+functionName, bytes.NewBuffer([]byte(`{}`)))
+	w := httptest.NewRecorder()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Printf("[CronScheduler] Failed to read response body for lambda %s: %v", functionName, err)
-		return
-	}
+	c.workerPool.RunLambda(w, req)
+
+	resp := w.Result()
+	body, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
+		// TODO: Improve how this error is surfaced. The platform operator can see logs,
+		// but function developers likely cannot — consider exposing errors through a user-facing mechanism.
 		log.Printf("[CronScheduler] Lambda %s returned non-200 (%d): %s", functionName, resp.StatusCode, string(body))
 	} else {
 		log.Printf("[CronScheduler] Lambda %s invoked successfully. Response: %s", functionName, string(body))
