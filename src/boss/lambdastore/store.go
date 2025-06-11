@@ -159,13 +159,15 @@ func (s *LambdaStore) loadConfigAndRegister(funcName string) error {
 	entry := s.getOrCreateEntry(funcName)
 
 	entry.Lock.Lock()
+
 	entry.Config = cfg
-	entry.Lock.Unlock()
 
 	err = s.eventManager.Register(funcName, cfg.Triggers)
 	if err != nil {
 		return err
 	}
+
+	entry.Lock.Unlock()
 
 	return nil
 }
@@ -237,6 +239,10 @@ func (s *LambdaStore) removeFromRegistry(funcName string) error {
 		return fmt.Errorf("failed to rename tarball for %s: %w", funcName, err)
 	}
 
+	if err := s.eventManager.Unregister(funcName); err != nil {
+		log.Printf("failed to unregister triggers for %s: %v", funcName, err)
+	}
+
 	delete(s.Lambdas, funcName)
 	entry.Lock.Unlock()
 	s.mapLock.Unlock()
@@ -248,7 +254,6 @@ func (s *LambdaStore) removeFromRegistry(funcName string) error {
 		}
 	}()
 
-	s.eventManager.Unregister(funcName)
 	return nil
 }
 

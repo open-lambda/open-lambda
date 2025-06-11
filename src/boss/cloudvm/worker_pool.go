@@ -424,3 +424,14 @@ func forwardTaskHelper(w http.ResponseWriter, req *http.Request, workerHost stri
 
 	return nil
 }
+
+func (pool *WorkerPool) GetWorker() (*Worker, error) {
+	if len(pool.workers[STARTING])+len(pool.workers[RUNNING]) == 0 {
+		return nil, fmt.Errorf("no worker available")
+	}
+
+	worker := <-pool.queue
+	pool.queue <- worker
+
+	return worker, nil
+}
