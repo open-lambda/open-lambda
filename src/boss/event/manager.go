@@ -7,11 +7,6 @@ import (
 	"github.com/open-lambda/open-lambda/ol/common"
 )
 
-type Trigger interface {
-	Register(functionName string)
-	Unregister(functionName string)
-}
-
 type Manager struct {
 	cronScheduler *CronScheduler
 	kafkaManager  *KafkaManager
