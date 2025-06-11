@@ -66,12 +66,14 @@ func (k *KafkaManager) Register(functionName string, triggers []common.KafkaTrig
 
 		err = k.workerPool.ForwardTask(w, req, selectedWorker)
 		if err != nil {
+			// TODO: try again on error?
 			log.Printf("[KafkaManager] Failed to forward Kafka setup for %s: %v", functionName, err)
 			continue
 		}
 
 		resp := w.Result()
 		if resp.StatusCode != http.StatusOK {
+			// TODO: try again on error?
 			body, _ := io.ReadAll(resp.Body)
 			log.Printf("[KafkaManager] Worker returned error on setup for %s: %s - %s", functionName, resp.Status, string(body))
 		}
@@ -105,6 +107,7 @@ func (k *KafkaManager) Unregister(functionName string) error {
 	// Assumes the worker is still alive during unregister; what happens if the worker is shutdown between register and unregister?
 	err := k.workerPool.ForwardTask(w, req, entry.Worker)
 	if err != nil {
+		// TODO: try again on error?
 		log.Printf("[KafkaManager] Failed to forward unsetup request for %s: %v", functionName, err)
 		return err
 	}
