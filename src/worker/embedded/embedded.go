@@ -6,8 +6,8 @@ import _ "embed"
 
 // Default tree of 40 Zygotes nodes (with nodes for Pandas, etc)
 
-//go:embed default-zygotes-40.json
-var DefaultZygotes40_json string
+//go:embed default-zygotes-40.yaml
+var DefaultZygotes40_yaml string
 
 // Used by github.com/open-lambda/open-lambda/ol/worker/lambda/packages
 //
