@@ -37,7 +37,8 @@ type CronTrigger struct {
 
 // LambdaConfig defines the overall configuration for the lambda function.
 type LambdaConfig struct {
-	Triggers Triggers `yaml:"triggers"` // List of HTTP triggers
+	Triggers    Triggers `yaml:"triggers"`
+	MemoryMaxMB int      `yaml:"memory_mb,omitempty"` // List of HTTP triggers
 	// Additional configurations can be added here.
 }
 
