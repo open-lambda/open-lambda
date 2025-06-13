@@ -13,7 +13,7 @@ import (
 // 1. The global template config (shared defaults)
 // 2. Worker-specific defaults based on its directory path
 // 3. A unique worker port number
-// The final config is then written to <workerPath>/config.json.
+// The final config is then written to <workerPath>/config.yaml.
 func SaveTemplateConfToWorkerDir(cfg *common.Config, workerPath string, workerPort string) error {
 	// Copy the config so we can safely mutate it
 	cfgCopy := *cfg
@@ -52,6 +52,6 @@ func SaveTemplateConfToWorkerDir(cfg *common.Config, workerPath string, workerPo
 	cfgCopy.Registry = config.BossConf.Lambda_Store_Path
 
 	// Save the template configuration to the worker's config directory
-	configPath := filepath.Join(workerPath, "config.json")
+	configPath := filepath.Join(workerPath, "config.yaml")
 	return common.SaveConfig(&cfgCopy, configPath)
 }

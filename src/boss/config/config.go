@@ -1,7 +1,7 @@
 package config
 
 import (
-	"encoding/json"
+	"gopkg.in/yaml.v3"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -12,14 +12,14 @@ import (
 var BossConf *Config
 
 type Config struct {
-	Platform          string          `json:"platform"`
-	Scaling           string          `json:"scaling"`
-	API_key           string          `json:"api_key"`
-	Boss_port         string          `json:"boss_port"`
-	Worker_Cap        int             `json:"worker_cap"`
-	Gcp               GcpConfig       `json:"gcp"`
-	Local             LocalPlatConfig `json:"local"`
-	Lambda_Store_Path string          `json:"lambda_store_path"`
+	Platform          string          `yaml:"platform"`
+	Scaling           string          `yaml:"scaling"`
+	API_key           string          `yaml:"api_key"`
+	Boss_port         string          `yaml:"boss_port"`
+	Worker_Cap        int             `yaml:"worker_cap"`
+	Gcp               GcpConfig       `yaml:"gcp"`
+	Local             LocalPlatConfig `yaml:"local"`
+	Lambda_Store_Path string          `yaml:"lambda_store_path"`
 }
 
 func LoadDefaults() error {
@@ -43,7 +43,7 @@ func LoadDefaults() error {
 	return checkConf()
 }
 
-// ParseConfig reads a file and tries to parse it as a JSON string to a Config
+// ParseConfig reads a file and tries to parse it as a YAML string to a Config
 // instance.
 func LoadConf(path string) error {
 	config_raw, err := ioutil.ReadFile(path)
@@ -51,7 +51,7 @@ func LoadConf(path string) error {
 		return fmt.Errorf("could not open config (%v): %v\n", path, err.Error())
 	}
 
-	if err := json.Unmarshal(config_raw, &BossConf); err != nil {
+	if err := yaml.Unmarshal(config_raw, &BossConf); err != nil {
 		log.Printf("FILE: %v\n", config_raw)
 		return fmt.Errorf("could not parse config (%v): %v\n", path, err.Error())
 	}
@@ -67,27 +67,28 @@ func checkConf() error {
 	return nil
 }
 
-// Dump prints the Config as a JSON string.
+// Dump prints the Config as a YAML string.
 func DumpConf() {
-	s, err := json.Marshal(BossConf)
+	s, err := yaml.Marshal(BossConf)
 	if err != nil {
 		panic(err)
 	}
 	log.Printf("CONFIG = %v\n", string(s))
 }
 
-// DumpStr returns the Config as an indented JSON string.
+// DumpStr returns the Config as an indented YAML string.
 func DumpConfStr() string {
-	s, err := json.MarshalIndent(BossConf, "", "\t")
+	s, err := yaml.Marshal(BossConf)
 	if err != nil {
 		panic(err)
 	}
 	return string(s)
 }
 
-// Save writes the Config as an indented JSON to path with 644 mode.
+// Save writes the Config as an indented YAML to path with 644 mode.
 func SaveConf(path string) error {
-	s, err := json.MarshalIndent(BossConf, "", "\t")
+	s, err := yaml.Marshal(BossConf)
+
 	if err != nil {
 		return err
 	}
