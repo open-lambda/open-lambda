@@ -16,6 +16,7 @@ import (
 	"syscall"
 
 	"github.com/open-lambda/open-lambda/ol/common"
+	"github.com/open-lambda/open-lambda/ol/worker/lambda"
 )
 
 const (
@@ -33,6 +34,19 @@ type cleanable interface {
 	cleanup()
 }
 
+var lambdaMgr *lambda.LambdaMgr
+var once sync.Once
+
+// creates paths in the worker directory
+func GetLambdaManagerInstance() (*lambda.LambdaMgr, error) {
+	var err error
+	once.Do(func() {
+		lambdaMgr, err = lambda.NewLambdaMgr()
+	})
+	return lambdaMgr, err
+}
+
+// LambdaManager is now a singleton, one per worker. This is because lambda manager
 // temporary file storing cpu profiled data
 const CPU_TEMP_PATTERN = ".cpu.*.prof"
 
