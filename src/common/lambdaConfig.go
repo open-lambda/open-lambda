@@ -77,7 +77,18 @@ func checkLambdaConfig(config *LambdaConfig) error {
 		}
 	}
 
-	// TODO: Validate Kafka triggers
+	// Validate Kafka triggers
+	for _, trigger := range config.Triggers.Kafka {
+		if len(trigger.Topics) == 0 {
+			return fmt.Errorf("Kafka trigger must have at least one topic")
+		}
+		if len(trigger.Bootstrap_servers) == 0 {
+			return fmt.Errorf("Kafka trigger must specify at least one bootstrap server")
+		}
+		if trigger.Group_id == "" {
+			return fmt.Errorf("Kafka trigger must have a group ID")
+		}
+	}
 
 	return nil
 }
