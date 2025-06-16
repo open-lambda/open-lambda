@@ -14,6 +14,9 @@ import (
 	"github.com/open-lambda/open-lambda/ol/common"
 )
 
+// NOTE: The worker-side implementation of Kafka triggers is still in progress.
+// This logic may need to be revised once the worker-side behavior is finalized.
+
 type KafkaManager struct {
 	workerPool *cloudvm.WorkerPool // to forward the req to worker
 	mapLock    sync.Mutex
@@ -32,6 +35,7 @@ func NewKafkaManager(pool *cloudvm.WorkerPool) *KafkaManager {
 	}
 }
 
+// Installs Kafka triggers for a given function.
 func (k *KafkaManager) Register(functionName string, triggers []common.KafkaTrigger) error {
 	if len(triggers) == 0 {
 		return nil
@@ -40,7 +44,9 @@ func (k *KafkaManager) Register(functionName string, triggers []common.KafkaTrig
 	k.mapLock.Lock()
 	defer k.mapLock.Unlock()
 
-	// select 1 worker for all the kafka consumers? or try pick different one for each consumer?
+	// TODO: Should all Kafka consumers for a function be assigned to a single worker,
+	// or should each trigger be placed on a separate (possibly different) worker?
+	// TODO: Add smarter worker selection, load balancing
 	selectedWorker, err := k.workerPool.GetWorker()
 
 	if err != nil {
@@ -64,6 +70,9 @@ func (k *KafkaManager) Register(functionName string, triggers []common.KafkaTrig
 		req := httptest.NewRequest(http.MethodPost, "/kafka-init/"+functionName, bytes.NewBuffer(data))
 		w := httptest.NewRecorder()
 
+		// TODO: Implement a heartbeat mechanism from worker to boss to detect dead workers.
+		// If a worker goes down, the boss should be notified and optionally reassign
+		// the Kafka consumer to a healthy worker.
 		err = k.workerPool.ForwardTask(w, req, selectedWorker)
 		if err != nil {
 			// TODO: try again on error?
@@ -91,6 +100,7 @@ func (k *KafkaManager) Register(functionName string, triggers []common.KafkaTrig
 	return nil
 }
 
+// Cleans up Kafka triggers previously registered for a given function.
 func (k *KafkaManager) Unregister(functionName string) error {
 	k.mapLock.Lock()
 	defer k.mapLock.Unlock()
@@ -104,7 +114,9 @@ func (k *KafkaManager) Unregister(functionName string) error {
 	req := httptest.NewRequest(http.MethodPost, "/kafka-stop/"+functionName, bytes.NewBuffer([]byte(`{}`)))
 	w := httptest.NewRecorder()
 
-	// Assumes the worker is still alive during unregister; what happens if the worker is shutdown between register and unregister?
+	// Assumes the worker is still alive when Unregister is called.
+	// However, if the worker shuts down between Register and Unregister,
+	// the boss won't know and the cleanup request may silently fail.
 	err := k.workerPool.ForwardTask(w, req, entry.Worker)
 	if err != nil {
 		// TODO: try again on error?
