@@ -8,7 +8,6 @@ import (
 
 	"github.com/open-lambda/open-lambda/ol/common"
 	"github.com/open-lambda/open-lambda/ol/worker/lambda"
-	_ "github.com/twmb/franz-go/pkg/kgo"
 )
 
 // LambdaServer is a worker server that listens to run lambda requests and forward
@@ -82,7 +81,7 @@ func (s *LambdaServer) cleanup() {
 func NewLambdaServer() (*LambdaServer, error) {
 	log.Printf("Starting new lambda server")
 
-	lambdaMgr, err := lambda.NewLambdaMgr()
+	lambdaMgr, err := GetLambdaManagerInstance()
 	if err != nil {
 		return nil, err
 	}
