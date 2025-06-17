@@ -5,39 +5,29 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"os"
-	"path/filepath"
 )
 
 var BossConf *Config
 
 type Config struct {
-	Platform          string          `json:"platform"`
-	Scaling           string          `json:"scaling"`
-	API_key           string          `json:"api_key"`
-	Boss_port         string          `json:"boss_port"`
-	Worker_Cap        int             `json:"worker_cap"`
-	Gcp               GcpConfig       `json:"gcp"`
-	Local             LocalPlatConfig `json:"local"`
-	Lambda_Store_Path string          `json:"lambda_store_path"`
+	Platform   string          `json:"platform"`
+	Scaling    string          `json:"scaling"`
+	API_key    string          `json:"api_key"`
+	Boss_port  string          `json:"boss_port"`
+	Worker_Cap int             `json:"worker_cap"`
+	Gcp        GcpConfig       `json:"gcp"`
+	Local      LocalPlatConfig `json:"local"`
 }
 
 func LoadDefaults() error {
-	currPath, err := os.Getwd()
-	if err != nil {
-		log.Printf("failed to get current path: %v", err)
-		return err
-	}
-
 	BossConf = &Config{
-		Platform:          "local",
-		Scaling:           "manual",
-		API_key:           "abc", // TODO: autogenerate a random key
-		Boss_port:         "5000",
-		Worker_Cap:        4,
-		Gcp:               GetGcpConfigDefaults(),
-		Local:             GetLocalPlatformConfigDefaults(),
-		Lambda_Store_Path: filepath.Join(currPath, "lambdaStore"),
+		Platform:   "local",
+		Scaling:    "manual",
+		API_key:    "abc", // TODO: autogenerate a random key
+		Boss_port:  "5000",
+		Worker_Cap: 4,
+		Gcp:        GetGcpConfigDefaults(),
+		Local:      GetLocalPlatformConfigDefaults(),
 	}
 
 	return checkConf()
