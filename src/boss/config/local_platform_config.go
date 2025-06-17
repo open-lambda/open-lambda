@@ -9,6 +9,7 @@ import (
 type LocalPlatConfig struct {
 	Worker_Starting_Port           string `json:"worker_starting_port"`
 	Path_To_Worker_Config_Template string `json:"path_to_worker_config_template"`
+	LambdaStoreLocal               string `json:"lambda_store_local"` // Path to local lambda store
 }
 
 func GetLocalPlatformConfigDefaults() LocalPlatConfig {
@@ -20,5 +21,6 @@ func GetLocalPlatformConfigDefaults() LocalPlatConfig {
 	return LocalPlatConfig{
 		Worker_Starting_Port:           "6000",
 		Path_To_Worker_Config_Template: filepath.Join(currPath, "template.json"),
+		LambdaStoreLocal:               filepath.Join(currPath, "lambda_store"),
 	}
 }
