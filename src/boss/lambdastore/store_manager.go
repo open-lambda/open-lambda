@@ -3,15 +3,16 @@ package lambdastore
 import (
 	"fmt"
 
+	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
 	"github.com/open-lambda/open-lambda/ol/boss/config"
 )
 
 // NewLambdaStore returns a LambdaStore implementation based on the platform in config
-func NewLambdaStore(conf *config.Config) (*LambdaStore, error) {
+func NewLambdaStore(conf *config.Config, pool *cloudvm.WorkerPool) (*LambdaStore, error) {
 	switch conf.Platform {
 	case "local":
 		storePath := conf.Local.LambdaStoreLocal
-		localStore, err := NewLocalLambdaStore(storePath)
+		localStore, err := NewLocalLambdaStore(storePath, pool)
 		if err != nil {
 			return nil, err
 		}

@@ -12,8 +12,8 @@ import (
 type LambdaStorePlatform interface {
 	UploadLambda(w http.ResponseWriter, r *http.Request)
 	DeleteLambda(w http.ResponseWriter, r *http.Request)
-	ListLambda(w http.ResponseWriter, r *http.Request)
-	GetLambdaConfig(w http.ResponseWriter, r *http.Request)
+	ListLambda(w http.ResponseWriter)
+	RetrieveLambdaConfig(w http.ResponseWriter, r *http.Request)
 
 	// // Internal methods
 	// addToRegistry(name string, body io.Reader) error

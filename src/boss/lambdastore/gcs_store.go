@@ -85,7 +85,7 @@ func (s *GCSLambdaStore) DeleteLambda(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Lambda %s deleted successfully", functionName)
 }
 
-func (s *GCSLambdaStore) ListLambda(w http.ResponseWriter, r *http.Request) {
+func (s *GCSLambdaStore) ListLambda(w http.ResponseWriter) {
 	s.mapLock.Lock()
 	names := make([]string, 0, len(s.Lambdas))
 	for name := range s.Lambdas {
@@ -98,7 +98,7 @@ func (s *GCSLambdaStore) ListLambda(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *GCSLambdaStore) GetLambdaConfig(w http.ResponseWriter, r *http.Request) {
+func (s *GCSLambdaStore) RetrieveLambdaConfig(w http.ResponseWriter, r *http.Request) {
 	raw := strings.TrimPrefix(r.URL.Path, "/registry/")
 	parts := strings.SplitN(raw, "/", 2)
 	if len(parts) != 2 || parts[1] != "config" {
