@@ -51,7 +51,7 @@ func (k *KafkaManager) Register(functionName string, triggers []common.KafkaTrig
 		return fmt.Errorf("failed to get the worker to setup kafka consumer: %w", err)
 	}
 
-	workerAddress, err := k.workerPool.GetWorkerAddress(selectedWorker)
+	workerAddress, err := cloudvm.GetWorkerAddress(selectedWorker)
 	if err != nil {
 		return fmt.Errorf("[KafkaManager] Failed to get worker address: %w", err)
 	}
@@ -112,7 +112,7 @@ func (k *KafkaManager) Unregister(functionName string) error {
 		return nil
 	}
 
-	workerAddress, err := k.workerPool.GetWorkerAddress(entry.Worker)
+	workerAddress, err := cloudvm.GetWorkerAddress(entry.Worker)
 	if err != nil {
 		log.Printf("[KafkaManager] Failed to get worker address for %s: %v", functionName, err)
 		return fmt.Errorf("get worker address failed: %w", err)

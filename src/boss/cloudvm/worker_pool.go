@@ -437,7 +437,7 @@ func (pool *WorkerPool) GetWorker() (*Worker, error) {
 	return worker, nil
 }
 
-func (pool *WorkerPool) GetWorkerAddress(worker *Worker) (string, error) {
+func GetWorkerAddress(worker *Worker) (string, error) {
 	if worker == nil {
 		return "", fmt.Errorf("worker is nil")
 	}
