@@ -424,3 +424,25 @@ func forwardTaskHelper(w http.ResponseWriter, req *http.Request, workerHost stri
 
 	return nil
 }
+
+func (pool *WorkerPool) GetWorker() (*Worker, error) {
+	if len(pool.workers[STARTING])+len(pool.workers[RUNNING]) == 0 {
+		return nil, fmt.Errorf("no worker available")
+	}
+
+	// TODO: replace the channel with simple locking
+	worker := <-pool.queue
+	pool.queue <- worker
+
+	return worker, nil
+}
+
+func GetWorkerAddress(worker *Worker) (string, error) {
+	if worker == nil {
+		return "", fmt.Errorf("worker is nil")
+	}
+	if worker.host == "" || worker.port == "" {
+		return "", fmt.Errorf("worker address is incomplete")
+	}
+	return fmt.Sprintf("%s:%s", worker.host, worker.port), nil
+}
