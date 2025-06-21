@@ -133,7 +133,7 @@ func (evictor *SOCKEvictor) updateState() {
 		switch event.EvType {
 		case EvCreate:
 			if prio != 0 {
-				panic(fmt.Sprintf("Sandboxes should be at prio 0 upon EvCreate event but it was %d for %d", prio, sb.ID()))
+				panic(fmt.Sprintf("Sandboxes should be at prio 0 upon EvCreate event but it was %d for %s", prio, sb.ID()))
 			}
 			prio += 1
 		case EvUnpause:
@@ -151,7 +151,7 @@ func (evictor *SOCKEvictor) updateState() {
 
 		evictor.printf("Evictor: Sandbox %v priority goes to %d", sb.ID(), prio)
 		if prio < 0 {
-			panic(fmt.Sprintf("priority should never go negative, but it went to %d for sandbox %d", prio, sb.ID()))
+			panic(fmt.Sprintf("priority should never go negative, but it went to %d for sandbox %s", prio, sb.ID()))
 			panic("priority should never go negative")
 		}
 
