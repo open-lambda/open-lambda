@@ -112,16 +112,16 @@ func (p *MockSandboxPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDi
 			CPUPercent: 100,
 		}
 	}
-	
+
 	sandbox := NewMockSandbox("mock-sandbox-"+string(rune(len(p.sandboxes)+1)), meta)
 	sandbox.runtimeType = rtType
 	p.sandboxes = append(p.sandboxes, sandbox)
-	
+
 	// Notify listeners
 	for _, listener := range p.listeners {
 		listener(EvCreate, sandbox)
 	}
-	
+
 	return sandbox, nil
 }
 
@@ -358,7 +358,7 @@ func TestSandboxEventTypes(t *testing.T) {
 func TestSandboxEdgeCases(t *testing.T) {
 	// Test creating sandbox with parent (not supported in DockerPool)
 	pool := NewMockSandboxPool()
-	
+
 	// Create a parent sandbox first
 	parent, err := pool.Create(nil, false, "/code", "/scratch", nil, common.RT_PYTHON)
 	if err != nil {
