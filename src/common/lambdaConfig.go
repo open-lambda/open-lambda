@@ -34,10 +34,10 @@ type CronTrigger struct {
 }
 
 type KafkaTrigger struct {
-	Bootstrap_servers []string `yaml:"bootstrap_servers" json:"bootstrap_servers"` // e.g., ["localhost:9092"]
-	Topics            []string `yaml:"topics" json:"topics"`                       // e.g., ["events", "logs"]
-	Group_id          string   `yaml:"group_id" json:"group_id"`                   // e.g., "lambda-group"
-	Auto_offset_reset string   `yaml:"auto_offset_reset" json:"auto_offset_reset"` // "earliest" or "latest"
+	BootstrapServers []string `yaml:"bootstrap_servers" json:"bootstrap_servers"` // e.g., ["localhost:9092"]
+	Topics           []string `yaml:"topics" json:"topics"`                       // e.g., ["events", "logs"]
+	GroupId          string   `yaml:"group_id" json:"group_id"`                   // e.g., "lambda-group"
+	AutoOffsetReset  string   `yaml:"auto_offset_reset" json:"auto_offset_reset"` // "earliest" or "latest"
 }
 
 // LambdaConfig defines the overall configuration for the lambda function.
@@ -82,10 +82,10 @@ func checkLambdaConfig(config *LambdaConfig) error {
 		if len(trigger.Topics) == 0 {
 			return fmt.Errorf("Kafka trigger must have at least one topic")
 		}
-		if len(trigger.Bootstrap_servers) == 0 {
+		if len(trigger.BootstrapServers) == 0 {
 			return fmt.Errorf("Kafka trigger must specify at least one bootstrap server")
 		}
-		if trigger.Group_id == "" {
+		if trigger.GroupId == "" {
 			return fmt.Errorf("Kafka trigger must have a group ID")
 		}
 	}

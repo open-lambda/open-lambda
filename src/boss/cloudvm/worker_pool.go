@@ -430,8 +430,19 @@ func (pool *WorkerPool) GetWorker() (*Worker, error) {
 		return nil, fmt.Errorf("no worker available")
 	}
 
+	// TODO: replace the channel with simple locking
 	worker := <-pool.queue
 	pool.queue <- worker
 
 	return worker, nil
+}
+
+func (pool *WorkerPool) GetWorkerAddress(worker *Worker) (string, error) {
+	if worker == nil {
+		return "", fmt.Errorf("worker is nil")
+	}
+	if worker.host == "" || worker.port == "" {
+		return "", fmt.Errorf("worker address is incomplete")
+	}
+	return fmt.Sprintf("%s:%s", worker.host, worker.port), nil
 }

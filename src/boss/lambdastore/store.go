@@ -159,6 +159,7 @@ func (s *LambdaStore) loadConfigAndRegister(funcName string) error {
 	entry := s.getOrCreateEntry(funcName)
 
 	entry.Lock.Lock()
+	defer entry.Lock.Unlock()
 
 	entry.Config = cfg
 
@@ -166,8 +167,6 @@ func (s *LambdaStore) loadConfigAndRegister(funcName string) error {
 	if err != nil {
 		return err
 	}
-
-	entry.Lock.Unlock()
 
 	return nil
 }

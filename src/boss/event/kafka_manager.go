@@ -7,7 +7,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"net/http/httptest"
 	"sync"
 
 	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
@@ -19,7 +18,7 @@ import (
 
 type KafkaManager struct {
 	workerPool *cloudvm.WorkerPool // to forward the req to worker
-	mapLock    sync.Mutex
+	lock       sync.Mutex
 	functions  map[string]KafkaFunctionEntry // Maps function names to their active Kafka triggers and the worker addresses where the consumers were initialized
 }
 
@@ -41,50 +40,53 @@ func (k *KafkaManager) Register(functionName string, triggers []common.KafkaTrig
 		return nil
 	}
 
-	k.mapLock.Lock()
-	defer k.mapLock.Unlock()
+	k.lock.Lock()
+	defer k.lock.Unlock()
 
 	// TODO: Should all Kafka consumers for a function be assigned to a single worker,
 	// or should each trigger be placed on a separate (possibly different) worker?
 	// TODO: Add smarter worker selection, load balancing
 	selectedWorker, err := k.workerPool.GetWorker()
-
 	if err != nil {
 		return fmt.Errorf("failed to get the worker to setup kafka consumer: %w", err)
+	}
+
+	workerAddress, err := k.workerPool.GetWorkerAddress(selectedWorker)
+	if err != nil {
+		return fmt.Errorf("[KafkaManager] Failed to get worker address: %w", err)
 	}
 
 	// Setup each trigger at the worker
 	for _, trigger := range triggers {
 		// validate the required fields, make sure it is not empty
-		if len(trigger.Topics) == 0 || len(trigger.Bootstrap_servers) == 0 {
-			log.Printf("[KafkaManager] Skipping empty Kafka trigger for %s", functionName)
-			continue
+		if len(trigger.Topics) == 0 || len(trigger.BootstrapServers) == 0 {
+			return fmt.Errorf("invalid Kafka trigger for %s: must include at least one topic and one bootstrap server", functionName)
 		}
 
 		data, err := json.Marshal(trigger)
 		if err != nil {
-			log.Printf("[KafkaManager] Failed to marshal Kafka trigger for %s: %v", functionName, err)
-			continue
+			return fmt.Errorf("failed to marshal Kafka trigger for %s: %w", functionName, err)
 		}
 
-		req := httptest.NewRequest(http.MethodPost, "/kafka-init/"+functionName, bytes.NewBuffer(data))
-		w := httptest.NewRecorder()
+		url := fmt.Sprintf("http://%s/kafka-init/%s", workerAddress, functionName)
 
-		// TODO: Implement a heartbeat mechanism from worker to boss to detect dead workers.
-		// If a worker goes down, the boss should be notified and optionally reassign
-		// the Kafka consumer to a healthy worker.
-		err = k.workerPool.ForwardTask(w, req, selectedWorker)
+		httpReq, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(data))
 		if err != nil {
-			// TODO: try again on error?
-			log.Printf("[KafkaManager] Failed to forward Kafka setup for %s: %v", functionName, err)
-			continue
+			return fmt.Errorf("failed to create request for %s: %w", functionName, err)
 		}
 
-		resp := w.Result()
+		httpReq.Header.Set("Content-Type", "application/json")
+
+		resp, err := http.DefaultClient.Do(httpReq)
+		if err != nil {
+			return fmt.Errorf("failed to send Kafka setup for %s: %w", functionName, err)
+		}
+
 		if resp.StatusCode != http.StatusOK {
 			// TODO: try again on error?
 			body, _ := io.ReadAll(resp.Body)
-			log.Printf("[KafkaManager] Worker returned error on setup for %s: %s - %s", functionName, resp.Status, string(body))
+			resp.Body.Close()
+			return fmt.Errorf("worker returned error on setup for %s: %s - %s", functionName, resp.Status, string(body))
 		}
 
 		resp.Body.Close()
@@ -102,29 +104,36 @@ func (k *KafkaManager) Register(functionName string, triggers []common.KafkaTrig
 
 // Cleans up Kafka triggers previously registered for a given function.
 func (k *KafkaManager) Unregister(functionName string) error {
-	k.mapLock.Lock()
-	defer k.mapLock.Unlock()
+	k.lock.Lock()
+	defer k.lock.Unlock()
 
 	entry, exists := k.functions[functionName]
 	if !exists {
 		return nil
 	}
 
-	// Construct simulated request
-	req := httptest.NewRequest(http.MethodPost, "/kafka-stop/"+functionName, bytes.NewBuffer([]byte(`{}`)))
-	w := httptest.NewRecorder()
-
-	// Assumes the worker is still alive when Unregister is called.
-	// However, if the worker shuts down between Register and Unregister,
-	// the boss won't know and the cleanup request may silently fail.
-	err := k.workerPool.ForwardTask(w, req, entry.Worker)
+	workerAddress, err := k.workerPool.GetWorkerAddress(entry.Worker)
 	if err != nil {
-		// TODO: try again on error?
-		log.Printf("[KafkaManager] Failed to forward unsetup request for %s: %v", functionName, err)
-		return err
+		log.Printf("[KafkaManager] Failed to get worker address for %s: %v", functionName, err)
+		return fmt.Errorf("get worker address failed: %w", err)
 	}
 
-	resp := w.Result()
+	url := fmt.Sprintf("http://%s/kafka-stop/%s", workerAddress, functionName)
+
+	httpReq, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer([]byte(`{}`)))
+	if err != nil {
+		log.Printf("[KafkaManager] Failed to create unsetup request for %s: %v", functionName, err)
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		log.Printf("[KafkaManager] Failed to send Kafka unsetup request for %s: %v", functionName, err)
+		return fmt.Errorf("failed to send request: %w", err)
+	}
+
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {

@@ -27,7 +27,9 @@ func NewManager(pool *cloudvm.WorkerPool) *Manager {
 // It automatically calls Unregister first to clean up any stale triggers.
 func (m *Manager) Register(functionName string, triggers common.Triggers) error {
 	// Clean up any stale triggers
-	m.Unregister(functionName)
+	if err := m.Unregister(functionName); err != nil {
+		return fmt.Errorf("failed to unregister existing triggers for %s: %w", functionName, err)
+	}
 
 	// Register cron triggers
 	if err := m.cronScheduler.Register(functionName, triggers.Cron); err != nil {
