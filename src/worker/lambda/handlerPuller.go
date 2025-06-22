@@ -171,7 +171,7 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type common.R
 
 		err := Copy(src, targetDir)
 		if err != nil {
-			return rt_type, "", fmt.Errorf("%s :: %s", err)
+			return rt_type, "", fmt.Errorf("copy error: %s", err)
 		}
 
 		// Figure out runtime type
@@ -216,7 +216,7 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type common.R
 		rt_type = common.RT_PYTHON
 
 		if err != nil {
-			return rt_type, "", fmt.Errorf("%s :: %s", err)
+			return rt_type, "", fmt.Errorf("copy error: %s", err)
 		}
 	} else if strings.HasSuffix(stat.Name(), ".bin") {
 		log.Printf("Installing `%s` from binary file", src)
@@ -225,7 +225,7 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type common.R
 		rt_type = common.RT_NATIVE
 
 		if err != nil {
-			return rt_type, "", fmt.Errorf("%s :: %s", err)
+			return rt_type, "", fmt.Errorf("copy error: %s", err)
 		}
 	} else if strings.HasSuffix(stat.Name(), ".tar.gz") {
 		log.Printf("Installing `%s` from an archive file", src)
