@@ -152,7 +152,6 @@ func (evictor *SOCKEvictor) updateState() {
 		evictor.printf("Evictor: Sandbox %v priority goes to %d", sb.ID(), prio)
 		if prio < 0 {
 			panic(fmt.Sprintf("priority should never go negative, but it went to %d for sandbox %s", prio, sb.ID()))
-			panic("priority should never go negative")
 		}
 
 		if event.EvType == EvDestroy {

@@ -57,14 +57,14 @@ func (m *mockSandbox) Unpause() error {
 	return nil
 }
 
-func (m *mockSandbox) fork(dst Sandbox) error {
+func (m *mockSandbox) fork(_ Sandbox) error {
 	if m.destroyed {
 		return FORK_FAILED
 	}
 	return nil
 }
 
-func (m *mockSandbox) childExit(child Sandbox) {
+func (*mockSandbox) childExit(_ Sandbox) {
 	// Mock implementation - no-op
 }
 
@@ -84,7 +84,7 @@ type mockSandboxPool struct {
 	cleaned   bool
 }
 
-func (m *mockSandboxPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, meta *SandboxMeta, rtType common.RuntimeType) (Sandbox, error) {
+func (m *mockSandboxPool) Create(_ Sandbox, _ bool, _, _ string, meta *SandboxMeta, rtType common.RuntimeType) (Sandbox, error) {
 	if meta == nil {
 		meta = &SandboxMeta{MemLimitMB: 128, CPUPercent: 50}
 	}
@@ -365,7 +365,7 @@ func TestMockSandboxPool_AddListener(t *testing.T) {
 	pool := &mockSandboxPool{}
 	eventReceived := false
 
-	pool.AddListener(func(evType SandboxEventType, sb Sandbox) {
+	pool.AddListener(func(evType SandboxEventType, _ Sandbox) {
 		if evType == EvCreate {
 			eventReceived = true
 		}

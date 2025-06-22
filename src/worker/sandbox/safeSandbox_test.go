@@ -107,7 +107,7 @@ func TestSafeSandbox_Destroy(t *testing.T) {
 
 	eventReceived := false
 	handlers := []SandboxEventFunc{
-		func(evType SandboxEventType, sb Sandbox) {
+		func(evType SandboxEventType, _ Sandbox) {
 			if evType == EvDestroy {
 				eventReceived = true
 			}
@@ -161,7 +161,7 @@ func TestSafeSandbox_DestroyIfPaused(t *testing.T) {
 
 			var receivedEvent SandboxEventType
 			handlers := []SandboxEventFunc{
-				func(evType SandboxEventType, sb Sandbox) {
+				func(evType SandboxEventType, _ Sandbox) {
 					if evType != EvCreate {
 						receivedEvent = evType
 					}
@@ -190,7 +190,7 @@ func TestSafeSandbox_Pause(t *testing.T) {
 
 	var receivedEvent SandboxEventType
 	handlers := []SandboxEventFunc{
-		func(evType SandboxEventType, sb Sandbox) {
+		func(evType SandboxEventType, _ Sandbox) {
 			if evType == EvPause {
 				receivedEvent = evType
 			}
@@ -228,7 +228,7 @@ func TestSafeSandbox_Unpause(t *testing.T) {
 
 	var receivedEvent SandboxEventType
 	handlers := []SandboxEventFunc{
-		func(evType SandboxEventType, sb Sandbox) {
+		func(evType SandboxEventType, _ Sandbox) {
 			if evType == EvUnpause {
 				receivedEvent = evType
 			}
@@ -269,7 +269,7 @@ func TestSafeSandbox_ErrorHandling(t *testing.T) {
 
 	var destroyEventReceived bool
 	handlers := []SandboxEventFunc{
-		func(evType SandboxEventType, sb Sandbox) {
+		func(evType SandboxEventType, _ Sandbox) {
 			if evType == EvDestroy {
 				destroyEventReceived = true
 			}
@@ -308,7 +308,7 @@ func TestSafeSandbox_Fork(t *testing.T) {
 
 	var receivedEvent SandboxEventType
 	handlers := []SandboxEventFunc{
-		func(evType SandboxEventType, sb Sandbox) {
+		func(evType SandboxEventType, _ Sandbox) {
 			if evType == EvFork {
 				receivedEvent = evType
 			}
@@ -340,7 +340,7 @@ func TestSafeSandbox_ChildExit(t *testing.T) {
 
 	var receivedEvent SandboxEventType
 	handlers := []SandboxEventFunc{
-		func(evType SandboxEventType, sb Sandbox) {
+		func(evType SandboxEventType, _ Sandbox) {
 			if evType == EvChildExit {
 				receivedEvent = evType
 			}
@@ -433,7 +433,7 @@ func TestSafeSandbox_EventSequence(t *testing.T) {
 	var mu sync.Mutex
 
 	handlers := []SandboxEventFunc{
-		func(evType SandboxEventType, sb Sandbox) {
+		func(evType SandboxEventType, _ Sandbox) {
 			mu.Lock()
 			events = append(events, evType)
 			mu.Unlock()
@@ -475,12 +475,12 @@ func TestSafeSandbox_MultipleListeners(t *testing.T) {
 	listener2Called := false
 
 	handlers := []SandboxEventFunc{
-		func(evType SandboxEventType, sb Sandbox) {
+		func(evType SandboxEventType, _ Sandbox) {
 			if evType == EvCreate {
 				listener1Called = true
 			}
 		},
-		func(evType SandboxEventType, sb Sandbox) {
+		func(evType SandboxEventType, _ Sandbox) {
 			if evType == EvCreate {
 				listener2Called = true
 			}
