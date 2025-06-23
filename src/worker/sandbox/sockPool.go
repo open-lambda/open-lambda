@@ -109,9 +109,9 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 	}
 	// start with default memory limit
 	memLimitMB := meta.MemLimitMB
-	// override default if config gives a value
-	if lambdaConfig != nil && lambdaConfig.MemoryMaxMB > 0 {
-		memLimitMB = lambdaConfig.MemoryMaxMB
+	// check if the per-lambda config was loaded AND if the memory field was set
+	if lambdaConfig != nil && lambdaConfig.MemoryMaxMB != nil {
+		memLimitMB = *lambdaConfig.MemoryMaxMB
 		// log memory override
 		pool.printf("using per-lambda memory limit of %d mb", memLimitMB)
 	}

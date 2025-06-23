@@ -94,3 +94,5 @@ azure.json
 boss.json
 cluster.log
 tasks.log
+/venv
+.vscode

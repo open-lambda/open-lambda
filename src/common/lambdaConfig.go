@@ -36,9 +36,9 @@ type CronTrigger struct {
 // TODO: add KafkaTrigger struct
 
 // LambdaConfig defines the overall configuration for the lambda function.
-type LambdaConfig struct {
+type LambdaConfig struct { // List of HTTP triggers
 	Triggers    Triggers `yaml:"triggers"`
-	MemoryMaxMB int      `yaml:"memory_mb,omitempty"` // List of HTTP triggers
+	MemoryMaxMB *int     `yaml:"memory_mb,omitempty"`
 	// Additional configurations can be added here.
 }
 
