@@ -175,7 +175,7 @@ func GetDefaultWorkerConfig(olPath string) (*Config, error) {
 		Server_mode:       "lambda",
 		Worker_url:        "localhost",
 		Worker_port:       "5000",
-		Registry:          registryDir,
+		Registry:          "file://" + registryDir,
 		Sandbox:           "sock",
 		Log_output:        true,
 		Pkgs_dir:          packagesDir,
