@@ -39,6 +39,14 @@ func NewHandlerPuller(dirMaker *common.DirMaker) (*HandlerPuller, error) {
 	ctx := context.Background()
 	storeURL := common.Conf.Registry
 
+	// If no recognized scheme is present, assume local path and add file://
+	if !strings.HasPrefix(storeURL, "file://") &&
+		!strings.HasPrefix(storeURL, "s3://") &&
+		!strings.HasPrefix(storeURL, "gs://") {
+		storeURL = "file://" + storeURL
+	}
+
+	// If local, create directory if needed
 	if strings.HasPrefix(storeURL, "file://") {
 		dir := strings.TrimPrefix(storeURL, "file://")
 		if err := os.MkdirAll(dir, 0755); err != nil {
