@@ -15,8 +15,9 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
+// Pin Azure SDK to avoid breaking changes introduced in v0.5.0+
 replace github.com/Azure/azure-sdk-for-go/sdk/storage/azblob => github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v0.4.1
-
+// Using older version for compatibility with our azure.go logic
 replace github.com/Azure/azure-sdk-for-go/sdk/azidentity => github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.6.0
 
 require (
