@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"net/url"
 	"os"
 	"os/exec"
 	"path"
@@ -153,8 +154,8 @@ func initOLDir(olPath string, dockerBaseImage string, newBase bool) (err error) 
 		return err
 	}
 
-	if err := os.Mkdir(common.Conf.Registry, 0700); err != nil {
-		return err
+	if err := initRegistryPath(); err != nil {
+		return fmt.Errorf("failed to initialize registry path: %w", err)
 	}
 
 	if _, err := os.Stat(baseDir); os.IsNotExist(err) {
@@ -499,4 +500,32 @@ func overrideOpts(confPath, overridePath, optsStr string) error {
 		return err
 	}
 	return ioutil.WriteFile(overridePath, s, 0644)
+}
+
+// Create the registry directory only if it's a local path (file://).
+// For cloud-based registries (e.g., gs://, s3://), skip creation since
+// they are managed by the cloud provider and not accessible via os.Mkdir.
+// This ensures compatibility across local and remote registry backends.
+func initRegistryPath() error {
+	registryURL := common.Conf.Registry
+
+	u, err := url.Parse(registryURL)
+	if err != nil {
+		return fmt.Errorf("invalid registry URL '%s': %w", registryURL, err)
+	}
+
+	switch u.Scheme {
+	case "file":
+		// Ensure local directory exists
+		if err := os.MkdirAll(u.Path, 0700); err != nil {
+			return fmt.Errorf("failed to create local registry dir: %w", err)
+		}
+	case "gs", "s3", "azureblob":
+		// Supported remote backends, skip mkdir
+		fmt.Printf("\tSkipping mkdir for remote registry: %s\n", registryURL)
+	default:
+		return fmt.Errorf("unsupported registry URL scheme: %s", u.Scheme)
+	}
+
+	return nil
 }

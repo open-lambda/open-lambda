@@ -42,7 +42,7 @@ func NewHandlerPuller(dirMaker *common.DirMaker) (*HandlerPuller, error) {
 	if strings.HasPrefix(storeURL, "file://") {
 		dir := strings.TrimPrefix(storeURL, "file://")
 		if err := os.MkdirAll(dir, 0755); err != nil {
-			return nil, fmt.Errorf("failed to create local lambda store directory: %w", err)
+			return nil, fmt.Errorf("failed to create local lambda store directory %s: %w", dir, err)
 		}
 	}
 
