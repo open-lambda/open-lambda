@@ -21,7 +21,7 @@ type LambdaMgr struct {
 	sbPool sandbox.SandboxPool
 	*packages.DepTracer
 	*packages.PackagePuller // depends on sbPool and DepTracer
-	zygote.ZygoteProvider     // depends PackagePuller
+	zygote.ZygoteProvider   // depends PackagePuller
 	*HandlerPuller          // depends on sbPool and ImportCache[optional]
 
 	// storage dirs that we manage
@@ -111,8 +111,8 @@ func (mgr *LambdaMgr) Get(name string) (f *LambdaFunc) {
 
 	if f == nil {
 		f = &LambdaFunc{
-			lmgr:      mgr,
-			name:      name,
+			lmgr: mgr,
+			name: name,
 			// TODO make these configurable
 			funcChan:  make(chan *Invocation, 1024),
 			instChan:  make(chan *Invocation, 1024),
