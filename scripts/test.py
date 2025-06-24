@@ -328,7 +328,7 @@ def run_tests():
 
     # make sure code updates get pulled within the cache time
     with tempfile.TemporaryDirectory() as reg_dir:
-        with TestConfContext(registry=reg_dir, registry_cache_ms=3000):
+        with TestConfContext(registry="file://" + reg_dir, registry_cache_ms=3000):
             update_code()
 
     # test heavy load
