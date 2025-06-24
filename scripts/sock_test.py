@@ -9,6 +9,8 @@ SOCK-specific tests
 import argparse
 import os
 import sys
+import tarfile 
+import tempfile
 
 from time import time
 
@@ -38,25 +40,31 @@ def sock_churn_task(args):
 def sock_churn(baseline, procs, seconds, fork):
     # baseline: how many sandboxes are sitting idly throughout the experiment
     # procs: how many procs are concurrently creating and deleting other sandboxes
+    
+    # Unpack echo.tar.gz into a temp directory
+    with tempfile.TemporaryDirectory() as extracted_dir:
+        with tarfile.open("test-registry/echo.tar.gz", "r:gz") as tar:
+            tar.extractall(path=extracted_dir)
 
-    echo_path = "file://" + os.path.abspath("test-registry/echo.tar.gz")
-    open_lambda = OpenLambda()
+        echo_path = "file://" + extracted_dir 
 
-    if fork:
-        parent = open_lambda.create({"code": "", "leaf": False})
-    else:
-        parent = ""
+        open_lambda = OpenLambda()
 
-    for _ in range(baseline):
-        sandbox_id = open_lambda.create({"code": echo_path, "leaf": True, "parent": parent})
-        open_lambda.pause(sandbox_id)
+        if fork:
+            parent = open_lambda.create({"code": "", "leaf": False})
+        else:
+            parent = ""
 
-    start = time()
-    with Pool(procs) as pool:
-        reqs = sum(pool.map(sock_churn_task, [(echo_path, parent, start, seconds)] * procs,
-                            chunksize=1))
+        for _ in range(baseline):
+            sandbox_id = open_lambda.create({"code": echo_path, "leaf": True, "parent": parent})
+            open_lambda.pause(sandbox_id)
 
-    return {"sandboxes_per_sec": reqs/seconds}
+        start = time()
+        with Pool(procs) as pool:
+            reqs = sum(pool.map(sock_churn_task, [(echo_path, parent, start, seconds)] * procs,
+                                chunksize=1))
+
+        return {"sandboxes_per_sec": reqs/seconds}
 
 def run_tests():
     print("Testing SOCK directly (without lambdas)")
