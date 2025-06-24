@@ -57,7 +57,7 @@ def main():
         "evictor": True,
         "package": True,
     }
-    with TestConfContext(registry=os.path.abspath(args.registry), trace=trace_config):
+    with TestConfContext(registry="file://" + os.path.abspath(args.registry), trace=trace_config):
         if args.worker_type == 'docker':
             set_worker_type(DockerWorker)
         elif args.worker_type == 'sock':
