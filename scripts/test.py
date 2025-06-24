@@ -10,6 +10,7 @@ import argparse
 import os
 import sys
 import tempfile
+import tarfile
 
 from time import time
 from subprocess import call
