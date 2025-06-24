@@ -11,6 +11,8 @@ import os
 import sys
 import tarfile 
 import tempfile
+import shutil
+import uuid
 
 from time import time
 
@@ -41,13 +43,15 @@ def sock_churn(baseline, procs, seconds, fork):
     # baseline: how many sandboxes are sitting idly throughout the experiment
     # procs: how many procs are concurrently creating and deleting other sandboxes
     
-    # Unpack echo.tar.gz into a temp directory
-    with tempfile.TemporaryDirectory() as extracted_dir:
+    extracted_dir = f"/tmp/echo-unpacked-{uuid.uuid4().hex}"
+    os.makedirs(extracted_dir)
+
+    try:
+        # Unpack once to a persistent directory
         with tarfile.open("test-registry/echo.tar.gz", "r:gz") as tar:
             tar.extractall(path=extracted_dir)
 
-        echo_path = "file://" + extracted_dir 
-
+        echo_path = "file://" + extracted_dir
         open_lambda = OpenLambda()
 
         if fork:
@@ -64,7 +68,10 @@ def sock_churn(baseline, procs, seconds, fork):
             reqs = sum(pool.map(sock_churn_task, [(echo_path, parent, start, seconds)] * procs,
                                 chunksize=1))
 
-        return {"sandboxes_per_sec": reqs/seconds}
+        return {"sandboxes_per_sec": reqs / seconds}
+
+    finally:
+        shutil.rmtree(extracted_dir, ignore_errors=True)
 
 def run_tests():
     print("Testing SOCK directly (without lambdas)")
