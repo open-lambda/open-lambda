@@ -148,8 +148,8 @@ def call_each_once(lambda_count, alloc_mb=0, zygote_provider="tree"):
             lambda_dir = os.path.join(tmp_build_dir, lambda_name)
             os.makedirs(lambda_dir)
 
-            # Write L{pos}.py
-            with open(os.path.join(lambda_dir, f"{lambda_name}.py"), "w", encoding="utf-8") as code:
+            # Write f.py
+            with open(os.path.join(lambda_dir, "f.py"), "w", encoding="utf-8") as code:
                 code.write("def f(event):\n")
                 code.write("    global s\n")
                 code.write(f"    s = '*' * {alloc_mb} * 1024**2\n")
@@ -158,7 +158,7 @@ def call_each_once(lambda_count, alloc_mb=0, zygote_provider="tree"):
             # Package into tar.gz
             tar_path = os.path.join(reg_dir, f"{lambda_name}.tar.gz")
             with tarfile.open(tar_path, "w:gz") as tar:
-                tar.add(os.path.join(lambda_dir, f"{lambda_name}.py"), arcname=f"{lambda_name}.py")
+                tar.add(os.path.join(lambda_dir, "f.py"), arcname="f.py")
 
         # Set config to point to blob-backed registry
         with TestConfContext(registry="file://" + os.path.abspath(reg_dir)):
@@ -210,17 +210,17 @@ def update_code():
     open_lambda = OpenLambda()
 
     for pos in range(3):
-        # Create a temp directory with updated version.py
+        # Create a temp directory with updated f.py
         with tempfile.TemporaryDirectory() as tmp_dir:
-            version_py = os.path.join(tmp_dir, "version.py")
-            with open(version_py, "w", encoding='utf-8') as code:
+            f_py = os.path.join(tmp_dir, "f.py")
+            with open(f_py, "w", encoding='utf-8') as code:
                 code.write("def f(event):\n")
                 code.write(f"    return {pos}\n")
 
             # Create a tar.gz archive
             tar_path = os.path.join(reg_path, "version.tar.gz")
             with tarfile.open(tar_path, "w:gz") as tar:
-                tar.add(version_py, arcname="version.py")
+                tar.add(f_py, arcname="f.py")
 
         # Wait until the update propagates to OpenLambda
         start = time()
