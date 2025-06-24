@@ -140,18 +140,30 @@ def call_each_once_exec(lambda_count, alloc_mb, zygote_provider):
             return {"reqs_per_sec": lambda_count/seconds}
 
 def call_each_once(lambda_count, alloc_mb=0, zygote_provider="tree"):
-    with tempfile.TemporaryDirectory() as reg_dir:
-        # create dummy lambdas
+    with tempfile.TemporaryDirectory() as tmp_build_dir, tempfile.TemporaryDirectory() as reg_dir:
+        # Create tar.gz packages for each lambda
         for pos in range(lambda_count):
-            with open(os.path.join(reg_dir, f"L{pos}.py"), "w", encoding='utf-8') as code:
+            lambda_name = f"L{pos}"
+            lambda_dir = os.path.join(tmp_build_dir, lambda_name)
+            os.makedirs(lambda_dir)
+
+            # Write L{pos}.py
+            with open(os.path.join(lambda_dir, f"{lambda_name}.py"), "w", encoding="utf-8") as code:
                 code.write("def f(event):\n")
                 code.write("    global s\n")
                 code.write(f"    s = '*' * {alloc_mb} * 1024**2\n")
                 code.write(f"    return {pos}\n")
 
-        with TestConfContext(registry=reg_dir):
+            # Package into tar.gz
+            tar_path = os.path.join(reg_dir, f"{lambda_name}.tar.gz")
+            with tarfile.open(tar_path, "w:gz") as tar:
+                tar.add(os.path.join(lambda_dir, f"{lambda_name}.py"), arcname=f"{lambda_name}.py")
+
+        # Set config to point to blob-backed registry
+        with TestConfContext(registry="file://" + os.path.abspath(reg_dir)):
             call_each_once_exec(lambda_count=lambda_count, alloc_mb=alloc_mb,
                                 zygote_provider=zygote_provider)
+
 
 @test
 def fork_bomb():
@@ -188,27 +200,36 @@ def ping_test():
 @test
 def update_code():
     curr_conf = get_current_config()
-    reg_dir = curr_conf['registry']
+    reg_path = curr_conf['registry']
     cache_seconds = curr_conf['registry_cache_ms'] / 1000
+
+    if reg_path.startswith("file://"):
+        reg_path = reg_path[len("file://"):]
 
     open_lambda = OpenLambda()
 
     for pos in range(3):
-        # update function code
-        with open(os.path.join(reg_dir, "version.py"), "w", encoding='utf-8') as code:
-            code.write("def f(event):\n")
-            code.write(f"    return {pos}\n")
+        # Create a temp directory with updated version.py
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            version_py = os.path.join(tmp_dir, "version.py")
+            with open(version_py, "w", encoding='utf-8') as code:
+                code.write("def f(event):\n")
+                code.write(f"    return {pos}\n")
 
-        # how long does it take for us to start seeing the latest code?
+            # Create a tar.gz archive
+            tar_path = os.path.join(reg_path, "version.tar.gz")
+            with tarfile.open(tar_path, "w:gz") as tar:
+                tar.add(version_py, arcname="version.py")
+
+        # Wait until the update propagates to OpenLambda
         start = time()
         while True:
             text = open_lambda.run("version", None)
             num = int(text)
-            assert num >= pos-1
+            assert num >= pos - 1
             end = time()
 
-            # make sure the time to grab new code is about the time
-            # specified for the registry cache (within ~1 second)
+            # Confirm cache delay boundaries
             assert end - start <= cache_seconds + 1
             if num == pos:
                 if pos > 0:
