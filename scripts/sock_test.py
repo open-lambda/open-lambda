@@ -39,7 +39,7 @@ def sock_churn(baseline, procs, seconds, fork):
     # baseline: how many sandboxes are sitting idly throughout the experiment
     # procs: how many procs are concurrently creating and deleting other sandboxes
 
-    echo_path = "file://" + os.path.abspath("test-registry/echo")
+    echo_path = "file://" + os.path.abspath("test-registry/echo.tar.gz")
     open_lambda = OpenLambda()
 
     if fork:
