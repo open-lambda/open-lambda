@@ -13,6 +13,7 @@ import copy
 import subprocess
 import os
 import json
+import yaml
 import requests
 
 _OL_DIR = None
@@ -59,8 +60,8 @@ def put_conf(conf):
     ''' Sets the specified function and updates the config file on disk '''
 
     global _CURR_CONF
-    with open(os.path.join(_OL_DIR, "config.json"), 'w', encoding='utf-8') as cfile:
-        json.dump(conf, cfile, indent=2)
+    with open(os.path.join(_OL_DIR, "config.yaml"), 'w', encoding='utf-8') as cfile:
+        yaml.safe_dump(conf, cfile, default_flow_style=False)
     _CURR_CONF = conf
 
 class TestConf:
@@ -68,12 +69,12 @@ class TestConf:
     def __init__(self, **keywords):
         self.orig = None
 
-        with open(os.path.join(_OL_DIR, "config.json"), "r", encoding='utf-8') as cfile:
+        with open(os.path.join(_OL_DIR, "config.yaml"), "r", encoding='utf-8') as cfile:
             try:
-                self.orig = json.load(cfile)
-            except json.JSONDecodeError as err:
+                self.orig = yaml.safe_load(cfile)
+            except yaml.YAMLError as err:
                 raise ValueError(
-                    f"Failed to parse JSON file. Contents are:\n"
+                    f"Failed to parse YAML file. Contents are:\n"
                     f"{cfile.read()}"
                 ) from err
 

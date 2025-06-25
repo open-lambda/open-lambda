@@ -1,7 +1,7 @@
 package zygote
 
 import (
-	"encoding/json"
+	"gopkg.in/yaml.v3"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -88,16 +88,16 @@ func NewImportCache(codeDirs *common.DirMaker, scratchDirs *common.DirMaker, sbP
 				}
 			}
 
-			if err := json.Unmarshal(b, cache.root); err != nil {
+			if err := yaml.Unmarshal(b, cache.root); err != nil {
 				return nil, fmt.Errorf("could parse import tree file (%v): %v\n", treeConf, err.Error())
 			}
 		}
 	case map[string]any:
-		b, err := json.Marshal(treeConf)
+		b, err := yaml.Marshal(treeConf)
 		if err != nil {
 			return nil, err
 		}
-		if err := json.Unmarshal(b, cache.root); err != nil {
+		if err := yaml.Unmarshal(b, cache.root); err != nil {
 			return nil, err
 		}
 	default:

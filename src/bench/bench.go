@@ -101,7 +101,7 @@ func play_trace(ctx *cli.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	configPath := filepath.Join(olPath, "config.json")
+	configPath := filepath.Join(olPath, "config.yaml")
 	if err := common.LoadGlobalConfig(configPath); err != nil {
 		return "", err
 	}
@@ -187,7 +187,7 @@ func run_benchmark(ctx *cli.Context, name string, tasks int, functions int, func
 	if err != nil {
 		return "", err
 	}
-	configPath := filepath.Join(olPath, "config.json")
+	configPath := filepath.Join(olPath, "config.yaml")
 	if err := common.LoadGlobalConfig(configPath); err != nil {
 		return "", err
 	}
@@ -273,7 +273,7 @@ func create_lambdas(ctx *cli.Context) error {
 		return err
 	}
 
-	configPath := filepath.Join(olPath, "config.json")
+	configPath := filepath.Join(olPath, "config.yaml")
 
 	if err := common.LoadGlobalConfig(configPath); err != nil {
 		return err
