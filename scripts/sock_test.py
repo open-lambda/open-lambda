@@ -9,6 +9,10 @@ SOCK-specific tests
 import argparse
 import os
 import sys
+import tarfile 
+import tempfile
+import shutil
+import uuid
 
 from time import time
 
@@ -38,25 +42,36 @@ def sock_churn_task(args):
 def sock_churn(baseline, procs, seconds, fork):
     # baseline: how many sandboxes are sitting idly throughout the experiment
     # procs: how many procs are concurrently creating and deleting other sandboxes
+    
+    extracted_dir = f"/tmp/echo-unpacked"
+    os.makedirs(extracted_dir)
 
-    echo_path = os.path.abspath("test-registry/echo")
-    open_lambda = OpenLambda()
+    try:
+        # Unpack once to a persistent directory
+        with tarfile.open("test-registry/echo.tar.gz", "r:gz") as tar:
+            tar.extractall(path=extracted_dir)
 
-    if fork:
-        parent = open_lambda.create({"code": "", "leaf": False})
-    else:
-        parent = ""
+        echo_path = "file://" + extracted_dir
+        open_lambda = OpenLambda()
 
-    for _ in range(baseline):
-        sandbox_id = open_lambda.create({"code": echo_path, "leaf": True, "parent": parent})
-        open_lambda.pause(sandbox_id)
+        if fork:
+            parent = open_lambda.create({"code": "", "leaf": False})
+        else:
+            parent = ""
 
-    start = time()
-    with Pool(procs) as pool:
-        reqs = sum(pool.map(sock_churn_task, [(echo_path, parent, start, seconds)] * procs,
-                            chunksize=1))
+        for _ in range(baseline):
+            sandbox_id = open_lambda.create({"code": echo_path, "leaf": True, "parent": parent})
+            open_lambda.pause(sandbox_id)
 
-    return {"sandboxes_per_sec": reqs/seconds}
+        start = time()
+        with Pool(procs) as pool:
+            reqs = sum(pool.map(sock_churn_task, [(echo_path, parent, start, seconds)] * procs,
+                                chunksize=1))
+
+        return {"sandboxes_per_sec": reqs / seconds}
+
+    finally:
+        shutil.rmtree(extracted_dir, ignore_errors=True)
 
 def run_tests():
     print("Testing SOCK directly (without lambdas)")
@@ -83,7 +98,7 @@ def main():
     prepare_open_lambda(args.ol_dir)
 
     start_tests()
-    with TestConfContext(registry=os.path.abspath(args.registry), limits={"installer_mem_mb": 250}):
+    with TestConfContext(registry="file://" + os.path.abspath(args.registry), limits={"installer_mem_mb": 250}):
         run_tests()
     check_test_results()
 

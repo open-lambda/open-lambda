@@ -1,5 +1,0 @@
-triggers:
-  http:
-    - method: GET
-    - method: POST
-
