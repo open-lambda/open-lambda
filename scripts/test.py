@@ -209,7 +209,7 @@ def update_code():
             with open(os.path.join(lambda_dir, "f.py"), "w", encoding='utf-8') as code:
                 code.write("def f(event):\n")
                 code.write(f"    return {pos}\n")
-            
+                
             # Create tar.gz file
             tar_path = os.path.join(reg_dir, "version.tar.gz")
             with tarfile.open(tar_path, "w:gz") as tar:
