@@ -10,6 +10,7 @@ import argparse
 import os
 import sys
 import tempfile
+import tarfile
 
 from time import time
 from subprocess import call
@@ -141,13 +142,21 @@ def call_each_once_exec(lambda_count, alloc_mb, zygote_provider):
 
 def call_each_once(lambda_count, alloc_mb=0, zygote_provider="tree"):
     with tempfile.TemporaryDirectory() as reg_dir:
-        # create dummy lambdas
+        # create dummy lambdas as tar.gz files
         for pos in range(lambda_count):
-            with open(os.path.join(reg_dir, f"L{pos}.py"), "w", encoding='utf-8') as code:
-                code.write("def f(event):\n")
-                code.write("    global s\n")
-                code.write(f"    s = '*' * {alloc_mb} * 1024**2\n")
-                code.write(f"    return {pos}\n")
+            # Create temporary directory for lambda contents
+            with tempfile.TemporaryDirectory() as lambda_dir:
+                # Write f.py file
+                with open(os.path.join(lambda_dir, "f.py"), "w", encoding='utf-8') as code:
+                    code.write("def f(event):\n")
+                    code.write("    global s\n")
+                    code.write(f"    s = '*' * {alloc_mb} * 1024**2\n")
+                    code.write(f"    return {pos}\n")
+                
+                # Create tar.gz file
+                tar_path = os.path.join(reg_dir, f"L{pos}.tar.gz")
+                with tarfile.open(tar_path, "w:gz") as tar:
+                    tar.add(os.path.join(lambda_dir, "f.py"), arcname="f.py")
 
         with TestConfContext(registry=reg_dir):
             call_each_once_exec(lambda_count=lambda_count, alloc_mb=alloc_mb,
@@ -194,10 +203,17 @@ def update_code():
     open_lambda = OpenLambda()
 
     for pos in range(3):
-        # update function code
-        with open(os.path.join(reg_dir, "version.py"), "w", encoding='utf-8') as code:
-            code.write("def f(event):\n")
-            code.write(f"    return {pos}\n")
+        # update function code in tar.gz format
+        with tempfile.TemporaryDirectory() as lambda_dir:
+            # Write f.py file
+            with open(os.path.join(lambda_dir, "f.py"), "w", encoding='utf-8') as code:
+                code.write("def f(event):\n")
+                code.write(f"    return {pos}\n")
+            
+            # Create tar.gz file
+            tar_path = os.path.join(reg_dir, "version.tar.gz")
+            with tarfile.open(tar_path, "w:gz") as tar:
+                tar.add(os.path.join(lambda_dir, "f.py"), arcname="f.py")
 
         # how long does it take for us to start seeing the latest code?
         start = time()
