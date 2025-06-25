@@ -43,7 +43,7 @@ def sock_churn(baseline, procs, seconds, fork):
     # baseline: how many sandboxes are sitting idly throughout the experiment
     # procs: how many procs are concurrently creating and deleting other sandboxes
     
-    extracted_dir = f"/tmp/echo-unpacked-{uuid.uuid4().hex}"
+    extracted_dir = f"/tmp/echo-unpacked"
     os.makedirs(extracted_dir)
 
     try:
