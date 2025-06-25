@@ -152,7 +152,6 @@ def call_each_once(lambda_count, alloc_mb=0, zygote_provider="tree"):
                     code.write("    global s\n")
                     code.write(f"    s = '*' * {alloc_mb} * 1024**2\n")
                     code.write(f"    return {pos}\n")
-                
                 # Create tar.gz file
                 tar_path = os.path.join(reg_dir, f"L{pos}.tar.gz")
                 with tarfile.open(tar_path, "w:gz") as tar:
@@ -209,7 +208,6 @@ def update_code():
             with open(os.path.join(lambda_dir, "f.py"), "w", encoding='utf-8') as code:
                 code.write("def f(event):\n")
                 code.write(f"    return {pos}\n")
-                
             # Create tar.gz file
             tar_path = os.path.join(reg_dir, "version.tar.gz")
             with tarfile.open(tar_path, "w:gz") as tar:
