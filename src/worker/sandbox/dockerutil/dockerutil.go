@@ -30,7 +30,7 @@ func ImageExists(client *docker.Client, name string) (bool, error) {
 func SafeKill(client *docker.Client, cid string) error {
 	container_insp, err := client.InspectContainer(cid)
 	if err != nil {
-		return fmt.Errorf("failed to get inspect docker container ID %v: ", cid, err)
+		return fmt.Errorf("failed to get inspect docker container ID %v: %v", cid, err)
 	}
 
 	if container_insp.State.Dead {
@@ -41,14 +41,14 @@ func SafeKill(client *docker.Client, cid string) error {
 	if container_insp.State.Paused {
 		fmt.Printf("Unpause container %v\n", cid)
 		if err := client.UnpauseContainer(cid); err != nil {
-			return fmt.Errorf("failed to unpause container %v.  May require manual cleanup: ", cid, err)
+			return fmt.Errorf("failed to unpause container %v.  May require manual cleanup: %v", cid, err)
 		}
 	}
 
 	fmt.Printf("Kill container %v\n", cid)
 	killopts := docker.KillContainerOptions{ID: cid}
 	if err := client.KillContainer(killopts); err != nil {
-		return fmt.Errorf("failed to kill container %v.  May require manual cleanup: ", cid, err)
+		return fmt.Errorf("failed to kill container %v.  May require manual cleanup: %v", cid, err)
 	}
 
 	return nil
@@ -63,7 +63,7 @@ func SafeRemove(client *docker.Client, cid string) error {
 	fmt.Printf("Remove container %v\n", cid)
 	rmopts := docker.RemoveContainerOptions{ID: cid}
 	if err := client.RemoveContainer(rmopts); err != nil {
-		return fmt.Errorf("failed to remove container %v.  May require manual cleanup: ", cid, err)
+		return fmt.Errorf("failed to remove container %v.  May require manual cleanup: %v", cid, err)
 	}
 
 	return nil

@@ -43,7 +43,7 @@ func (s *ThresholdScaling) Scale() {
 
 	if pool.GetTarget() < pool.GetCap() && tasksPerWorker > UPPERBOUND {
 		new_target := pool.GetTarget() + tasksPerWorker/UPPERBOUND
-		log.Println("scale up (target=%d)\n", new_target)
+		log.Printf("scale up (target=%d)\n", new_target)
 		pool.SetTarget(new_target)
 	}
 
@@ -53,7 +53,7 @@ func (s *ThresholdScaling) Scale() {
 			new_target = 1
 		}
 
-		log.Println("scale down (target=%d)\n", new_target)
+		log.Printf("scale down (target=%d)\n", new_target)
 		pool.SetTarget(new_target)
 	}
 

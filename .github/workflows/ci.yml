@@ -67,6 +67,31 @@ jobs:
     - name: Boss/Lambda Store Tests
       run: sudo env "PATH=$PATH" python3 scripts/boss_test.py local
       timeout-minutes: 5
+    - name: Go Unit Tests (Sandbox API)
+      run: |
+        cd src
+        go test -v ./worker/sandbox
+      timeout-minutes: 5
+    - name: Go Test Coverage (All Packages)
+      run: |
+        cd src
+        # First ensure all packages compile
+        go build ./...
+        # Run tests with coverage (only packages that have tests will generate coverage)
+        go test -v -race -coverprofile=coverage.out ./... || true
+        # Generate HTML coverage report if coverage file exists
+        if [ -f coverage.out ]; then
+          go tool cover -html=coverage.out -o coverage.html
+        fi
+      timeout-minutes: 10
+    - name: Upload Test Coverage
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: go-test-coverage
+        path: |
+          src/coverage.out
+          src/coverage.html
     - name: Test Binaries (WebAssembly)
       timeout-minutes: 10
       run: |
