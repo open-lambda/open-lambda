@@ -354,7 +354,7 @@ func adminInstall(ctx *cli.Context) error {
 	}
 
 	// Create tar.gz archive
-	tarData, err := createTarGz(funcDir, funcName)
+	tarData, err := createTarGz(funcDir)
 	if err != nil {
 		return fmt.Errorf("failed to create tar.gz: %v", err)
 	}
@@ -369,7 +369,7 @@ func adminInstall(ctx *cli.Context) error {
 }
 
 // createTarGz creates a tar.gz archive from the function directory
-func createTarGz(funcDir, funcName string) ([]byte, error) {
+func createTarGz(funcDir string) ([]byte, error) {
 	var buf bytes.Buffer
 	gzWriter := gzip.NewWriter(&buf)
 	tarWriter := tar.NewWriter(gzWriter)
