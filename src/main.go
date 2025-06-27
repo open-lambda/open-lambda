@@ -2,6 +2,9 @@
 package main
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,6 +16,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/open-lambda/open-lambda/ol/bench"
 	"github.com/open-lambda/open-lambda/ol/boss"
@@ -300,6 +304,165 @@ func bossStart(ctx *cli.Context) error {
 	return fmt.Errorf("this code should not be reachable")
 }
 
+// checkBossRunning verifies that the Boss server is running by hitting the /status endpoint
+func checkBossRunning() error {
+	// Load config from boss.json
+	if err := config.LoadConf("boss.json"); err != nil {
+		return fmt.Errorf("failed to load boss.json, boss does not seem to be running: %v", err)
+	}
+
+	// Default values
+	bossHost := "localhost"
+	bossPort := config.BossConf.Boss_port
+
+	url := fmt.Sprintf("http://%s:%s/status", bossHost, bossPort)
+	client := &http.Client{Timeout: 2 * time.Second}
+
+	resp, err := client.Get(url)
+	if err != nil {
+		return fmt.Errorf("could not reach boss at %s: %v", url, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("boss returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
+// adminInstall corresponds to the "admin install" command
+func adminInstall(ctx *cli.Context) error {
+	if ctx.NArg() != 1 {
+		return fmt.Errorf("usage: ol admin install <function_directory>")
+	}
+
+	if err := checkBossRunning(); err != nil {
+		return fmt.Errorf("boss is not running or not reachable: %v", err)
+	}
+
+	funcDir := ctx.Args().Get(0)
+	funcDir = strings.TrimSuffix(funcDir, "/")
+
+	// Extract function name from directory path
+	funcName := filepath.Base(funcDir)
+
+	// Check if directory exists
+	if _, err := os.Stat(funcDir); os.IsNotExist(err) {
+		return fmt.Errorf("directory %s does not exist", funcDir)
+	}
+
+	// Create tar.gz archive
+	tarData, err := createTarGz(funcDir, funcName)
+	if err != nil {
+		return fmt.Errorf("failed to create tar.gz: %v", err)
+	}
+
+	// Upload to lambda store
+	if err := uploadToLambdaStore(funcName, tarData); err != nil {
+		return fmt.Errorf("failed to upload to lambda store: %v", err)
+	}
+
+	fmt.Printf("Successfully installed lambda function: %s\n", funcName)
+	return nil
+}
+
+// createTarGz creates a tar.gz archive from the function directory
+func createTarGz(funcDir, funcName string) ([]byte, error) {
+	var buf bytes.Buffer
+	gzWriter := gzip.NewWriter(&buf)
+	tarWriter := tar.NewWriter(gzWriter)
+
+	// Files to include: f.py (required) and ol.yaml (optional)
+	filesToInclude := []string{"f.py", "ol.yaml"}
+
+	for _, fileName := range filesToInclude {
+		filePath := filepath.Join(funcDir, fileName)
+
+		// Check if file exists
+		info, err := os.Stat(filePath)
+		if os.IsNotExist(err) {
+			if fileName == "f.py" {
+				return nil, fmt.Errorf("required file f.py not found in %s", funcDir)
+			}
+			// ol.yaml is optional, skip if not found
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to stat %s: %v", filePath, err)
+		}
+
+		// Create tar header
+		header := &tar.Header{
+			Name: fileName,
+			Mode: 0644,
+			Size: info.Size(),
+		}
+
+		if err := tarWriter.WriteHeader(header); err != nil {
+			return nil, fmt.Errorf("failed to write tar header for %s: %v", fileName, err)
+		}
+
+		// Write file content
+		file, err := os.Open(filePath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open %s: %v", filePath, err)
+		}
+
+		if _, err := io.Copy(tarWriter, file); err != nil {
+			file.Close()
+			return nil, fmt.Errorf("failed to write %s to tar: %v", fileName, err)
+		}
+		file.Close()
+	}
+
+	if err := tarWriter.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close tar writer: %v", err)
+	}
+
+	if err := gzWriter.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close gzip writer: %v", err)
+	}
+
+	return buf.Bytes(), nil
+}
+
+// uploadToLambdaStore uploads the tar.gz data to the lambda store
+func uploadToLambdaStore(funcName string, tarData []byte) error {
+	// Load config from boss.json
+	if err := config.LoadConf("boss.json"); err != nil {
+		return fmt.Errorf("failed to load boss.json: %v", err)
+	}
+
+	// Only works on the same machine as the boss for now
+	bossHost := "localhost"
+	bossPort := config.BossConf.Boss_port
+
+	url := fmt.Sprintf("http://%s:%s/registry/%s", bossHost, bossPort, funcName)
+
+	req, err := http.NewRequest("POST", url, bytes.NewReader(tarData))
+	if err != nil {
+		return fmt.Errorf("failed to create HTTP request: %v", err)
+	}
+
+	req.Header.Set("Content-Type", "application/gzip")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send HTTP request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("upload failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
 // main runs the admin tool
 func main() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
@@ -323,6 +486,19 @@ OPTIONS:
 	app.EnableBashCompletion = true
 	app.HideVersion = true
 	app.Commands = []*cli.Command{
+		&cli.Command{
+			Name:      "admin",
+			Usage:     "Admin commands for managing lambdas",
+			UsageText: "ol admin <cmd>",
+			Subcommands: []*cli.Command{
+				{
+					Name:      "install",
+					Usage:     "Install a lambda function from directory",
+					UsageText: "ol admin install <function_directory>",
+					Action:    adminInstall,
+				},
+			},
+		},
 		&cli.Command{
 			Name:        "boss",
 			Usage:       "Start an OL Boss process",
