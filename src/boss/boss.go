@@ -168,6 +168,10 @@ func BossMain() (err error) {
 		boss.autoScaler.Launch(boss.workerPool)
 	}
 
+	// Launch 1 worker by default when boss starts
+	log.Printf("Launching 1 worker by default")
+	boss.workerPool.SetTarget(1)
+
 	http.HandleFunc(BOSS_STATUS_PATH, boss.BossStatus)
 	http.HandleFunc(SCALING_PATH, boss.ScalingWorker)
 	http.HandleFunc(RUN_PATH, boss.workerPool.RunLambda)
