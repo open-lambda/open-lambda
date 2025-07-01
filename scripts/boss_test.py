@@ -207,6 +207,25 @@ def cleanup_boss():
     kill_boss_on_port(5000)
 
 
+def test_default_trigger(lambda_name):
+    """
+    Test default HTTP trigger functionality by uploading a lambda,
+    verifying its config, and invoking it.
+    """
+    print("[DEFAULT TEST] Testing default HTTP trigger functionality...")
+    
+    # Step 2: upload and verify lambda
+    code = ["def f(event):", "\treturn 'hello'"]
+    upload_lambda(lambda_name, code)
+    verify_lambda_config(lambda_name)
+
+    # Step 3: invoke
+    result = invoke_lambda(lambda_name)
+    assert result == "hello", f"Unexpected lambda result: {result}"
+    
+    print("[DEFAULT TEST] Default trigger test completed successfully.\n")
+
+
 def test_cron_trigger():
     """
     Test cron trigger functionality by creating a lambda with cron trigger,
@@ -259,22 +278,16 @@ def tester(platform):
     assert json.loads(boss_get("status"))["state"]["starting"] == 1
     wait_for_workers(1)
 
-    # Step 2: upload and verify lambda
+    # Test default HTTP trigger functionality
     lambda_name = "hi"
-    code = ["def f(event):", "\treturn 'hello'"]
-    upload_lambda(lambda_name, code)
-    verify_lambda_config(lambda_name)
-
-    # Step 3: invoke
-    result = invoke_lambda(lambda_name)
-    assert result == "hello", f"Unexpected lambda result: {result}"
-
-    # Step 3.5: test cron trigger functionality
+    test_default_trigger(lambda_name)
+    
+    # Test cron trigger functionality
     test_cron_trigger()
-
-    # Step 4: scale down and verify unavailability
+    
+    # Shutdown and check
     shutdown_and_check(lambda_name)
-
+    
     # Step 5: delete lambda and verify it's gone
     delete_lambda_and_verify(lambda_name)
 
