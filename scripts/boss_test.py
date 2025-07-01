@@ -234,7 +234,8 @@ def test_default_trigger():
 def test_cron_trigger():
     """
     Test cron trigger functionality by creating a lambda with cron trigger,
-    uploading it, and verifying the cron config is set correctly.
+    uploading it, verifying the cron config is set correctly, and checking
+    that the cron function was invoked successfully.
     """
     print("[CRON TEST] Testing cron trigger functionality...")
     
@@ -260,8 +261,30 @@ def test_cron_trigger():
     # Verify the cron configuration was set correctly
     verify_lambda_cron_config(lambda_name)
     
+    # Clear any existing output file
+    output_file = "/tmp/cron_test_output.txt"
+    if os.path.exists(output_file):
+        os.remove(output_file)
+    
+    # Wait for cron to execute (slightly over 1 minute to ensure it runs)
+    print("[CRON TEST] Waiting 70 seconds for cron trigger to execute...")
+    time.sleep(70)
+    
+    # Check if the output file was created and contains the expected content
+    assert os.path.exists(output_file), f"Cron output file {output_file} was not created"
+    
+    with open(output_file, 'r') as f:
+        content = f.read()
+    
+    assert "cron invoked" in content, f"Expected 'cron invoked' in output file, but got: {content}"
+    print(f"[CRON TEST] Cron execution verified. Output: {content.strip()}")
+    
     # Clean up
     delete_lambda_and_verify(lambda_name)
+    
+    # Clean up output file
+    if os.path.exists(output_file):
+        os.remove(output_file)
     
     print("[CRON TEST] Cron trigger test completed successfully.\n")
 
