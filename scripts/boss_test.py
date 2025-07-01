@@ -207,12 +207,14 @@ def cleanup_boss():
     kill_boss_on_port(5000)
 
 
-def test_default_trigger(lambda_name):
+def test_default_trigger():
     """
     Test default HTTP trigger functionality by uploading a lambda,
-    verifying its config, and invoking it.
+    verifying its config, invoking it, and cleaning up.
     """
     print("[DEFAULT TEST] Testing default HTTP trigger functionality...")
+    
+    lambda_name = "hi"
     
     # Step 2: upload and verify lambda
     code = ["def f(event):", "\treturn 'hello'"]
@@ -222,6 +224,9 @@ def test_default_trigger(lambda_name):
     # Step 3: invoke
     result = invoke_lambda(lambda_name)
     assert result == "hello", f"Unexpected lambda result: {result}"
+    
+    # Step 5: delete lambda and verify it's gone
+    delete_lambda_and_verify(lambda_name)
     
     print("[DEFAULT TEST] Default trigger test completed successfully.\n")
 
@@ -279,17 +284,13 @@ def tester(platform):
     wait_for_workers(1)
 
     # Test default HTTP trigger functionality
-    lambda_name = "hi"
-    test_default_trigger(lambda_name)
+    test_default_trigger()
     
     # Test cron trigger functionality
     test_cron_trigger()
     
     # Shutdown and check
-    shutdown_and_check(lambda_name)
-    
-    # Step 5: delete lambda and verify it's gone
-    delete_lambda_and_verify(lambda_name)
+    shutdown_and_check("hi")
 
     print(f"Test passed for platform: {platform}\n")
     cleanup_boss()
