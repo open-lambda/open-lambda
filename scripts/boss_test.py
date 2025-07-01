@@ -158,8 +158,8 @@ def verify_lambda_cron_config(lambda_name):
     
     print(f"[VERIFY] Cron config verified: {actual_config['Triggers']['Cron']}\n")
 
-def shutdown_and_check(lambda_name):
-    print(f"[SHUTDOWN] Shutting down workers for lambda '{lambda_name}'...")
+def shutdown_and_check():
+    print("[SHUTDOWN] Shutting down workers...")
     scale_workers(0)
     time.sleep(1)
     status = json.loads(boss_get("status"))
@@ -290,7 +290,7 @@ def tester(platform):
     test_cron_trigger()
     
     # Shutdown and check
-    shutdown_and_check("hi")
+    shutdown_and_check()
 
     print(f"Test passed for platform: {platform}\n")
     cleanup_boss()
