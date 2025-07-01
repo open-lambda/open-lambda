@@ -108,6 +108,30 @@ def create_lambda_tar(code_lines):
 
     return temp_tar_path
 
+def create_lambda_tar_with_cron(code_lines, cron_schedule="* * * * *"):
+    print("[BUILD] Creating lambda tarball with cron trigger...")
+    # Create temp files for f.py and ol.yaml
+    with tempfile.NamedTemporaryFile(delete=False, mode="w", suffix=".py") as code_file:
+        code_file.write("\n".join(code_lines))
+        code_path = code_file.name
+
+    with tempfile.NamedTemporaryFile(delete=False, mode="w", suffix=".yaml") as ol_file:
+        ol_file.write(f"triggers:\n  cron:\n    - schedule: \"{cron_schedule}\"\n")
+        ol_path = ol_file.name
+
+    # Create the tar.gz file path
+    temp_tar_path = tempfile.mktemp(suffix=".tar.gz")
+
+    # Add both files at the top level in the tarball
+    with tarfile.open(temp_tar_path, "w:gz") as tar:
+        tar.add(code_path, arcname="f.py")
+        tar.add(ol_path, arcname="ol.yaml")
+    # Clean up the temporary source files
+    os.remove(code_path)
+    os.remove(ol_path)
+
+    return temp_tar_path
+
 
 def upload_lambda(lambda_name, code_lines):
     print(f"[UPLOAD] Uploading lambda '{lambda_name}'...")
@@ -119,6 +143,17 @@ def upload_lambda(lambda_name, code_lines):
         resp.raise_for_status()
     os.remove(tar_path)
     print(f"[UPLOAD] Lambda '{lambda_name}' uploaded.\n")
+
+def upload_lambda_with_cron(lambda_name, code_lines, cron_schedule="* * * * *"):
+    print(f"[UPLOAD] Uploading lambda '{lambda_name}' with cron trigger...")
+    tar_path = create_lambda_tar_with_cron(code_lines, cron_schedule)
+    with open(tar_path, "rb") as f:
+        url = f"http://localhost:{boss_port}/registry/{lambda_name}"
+        headers = {"Content-Type": "application/octet-stream"}
+        resp = requests.post(url, data=f, headers=headers)
+        resp.raise_for_status()
+    os.remove(tar_path)
+    print(f"[UPLOAD] Lambda '{lambda_name}' uploaded with cron trigger.\n")
 
 def invoke_lambda(lambda_name, check=True):
     print(f"[INVOKE] Invoking lambda '{lambda_name}'...\n")
@@ -140,6 +175,18 @@ def verify_lambda_config(lambda_name):
         f"Lambda config mismatch!\nExpected: {expected_config}\nActual: {actual_config}"
     )
     print("[VERIFY] Config verified successfully.\n")
+
+def verify_lambda_cron_config(lambda_name):
+    print(f"[VERIFY] Verifying cron config for lambda '{lambda_name}'...")
+    resp = boss_get(f"registry/{lambda_name}/config")
+    actual_config = json.loads(resp)
+    
+    # Check that cron trigger exists
+    assert actual_config["Triggers"]["Cron"] is not None, "Expected cron trigger to be configured"
+    assert len(actual_config["Triggers"]["Cron"]) > 0, "Expected at least one cron trigger"
+    assert "Schedule" in actual_config["Triggers"]["Cron"][0], "Expected cron trigger to have a schedule"
+    
+    print(f"[VERIFY] Cron config verified: {actual_config['Triggers']['Cron']}\n")
 
 def shutdown_and_check(lambda_name):
     print(f"[SHUTDOWN] Shutting down workers for lambda '{lambda_name}'...")
@@ -190,6 +237,84 @@ def cleanup_boss():
     kill_boss_on_port(5000)
 
 
+def test_cron_trigger(platform):
+    """
+    Test cron trigger functionality by:
+    1. Creating a lambda function that appends "cron invoked" to /tmp/cron_test_output.txt
+    2. Uploading it with a cron trigger that runs every minute
+    3. Sleeping for 70 seconds to allow the cron to trigger
+    4. Checking that the output file exists and contains "cron invoked"
+    """
+    print("\n========================================")
+    print(f"Running Cron Trigger Test for platform: {platform}")
+    print("========================================\n")
+
+    # Clean up any existing test output file
+    test_output_file = "/tmp/cron_test_output.txt"
+    if os.path.exists(test_output_file):
+        os.remove(test_output_file)
+        print(f"[CLEANUP] Removed existing test output file: {test_output_file}")
+
+    clear_config()
+    launch_boss(platform)
+
+    try:
+        # Step 1: scale up worker
+        status = json.loads(boss_get("status"))
+        assert status["state"]["running"] == 0
+        scale_workers(1)
+        assert json.loads(boss_get("status"))["state"]["starting"] == 1
+        wait_for_workers(1)
+
+        # Step 2: create and upload lambda with cron trigger
+        lambda_name = "cron_test"
+        code = [
+            "def f(event):",
+            "    import os",
+            "    with open('/tmp/cron_test_output.txt', 'a') as f:",
+            "        f.write('cron invoked\\n')",
+            "    return 'cron executed'"
+        ]
+        
+        # Upload lambda with cron trigger that runs every minute
+        upload_lambda_with_cron(lambda_name, code, "* * * * *")
+        print(f"[CRON] Lambda '{lambda_name}' uploaded with cron trigger (every minute).\n")
+        
+        # Verify the cron configuration was set correctly
+        verify_lambda_cron_config(lambda_name)
+
+        # Step 3: sleep for 70 seconds to allow cron to trigger
+        print("[WAIT] Sleeping for 70 seconds to allow cron to trigger...")
+        time.sleep(70)
+        print("[WAIT] Wait complete.\n")
+
+        # Step 4: check that the output file exists and contains expected content
+        print(f"[VERIFY] Checking output file: {test_output_file}")
+        
+        assert os.path.exists(test_output_file), f"Output file {test_output_file} does not exist"
+        
+        with open(test_output_file, "r", encoding="utf-8") as f:
+            content = f.read().strip()
+        
+        assert "cron invoked" in content, f"Expected 'cron invoked' in output file, but got: {content}"
+        
+        print(f"[VERIFY] Success! Output file contains: {content}")
+        print("[VERIFY] Cron trigger test passed.\n")
+
+        # Clean up
+        delete_lambda_and_verify(lambda_name)
+        
+    finally:
+        # Clean up the test output file
+        if os.path.exists(test_output_file):
+            os.remove(test_output_file)
+            print(f"[CLEANUP] Removed test output file: {test_output_file}")
+        
+        cleanup_boss()
+
+    print(f"Cron trigger test passed for platform: {platform}\n")
+
+
 ### ------------------ End-to-End Test ------------------ ###
 
 def tester(platform):
@@ -228,11 +353,19 @@ def tester(platform):
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python3 boss_test.py (aws|azure|gcp|local) [platform2, ...]")
+        print("Usage: python3 boss_test.py (aws|azure|gcp|local) [platform2, ...] [--cron-test]")
         sys.exit(1)
 
+    # Check if cron test is requested
+    run_cron_test = "--cron-test" in sys.argv
+    if run_cron_test:
+        sys.argv.remove("--cron-test")
+
     for platform in sys.argv[1:]:
-        tester(platform)
+        if run_cron_test:
+            test_cron_trigger(platform)
+        else:
+            tester(platform)
 
 if __name__ == "__main__":
     main()
