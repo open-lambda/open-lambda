@@ -146,7 +146,7 @@ def verify_lambda_config(lambda_name):
     )
     print("[VERIFY] Config verified successfully.\n")
 
-def verify_lambda_cron_config(lambda_name):
+def verify_lambda_cron_trigger_result(lambda_name):
     print(f"[VERIFY] Verifying cron config for lambda '{lambda_name}'...")
     resp = boss_get(f"registry/{lambda_name}/config")
     actual_config = json.loads(resp)
@@ -156,7 +156,23 @@ def verify_lambda_cron_config(lambda_name):
     assert len(actual_config["Triggers"]["Cron"]) > 0, "Expected at least one cron trigger"
     assert "Schedule" in actual_config["Triggers"]["Cron"][0], "Expected cron trigger to have a schedule"
     
-    print(f"[VERIFY] Cron config verified: {actual_config['Triggers']['Cron']}\n")
+    print(f"[VERIFY] Cron config verified: {actual_config['Triggers']['Cron']}")
+    
+    # Check if the output file was created and contains the expected content
+    output_file = "/tmp/cron_test_output.txt"
+    assert os.path.exists(output_file), f"Cron output file {output_file} was not created"
+    
+    with open(output_file, 'r') as f:
+        content = f.read()
+    
+    assert "cron invoked" in content, f"Expected 'cron invoked' in output file, but got: {content}"
+    print(f"[VERIFY] Cron execution verified. Output: {content.strip()}")
+    
+    # Clean up output file
+    if os.path.exists(output_file):
+        os.remove(output_file)
+    
+    print("[VERIFY] Cron trigger result verification completed.\n")
 
 def shutdown_and_check():
     print("[SHUTDOWN] Shutting down workers...")
@@ -255,36 +271,23 @@ def test_cron_trigger():
         "    - schedule: \"* * * * *\""
     ]
     
-    # Upload lambda with cron trigger
-    upload_lambda(lambda_name, code, cron_config)
-    
-    # Verify the cron configuration was set correctly
-    verify_lambda_cron_config(lambda_name)
-    
-    # Clear any existing output file
+    # Clear any existing output file before upload
     output_file = "/tmp/cron_test_output.txt"
     if os.path.exists(output_file):
         os.remove(output_file)
+    
+    # Upload lambda with cron trigger
+    upload_lambda(lambda_name, code, cron_config)
     
     # Wait for cron to execute (slightly over 1 minute to ensure it runs)
     print("[CRON TEST] Waiting 70 seconds for cron trigger to execute...")
     time.sleep(70)
     
-    # Check if the output file was created and contains the expected content
-    assert os.path.exists(output_file), f"Cron output file {output_file} was not created"
-    
-    with open(output_file, 'r') as f:
-        content = f.read()
-    
-    assert "cron invoked" in content, f"Expected 'cron invoked' in output file, but got: {content}"
-    print(f"[CRON TEST] Cron execution verified. Output: {content.strip()}")
+    # Verify the cron configuration and execution result
+    verify_lambda_cron_trigger_result(lambda_name)
     
     # Clean up
     delete_lambda_and_verify(lambda_name)
-    
-    # Clean up output file
-    if os.path.exists(output_file):
-        os.remove(output_file)
     
     print("[CRON TEST] Cron trigger test completed successfully.\n")
 
