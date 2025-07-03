@@ -1,9 +1,10 @@
 FROM ubuntu:22.04
 
+RUN apt-get autoremove
 RUN apt-get -y --fix-missing update
 RUN apt-get -y install wget apt-transport-https curl
 RUN apt-get -y install python3 python3-dev python3-pip python-is-python3
-RUN apt-get -y install build-essential libseccomp-dev
+RUN apt-get -y install build-essential libseccomp-dev libcap-dev
 RUN pip3 install --upgrade pip
 RUN pip3 install virtualenv requests tornado==6.1.0
 
