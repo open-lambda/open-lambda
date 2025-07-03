@@ -1,7 +1,7 @@
 package worker
 
 import (
-	"encoding/json"
+	"gopkg.in/yaml.v3"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -139,12 +139,12 @@ func initOLDir(olPath string, dockerBaseImage string, newBase bool) (err error) 
 		return err
 	}
 
-	zygoteTreePath := filepath.Join(olPath, "default-zygotes-40.json")
-	if err := ioutil.WriteFile(zygoteTreePath, []byte(embedded.DefaultZygotes40_json), 0400); err != nil {
+	zygoteTreePath := filepath.Join(olPath, "default-zygotes-40.yaml")
+	if err := ioutil.WriteFile(zygoteTreePath, []byte(embedded.DefaultZygotes40_yaml), 0400); err != nil {
 		return err
 	}
 
-	confPath := filepath.Join(olPath, "config.json")
+	confPath := filepath.Join(olPath, "config.yaml")
 	if err := common.SaveGlobalConfig(confPath); err != nil {
 		return err
 	}
@@ -431,7 +431,7 @@ func bringToStoppedClean(olPath string) error {
 	return nil
 }
 
-// modify the config.json file based on settings from cmdline: -o opt1=val1,opt2=val2,...
+// modify the config.yaml file based on settings from cmdline: -o opt1=val1,opt2=val2,...
 //
 // apply changes in optsStr to config from confPath, saving result to overridePath
 func overrideOpts(confPath, overridePath, optsStr string) error {
@@ -440,7 +440,7 @@ func overrideOpts(confPath, overridePath, optsStr string) error {
 		return err
 	}
 	conf := make(map[string]any)
-	if err := json.Unmarshal(b, &conf); err != nil {
+	if err := yaml.Unmarshal(b, &conf); err != nil {
 		return err
 	}
 
@@ -494,7 +494,7 @@ func overrideOpts(confPath, overridePath, optsStr string) error {
 	}
 
 	// save back config
-	s, err := json.MarshalIndent(conf, "", "\t")
+	s, err := yaml.Marshal(conf)
 	if err != nil {
 		return err
 	}

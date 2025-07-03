@@ -2,7 +2,7 @@
 package main
 
 import (
-	"encoding/json"
+	"gopkg.in/yaml.v3"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -28,21 +28,21 @@ func newBossConf() error {
 		return err
 	}
 
-	if err := config.SaveConf("boss.json"); err != nil {
+	if err := config.SaveConf("boss.yaml"); err != nil {
 		return err
 	}
 
-	fmt.Printf("populated boss.json with default settings\n")
+	fmt.Printf("populated boss.yaml with default settings\n")
 	return nil
 }
 
 // runBoss corresponses to the "boss" command of the admin tool.
 func runBoss(ctx *cli.Context) error {
-	if _, err := os.Stat("boss.json"); os.IsNotExist(err) {
+	if _, err := os.Stat("boss.yaml"); os.IsNotExist(err) {
 		newBossConf()
 	}
 
-	confPath := "boss.json"
+	confPath := "boss.yaml"
 	overrides := ctx.String("options")
 	if overrides != "" {
 		overridesPath := confPath + ".overrides"
@@ -60,7 +60,7 @@ func runBoss(ctx *cli.Context) error {
 	return bossStart(ctx)
 }
 
-// modify the config.json file based on settings from cmdline: -o opt1=val1,opt2=val2,...
+// modify the config.yaml file based on settings from cmdline: -o opt1=val1,opt2=val2,...
 //
 // apply changes in optsStr to config from confPath, saving result to overridePath
 func overrideOpts(confPath, overridePath, optsStr string) error {
@@ -69,7 +69,7 @@ func overrideOpts(confPath, overridePath, optsStr string) error {
 		return err
 	}
 	conf := make(map[string]any)
-	if err := json.Unmarshal(b, &conf); err != nil {
+	if err := yaml.Unmarshal(b, &conf); err != nil {
 		return err
 	}
 
@@ -123,7 +123,7 @@ func overrideOpts(confPath, overridePath, optsStr string) error {
 	}
 
 	// save back config
-	s, err := json.MarshalIndent(conf, "", "\t")
+	s, err := yaml.Marshal(conf)
 	if err != nil {
 		return err
 	}
@@ -138,7 +138,7 @@ func pprofMem(ctx *cli.Context) error {
 		return err
 	}
 
-	err = common.LoadGlobalConfig(filepath.Join(olPath, "config.json"))
+	err = common.LoadGlobalConfig(filepath.Join(olPath, "config.yaml"))
 	if err != nil {
 		return err
 	}
@@ -176,7 +176,7 @@ func pprofCpuStart(ctx *cli.Context) error {
 		return err
 	}
 
-	err = common.LoadGlobalConfig(filepath.Join(olPath, "config.json"))
+	err = common.LoadGlobalConfig(filepath.Join(olPath, "config.yaml"))
 	if err != nil {
 		return err
 	}
@@ -212,7 +212,7 @@ func pprofCpuStop(ctx *cli.Context) error {
 		return err
 	}
 
-	err = common.LoadGlobalConfig(filepath.Join(olPath, "config.json"))
+	err = common.LoadGlobalConfig(filepath.Join(olPath, "config.yaml"))
 	if err != nil {
 		return err
 	}
