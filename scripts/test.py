@@ -11,6 +11,7 @@ import os
 import sys
 import tempfile
 import tarfile
+import subprocess
 
 from time import time
 from subprocess import call
@@ -37,6 +38,51 @@ from open_lambda import OpenLambda
 
 # These will be set by argparse in main()
 OL_DIR = None
+
+
+def install_examples_to_worker_registry():
+    """Install all lambda functions from examples directory to worker registry using admin install"""
+    examples_dir = os.path.join(os.path.dirname(OL_DIR), "examples")
+    
+    if not os.path.exists(examples_dir):
+        print(f"Examples directory not found at {examples_dir}")
+        return
+    
+    # Get all directories in examples
+    example_functions = []
+    for item in os.listdir(examples_dir):
+        item_path = os.path.join(examples_dir, item)
+        if os.path.isdir(item_path):
+            # Check if it has f.py (required for lambda functions)
+            if os.path.exists(os.path.join(item_path, "f.py")):
+                example_functions.append(item_path)
+    
+    print(f"Found {len(example_functions)} lambda functions in examples directory")
+    
+    # Install each function using admin install command
+    ol_binary = os.path.join(os.path.dirname(OL_DIR), "bin", "ol")
+    if not os.path.exists(ol_binary):
+        print(f"OL binary not found at {ol_binary}, trying ./ol")
+        ol_binary = "./ol"
+    
+    for func_dir in example_functions:
+        func_name = os.path.basename(func_dir)
+        print(f"Installing {func_name} from {func_dir}")
+        
+        try:
+            # Run ol admin install <function_directory>
+            result = subprocess.run([ol_binary, "admin", "install", func_dir], 
+                                  capture_output=True, text=True, cwd=os.path.dirname(OL_DIR))
+            
+            if result.returncode == 0:
+                print(f"✓ Successfully installed {func_name}")
+            else:
+                print(f"✗ Failed to install {func_name}: {result.stderr}")
+                
+        except Exception as e:
+            print(f"✗ Error installing {func_name}: {e}")
+    
+    print("Finished installing example functions")
 
 
 @test
@@ -342,9 +388,11 @@ def main():
     parser.add_argument('--worker_type', type=str, default="sock")
     parser.add_argument('--test_filter', type=str, default="")
     parser.add_argument('--test_blocklist', type=str, default="")
-    parser.add_argument('--registry', type=str, default="test-registry")
+    parser.add_argument('--registry', type=str, default="")  # Will use worker registry by default
     parser.add_argument('--ol_dir', type=str, default="test-dir")
     parser.add_argument('--image', type=str, default="ol-wasm")
+    parser.add_argument('--install_examples', action='store_true', 
+                       help='Install example functions using admin install command')
 
     args = parser.parse_args()
 
@@ -360,19 +408,33 @@ def main():
     setup_config(args.ol_dir)
     prepare_open_lambda(args.ol_dir, args.image)
 
+    # Determine registry path - use worker registry if not specified
+    if args.registry:
+        registry_path = os.path.abspath(args.registry)
+    else:
+        # Use worker registry directory from config
+        registry_path = os.path.join(args.ol_dir, "registry")
+
     trace_config = {
         "cgroups": True,
         "memory": True,
         "evictor": True,
         "package": True,
     }
-    with TestConfContext(registry=os.path.abspath(args.registry), trace=trace_config):
+    
+    with TestConfContext(registry=registry_path, trace=trace_config):
         if args.worker_type == 'docker':
             set_worker_type(DockerWorker)
         elif args.worker_type == 'sock':
             set_worker_type(SockWorker)
         else:
             raise RuntimeError(f"Invalid worker type {args.worker_type}")
+
+        # Install examples if requested or if using default registry (worker registry)
+        if args.install_examples or not args.registry:
+            print("Installing example functions to worker registry...")
+            install_examples_to_worker_registry()
+            print()
 
         start_tests()
         run_tests()
