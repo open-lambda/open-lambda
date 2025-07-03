@@ -304,29 +304,24 @@ func bossStart(ctx *cli.Context) error {
 	return fmt.Errorf("this code should not be reachable")
 }
 
-// checkBossRunning verifies that the Boss server is running by hitting the /status endpoint
-func checkBossRunning() error {
-	// Load config from boss.json
-	if err := config.LoadConf("boss.json"); err != nil {
-		return fmt.Errorf("failed to load boss.json, boss does not seem to be running: %v", err)
-	}
+// checkStatus of either boss or worker to see if it any of them is running
+func checkStatus(port string) error {
+	// ONly works on the same machine.
+	// Could be boss or worker.
+	host := "localhost"
 
-	// Default values
-	bossHost := "localhost"
-	bossPort := config.BossConf.Boss_port
-
-	url := fmt.Sprintf("http://%s:%s/status", bossHost, bossPort)
+	url := fmt.Sprintf("http://%s:%s/status", host, port)
 	client := &http.Client{Timeout: 2 * time.Second}
 
 	resp, err := client.Get(url)
 	if err != nil {
-		return fmt.Errorf("could not reach boss at %s: %v", url, err)
+		return fmt.Errorf("could not reach boss/worker at %s: %v", url, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("boss returned status %d: %s", resp.StatusCode, string(body))
+		return fmt.Errorf("boss/worker returned status %d: %s", resp.StatusCode, string(body))
 	}
 
 	return nil
@@ -338,8 +333,21 @@ func adminInstall(ctx *cli.Context) error {
 		return fmt.Errorf("usage: ol admin install <function_directory>")
 	}
 
-	if err := checkBossRunning(); err != nil {
-		return fmt.Errorf("boss is not running or not reachable: %v", err)
+	if common.Conf == nil && config.BossConf == nil {
+		return fmt.Errorf("common.Conf or config.BossConf not initialized")
+	}
+
+	bossPort := config.BossConf.Boss_port
+	// default upload is to boss
+	portToUploadLambda := bossPort
+
+	if err := checkStatus(bossPort); err != nil {
+		fmt.Printf("boss is not running or not reachable, checking if the worker is running: %v\n", err)
+		if err := checkStatus(common.Conf.Worker_port); err != nil {
+			return fmt.Errorf("neither boss nor worker is running: %v", err)
+		}
+		// if the boss is not running but there is stand alone worker, we upload to the worker
+		portToUploadLambda = common.Conf.Worker_port
 	}
 
 	funcDir := ctx.Args().Get(0)
@@ -360,7 +368,7 @@ func adminInstall(ctx *cli.Context) error {
 	}
 
 	// Upload to lambda store
-	if err := uploadToLambdaStore(funcName, tarData); err != nil {
+	if err := uploadToLambdaStore(funcName, tarData, portToUploadLambda); err != nil {
 		return fmt.Errorf("failed to upload to lambda store: %v", err)
 	}
 
@@ -429,17 +437,12 @@ func createTarGz(funcDir string) ([]byte, error) {
 }
 
 // uploadToLambdaStore uploads the tar.gz data to the lambda store
-func uploadToLambdaStore(funcName string, tarData []byte) error {
-	// Load config from boss.json
-	if err := config.LoadConf("boss.json"); err != nil {
-		return fmt.Errorf("failed to load boss.json: %v", err)
-	}
+func uploadToLambdaStore(funcName string, tarData []byte, port string) error {
+	// Only works on the same machine.
+	// could be boss or worker.
+	host := "localhost"
 
-	// Only works on the same machine as the boss for now
-	bossHost := "localhost"
-	bossPort := config.BossConf.Boss_port
-
-	url := fmt.Sprintf("http://%s:%s/registry/%s", bossHost, bossPort, funcName)
+	url := fmt.Sprintf("http://%s:%s/registry/%s", host, port, funcName)
 
 	req, err := http.NewRequest("POST", url, bytes.NewReader(tarData))
 	if err != nil {
