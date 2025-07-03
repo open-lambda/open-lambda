@@ -84,7 +84,7 @@ def wait_for_workers(expected_running, timeout=180):
 
 ### ------------------ Lambda Operations ------------------ ###
 
-def create_lambda_tar(code_lines):
+def create_lambda_tar(code_lines, config_lines=None):
     print("[BUILD] Creating lambda tarball...")
     # Create temp files for f.py and ol.yaml
     with tempfile.NamedTemporaryFile(delete=False, mode="w", suffix=".py") as code_file:
@@ -92,7 +92,10 @@ def create_lambda_tar(code_lines):
         code_path = code_file.name
 
     with tempfile.NamedTemporaryFile(delete=False, mode="w", suffix=".yaml") as ol_file:
-        ol_file.write("triggers:\n  http:\n    - method: \"POST\"\n")
+        if config_lines:
+            ol_file.write("\n".join(config_lines))
+        else:
+            ol_file.write("triggers:\n  http:\n    - method: \"POST\"\n")
         ol_path = ol_file.name
 
     # Create the tar.gz file path
@@ -109,9 +112,9 @@ def create_lambda_tar(code_lines):
     return temp_tar_path
 
 
-def upload_lambda(lambda_name, code_lines):
+def upload_lambda(lambda_name, code_lines, config_lines=None):
     print(f"[UPLOAD] Uploading lambda '{lambda_name}'...")
-    tar_path = create_lambda_tar(code_lines)
+    tar_path = create_lambda_tar(code_lines, config_lines)
     with open(tar_path, "rb") as f:
         url = f"http://localhost:{boss_port}/registry/{lambda_name}"
         headers = {"Content-Type": "application/octet-stream"}
@@ -119,6 +122,8 @@ def upload_lambda(lambda_name, code_lines):
         resp.raise_for_status()
     os.remove(tar_path)
     print(f"[UPLOAD] Lambda '{lambda_name}' uploaded.\n")
+
+
 
 def invoke_lambda(lambda_name, check=True):
     print(f"[INVOKE] Invoking lambda '{lambda_name}'...\n")
@@ -141,8 +146,36 @@ def verify_lambda_config(lambda_name):
     )
     print("[VERIFY] Config verified successfully.\n")
 
-def shutdown_and_check(lambda_name):
-    print(f"[SHUTDOWN] Shutting down workers for lambda '{lambda_name}'...")
+def verify_lambda_cron_trigger_result(lambda_name):
+    print(f"[VERIFY] Verifying cron config for lambda '{lambda_name}'...")
+    resp = boss_get(f"registry/{lambda_name}/config")
+    actual_config = json.loads(resp)
+    
+    # Check that cron trigger exists
+    assert actual_config["Triggers"]["Cron"] is not None, "Expected cron trigger to be configured"
+    assert len(actual_config["Triggers"]["Cron"]) > 0, "Expected at least one cron trigger"
+    assert "Schedule" in actual_config["Triggers"]["Cron"][0], "Expected cron trigger to have a schedule"
+    
+    print(f"[VERIFY] Cron config verified: {actual_config['Triggers']['Cron']}")
+    
+    # Check if the output file was created and contains the expected content
+    output_file = "/tmp/cron_test_output.txt"
+    assert os.path.exists(output_file), f"Cron output file {output_file} was not created"
+    
+    with open(output_file, 'r') as f:
+        content = f.read()
+    
+    assert "cron invoked" in content, f"Expected 'cron invoked' in output file, but got: {content}"
+    print(f"[VERIFY] Cron execution verified. Output: {content.strip()}")
+    
+    # Clean up output file
+    if os.path.exists(output_file):
+        os.remove(output_file)
+    
+    print("[VERIFY] Cron trigger result verification completed.\n")
+
+def shutdown_and_check():
+    print("[SHUTDOWN] Shutting down workers...")
     scale_workers(0)
     time.sleep(1)
     status = json.loads(boss_get("status"))
@@ -190,6 +223,75 @@ def cleanup_boss():
     kill_boss_on_port(5000)
 
 
+def test_default_trigger():
+    """
+    Test default HTTP trigger functionality by uploading a lambda,
+    verifying its config, invoking it, and cleaning up.
+    """
+    print("[DEFAULT TEST] Testing default HTTP trigger functionality...")
+    
+    lambda_name = "hi"
+    
+    # Step 2: upload and verify lambda
+    code = ["def f(event):", "\treturn 'hello'"]
+    upload_lambda(lambda_name, code)
+    verify_lambda_config(lambda_name)
+
+    # Step 3: invoke
+    result = invoke_lambda(lambda_name)
+    assert result == "hello", f"Unexpected lambda result: {result}"
+    
+    # Step 5: delete lambda and verify it's gone
+    delete_lambda_and_verify(lambda_name)
+    
+    print("[DEFAULT TEST] Default trigger test completed successfully.\n")
+
+
+def test_cron_trigger():
+    """
+    Test cron trigger functionality by creating a lambda with cron trigger,
+    uploading it, verifying the cron config is set correctly, and checking
+    that the cron function was invoked successfully.
+    """
+    print("[CRON TEST] Testing cron trigger functionality...")
+    
+    lambda_name = "cron_test"
+    code = [
+        "def f(event):",
+        "    import os",
+        "    with open('/tmp/cron_test_output.txt', 'a') as f:",
+        "        f.write('cron invoked\\n')",
+        "    return 'cron executed'"
+    ]
+    
+    # Create cron config lines
+    cron_config = [
+        "triggers:",
+        "  cron:",
+        "    - schedule: \"* * * * *\""
+    ]
+    
+    # Clear any existing output file before upload
+    output_file = "/tmp/cron_test_output.txt"
+    if os.path.exists(output_file):
+        os.remove(output_file)
+    
+    # Upload lambda with cron trigger
+    upload_lambda(lambda_name, code, cron_config)
+    
+    # Wait for cron to execute (slightly over 1 minute to ensure it runs)
+    print("[CRON TEST] Waiting 70 seconds for cron trigger to execute...")
+    time.sleep(70)
+    
+    # Verify the cron configuration and execution result
+    verify_lambda_cron_trigger_result(lambda_name)
+    
+    # Clean up
+    delete_lambda_and_verify(lambda_name)
+    
+    print("[CRON TEST] Cron trigger test completed successfully.\n")
+
+
 ### ------------------ End-to-End Test ------------------ ###
 
 def tester(platform):
@@ -207,21 +309,14 @@ def tester(platform):
     assert json.loads(boss_get("status"))["state"]["starting"] == 1
     wait_for_workers(1)
 
-    # Step 2: upload and verify lambda
-    lambda_name = "hi"
-    code = ["def f(event):", "\treturn 'hello'"]
-    upload_lambda(lambda_name, code)
-    verify_lambda_config(lambda_name)
-
-    # Step 3: invoke
-    result = invoke_lambda(lambda_name)
-    assert result == "hello", f"Unexpected lambda result: {result}"
-
-    # Step 4: scale down and verify unavailability
-    shutdown_and_check(lambda_name)
-
-    # Step 5: delete lambda and verify it's gone
-    delete_lambda_and_verify(lambda_name)
+    # Test default HTTP trigger functionality
+    test_default_trigger()
+    
+    # Test cron trigger functionality
+    test_cron_trigger()
+    
+    # Shutdown and check
+    shutdown_and_check()
 
     print(f"Test passed for platform: {platform}\n")
     cleanup_boss()
