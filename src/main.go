@@ -329,61 +329,64 @@ func checkStatus(port string) error {
 
 // adminInstall corresponds to the "admin install" command
 func adminInstall(ctx *cli.Context) error {
-	if ctx.NArg() != 1 {
-		return fmt.Errorf("usage: ol admin install <function_directory>")
+	// Parse arguments: can be "boss <func_dir>" or just "<func_dir>"
+	args := ctx.Args().Slice()
+	var installTarget string
+	var funcDir string
+	var workerPath string
+
+	// Check for -p flag
+	workerPath = ctx.String("path")
+
+	if len(args) == 0 {
+		return fmt.Errorf("usage: ol admin install [boss | -p <worker_path>] <function_directory>")
 	}
 
-	// Try to load boss configuration first (if boss.json exists)
-	if _, err := os.Stat("boss.json"); err == nil {
-		if err := config.LoadConf("boss.json"); err != nil {
-			return fmt.Errorf("failed to load boss config: %v", err)
-		}
-	}
+	if len(args) == 1 {
+		// Case: "ol admin install <func_dir>" or "ol admin install -p myworker <func_dir>"
+		funcDir = args[0]
+		installTarget = "worker"
 
-	// If boss config is not available, try to load worker configuration
-	if config.BossConf == nil {
-		olPath, err := common.GetOlPath(ctx)
-		if err != nil {
-			return err
+		// If no -p specified, default to default-ol
+		if workerPath == "" {
+			workerPath = "default-ol"
 		}
-		
-		if err := common.LoadGlobalConfig(filepath.Join(olPath, "config.json")); err != nil {
-			return fmt.Errorf("failed to load worker config: %v", err)
-		}
-	}
 
-	if common.Conf == nil && config.BossConf == nil {
-		return fmt.Errorf("common.Conf or config.BossConf not initialized")
+	} else if len(args) == 2 && args[0] == "boss" {
+		// Case: "ol admin install boss <func_dir>"
+		installTarget = "boss"
+		funcDir = args[1]
+		if workerPath != "" {
+			return fmt.Errorf("cannot use both 'boss' and '-p' flags together")
+		}
+	} else {
+		return fmt.Errorf("usage: ol admin install [boss | -p <worker_path>] <function_directory>")
 	}
 
 	var portToUploadLambda string
 
-	// Try boss first if available
-	if config.BossConf != nil {
-		bossPort := config.BossConf.Boss_port
-		portToUploadLambda = bossPort
-		
-		if err := checkStatus(bossPort); err != nil {
-			fmt.Printf("boss is not running or not reachable, checking if the worker is running: %v\n", err)
-			if common.Conf != nil {
-				if err := checkStatus(common.Conf.Worker_port); err != nil {
-					return fmt.Errorf("neither boss nor worker is running: %v", err)
-				}
-				// if the boss is not running but there is stand alone worker, we upload to the worker
-				portToUploadLambda = common.Conf.Worker_port
-			} else {
-				return fmt.Errorf("boss is not running and no worker config available: %v", err)
-			}
+	switch installTarget {
+	case "boss":
+		// Install to boss
+		if err := config.LoadConf("boss.json"); err != nil {
+			return fmt.Errorf("failed to load boss config: %v", err)
 		}
-	} else if common.Conf != nil {
-		// Only worker config available
+		if err := checkStatus(config.BossConf.Boss_port); err != nil {
+			return fmt.Errorf("boss is not running: %v", err)
+		}
+		portToUploadLambda = config.BossConf.Boss_port
+
+	case "worker":
+		// Install to specific worker (with -p)
+		if err := common.LoadGlobalConfig(filepath.Join(workerPath, "config.json")); err != nil {
+			return fmt.Errorf("failed to load worker config for %s: %v", workerPath, err)
+		}
 		if err := checkStatus(common.Conf.Worker_port); err != nil {
-			return fmt.Errorf("worker is not running: %v", err)
+			return fmt.Errorf("worker %s is not running: %v", workerPath, err)
 		}
 		portToUploadLambda = common.Conf.Worker_port
 	}
 
-	funcDir := ctx.Args().Get(0)
 	funcDir = strings.TrimSuffix(funcDir, "/")
 
 	// Extract function name from directory path
@@ -398,6 +401,15 @@ func adminInstall(ctx *cli.Context) error {
 	tarData, err := createTarGz(funcDir)
 	if err != nil {
 		return fmt.Errorf("failed to create tar.gz: %v", err)
+	}
+
+	// Debug: Print upload details
+	fmt.Printf("DEBUG: Uploading to port %s\n", portToUploadLambda)
+	if common.Conf != nil {
+		fmt.Printf("DEBUG: Worker registry: %s\n", common.Conf.Registry)
+	}
+	if config.BossConf != nil {
+		fmt.Printf("DEBUG: Boss config loaded\n")
 	}
 
 	// Upload to lambda store
@@ -530,8 +542,15 @@ OPTIONS:
 				{
 					Name:      "install",
 					Usage:     "Install a lambda function from directory",
-					UsageText: "ol admin install <function_directory>",
+					UsageText: "ol admin install [boss | -p <worker_path>] <function_directory>",
 					Action:    adminInstall,
+					Flags: []cli.Flag{
+						&cli.StringFlag{
+							Name:    "path",
+							Aliases: []string{"p"},
+							Usage:   "Worker directory path (e.g., -p myworker)",
+						},
+					},
 				},
 			},
 		},

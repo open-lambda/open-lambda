@@ -73,8 +73,8 @@ def install_examples_to_worker_registry():
         print(f"Installing {func_name} from {func_dir}")
         
         try:
-            # Run ol admin install <function_directory> with the correct OL path
-            result = subprocess.run([ol_binary, "admin", "install", func_dir, f"-p={OL_DIR}"], 
+            # Run ol admin install -p <worker_path> <function_directory>
+            result = subprocess.run([ol_binary, "admin", "install", f"-p={OL_DIR}", func_dir], 
                                   capture_output=True, text=True, cwd=project_root)
             
             if result.returncode == 0:
