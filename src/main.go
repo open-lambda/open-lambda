@@ -333,20 +333,53 @@ func adminInstall(ctx *cli.Context) error {
 		return fmt.Errorf("usage: ol admin install <function_directory>")
 	}
 
+	// Try to load boss configuration first (if boss.json exists)
+	if _, err := os.Stat("boss.json"); err == nil {
+		if err := config.LoadConf("boss.json"); err != nil {
+			return fmt.Errorf("failed to load boss config: %v", err)
+		}
+	}
+
+	// If boss config is not available, try to load worker configuration
+	if config.BossConf == nil {
+		olPath, err := common.GetOlPath(ctx)
+		if err != nil {
+			return err
+		}
+		
+		if err := common.LoadGlobalConfig(filepath.Join(olPath, "config.json")); err != nil {
+			return fmt.Errorf("failed to load worker config: %v", err)
+		}
+	}
+
 	if common.Conf == nil && config.BossConf == nil {
 		return fmt.Errorf("common.Conf or config.BossConf not initialized")
 	}
 
-	bossPort := config.BossConf.Boss_port
-	// default upload is to boss
-	portToUploadLambda := bossPort
+	var portToUploadLambda string
 
-	if err := checkStatus(bossPort); err != nil {
-		fmt.Printf("boss is not running or not reachable, checking if the worker is running: %v\n", err)
-		if err := checkStatus(common.Conf.Worker_port); err != nil {
-			return fmt.Errorf("neither boss nor worker is running: %v", err)
+	// Try boss first if available
+	if config.BossConf != nil {
+		bossPort := config.BossConf.Boss_port
+		portToUploadLambda = bossPort
+		
+		if err := checkStatus(bossPort); err != nil {
+			fmt.Printf("boss is not running or not reachable, checking if the worker is running: %v\n", err)
+			if common.Conf != nil {
+				if err := checkStatus(common.Conf.Worker_port); err != nil {
+					return fmt.Errorf("neither boss nor worker is running: %v", err)
+				}
+				// if the boss is not running but there is stand alone worker, we upload to the worker
+				portToUploadLambda = common.Conf.Worker_port
+			} else {
+				return fmt.Errorf("boss is not running and no worker config available: %v", err)
+			}
 		}
-		// if the boss is not running but there is stand alone worker, we upload to the worker
+	} else if common.Conf != nil {
+		// Only worker config available
+		if err := checkStatus(common.Conf.Worker_port); err != nil {
+			return fmt.Errorf("worker is not running: %v", err)
+		}
 		portToUploadLambda = common.Conf.Worker_port
 	}
 
