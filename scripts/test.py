@@ -430,11 +430,10 @@ def main():
         else:
             raise RuntimeError(f"Invalid worker type {args.worker_type}")
 
-        # Install examples if requested or if using default registry (worker registry)
-        if args.install_examples or not args.registry:
-            print("Installing example functions to worker registry...")
-            install_examples_to_worker_registry()
-            print()
+        # Install examples
+        print("Installing example functions to worker registry...")
+        install_examples_to_worker_registry()
+        print()
 
         start_tests()
         run_tests()
