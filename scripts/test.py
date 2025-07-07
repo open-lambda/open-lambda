@@ -60,10 +60,13 @@ def install_examples_to_worker_registry():
     print(f"Found {len(example_functions)} lambda functions in examples directory")
     
     # Install each function using admin install command
-    ol_binary = os.path.join(os.path.dirname(OL_DIR), "bin", "ol")
+    # Find the ol binary - it should be in the project root
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    ol_binary = os.path.join(project_root, "ol")
+    
     if not os.path.exists(ol_binary):
-        print(f"OL binary not found at {ol_binary}, trying ./ol")
-        ol_binary = "./ol"
+        print(f"✗ OL binary not found at {ol_binary}")
+        return
     
     for func_dir in example_functions:
         func_name = os.path.basename(func_dir)
@@ -72,7 +75,7 @@ def install_examples_to_worker_registry():
         try:
             # Run ol admin install <function_directory>
             result = subprocess.run([ol_binary, "admin", "install", func_dir], 
-                                  capture_output=True, text=True, cwd=os.path.dirname(OL_DIR))
+                                  capture_output=True, text=True, cwd=project_root)
             
             if result.returncode == 0:
                 print(f"✓ Successfully installed {func_name}")
