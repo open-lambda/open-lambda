@@ -433,12 +433,13 @@ def main():
         else:
             raise RuntimeError(f"Invalid worker type {args.worker_type}")
 
-        # Install examples
+        start_tests()
+        
+        # Install examples after worker is started
         print("Installing example functions to worker registry...")
         install_examples_to_worker_registry()
         print()
-
-        start_tests()
+        
         run_tests()
 
     check_test_results()
