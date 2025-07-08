@@ -13,7 +13,7 @@ import tempfile
 import tarfile
 import subprocess
 
-from time import time
+from time import time, sleep
 from subprocess import call
 from multiprocessing import Pool
 
@@ -437,7 +437,7 @@ def main():
         
         # Wait a moment for worker to fully start up
         print("Waiting for worker to fully start...")
-        time.sleep(3)
+        sleep(3)
         
         # Install examples after worker is started
         print("Installing example functions to worker registry...")
