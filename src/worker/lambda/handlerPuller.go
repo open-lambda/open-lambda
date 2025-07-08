@@ -113,11 +113,9 @@ func (cp *HandlerPuller) Pull(name string) (rt_type common.RuntimeType, targetDi
 	}
 
 	if cp.isRemote() {
-		// registry type = web
+		// registry type = web - only support tar.gz files
 		urls := []string{
 			cp.prefix + "/" + name + ".tar.gz",
-			cp.prefix + "/" + name + ".py",
-			cp.prefix + "/" + name + ".bin",
 		}
 
 		for i := 0; i < len(urls); i++ {
@@ -133,12 +131,9 @@ func (cp *HandlerPuller) Pull(name string) (rt_type common.RuntimeType, targetDi
 		return rt_type, "", fmt.Errorf("lambda not found at any of these locations: %s", strings.Join(urls, ", "))
 	}
 
-	// registry type = file
+	// registry type = file - only support tar.gz files
 	paths := []string{
 		filepath.Join(cp.prefix, name) + ".tar.gz",
-		filepath.Join(cp.prefix, name) + ".py",
-		filepath.Join(cp.prefix, name) + ".bin",
-		filepath.Join(cp.prefix, name),
 	}
 
 	for i := 0; i < len(paths); i++ {
@@ -208,26 +203,8 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type common.R
 
 	log.Printf("Created new directory for lambda function at `%s`", targetDir)
 
-	// Make sure we include the suffix
-	if strings.HasSuffix(stat.Name(), ".py") {
-		log.Printf("Installing `%s` from a python file", src)
-
-		err := Copy(src, filepath.Join(targetDir, "f.py"))
-		rt_type = common.RT_PYTHON
-
-		if err != nil {
-			return rt_type, "", fmt.Errorf("%s :: %s", err)
-		}
-	} else if strings.HasSuffix(stat.Name(), ".bin") {
-		log.Printf("Installing `%s` from binary file", src)
-
-		err := Copy(src, filepath.Join(targetDir, "f.bin"))
-		rt_type = common.RT_NATIVE
-
-		if err != nil {
-			return rt_type, "", fmt.Errorf("%s :: %s", err)
-		}
-	} else if strings.HasSuffix(stat.Name(), ".tar.gz") {
+	// Only support tar.gz files
+	if strings.HasSuffix(stat.Name(), ".tar.gz") {
 		log.Printf("Installing `%s` from an archive file", src)
 
 		cmd := exec.Command("tar", "-xzf", src, "--directory", targetDir)
@@ -235,16 +212,16 @@ func (cp *HandlerPuller) pullLocalFile(src, lambdaName string) (rt_type common.R
 			return rt_type, "", fmt.Errorf("%s :: %s", err, string(output))
 		}
 
-		// Figure out runtime type
+		// Validate that tar.gz contains f.py or f.bin
 		if _, err := os.Stat(targetDir + "/f.py"); !os.IsNotExist(err) {
 			rt_type = common.RT_PYTHON
 		} else if _, err := os.Stat(targetDir + "/f.bin"); !os.IsNotExist(err) {
 			rt_type = common.RT_NATIVE
 		} else {
-			return rt_type, "", fmt.Errorf("Found unknown runtime type or no code at all")
+			return rt_type, "", fmt.Errorf("tar.gz file must contain f.py or f.bin")
 		}
 	} else {
-		return rt_type, "", fmt.Errorf("lambda file %s not a .tar.gz or .py", src)
+		return rt_type, "", fmt.Errorf("lambda file %s must be a .tar.gz file", src)
 	}
 
 	if !cp.isRemote() {
