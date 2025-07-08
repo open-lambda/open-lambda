@@ -435,6 +435,10 @@ def main():
 
         start_tests()
         
+        # Wait a moment for worker to fully start up
+        print("Waiting for worker to fully start...")
+        time.sleep(3)
+        
         # Install examples after worker is started
         print("Installing example functions to worker registry...")
         install_examples_to_worker_registry()
