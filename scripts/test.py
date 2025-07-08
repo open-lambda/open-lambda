@@ -394,8 +394,6 @@ def main():
     parser.add_argument('--registry', type=str, default="")  # Will use worker registry by default
     parser.add_argument('--ol_dir', type=str, default="test-dir")
     parser.add_argument('--image', type=str, default="ol-wasm")
-    parser.add_argument('--install_examples', action='store_true', 
-                       help='Install example functions using admin install command')
 
     args = parser.parse_args()
 
