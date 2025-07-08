@@ -5,7 +5,7 @@ RUN apt-get -y install wget apt-transport-https curl
 RUN apt-get -y install python3 python3-dev python3-pip python-is-python3
 RUN apt-get -y install build-essential libseccomp-dev
 RUN pip3 install --upgrade pip
-RUN pip3 install virtualenv requests tornado==6.1.0
+RUN pip3 install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org virtualenv requests tornado==6.1.0
 
 RUN mkdir /runtimes
 
