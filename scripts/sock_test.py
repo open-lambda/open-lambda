@@ -27,7 +27,6 @@ from open_lambda import OpenLambda
 def install_examples_to_worker_registry():
     """Install all lambda functions from examples directory 
     to worker registry using admin install"""
-    
     examples_dir = os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "examples"
     )
