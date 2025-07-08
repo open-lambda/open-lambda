@@ -133,14 +133,36 @@ start and stop a worker many times without reinitializing.  You can
 change the config file, but the changes won't take effect until you
 restart the worker.
 
-## Creating a Lambda
+## Creating and Installing a Lambda
 
-Now save the following to `./default-ol/registry/echo.py`:
+Create the function directory. For example, to create a function called echo:
+
+```bash
+mkdir -p echo
+```
+
+Now, create a file named `f.py` inside the `echo` directory with the following content:
 
 ```python
 def f(event):
     return event
 ```
+
+With the worker running, you can install the lambda function using the `ol admin install` command:
+
+```bash
+./ol admin install echo/
+```
+
+This command will package the `echo` directory into a `.tar.gz` file and upload it to the worker's registry.
+
+If you initialized a worker with a specific path (e.g., `./ol worker init -p myworker`), you must specify the same path when installing a lambda.
+
+```bash
+./ol admin install -p myworker echo/
+```
+
+If no `-p` flag is specified, the command will default to the worker running on port 5000 using the default config.
 
 ## Invoke Lambda
 

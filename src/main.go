@@ -333,10 +333,9 @@ func adminInstall(ctx *cli.Context) error {
 	args := ctx.Args().Slice()
 	var installTarget string
 	var funcDir string
-	var workerPath string
 
 	// Check for -p flag
-	workerPath = ctx.String("path")
+	workerPath := ctx.String("path")
 
 	if len(args) == 0 {
 		return fmt.Errorf("usage: ol admin install [boss | -p <worker_path>] <function_directory>")
@@ -372,10 +371,15 @@ func adminInstall(ctx *cli.Context) error {
 		portToUploadLambda = config.BossConf.Boss_port
 
 	case "worker":
-		// If no -p specified, default to default-ol
+		// If no -p specified, default to worker running on default port 5000
 		if workerPath == "" {
-			if err := common.LoadDefaultLambdaConfig(); err != nil {
-				return fmt.Errorf("failed to load worker config for %s: %v", workerPath, err)
+			olPath, err := common.GetOlPath(ctx)
+			if err != nil {
+				return err
+			}
+
+			if err := common.LoadDefaults(olPath); err != nil {
+				return fmt.Errorf("failed to load default worker config for %s: %v", workerPath, err)
 			}
 		} else {
 			// Install to specific worker (with -p)
@@ -406,15 +410,6 @@ func adminInstall(ctx *cli.Context) error {
 		return fmt.Errorf("failed to create tar.gz: %v", err)
 	}
 
-	// Debug: Print upload details
-	fmt.Printf("DEBUG: Uploading to port %s\n", portToUploadLambda)
-	if common.Conf != nil {
-		fmt.Printf("DEBUG: Worker registry: %s\n", common.Conf.Registry)
-	}
-	if config.BossConf != nil {
-		fmt.Printf("DEBUG: Boss config loaded\n")
-	}
-
 	// Upload to lambda store
 	if err := uploadToLambdaStore(funcName, tarData, portToUploadLambda); err != nil {
 		return fmt.Errorf("failed to upload to lambda store: %v", err)
@@ -443,7 +438,6 @@ func createTarGz(funcDir string) ([]byte, error) {
 		}
 
 		if info.IsDir() {
-			fmt.Printf("DEBUG: Skipping directory: %s\n", path)
 			return nil // skip directories, tar only files
 		}
 
@@ -452,8 +446,6 @@ func createTarGz(funcDir string) ([]byte, error) {
 		if err != nil {
 			return fmt.Errorf("unable to compute relative path: %v", err)
 		}
-
-		fmt.Printf("DEBUG: Processing file: %s -> %s (size: %d)\n", path, relPath, info.Size())
 
 		header, err := tar.FileInfoHeader(info, "")
 		if err != nil {
@@ -480,7 +472,6 @@ func createTarGz(funcDir string) ([]byte, error) {
 			return fmt.Errorf("error closing file: %v", err)
 		}
 
-		fmt.Printf("DEBUG: Successfully added file: %s\n", relPath)
 		return nil
 	})
 	if err != nil {
