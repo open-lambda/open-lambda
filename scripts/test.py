@@ -420,7 +420,7 @@ def main():
         "evictor": True,
         "package": True,
     }
-    
+
     with TestConfContext(registry=registry_path, trace=trace_config):
         if args.worker_type == 'docker':
             set_worker_type(DockerWorker)
@@ -428,7 +428,7 @@ def main():
             set_worker_type(SockWorker)
         else:
             raise RuntimeError(f"Invalid worker type {args.worker_type}")
-        
+
         install_examples_to_worker_registry()
 
         start_tests()

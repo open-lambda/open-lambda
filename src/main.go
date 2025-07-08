@@ -347,11 +347,6 @@ func adminInstall(ctx *cli.Context) error {
 		funcDir = args[0]
 		installTarget = "worker"
 
-		// If no -p specified, default to default-ol
-		if workerPath == "" {
-			workerPath = "default-ol"
-		}
-
 	} else if len(args) == 2 && args[0] == "boss" {
 		// Case: "ol admin install boss <func_dir>"
 		installTarget = "boss"
@@ -377,10 +372,18 @@ func adminInstall(ctx *cli.Context) error {
 		portToUploadLambda = config.BossConf.Boss_port
 
 	case "worker":
-		// Install to specific worker (with -p)
-		if err := common.LoadGlobalConfig(filepath.Join(workerPath, "config.json")); err != nil {
-			return fmt.Errorf("failed to load worker config for %s: %v", workerPath, err)
+		// If no -p specified, default to default-ol
+		if workerPath == "" {
+			if err := common.LoadDefaultLambdaConfig(); err != nil {
+				return fmt.Errorf("failed to load worker config for %s: %v", workerPath, err)
+			}
+		} else {
+			// Install to specific worker (with -p)
+			if err := common.LoadGlobalConfig(filepath.Join(workerPath, "config.json")); err != nil {
+				return fmt.Errorf("failed to load worker config for %s: %v", workerPath, err)
+			}
 		}
+
 		if err := checkStatus(common.Conf.Worker_port); err != nil {
 			return fmt.Errorf("worker %s is not running: %v", workerPath, err)
 		}
