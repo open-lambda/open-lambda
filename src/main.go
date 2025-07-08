@@ -340,7 +340,6 @@ func adminInstall(ctx *cli.Context) error {
 	if len(args) == 0 {
 		return fmt.Errorf("usage: ol admin install [boss | -p <worker_path>] <function_directory>")
 	}
-
 	if len(args) == 1 {
 		// Case: "ol admin install <func_dir>" or "ol admin install -p myworker <func_dir>"
 		funcDir = args[0]
