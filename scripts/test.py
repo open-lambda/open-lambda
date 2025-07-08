@@ -39,7 +39,7 @@ from open_lambda import OpenLambda
 # These will be set by argparse in main()
 OL_DIR = None
 
-
+@test
 def install_examples_to_worker_registry():
     """Install all lambda functions from examples directory to worker registry using admin install"""
     examples_dir = os.path.join(os.path.dirname(OL_DIR), "examples")
@@ -393,7 +393,7 @@ def main():
     parser.add_argument('--test_blocklist', type=str, default="")
     parser.add_argument('--registry', type=str, default="")  # Will use worker registry by default
     parser.add_argument('--ol_dir', type=str, default="test-dir")
-    parser.add_argument('--image', type=str, default="ol-wasm")
+    parser.add_argument('--image', type=str, default="ol-min")
     parser.add_argument('--install_examples', action='store_true', 
                        help='Install example functions using admin install command')
 
@@ -432,18 +432,10 @@ def main():
             set_worker_type(SockWorker)
         else:
             raise RuntimeError(f"Invalid worker type {args.worker_type}")
+        
+        install_examples_to_worker_registry()
 
         start_tests()
-        
-        # Wait a moment for worker to fully start up
-        print("Waiting for worker to fully start...")
-        sleep(3)
-        
-        # Install examples after worker is started
-        print("Installing example functions to worker registry...")
-        install_examples_to_worker_registry()
-        print()
-        
         run_tests()
 
     check_test_results()
