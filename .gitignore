@@ -92,5 +92,12 @@ azure.json
 
 #boss
 boss.json
+boss.out
 cluster.log
 tasks.log
+
+# build artifacts and test files
+min-image/spin
+template.json
+worker-*/
+test-registry/
