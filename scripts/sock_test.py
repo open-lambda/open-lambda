@@ -39,7 +39,7 @@ def sock_churn(baseline, procs, seconds, fork):
     # baseline: how many sandboxes are sitting idly throughout the experiment
     # procs: how many procs are concurrently creating and deleting other sandboxes
 
-    echo_path = os.path.abspath("test-registry/echo.tar.gz")
+    echo_path = os.path.abspath("registry/echo.tar.gz")
     open_lambda = OpenLambda()
 
     if fork:
@@ -72,7 +72,7 @@ def main():
     parser = argparse.ArgumentParser(description='Run SOCK-specific tests for OpenLambda')
     parser.add_argument('--test_filter', type=str, default="")
     parser.add_argument('--ol_dir', type=str, default="test-dir")
-    parser.add_argument('--registry', type=str, default="test-registry")
+    parser.add_argument('--registry', type=str, default="registry")
 
     args = parser.parse_args()
 

@@ -409,12 +409,8 @@ def main():
     setup_config(args.ol_dir)
     prepare_open_lambda(args.ol_dir, args.image)
 
-    # Determine registry path - use worker registry if not specified
-    if args.registry:
-        registry_path = os.path.abspath(args.registry)
-    else:
-        # Use worker registry directory from config
-        registry_path = os.path.join(args.ol_dir, "registry")
+    # Use worker registry directory from config
+    registry_path = os.path.join(args.ol_dir, "registry")
 
     trace_config = {
         "cgroups": True,
