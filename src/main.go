@@ -427,53 +427,66 @@ func createTarGz(funcDir string) ([]byte, error) {
 	gzWriter := gzip.NewWriter(&buf)
 	tarWriter := tar.NewWriter(gzWriter)
 
-	// Files to include: f.py (required) and ol.yaml (optional)
-	filesToInclude := []string{"f.py", "ol.yaml"}
+	// Verify f.py exists
+	fpyPath := filepath.Join(funcDir, "f.py")
+	if _, err := os.Stat(fpyPath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("required file f.py not found in %s", funcDir)
+	}
 
-	for _, fileName := range filesToInclude {
-		filePath := filepath.Join(funcDir, fileName)
-
-		// Check if file exists
-		info, err := os.Stat(filePath)
-		if os.IsNotExist(err) {
-			if fileName == "f.py" {
-				return nil, fmt.Errorf("required file f.py not found in %s", funcDir)
-			}
-			// ol.yaml is optional, skip if not found
-			continue
-		}
+	// Walk the directory recursively
+	err := filepath.Walk(funcDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			return nil, fmt.Errorf("failed to stat %s: %v", filePath, err)
+			return fmt.Errorf("walk error: %v", err)
+		}
+
+		if info.IsDir() {
+			fmt.Printf("DEBUG: Skipping directory: %s\n", path)
+			return nil // skip directories, tar only files
 		}
 
 		// Create tar header
-		header := &tar.Header{
-			Name: fileName,
-			Mode: 0644,
-			Size: info.Size(),
+		relPath, err := filepath.Rel(funcDir, path)
+		if err != nil {
+			return fmt.Errorf("unable to compute relative path: %v", err)
 		}
+
+		fmt.Printf("DEBUG: Processing file: %s -> %s (size: %d)\n", path, relPath, info.Size())
+
+		header, err := tar.FileInfoHeader(info, "")
+		if err != nil {
+			return fmt.Errorf("unable to create header: %v", err)
+		}
+		header.Name = relPath // preserve folder structure
 
 		if err := tarWriter.WriteHeader(header); err != nil {
-			return nil, fmt.Errorf("failed to write tar header for %s: %v", fileName, err)
+			return fmt.Errorf("failed to write header: %v", err)
 		}
 
-		// Write file content
-		file, err := os.Open(filePath)
+		// Open and copy file content
+		file, err := os.Open(path)
 		if err != nil {
-			return nil, fmt.Errorf("failed to open %s: %v", filePath, err)
+			return fmt.Errorf("unable to open file: %v", err)
 		}
 
 		if _, err := io.Copy(tarWriter, file); err != nil {
 			file.Close()
-			return nil, fmt.Errorf("failed to write %s to tar: %v", fileName, err)
+			return fmt.Errorf("error copying file data: %v", err)
 		}
-		file.Close()
+
+		if err := file.Close(); err != nil {
+			return fmt.Errorf("error closing file: %v", err)
+		}
+
+		fmt.Printf("DEBUG: Successfully added file: %s\n", relPath)
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	if err := tarWriter.Close(); err != nil {
 		return nil, fmt.Errorf("failed to close tar writer: %v", err)
 	}
-
 	if err := gzWriter.Close(); err != nil {
 		return nil, fmt.Errorf("failed to close gzip writer: %v", err)
 	}
