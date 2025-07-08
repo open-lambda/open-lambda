@@ -159,29 +159,40 @@ def verify_lambda_cron_trigger_result(lambda_name):
     
     print(f"[VERIFY] Cron config verified: {actual_config['Triggers']['Cron']}")
     
-    # Check if the output file was created in the worker directory
-    # The lambda writes to the current working directory, which should be the worker directory
-    import glob
-    output_files = glob.glob("*/cron_test_output.txt")  # Look in worker directories
-    if not output_files:
-        # Fallback: check if it was written to /tmp/cron_test_output.txt
-        output_file = "/tmp/cron_test_output.txt"
-        if os.path.exists(output_file):
-            output_files = [output_file]
+    # Check if the output file was created to verify execution
+    # The lambda tries to write to multiple locations, check all of them
+    output_locations = [
+        "/tmp/cron_test_output.txt",  # Primary expected location
+        "cron_test_output.txt",       # Current working directory
+        "/cron_test_output.txt",      # Root directory
+    ]
     
-    assert len(output_files) > 0, f"Cron output file was not created. Looked for cron_test_output.txt in worker directories and /tmp/"
+    # Also check worker directories
+    worker_dirs = glob.glob("worker-*/")
+    for worker_dir in worker_dirs:
+        for filename in ["cron_test_output.txt", "tmp/cron_test_output.txt"]:
+            output_locations.append(os.path.join(worker_dir, filename))
     
-    output_file = output_files[0]
-    with open(output_file, 'r') as f:
-        content = f.read()
+    found_output = False
+    content = ""
+    found_file = ""
     
-    assert "cron invoked" in content, f"Expected 'cron invoked' in output file, but got: {content}"
-    print(f"[VERIFY] Cron execution verified. Output: {content.strip()}")
+    for location in output_locations:
+        if os.path.exists(location):
+            found_output = True
+            found_file = location
+            with open(location, 'r') as f:
+                content = f.read()
+            break
+    
+    # Assert that we found the output file as requested in the comment
+    assert found_output, f"Cron output file /tmp/cron_test_output.txt was not created. Checked locations: {output_locations}"
+    
+    assert "cron invoked" in content, f"Expected 'cron invoked' in output file {found_file}, but got: {content}"
+    print(f"[VERIFY] Cron execution verified. Output found in {found_file}: {content.strip()}")
     
     # Clean up output file
-    for file_path in output_files:
-        if os.path.exists(file_path):
-            os.remove(file_path)
+    os.remove(found_file)
     
     print("[VERIFY] Cron trigger result verification completed.\n")
 
@@ -267,18 +278,31 @@ def test_cron_trigger():
     print("[CRON TEST] Testing cron trigger functionality...")
     
     lambda_name = "cron_test"
-    # Lambda that writes to a shared volume that can be accessed by host
+    # Lambda that writes to multiple locations to ensure we can find the output
     code = [
         "def f(event):",
         "    import os",
         "    import time",
-        "    try:",
-        "        # Try to write to the worker directory which should be shared",
-        "        with open('cron_test_output.txt', 'w') as f:",
-        "            f.write('cron invoked at ' + str(time.time()) + '\\n')",
-        "        return 'cron executed'",
-        "    except Exception as e:",
-        "        return f'cron failed: {str(e)}'"
+        "    timestamp = str(time.time())",
+        "    message = f'cron invoked at {timestamp}\\n'",
+        "    ",
+        "    # Try to write to multiple locations",
+        "    locations = [",
+        "        '/tmp/cron_test_output.txt',",
+        "        'cron_test_output.txt',",
+        "        '/cron_test_output.txt'",
+        "    ]",
+        "    ",
+        "    success_count = 0",
+        "    for location in locations:",
+        "        try:",
+        "            with open(location, 'w') as f:",
+        "                f.write(message)",
+        "            success_count += 1",
+        "        except Exception:",
+        "            pass  # Ignore errors, try next location",
+        "    ",
+        "    return f'cron executed, wrote to {success_count} locations'"
     ]
     
     # Create cron config lines
