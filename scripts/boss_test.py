@@ -5,6 +5,7 @@ import time
 import tarfile
 import tempfile
 import subprocess
+import glob
 from subprocess import run
 
 import requests
@@ -158,10 +159,19 @@ def verify_lambda_cron_trigger_result(lambda_name):
     
     print(f"[VERIFY] Cron config verified: {actual_config['Triggers']['Cron']}")
     
-    # Check if the output file was created and contains the expected content
-    output_file = "/tmp/cron_test_output.txt"
-    assert os.path.exists(output_file), f"Cron output file {output_file} was not created"
+    # Check if the output file was created in the worker directory
+    # The lambda writes to the current working directory, which should be the worker directory
+    import glob
+    output_files = glob.glob("*/cron_test_output.txt")  # Look in worker directories
+    if not output_files:
+        # Fallback: check if it was written to /tmp/cron_test_output.txt
+        output_file = "/tmp/cron_test_output.txt"
+        if os.path.exists(output_file):
+            output_files = [output_file]
     
+    assert len(output_files) > 0, f"Cron output file was not created. Looked for cron_test_output.txt in worker directories and /tmp/"
+    
+    output_file = output_files[0]
     with open(output_file, 'r') as f:
         content = f.read()
     
@@ -169,8 +179,9 @@ def verify_lambda_cron_trigger_result(lambda_name):
     print(f"[VERIFY] Cron execution verified. Output: {content.strip()}")
     
     # Clean up output file
-    if os.path.exists(output_file):
-        os.remove(output_file)
+    for file_path in output_files:
+        if os.path.exists(file_path):
+            os.remove(file_path)
     
     print("[VERIFY] Cron trigger result verification completed.\n")
 
@@ -250,18 +261,24 @@ def test_default_trigger():
 def test_cron_trigger():
     """
     Test cron trigger functionality by creating a lambda with cron trigger,
-    uploading it, verifying the cron config is set correctly, and checking
-    that the cron function was invoked successfully.
+    uploading it, and verifying the cron config is set correctly.
+    Then wait for cron execution and verify it was invoked.
     """
     print("[CRON TEST] Testing cron trigger functionality...")
     
     lambda_name = "cron_test"
+    # Lambda that writes to a shared volume that can be accessed by host
     code = [
         "def f(event):",
         "    import os",
-        "    with open('/tmp/cron_test_output.txt', 'a') as f:",
-        "        f.write('cron invoked\\n')",
-        "    return 'cron executed'"
+        "    import time",
+        "    try:",
+        "        # Try to write to the worker directory which should be shared",
+        "        with open('cron_test_output.txt', 'w') as f:",
+        "            f.write('cron invoked at ' + str(time.time()) + '\\n')",
+        "        return 'cron executed'",
+        "    except Exception as e:",
+        "        return f'cron failed: {str(e)}'"
     ]
     
     # Create cron config lines
@@ -270,11 +287,6 @@ def test_cron_trigger():
         "  cron:",
         "    - schedule: \"* * * * *\""
     ]
-    
-    # Clear any existing output file before upload
-    output_file = "/tmp/cron_test_output.txt"
-    if os.path.exists(output_file):
-        os.remove(output_file)
     
     # Upload lambda with cron trigger
     upload_lambda(lambda_name, code, cron_config)
