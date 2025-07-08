@@ -26,12 +26,14 @@ from open_lambda import OpenLambda
 @test
 def install_examples_to_worker_registry():
     """Install all lambda functions from examples directory to worker registry using admin install"""
-    examples_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "examples")
-    
+    examples_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "examples"
+    )
+
     if not os.path.exists(examples_dir):
         print(f"Examples directory not found at {examples_dir}")
         return
-    
+
     # Get all directories in examples
     example_functions = []
     for item in os.listdir(examples_dir):
@@ -40,38 +42,38 @@ def install_examples_to_worker_registry():
             # Check if it has f.py (required for lambda functions)
             if os.path.exists(os.path.join(item_path, "f.py")):
                 example_functions.append(item_path)
-    
+
     print(f"Found {len(example_functions)} lambda functions in examples directory")
-    
+
     # Install each function using admin install command
     # Find the ol binary - it should be in the project root
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     ol_binary = os.path.join(project_root, "ol")
-    
+
     if not os.path.exists(ol_binary):
         print(f"✗ OL binary not found at {ol_binary}")
         return
-    
+
     # Get OL_DIR from the global args - for sock_test we'll use test-dir
     ol_dir = "test-dir"
-    
+
     for func_dir in example_functions:
         func_name = os.path.basename(func_dir)
         print(f"Installing {func_name} from {func_dir}")
-        
+
         try:
             # Run ol admin install -p <worker_path> <function_directory>
-            result = subprocess.run([ol_binary, "admin", "install", f"-p={ol_dir}", func_dir], 
+            result = subprocess.run([ol_binary, "admin", "install", f"-p={ol_dir}", func_dir],
                                   capture_output=True, text=True, cwd=project_root)
-            
+
             if result.returncode == 0:
                 print(f"✓ Successfully installed {func_name}")
             else:
                 print(f"✗ Failed to install {func_name}: {result.stderr}")
-                
-        except Exception as e:
+
+        except subprocess.SubprocessError as e:
             print(f"✗ Error installing {func_name}: {e}")
-    
+
     print("Finished installing example functions")
 
 def sock_churn_task(args):

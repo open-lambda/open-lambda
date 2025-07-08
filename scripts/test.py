@@ -13,7 +13,7 @@ import tempfile
 import tarfile
 import subprocess
 
-from time import time, sleep
+from time import time
 from subprocess import call
 from multiprocessing import Pool
 
@@ -42,7 +42,9 @@ OL_DIR = None
 @test
 def install_examples_to_worker_registry():
     """Install all lambda functions from examples directory to worker registry using admin install"""
-    examples_dir = os.path.join(os.path.dirname(OL_DIR), "examples")
+    examples_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "examples"
+    )
     
     if not os.path.exists(examples_dir):
         print(f"Examples directory not found at {examples_dir}")
