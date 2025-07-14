@@ -132,7 +132,8 @@ def verify_lambda_config(lambda_name):
     expected_config = {
         "Triggers": {
             "HTTP": [{"Method": "POST"}],
-            "Cron": None
+            "Cron": None,
+            "Kafka": None,
         }
     }
     assert actual_config == expected_config, (

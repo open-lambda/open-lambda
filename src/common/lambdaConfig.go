@@ -20,9 +20,9 @@ var HandlerNameRegex = regexp.MustCompile(`^[A-Za-z0-9\.\-\_]+$`)
 
 // Triggers defines different ways a lambda can be invoked
 type Triggers struct {
-	HTTP []HTTPTrigger `yaml:"http,omitempty"` // List of HTTP triggers
-	Cron []CronTrigger `yaml:"cron,omitempty"` // List of cron triggers
-	// TODO: Add Kafka triggers
+	HTTP  []HTTPTrigger  `yaml:"http,omitempty"`  // List of HTTP triggers
+	Cron  []CronTrigger  `yaml:"cron,omitempty"`  // List of cron triggers
+	Kafka []KafkaTrigger `yaml:"kafka,omitempty"` // List of kafka triggers
 }
 
 type HTTPTrigger struct {
@@ -33,7 +33,12 @@ type CronTrigger struct {
 	Schedule string `yaml:"schedule"` // Cron schedule (e.g., "*/5 * * * *")
 }
 
-// TODO: add KafkaTrigger struct
+type KafkaTrigger struct {
+	BootstrapServers []string `yaml:"bootstrap_servers" json:"bootstrap_servers"` // e.g., ["localhost:9092"]
+	Topics           []string `yaml:"topics" json:"topics"`                       // e.g., ["events", "logs"]
+	GroupId          string   `yaml:"group_id" json:"group_id"`                   // e.g., "lambda-group"
+	AutoOffsetReset  string   `yaml:"auto_offset_reset" json:"auto_offset_reset"` // "earliest" or "latest"
+}
 
 // LambdaConfig defines the overall configuration for the lambda function.
 type LambdaConfig struct { // List of HTTP triggers
@@ -73,7 +78,18 @@ func checkLambdaConfig(config *LambdaConfig) error {
 		}
 	}
 
-	// TODO: Validate Kafka triggers
+	// Validate Kafka triggers
+	for _, trigger := range config.Triggers.Kafka {
+		if len(trigger.Topics) == 0 {
+			return fmt.Errorf("Kafka trigger must have at least one topic")
+		}
+		if len(trigger.BootstrapServers) == 0 {
+			return fmt.Errorf("Kafka trigger must specify at least one bootstrap server")
+		}
+		if trigger.GroupId == "" {
+			return fmt.Errorf("Kafka trigger must have a group ID")
+		}
+	}
 
 	return nil
 }

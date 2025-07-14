@@ -33,6 +33,7 @@ type cleanable interface {
 	cleanup()
 }
 
+// LambdaManager is now a singleton, one per worker. This is because lambda manager
 // temporary file storing cpu profiled data
 const CPU_TEMP_PATTERN = ".cpu.*.prof"
 
