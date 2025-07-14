@@ -177,15 +177,16 @@ def main():
 
     global bootstrap_path
 
-    if len(sys.argv) < 2:
-        print("Expected execution: chroot <path_to_root_fs> python3 server.py <path_to_bootstrap.py> [cgroup-count] [enable-seccomp]")
+    if len(sys.argv) < 3:
+        print("Expected execution: chroot <path_to_root_fs> python3 server.py <path_to_bootstrap.py> [cgroup-count] [enable-seccomp] [enable-capabilities]")
         print("    cgroup-count: number of FDs (starting at 3) that refer to /sys/fs/cgroup/..../cgroup.procs files")
-        print("    enable-seccomp: true/false to enable or disables seccomp filtering")
+        print("    enable-seccomp: true/false to enable or disable seccomp filtering")
+        print("    enable-capabilities: true/false to enable or disable capability dropping")
         sys.exit(1)
 
     print('server.py: started new process with args: ' + " ".join(sys.argv))
 
-    #enable_seccomp if enable-seccomp is not passed
+    # enable_seccomp if enable-seccomp is not passed
     if len(sys.argv) < 3 or sys.argv[3] == 'true':
         return_code = ol.enable_seccomp()
         assert return_code >= 0
@@ -208,7 +209,6 @@ def main():
             file.write(pid)
             print(f'server.py: joined cgroup, close FD {fd_id}')
 
-    # drop privileges here
     start_container()
 
 
