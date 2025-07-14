@@ -158,6 +158,14 @@ def start_container():
         # works for the process that calls it.
         os._exit(0)
 
+    # drop all capabilities
+    return_val = ol.drop_all_caps();
+    assert return_val == 0
+
+    # set CAP_SYS_ADMIN
+    return_val = ol.modify_caps(21, 1);
+    assert return_val == 0
+
     with open(bootstrap_path, encoding='utf-8') as f:
         # this code can be whatever OL decides, but it will probably do the following:
         # 1. some imports
