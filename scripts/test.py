@@ -399,6 +399,10 @@ def main():
 
     OL_DIR = args.ol_dir
 
+    # Clean up any existing test directory
+    if os.path.exists(args.ol_dir):
+        call(['rm', '-rf', args.ol_dir])
+
     setup_config(args.ol_dir)
     prepare_open_lambda(args.ol_dir, args.image)
 
