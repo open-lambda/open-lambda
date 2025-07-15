@@ -11,6 +11,11 @@ import (
 	"strings"
 	"sync"
 
+	_ "gocloud.dev/blob"
+	_ "gocloud.dev/blob/fileblob"
+	_ "gocloud.dev/blob/gcsblob"
+	_ "gocloud.dev/blob/s3blob"
+
 	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
 	"github.com/open-lambda/open-lambda/ol/boss/event"
 	"github.com/open-lambda/open-lambda/ol/common"
