@@ -1,5 +1,6 @@
 #! /bin/bash
 
+set -e
 shopt -s nullglob
 
 REGISTRY_PATH=$1
@@ -10,7 +11,7 @@ mkdir -p ${REGISTRY_PATH}
 echo "Searching for functions in ${NATIVE_PREFIX}"
 
 for f in ${NATIVE_PREFIX}/*; do
-    name=${f/${NATIVE_PREFIX}/}
+    name=${basename"$f"}
 
     # Ignore subdirectories, libraries, and non-executable files
     if [[ $name != *".so" && -f "$f" && -x "$f" ]]; then
