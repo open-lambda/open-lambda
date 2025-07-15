@@ -211,22 +211,15 @@ func uploadToLambdaStore(funcName string, tarData []byte, port string) error {
 func AdminCommands() []*cli.Command {
 	return []*cli.Command{
 		{
-			Name:      "admin",
-			Usage:     "Admin commands for managing lambdas",
-			UsageText: "ol admin <cmd>",
-			Subcommands: []*cli.Command{
-				{
-					Name:      "install",
-					Usage:     "Install a lambda function from directory",
-					UsageText: "ol admin install [boss | -p <worker_path>] <function_directory>",
-					Action:    adminInstall,
-					Flags: []cli.Flag{
-						&cli.StringFlag{
-							Name:    "path",
-							Aliases: []string{"p"},
-							Usage:   "Worker directory path (e.g., -p myworker)",
-						},
-					},
+			Name:      "install",
+			Usage:     "Install a lambda function from directory",
+			UsageText: "ol admin install [boss | -p <worker_path>] <function_directory>",
+			Action:    adminInstall,
+			Flags: []cli.Flag{
+				&cli.StringFlag{
+					Name:    "path",
+					Aliases: []string{"p"},
+					Usage:   "Worker directory path (e.g., -p myworker)",
 				},
 			},
 		},
