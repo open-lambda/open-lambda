@@ -40,6 +40,13 @@ type LambdaEntry struct {
 func NewLambdaStore(storeURL string, pool *cloudvm.WorkerPool) (*LambdaStore, error) {
 	ctx := context.Background()
 
+	// If no recognized scheme is present, assume local path and add file://
+	if !strings.HasPrefix(storeURL, "file://") &&
+		!strings.HasPrefix(storeURL, "s3://") &&
+		!strings.HasPrefix(storeURL, "gs://") {
+		storeURL = "file://" + storeURL
+	}
+
 	// If using local file storage, ensure the directory exists
 	if strings.HasPrefix(storeURL, "file://") {
 		dir := strings.TrimPrefix(storeURL, "file://")

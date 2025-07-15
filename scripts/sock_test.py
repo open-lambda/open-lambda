@@ -127,7 +127,7 @@ def main():
     parser = argparse.ArgumentParser(description='Run SOCK-specific tests for OpenLambda')
     parser.add_argument('--test_filter', type=str, default="")
     parser.add_argument('--ol_dir', type=str, default="test-dir")
-    parser.add_argument('--registry', type=str, default="registry")
+    parser.add_argument('--registry', type=str, default="")
 
     args = parser.parse_args()
 
@@ -138,7 +138,7 @@ def main():
     prepare_open_lambda(args.ol_dir)
 
     start_tests()
-    with TestConfContext(registry=os.path.abspath(args.registry), limits={"installer_mem_mb": 250}):
+    with TestConfContext(limits={"installer_mem_mb": 250}):
         run_tests()
     check_test_results()
 
