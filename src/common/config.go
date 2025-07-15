@@ -76,10 +76,11 @@ type DockerConfig struct {
 }
 
 type FeaturesConfig struct {
-	Reuse_cgroups       bool   `json:"reuse_cgroups"`
-	Import_cache        string `json:"import_cache"`
-	Downsize_paused_mem bool   `json:"downsize_paused_mem"`
-	Enable_seccomp      bool   `json:"enable_seccomp"`
+	Reuse_cgroups        bool    `json:"reuse_cgroups"`
+	Import_cache         string  `json:"import_cache"`
+	Downsize_paused_mem  bool    `json:"downsize_paused_mem"`
+	Enable_seccomp       bool    `json:"enable_seccomp"`
+	Enable_capabilities  bool    `json:"enable_capabilities"`
 }
 
 type TraceConfig struct {
