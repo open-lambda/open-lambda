@@ -39,7 +39,7 @@ wasm-functions:
 native-functions: imgs/ol-wasm
 	cd bin-functions && cross build --release
 	bash ./bin-functions/install-native.sh test-dir/registry
-	ls registry/hashing.tar.gz registry/noop.tar.gz # guarantee they were created
+	ls test-dir/registry/hashing.tar.gz test-dir/registry/noop.tar.gz # guarantee they were created
 
 update-dependencies:
 	cd wasm-image/runtimes/native && cargo update
