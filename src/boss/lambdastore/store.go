@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 
@@ -26,11 +25,6 @@ type LambdaStore struct {
 	// bucket is the cloud storage bucket for lambda tarballs
 	bucket *blob.Bucket
 
-	// trashPath is a subdirectory used to temporarily move deleted lambda tarballs.
-	// The tarball is atomically moved here while holding both mapLock and the lambda’s entry.Lock,
-	// ensuring consistency between in-memory and on-disk state. Actual deletion from disk
-	// is deferred to a background goroutine to avoid holding locks during slow I/O.
-	trashPath string
 
 	eventManager *event.Manager
 	// mapLock protects concurrent access to the Lambdas map
@@ -284,9 +278,6 @@ func (s *LambdaStore) removeFromRegistry(funcName string) error {
 	// hold both locks
 	entry.Lock.Lock()
 
-	ctx := context.Background()
-	key := funcName + ".tar.gz"
-
 	if s.eventManager != nil {
 		if err := s.eventManager.Unregister(funcName); err != nil {
 			log.Printf("failed to unregister triggers for %s: %v", funcName, err)
@@ -299,8 +290,8 @@ func (s *LambdaStore) removeFromRegistry(funcName string) error {
 
 	// Background deletion
 	go func() {
-		if err := os.Remove(trashPath); err != nil {
-			log.Printf("warning: failed to remove %s from trash: %v", trashPath, err)
+		if err := s.bucket.Delete(context.Background(), funcName+".tar.gz"); err != nil {
+			log.Printf("warning: failed to remove %s from blob storage: %v", funcName+".tar.gz", err)
 		}
 	}()
 
@@ -312,16 +303,17 @@ func (s *LambdaStore) getConfig(funcName string) (*common.LambdaConfig, error) {
 	lambdaEntry.Lock.Lock()
 	defer lambdaEntry.Lock.Unlock()
 
-	tarPath := filepath.Join(s.StorePath, funcName+".tar.gz")
-	cfg, err := common.ExtractConfigFromTarGz(tarPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("lambda %q not found", funcName)
-		}
-		return nil, fmt.Errorf("failed to extract config: %w", err)
+	// Return cached config if available
+	if lambdaEntry.Config != nil {
+		return lambdaEntry.Config, nil
 	}
 
-	return cfg, nil
+	// If not cached, try to load from blob storage
+	if err := s.loadConfigAndRegister(funcName); err != nil {
+		return nil, fmt.Errorf("lambda %q not found", funcName)
+	}
+
+	return lambdaEntry.Config, nil
 }
 
 func (s *LambdaStore) getOrCreateEntry(funcName string) *LambdaEntry {

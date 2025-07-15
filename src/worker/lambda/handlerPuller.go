@@ -31,8 +31,9 @@ type HandlerPuller struct {
 }
 
 type CacheEntry struct {
-	version string // optional: not used with blob
+	version string // blob modification time
 	path    string
+	runtime common.RuntimeType
 }
 
 func NewHandlerPuller(dirMaker *common.DirMaker) (*HandlerPuller, error) {
@@ -72,17 +73,17 @@ func (cp *HandlerPuller) Pull(name string) (common.RuntimeType, string, error) {
 	if err == nil {
 		version := attrs.ModTime.String()
 		if cached := cp.getCache(name); cached != nil && cached.version == version {
-			return RT_UNKNOWN, cached.path, nil
+			return cached.runtime, cached.path, nil
 		}
 	}
 
 	rt, dir, err := cp.pullFromBlob(key, name)
 	if err == nil {
+		version := ""
 		if attrs != nil {
-			cp.putCache(name, attrs.ModTime.String(), dir)
-		} else {
-			cp.putCache(name, "", dir)
+			version = attrs.ModTime.String()
 		}
+		cp.putCache(name, version, dir, rt)
 		return rt, dir, nil
 	} else if err != errNotFound404 {
 		return RT_UNKNOWN, "", err
@@ -116,7 +117,7 @@ func (cp *HandlerPuller) pullFromBlob(key, lambdaName string) (common.RuntimeTyp
 	defer os.Remove(tmpPath)
 
 	targetDir := cp.dirMaker.Get(lambdaName)
-	if err := os.Mkdir(targetDir, 0755); err != nil {
+	if err := os.MkdirAll(targetDir, 0755); err != nil {
 		return RT_UNKNOWN, "", err
 	}
 
@@ -147,6 +148,10 @@ func (cp *HandlerPuller) getCache(name string) *CacheEntry {
 	}
 	return entry.(*CacheEntry)
 }
-func (cp *HandlerPuller) putCache(name, version, path string) {
-	cp.dirCache.Store(name, &CacheEntry{version, path})
+func (cp *HandlerPuller) putCache(name, version, path string, runtime common.RuntimeType) {
+	// Clean up old cache entry if it exists
+	if old := cp.getCache(name); old != nil && old.path != path {
+		os.RemoveAll(old.path)
+	}
+	cp.dirCache.Store(name, &CacheEntry{version, path, runtime})
 }

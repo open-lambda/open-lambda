@@ -47,9 +47,8 @@ func SaveTemplateConfToWorkerDir(cfg *common.Config, workerPath string, workerPo
 
 	cfgCopy.Worker_port = workerPort
 
-	// point the worker registry to lambda store
-	// TODO: it only works on the same machine. Need to handle this more generally.
-	cfgCopy.Registry = config.BossConf.Local.LambdaStoreLocal
+	// point the worker registry to lambda store (platform-aware)
+	cfgCopy.Registry = config.BossConf.GetLambdaStoreURL()
 
 	// Save the template configuration to the worker's config directory
 	configPath := filepath.Join(workerPath, "config.json")
