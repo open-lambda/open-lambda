@@ -21,7 +21,7 @@ type LambdaMgr struct {
 	sbPool sandbox.SandboxPool
 	*packages.DepTracer
 	*packages.PackagePuller // depends on sbPool and DepTracer
-	zygote.ZygoteProvider     // depends PackagePuller
+	zygote.ZygoteProvider   // depends PackagePuller
 	*HandlerPuller          // depends on sbPool and ImportCache[optional]
 
 	// storage dirs that we manage
@@ -46,8 +46,27 @@ type Invocation struct {
 	execMs int
 }
 
-// NewLambdaMgr creates a new LambdaMgr instance and initializes its subsystems.
-func NewLambdaMgr() (res *LambdaMgr, err error) {
+var lambdaMgr *LambdaMgr
+var once sync.Once
+
+// GetLambdaManagerInstance returns a singleton instance of LambdaMgr.
+// This is necessary because:
+//   - Each LambdaMgr sets up directories and manages shared code storage on the worker,
+//     so multiple instances causes the same folders to get created again, leading to conflicting operations.
+//   - All triggers (e.g., HTTP, Kafka) on the same worker need to use the same LambdaMgr
+//     to run the same code
+//   - Using sync.Once ensures that the LambdaMgr is only initialized once per worker process.
+func GetLambdaManagerInstance() (*LambdaMgr, error) {
+	var err error
+	once.Do(func() {
+		lambdaMgr, err = newLambdaMgr()
+	})
+	return lambdaMgr, err
+}
+
+// newLambdaMgr creates a new LambdaMgr instance and initializes its subsystems.
+// This is private to force packages to use the singleton method GetLambdaManagerInstance
+func newLambdaMgr() (res *LambdaMgr, err error) {
 	mgr := &LambdaMgr{
 		lfuncMap: make(map[string]*LambdaFunc),
 	}
@@ -111,8 +130,8 @@ func (mgr *LambdaMgr) Get(name string) (f *LambdaFunc) {
 
 	if f == nil {
 		f = &LambdaFunc{
-			lmgr:      mgr,
-			name:      name,
+			lmgr: mgr,
+			name: name,
 			// TODO make these configurable
 			funcChan:  make(chan *Invocation, 1024),
 			instChan:  make(chan *Invocation, 1024),

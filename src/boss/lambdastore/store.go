@@ -56,9 +56,15 @@ func NewLambdaStore(storeURL string, pool *cloudvm.WorkerPool) (*LambdaStore, er
 		return nil, fmt.Errorf("failed to open blob bucket: %w", err)
 	}
 
+	var eventManager *event.Manager
+	if pool != nil {
+		eventManager = event.NewManager(pool)
+	}
+
 	store := &LambdaStore{
-		bucket:       bucket,
-		eventManager: event.NewManager(pool),
+		StorePath:    storePath,
+		trashPath:    trashDir,
+		eventManager: eventManager,
 		Lambdas:      make(map[string]*LambdaEntry),
 	}
 
@@ -188,12 +194,15 @@ func (s *LambdaStore) loadConfigAndRegister(funcName string) error {
 
 	entry := s.getOrCreateEntry(funcName)
 	entry.Lock.Lock()
-	entry.Config = cfg
-	entry.Lock.Unlock()
+	defer entry.Lock.Unlock()
 
-	err = s.eventManager.Register(funcName, cfg.Triggers)
-	if err != nil {
-		return err
+	entry.Config = cfg
+
+	if s.eventManager != nil {
+		err = s.eventManager.Register(funcName, cfg.Triggers)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -252,9 +261,11 @@ func (s *LambdaStore) addToRegistry(funcName string, body io.Reader) error {
 
 	lambdaEntry.Config = cfg
 
-	err = s.eventManager.Register(funcName, cfg.Triggers)
-	if err != nil {
-		return err
+	if s.eventManager != nil {
+		err = s.eventManager.Register(funcName, cfg.Triggers)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -273,7 +284,12 @@ func (s *LambdaStore) removeFromRegistry(funcName string) error {
 	ctx := context.Background()
 	key := funcName + ".tar.gz"
 
-	// Remove from in-memory storage first
+	if s.eventManager != nil {
+		if err := s.eventManager.Unregister(funcName); err != nil {
+			log.Printf("failed to unregister triggers for %s: %v", funcName, err)
+		}
+	}
+
 	delete(s.Lambdas, funcName)
 	entry.Lock.Unlock()
 	s.mapLock.Unlock()
@@ -285,7 +301,6 @@ func (s *LambdaStore) removeFromRegistry(funcName string) error {
 		}
 	}()
 
-	s.eventManager.Unregister(funcName)
 	return nil
 }
 

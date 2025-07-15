@@ -11,6 +11,7 @@ import os
 import sys
 import tempfile
 import tarfile
+import subprocess
 
 from time import time
 from subprocess import call
@@ -37,6 +38,47 @@ from open_lambda import OpenLambda
 
 # These will be set by argparse in main()
 OL_DIR = None
+
+@test
+def install_examples_to_worker_registry():
+    """Install all lambda functions from examples directory to
+    worker registry using admin install"""
+    examples_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "examples"
+    )
+    if not os.path.exists(examples_dir):
+        print(f"Examples directory not found at {examples_dir}")
+        return
+    # Get all directories in examples
+    example_functions = []
+    for item in os.listdir(examples_dir):
+        item_path = os.path.join(examples_dir, item)
+        if os.path.isdir(item_path):
+            # Check if it has f.py (required for lambda functions)
+            if os.path.exists(os.path.join(item_path, "f.py")):
+                example_functions.append(item_path)
+    print(f"Found {len(example_functions)} lambda functions in examples directory")
+    # Install each function using admin install command
+    # Find the ol binary - it should be in the project root
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    ol_binary = os.path.join(project_root, "ol")
+    if not os.path.exists(ol_binary):
+        print(f"✗ OL binary not found at {ol_binary}")
+        return
+    for func_dir in example_functions:
+        func_name = os.path.basename(func_dir)
+        print(f"Installing {func_name} from {func_dir}")
+        try:
+            # Run ol admin install -p <worker_path> <function_directory>
+            result = subprocess.run([ol_binary, "admin", "install", f"-p={OL_DIR}", func_dir],
+                                capture_output=True, text=True, cwd=project_root)
+            if result.returncode == 0:
+                print(f"✓ Successfully installed {func_name}")
+            else:
+                print(f"✗ Failed to install {func_name}: {result.stderr}")
+        except Exception as e:
+            print(f"✗ Error installing {func_name}: {e}")
+    print("Finished installing example functions")
 
 
 @test
@@ -141,19 +183,21 @@ def call_each_once_exec(lambda_count, alloc_mb, zygote_provider):
             return {"reqs_per_sec": lambda_count/seconds}
 
 def call_each_once(lambda_count, alloc_mb=0, zygote_provider="tree"):
-    with tempfile.TemporaryDirectory() as tmp_build_dir, tempfile.TemporaryDirectory() as reg_dir:
-        # Create tar.gz packages for each lambda
+    with tempfile.TemporaryDirectory() as reg_dir:
+        # create dummy lambdas as tar.gz files
         for pos in range(lambda_count):
-            lambda_name = f"L{pos}"
-            lambda_dir = os.path.join(tmp_build_dir, lambda_name)
-            os.makedirs(lambda_dir)
-
-            # Write f.py
-            with open(os.path.join(lambda_dir, "f.py"), "w", encoding="utf-8") as code:
-                code.write("def f(event):\n")
-                code.write("    global s\n")
-                code.write(f"    s = '*' * {alloc_mb} * 1024**2\n")
-                code.write(f"    return {pos}\n")
+            # Create temporary directory for lambda contents
+            with tempfile.TemporaryDirectory() as lambda_dir:
+                # Write f.py file
+                with open(os.path.join(lambda_dir, "f.py"), "w", encoding='utf-8') as code:
+                    code.write("def f(event):\n")
+                    code.write("    global s\n")
+                    code.write(f"    s = '*' * {alloc_mb} * 1024**2\n")
+                    code.write(f"    return {pos}\n")
+                # Create tar.gz file
+                tar_path = os.path.join(reg_dir, f"L{pos}.tar.gz")
+                with tarfile.open(tar_path, "w:gz") as tar:
+                    tar.add(os.path.join(lambda_dir, "f.py"), arcname="f.py")
 
             # Package into tar.gz
             tar_path = os.path.join(reg_dir, f"{lambda_name}.tar.gz")
@@ -210,12 +254,16 @@ def update_code():
     open_lambda = OpenLambda()
 
     for pos in range(3):
-        # Create a temp directory with updated f.py
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            f_py = os.path.join(tmp_dir, "f.py")
-            with open(f_py, "w", encoding='utf-8') as code:
+        # update function code in tar.gz format
+        with tempfile.TemporaryDirectory() as lambda_dir:
+            # Write f.py file
+            with open(os.path.join(lambda_dir, "f.py"), "w", encoding='utf-8') as code:
                 code.write("def f(event):\n")
                 code.write(f"    return {pos}\n")
+            # Create tar.gz file
+            tar_path = os.path.join(reg_dir, "version.tar.gz")
+            with tarfile.open(tar_path, "w:gz") as tar:
+                tar.add(os.path.join(lambda_dir, "f.py"), arcname="f.py")
 
             # Create a tar.gz archive
             tar_path = os.path.join(reg_path, "version.tar.gz")
@@ -350,7 +398,7 @@ def main():
     parser.add_argument('--worker_type', type=str, default="sock")
     parser.add_argument('--test_filter', type=str, default="")
     parser.add_argument('--test_blocklist', type=str, default="")
-    parser.add_argument('--registry', type=str, default="test-registry")
+    parser.add_argument('--registry', type=str, default="")  # Will use worker registry by default
     parser.add_argument('--ol_dir', type=str, default="test-dir")
     parser.add_argument('--image', type=str, default="ol-wasm")
 
@@ -368,19 +416,25 @@ def main():
     setup_config(args.ol_dir)
     prepare_open_lambda(args.ol_dir, args.image)
 
+    # Use worker registry directory from config
+    registry_path = os.path.join(args.ol_dir, "registry")
+
     trace_config = {
         "cgroups": True,
         "memory": True,
         "evictor": True,
         "package": True,
     }
-    with TestConfContext(registry="file://" + os.path.abspath(args.registry), trace=trace_config):
+
+    with TestConfContext(registry=registry_path, trace=trace_config):
         if args.worker_type == 'docker':
             set_worker_type(DockerWorker)
         elif args.worker_type == 'sock':
             set_worker_type(SockWorker)
         else:
             raise RuntimeError(f"Invalid worker type {args.worker_type}")
+
+        install_examples_to_worker_registry()
 
         start_tests()
         run_tests()

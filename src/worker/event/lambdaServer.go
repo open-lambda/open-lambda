@@ -81,7 +81,7 @@ func (s *LambdaServer) cleanup() {
 func NewLambdaServer() (*LambdaServer, error) {
 	log.Printf("Starting new lambda server")
 
-	lambdaMgr, err := lambda.NewLambdaMgr()
+	lambdaMgr, err := lambda.GetLambdaManagerInstance()
 	if err != nil {
 		return nil, err
 	}
