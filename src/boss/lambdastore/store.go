@@ -40,10 +40,15 @@ type LambdaEntry struct {
 func NewLambdaStore(storePath string, pool *cloudvm.WorkerPool) (*LambdaStore, error) {
 	trashDir := filepath.Join(storePath, ".trash")
 
+	var eventManager *event.Manager
+	if pool != nil {
+		eventManager = event.NewManager(pool)
+	}
+
 	store := &LambdaStore{
 		StorePath:    storePath,
 		trashPath:    trashDir,
-		eventManager: event.NewManager(pool),
+		eventManager: eventManager,
 		Lambdas:      make(map[string]*LambdaEntry),
 	}
 
@@ -163,9 +168,11 @@ func (s *LambdaStore) loadConfigAndRegister(funcName string) error {
 
 	entry.Config = cfg
 
-	err = s.eventManager.Register(funcName, cfg.Triggers)
-	if err != nil {
-		return err
+	if s.eventManager != nil {
+		err = s.eventManager.Register(funcName, cfg.Triggers)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -210,9 +217,11 @@ func (s *LambdaStore) addToRegistry(funcName string, body io.Reader) error {
 
 	lambdaEntry.Config = cfg
 
-	err = s.eventManager.Register(funcName, cfg.Triggers)
-	if err != nil {
-		return err
+	if s.eventManager != nil {
+		err = s.eventManager.Register(funcName, cfg.Triggers)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -238,8 +247,10 @@ func (s *LambdaStore) removeFromRegistry(funcName string) error {
 		return fmt.Errorf("failed to rename tarball for %s: %w", funcName, err)
 	}
 
-	if err := s.eventManager.Unregister(funcName); err != nil {
-		log.Printf("failed to unregister triggers for %s: %v", funcName, err)
+	if s.eventManager != nil {
+		if err := s.eventManager.Unregister(funcName); err != nil {
+			log.Printf("failed to unregister triggers for %s: %v", funcName, err)
+		}
 	}
 
 	delete(s.Lambdas, funcName)
