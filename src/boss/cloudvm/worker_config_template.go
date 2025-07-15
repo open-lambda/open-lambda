@@ -49,7 +49,7 @@ func SaveTemplateConfToWorkerDir(cfg *common.Config, workerPath string, workerPo
 
 	// point the worker registry to lambda store
 	// TODO: it only works on the same machine. Need to handle this more generally.
-	cfgCopy.Registry = config.BossConf.Lambda_Store_Path
+	cfgCopy.Registry = config.BossConf.Local.LambdaStoreLocal
 
 	// Save the template configuration to the worker's config directory
 	configPath := filepath.Join(workerPath, "config.json")
