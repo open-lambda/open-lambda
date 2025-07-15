@@ -125,7 +125,12 @@ func initOLDir(olPath string, dockerBaseImage string, newBase bool) (err error) 
 				}
 			}
 		} else {
-			return fmt.Errorf("Directory %s already exists but does not contain a previous OL deployment", olPath)
+			// Directory exists but doesn't contain a valid OL deployment
+			// Remove it and create a fresh one
+			fmt.Printf("Directory %s exists but is not a valid OL deployment. Removing it.\n", olPath)
+			if err := os.RemoveAll(olPath); err != nil {
+				return fmt.Errorf("failed to remove invalid OL directory %s: %w", olPath, err)
+			}
 		}
 	} else {
 		if err := os.Mkdir(olPath, 0700); err != nil {
