@@ -25,7 +25,6 @@ type LambdaStore struct {
 	// bucket is the cloud storage bucket for lambda tarballs
 	bucket *blob.Bucket
 
-
 	eventManager *event.Manager
 	// mapLock protects concurrent access to the Lambdas map
 	mapLock sync.Mutex
