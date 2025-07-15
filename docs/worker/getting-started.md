@@ -133,9 +133,35 @@ start and stop a worker many times without reinitializing.  You can
 change the config file, but the changes won't take effect until you
 restart the worker.
 
-## Creating and Installing a Lambda
+## Using Provided Examples
 
-Create the function directory. For example, to create a function called echo:
+OpenLambda includes a variety of example lambda functions in the `examples/` directory to help you get started quickly. These examples demonstrate different use cases and features:
+
+- `examples/echo/` - Simple echo function that returns the input
+- `examples/hello/` - Basic hello world function  
+- `examples/numpy21/`, `examples/numpy22/` - Examples using NumPy
+- `examples/pandas/` - Data processing with Pandas
+- `examples/flask-test/` - Web framework integration
+- `examples/timeout/` - Function with timeout configuration
+- And many more...
+
+To use any of these examples, simply install them directly:
+
+```bash
+./ol admin install examples/echo/
+./ol admin install examples/hello/
+./ol admin install examples/numpy21/
+```
+
+Then invoke them with curl:
+
+```bash
+curl -X POST localhost:5000/run/echo -d '{"hello": "world"}'
+```
+
+## Creating and Installing a Custom Lambda
+
+You can also create your own lambda functions. Create the function directory:
 
 ```bash
 mkdir -p echo

@@ -16,6 +16,7 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/open-lambda/open-lambda/ol/boss/lambdastore"
 	"github.com/open-lambda/open-lambda/ol/common"
 )
 
@@ -36,6 +37,10 @@ const (
 	// GET /registry/{name} not implemented
 	// GET /registry/{name}/config
 	REGISTRY_BASE_PATH = "/registry/"
+)
+
+var (
+	lambdaStore *lambdastore.LambdaStore
 )
 
 type cleanable interface {
@@ -209,14 +214,14 @@ func shutdown(pidPath string, server cleanable) {
 	os.Exit(rc)
 }
 
-// RegistryHandler handles registry requests similar to boss, but uploads to common.Conf.Registry
+// RegistryHandler handles registry requests using boss's LambdaStore
 func RegistryHandler(w http.ResponseWriter, r *http.Request) {
 	relPath := strings.TrimPrefix(r.URL.Path, REGISTRY_BASE_PATH)
 
 	// GET /registry - list all lambda functions in registry
 	if relPath == "" {
 		if r.Method == "GET" {
-			ListLambdas(w)
+			lambdaStore.ListLambda(w)
 			return
 		}
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -227,15 +232,15 @@ func RegistryHandler(w http.ResponseWriter, r *http.Request) {
 
 	// GET /registry/{name}/config
 	if len(parts) == 2 && parts[1] == "config" && r.Method == "GET" {
-		RetrieveLambdaConfig(w, r)
+		lambdaStore.RetrieveLambdaConfig(w, r)
 		return
 	}
 
 	switch r.Method {
 	case "POST":
-		UploadLambda(w, r)
+		lambdaStore.UploadLambda(w, r)
 	case "DELETE":
-		DeleteLambda(w, r)
+		lambdaStore.DeleteLambda(w, r)
 	case "GET":
 		http.Error(w, "not implemented", http.StatusNotImplemented)
 	default:
@@ -271,6 +276,13 @@ func Main() (err error) {
 	http.HandleFunc(PPROF_MEM_PATH, PprofMem)
 	http.HandleFunc(PPROF_CPU_START_PATH, PprofCpuStart)
 	http.HandleFunc(PPROF_CPU_STOP_PATH, PprofCpuStop)
+
+	// Initialize LambdaStore for registry
+	lambdaStore, err = lambdastore.NewLambdaStore(common.Conf.Registry, nil)
+	if err != nil {
+		os.Remove(pidPath)
+		return fmt.Errorf("failed to initialize lambda store: %v", err)
+	}
 
 	// Registry handler
 	http.HandleFunc(REGISTRY_BASE_PATH, RegistryHandler)

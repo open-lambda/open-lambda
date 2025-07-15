@@ -2,9 +2,6 @@
 package main
 
 import (
-	"archive/tar"
-	"bytes"
-	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,8 +13,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
+	"github.com/open-lambda/open-lambda/ol/admin"
 	"github.com/open-lambda/open-lambda/ol/bench"
 	"github.com/open-lambda/open-lambda/ol/boss"
 	"github.com/open-lambda/open-lambda/ol/boss/config"
@@ -304,219 +301,6 @@ func bossStart(ctx *cli.Context) error {
 	return fmt.Errorf("this code should not be reachable")
 }
 
-// checkStatus of either boss or worker to see if it any of them is running
-func checkStatus(port string) error {
-	// ONly works on the same machine.
-	// Could be boss or worker.
-	host := "localhost"
-
-	url := fmt.Sprintf("http://%s:%s/status", host, port)
-	client := &http.Client{Timeout: 2 * time.Second}
-
-	resp, err := client.Get(url)
-	if err != nil {
-		return fmt.Errorf("could not reach boss/worker at %s: %v", url, err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("boss/worker returned status %d: %s", resp.StatusCode, string(body))
-	}
-
-	return nil
-}
-
-// adminInstall corresponds to the "admin install" command
-func adminInstall(ctx *cli.Context) error {
-	// Parse arguments: can be "boss <func_dir>" or just "<func_dir>"
-	args := ctx.Args().Slice()
-	var installTarget string
-	var funcDir string
-
-	// Check for -p flag
-	workerPath := ctx.String("path")
-
-	if len(args) == 0 {
-		return fmt.Errorf("usage: ol admin install [boss | -p <worker_path>] <function_directory>")
-	}
-	if len(args) == 1 {
-		// Case: "ol admin install <func_dir>" or "ol admin install -p myworker <func_dir>"
-		funcDir = args[0]
-		installTarget = "worker"
-
-	} else if len(args) == 2 && args[0] == "boss" {
-		// Case: "ol admin install boss <func_dir>"
-		installTarget = "boss"
-		funcDir = args[1]
-		if workerPath != "" {
-			return fmt.Errorf("cannot use both 'boss' and '-p' flags together")
-		}
-	} else {
-		return fmt.Errorf("usage: ol admin install [boss | -p <worker_path>] <function_directory>")
-	}
-
-	var portToUploadLambda string
-
-	switch installTarget {
-	case "boss":
-		// Install to boss
-		if err := config.LoadConf("boss.json"); err != nil {
-			return fmt.Errorf("failed to load boss config: %v", err)
-		}
-		if err := checkStatus(config.BossConf.Boss_port); err != nil {
-			return fmt.Errorf("boss is not running: %v", err)
-		}
-		portToUploadLambda = config.BossConf.Boss_port
-
-	case "worker":
-		// If no -p specified, default to worker running on default port 5000
-		if workerPath == "" {
-			olPath, err := common.GetOlPath(ctx)
-			if err != nil {
-				return err
-			}
-
-			if err := common.LoadDefaults(olPath); err != nil {
-				return fmt.Errorf("failed to load default worker config for %s: %v", workerPath, err)
-			}
-		} else {
-			// Install to specific worker (with -p)
-			if err := common.LoadGlobalConfig(filepath.Join(workerPath, "config.json")); err != nil {
-				return fmt.Errorf("failed to load worker config for %s: %v", workerPath, err)
-			}
-		}
-
-		if err := checkStatus(common.Conf.Worker_port); err != nil {
-			return fmt.Errorf("worker %s is not running: %v", workerPath, err)
-		}
-		portToUploadLambda = common.Conf.Worker_port
-	}
-
-	funcDir = strings.TrimSuffix(funcDir, "/")
-
-	// Extract function name from directory path
-	funcName := filepath.Base(funcDir)
-
-	// Check if directory exists
-	if _, err := os.Stat(funcDir); os.IsNotExist(err) {
-		return fmt.Errorf("directory %s does not exist", funcDir)
-	}
-
-	// Create tar.gz archive
-	tarData, err := createTarGz(funcDir)
-	if err != nil {
-		return fmt.Errorf("failed to create tar.gz: %v", err)
-	}
-
-	// Upload to lambda store
-	if err := uploadToLambdaStore(funcName, tarData, portToUploadLambda); err != nil {
-		return fmt.Errorf("failed to upload to lambda store: %v", err)
-	}
-
-	fmt.Printf("Successfully installed lambda function: %s\n", funcName)
-	return nil
-}
-
-// createTarGz creates a tar.gz archive from the function directory
-func createTarGz(funcDir string) ([]byte, error) {
-	var buf bytes.Buffer
-	gzWriter := gzip.NewWriter(&buf)
-	tarWriter := tar.NewWriter(gzWriter)
-
-	// Verify f.py exists
-	fpyPath := filepath.Join(funcDir, "f.py")
-	if _, err := os.Stat(fpyPath); os.IsNotExist(err) {
-		return nil, fmt.Errorf("required file f.py not found in %s", funcDir)
-	}
-
-	// Walk the directory recursively
-	err := filepath.Walk(funcDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return fmt.Errorf("walk error: %v", err)
-		}
-
-		if info.IsDir() {
-			return nil // skip directories, tar only files
-		}
-
-		// Create tar header
-		relPath, err := filepath.Rel(funcDir, path)
-		if err != nil {
-			return fmt.Errorf("unable to compute relative path: %v", err)
-		}
-
-		header, err := tar.FileInfoHeader(info, "")
-		if err != nil {
-			return fmt.Errorf("unable to create header: %v", err)
-		}
-		header.Name = relPath // preserve folder structure
-
-		if err := tarWriter.WriteHeader(header); err != nil {
-			return fmt.Errorf("failed to write header: %v", err)
-		}
-
-		// Open and copy file content
-		file, err := os.Open(path)
-		if err != nil {
-			return fmt.Errorf("unable to open file: %v", err)
-		}
-
-		if _, err := io.Copy(tarWriter, file); err != nil {
-			file.Close()
-			return fmt.Errorf("error copying file data: %v", err)
-		}
-
-		if err := file.Close(); err != nil {
-			return fmt.Errorf("error closing file: %v", err)
-		}
-
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	if err := tarWriter.Close(); err != nil {
-		return nil, fmt.Errorf("failed to close tar writer: %v", err)
-	}
-	if err := gzWriter.Close(); err != nil {
-		return nil, fmt.Errorf("failed to close gzip writer: %v", err)
-	}
-
-	return buf.Bytes(), nil
-}
-
-// uploadToLambdaStore uploads the tar.gz data to the lambda store
-func uploadToLambdaStore(funcName string, tarData []byte, port string) error {
-	// Only works on the same machine.
-	// could be boss or worker.
-	host := "localhost"
-
-	url := fmt.Sprintf("http://%s:%s/registry/%s", host, port, funcName)
-
-	req, err := http.NewRequest("POST", url, bytes.NewReader(tarData))
-	if err != nil {
-		return fmt.Errorf("failed to create HTTP request: %v", err)
-	}
-
-	req.Header.Set("Content-Type", "application/gzip")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send HTTP request: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusCreated {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("upload failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	return nil
-}
-
 // main runs the admin tool
 func main() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
@@ -541,26 +325,6 @@ OPTIONS:
 	app.HideVersion = true
 	app.Commands = []*cli.Command{
 		&cli.Command{
-			Name:      "admin",
-			Usage:     "Admin commands for managing lambdas",
-			UsageText: "ol admin <cmd>",
-			Subcommands: []*cli.Command{
-				{
-					Name:      "install",
-					Usage:     "Install a lambda function from directory",
-					UsageText: "ol admin install [boss | -p <worker_path>] <function_directory>",
-					Action:    adminInstall,
-					Flags: []cli.Flag{
-						&cli.StringFlag{
-							Name:    "path",
-							Aliases: []string{"p"},
-							Usage:   "Worker directory path (e.g., -p myworker)",
-						},
-					},
-				},
-			},
-		},
-		&cli.Command{
 			Name:        "boss",
 			Usage:       "Start an OL Boss process",
 			UsageText:   "ol boss [OPTIONS...] [--detach]",
@@ -578,6 +342,12 @@ OPTIONS:
 				},
 			},
 			Action: runBoss,
+		},
+		&cli.Command{
+			Name:        "admin",
+			Usage:       "Admin commands for managing lambdas",
+			UsageText:   "ol admin <cmd>",
+			Subcommands: admin.AdminCommands(),
 		},
 		&cli.Command{
 			Name:        "worker",
