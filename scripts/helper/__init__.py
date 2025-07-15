@@ -140,6 +140,13 @@ class DockerWorker():
             print("Starting Docker container worker")
             run(['sudo', './ol', 'worker', 'up', f'-p={_OL_DIR}', '--detach'])
         except Exception as err:
+            # If the worker fails to start, we print the log file
+            log_path = os.path.join(_OL_DIR, "worker.out")
+            if os.path.exists(log_path):
+                print("====== BEGIN worker.out ======")
+                with open(log_path) as f:
+                    print(f.read())
+                print("====== END worker.out =======")
             raise RuntimeError(f"failed to start worker: {err}") from err
 
         self._running = True
