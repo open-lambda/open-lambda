@@ -68,7 +68,8 @@ def install_examples_to_worker_registry():
                                   capture_output=True, text=True, cwd=project_root)
 
             if result.returncode == 0:
-                print(f"✓ Successfully installed {func_name}")
+                dest = os.path.abspath(os.path.join(registry_dir, f"{func_name}.tar.gz"))
+                print(f"✓ Successfully installed {func_name} → {dest}")
             else:
                 print(f"✗ Failed to install {func_name}: {result.stderr}")
 
