@@ -95,7 +95,10 @@ func (cp *HandlerPuller) Pull(name string) (common.RuntimeType, string, error) {
 	} else if err != errNotFound404 {
 		return RT_UNKNOWN, "", err
 	}
-	return RT_UNKNOWN, "", fmt.Errorf("lambda not found in blob store for %s", name)
+	return RT_UNKNOWN, "", fmt.Errorf(
+		"lambda %q not found in blob store (bucket=%q, key=%q)",
+		name, common.Conf.Registry, key,
+	)
 }
 
 func (cp *HandlerPuller) pullFromBlob(key, lambdaName string) (common.RuntimeType, string, error) {
