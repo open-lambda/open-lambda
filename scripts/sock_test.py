@@ -140,7 +140,9 @@ def main():
     prepare_open_lambda(args.ol_dir)
 
     start_tests()
-    with TestConfContext(registry= "file://" + os.path.abspath(args.registry), limits={"installer_mem_mb": 250}):
+    
+    registry_path = "file://" + os.path.abspath(args.registry)
+    with TestConfContext(registry=registry_path, limits={"installer_mem_mb": 250}):
         run_tests()
     check_test_results()
 
