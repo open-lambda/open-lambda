@@ -103,7 +103,7 @@ def _main():
 
         start_tests()
 
-        registry = "file://" + os.path.abspath(os.path.join(args.ol_dir, "registry"))   
+        registry =  "file://" + os.path.abspath(args.registry) 
         with TestConfContext(registry=registry):
             run_tests()
 
