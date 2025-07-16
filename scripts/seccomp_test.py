@@ -40,7 +40,7 @@ def main():
     parser = argparse.ArgumentParser(description='Run tests for OpenLambda')
     parser.add_argument('--worker_type', type=str, default="sock")
     parser.add_argument('--test_filter', type=str, default="")
-    parser.add_argument('--registry', type=str, default="")
+    parser.add_argument('--registry', type=str, default="registry")
     parser.add_argument('--ol_dir', type=str, default="test-dir")
 
     args = parser.parse_args()

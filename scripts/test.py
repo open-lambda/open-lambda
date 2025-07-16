@@ -384,7 +384,7 @@ def main():
     parser.add_argument('--worker_type', type=str, default="sock")
     parser.add_argument('--test_filter', type=str, default="")
     parser.add_argument('--test_blocklist', type=str, default="")
-    parser.add_argument('--registry', type=str, default="")  # Will use worker registry by default
+    parser.add_argument('--registry', type=str, default="registry") 
     parser.add_argument('--ol_dir', type=str, default="test-dir")
     parser.add_argument('--image', type=str, default="ol-wasm")
 
@@ -407,7 +407,7 @@ def main():
     prepare_open_lambda(args.ol_dir, args.image)
 
     # Use worker registry directory from config
-    registry_path = "file://" + os.path.abspath(os.path.join(args.ol_dir, "registry"))
+    registry_path = "file://" + os.path.abspath(args.registry)
 
     trace_config = {
         "cgroups": True,
