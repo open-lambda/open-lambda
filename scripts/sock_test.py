@@ -57,6 +57,7 @@ def install_examples_to_worker_registry():
 
     # Get OL_DIR from the global args - for sock_test we'll use test-dir
     ol_dir = "test-dir"
+    registry_dir = os.path.join(project_root, ol_dir, "registry")
 
     for func_dir in example_functions:
         func_name = os.path.basename(func_dir)
