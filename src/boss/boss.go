@@ -153,7 +153,7 @@ func BossMain() (err error) {
 		return err
 	}
 
-	store, err := lambdastore.NewLambdaStore(config.BossConf.Lambda_Store_Path, pool)
+	store, err := lambdastore.NewLambdaStore(config.BossConf.GetLambdaStoreURL(), pool)
 	if err != nil {
 		return err
 	}
