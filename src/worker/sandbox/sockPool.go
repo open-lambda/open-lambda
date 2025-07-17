@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
+	"net/http"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
-	"net"
-	"net/http"
 	"time"
 
 	"github.com/open-lambda/open-lambda/ol/common"
@@ -101,7 +101,21 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 	// don't want to use this cgroup feature, because the child
 	// would take the blame for ALL of the parent's allocations
 	moveMemCharge := (parent == nil)
-	cSock.cg = pool.cgPool.GetCg(meta.MemLimitMB, moveMemCharge, meta.CPUPercent)
+	// load lambda-specific config from code directory
+	lambdaConfig, err := common.LoadLambdaConfig(codeDir)
+	if err != nil {
+		// log error and use default settings
+		pool.printf("could not load lambda config from %s: %v. proceeding with defaults.", codeDir, err)
+	}
+	// start with default memory limit
+	memLimitMB := meta.MemLimitMB
+	// check if the per-lambda config was loaded AND if the memory field was set
+	if lambdaConfig != nil && lambdaConfig.MemoryMaxMB != nil {
+		memLimitMB = *lambdaConfig.MemoryMaxMB
+		// log memory override
+		pool.printf("using per-lambda memory limit of %d mb", memLimitMB)
+	}
+	cSock.cg = pool.cgPool.GetCg(memLimitMB, moveMemCharge, meta.CPUPercent)
 	t2.T1()
 	cSock.printf("use cgroup %s", cSock.cg.Name())
 
@@ -192,7 +206,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 
 	cSock.client = &http.Client{
 		Transport: &http.Transport{Dial: dial},
-		Timeout: time.Second * time.Duration(common.Conf.Limits.Max_runtime_default),
+		Timeout:   time.Second * time.Duration(common.Conf.Limits.Max_runtime_default),
 	}
 
 	// event handling
