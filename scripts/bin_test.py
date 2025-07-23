@@ -77,7 +77,7 @@ def _main():
     parser.add_argument('--test_filter', type=str, default="")
     parser.add_argument('--worker_type', type=str, default="sock")
     parser.add_argument('--ol_dir', type=str, default="test-dir")
-    parser.add_argument('--registry', type=str, default="test-registry")
+    parser.add_argument('--registry', type=str, default="registry")
 
     args = parser.parse_args()
 
@@ -103,7 +103,7 @@ def _main():
 
         start_tests()
 
-        registry = os.path.abspath(args.registry)
+        registry = "file://" + os.path.abspath(args.registry)
         with TestConfContext(registry=registry):
             run_tests()
 

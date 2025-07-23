@@ -57,6 +57,7 @@ def install_examples_to_worker_registry():
 
     # Get OL_DIR from the global args - for sock_test we'll use test-dir
     ol_dir = "test-dir"
+    registry_dir = os.path.join(project_root, ol_dir, "registry")
 
     for func_dir in example_functions:
         func_name = os.path.basename(func_dir)
@@ -68,7 +69,8 @@ def install_examples_to_worker_registry():
                                   capture_output=True, text=True, cwd=project_root)
 
             if result.returncode == 0:
-                print(f"✓ Successfully installed {func_name}")
+                dest = os.path.abspath(os.path.join(registry_dir, f"{func_name}.tar.gz"))
+                print(f"✓ Successfully installed {func_name} → {dest}")
             else:
                 print(f"✗ Failed to install {func_name}: {result.stderr}")
 
@@ -138,7 +140,8 @@ def main():
     prepare_open_lambda(args.ol_dir)
 
     start_tests()
-    with TestConfContext(registry=os.path.abspath(args.registry), limits={"installer_mem_mb": 250}):
+    registry_path = "file://" + os.path.abspath(args.registry)
+    with TestConfContext(registry=registry_path, limits={"installer_mem_mb": 250}):
         run_tests()
     check_test_results()
 
