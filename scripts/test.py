@@ -384,7 +384,7 @@ def main():
     parser.add_argument('--worker_type', type=str, default="sock")
     parser.add_argument('--test_filter', type=str, default="")
     parser.add_argument('--test_blocklist', type=str, default="")
-    parser.add_argument('--registry', type=str, default="registry") 
+    parser.add_argument('--registry', type=str, default="registry")
     parser.add_argument('--ol_dir', type=str, default="test-dir")
     parser.add_argument('--image', type=str, default="ol-wasm")
 

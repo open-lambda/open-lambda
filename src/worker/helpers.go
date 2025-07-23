@@ -153,14 +153,6 @@ func initOLDir(olPath string, dockerBaseImage string, newBase bool) (err error) 
 		return err
 	}
 
-	// Create local registry directory (only for local file storage)
-	if strings.HasPrefix(common.Conf.Registry, "file://") {
-		registryPath := strings.TrimPrefix(common.Conf.Registry, "file://")
-		if err := os.Mkdir(registryPath, 0700); err != nil {
-			return err
-		}
-	}
-
 	if _, err := os.Stat(baseDir); os.IsNotExist(err) {
 		if err := initOLBaseDir(baseDir, dockerBaseImage); err != nil {
 			os.RemoveAll(baseDir)
