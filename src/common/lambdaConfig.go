@@ -41,8 +41,9 @@ type KafkaTrigger struct {
 }
 
 // LambdaConfig defines the overall configuration for the lambda function.
-type LambdaConfig struct {
-	Triggers Triggers `yaml:"triggers"` // List of HTTP triggers
+type LambdaConfig struct { // List of HTTP triggers
+	Triggers    Triggers `yaml:"triggers"`
+	MemoryMaxMB *int     `yaml:"memory_mb,omitempty"`
 	// Additional configurations can be added here.
 }
 
