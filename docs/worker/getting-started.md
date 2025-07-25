@@ -133,14 +133,62 @@ start and stop a worker many times without reinitializing.  You can
 change the config file, but the changes won't take effect until you
 restart the worker.
 
-## Creating a Lambda
+## Using Provided Examples
 
-Now save the following to `./default-ol/registry/echo.py`:
+OpenLambda includes a variety of example lambda functions in the `examples/` directory to help you get started quickly. These examples demonstrate different use cases and features:
+
+- `examples/echo/` - Simple echo function that returns the input
+- `examples/hello/` - Basic hello world function  
+- `examples/numpy21/`, `examples/numpy22/` - Examples using NumPy
+- `examples/pandas/` - Data processing with Pandas
+- `examples/flask-test/` - Web framework integration
+- `examples/timeout/` - Function with timeout configuration
+- And many more...
+
+To use any of these examples, simply install them directly:
+
+```bash
+./ol admin install examples/echo/
+./ol admin install examples/hello/
+./ol admin install examples/numpy21/
+```
+
+Then invoke them with curl:
+
+```bash
+curl -X POST localhost:5000/run/echo -d '{"hello": "world"}'
+```
+
+## Creating and Installing a Custom Lambda
+
+You can also create your own lambda functions. Create the function directory:
+
+```bash
+mkdir -p echo
+```
+
+Now, create a file named `f.py` inside the `echo` directory with the following content:
 
 ```python
 def f(event):
     return event
 ```
+
+With the worker running, you can install the lambda function using the `ol admin install` command:
+
+```bash
+./ol admin install echo/
+```
+
+This command will package the `echo` directory into a `.tar.gz` file and upload it to the worker's registry.
+
+If you initialized a worker with a specific path (e.g., `./ol worker init -p myworker`), you must specify the same path when installing a lambda.
+
+```bash
+./ol admin install -p myworker echo/
+```
+
+If no `-p` flag is specified, the command will default to the worker running on port 5000 using the default config.
 
 ## Invoke Lambda
 

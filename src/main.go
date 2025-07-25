@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/open-lambda/open-lambda/ol/admin"
 	"github.com/open-lambda/open-lambda/ol/bench"
 	"github.com/open-lambda/open-lambda/ol/boss"
 	"github.com/open-lambda/open-lambda/ol/boss/config"
@@ -341,6 +342,12 @@ OPTIONS:
 				},
 			},
 			Action: runBoss,
+		},
+		&cli.Command{
+			Name:        "admin",
+			Usage:       "Admin commands for managing lambdas",
+			UsageText:   "ol admin <cmd>",
+			Subcommands: admin.AdminCommands(),
 		},
 		&cli.Command{
 			Name:        "worker",

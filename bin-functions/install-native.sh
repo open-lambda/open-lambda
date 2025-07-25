@@ -14,7 +14,18 @@ for f in ${NATIVE_PREFIX}/*; do
 
     # Ignore subdirectories, libraries, and non-executable files
     if [[ $name != *".so" && -f "$f" && -x "$f" ]]; then
-        echo "Installing native function '$name.bin' from '$f' to ${REGISTRY_PATH}/${name}.bin"
-        rsync -c $f ${REGISTRY_PATH}/$name.bin
+        echo "Installing native function '$name.tar.gz' from '$f' to ${REGISTRY_PATH}/${name}.tar.gz"
+        
+        # Create temporary directory for tar.gz creation
+        temp_dir=$(mktemp -d)
+        
+        # Copy binary to temp directory as f.bin
+        cp "$f" "$temp_dir/f.bin"
+        
+        # Create tar.gz file containing f.bin
+        tar -czf "${REGISTRY_PATH}/${name}.tar.gz" -C "$temp_dir" f.bin
+        
+        # Clean up temporary directory
+        rm -rf "$temp_dir"
     fi
 done
