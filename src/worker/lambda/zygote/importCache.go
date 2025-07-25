@@ -146,7 +146,8 @@ func (cache *ImportCache) recursiveKill(node *ImportCacheNode) {
 }
 
 // Create creates a new sandbox using the import cache.
-func (cache *ImportCache) Create(childSandboxPool sandbox.SandboxPool, isLeaf bool, codeDir, scratchDir string, meta *sandbox.SandboxMeta, rt_type common.RuntimeType) (sandbox.Sandbox, error) {
+// adding config
+func (cache *ImportCache) Create(config *common.LambdaConfig, childSandboxPool sandbox.SandboxPool, isLeaf bool, codeDir, scratchDir string, meta *sandbox.SandboxMeta, rt_type common.RuntimeType) (sandbox.Sandbox, error) {
 	t := common.T0("ImportCache.Create")
 	defer t.T1()
 
@@ -158,7 +159,7 @@ func (cache *ImportCache) Create(childSandboxPool sandbox.SandboxPool, isLeaf bo
 		panic(fmt.Errorf("did not find Zygote; at least expected to find the root"))
 	}
 	log.Printf("Try using Zygote from <%v>", node)
-	return cache.createChildSandboxFromNode(childSandboxPool, node, isLeaf, codeDir, scratchDir, meta, rt_type)
+	return cache.createChildSandboxFromNode(config, childSandboxPool, node, isLeaf, codeDir, scratchDir, meta, rt_type)
 }
 
 // use getSandboxInNode to get a Zygote Sandbox for the node (creating one
@@ -166,7 +167,8 @@ func (cache *ImportCache) Create(childSandboxPool sandbox.SandboxPool, isLeaf bo
 //
 // the new Sandbox may either be for a Zygote, or a leaf Sandbox
 func (cache *ImportCache) createChildSandboxFromNode(
-	childSandboxPool sandbox.SandboxPool, node *ImportCacheNode, isLeaf bool,
+	// adding config
+	config *common.LambdaConfig, childSandboxPool sandbox.SandboxPool, node *ImportCacheNode, isLeaf bool,
 	codeDir, scratchDir string, meta *sandbox.SandboxMeta, rt_type common.RuntimeType) (sandbox.Sandbox, error) {
 	t := common.T0("ImportCache.createChildSandboxFromNode")
 	defer t.T1()
@@ -180,7 +182,8 @@ func (cache *ImportCache) createChildSandboxFromNode(
 		}
 
 		t2 := common.T0("ImportCache.createChildSandboxFromNode:childSandboxPool.Create")
-		sb, err := childSandboxPool.Create(zygoteSB, isLeaf, codeDir, scratchDir, meta, rt_type)
+		// adding config
+		sb, err := childSandboxPool.Create(config, zygoteSB, isLeaf, codeDir, scratchDir, meta, rt_type)
 
 		if err == nil {
 			if isLeaf {
@@ -314,9 +317,9 @@ func (cache *ImportCache) createSandboxInNode(node *ImportCacheNode, rt_type com
 	scratchDir := cache.scratchDirs.Make("import-cache")
 	var sb sandbox.Sandbox
 	if node.parent != nil {
-		sb, err = cache.createChildSandboxFromNode(cache.sbPool, node.parent, false, node.codeDir, scratchDir, node.meta, rt_type)
+		sb, err = cache.createChildSandboxFromNode(nil, cache.sbPool, node.parent, false, node.codeDir, scratchDir, node.meta, rt_type)
 	} else {
-		sb, err = cache.sbPool.Create(nil, false, node.codeDir, scratchDir, node.meta, common.RT_PYTHON)
+		sb, err = cache.sbPool.Create(nil, nil, false, node.codeDir, scratchDir, node.meta, common.RT_PYTHON)
 	}
 
 	if err != nil {
