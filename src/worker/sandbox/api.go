@@ -7,13 +7,14 @@ import (
 
 type SandboxPool interface {
 	// Create a new, unpaused sandbox
-	//
 	// parent: a sandbox to fork from (may be nil, and some SandboxPool's don't support not nil)
 	// isLeaf: true iff this is not being created as a sandbox we can fork later
 	// codeDir: directory where lambda code exists
 	// scratchDir: directory where handler code can write (caller is responsible for creating and deleting)
 	// meta: details about installs, imports, etc.  Will be populated with defaults if not specified
-	Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, meta *SandboxMeta, rtType common.RuntimeType) (sb Sandbox, err error)
+	
+	// adding the *common.LambdaConfig
+	Create(config *common.LambdaConfig, parent Sandbox, isLeaf bool, codeDir, scratchDir string, meta *SandboxMeta, rtType common.RuntimeType) (sb Sandbox, err error)
 
 	// blocks until all Sandboxes are deleted, so caller must
 	// either delete them before this call, or from another asyncronously

@@ -22,7 +22,7 @@ func SandboxPoolFromConfig(name string, sizeMb int) (cf SandboxPool, err error) 
 
 	return nil, fmt.Errorf("invalid sandbox type: '%s'", common.Conf.Sandbox)
 }
-
+/* 
 func fillMetaDefaults(meta *SandboxMeta) *SandboxMeta {
 	if meta == nil {
 		meta = &SandboxMeta{}
@@ -35,7 +35,7 @@ func fillMetaDefaults(meta *SandboxMeta) *SandboxMeta {
 	}
 	return meta
 }
-
+*/
 func (meta *SandboxMeta) String() string {
 	return fmt.Sprintf("<installs=[%s], imports=[%s], mem-limit-mb=%v>",
 		strings.Join(meta.Installs, ","), strings.Join(meta.Imports, ","), meta.MemLimitMB)

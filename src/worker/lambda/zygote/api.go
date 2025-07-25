@@ -6,7 +6,8 @@ import (
 )
 
 type ZygoteProvider interface {
-	Create(childSandboxPool sandbox.SandboxPool, isLeaf bool,
+	// adding common.LambdaConfig
+	Create(config *common.LambdaConfig, childSandboxPool sandbox.SandboxPool, isLeaf bool,
 		codeDir, scratchDir string, meta *sandbox.SandboxMeta,
 		rt_type common.RuntimeType) (sandbox.Sandbox, error)
 	Cleanup()

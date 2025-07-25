@@ -1,0 +1,4 @@
+mem_mb: 12
+triggers:
+  http:
+    - method: POST

@@ -112,7 +112,7 @@ func (server *SOCKServer) Create(w http.ResponseWriter, _ []string, args map[str
 		Installs: packages,
 	}
 
-	c, err := server.sbPool.Create(parent, leaf, codeDir, scratchDir, meta, rtType)
+	c, err := server.sbPool.Create(nil, parent, leaf, codeDir, scratchDir, meta, rtType)
 	if err != nil {
 		return err
 	}

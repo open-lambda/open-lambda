@@ -22,6 +22,7 @@ type SOCKContainer struct {
 	pool             *SOCKPool
 	id               string
 	meta             *SandboxMeta
+	memLimitMB	 int // adding this to store the resolved memory limit
 	containerRootDir string
 	codeDir          string
 	scratchDir       string
@@ -260,7 +261,8 @@ func (container *SOCKContainer) Unpause() (err error) {
 		// block until we have enough mem to upsize limit to the
 		// normal size before unpausing
 		oldLimit := container.cg.GetMemLimitMB()
-		newLimit := common.Conf.Limits.Mem_mb
+		// use the container's specific memory limit, not the global one
+		newLimit := container.memLimitMB
 		container.pool.mem.adjustAvailableMB(oldLimit - newLimit)
 		container.cg.SetMemLimitMB(newLimit)
 	}

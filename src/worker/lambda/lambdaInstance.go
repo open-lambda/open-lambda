@@ -5,6 +5,8 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
+	"errors"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 	"github.com/open-lambda/open-lambda/ol/worker/sandbox"
@@ -96,26 +98,27 @@ func (linst *LambdaInstance) Task() {
 		// if we don't already have a Sandbox, create one, and
 		// HTTP proxy over the channel
 		if sb == nil {
-			sb = nil
-
+			// sb = nil
+			/*
+			// temporary
 			if f.lmgr.ZygoteProvider != nil && f.rtType == common.RT_PYTHON {
 				scratchDir := f.lmgr.scratchDirs.Make(f.name)
 
 				// we don't specify parent SB, because ImportCache.Create chooses it for us
-				sb, err = f.lmgr.ZygoteProvider.Create(f.lmgr.sbPool, true, linst.codeDir, scratchDir, linst.meta.Sandbox, f.rtType)
+				sb, err = f.lmgr.ZygoteProvider.Create(nil, f.lmgr.sbPool, true, linst.codeDir, scratchDir, linst.meta.Sandbox, f.rtType)
 				if err != nil {
 					f.printf("failed to get Sandbox from import cache")
 					sb = nil
 				}
 			}
-
+			*/
 			log.Printf("Creating new sandbox")
 
 			// import cache is either disabled or it failed
 			if sb == nil {
 				t2 := common.T0("LambdaInstance-WaitSandbox-NoImportCache")
 				scratchDir := f.lmgr.scratchDirs.Make(f.name)
-				sb, err = f.lmgr.sbPool.Create(nil, true, linst.codeDir, scratchDir, linst.meta.Sandbox, f.rtType)
+				sb, err = f.lmgr.sbPool.Create(linst.lfunc.config, nil, true, linst.codeDir, scratchDir, linst.meta.Sandbox, f.rtType)
 				t2.T1()
 			}
 
@@ -142,7 +145,38 @@ func (linst *LambdaInstance) Task() {
 			if err != nil {
 				linst.TrySendError(req, http.StatusInternalServerError, "Could not create NewRequest: "+err.Error(), sb)
 			} else {
-				resp, err := sb.Client().Do(httpReq)
+				// add runtime limit logic
+				// 1. determine the runtime limit
+				maxRuntime := time.Duration(common.Conf.Limits.Max_runtime_default) * time.Second
+				if linst.lfunc.config.MaxRuntimeSec != nil {
+					maxRuntime = time.Duration(*linst.lfunc.config.MaxRuntimeSec) * time.Second
+				}
+
+				// 2. make the request in a goroutine
+				type response struct {
+					resp *http.Response
+					err  error
+				}
+				ch := make(chan response, 1)
+				go func() {
+					resp, err := sb.Client().Do(httpReq)
+					ch <- response{resp: resp, err: err}
+				}()
+
+				// 3. wait for response or timeout
+				var resp *http.Response
+				select {
+				case res := <-ch:
+					resp = res.resp
+					err = res.err
+				case <-time.After(maxRuntime):
+					// use a string builder to avoid repeated appends
+					var b strings.Builder
+					b.WriteString("lambda timed out after ")
+					b.WriteString(maxRuntime.String())
+					err = errors.New(b.String())
+					resp = nil
+				}
 
 				// copy response out
 				if err != nil {
