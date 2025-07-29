@@ -1,8 +1,9 @@
 package sandbox
 
 import (
-	"github.com/open-lambda/open-lambda/ol/common"
 	"net/http"
+
+	"github.com/open-lambda/open-lambda/ol/common"
 )
 
 type SandboxPool interface {
@@ -12,9 +13,8 @@ type SandboxPool interface {
 	// codeDir: directory where lambda code exists
 	// scratchDir: directory where handler code can write (caller is responsible for creating and deleting)
 	// meta: details about installs, imports, etc.  Will be populated with defaults if not specified
-	
-	// adding the *common.LambdaConfig
-	Create(config *common.LambdaConfig, parent Sandbox, isLeaf bool, codeDir, scratchDir string, meta *SandboxMeta, rtType common.RuntimeType) (sb Sandbox, err error)
+
+	Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, meta *SandboxMeta, rtType common.RuntimeType) (sb Sandbox, err error)
 
 	// blocks until all Sandboxes are deleted, so caller must
 	// either delete them before this call, or from another asyncronously
@@ -61,7 +61,7 @@ type Sandbox interface {
 	Unpause() error
 
 	// Communication channel to forward requests.
-	Client() (*http.Client)
+	Client() *http.Client
 
 	// Lookup metadata that Sandbox was initialized with (static over time)
 	Meta() *SandboxMeta
@@ -85,11 +85,18 @@ type Sandbox interface {
 	GetRuntimeType() common.RuntimeType // TODO: make it part of SandboxMeta?
 }
 
+// Limits defines resource constraints for a sandbox.
+// Pointers are used to distinguish between a zero-value and an unset value.
+type Limits struct {
+	MemMB      *int
+	CPUPercent *int
+}
+
+// SandboxMeta contains metadata for initializing a sandbox, including resource limits.
 type SandboxMeta struct {
-	Installs   []string
-	Imports    []string
-	MemLimitMB int
-	CPUPercent int
+	Installs []string
+	Imports  []string
+	Limits   *Limits // Optional resource limits to override worker defaults.
 }
 
 type SandboxError string
@@ -116,13 +123,13 @@ type SandboxEventFunc func(SandboxEventType, Sandbox)
 type SandboxEventType int
 
 const (
-	EvCreate    SandboxEventType = iota
-	EvDestroy                    = iota
-	EvDestroyIgnored             = iota
-	EvPause                      = iota
-	EvUnpause                    = iota
-	EvFork                       = iota
-	EvChildExit                  = iota
+	EvCreate         SandboxEventType = iota
+	EvDestroy                         = iota
+	EvDestroyIgnored                  = iota
+	EvPause                           = iota
+	EvUnpause                         = iota
+	EvFork                            = iota
+	EvChildExit                       = iota
 )
 
 type SandboxEvent struct {

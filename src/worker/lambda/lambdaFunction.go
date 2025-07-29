@@ -33,7 +33,6 @@ type LambdaFunc struct {
 	lastPull *time.Time
 	codeDir  string
 	Meta     *FunctionMeta
-	config	 *common.LambdaConfig // adding config
 
 	// lambda execution
 	funcChan  chan *Invocation // server to func
@@ -171,10 +170,9 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 
 		f.lmgr.DepTracer.TraceFunction(codeDir, meta.Sandbox.Installs)
 		f.Meta = meta
-		f.config = meta.Config // store the loaded config
 	} else if rtType == common.RT_NATIVE {
 		log.Printf("Got native function")
-		
+
 		// parsing ol.yaml for native functions too
 		meta, err := parseMeta(codeDir)
 		if err != nil {
@@ -182,15 +180,8 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 		}
 
 		f.Meta = meta
-		f.config = meta.Config
 		// debug
-		f.printf("Loaded config for lambda. MemMB: %v, CPU: %v", f.config.MemMB, f.config.CPUPercent)
-
-		// Initialize f.Meta for native functions for consistensy.
-		// f.Meta = &FunctionMeta{
-			// Sandbox: nil,                              // Sandbox is nil for native functions
-			// Config:  common.LoadDefaultLambdaConfig(), // Load default configuration
-		// }
+		f.printf("Loaded config for lambda. MemMB: %v, CPU: %v", f.Meta.Config.MemMB, f.Meta.Config.CPUPercent)
 	}
 
 	f.codeDir = codeDir

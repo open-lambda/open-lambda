@@ -43,10 +43,9 @@ func NewMultiTree(codeDirs *common.DirMaker, scratchDirs *common.DirMaker, sbPoo
 }
 
 // Create creates a new sandbox using a randomly selected ImportCache tree.
-// adding config
-func (mt *MultiTree) Create(config *common.LambdaConfig, childSandboxPool sandbox.SandboxPool, isLeaf bool, codeDir, scratchDir string, meta *sandbox.SandboxMeta, rt_type common.RuntimeType) (sandbox.Sandbox, error) {
+func (mt *MultiTree) Create(childSandboxPool sandbox.SandboxPool, isLeaf bool, codeDir, scratchDir string, meta *sandbox.SandboxMeta, rt_type common.RuntimeType) (sandbox.Sandbox, error) {
 	idx := rand.Intn(len(mt.trees))
-	return mt.trees[idx].Create(config, childSandboxPool, isLeaf, codeDir, scratchDir, meta, rt_type)
+	return mt.trees[idx].Create(childSandboxPool, isLeaf, codeDir, scratchDir, meta, rt_type)
 }
 
 // Cleanup performs cleanup operations for all ImportCache trees in the MultiTree.
