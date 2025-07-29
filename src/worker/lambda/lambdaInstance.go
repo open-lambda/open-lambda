@@ -118,14 +118,14 @@ func (linst *LambdaInstance) Task() {
 
 				// Create a meta object to pass to the sandbox pool.
 				meta := &sandbox.SandboxMeta{
-					// Add the limits from the lambda's config.
+					// Populate with resource limits from the per-lambda config, if they exist.
 					Limits: &sandbox.Limits{
 						MemMB:      linst.lfunc.Meta.Config.MemMB,
 						CPUPercent: linst.lfunc.Meta.Config.CPUPercent,
 					},
 				}
 
-				// Call the ORIGINAL Create function, passing our new meta object.
+				// Create a new sandbox using the specified metadata.
 				sb, err = f.lmgr.sbPool.Create(nil, true, linst.codeDir, scratchDir, meta, f.rtType)
 				t2.T1()
 			}
