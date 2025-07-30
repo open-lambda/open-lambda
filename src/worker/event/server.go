@@ -278,11 +278,11 @@ func Main() (err error) {
 	http.HandleFunc(PPROF_CPU_STOP_PATH, PprofCpuStop)
 
 	// Initialize LambdaStore for registry
-	log.Printf("Worker: Initializing LambdaStore with Registry = %s", common.Conf.Registry)
+	log.Printf("Worker: Initializing LambdaStore with Registry = \"%s\"", common.Conf.Registry)
 	lambdaStore, err = lambdastore.NewLambdaStore(common.Conf.Registry, nil)
 	if err != nil {
 		os.Remove(pidPath)
-		return fmt.Errorf("failed to initialize lambda store at %s: %v", common.Conf.Registry, err)
+		return fmt.Errorf("failed to initialize lambda store at %s: %w", common.Conf.Registry, err)
 	}
 
 	// Registry handler

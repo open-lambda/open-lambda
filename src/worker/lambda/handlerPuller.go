@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"gocloud.dev/blob"
 	_ "gocloud.dev/blob/fileblob"
@@ -31,7 +32,7 @@ type HandlerPuller struct {
 }
 
 type CacheEntry struct {
-	version string // blob modification time
+	version time.Time // blob modification time
 	path    string
 	runtime common.RuntimeType
 }
@@ -74,21 +75,21 @@ func (cp *HandlerPuller) Pull(name string) (common.RuntimeType, string, error) {
 		return RT_UNKNOWN, "", err
 	}
 
-	key := name + ".tar.gz"
+	key := name + common.LambdaFileExtension
 
 	attrs, err := cp.bucket.Attributes(context.Background(), key)
 	if err == nil {
-		version := attrs.ModTime.String()
-		if cached := cp.getCache(name); cached != nil && cached.version == version {
+		version := attrs.ModTime
+		if cached := cp.getCache(name); cached != nil && cached.version.Equal(version) {
 			return cached.runtime, cached.path, nil
 		}
 	}
 
 	rt, dir, err := cp.pullFromBlob(key, name)
 	if err == nil {
-		version := ""
+		var version time.Time
 		if attrs != nil {
-			version = attrs.ModTime.String()
+			version = attrs.ModTime
 		}
 		cp.putCache(name, version, dir, rt)
 		return rt, dir, nil
@@ -158,7 +159,7 @@ func (cp *HandlerPuller) getCache(name string) *CacheEntry {
 	}
 	return entry.(*CacheEntry)
 }
-func (cp *HandlerPuller) putCache(name, version, path string, runtime common.RuntimeType) {
+func (cp *HandlerPuller) putCache(name string, version time.Time, path string, runtime common.RuntimeType) {
 	// Clean up old cache entry if it exists
 	if old := cp.getCache(name); old != nil && old.path != path {
 		os.RemoveAll(old.path)

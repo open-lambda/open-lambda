@@ -171,10 +171,14 @@ func GetDefaultWorkerConfig(olPath string) (*Config, error) {
 	memPoolMb := Max(int(totalMb-500), 500)
 
 	cfg := &Config{
-		Worker_dir:        workerDir,
-		Server_mode:       "lambda",
-		Worker_url:        "localhost",
-		Worker_port:       "5000",
+		Worker_dir:  workerDir,
+		Server_mode: "lambda",
+		Worker_url:  "localhost",
+		Worker_port: "5000",
+		// Registry URL with file:// prefix required by gocloud blob backend abstraction.
+		// The gocloud library uses URL schemes to route to appropriate storage drivers:
+		// file:// for local filesystem, s3:// for AWS S3, gs:// for Google Cloud Storage.
+		// By default, it will be configured to local
 		Registry:          "file://" + registryDir,
 		Sandbox:           "sock",
 		Log_output:        true,

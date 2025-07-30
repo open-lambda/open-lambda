@@ -21,6 +21,7 @@ import (
 	"github.com/open-lambda/open-lambda/ol/common"
 )
 
+
 type LambdaStore struct {
 	// bucket is the cloud storage bucket for lambda tarballs
 	bucket *blob.Bucket
@@ -36,6 +37,12 @@ type LambdaEntry struct {
 	Lock   *sync.Mutex
 }
 
+// NewLambdaStore creates a new lambda store backed by cloud storage.
+// pool may be nil or a WorkerPool instance depending on the calling context:
+// - Boss context (pool provided): Full functionality including lambda registry and event-driven execution
+//   (cron triggers, Kafka triggers). Called from boss.go:156 with a worker pool.
+// - Worker context (pool is nil): Limited functionality with lambda registry only (upload, delete, list, config).
+//   Event-driven execution is disabled. Called from worker/event/server.go:282 with nil pool.
 func NewLambdaStore(storeURL string, pool *cloudvm.WorkerPool) (*LambdaStore, error) {
 	ctx := context.Background()
 
@@ -80,8 +87,8 @@ func NewLambdaStore(storeURL string, pool *cloudvm.WorkerPool) (*LambdaStore, er
 		if err != nil {
 			return nil, fmt.Errorf("failed to list bucket objects: %w", err)
 		}
-		if strings.HasSuffix(obj.Key, ".tar.gz") {
-			funcName := strings.TrimSuffix(obj.Key, ".tar.gz")
+		if strings.HasSuffix(obj.Key, common.LambdaFileExtension) {
+			funcName := strings.TrimSuffix(obj.Key, common.LambdaFileExtension)
 			if err := store.loadConfigAndRegister(funcName); err != nil {
 				log.Printf("Failed to load lambda %s: %v", funcName, err)
 			}
@@ -168,7 +175,7 @@ func (s *LambdaStore) RetrieveLambdaConfig(w http.ResponseWriter, r *http.Reques
 
 func (s *LambdaStore) loadConfigAndRegister(funcName string) error {
 	ctx := context.Background()
-	key := funcName + ".tar.gz"
+	key := funcName + common.LambdaFileExtension
 
 	// Read the tarball from blob storage
 	reader, err := s.bucket.NewReader(ctx, key, nil)
@@ -178,7 +185,7 @@ func (s *LambdaStore) loadConfigAndRegister(funcName string) error {
 	defer reader.Close()
 
 	// Download to a temp file for config extraction
-	tempFile, err := os.CreateTemp("", funcName+"_*.tar.gz")
+	tempFile, err := os.CreateTemp("", funcName+"_*"+common.LambdaFileExtension)
 	if err != nil {
 		return fmt.Errorf("failed to create temp file: %w", err)
 	}
@@ -217,10 +224,10 @@ func (s *LambdaStore) addToRegistry(funcName string, body io.Reader) error {
 	defer lambdaEntry.Lock.Unlock()
 
 	ctx := context.Background()
-	key := funcName + ".tar.gz"
+	key := funcName + common.LambdaFileExtension
 
 	// Create a temporary file to validate the tarball
-	tempFile, err := os.CreateTemp("", funcName+"_upload_*.tar.gz")
+	tempFile, err := os.CreateTemp("", funcName+"_upload_*"+common.LambdaFileExtension)
 	if err != nil {
 		return fmt.Errorf("failed to create temp tarball: %w", err)
 	}
@@ -252,14 +259,14 @@ func (s *LambdaStore) addToRegistry(funcName string, body io.Reader) error {
 	if err != nil {
 		return fmt.Errorf("failed to create blob writer: %w", err)
 	}
+	defer func() {
+		if err := writer.Close(); err != nil {
+			log.Printf("warning: failed to close blob writer: %v", err)
+		}
+	}()
 
 	if _, err := io.Copy(writer, tempFile); err != nil {
-		writer.Close()
 		return fmt.Errorf("failed to upload to blob storage: %w", err)
-	}
-
-	if err := writer.Close(); err != nil {
-		return fmt.Errorf("failed to close blob writer: %w", err)
 	}
 
 	lambdaEntry.Config = cfg
@@ -296,8 +303,8 @@ func (s *LambdaStore) removeFromRegistry(funcName string) error {
 
 	// Background deletion
 	go func() {
-		if err := s.bucket.Delete(context.Background(), funcName+".tar.gz"); err != nil {
-			log.Printf("warning: failed to remove %s from blob storage: %v", funcName+".tar.gz", err)
+		if err := s.bucket.Delete(context.Background(), funcName+common.LambdaFileExtension); err != nil {
+			log.Printf("warning: failed to remove %s from blob storage: %v", funcName+common.LambdaFileExtension, err)
 		}
 	}()
 
@@ -316,7 +323,7 @@ func (s *LambdaStore) getConfig(funcName string) (*common.LambdaConfig, error) {
 
 	// If not cached, try to load from blob storage
 	if err := s.loadConfigAndRegister(funcName); err != nil {
-		return nil, fmt.Errorf("lambda %q not found", funcName)
+		return nil, fmt.Errorf("failed to load lambda %q: %w", funcName, err)
 	}
 
 	return lambdaEntry.Config, nil
