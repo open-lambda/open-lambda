@@ -348,6 +348,57 @@ func SandboxConfJson() string {
 	return string(s)
 }
 
+// SaveConfigAtomic saves a config to a file atomically to prevent race conditions
+// This is used for template.json creation to avoid corruption during concurrent access
+func SaveConfigAtomic(cfg *Config, filePath string) error {
+	// Create temp file in same directory as target file
+	dir := filepath.Dir(filePath)
+	tempFile, err := os.CreateTemp(dir, filepath.Base(filePath)+".tmp.*")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %v", err)
+	}
+	
+	tempPath := tempFile.Name()
+	
+	// Ensure cleanup on failure
+	defer func() {
+		if tempFile != nil {
+			tempFile.Close()
+			os.Remove(tempPath)
+		}
+	}()
+	
+	// Marshal config to JSON
+	data, err := json.MarshalIndent(cfg, "", "\t")
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %v", err)
+	}
+	
+	// Write to temp file
+	if _, err := tempFile.Write(data); err != nil {
+		return fmt.Errorf("failed to write temp file: %v", err)
+	}
+	
+	// Sync to ensure data is written to disk
+	if err := tempFile.Sync(); err != nil {
+		return fmt.Errorf("failed to sync temp file: %v", err)
+	}
+	
+	// Close temp file
+	if err := tempFile.Close(); err != nil {
+		return fmt.Errorf("failed to close temp file: %v", err)
+	}
+	tempFile = nil // Mark as closed to avoid double-close in defer
+	
+	// Atomic rename - this is the key operation that prevents corruption
+	if err := os.Rename(tempPath, filePath); err != nil {
+		return fmt.Errorf("failed to rename temp file: %v", err)
+	}
+	
+	log.Printf("Atomically saved config to: %s", filePath)
+	return nil
+}
+
 // Dump prints the Config as a JSON string.
 func DumpConf() {
 	s, err := json.Marshal(Conf)

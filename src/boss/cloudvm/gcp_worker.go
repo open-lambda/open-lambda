@@ -160,8 +160,8 @@ func createGcsTemplate() error {
 	defaultTemplateConfig.SOCK_base_path = ""
 	defaultTemplateConfig.Import_cache_tree = ""
 
-	// Save template.json with GCS registry
-	if err := common.SaveConfig(defaultTemplateConfig, templatePath); err != nil {
+	// Save template.json with GCS registry using atomic write
+	if err := common.SaveConfigAtomic(defaultTemplateConfig, templatePath); err != nil {
 		return fmt.Errorf("failed to save template.json: %v", err)
 	}
 

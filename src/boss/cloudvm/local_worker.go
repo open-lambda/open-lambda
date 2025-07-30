@@ -43,7 +43,7 @@ func NewLocalWorkerPool() *WorkerPool {
 			defaultTemplateConfig.SOCK_base_path = ""
 			defaultTemplateConfig.Import_cache_tree = ""
 
-			if err := common.SaveConfig(defaultTemplateConfig, templatePath); err != nil {
+			if err := common.SaveConfigAtomic(defaultTemplateConfig, templatePath); err != nil {
 				log.Fatalf("failed to save template.json: %v", err)
 			}
 		} else {
