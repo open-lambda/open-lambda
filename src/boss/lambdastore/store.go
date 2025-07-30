@@ -1,17 +1,17 @@
 package lambdastore
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 
-	_ "gocloud.dev/blob"
+	"gocloud.dev/blob"
 	_ "gocloud.dev/blob/fileblob"
 	_ "gocloud.dev/blob/gcsblob"
 	_ "gocloud.dev/blob/s3blob"
@@ -21,15 +21,10 @@ import (
 	"github.com/open-lambda/open-lambda/ol/common"
 )
 
-type LambdaStore struct {
-	// StorePath is the directory where active lambda tarballs are stored.
-	StorePath string
 
-	// trashPath is a subdirectory used to temporarily move deleted lambda tarballs.
-	// The tarball is atomically moved here while holding both mapLock and the lambda’s entry.Lock,
-	// ensuring consistency between in-memory and on-disk state. Actual deletion from disk
-	// is deferred to a background goroutine to avoid holding locks during slow I/O.
-	trashPath string
+type LambdaStore struct {
+	// bucket is the cloud storage bucket for lambda tarballs
+	bucket *blob.Bucket
 
 	eventManager *event.Manager
 	// mapLock protects concurrent access to the Lambdas map
@@ -42,8 +37,34 @@ type LambdaEntry struct {
 	Lock   *sync.Mutex
 }
 
-func NewLambdaStore(storePath string, pool *cloudvm.WorkerPool) (*LambdaStore, error) {
-	trashDir := filepath.Join(storePath, ".trash")
+// NewLambdaStore creates a new lambda store backed by cloud storage.
+// pool may be nil or a WorkerPool instance depending on the calling context:
+// - Boss context (pool provided): Full functionality including lambda registry and event-driven execution
+//   (cron triggers, Kafka triggers). Called from boss.go:156 with a worker pool.
+// - Worker context (pool is nil): Limited functionality with lambda registry only (upload, delete, list, config).
+//   Event-driven execution is disabled. Called from worker/event/server.go:282 with nil pool.
+func NewLambdaStore(storeURL string, pool *cloudvm.WorkerPool) (*LambdaStore, error) {
+	ctx := context.Background()
+
+	// If no recognized scheme is present, assume local path and add file://
+	if !strings.HasPrefix(storeURL, "file://") &&
+		!strings.HasPrefix(storeURL, "s3://") &&
+		!strings.HasPrefix(storeURL, "gs://") {
+		storeURL = "file://" + storeURL
+	}
+
+	// If using local file storage, ensure the directory exists
+	if strings.HasPrefix(storeURL, "file://") {
+		dir := strings.TrimPrefix(storeURL, "file://")
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return nil, fmt.Errorf("failed to create local lambda store directory %s: %w", dir, err)
+		}
+	}
+
+	bucket, err := blob.OpenBucket(ctx, storeURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open blob bucket: %w", err)
+	}
 
 	var eventManager *event.Manager
 	if pool != nil {
@@ -51,29 +72,23 @@ func NewLambdaStore(storePath string, pool *cloudvm.WorkerPool) (*LambdaStore, e
 	}
 
 	store := &LambdaStore{
-		StorePath:    storePath,
-		trashPath:    trashDir,
+		bucket:       bucket,
 		eventManager: eventManager,
 		Lambdas:      make(map[string]*LambdaEntry),
 	}
 
-	if err := os.MkdirAll(store.StorePath, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create lambda store directory: %w", err)
-	}
-
-	// Ensure the .trash directory exists for safe async deletion
-	if err := os.MkdirAll(trashDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create .trash directory: %w", err)
-	}
-
-	files, err := os.ReadDir(store.StorePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read lambda store directory: %w", err)
-	}
-
-	for _, file := range files {
-		if strings.HasSuffix(file.Name(), ".tar.gz") {
-			funcName := strings.TrimSuffix(file.Name(), ".tar.gz")
+	// Load existing lambdas by listing objects in the bucket
+	iter := bucket.List(&blob.ListOptions{})
+	for {
+		obj, err := iter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to list bucket objects: %w", err)
+		}
+		if strings.HasSuffix(obj.Key, common.LambdaFileExtension) {
+			funcName := strings.TrimSuffix(obj.Key, common.LambdaFileExtension)
 			if err := store.loadConfigAndRegister(funcName); err != nil {
 				log.Printf("Failed to load lambda %s: %v", funcName, err)
 			}
@@ -159,9 +174,29 @@ func (s *LambdaStore) RetrieveLambdaConfig(w http.ResponseWriter, r *http.Reques
 // ------------------- Core Logic ----------------------
 
 func (s *LambdaStore) loadConfigAndRegister(funcName string) error {
-	tarPath := filepath.Join(s.StorePath, funcName+".tar.gz")
+	ctx := context.Background()
+	key := funcName + common.LambdaFileExtension
 
-	cfg, err := common.ExtractConfigFromTarGz(tarPath)
+	// Read the tarball from blob storage
+	reader, err := s.bucket.NewReader(ctx, key, nil)
+	if err != nil {
+		return fmt.Errorf("failed to open blob reader: %w", err)
+	}
+	defer reader.Close()
+
+	// Download to a temp file for config extraction
+	tempFile, err := os.CreateTemp("", funcName+"_*"+common.LambdaFileExtension)
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	defer os.Remove(tempFile.Name())
+	defer tempFile.Close()
+
+	if _, err := io.Copy(tempFile, reader); err != nil {
+		return fmt.Errorf("failed to download blob: %w", err)
+	}
+
+	cfg, err := common.ExtractConfigFromTarGz(tempFile.Name())
 	if err != nil {
 		return fmt.Errorf("failed to extract config.json: %w", err)
 	}
@@ -188,36 +223,50 @@ func (s *LambdaStore) addToRegistry(funcName string, body io.Reader) error {
 	lambdaEntry.Lock.Lock()
 	defer lambdaEntry.Lock.Unlock()
 
-	tarPath := filepath.Join(s.StorePath, funcName+".tar.gz")
-	tmpPath := tarPath + ".tmp"
+	ctx := context.Background()
+	key := funcName + common.LambdaFileExtension
 
-	tarFile, err := os.Create(tmpPath)
+	// Create a temporary file to validate the tarball
+	tempFile, err := os.CreateTemp("", funcName+"_upload_*"+common.LambdaFileExtension)
 	if err != nil {
 		return fmt.Errorf("failed to create temp tarball: %w", err)
 	}
 
-	// always try to clean up temp file on return
-	defer func() {
-		_ = os.Remove(tmpPath)
-	}()
+	defer os.Remove(tempFile.Name())
+	defer tempFile.Close()
 
-	if _, err := io.Copy(tarFile, body); err != nil {
-		tarFile.Close()
+	if _, err := io.Copy(tempFile, body); err != nil {
 		return fmt.Errorf("failed to write to temp tarball: %w", err)
 	}
 
-	if err := tarFile.Close(); err != nil {
+	if err := tempFile.Close(); err != nil {
 		return fmt.Errorf("failed to close temp tarball: %w", err)
 	}
 
-	cfg, err := common.ExtractConfigFromTarGz(tmpPath)
+	cfg, err := common.ExtractConfigFromTarGz(tempFile.Name())
 	if err != nil {
 		return fmt.Errorf("failed to extract config from temp tarball: %w", err)
 	}
 
-	// Atomically replace the old file
-	if err := os.Rename(tmpPath, tarPath); err != nil {
-		return fmt.Errorf("failed to rename temp tarball: %w", err)
+	// Upload to blob storage
+	tempFile, err = os.Open(tempFile.Name())
+	if err != nil {
+		return fmt.Errorf("failed to reopen temp file: %w", err)
+	}
+	defer tempFile.Close()
+
+	writer, err := s.bucket.NewWriter(ctx, key, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create blob writer: %w", err)
+	}
+	defer func() {
+		if err := writer.Close(); err != nil {
+			log.Printf("warning: failed to close blob writer: %v", err)
+		}
+	}()
+
+	if _, err := io.Copy(writer, tempFile); err != nil {
+		return fmt.Errorf("failed to upload to blob storage: %w", err)
 	}
 
 	lambdaEntry.Config = cfg
@@ -242,16 +291,6 @@ func (s *LambdaStore) removeFromRegistry(funcName string) error {
 	// hold both locks
 	entry.Lock.Lock()
 
-	tarPath := filepath.Join(s.StorePath, funcName+".tar.gz")
-	trashPath := filepath.Join(s.trashPath, funcName+".tar.gz")
-
-	// Rename the file (fast + atomic)
-	if err := os.Rename(tarPath, trashPath); err != nil && !os.IsNotExist(err) {
-		entry.Lock.Unlock()
-		s.mapLock.Unlock()
-		return fmt.Errorf("failed to rename tarball for %s: %w", funcName, err)
-	}
-
 	if s.eventManager != nil {
 		if err := s.eventManager.Unregister(funcName); err != nil {
 			log.Printf("failed to unregister triggers for %s: %v", funcName, err)
@@ -264,8 +303,8 @@ func (s *LambdaStore) removeFromRegistry(funcName string) error {
 
 	// Background deletion
 	go func() {
-		if err := os.Remove(trashPath); err != nil {
-			log.Printf("warning: failed to remove %s from trash: %v", trashPath, err)
+		if err := s.bucket.Delete(context.Background(), funcName+common.LambdaFileExtension); err != nil {
+			log.Printf("warning: failed to remove %s from blob storage: %v", funcName+common.LambdaFileExtension, err)
 		}
 	}()
 
@@ -277,16 +316,17 @@ func (s *LambdaStore) getConfig(funcName string) (*common.LambdaConfig, error) {
 	lambdaEntry.Lock.Lock()
 	defer lambdaEntry.Lock.Unlock()
 
-	tarPath := filepath.Join(s.StorePath, funcName+".tar.gz")
-	cfg, err := common.ExtractConfigFromTarGz(tarPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("lambda %q not found", funcName)
-		}
-		return nil, fmt.Errorf("failed to extract config: %w", err)
+	// Return cached config if available
+	if lambdaEntry.Config != nil {
+		return lambdaEntry.Config, nil
 	}
 
-	return cfg, nil
+	// If not cached, try to load from blob storage
+	if err := s.loadConfigAndRegister(funcName); err != nil {
+		return nil, fmt.Errorf("failed to load lambda %q: %w", funcName, err)
+	}
+
+	return lambdaEntry.Config, nil
 }
 
 func (s *LambdaStore) getOrCreateEntry(funcName string) *LambdaEntry {
