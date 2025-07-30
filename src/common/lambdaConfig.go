@@ -44,6 +44,9 @@ type KafkaTrigger struct {
 type LambdaConfig struct {
 	Triggers Triggers `yaml:"triggers"` // List of HTTP triggers
 	// Additional configurations can be added here.
+	MemMB         *int `yaml:"mem_mb,omitempty"`
+	CPUPercent    *int `yaml:"cpu_percent,omitempty"`
+	MaxRuntimeSec *int `yaml:"max_runtime_sec,omitempty"`
 }
 
 // LoadDefaultLambdaConfig initializes the configuration with default values.
@@ -114,6 +117,7 @@ func LoadLambdaConfig(codeDir string) (*LambdaConfig, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse YAML file: %v", err)
 	}
+	log.Printf("DEBUG: Loaded ol.yaml. MemMB: %v, CPUPercent: %v", config.MemMB, config.CPUPercent)
 
 	return &config, checkLambdaConfig(&config)
 }

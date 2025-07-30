@@ -173,11 +173,15 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 	} else if rtType == common.RT_NATIVE {
 		log.Printf("Got native function")
 
-		// Initialize f.Meta for native functions for consistensy.
-		f.Meta = &FunctionMeta{
-			Sandbox: nil,                              // Sandbox is nil for native functions
-			Config:  common.LoadDefaultLambdaConfig(), // Load default configuration
+		// parsing ol.yaml for native functions too
+		meta, err := parseMeta(codeDir)
+		if err != nil {
+			return err
 		}
+
+		f.Meta = meta
+		// debug
+		f.printf("Loaded config for lambda. MemMB: %v, CPU: %v", f.Meta.Config.MemMB, f.Meta.Config.CPUPercent)
 	}
 
 	f.codeDir = codeDir

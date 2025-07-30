@@ -111,11 +111,22 @@ func (linst *LambdaInstance) Task() {
 
 			log.Printf("Creating new sandbox")
 
-			// import cache is either disabled or it failed
+			/// import cache is either disabled or it failed
 			if sb == nil {
 				t2 := common.T0("LambdaInstance-WaitSandbox-NoImportCache")
 				scratchDir := f.lmgr.scratchDirs.Make(f.name)
-				sb, err = f.lmgr.sbPool.Create(nil, true, linst.codeDir, scratchDir, linst.meta.Sandbox, f.rtType)
+
+				// Create a meta object to pass to the sandbox pool.
+				meta := &sandbox.SandboxMeta{
+					// Populate with resource limits from the per-lambda config, if they exist.
+					Limits: &sandbox.Limits{
+						MemMB:      linst.lfunc.Meta.Config.MemMB,
+						CPUPercent: linst.lfunc.Meta.Config.CPUPercent,
+					},
+				}
+
+				// Create a new sandbox using the specified metadata.
+				sb, err = f.lmgr.sbPool.Create(nil, true, linst.codeDir, scratchDir, meta, f.rtType)
 				t2.T1()
 			}
 
