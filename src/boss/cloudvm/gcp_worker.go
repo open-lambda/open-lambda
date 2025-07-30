@@ -7,6 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/open-lambda/open-lambda/ol/boss/config"
+	"github.com/open-lambda/open-lambda/ol/common"
 )
 
 type GcpWorkerPool struct {
@@ -63,6 +66,11 @@ func NewGcpWorkerPool() *WorkerPool {
 		panic(err)
 	}
 	fmt.Printf("Instance: %s\n", instance)
+
+	fmt.Printf("STEP 2a: prepare snapshot with GCS lambda store config\n")
+	if err := prepareGcsWorkerDefaults(); err != nil {
+		panic(fmt.Errorf("failed to prepare GCS worker defaults: %v", err))
+	}
 
 	fmt.Printf("STEP 3: take crash-consistent snapshot of instance\n")
 	disk := instance // assume Gcp disk name is same as instance name
@@ -122,4 +130,34 @@ func (pool *GcpWorkerPool) DeleteInstance(worker *Worker) error {
 
 func (_ *GcpWorkerPool) ForwardTask(w http.ResponseWriter, r *http.Request, worker *Worker) error {
 	return forwardTaskHelper(w, r, worker.host, worker.port)
+}
+
+// prepareGcsWorkerDefaults creates a default worker config with GCS registry 
+// and saves it to the snapshot so workers inherit the correct lambda store URL
+func prepareGcsWorkerDefaults() error {
+	// Create a temporary directory to hold the default worker config
+	tempDir := "/tmp/ol-worker-defaults"
+	if err := os.MkdirAll(tempDir, 0755); err != nil {
+		return fmt.Errorf("failed to create temp directory: %v", err)
+	}
+
+	// Get default worker config for the temp directory
+	defaultCfg, err := common.GetDefaultWorkerConfig(tempDir)
+	if err != nil {
+		return fmt.Errorf("failed to get default worker config: %v", err)
+	}
+
+	// Override registry to use GCS lambda store
+	defaultCfg.Registry = config.BossConf.GetLambdaStoreURL()
+	log.Printf("Setting default worker registry to: %s", defaultCfg.Registry)
+
+	// Save the modified config as the global default template
+	templatePath := "/tmp/worker-config-template.json"
+	if err := common.SaveConfig(defaultCfg, templatePath); err != nil {
+		return fmt.Errorf("failed to save worker config template: %v", err)
+	}
+
+	// This config will be baked into the snapshot and used by workers
+	log.Printf("Worker config template prepared for snapshot at: %s", templatePath)
+	return nil
 }

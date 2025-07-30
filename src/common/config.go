@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"os"
 	"path"
 	"path/filepath"
 	"syscall"
@@ -152,6 +153,22 @@ func LoadDefaults(olPath string) error {
 
 // GetDefaultWorkerConfig returns a config populated with reasonable defaults.
 func GetDefaultWorkerConfig(olPath string) (*Config, error) {
+	// Check if there's a pre-baked worker config template (from GCP snapshot)
+	templatePath := "/tmp/worker-config-template.json"
+	if _, err := os.Stat(templatePath); err == nil {
+		log.Printf("Loading pre-baked worker config from snapshot: %s", templatePath)
+		cfg, err := ReadInConfig(templatePath)
+		if err != nil {
+			log.Printf("Failed to load pre-baked config, falling back to defaults: %v", err)
+		} else {
+			// Update paths based on current olPath if needed
+			if olPath != "" && cfg.Worker_dir == "" {
+				cfg.Worker_dir = filepath.Join(olPath, "worker")
+			}
+			return cfg, nil
+		}
+	}
+
 	var workerDir, registryDir, baseImgDir, zygoteTreePath, packagesDir string
 
 	if olPath != "" {
