@@ -153,22 +153,48 @@ func LoadDefaults(olPath string) error {
 
 // GetDefaultWorkerConfig returns a config populated with reasonable defaults.
 func GetDefaultWorkerConfig(olPath string) (*Config, error) {
-	// Check if there's a pre-baked worker config template (from GCP snapshot)
-	templatePath := "/tmp/worker-config-template.json"
-	if _, err := os.Stat(templatePath); err == nil {
-		log.Printf("Loading pre-baked worker config from snapshot: %s", templatePath)
-		cfg, err := ReadInConfig(templatePath)
-		if err != nil {
-			log.Printf("Failed to load pre-baked config, falling back to defaults: %v", err)
-		} else {
-			// Update paths based on current olPath if needed
-			if olPath != "" && cfg.Worker_dir == "" {
-				cfg.Worker_dir = filepath.Join(olPath, "worker")
+	// Check if template.json exists - if so, use it and patch empty fields
+	currPath, err := os.Getwd()
+	if err == nil {
+		templatePath := filepath.Join(currPath, "template.json")
+		if _, err := os.Stat(templatePath); err == nil {
+			log.Printf("Loading config from template.json: %s", templatePath)
+			cfg, err := ReadInConfig(templatePath)
+			if err == nil {
+				// Patch worker-specific fields if they're empty (same logic as worker_config_template.go)
+				defaultCfg, err := getDefaultConfigForPatching(olPath)
+				if err != nil {
+					return nil, fmt.Errorf("failed to get defaults for patching: %v", err)
+				}
+
+				if cfg.Worker_dir == "" {
+					cfg.Worker_dir = defaultCfg.Worker_dir
+					log.Printf("Patched Worker_dir: %s", cfg.Worker_dir)
+				}
+				if cfg.Pkgs_dir == "" {
+					cfg.Pkgs_dir = defaultCfg.Pkgs_dir
+					log.Printf("Patched Pkgs_dir: %s", cfg.Pkgs_dir)
+				}
+				if cfg.SOCK_base_path == "" {
+					cfg.SOCK_base_path = defaultCfg.SOCK_base_path
+					log.Printf("Patched SOCK_base_path: %s", cfg.SOCK_base_path)
+				}
+				if cfg.Import_cache_tree == "" {
+					cfg.Import_cache_tree = defaultCfg.Import_cache_tree
+					log.Printf("Patched Import_cache_tree: %s", cfg.Import_cache_tree)
+				}
+
+				return cfg, nil
 			}
-			return cfg, nil
 		}
 	}
 
+	// Fallback: generate defaults if no template.json
+	return getDefaultConfigForPatching(olPath)
+}
+
+// getDefaultConfigForPatching generates the default config used for patching empty template fields
+func getDefaultConfigForPatching(olPath string) (*Config, error) {
 	var workerDir, registryDir, baseImgDir, zygoteTreePath, packagesDir string
 
 	if olPath != "" {
@@ -195,7 +221,7 @@ func GetDefaultWorkerConfig(olPath string) (*Config, error) {
 		// Registry URL with file:// prefix required by gocloud blob backend abstraction.
 		// The gocloud library uses URL schemes to route to appropriate storage drivers:
 		// file:// for local filesystem, s3:// for AWS S3, gs:// for Google Cloud Storage.
-		// By default, it will be configured to local
+		// Default to local file registry
 		Registry:          "file://" + registryDir,
 		Sandbox:           "sock",
 		Log_output:        true,

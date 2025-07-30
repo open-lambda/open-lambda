@@ -15,7 +15,6 @@ import (
 
 // WORKER IMPLEMENTATION: LocalWorker
 type LocalWorkerPoolPlatform struct {
-	configTemplate *common.Config
 	// lock protects nextWorkerPort from race conditions caused by concurrent access.
 	lock           sync.Mutex
 	nextWorkerPort int
@@ -34,6 +33,16 @@ func NewLocalWorkerPool() *WorkerPool {
 				log.Fatalf("failed to load default template config: %v", err)
 			}
 
+			// Set platform-specific registry (local platform)
+			defaultTemplateConfig.Registry = config.BossConf.GetLambdaStoreURL()
+			log.Printf("Setting template.json registry to: %s", defaultTemplateConfig.Registry)
+
+			// Clear worker-specific fields so they get patched later
+			defaultTemplateConfig.Worker_dir = ""
+			defaultTemplateConfig.Pkgs_dir = ""
+			defaultTemplateConfig.SOCK_base_path = ""
+			defaultTemplateConfig.Import_cache_tree = ""
+
 			if err := common.SaveConfig(defaultTemplateConfig, templatePath); err != nil {
 				log.Fatalf("failed to save template.json: %v", err)
 			}
@@ -42,16 +51,9 @@ func NewLocalWorkerPool() *WorkerPool {
 		}
 	}
 
-	// Load the template and save locally
-	cfg, err := common.ReadInConfig(templatePath)
-	if err != nil {
-		log.Fatalf("failed to load template config: %v", err)
-	}
-
 	return &WorkerPool{
 		WorkerPoolPlatform: &LocalWorkerPoolPlatform{
 			nextWorkerPort: startPort,
-			configTemplate: cfg,
 		},
 	}
 }
@@ -86,9 +88,21 @@ func (p *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) error {
 	workerPath := filepath.Join(currPath, worker.workerId)
 	workerPort := p.GetNextWorkerPort()
 
-	// Load worker configuration
-	if err := SaveTemplateConfToWorkerDir(p.configTemplate, workerPath, workerPort); err != nil {
-		log.Printf("Failed to load template.json: %v", err)
+	// Create worker-specific config.json from template
+	// The template.json will be loaded and patched in GetDefaultWorkerConfig
+	cfg, err := common.GetDefaultWorkerConfig(workerPath)
+	if err != nil {
+		log.Printf("Failed to get worker config: %v", err)
+		return err
+	}
+	
+	// Set worker-specific port
+	cfg.Worker_port = workerPort
+	
+	// Save to worker directory
+	configPath := filepath.Join(workerPath, "config.json")
+	if err := common.SaveConfig(cfg, configPath); err != nil {
+		log.Printf("Failed to save worker config: %v", err)
 		return err
 	}
 

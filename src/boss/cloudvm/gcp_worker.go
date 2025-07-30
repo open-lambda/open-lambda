@@ -68,8 +68,8 @@ func NewGcpWorkerPool() *WorkerPool {
 	fmt.Printf("Instance: %s\n", instance)
 
 	fmt.Printf("STEP 2a: prepare snapshot with GCS lambda store config\n")
-	if err := prepareGcsWorkerDefaults(); err != nil {
-		panic(fmt.Errorf("failed to prepare GCS worker defaults: %v", err))
+	if err := createGcsTemplate(); err != nil {
+		panic(fmt.Errorf("failed to create GCS template.json: %v", err))
 	}
 
 	fmt.Printf("STEP 3: take crash-consistent snapshot of instance\n")
@@ -132,32 +132,39 @@ func (_ *GcpWorkerPool) ForwardTask(w http.ResponseWriter, r *http.Request, work
 	return forwardTaskHelper(w, r, worker.host, worker.port)
 }
 
-// prepareGcsWorkerDefaults creates a default worker config with GCS registry 
-// and saves it to the snapshot so workers inherit the correct lambda store URL
-func prepareGcsWorkerDefaults() error {
-	// Create a temporary directory to hold the default worker config
-	tempDir := "/tmp/ol-worker-defaults"
-	if err := os.MkdirAll(tempDir, 0755); err != nil {
-		return fmt.Errorf("failed to create temp directory: %v", err)
-	}
-
-	// Get default worker config for the temp directory
-	defaultCfg, err := common.GetDefaultWorkerConfig(tempDir)
+// createGcsTemplate creates template.json with GCS registry configuration
+// This will be captured in the snapshot and used by workers
+func createGcsTemplate() error {
+	currPath, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("failed to get default worker config: %v", err)
+		return fmt.Errorf("failed to get current path: %v", err)
 	}
 
-	// Override registry to use GCS lambda store
-	defaultCfg.Registry = config.BossConf.GetLambdaStoreURL()
-	log.Printf("Setting default worker registry to: %s", defaultCfg.Registry)
-
-	// Save the modified config as the global default template
-	templatePath := "/tmp/worker-config-template.json"
-	if err := common.SaveConfig(defaultCfg, templatePath); err != nil {
-		return fmt.Errorf("failed to save worker config template: %v", err)
+	templatePath := filepath.Join(currPath, "template.json")
+	
+	log.Printf("Creating template.json with GCS registry at: %s", templatePath)
+	
+	// Get default worker config
+	defaultTemplateConfig, err := common.GetDefaultWorkerConfig("")
+	if err != nil {
+		return fmt.Errorf("failed to load default template config: %v", err)
 	}
 
-	// This config will be baked into the snapshot and used by workers
-	log.Printf("Worker config template prepared for snapshot at: %s", templatePath)
+	// Set the GCS registry URL
+	defaultTemplateConfig.Registry = config.BossConf.GetLambdaStoreURL()
+	log.Printf("Setting template.json registry to: %s", defaultTemplateConfig.Registry)
+
+	// Clear worker-specific fields so they get patched later
+	defaultTemplateConfig.Worker_dir = ""
+	defaultTemplateConfig.Pkgs_dir = ""
+	defaultTemplateConfig.SOCK_base_path = ""
+	defaultTemplateConfig.Import_cache_tree = ""
+
+	// Save template.json with GCS registry
+	if err := common.SaveConfig(defaultTemplateConfig, templatePath); err != nil {
+		return fmt.Errorf("failed to save template.json: %v", err)
+	}
+
+	log.Printf("template.json with GCS registry ready for snapshot")
 	return nil
 }
