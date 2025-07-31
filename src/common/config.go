@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"os"
 	"path"
 	"path/filepath"
 	"syscall"
@@ -152,6 +153,55 @@ func LoadDefaults(olPath string) error {
 
 // GetDefaultWorkerConfig returns a config populated with reasonable defaults.
 func GetDefaultWorkerConfig(olPath string) (*Config, error) {
+	// Check if template.json exists - if so, use it and patch empty fields
+	currPath, err := os.Getwd()
+	if err == nil {
+		// First check current directory
+		templatePath := filepath.Join(currPath, "template.json")
+		if _, err := os.Stat(templatePath); err != nil {
+			// If not found, check parent directory (for workers running in subdirs)
+			parentPath := filepath.Dir(currPath)
+			templatePath = filepath.Join(parentPath, "template.json")
+		}
+		
+		if _, err := os.Stat(templatePath); err == nil {
+			log.Printf("Loading config from template.json: %s", templatePath)
+			cfg, err := ReadInConfig(templatePath)
+			if err == nil {
+				// Patch worker-specific fields if they're empty (same logic as worker_config_template.go)
+				defaultCfg, err := getDefaultConfigForPatching(olPath)
+				if err != nil {
+					return nil, fmt.Errorf("failed to get defaults for patching: %v", err)
+				}
+
+				if cfg.Worker_dir == "" {
+					cfg.Worker_dir = defaultCfg.Worker_dir
+					log.Printf("Patched Worker_dir: %s", cfg.Worker_dir)
+				}
+				if cfg.Pkgs_dir == "" {
+					cfg.Pkgs_dir = defaultCfg.Pkgs_dir
+					log.Printf("Patched Pkgs_dir: %s", cfg.Pkgs_dir)
+				}
+				if cfg.SOCK_base_path == "" {
+					cfg.SOCK_base_path = defaultCfg.SOCK_base_path
+					log.Printf("Patched SOCK_base_path: %s", cfg.SOCK_base_path)
+				}
+				if cfg.Import_cache_tree == "" {
+					cfg.Import_cache_tree = defaultCfg.Import_cache_tree
+					log.Printf("Patched Import_cache_tree: %s", cfg.Import_cache_tree)
+				}
+
+				return cfg, nil
+			}
+		}
+	}
+
+	// Fallback: generate defaults if no template.json
+	return getDefaultConfigForPatching(olPath)
+}
+
+// getDefaultConfigForPatching generates the default config used for patching empty template fields
+func getDefaultConfigForPatching(olPath string) (*Config, error) {
 	var workerDir, registryDir, baseImgDir, zygoteTreePath, packagesDir string
 
 	if olPath != "" {
@@ -178,7 +228,7 @@ func GetDefaultWorkerConfig(olPath string) (*Config, error) {
 		// Registry URL with file:// prefix required by gocloud blob backend abstraction.
 		// The gocloud library uses URL schemes to route to appropriate storage drivers:
 		// file:// for local filesystem, s3:// for AWS S3, gs:// for Google Cloud Storage.
-		// By default, it will be configured to local
+		// Default to local file registry
 		Registry:          "file://" + registryDir,
 		Sandbox:           "sock",
 		Log_output:        true,
@@ -303,6 +353,64 @@ func SandboxConfJson() string {
 		panic(err)
 	}
 	return string(s)
+}
+
+// SaveConfigAtomic saves a config to a file atomically to prevent race conditions
+// This is used for template.json creation to avoid corruption during concurrent access
+func SaveConfigAtomic(cfg *Config, filePath string) error {
+	// Create temp file in same directory as target file
+	dir := filepath.Dir(filePath)
+	tempFile, err := os.CreateTemp(dir, filepath.Base(filePath)+".tmp.*")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %v", err)
+	}
+	
+	tempPath := tempFile.Name()
+	
+	// Ensure cleanup on failure
+	defer func() {
+		if tempFile != nil {
+			tempFile.Close()
+			os.Remove(tempPath)
+		}
+	}()
+	
+	// Marshal config to JSON
+	data, err := json.MarshalIndent(cfg, "", "\t")
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %v", err)
+	}
+	
+	// Write to temp file
+	if _, err := tempFile.Write(data); err != nil {
+		return fmt.Errorf("failed to write temp file: %v", err)
+	}
+	
+	// Sync to ensure data is written to disk
+	if err := tempFile.Sync(); err != nil {
+		return fmt.Errorf("failed to sync temp file: %v", err)
+	}
+	
+	// Close temp file
+	if err := tempFile.Close(); err != nil {
+		return fmt.Errorf("failed to close temp file: %v", err)
+	}
+	tempFile = nil // Mark as closed to avoid double-close in defer
+	
+	// Atomic rename - this is the key operation that prevents corruption
+	if err := os.Rename(tempPath, filePath); err != nil {
+		return fmt.Errorf("failed to rename temp file: %v", err)
+	}
+	
+	// Sync the directory to ensure the rename is persisted before snapshot
+	dirFile, err := os.Open(filepath.Dir(filePath))
+	if err == nil {
+		dirFile.Sync() // Ensure directory entry is synced
+		dirFile.Close()
+	}
+	
+	log.Printf("Atomically saved config to: %s", filePath)
+	return nil
 }
 
 // Dump prints the Config as a JSON string.

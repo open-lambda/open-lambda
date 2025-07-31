@@ -7,6 +7,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
+
+	"github.com/open-lambda/open-lambda/ol/boss/config"
+	"github.com/open-lambda/open-lambda/ol/common"
 )
 
 type GcpWorkerPool struct {
@@ -63,6 +67,15 @@ func NewGcpWorkerPool() *WorkerPool {
 		panic(err)
 	}
 	fmt.Printf("Instance: %s\n", instance)
+
+	fmt.Printf("STEP 2a: prepare snapshot with GCS lambda store config\n")
+	if err := createGcsTemplate(); err != nil {
+		panic(fmt.Errorf("failed to create GCS template.json: %v", err))
+	}
+
+	// Brief pause to ensure filesystem operations are fully committed before snapshot
+	fmt.Printf("STEP 2b: ensuring filesystem sync before snapshot\n")
+	time.Sleep(1 * time.Second)
 
 	fmt.Printf("STEP 3: take crash-consistent snapshot of instance\n")
 	disk := instance // assume Gcp disk name is same as instance name
@@ -122,4 +135,42 @@ func (pool *GcpWorkerPool) DeleteInstance(worker *Worker) error {
 
 func (_ *GcpWorkerPool) ForwardTask(w http.ResponseWriter, r *http.Request, worker *Worker) error {
 	return forwardTaskHelper(w, r, worker.host, worker.port)
+}
+
+// createGcsTemplate creates template.json with GCS registry configuration
+// This will be captured in the snapshot and used by workers
+func createGcsTemplate() error {
+	currPath, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get current path: %v", err)
+	}
+
+	templatePath := filepath.Join(currPath, "template.json")
+
+	log.Printf("Creating template.json with GCS registry at: %s", templatePath)
+
+	// Get default worker config
+	defaultTemplateConfig, err := common.GetDefaultWorkerConfig("")
+	if err != nil {
+		return fmt.Errorf("failed to load default template config: %v", err)
+	}
+
+	// Set the GCS registry URL
+	defaultTemplateConfig.Registry = config.BossConf.GetLambdaStoreURL()
+	log.Printf("Setting template.json registry to: %s", defaultTemplateConfig.Registry)
+
+	// Clear worker-specific fields so they get patched later
+	defaultTemplateConfig.Worker_dir = ""
+	defaultTemplateConfig.Pkgs_dir = ""
+	defaultTemplateConfig.SOCK_base_path = ""
+	defaultTemplateConfig.Import_cache_tree = ""
+	defaultTemplateConfig.Worker_url = "0.0.0.0"
+
+	// Save template.json with GCS registry using atomic write
+	if err := common.SaveConfigAtomic(defaultTemplateConfig, templatePath); err != nil {
+		return fmt.Errorf("failed to save template.json: %v", err)
+	}
+
+	log.Printf("template.json with GCS registry ready for snapshot")
+	return nil
 }
