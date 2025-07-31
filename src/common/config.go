@@ -156,7 +156,14 @@ func GetDefaultWorkerConfig(olPath string) (*Config, error) {
 	// Check if template.json exists - if so, use it and patch empty fields
 	currPath, err := os.Getwd()
 	if err == nil {
+		// First check current directory
 		templatePath := filepath.Join(currPath, "template.json")
+		if _, err := os.Stat(templatePath); err != nil {
+			// If not found, check parent directory (for workers running in subdirs)
+			parentPath := filepath.Dir(currPath)
+			templatePath = filepath.Join(parentPath, "template.json")
+		}
+		
 		if _, err := os.Stat(templatePath); err == nil {
 			log.Printf("Loading config from template.json: %s", templatePath)
 			cfg, err := ReadInConfig(templatePath)
@@ -393,6 +400,13 @@ func SaveConfigAtomic(cfg *Config, filePath string) error {
 	// Atomic rename - this is the key operation that prevents corruption
 	if err := os.Rename(tempPath, filePath); err != nil {
 		return fmt.Errorf("failed to rename temp file: %v", err)
+	}
+	
+	// Sync the directory to ensure the rename is persisted before snapshot
+	dirFile, err := os.Open(filepath.Dir(filePath))
+	if err == nil {
+		dirFile.Sync() // Ensure directory entry is synced
+		dirFile.Close()
 	}
 	
 	log.Printf("Atomically saved config to: %s", filePath)

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/open-lambda/open-lambda/ol/boss/config"
 	"github.com/open-lambda/open-lambda/ol/common"
@@ -71,6 +72,10 @@ func NewGcpWorkerPool() *WorkerPool {
 	if err := createGcsTemplate(); err != nil {
 		panic(fmt.Errorf("failed to create GCS template.json: %v", err))
 	}
+
+	// Brief pause to ensure filesystem operations are fully committed before snapshot
+	fmt.Printf("STEP 2b: ensuring filesystem sync before snapshot\n")
+	time.Sleep(1 * time.Second)
 
 	fmt.Printf("STEP 3: take crash-consistent snapshot of instance\n")
 	disk := instance // assume Gcp disk name is same as instance name
