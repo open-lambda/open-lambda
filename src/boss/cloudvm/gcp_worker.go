@@ -146,9 +146,9 @@ func createGcsTemplate() error {
 	}
 
 	templatePath := filepath.Join(currPath, "template.json")
-	
+
 	log.Printf("Creating template.json with GCS registry at: %s", templatePath)
-	
+
 	// Get default worker config
 	defaultTemplateConfig, err := common.GetDefaultWorkerConfig("")
 	if err != nil {
@@ -164,6 +164,7 @@ func createGcsTemplate() error {
 	defaultTemplateConfig.Pkgs_dir = ""
 	defaultTemplateConfig.SOCK_base_path = ""
 	defaultTemplateConfig.Import_cache_tree = ""
+	defaultTemplateConfig.Worker_url = "0.0.0.0"
 
 	// Save template.json with GCS registry using atomic write
 	if err := common.SaveConfigAtomic(defaultTemplateConfig, templatePath); err != nil {
