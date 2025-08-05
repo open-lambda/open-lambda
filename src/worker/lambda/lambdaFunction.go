@@ -182,11 +182,36 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 // needed, and dispatches to a set of lambda instances. Task also
 // monitors outstanding requests, and scales the number of instances
 // up or down as needed.
+//
+// communication for a given request is as follows (each of the four
+// transfers are commented within the function):
+//
+// client -> function -> instance -> function -> client
+//
+// each of the 4 handoffs above is over a chan.  In order, those chans are:
+// 1. LambdaFunc.funcChan
+// 2. LambdaFunc.instChan
+// 3. LambdaFunc.doneChan
+// 4. Invocation.done
+//
+// If either LambdaFunc.funcChan or LambdaFunc.instChan is full, we
+// respond to the client with a backoff message: StatusTooManyRequests
 func (f *LambdaFunc) Task() {
 	// we want to perform various cleanup actions, such as killing
+	// instances and deleting old code.  We want to do these
+	// asynchronously, but in order.  Thus, we use a chan to get
 	// instances and deleting old code. We want to do these
 	// asynchronously, but in order. Thus, we use a chan to get
 	// FIFO behavior and a single cleanup task to get async.
+	//
+	// two types can be sent to this chan:
+	//
+	// 1. string: this is a path to be deleted
+	//
+	// 2. chan: this is a signal chan that corresponds to
+	// previously initiated cleanup work.  We block until we
+	// receive the complete signal, before proceeding to
+	// subsequent cleanup tasks in the FIFO.
 	cleanupChan := make(chan any, 32)
 	cleanupTaskDone := make(chan bool)
 	go func() {
@@ -221,6 +246,8 @@ func (f *LambdaFunc) Task() {
 				continue
 			}
 		case req := <-f.funcChan:
+			// msg: client -> function
+
 			// check for new code, and cleanup old code
 			// (and instances that use it) if necessary
 			oldCodeDir := f.codeDir
@@ -264,6 +291,7 @@ func (f *LambdaFunc) Task() {
 
 			select {
 			case f.instChan <- req:
+				// msg: function -> instance
 				outstandingReqs++
 			default:
 				// queue cannot accept more, so reply with backoff
@@ -272,8 +300,12 @@ func (f *LambdaFunc) Task() {
 				req.done <- true
 			}
 		case req := <-f.doneChan:
+			// msg: instance -> function
+
 			execMs.Add(req.execMs)
 			outstandingReqs--
+
+			// msg: function -> client
 			req.done <- true
 
 		case done := <-f.killChan:
@@ -295,16 +327,27 @@ func (f *LambdaFunc) Task() {
 		}
 
 		// POLICY: how many instances (i.e., virtual sandboxes) should we allocate?
-		inProgressWorkMs := outstandingReqs * execMs.Avg
-		desiredInstances := inProgressWorkMs / 10 // aim for 1 sandbox per 10ms of work
 
+		// AUTOSCALING STEP 1: decide how many instances we want
+
+		// let's aim to have 1 sandbox per 10ms of outstanding work
+		// TODO make this configurable
+		inProgressWorkMs := outstandingReqs * execMs.Avg
+		desiredInstances := inProgressWorkMs / 10
+
+		// if we have, say, one job that will take 100
+		// seconds, spinning up 100 instances won't do any
+		// good, so cap by number of outstanding reqs
 		if outstandingReqs < desiredInstances {
 			desiredInstances = outstandingReqs
 		}
 
+		// always try to have one instance
 		if desiredInstances < 1 {
 			desiredInstances = 1
 		}
+
+		// AUTOSCALING STEP 2: tweak how many instances we have, to get closer to our goal
 
 		// make at most one scaling adjustment per 100ms
 		adjustFreq := time.Millisecond * 100

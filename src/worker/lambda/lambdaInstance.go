@@ -62,7 +62,7 @@ func (linst *LambdaInstance) Task() {
 						log.Printf("Runtime output is:")
 
 						for _, line := range strings.Split(rtLog, "\n") {
-							log.Printf("    %s", line)
+							log.Printf("   %s", line)
 						}
 					}
 
@@ -70,7 +70,7 @@ func (linst *LambdaInstance) Task() {
 						log.Printf("Proxy output is:")
 
 						for _, line := range strings.Split(proxyLog, "\n") {
-							log.Printf("    %s", line)
+							log.Printf("   %s", line)
 						}
 					}
 				}
@@ -232,7 +232,7 @@ func (linst *LambdaInstance) Task() {
 						log.Printf("Runtime output is:")
 
 						for _, line := range strings.Split(rtLog, "\n") {
-							log.Printf("    %s", line)
+							log.Printf("   %s", line)
 						}
 					}
 				}
@@ -256,6 +256,7 @@ func (linst *LambdaInstance) Task() {
 				sb = nil
 			}
 		}
+
 		t.T1()
 	}
 }

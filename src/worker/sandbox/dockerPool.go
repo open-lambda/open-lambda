@@ -58,6 +58,7 @@ func NewDockerPool(pidMode string, caps []string) (*DockerPool, error) {
 	return pool, nil
 }
 
+// Create creates a docker sandbox from the handler and sandbox directory.
 func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, meta *SandboxMeta, _ common.RuntimeType) (sb Sandbox, err error) {
 	// Ensure meta is not nil to prevent panics.
 	if meta == nil {
