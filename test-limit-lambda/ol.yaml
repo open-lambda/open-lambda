@@ -1,4 +1,5 @@
-mem_mb: 12
+limits:
+  mem_mb: 64
 triggers:
   http:
     - method: POST

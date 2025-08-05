@@ -98,15 +98,19 @@ func (linst *LambdaInstance) Task() {
 		// if we don't already have a Sandbox, create one, and
 		// HTTP proxy over the channel
 		if sb == nil {
+			// Create a meta object to pass to the sandbox pool.
+			// This meta object will contain both the package/import requirements
+			// and the per-lambda resource limits.
 			meta := &sandbox.SandboxMeta{
-				Installs: linst.meta.Sandbox.Installs,
-				Imports:  linst.meta.Sandbox.Imports,
-				Limits:   &linst.lfunc.Meta.Config.Limits,
+				Limits: &linst.lfunc.Meta.Config.Limits,
+			}
+			if linst.meta != nil && linst.meta.Sandbox != nil {
+				meta.Installs = linst.meta.Sandbox.Installs
+				meta.Imports = linst.meta.Sandbox.Imports
 			}
 
 			if f.lmgr.ZygoteProvider != nil && f.rtType == common.RT_PYTHON {
 				scratchDir := f.lmgr.scratchDirs.Make(f.name)
-
 				// we don't specify parent SB, because ImportCache.Create chooses it for us
 				sb, err = f.lmgr.ZygoteProvider.Create(f.lmgr.sbPool, true, linst.codeDir, scratchDir, meta, f.rtType)
 				if err != nil {
@@ -119,6 +123,7 @@ func (linst *LambdaInstance) Task() {
 			if sb == nil {
 				t2 := common.T0("LambdaInstance-WaitSandbox-NoImportCache")
 				scratchDir := f.lmgr.scratchDirs.Make(f.name)
+				// Create a new sandbox using the specified metadata.
 				sb, err = f.lmgr.sbPool.Create(nil, true, linst.codeDir, scratchDir, meta, f.rtType)
 				t2.T1()
 			}
@@ -251,7 +256,6 @@ func (linst *LambdaInstance) Task() {
 				sb = nil
 			}
 		}
-
 		t.T1()
 	}
 }
