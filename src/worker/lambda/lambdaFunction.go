@@ -33,7 +33,6 @@ type LambdaFunc struct {
 	lastPull *time.Time
 	codeDir  string
 	Meta     *FunctionMeta
-	config	 *common.LambdaConfig // adding config
 
 	// lambda execution
 	funcChan  chan *Invocation // server to func
@@ -86,16 +85,19 @@ func parseMeta(codeDir string) (*FunctionMeta, error) {
 		// having a requirements.txt is optional
 	} else if err != nil {
 		return nil, err
+	} else {
+		defer file.Close()
 	}
-	defer file.Close()
 
-	scnr := bufio.NewScanner(file)
-	for scnr.Scan() {
-		line := strings.ReplaceAll(scnr.Text(), " ", "")
-		pkg := strings.Split(line, "#")[0]
-		if pkg != "" {
-			pkg = packages.NormalizePkg(pkg)
-			sandboxMeta.Installs = append(sandboxMeta.Installs, pkg)
+	if file != nil {
+		scnr := bufio.NewScanner(file)
+		for scnr.Scan() {
+			line := strings.ReplaceAll(scnr.Text(), " ", "")
+			pkg := strings.Split(line, "#")[0]
+			if pkg != "" {
+				pkg = packages.NormalizePkg(pkg)
+				sandboxMeta.Installs = append(sandboxMeta.Installs, pkg)
+			}
 		}
 	}
 
@@ -153,14 +155,12 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 		}
 	}()
 
-	if rtType == common.RT_PYTHON {
-		// inspect new code for dependencies; if we can install
-		// everything necessary, start using new code
-		meta, err := parseMeta(codeDir)
-		if err != nil {
-			return err
-		}
+	meta, err := parseMeta(codeDir)
+	if err != nil {
+		return err
+	}
 
+	if rtType == common.RT_PYTHON {
 		// make sure all specified dependencies are installed
 		// (but don't recursively find others)
 		for _, pkg := range meta.Sandbox.Installs {
@@ -170,68 +170,23 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 		}
 
 		f.lmgr.DepTracer.TraceFunction(codeDir, meta.Sandbox.Installs)
-		f.Meta = meta
-		f.config = meta.Config // store the loaded config
-	} else if rtType == common.RT_NATIVE {
-		log.Printf("Got native function")
-		
-		// parsing ol.yaml for native functions too
-		meta, err := parseMeta(codeDir)
-		if err != nil {
-			return err
-		}
-
-		f.Meta = meta
-		f.config = meta.Config
-		// debug
-		f.printf("Loaded config for lambda. MemMB: %v, CPU: %v", f.config.MemMB, f.config.CPUPercent)
-
-		// Initialize f.Meta for native functions for consistensy.
-		// f.Meta = &FunctionMeta{
-			// Sandbox: nil,                              // Sandbox is nil for native functions
-			// Config:  common.LoadDefaultLambdaConfig(), // Load default configuration
-		// }
 	}
 
+	f.Meta = meta
 	f.codeDir = codeDir
 	f.lastPull = &now
 	return nil
 }
 
 // this Task receives lambda requests, fetches new lambda code as
-// needed, and dispatches to a set of lambda instances.  Task also
+// needed, and dispatches to a set of lambda instances. Task also
 // monitors outstanding requests, and scales the number of instances
 // up or down as needed.
-//
-// communication for a given request is as follows (each of the four
-// transfers are commented within the function):
-//
-// client -> function -> instance -> function -> client
-//
-// each of the 4 handoffs above is over a chan.  In order, those chans are:
-// 1. LambdaFunc.funcChan
-// 2. LambdaFunc.instChan
-// 3. LambdaFunc.doneChan
-// 4. Invocation.done
-//
-// If either LambdaFunc.funcChan or LambdaFunc.instChan is full, we
-// respond to the client with a backoff message: StatusTooManyRequests
 func (f *LambdaFunc) Task() {
-	f.printf("debug: LambdaFunc.Task() runs on goroutine %d", common.GetGoroutineID())
-
 	// we want to perform various cleanup actions, such as killing
-	// instances and deleting old code.  We want to do these
-	// asynchronously, but in order.  Thus, we use a chan to get
+	// instances and deleting old code. We want to do these
+	// asynchronously, but in order. Thus, we use a chan to get
 	// FIFO behavior and a single cleanup task to get async.
-	//
-	// two types can be sent to this chan:
-	//
-	// 1. string: this is a path to be deleted
-	//
-	// 2. chan: this is a signal chan that corresponds to
-	// previously initiated cleanup work.  We block until we
-	// receive the complete signal, before proceeding to
-	// subsequent cleanup tasks in the FIFO.
 	cleanupChan := make(chan any, 32)
 	cleanupTaskDone := make(chan bool)
 	go func() {
@@ -266,8 +221,6 @@ func (f *LambdaFunc) Task() {
 				continue
 			}
 		case req := <-f.funcChan:
-			// msg: client -> function
-
 			// check for new code, and cleanup old code
 			// (and instances that use it) if necessary
 			oldCodeDir := f.codeDir
@@ -311,7 +264,6 @@ func (f *LambdaFunc) Task() {
 
 			select {
 			case f.instChan <- req:
-				// msg: function -> instance
 				outstandingReqs++
 			default:
 				// queue cannot accept more, so reply with backoff
@@ -320,12 +272,8 @@ func (f *LambdaFunc) Task() {
 				req.done <- true
 			}
 		case req := <-f.doneChan:
-			// msg: instance -> function
-
 			execMs.Add(req.execMs)
 			outstandingReqs--
-
-			// msg: function -> client
 			req.done <- true
 
 		case done := <-f.killChan:
@@ -347,27 +295,16 @@ func (f *LambdaFunc) Task() {
 		}
 
 		// POLICY: how many instances (i.e., virtual sandboxes) should we allocate?
-
-		// AUTOSCALING STEP 1: decide how many instances we want
-
-		// let's aim to have 1 sandbox per 10ms of outstanding work
-		// TODO make this configurable
 		inProgressWorkMs := outstandingReqs * execMs.Avg
-		desiredInstances := inProgressWorkMs / 10
+		desiredInstances := inProgressWorkMs / 10 // aim for 1 sandbox per 10ms of work
 
-		// if we have, say, one job that will take 100
-		// seconds, spinning up 100 instances won't do any
-		// good, so cap by number of outstanding reqs
 		if outstandingReqs < desiredInstances {
 			desiredInstances = outstandingReqs
 		}
 
-		// always try to have one instance
 		if desiredInstances < 1 {
 			desiredInstances = 1
 		}
-
-		// AUTOSCALING STEP 2: tweak how many instances we have, to get closer to our goal
 
 		// make at most one scaling adjustment per 100ms
 		adjustFreq := time.Millisecond * 100

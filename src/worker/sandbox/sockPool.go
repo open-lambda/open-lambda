@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
+	"net/http"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
-	"net"
-	"net/http"
 	"time"
 
 	"github.com/open-lambda/open-lambda/ol/common"
@@ -64,34 +64,24 @@ func sbStr(sb Sandbox) string {
 	return fmt.Sprintf("<SB %s>", sb.ID())
 }
 
-func (pool *SOCKPool) Create(config *common.LambdaConfig, parent Sandbox, isLeaf bool, codeDir, scratchDir string, meta *SandboxMeta, rtType common.RuntimeType) (sb Sandbox, err error) {
+func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, meta *SandboxMeta, rtType common.RuntimeType) (sb Sandbox, err error) {
+	// Ensure meta is not nil to prevent panics.
 	if meta == nil {
 		meta = &SandboxMeta{}
 	}
-	// debug lines
-	if config != nil {
-        pool.printf("Sandbox.Create received config with MemMB: %v, CPU: %v", config.MemMB, config.CPUPercent)
-    	} else {
-        pool.printf("Sandbox.Create received nil config")
-    	}
-    	
-	id := fmt.Sprintf("%d", atomic.AddInt64(&nextId, 1))
-	// meta = fillMetaDefaults(meta)
 
-	// 1. determine the memory limit with fallback
+	// Determine resource limits, falling back to worker defaults if not specified in meta.
 	memMB := common.Conf.Limits.Mem_mb
-	if config != nil && config.MemMB != nil {
-		memMB = *config.MemMB
+	if meta.Limits != nil && meta.Limits.MemMB != 0 {
+		memMB = meta.Limits.MemMB
 	}
-	meta.MemLimitMB = memMB // update meta for consistency, if needed elsewhere
 
-	// 2. determine the CPU limit with fallback
 	cpuPercent := common.Conf.Limits.CPU_percent
-	if config != nil && config.CPUPercent != nil {
-		cpuPercent = *config.CPUPercent
+	if meta.Limits != nil && meta.Limits.CPUPercent != 0 {
+		cpuPercent = meta.Limits.CPUPercent
 	}
-	meta.CPUPercent = cpuPercent
 
+	id := fmt.Sprintf("%d", atomic.AddInt64(&nextId, 1))
 	pool.printf("<%v>.Create(%v, %v, %v, %v, %v)=%s...", pool.name, sbStr(parent), isLeaf, codeDir, scratchDir, meta, id)
 	defer func() {
 		pool.printf("...returns %v, %v", sbStr(sb), err)
@@ -101,23 +91,22 @@ func (pool *SOCKPool) Create(config *common.LambdaConfig, parent Sandbox, isLeaf
 	defer t.T1()
 
 	var cSock = &SOCKContainer{
-		pool:               pool,
-		id:                 id,
+		pool:             pool,
+		id:               id,
 		containerRootDir: pool.rootDirs.Make("SB-" + id),
-		codeDir:            codeDir,
-		scratchDir:         scratchDir,
-		cgRefCount:         1,
-		children:           make(map[string]Sandbox),
-		meta:               meta,
-		rtType:             rtType,
-		containerProxy:     nil,
-		memLimitMB:         memMB, // setting the new field on the container
+		codeDir:          codeDir,
+		scratchDir:       scratchDir,
+		cgRefCount:       1,
+		children:         make(map[string]Sandbox),
+		meta:             meta,
+		rtType:           rtType,
+		containerProxy:   nil,
 	}
 	var c Sandbox = cSock
 
 	// block until we have enough to cover the cgroup mem limits
 	t2 := t.T0("acquire-mem")
-	pool.mem.adjustAvailableMB(-memMB) // using the resolved memMB
+	pool.mem.adjustAvailableMB(-memMB)
 	t2.T1()
 
 	t2 = t.T0("acquire-cgroup")
@@ -127,7 +116,7 @@ func (pool *SOCKPool) Create(config *common.LambdaConfig, parent Sandbox, isLeaf
 	// don't want to use this cgroup feature, because the child
 	// would take the blame for ALL of the parent's allocations
 	moveMemCharge := (parent == nil)
-	cSock.cg = pool.cgPool.GetCg(memMB, moveMemCharge, cpuPercent) // using resolved memMB and cpuPercent
+	cSock.cg = pool.cgPool.GetCg(memMB, moveMemCharge, cpuPercent)
 	t2.T1()
 	cSock.printf("use cgroup %s", cSock.cg.Name())
 
@@ -218,7 +207,7 @@ func (pool *SOCKPool) Create(config *common.LambdaConfig, parent Sandbox, isLeaf
 
 	cSock.client = &http.Client{
 		Transport: &http.Transport{Dial: dial},
-		Timeout: time.Second * time.Duration(common.Conf.Limits.Max_runtime_default),
+		Timeout:   time.Second * time.Duration(common.Conf.Limits.Max_runtime_default),
 	}
 
 	// event handling

@@ -42,11 +42,9 @@ type KafkaTrigger struct {
 
 // LambdaConfig defines the overall configuration for the lambda function.
 type LambdaConfig struct {
-	Triggers Triggers `yaml:"triggers"` // List of HTTP triggers
-	// Additional configurations can be added here.
-	MemMB         *int `yaml:"mem_mb,omitempty"`
-	CPUPercent    *int `yaml:"cpu_percent,omitempty"`
-	MaxRuntimeSec *int `yaml:"max_runtime_sec,omitempty"`
+	Triggers      Triggers `yaml:"triggers"`
+	Limits        Limits   `yaml:"limits,omitempty"`
+	MaxRuntimeSec int      `yaml:"max_runtime_sec,omitempty"`
 }
 
 // LoadDefaultLambdaConfig initializes the configuration with default values.
@@ -96,13 +94,12 @@ func checkLambdaConfig(config *LambdaConfig) error {
 	return nil
 }
 
-// ParseYaml reads and parses the YAML configuration file.
+// LoadLambdaConfig reads and parses the YAML configuration file.
 func LoadLambdaConfig(codeDir string) (*LambdaConfig, error) {
 	path := filepath.Join(codeDir, LambdaConfigFilename)
 	file, err := os.Open(path)
 
 	if errors.Is(err, os.ErrNotExist) {
-		fmt.Println("Config file not found. Loading defaults...")
 		return LoadDefaultLambdaConfig(), nil
 	} else if err != nil {
 		// Failed to open the file
@@ -113,11 +110,10 @@ func LoadLambdaConfig(codeDir string) (*LambdaConfig, error) {
 	var config LambdaConfig
 
 	decoder := yaml.NewDecoder(file)
-	err = decoder.Decode(&config) // Use LambdaConf instead of Conf
+	err = decoder.Decode(&config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse YAML file: %v", err)
 	}
-	log.Printf("DEBUG: Loaded ol.yaml. MemMB: %v, CPUPercent: %v", config.MemMB, config.CPUPercent)
 
 	return &config, checkLambdaConfig(&config)
 }

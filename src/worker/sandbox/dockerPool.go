@@ -9,7 +9,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"syscall"
-	"time"
 
 	docker "github.com/fsouza/go-dockerclient"
 	"github.com/open-lambda/open-lambda/ol/common"
@@ -59,12 +58,23 @@ func NewDockerPool(pidMode string, caps []string) (*DockerPool, error) {
 	return pool, nil
 }
 
-// Create creates a docker sandbox from the handler and sandbox directory.
-func (pool *DockerPool) Create(config *common.LambdaConfig, parent Sandbox, isLeaf bool, codeDir, scratchDir string, meta *SandboxMeta, _ common.RuntimeType) (sb Sandbox, err error) {
+func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, meta *SandboxMeta, _ common.RuntimeType) (sb Sandbox, err error) {
+	// Ensure meta is not nil to prevent panics.
 	if meta == nil {
-    	meta = &SandboxMeta{}
+		meta = &SandboxMeta{}
 	}
-	// meta = fillMetaDefaults(meta)
+
+	// Determine resource limits, falling back to worker defaults if not specified in meta.
+	memMB := common.Conf.Limits.Mem_mb
+	if meta.Limits != nil && meta.Limits.MemMB != 0 {
+		memMB = meta.Limits.MemMB
+	}
+
+	cpuPercent := common.Conf.Limits.CPU_percent
+	if meta.Limits != nil && meta.Limits.CPUPercent != 0 {
+		cpuPercent = meta.Limits.CPUPercent
+	}
+
 	t := common.T0("Create()")
 	defer t.T1()
 
@@ -111,7 +121,6 @@ func (pool *DockerPool) Create(config *common.LambdaConfig, parent Sandbox, isLe
 	// create the container using the specified configuration
 	procLimit := int64(common.Conf.Limits.Procs)
 	swappiness := int64(common.Conf.Limits.Swappiness)
-	cpuPercent := int64(common.Conf.Limits.CPU_percent)
 	container, err := pool.client.CreateContainer(
 		docker.CreateContainerOptions{
 			Config: &docker.Config{
@@ -127,8 +136,8 @@ func (pool *DockerPool) Create(config *common.LambdaConfig, parent Sandbox, isLe
 				Runtime:          pool.dockerRuntime,
 				PidsLimit:        &procLimit,
 				MemorySwappiness: &swappiness,
-				CPUPercent:       cpuPercent,
-				Memory:           int64(meta.MemLimitMB * 1024 * 1024),
+				CPUPercent:       int64(cpuPercent),
+				Memory:           int64(memMB * 1024 * 1024),
 			},
 		},
 	)
@@ -172,7 +181,6 @@ func (pool *DockerPool) Create(config *common.LambdaConfig, parent Sandbox, isLe
 
 	c.httpClient = &http.Client{
 		Transport: &http.Transport{Dial: dial},
-		Timeout:   time.Second * time.Duration(common.Conf.Limits.Max_runtime_default),
 	}
 
 	// wrap to make thread-safe and handle container death
