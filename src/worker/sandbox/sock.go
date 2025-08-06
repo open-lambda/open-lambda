@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"sync/atomic"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -22,13 +22,13 @@ type SOCKContainer struct {
 	pool             *SOCKPool
 	id               string
 	meta             *SandboxMeta
-	memLimitMB	 int // adding this to store the resolved memory limit
+	memLimitMB       int // adding this to store the resolved memory limit
 	containerRootDir string
 	codeDir          string
 	scratchDir       string
 	cg               cgroups.Cgroup
 	rtType           common.RuntimeType
-	client *http.Client
+	client           *http.Client
 
 	// 1 for self, plus 1 for each child (we can't release memory
 	// until all descendants are dead, because they share the
@@ -74,7 +74,7 @@ func (container *SOCKContainer) freshProc() (err error) {
 	if container.rtType == common.RT_PYTHON {
 		cmd = exec.Command(
 			"chroot", container.containerRootDir, "python3", "-u",
-			"/runtimes/python/server.py", "/host/bootstrap.py", strconv.Itoa(1), 
+			"/runtimes/python/server.py", "/host/bootstrap.py", strconv.Itoa(1),
 			strconv.FormatBool(common.Conf.Features.Enable_seccomp),
 		)
 	} else if container.rtType == common.RT_NATIVE {
@@ -90,7 +90,6 @@ func (container *SOCKContainer) freshProc() (err error) {
 			"chroot", container.containerRootDir,
 			"env", "RUST_BACKTRACE=full", "/runtimes/native/server", strconv.Itoa(1),
 			strconv.FormatBool(common.Conf.Features.Enable_seccomp),
-
 		)
 	} else {
 		return fmt.Errorf("Unsupported runtime")
@@ -122,13 +121,13 @@ func (container *SOCKContainer) launchContainerProxy() (err error) {
 
 	binPath, err := exec.LookPath("ol-container-proxy")
 	if err != nil {
-        return fmt.Errorf("Failed to find container proxy binary: %s", err)
+		return fmt.Errorf("Failed to find container proxy binary: %s", err)
 	}
 
 	proc, err := os.StartProcess(binPath, args, &procAttr)
 
 	if err != nil {
-        return fmt.Errorf("Failed to start container proxy: %s", err)
+		return fmt.Errorf("Failed to start container proxy: %s", err)
 	}
 
 	died := make(chan error)
@@ -138,7 +137,7 @@ func (container *SOCKContainer) launchContainerProxy() (err error) {
 	}()
 
 	if err != nil {
-        return fmt.Errorf("Failed to start container proxy: %s", err)
+		return fmt.Errorf("Failed to start container proxy: %s", err)
 	}
 
 	var pingErr error
@@ -343,9 +342,9 @@ func (container *SOCKContainer) fork(dst Sandbox) (err error) {
 		return fmt.Errorf("only %vMB of spare memory in parent, rejecting fork request (need at least 3MB)", spareMB)
 	}
 
-    // increment reference count before we start any processes
+	// increment reference count before we start any processes
 	container.children[dst.ID()] = dst
-    newCount := atomic.AddInt32(&container.cgRefCount, 1)
+	newCount := atomic.AddInt32(&container.cgRefCount, 1)
 
 	if newCount == 0 {
 		panic("cgRefCount was already 0")
@@ -423,7 +422,7 @@ func (container *SOCKContainer) Meta() *SandboxMeta {
 	return container.meta
 }
 
-func (container *SOCKContainer) Client() (*http.Client) {
+func (container *SOCKContainer) Client() *http.Client {
 	return container.client
 }
 

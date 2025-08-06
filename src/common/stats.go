@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"container/list"
 	"fmt"
+	"log"
 	"runtime"
 	"strconv"
 	"sync"
 	"time"
-	"log"
 )
 
 type RollingAvg struct {

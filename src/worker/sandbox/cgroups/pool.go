@@ -170,11 +170,11 @@ func (pool *CgroupPool) GetCg(memLimitMB int, moveMemCharge bool, cpuPercent int
 	var _ = moveMemCharge
 
 	/*
-	if moveMemCharge {
-		cg.WriteInt("memory.move_charge_at_immigrate", 1)
-	} else {
-		cg.WriteInt("memory.move_charge_at_immigrate", 0)
-	}*/
+		if moveMemCharge {
+			cg.WriteInt("memory.move_charge_at_immigrate", 1)
+		} else {
+			cg.WriteInt("memory.move_charge_at_immigrate", 0)
+		}*/
 
 	return cg
 }
