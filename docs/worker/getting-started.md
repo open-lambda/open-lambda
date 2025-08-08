@@ -36,10 +36,9 @@ version of Rust, the wasm32 toolchain, and the `cross` tool
 installed. The easiest way to do this is:
 
 ```
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain=nightly-2022-07-25
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain=nightly-2025-02-15
 source $HOME/.cargo/env
 rustup target add wasm32-unknown-unknown
-rustup target add --toolchain=nightly-2023-02-22 wasm32-unknown-unknown
 cargo install cross
 ```
 
