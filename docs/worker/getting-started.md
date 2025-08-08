@@ -5,7 +5,7 @@
 OpenLambda relies heavily on operations that require root privilege.
 To simplify this, we suggest that you run all commands as the root user.
 
-OpenLambda is only actively tested on Ubuntu 22.04 LTS.  If you try
+OpenLambda is only actively tested on Ubuntu 24.04 LTS.  If you try
 running on a different distro, one thing you'll definitely need is
 cgroups2 mounted at /sys/fs/cgroup (`mount | grep cgroup2`).
 OpenLambda does not work with cgroups v1.
@@ -13,7 +13,7 @@ OpenLambda does not work with cgroups v1.
 Make sure you have all basic dependencies installed:
 ```
 apt update
-apt install -y docker.io llvm-12-dev libclang-common-12-dev build-essential python3 zlib1g-dev
+apt install -y docker.io llvm-14-dev libclang-common-14-dev build-essential python3 zlib1g-dev
 ```
 
 For a recent version of go, run the following:
@@ -52,7 +52,13 @@ sudo gpasswd -a $USER docker
 
 ## Build
 
-For a full deployment with Python+WASM support, just run `make all`.
+For a full deployment with Python+WASM support, run:
+```
+make all
+make sudo-install
+```
+
+The `make sudo-install` step installs the binaries (`ol`, `ol-wasm`, and `ol-container-proxy`) to `/usr/local/bin/`, which is required for running the full test suite.
 
 For a "min" deployment (just Python), run `make ol imgs/ol-min`.
 
