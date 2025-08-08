@@ -4,7 +4,8 @@ set -e
 shopt -s nullglob
 
 REGISTRY_PATH=$1
-NATIVE_PREFIX=./bin-functions/target/x86_64-unknown-linux-gnu/release
+RUST_TARGET=${2:-x86_64-unknown-linux-gnu}  # Default to x86_64 if not specified
+NATIVE_PREFIX=./bin-functions/target/${RUST_TARGET}/release
 mkdir -p ${REGISTRY_PATH}
 echo "Searching for functions in ${NATIVE_PREFIX}"
 
