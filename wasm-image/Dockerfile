@@ -3,7 +3,7 @@ FROM ol-min
 RUN apt-get -y install clang
 
 # Setup rust environment (prereq for native runtime)
-RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain nightly-2024-12-16
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain nightly-2025-02-15
 
 # Build Native Runtime in the Container
 RUN mkdir /runtimes/native
