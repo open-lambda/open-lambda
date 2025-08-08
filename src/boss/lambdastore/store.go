@@ -21,7 +21,6 @@ import (
 	"github.com/open-lambda/open-lambda/ol/common"
 )
 
-
 type LambdaStore struct {
 	// bucket is the cloud storage bucket for lambda tarballs
 	bucket *blob.Bucket
@@ -39,10 +38,10 @@ type LambdaEntry struct {
 
 // NewLambdaStore creates a new lambda store backed by cloud storage.
 // pool may be nil or a WorkerPool instance depending on the calling context:
-// - Boss context (pool provided): Full functionality including lambda registry and event-driven execution
-//   (cron triggers, Kafka triggers). Called from boss.go:156 with a worker pool.
-// - Worker context (pool is nil): Limited functionality with lambda registry only (upload, delete, list, config).
-//   Event-driven execution is disabled. Called from worker/event/server.go:282 with nil pool.
+//   - Boss context (pool provided): Full functionality including lambda registry and event-driven execution
+//     (cron triggers, Kafka triggers). Called from boss.go:156 with a worker pool.
+//   - Worker context (pool is nil): Limited functionality with lambda registry only (upload, delete, list, config).
+//     Event-driven execution is disabled. Called from worker/event/server.go:282 with nil pool.
 func NewLambdaStore(storeURL string, pool *cloudvm.WorkerPool) (*LambdaStore, error) {
 	ctx := context.Background()
 

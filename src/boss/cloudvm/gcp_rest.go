@@ -7,9 +7,9 @@ type GcpLaunchVmArgs struct {
 	Zone                string
 	InstanceName        string
 	// SourceImage string
-	SnapshotName        string
-	DiskSizeGb          int
-	MachineType         string
+	SnapshotName string
+	DiskSizeGb   int
+	MachineType  string
 }
 
 type GcpSnapshotArgs struct {

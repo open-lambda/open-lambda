@@ -60,7 +60,7 @@ type Sandbox interface {
 	Unpause() error
 
 	// Communication channel to forward requests.
-	Client() (*http.Client)
+	Client() *http.Client
 
 	// Lookup metadata that Sandbox was initialized with (static over time)
 	Meta() *SandboxMeta
@@ -115,13 +115,13 @@ type SandboxEventFunc func(SandboxEventType, Sandbox)
 type SandboxEventType int
 
 const (
-	EvCreate    SandboxEventType = iota
-	EvDestroy                    = iota
-	EvDestroyIgnored             = iota
-	EvPause                      = iota
-	EvUnpause                    = iota
-	EvFork                       = iota
-	EvChildExit                  = iota
+	EvCreate         SandboxEventType = iota
+	EvDestroy                         = iota
+	EvDestroyIgnored                  = iota
+	EvPause                           = iota
+	EvUnpause                         = iota
+	EvFork                            = iota
+	EvChildExit                       = iota
 )
 
 type SandboxEvent struct {
