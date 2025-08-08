@@ -1,9 +1,9 @@
 package autoscaling
 
 import (
+	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
 	"log"
 	"time"
-	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
 )
 
 const (
@@ -13,8 +13,8 @@ const (
 )
 
 type ThresholdScaling struct {
-	pool *cloudvm.WorkerPool
-	timeout *time.Timer
+	pool     *cloudvm.WorkerPool
+	timeout  *time.Timer
 	exitChan chan bool
 }
 

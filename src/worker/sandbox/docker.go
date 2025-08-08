@@ -15,8 +15,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"os"
 	"net/http"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -26,14 +26,14 @@ import (
 
 // DockerContainer is a sandbox inside a docker container.
 type DockerContainer struct {
-	hostID	string
-	hostDir   string
-	nspid	 string
-	container *docker.Container
-	client	*docker.Client
-	installed map[string]bool
-	meta	  *SandboxMeta
-	rtType   common.RuntimeType
+	hostID     string
+	hostDir    string
+	nspid      string
+	container  *docker.Container
+	client     *docker.Client
+	installed  map[string]bool
+	meta       *SandboxMeta
+	rtType     common.RuntimeType
 	httpClient *http.Client
 }
 
@@ -109,7 +109,7 @@ func (container *DockerContainer) State() (hstate HandlerState, err error) {
 	return hstate, nil
 }
 
-func (container *DockerContainer) Client() (*http.Client) {
+func (container *DockerContainer) Client() *http.Client {
 	return container.httpClient
 }
 
