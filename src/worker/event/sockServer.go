@@ -49,19 +49,22 @@ func (server *SOCKServer) Create(w http.ResponseWriter, _ []string, args map[str
 	// create args
 	codePath := args["code"].(string)
 	var codeDir string
+
 	// Handle tar.gz files by extracting them to a temporary directory
-	if strings.HasSuffix(codePath, ".tar.gz") {
+	if strings.HasSuffix(codePath, common.LambdaFileExtension) {
 		// Create temporary directory for extraction
 		tempDir, err := ioutil.TempDir("", "ol-sock-code-")
 		if err != nil {
 			return fmt.Errorf("failed to create temp dir for tar.gz extraction: %v", err)
 		}
+
 		// Extract tar.gz file
 		cmd := exec.Command("tar", "-xzf", codePath, "--directory", tempDir)
 		if output, err := cmd.CombinedOutput(); err != nil {
 			os.RemoveAll(tempDir)
 			return fmt.Errorf("failed to extract tar.gz file %s: %v :: %s", codePath, err, string(output))
 		}
+
 		codeDir = tempDir
 	} else {
 		codeDir = codePath

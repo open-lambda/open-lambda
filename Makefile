@@ -7,6 +7,16 @@ LAMBDA_FILES = min-image/Dockerfile min-image/Makefile min-image/spin.c min-imag
 BUILDTYPE?=debug
 INSTALL_PREFIX?=/usr/local
 
+# Detect host architecture for Linux
+ARCH := $(shell uname -m)
+ifeq ($(ARCH),x86_64)
+    RUST_TARGET := x86_64-unknown-linux-gnu
+else ifeq ($(ARCH),aarch64)
+    RUST_TARGET := aarch64-unknown-linux-gnu
+else
+    $(error Unsupported architecture: $(ARCH))
+endif
+
 ifeq (${BUILDTYPE}, release)
 	BUILD_FLAGS=--release
 else
@@ -37,9 +47,9 @@ wasm-functions:
 	ls test-registry.wasm/hashing.wasm test-registry.wasm/noop.wasm
 
 native-functions: imgs/ol-wasm
-	cd bin-functions && cross build --release
-	bash ./bin-functions/install-native.sh test-registry
-	ls test-registry/hashing.tar.gz test-registry/noop.tar.gz # guarantee they were created
+	cd bin-functions && cargo build --release --target $(RUST_TARGET)
+	bash ./bin-functions/install-native.sh registry $(RUST_TARGET)
+	ls registry/hashing.tar.gz registry/noop.tar.gz # guarantee they were created
 
 update-dependencies:
 	cd wasm-image/runtimes/native && cargo update
