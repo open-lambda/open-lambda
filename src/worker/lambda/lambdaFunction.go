@@ -85,16 +85,19 @@ func parseMeta(codeDir string) (*FunctionMeta, error) {
 		// having a requirements.txt is optional
 	} else if err != nil {
 		return nil, err
+	} else {
+		defer file.Close()
 	}
-	defer file.Close()
 
-	scnr := bufio.NewScanner(file)
-	for scnr.Scan() {
-		line := strings.ReplaceAll(scnr.Text(), " ", "")
-		pkg := strings.Split(line, "#")[0]
-		if pkg != "" {
-			pkg = packages.NormalizePkg(pkg)
-			sandboxMeta.Installs = append(sandboxMeta.Installs, pkg)
+	if file != nil {
+		scnr := bufio.NewScanner(file)
+		for scnr.Scan() {
+			line := strings.ReplaceAll(scnr.Text(), " ", "")
+			pkg := strings.Split(line, "#")[0]
+			if pkg != "" {
+				pkg = packages.NormalizePkg(pkg)
+				sandboxMeta.Installs = append(sandboxMeta.Installs, pkg)
+			}
 		}
 	}
 
@@ -152,14 +155,12 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 		}
 	}()
 
-	if rtType == common.RT_PYTHON {
-		// inspect new code for dependencies; if we can install
-		// everything necessary, start using new code
-		meta, err := parseMeta(codeDir)
-		if err != nil {
-			return err
-		}
+	meta, err := parseMeta(codeDir)
+	if err != nil {
+		return err
+	}
 
+	if rtType == common.RT_PYTHON {
 		// make sure all specified dependencies are installed
 		// (but don't recursively find others)
 		for _, pkg := range meta.Sandbox.Installs {
@@ -169,24 +170,16 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 		}
 
 		f.lmgr.DepTracer.TraceFunction(codeDir, meta.Sandbox.Installs)
-		f.Meta = meta
-	} else if rtType == common.RT_NATIVE {
-		log.Printf("Got native function")
-
-		// Initialize f.Meta for native functions for consistensy.
-		f.Meta = &FunctionMeta{
-			Sandbox: nil,                              // Sandbox is nil for native functions
-			Config:  common.LoadDefaultLambdaConfig(), // Load default configuration
-		}
 	}
 
+	f.Meta = meta
 	f.codeDir = codeDir
 	f.lastPull = &now
 	return nil
 }
 
 // this Task receives lambda requests, fetches new lambda code as
-// needed, and dispatches to a set of lambda instances.  Task also
+// needed, and dispatches to a set of lambda instances. Task also
 // monitors outstanding requests, and scales the number of instances
 // up or down as needed.
 //
@@ -204,11 +197,11 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 // If either LambdaFunc.funcChan or LambdaFunc.instChan is full, we
 // respond to the client with a backoff message: StatusTooManyRequests
 func (f *LambdaFunc) Task() {
-	f.printf("debug: LambdaFunc.Task() runs on goroutine %d", common.GetGoroutineID())
-
 	// we want to perform various cleanup actions, such as killing
 	// instances and deleting old code.  We want to do these
 	// asynchronously, but in order.  Thus, we use a chan to get
+	// instances and deleting old code. We want to do these
+	// asynchronously, but in order. Thus, we use a chan to get
 	// FIFO behavior and a single cleanup task to get async.
 	//
 	// two types can be sent to this chan:
