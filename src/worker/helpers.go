@@ -13,6 +13,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"os/user"
 
 	docker "github.com/fsouza/go-dockerclient"
 	dutil "github.com/open-lambda/open-lambda/ol/worker/sandbox/dockerutil"
@@ -21,9 +22,92 @@ import (
 	"github.com/open-lambda/open-lambda/ol/worker/embedded"
 )
 
+// getTestUserInfo returns the UID and GID of testuser
+func getTestUserInfo() (int, int, error) {
+	testUser, err := user.Lookup("testuser")
+	if err != nil {
+		return -1, -1, fmt.Errorf("failed to lookup testuser: %v", err)
+	}
+
+	uid, err := strconv.Atoi(testUser.Uid)
+	if err != nil {
+		return -1, -1, fmt.Errorf("failed to parse testuser UID: %v", err)
+	}
+
+	gid, err := strconv.Atoi(testUser.Gid)
+	if err != nil {
+		return -1, -1, fmt.Errorf("failed to parse testuser GID: %v", err)
+	}
+
+	return uid, gid, nil
+}
+
+// createDirWithTestUserOwnership creates a directory and sets testuser as owner
+func createDirWithTestUserOwnership(dirPath string, perm os.FileMode) error {
+	if err := os.MkdirAll(dirPath, perm); err != nil {
+		return fmt.Errorf("failed to create directory %s: %v", dirPath, err)
+	}
+
+	uid, gid, err := getTestUserInfo()
+	if err != nil {
+		// If testuser doesn't exist, continue without changing ownership
+		// This allows the code to work in environments without testuser
+		fmt.Printf("Warning: Could not get testuser info: %v\n", err)
+		return nil
+	}
+
+	if err := os.Chown(dirPath, uid, gid); err != nil {
+		return fmt.Errorf("failed to chown directory %s to testuser: %v", dirPath, err)
+	}
+
+	return nil
+}
+
+// createFileWithTestUserOwnership creates a file and sets testuser as owner
+func createFileWithTestUserOwnership(filePath string, data []byte, perm os.FileMode) error {
+	if err := ioutil.WriteFile(filePath, data, perm); err != nil {
+		return fmt.Errorf("failed to write file %s: %v", filePath, err)
+	}
+
+	uid, gid, err := getTestUserInfo()
+	if err != nil {
+		// If testuser doesn't exist, continue without changing ownership
+		fmt.Printf("Warning: Could not get testuser info: %v\n", err)
+		return nil
+	}
+
+	if err := os.Chown(filePath, uid, gid); err != nil {
+		return fmt.Errorf("failed to chown file %s to testuser: %v", filePath, err)
+	}
+
+	return nil
+}
+
+// setTestUserOwnershipRecursive sets testuser ownership recursively
+func setTestUserOwnershipRecursive(dirPath string) error {
+	uid, gid, err := getTestUserInfo()
+	if err != nil {
+		fmt.Printf("Warning: Could not get testuser info: %v\n", err)
+		return nil
+	}
+
+	return filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		return os.Chown(path, uid, gid)
+	})
+}
+
+
 func initOLBaseDir(baseDir string, dockerBaseImage string) error {
 	if dockerBaseImage == "" {
 		dockerBaseImage = "ol-wasm"
+	}
+
+	// Set testuser ownership on the extracted base directory
+	if err := setTestUserOwnershipRecursive(baseDir); err != nil {
+		fmt.Printf("Warning: Failed to set testuser ownership on base dir: %v\n", err)
 	}
 
 	fmt.Printf("\tExtract '%s' Docker image to %s (make take several minutes).\n", dockerBaseImage, baseDir)
@@ -40,40 +124,52 @@ func initOLBaseDir(baseDir string, dockerBaseImage string) error {
 
 	// PART 2: various files/dirs on top of the extracted image
 	fmt.Printf("\tCreate handler/host/packages/resolve.conf over base image.\n")
-	if err := os.Mkdir(path.Join(baseDir, "handler"), 0700); err != nil {
+	if err := createDirWithTestUserOwnership(path.Join(baseDir, "handler"), 0755); err != nil {
 		return err
 	}
 
-	if err := os.Mkdir(path.Join(baseDir, "host"), 0700); err != nil {
+	if err := createDirWithTestUserOwnership(path.Join(baseDir, "host"), 0755); err != nil {
 		return err
 	}
 
-	if err := os.Mkdir(path.Join(baseDir, "packages"), 0700); err != nil {
+	if err := createDirWithTestUserOwnership(path.Join(baseDir, "packages"), 0755); err != nil {
 		return err
 	}
 
 	// need this because Docker containers don't have a dns server in /etc/resolv.conf
 	// TODO: make it a config option
 	dnsPath := filepath.Join(baseDir, "etc", "resolv.conf")
-	if err := ioutil.WriteFile(dnsPath, []byte("nameserver 8.8.8.8\n"), 0644); err != nil {
+	if err := createFileWithTestUserOwnership(dnsPath, []byte("nameserver 8.8.8.8\n"), 0644); err != nil {
 		return err
 	}
 
 	// PART 3: make /dev/* devices
 	fmt.Printf("\tCreate /dev/(null,random,urandom) over base image.\n")
-	path := filepath.Join(baseDir, "dev", "null")
-	if err := exec.Command("mknod", "-m", "0644", path, "c", "1", "3").Run(); err != nil {
-		return err
+
+	// Create device files
+	devices := []struct {
+		path  string
+		major string
+		minor string
+	}{
+		{filepath.Join(baseDir, "dev", "null"), "1", "3"},
+		{filepath.Join(baseDir, "dev", "random"), "1", "8"},
+		{filepath.Join(baseDir, "dev", "urandom"), "1", "9"},
 	}
 
-	path = filepath.Join(baseDir, "dev", "random")
-	if err := exec.Command("mknod", "-m", "0644", path, "c", "1", "8").Run(); err != nil {
-		return err
-	}
+	for _, device := range devices {
+		if err := exec.Command("mknod", "-m", "0644", device.path, "c", device.major, device.minor).Run(); err != nil {
+			return fmt.Errorf("failed to create device %s: %v", device.path, err)
+		}
 
-	path = filepath.Join(baseDir, "dev", "urandom")
+		// Set testuser ownership on device files
+		uid, gid, err := getTestUserInfo()
+		if err == nil {
+			os.Chown(device.path, uid, gid)
+		}
+ 	}
 
-	return exec.Command("mknod", "-m", "0644", path, "c", "1", "9").Run()
+	return nil
 }
 
 // initOLDir prepares a directory at olPath with necessary files for a
@@ -128,19 +224,19 @@ func initOLDir(olPath string, dockerBaseImage string, newBase bool) (err error) 
 			return fmt.Errorf("Directory %s already exists but does not contain a previous OL deployment", olPath)
 		}
 	} else {
-		if err := os.Mkdir(olPath, 0700); err != nil {
+		if err := createDirWithTestUserOwnership(olPath, 0755); err != nil {
 			return err
 		}
 	}
 
 	fmt.Printf("Init OL directory at %s\n", olPath)
 
-	if err := ioutil.WriteFile(initTimePath, []byte(time.Now().Local().String()+"\n"), 0400); err != nil {
+	if err := createFileWithTestUserOwnership(initTimePath, []byte(time.Now().Local().String()+"\n"), 0644); err != nil {
 		return err
 	}
 
 	zygoteTreePath := filepath.Join(olPath, "default-zygotes-40.json")
-	if err := ioutil.WriteFile(zygoteTreePath, []byte(embedded.DefaultZygotes40_json), 0400); err != nil {
+	if err := createFileWithTestUserOwnership(zygoteTreePath, []byte(embedded.DefaultZygotes40_json), 0644); err != nil {
 		return err
 	}
 
@@ -149,7 +245,13 @@ func initOLDir(olPath string, dockerBaseImage string, newBase bool) (err error) 
 		return err
 	}
 
-	if err := os.Mkdir(common.Conf.Worker_dir, 0700); err != nil {
+	// Set testuser ownership on config file
+	uid, gid, err := getTestUserInfo()
+	if err == nil {
+		os.Chown(confPath, uid, gid)
+	}
+
+	if err := createDirWithTestUserOwnership(common.Conf.Worker_dir, 0755); err != nil {
 		return err
 	}
 
@@ -160,6 +262,10 @@ func initOLDir(olPath string, dockerBaseImage string, newBase bool) (err error) 
 		}
 	} else {
 		fmt.Printf("\tReusing prior base at %s (pass -b to reconstruct this)\n", baseDir)
+		// Ensure existing base has proper ownership
+		if err := setTestUserOwnershipRecursive(baseDir); err != nil {
+			fmt.Printf("Warning: Failed to set testuser ownership on existing base: %v\n", err)
+		}
 	}
 
 	return nil
@@ -385,7 +491,8 @@ func stoppedDirtyToStoppedClean(olPath string) error {
 	}
 
 	// Remove the worker.pid file
-	if err := os.Remove(filepath.Join(olPath, "worker", "worker.pid")); err != nil {
+	pidFilePath := filepath.Join(olPath, "worker", "worker.pid")
+	if err := os.Remove(pidFilePath); err != nil {
 		// Return an error if removing worker.pid fails.
 		return fmt.Errorf("could not remove worker.pid: %s", err.Error())
 	}
@@ -494,5 +601,11 @@ func overrideOpts(confPath, overridePath, optsStr string) error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(overridePath, s, 0644)
+
+	// Create file with testuser ownership
+	if err := createFileWithTestUserOwnership(overridePath, s, 0644); err != nil {
+		return err
+	}
+
+	return nil
 }
