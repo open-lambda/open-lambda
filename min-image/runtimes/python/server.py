@@ -2,7 +2,7 @@
 
 ''' Python runtime for sock '''
 
-import os, sys, json, argparse, importlib, traceback, time, fcntl, array, socket, struct
+import os, sys, json, argparse, importlib, traceback, time, fcntl, array, socket, struct, pwd, grp
 
 sys.path.append("/usr/local/lib/python3.10/dist-packages")
 
@@ -115,10 +115,30 @@ def fork_server():
             file_sock.close()
             file_sock = None
 
-            # chroot
-            os.fchdir(root_fd)
-            os.chroot(".")
-            os.close(root_fd)
+            # For testuser: the Go side has already set up the container environment
+            # including proper mounts, so we just need to join the cgroup and continue
+            if os.getuid() == 0:
+                print(">>>> server.py: performing chroot as root user")
+                # chroot
+                os.fchdir(root_fd)
+                os.chroot(".")
+                os.close(root_fd)
+            else:
+                print(">>>> server.py: skipping chroot (Go side already set up container environment)")
+                # Still need to close the FD even if we don't use it
+                os.close(root_fd)
+
+                # Verify that the new container environment is properly set up
+                print(f">>>> server.py: verifying /host mount in new container")
+                if os.path.exists("/host"):
+                    try:
+                        host_contents = os.listdir("/host")
+                        print(f">>>> server.py: /host contains: {host_contents}")
+                    except Exception as e:
+                        print(f">>>> server.py: error listing /host: {e}")
+                else:
+                    print(f">>>> server.py: WARNING: /host directory not found in new container")
+
 
             # mem cgroup
             os.write(mem_cgroup_fd, str(os.getpid()).encode('utf-8'))
@@ -139,15 +159,77 @@ def start_container():
 
     global file_sock
 
+    uid, gid = os.getuid(), os.getgid()
+    user_info = pwd.getpwuid(uid)
+    group_info = grp.getgrgid(gid)
+    print(f">>> Username: {user_info.pw_name}")
+    print(f">>> Home directory: {user_info.pw_dir}")
+    print(f">>> Shell: {user_info.pw_shell}")
+    print(f">>> Group name: {group_info.gr_name}")
+
     # TODO: if we can get rid of this, we can get rid of the ns module
-    return_val = ol.unshare()
-    assert return_val == 0
+    # Only try unshare if running as root
+    if os.getuid() == 0:
+        return_val = ol.unshare()
+        print(">>>> server.py: unshare returned: " + str(return_val))
+        assert return_val == 0
+    else:
+        print(">>>> server.py: skipping unshare (not running as root)")
+
+    # Testing
+    # file = open("/home/testuser/output.txt", "w")
+    # file.write("Hello, World!")
+    # file.close()
+    # print(">>>> test file created successfully")
 
     # we open a new .sock file in the child, before starting the grand
     # child, which will actually use it.  This is so that the parent
     # can know that once the child exits, it is safe to start sending
     # messages to the sock file.
-    file_sock = tornado.netutil.bind_unix_socket(file_sock_path)
+    print(f">>>> server.py: current working directory: {os.getcwd()}")
+    print(f">>>> server.py: attempting to bind socket at: {file_sock_path}")
+    print(f">>>> server.py: checking /host directory:")
+    try:
+        for item in os.listdir("/host"):
+            print(f">>>>   /host/{item}")
+    except Exception as e:
+        print(f">>>>   Error listing /host: {e}")
+
+    print(f">>>> server.py: /host directory permissions:")
+    try:
+        import stat
+        host_stat = os.stat("/host")
+        print(f">>>>   Mode: {stat.filemode(host_stat.st_mode)}")
+        print(f">>>>   Owner UID: {host_stat.st_uid}")
+        print(f">>>>   Owner GID: {host_stat.st_gid}")
+        print(f">>>>   Current UID: {os.getuid()}")
+        print(f">>>>   Current GID: {os.getgid()}")
+    except Exception as e:
+        print(f">>>>   Error getting /host stats: {e}")
+
+    try:
+        file_sock = tornado.netutil.bind_unix_socket(file_sock_path)
+        print(f">>>> server.py: successfully bound to socket {file_sock_path}")
+        print(f">>>> server.py: socket file descriptor: {file_sock.fileno()}")
+    except Exception as e:
+        print(f">>>> server.py: failed to bind socket {file_sock_path}: {e}")
+        # Try to create the directory if it doesn't exist
+        sock_dir = os.path.dirname(file_sock_path)
+        if not os.path.exists(sock_dir):
+            print(f">>>> server.py: creating socket directory {sock_dir}")
+            os.makedirs(sock_dir, mode=0o755, exist_ok=True)
+            # Retry binding
+            file_sock = tornado.netutil.bind_unix_socket(file_sock_path)
+            print(f">>>> server.py: successfully bound to socket {file_sock_path} after creating directory")
+        else:
+            raise
+
+    print(f">>>> server.py: checking if socket file exists: {os.path.exists(file_sock_path)}")
+    if os.path.exists(file_sock_path):
+        import stat
+        sock_stat = os.stat(file_sock_path)
+        print(f">>>> server.py: socket file mode: {stat.filemode(sock_stat.st_mode)}")
+        print(f">>>> server.py: socket file owner: {sock_stat.st_uid}:{sock_stat.st_gid}")
 
     pid = os.fork()
     assert pid >= 0
@@ -156,18 +238,61 @@ def start_container():
         # orphan the new process by exiting parent.  The parent
         # process is in a weird state because unshare only partially
         # works for the process that calls it.
+        print(f">>>> server.py: parent process {os.getpid()} exiting, child process is {pid}")
         os._exit(0)
 
-    with open(bootstrap_path, encoding='utf-8') as f:
-        # this code can be whatever OL decides, but it will probably do the following:
-        # 1. some imports
-        # 2. call either web_server or fork_server
-        code = f.read()
+    print(f">>>> server.py: child process {os.getpid()} continuing")
+    print(f">>>> server.py: child checking if socket file still exists: {os.path.exists(file_sock_path)}")
+    if os.path.exists(file_sock_path):
+        import stat
+        sock_stat = os.stat(file_sock_path)
+        print(f">>>> server.py: child sees socket file mode: {stat.filemode(sock_stat.st_mode)}")
+    else:
+        print(f">>>> server.py: child - socket file disappeared!")
+        # List directory contents to see what's there
+        host_dir = os.path.dirname(file_sock_path)
         try:
-            exec(code)
-        except Exception as _:
-            print("Exception: " + traceback.format_exc())
-            print("Problematic Python Code:\n" + code)
+            for item in os.listdir(host_dir):
+                print(f">>>>   child sees: {host_dir}/{item}")
+        except Exception as e:
+            print(f">>>>   child error listing {host_dir}: {e}")
+
+    print(">>>> open bootstrap file: " + bootstrap_path)
+    try:
+        with open(bootstrap_path, encoding='utf-8') as f:
+            # this code can be whatever OL decides, but it will probably do the following:
+            # 1. some imports
+            # 2. call either web_server or fork_server
+            code = f.read()
+            print(f">>>> server.py: bootstrap file content length: {len(code)} characters")
+            try:
+                exec(code)
+            except Exception as _:
+                print("Exception: " + traceback.format_exc())
+                print("Problematic Python Code:\n" + code)
+    except FileNotFoundError:
+        print(f">>>> server.py: bootstrap file not found: {bootstrap_path}")
+        print(f">>>> server.py: current working directory: {os.getcwd()}")
+        print(f">>>> server.py: listing /host directory:")
+        try:
+            for item in os.listdir("/host"):
+                print(f">>>>   {item}")
+        except Exception as e:
+            print(f">>>>   Error listing /host: {e}")
+        raise
+    except PermissionError as e:
+        print(f">>>> server.py: permission error reading bootstrap file: {e}")
+        print(f">>>> server.py: file permissions for {bootstrap_path}:")
+        import stat
+        file_stat = os.stat(bootstrap_path)
+        print(f">>>>   Mode: {stat.filemode(file_stat.st_mode)}")
+        print(f">>>>   Owner UID: {file_stat.st_uid}")
+        print(f">>>>   Owner GID: {file_stat.st_gid}")
+        print(f">>>>   Current UID: {os.getuid()}")
+        print(f">>>>   Current GID: {os.getgid()}")
+    except Exception as stat_e:
+        print(f">>>>   Error getting file stats: {stat_e}")
+    raise
 
 def main():
     '''

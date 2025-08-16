@@ -18,7 +18,18 @@ RUN mv /tmp/py-runtime/server.py /runtimes/python/server.py
 RUN mv /tmp/py-runtime/server_legacy.py /runtimes/python/server_legacy.py
 RUN rm -rf /tmp/py-runtime
 
+# Create user and directories
+RUN useradd -m -s /bin/bash testuser
+
 # for the Docker container engine
 COPY spin /
+RUN chmod +x /spin
+
+# Change ownership of necessary directories and files
+RUN chown -R testuser:testuser /runtimes
+RUN chown testuser:testuser /spin
+
+# Switch to testuser
+USER testuser
 
 CMD ["/spin"]

@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+	"os/user"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 	"github.com/open-lambda/open-lambda/ol/worker/sandbox/cgroups"
@@ -41,6 +42,114 @@ type SOCKContainer struct {
 	containerProxy *os.Process
 }
 
+// getUserSpec returns the user specification for chroot commands
+func (container *SOCKContainer) getUserSpec() (string, error) {
+	// Look up testuser
+	testUser, err := user.Lookup("testuser")
+	if err != nil {
+		return "", fmt.Errorf("failed to lookup testuser: %v", err)
+	}
+	return fmt.Sprintf("%s:%s", testUser.Uid, testUser.Gid), nil
+}
+
+// ensureFilePermissions sets proper ownership for files that testuser needs access to
+func (container *SOCKContainer) ensureFilePermissions() error {
+	// Look up testuser
+	testUser, err := user.Lookup("testuser")
+	if err != nil {
+		return fmt.Errorf("failed to lookup testuser: %v", err)
+	}
+
+	uid, err := strconv.Atoi(testUser.Uid)
+	if err != nil {
+		return fmt.Errorf("failed to parse testuser UID: %v", err)
+	}
+
+	gid, err := strconv.Atoi(testUser.Gid)
+	if err != nil {
+		return fmt.Errorf("failed to parse testuser GID: %v", err)
+	}
+
+	// Ensure testuser owns the scratch directory and its contents
+	if err := os.Chown(container.scratchDir, uid, gid); err != nil {
+		return fmt.Errorf("failed to chown scratch dir: %v", err)
+	}
+
+	// Create tmp directory with proper permissions
+	tmpDir := filepath.Join(container.scratchDir, "tmp")
+	if err := os.MkdirAll(tmpDir, 0755); err != nil && !os.IsExist(err) {
+		return fmt.Errorf("failed to create tmp dir: %v", err)
+	}
+
+	if err := os.Chown(tmpDir, uid, gid); err != nil {
+		return fmt.Errorf("failed to chown tmp dir: %v", err)
+	}
+
+	// Recursively ensure all existing files in scratch directory are owned by testuser
+	filepath.Walk(container.scratchDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil // Skip files with errors
+		}
+		os.Chown(path, uid, gid)
+		// Also ensure files are readable by owner
+		if !info.IsDir() {
+			os.Chmod(path, 0644)
+		} else {
+			os.Chmod(path, 0755)
+		}
+		return nil
+	})
+
+	return nil
+}
+
+// ensureBootstrapPermissions specifically fixes bootstrap.py permissions if it exists
+func (container *SOCKContainer) ensureBootstrapPermissions() error {
+	bootstrapPath := filepath.Join(container.scratchDir, "bootstrap.py")
+
+	// Check if bootstrap.py exists
+	if _, err := os.Stat(bootstrapPath); err == nil {
+		// File exists, fix its permissions
+		testUser, err := user.Lookup("testuser")
+		if err != nil {
+			return fmt.Errorf("failed to lookup testuser: %v", err)
+		}
+
+		uid, err := strconv.Atoi(testUser.Uid)
+		if err != nil {
+			return fmt.Errorf("failed to parse testuser UID: %v", err)
+		}
+
+		gid, err := strconv.Atoi(testUser.Gid)
+		if err != nil {
+			return fmt.Errorf("failed to parse testuser GID: %v", err)
+		}
+
+		// Fix ownership and permissions
+		if err := os.Chown(bootstrapPath, uid, gid); err != nil {
+			return fmt.Errorf("failed to chown bootstrap.py: %v", err)
+		}
+
+		if err := os.Chmod(bootstrapPath, 0644); err != nil {
+			return fmt.Errorf("failed to chmod bootstrap.py: %v", err)
+		}
+
+		container.printf("Fixed bootstrap.py permissions: owner=%d:%d, mode=0644", uid, gid)
+	}
+
+	return nil
+}
+
+// ensureContainerRootPermissions sets permissions on container root before mounting
+func (container *SOCKContainer) ensureContainerRootPermissions() error {
+	// Set permissions on container root directory before it gets mounted as read-only
+	if err := os.Chmod(container.containerRootDir, 0755); err != nil {
+		return fmt.Errorf("failed to chmod container root dir: %v", err)
+	}
+
+	return nil
+}
+
 // add ID to each log message so we know which logs correspond to
 // which containers
 func (container *SOCKContainer) printf(format string, args ...any) {
@@ -58,6 +167,11 @@ func (container *SOCKContainer) GetRuntimeType() common.RuntimeType {
 }
 
 func (container *SOCKContainer) freshProc() (err error) {
+	// Ensure bootstrap.py has correct permissions if it exists
+	if err := container.ensureBootstrapPermissions(); err != nil {
+		container.printf("Warning: failed to fix bootstrap permissions: %v", err)
+	}
+
 	// get FD to cgroup
 	cgFiles := make([]*os.File, 1)
 	path := container.cg.CgroupProcsPath()
@@ -71,8 +185,12 @@ func (container *SOCKContainer) freshProc() (err error) {
 	var cmd *exec.Cmd
 
 	if container.rtType == common.RT_PYTHON {
+		userSpec, err := container.getUserSpec()
+		if err != nil {
+			return fmt.Errorf("failed to get user spec: %v", err)
+		}
 		cmd = exec.Command(
-			"chroot", container.containerRootDir, "python3", "-u",
+			"chroot", "--userspec="+userSpec, container.containerRootDir, "python3", "-u",
 			"/runtimes/python/server.py", "/host/bootstrap.py", strconv.Itoa(1),
 			strconv.FormatBool(common.Conf.Features.Enable_seccomp),
 		)
@@ -85,8 +203,13 @@ func (container *SOCKContainer) freshProc() (err error) {
 			}
 		}
 
+		userSpec, err := container.getUserSpec()
+		if err != nil {
+			return fmt.Errorf("failed to get user spec: %v", err)
+		}
+
 		cmd = exec.Command(
-			"chroot", container.containerRootDir,
+			"chroot", "--userspec="+userSpec, container.containerRootDir,
 			"env", "RUST_BACKTRACE=full", "/runtimes/native/server", strconv.Itoa(1),
 			strconv.FormatBool(common.Conf.Features.Enable_seccomp),
 		)
@@ -107,7 +230,27 @@ func (container *SOCKContainer) freshProc() (err error) {
 
 	// Runtimes will fork off a new container,
 	// so this won't block long
-	return cmd.Wait()
+	err = cmd.Wait()
+
+	// Debug: Check what's in the scratch directory after process completes
+	container.printf("Process completed, checking scratch directory contents:")
+	if files, readErr := os.ReadDir(container.scratchDir); readErr == nil {
+		for _, file := range files {
+			container.printf("  %s", file.Name())
+		}
+	} else {
+		container.printf("  Error reading scratch dir: %v", readErr)
+	}
+
+	// Specifically check for ol.sock
+	sockPath := filepath.Join(container.scratchDir, "ol.sock")
+	if _, statErr := os.Stat(sockPath); statErr == nil {
+		container.printf("ol.sock exists at %s", sockPath)
+	} else {
+		container.printf("ol.sock NOT found at %s: %v", sockPath, statErr)
+	}
+
+	return err
 }
 
 func (container *SOCKContainer) launchContainerProxy() (err error) {
@@ -182,6 +325,15 @@ func (container *SOCKContainer) launchContainerProxy() (err error) {
 }
 
 func (container *SOCKContainer) populateRoot() (err error) {
+	// Ensure proper permissions before mounting
+	if err := container.ensureContainerRootPermissions(); err != nil {
+		return fmt.Errorf("failed to set container root permissions: %v", err)
+	}
+
+	if err := container.ensureFilePermissions(); err != nil {
+		return fmt.Errorf("failed to set file permissions: %v", err)
+	}
+
 	// FILE SYSTEM STEP 1: mount base
 	baseDir := common.Conf.SOCK_base_path
 	if err := syscall.Mount(baseDir, container.containerRootDir, "", common.BIND, ""); err != nil {
@@ -211,19 +363,58 @@ func (container *SOCKContainer) populateRoot() (err error) {
 
 	// FILE SYSTEM STEP 3: scratch dir (tmp and communication)
 	tmpDir := filepath.Join(container.scratchDir, "tmp")
-	if err := os.Mkdir(tmpDir, 0777); err != nil && !os.IsExist(err) {
+	if err := os.MkdirAll(tmpDir, 0755); err != nil && !os.IsExist(err) {
 		return err
 	}
 
+	// Ensure testuser owns the tmp directory
+	testUser, err := user.Lookup("testuser")
+	if err == nil {
+		if uid, uidErr := strconv.Atoi(testUser.Uid); uidErr == nil {
+			if gid, gidErr := strconv.Atoi(testUser.Gid); gidErr == nil {
+				os.Chown(tmpDir, uid, gid)
+			}
+		}
+	}
+
 	sbScratchDir := filepath.Join(container.containerRootDir, "host")
+	if err := os.MkdirAll(sbScratchDir, 0755); err != nil && !os.IsExist(err) {
+		return fmt.Errorf("failed to create host mount point: %v", err)
+	}
 	if err := syscall.Mount(container.scratchDir, sbScratchDir, "", common.BIND, ""); err != nil {
 		return fmt.Errorf("failed to bind scratch dir: %v", err.Error())
+	}
+
+	// DO NOT make the /host mount read-only - we need to create sockets there
+	// This is different from the code and base mounts which are read-only for security
+
+	// Ensure the mounted /host directory has proper permissions for testuser
+	if testUser, err := user.Lookup("testuser"); err == nil {
+		if uid, uidErr := strconv.Atoi(testUser.Uid); uidErr == nil {
+			if gid, gidErr := strconv.Atoi(testUser.Gid); gidErr == nil {
+				// Note: We can't chmod the mounted directory after it's mounted as read-only
+				// But we can ensure the source directory has proper permissions
+				os.Chown(container.scratchDir, uid, gid)
+				os.Chmod(container.scratchDir, 0755)
+				container.printf("Set scratch dir permissions for testuser: %d:%d", uid, gid)
+			}
+		}
 	}
 
 	// TODO: cheaper to handle with symlink in lambda image?
 	sbTmpDir := filepath.Join(container.containerRootDir, "tmp")
 	if err := syscall.Mount(tmpDir, sbTmpDir, "", common.BIND, ""); err != nil {
 		return fmt.Errorf("failed to bind tmp dir: %v", err.Error())
+	}
+
+	container.printf("Mount setup complete - scratch=%s mounted to /host", container.scratchDir)
+
+	// Debug: check what's in the scratch directory before socket creation
+	if files, err := os.ReadDir(container.scratchDir); err == nil {
+		container.printf("Scratch directory contents before socket creation:")
+		for _, file := range files {
+			container.printf("  %s", file.Name())
+		}
 	}
 
 	return nil
@@ -349,6 +540,11 @@ func (container *SOCKContainer) fork(dst Sandbox) (err error) {
 	}
 
 	dstSock := dst.(*safeSandbox).Sandbox.(*SOCKContainer)
+	// Set up the destination container's filesystem BEFORE forking
+	container.printf("Setting up destination container filesystem for fork")
+	if err := dstSock.populateRoot(); err != nil {
+		return fmt.Errorf("failed to setup destination container root: %v", err)
+	}
 
 	origPids, err := container.cg.GetPIDs()
 	if err != nil {
@@ -412,6 +608,22 @@ func (container *SOCKContainer) fork(dst Sandbox) (err error) {
 		}
 	}
 	t.T1()
+
+	// Wait a bit and check if the socket was created in the destination
+	time.Sleep(100 * time.Millisecond)
+	expectedSockPath := filepath.Join(dstSock.scratchDir, "ol.sock")
+	if _, err := os.Stat(expectedSockPath); err != nil {
+		container.printf("Warning: socket not found at expected location %s: %v", expectedSockPath, err)
+		// List contents of destination scratch directory
+		if files, readErr := os.ReadDir(dstSock.scratchDir); readErr == nil {
+			container.printf("Destination scratch directory contents:")
+			for _, file := range files {
+				container.printf("  %s", file.Name())
+			}
+		}
+	} else {
+		container.printf("Fork successful: socket created at %s", expectedSockPath)
+	}
 
 	return nil
 }
