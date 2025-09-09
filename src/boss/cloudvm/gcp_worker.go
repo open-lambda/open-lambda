@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/open-lambda/open-lambda/ol/boss/config"
 	"github.com/open-lambda/open-lambda/ol/common"
@@ -70,12 +69,8 @@ func NewGcpWorkerPool() *WorkerPool {
 
 	fmt.Printf("STEP 2a: prepare snapshot with GCS lambda store config\n")
 	if err := createGcsTemplate(); err != nil {
-		panic(fmt.Errorf("failed to create GCS template.json: %v", err))
+		panic(fmt.Errorf("failed to create GCS template.json: %w", err))
 	}
-
-	// Brief pause to ensure filesystem operations are fully committed before snapshot
-	fmt.Printf("STEP 2b: ensuring filesystem sync before snapshot\n")
-	time.Sleep(1 * time.Second)
 
 	fmt.Printf("STEP 3: take crash-consistent snapshot of instance\n")
 	disk := instance // assume Gcp disk name is same as instance name
@@ -142,7 +137,7 @@ func (_ *GcpWorkerPool) ForwardTask(w http.ResponseWriter, r *http.Request, work
 func createGcsTemplate() error {
 	currPath, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("failed to get current path: %v", err)
+		return fmt.Errorf("failed to get current path: %w", err)
 	}
 
 	templatePath := filepath.Join(currPath, "template.json")
@@ -152,7 +147,7 @@ func createGcsTemplate() error {
 	// Get default worker config
 	defaultTemplateConfig, err := common.GetDefaultWorkerConfig("")
 	if err != nil {
-		return fmt.Errorf("failed to load default template config: %v", err)
+		return fmt.Errorf("failed to load default template config: %w", err)
 	}
 
 	// Set the GCS registry URL
@@ -166,9 +161,9 @@ func createGcsTemplate() error {
 	defaultTemplateConfig.Import_cache_tree = ""
 	defaultTemplateConfig.Worker_url = "0.0.0.0"
 
-	// Save template.json with GCS registry using atomic write
-	if err := common.SaveConfigAtomic(defaultTemplateConfig, templatePath); err != nil {
-		return fmt.Errorf("failed to save template.json: %v", err)
+	// Save template.json with GCS registry
+	if err := common.SaveConfig(defaultTemplateConfig, templatePath); err != nil {
+		return fmt.Errorf("failed to save template.json: %w", err)
 	}
 
 	log.Printf("template.json with GCS registry ready for snapshot")

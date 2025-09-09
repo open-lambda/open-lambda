@@ -163,7 +163,7 @@ func GetDefaultWorkerConfig(olPath string) (*Config, error) {
 			parentPath := filepath.Dir(currPath)
 			templatePath = filepath.Join(parentPath, "template.json")
 		}
-		
+
 		if _, err := os.Stat(templatePath); err == nil {
 			log.Printf("Loading config from template.json: %s", templatePath)
 			cfg, err := ReadInConfig(templatePath)
@@ -171,7 +171,7 @@ func GetDefaultWorkerConfig(olPath string) (*Config, error) {
 				// Patch worker-specific fields if they're empty (same logic as worker_config_template.go)
 				defaultCfg, err := getDefaultConfigForPatching(olPath)
 				if err != nil {
-					return nil, fmt.Errorf("failed to get defaults for patching: %v", err)
+					return nil, fmt.Errorf("failed to get defaults for patching: %w", err)
 				}
 
 				if cfg.Worker_dir == "" {
@@ -290,13 +290,13 @@ func LoadGlobalConfig(path string) error {
 func ReadInConfig(path string) (*Config, error) {
 	configRaw, err := ioutil.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("could not open config (%v): %v", path, err.Error())
+		return nil, fmt.Errorf("could not open config (%v): %w", path, err)
 	}
 
 	var templateConfig Config
 	if err := json.Unmarshal(configRaw, &templateConfig); err != nil {
 		fmt.Printf("Bad config file (%s):\n%s\n", path, string(configRaw))
-		return nil, fmt.Errorf("could not parse config (%v): %v", path, err.Error())
+		return nil, fmt.Errorf("could not parse config (%v): %w", path, err)
 	}
 
 	return &templateConfig, nil
@@ -355,63 +355,6 @@ func SandboxConfJson() string {
 	return string(s)
 }
 
-// SaveConfigAtomic saves a config to a file atomically to prevent race conditions
-// This is used for template.json creation to avoid corruption during concurrent access
-func SaveConfigAtomic(cfg *Config, filePath string) error {
-	// Create temp file in same directory as target file
-	dir := filepath.Dir(filePath)
-	tempFile, err := os.CreateTemp(dir, filepath.Base(filePath)+".tmp.*")
-	if err != nil {
-		return fmt.Errorf("failed to create temp file: %v", err)
-	}
-	
-	tempPath := tempFile.Name()
-	
-	// Ensure cleanup on failure
-	defer func() {
-		if tempFile != nil {
-			tempFile.Close()
-			os.Remove(tempPath)
-		}
-	}()
-	
-	// Marshal config to JSON
-	data, err := json.MarshalIndent(cfg, "", "\t")
-	if err != nil {
-		return fmt.Errorf("failed to marshal config: %v", err)
-	}
-	
-	// Write to temp file
-	if _, err := tempFile.Write(data); err != nil {
-		return fmt.Errorf("failed to write temp file: %v", err)
-	}
-	
-	// Sync to ensure data is written to disk
-	if err := tempFile.Sync(); err != nil {
-		return fmt.Errorf("failed to sync temp file: %v", err)
-	}
-	
-	// Close temp file
-	if err := tempFile.Close(); err != nil {
-		return fmt.Errorf("failed to close temp file: %v", err)
-	}
-	tempFile = nil // Mark as closed to avoid double-close in defer
-	
-	// Atomic rename - this is the key operation that prevents corruption
-	if err := os.Rename(tempPath, filePath); err != nil {
-		return fmt.Errorf("failed to rename temp file: %v", err)
-	}
-	
-	// Sync the directory to ensure the rename is persisted before snapshot
-	dirFile, err := os.Open(filepath.Dir(filePath))
-	if err == nil {
-		dirFile.Sync() // Ensure directory entry is synced
-		dirFile.Close()
-	}
-	
-	log.Printf("Atomically saved config to: %s", filePath)
-	return nil
-}
 
 // Dump prints the Config as a JSON string.
 func DumpConf() {
@@ -436,12 +379,56 @@ func SaveGlobalConfig(path string) error {
 	return SaveConfig(Conf, path)
 }
 
-func SaveConfig(cfg *Config, path string) error {
-	s, err := json.MarshalIndent(cfg, "", "\t")
+// writeConfigToFile writes config data to a file with proper syncing
+func writeConfigToFile(cfg *Config, filePath string) error {
+	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
+		return fmt.Errorf("failed to create file: %w", err)
+	}
+	defer file.Close()
+
+	// Marshal config to JSON
+	data, err := json.MarshalIndent(cfg, "", "\t")
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	// Write and sync to ensure data is written to disk
+	if _, err := file.Write(data); err != nil {
+		return fmt.Errorf("failed to write file: %w", err)
+	}
+
+	if err := file.Sync(); err != nil {
+		return fmt.Errorf("failed to sync file: %w", err)
+	}
+
+	return nil
+}
+
+func SaveConfig(cfg *Config, path string) error {
+	// Write to temp file in same directory to ensure atomic rename
+	tempPath := path + ".tmp"
+	if err := writeConfigToFile(cfg, tempPath); err != nil {
+		os.Remove(tempPath) // Clean up on failure
 		return err
 	}
-	return ioutil.WriteFile(path, s, 0644)
+
+	// Atomic rename - this is the key operation that prevents corruption
+	if err := os.Rename(tempPath, path); err != nil {
+		os.Remove(tempPath) // Clean up on failure
+		return fmt.Errorf("failed to rename temp file: %w", err)
+	}
+
+	// Sync the directory to ensure the rename is persisted
+	dirFile, err := os.Open(filepath.Dir(path))
+	if err != nil {
+		return fmt.Errorf("failed to open directory for sync: %w", err)
+	}
+	defer dirFile.Close()
+	dirFile.Sync() // Ensure directory entry is synced
+
+	log.Printf("Atomically saved config to: %s", path)
+	return nil
 }
 
 func GetOlPath(ctx *cli.Context) (string, error) {

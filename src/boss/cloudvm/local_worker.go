@@ -30,7 +30,7 @@ func NewLocalWorkerPool() *WorkerPool {
 			// Get the worker config struct
 			defaultTemplateConfig, err := common.GetDefaultWorkerConfig("")
 			if err != nil {
-				log.Fatalf("failed to load default template config: %v", err)
+				log.Fatalf("failed to load default template config: %w", err)
 			}
 
 			// Set platform-specific registry (local platform)
@@ -43,11 +43,11 @@ func NewLocalWorkerPool() *WorkerPool {
 			defaultTemplateConfig.SOCK_base_path = ""
 			defaultTemplateConfig.Import_cache_tree = ""
 
-			if err := common.SaveConfigAtomic(defaultTemplateConfig, templatePath); err != nil {
-				log.Fatalf("failed to save template.json: %v", err)
+			if err := common.SaveConfig(defaultTemplateConfig, templatePath); err != nil {
+				log.Fatalf("failed to save template.json: %w", err)
 			}
 		} else {
-			log.Fatalf("failed to stat template path: %v", err)
+			log.Fatalf("failed to stat template path: %w", err)
 		}
 	}
 
@@ -75,13 +75,13 @@ func (p *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) error {
 	// The boss should capture the output from initCmd and then print it using log.Printf which is lock-protected
 	initCmd.Stderr = os.Stderr
 	if err := initCmd.Run(); err != nil {
-		log.Printf("Failed to initialize worker %s: %v\n", worker.workerId, err)
+		log.Printf("Failed to initialize worker %s: %w\n", worker.workerId, err)
 		return err
 	}
 
 	currPath, err := os.Getwd()
 	if err != nil {
-		log.Printf("failed to get current path: %v", err)
+		log.Printf("failed to get current path: %w", err)
 		return err
 	}
 
@@ -92,7 +92,7 @@ func (p *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) error {
 	// The template.json will be loaded and patched in GetDefaultWorkerConfig
 	cfg, err := common.GetDefaultWorkerConfig(workerPath)
 	if err != nil {
-		log.Printf("Failed to get worker config: %v", err)
+		log.Printf("Failed to get worker config: %w", err)
 		return err
 	}
 	
@@ -102,7 +102,7 @@ func (p *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) error {
 	// Save to worker directory
 	configPath := filepath.Join(workerPath, "config.json")
 	if err := common.SaveConfig(cfg, configPath); err != nil {
-		log.Printf("Failed to save worker config: %v", err)
+		log.Printf("Failed to save worker config: %w", err)
 		return err
 	}
 
@@ -115,7 +115,7 @@ func (p *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) error {
 	// The boss should capture the output from initCmd and then print it using log.Printf which is lock-protected
 	upCmd.Stderr = os.Stderr
 	if err := upCmd.Start(); err != nil {
-		log.Printf("Failed to start worker %s: %v\n", worker.workerId, err)
+		log.Printf("Failed to start worker %s: %w\n", worker.workerId, err)
 		return err
 	}
 
@@ -131,7 +131,7 @@ func (_ *LocalWorkerPoolPlatform) DeleteInstance(worker *Worker) error {
 	downCmd := exec.Command("./ol", "worker", "down", "-p", worker.workerId)
 	err := downCmd.Run()
 	if err != nil {
-		log.Printf("Failed to stop worker %s: %v\n", worker.workerId, err)
+		log.Printf("Failed to stop worker %s: %w\n", worker.workerId, err)
 		return err
 	}
 
