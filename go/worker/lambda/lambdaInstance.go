@@ -1,8 +1,9 @@
 package lambda
 
 import (
+	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -53,22 +54,22 @@ func (linst *LambdaInstance) Task() {
 				proxyLog := sb.GetProxyLog()
 				sb.Destroy("Lambda instance kill signal received")
 
-				log.Printf("Stopped sandbox")
+				slog.Info("Stopped sandbox")
 
 				if common.Conf.Log_output {
 					if rtLog != "" {
-						log.Printf("Runtime output is:")
+						slog.Info("Runtime output is:")
 
 						for _, line := range strings.Split(rtLog, "\n") {
-							log.Printf("   %s", line)
+							slog.Info(fmt.Sprintf("   %s", line))
 						}
 					}
 
 					if proxyLog != "" {
-						log.Printf("Proxy output is:")
+						slog.Info("Proxy output is:")
 
 						for _, line := range strings.Split(proxyLog, "\n") {
-							log.Printf("   %s", line)
+							slog.Info(fmt.Sprintf("   %s", line))
 						}
 					}
 				}
@@ -109,7 +110,7 @@ func (linst *LambdaInstance) Task() {
 				}
 			}
 
-			log.Printf("Creating new sandbox")
+			slog.Info("Creating new sandbox")
 
 			// import cache is either disabled or it failed
 			if sb == nil {
@@ -186,14 +187,14 @@ func (linst *LambdaInstance) Task() {
 				rtLog := sb.GetRuntimeLog()
 				sb.Destroy("Lambda instance kill signal received")
 
-				log.Printf("Stopped sandbox")
+				slog.Info("Stopped sandbox")
 
 				if common.Conf.Log_output {
 					if rtLog != "" {
-						log.Printf("Runtime output is:")
+						slog.Info("Runtime output is:")
 
 						for _, line := range strings.Split(rtLog, "\n") {
-							log.Printf("   %s", line)
+							slog.Info(fmt.Sprintf("   %s", line))
 						}
 					}
 				}

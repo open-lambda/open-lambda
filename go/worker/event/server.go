@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -71,7 +71,7 @@ func Status(w http.ResponseWriter, _ *http.Request) {
 	// log.Printf("Received request to %s\n", r.URL.Path)
 
 	if _, err := w.Write([]byte("ready\n")); err != nil {
-		log.Printf("error in Status: %v", err)
+		slog.Error(fmt.Sprintf("error in Status: %v", err))
 	}
 }
 
@@ -91,7 +91,8 @@ func PprofMem(w http.ResponseWriter, _ *http.Request) {
 	runtime.GC()
 	w.Header().Add("Content-Type", "application/octet-stream")
 	if err := pprof.WriteHeapProfile(w); err != nil {
-		log.Fatal("could not write memory profile: ", err)
+		slog.Error(fmt.Sprintf("could not write memory profile: %v", err))
+		os.Exit(1)
 	}
 }
 
@@ -107,19 +108,19 @@ func doCpuStart() error {
 	// fresh cpu profiling
 	temp, err := os.CreateTemp("", CPU_TEMP_PATTERN)
 	if err != nil {
-		log.Printf("could not create the temp file: %v", err)
+		slog.Error(fmt.Sprintf("could not create the temp file: %v", err))
 		return err
 	}
 
-	log.Printf("Created a temp file: %s", temp.Name())
+	slog.Info(fmt.Sprintf("Created a temp file: %s", temp.Name()))
 	cpuTemp = temp
 
 	if err := pprof.StartCPUProfile(temp); err != nil {
-		log.Printf("could not start cpu profile: %v", err)
+		slog.Error(fmt.Sprintf("could not start cpu profile: %v", err))
 		return err
 	}
 
-	log.Printf("Started cpu profiling\n")
+	slog.Info("Started cpu profiling")
 	return nil
 }
 
@@ -141,7 +142,7 @@ func PprofCpuStop(w http.ResponseWriter, _ *http.Request) {
 
 	// user error: should start cpu profiling first
 	if cpuTemp == nil {
-		log.Printf("should start cpu profile before stopping it\n")
+		slog.Error("should start cpu profile before stopping it")
 		w.WriteHeader(http.StatusBadRequest) // bad request
 		return
 	}
@@ -154,10 +155,10 @@ func PprofCpuStop(w http.ResponseWriter, _ *http.Request) {
 	defer os.Remove(tempFilename) // deferred cleanup
 
 	// read data from file
-	log.Printf("Reading from %s\n", tempFilename)
+	slog.Info(fmt.Sprintf("Reading from %s", tempFilename))
 	buffer, err := ioutil.ReadFile(tempFilename)
 	if err != nil {
-		log.Printf("could not read from file %s\n", tempFilename)
+		slog.Error(fmt.Sprintf("could not read from file %s", tempFilename))
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -165,7 +166,7 @@ func PprofCpuStop(w http.ResponseWriter, _ *http.Request) {
 	// write profiled data to response
 	w.Header().Add("Content-Type", "application/octet-stream")
 	if _, err := w.Write(buffer); err != nil {
-		log.Printf("error in PprofCpuStop: %v", err)
+		slog.Error(fmt.Sprintf("error in PprofCpuStop: %v", err))
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 }
@@ -177,7 +178,7 @@ func shutdown(pidPath string, server cleanable) {
 	rc := 0
 
 	// "cpu-start"ed but have not "cpu-stop"ped before kill
-	log.Printf("save buffered profiled data to cpu.buf.prof\n")
+	slog.Info("save buffered profiled data to cpu.buf.prof")
 	if cpuTemp != nil {
 		pprof.StopCPUProfile()
 		filename := cpuTemp.Name()
@@ -185,32 +186,32 @@ func shutdown(pidPath string, server cleanable) {
 
 		in, err := ioutil.ReadFile(filename)
 		if err != nil {
-			log.Printf("error: %s", err)
+			slog.Error(fmt.Sprintf("error: %s", err))
 			rc = 1
 		} else if err = ioutil.WriteFile("cpu.buf.prof", in, 0644); err != nil {
-			log.Printf("error: %s", err)
+			slog.Error(fmt.Sprintf("error: %s", err))
 			rc = 1
 		}
 
 		os.Remove(filename)
 	}
 
-	log.Printf("save stats to %s", statsPath)
+	slog.Info(fmt.Sprintf("save stats to %s", statsPath))
 	if s, err := json.MarshalIndent(snapshot, "", "\t"); err != nil {
-		log.Printf("error: %s", err)
+		slog.Error(fmt.Sprintf("error: %s", err))
 		rc = 1
 	} else if err := ioutil.WriteFile(statsPath, s, 0644); err != nil {
-		log.Printf("error: %s", err)
+		slog.Error(fmt.Sprintf("error: %s", err))
 		rc = 1
 	}
 
-	log.Printf("Remove %s.", pidPath)
+	slog.Info(fmt.Sprintf("Remove %s.", pidPath))
 	if err := os.Remove(pidPath); err != nil {
-		log.Printf("error: %s", err)
+		slog.Error(fmt.Sprintf("error: %s", err))
 		rc = 1
 	}
 
-	log.Printf("Exiting worker (PID %d)", os.Getpid())
+	slog.Info(fmt.Sprintf("Exiting worker (PID %d)", os.Getpid()))
 	os.Exit(rc)
 }
 
@@ -264,7 +265,7 @@ func Main() (err error) {
 		return err
 	}
 
-	log.Printf("Saved PID %d to file %s", os.Getpid(), pidPath)
+	slog.Info(fmt.Sprintf("Saved PID %d to file %s", os.Getpid(), pidPath))
 	if err := ioutil.WriteFile(pidPath, []byte(fmt.Sprintf("%d", os.Getpid())), 0644); err != nil {
 		return err
 	}
@@ -278,7 +279,7 @@ func Main() (err error) {
 	http.HandleFunc(PPROF_CPU_STOP_PATH, PprofCpuStop)
 
 	// Initialize LambdaStore for registry
-	log.Printf("Worker: Initializing LambdaStore with Registry = \"%s\"", common.Conf.Registry)
+	slog.Info(fmt.Sprintf("Worker: Initializing LambdaStore with Registry = \"%s\"", common.Conf.Registry))
 	lambdaStore, err = lambdastore.NewLambdaStore(common.Conf.Registry, nil)
 	if err != nil {
 		os.Remove(pidPath)
@@ -308,7 +309,7 @@ func Main() (err error) {
 	signal.Notify(c, os.Interrupt, syscall.SIGINT)
 	go func() {
 		<-c
-		log.Printf("Received kill signal, cleaning up.")
+		slog.Info("Received kill signal, cleaning up.")
 		shutdown(pidPath, s)
 	}()
 
@@ -319,7 +320,7 @@ func Main() (err error) {
 	// (probably a port collision)
 	s.cleanup()
 	os.Remove(pidPath)
-	log.Printf(err.Error())
+	slog.Error(err.Error())
 	os.Exit(1)
 	return nil
 }

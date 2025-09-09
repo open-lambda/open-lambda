@@ -2,7 +2,7 @@ package common
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync/atomic"
@@ -31,7 +31,7 @@ type DirMaker struct {
 
 func NewDirMaker(system string, mode StoreMode) (*DirMaker, error) {
 	prefix := filepath.Join(Conf.Worker_dir, system)
-	log.Printf("Storage dir at %s", prefix)
+	slog.Info(fmt.Sprintf("Storage dir at %s", prefix))
 	if err := os.RemoveAll(prefix); err != nil {
 		return nil, err
 	}

@@ -5,7 +5,7 @@ import (
 	"container/list"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -69,7 +69,7 @@ func (f *LambdaFunc) Invoke(w http.ResponseWriter, r *http.Request) {
 // correspond to which LambdaFuncs
 func (f *LambdaFunc) printf(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
-	log.Printf("%s [FUNC %s]", strings.TrimRight(msg, "\n"), f.name)
+	slog.Info(fmt.Sprintf("%s [FUNC %s]", strings.TrimRight(msg, "\n"), f.name))
 }
 
 // parseMeta reads in a requirements.txt file that was built from pip-compile
@@ -139,7 +139,7 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 	defer func() {
 		if err != nil {
 			if err := os.RemoveAll(codeDir); err != nil {
-				log.Printf("could not cleanup %s after failed pull\n", codeDir)
+				slog.Error(fmt.Sprintf("could not cleanup %s after failed pull", codeDir))
 			}
 
 			if rtType == common.RT_PYTHON {
@@ -171,7 +171,7 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 		f.lmgr.DepTracer.TraceFunction(codeDir, meta.Sandbox.Installs)
 		f.Meta = meta
 	} else if rtType == common.RT_NATIVE {
-		log.Printf("Got native function")
+		slog.Info("Got native function")
 
 		// Initialize f.Meta for native functions for consistensy.
 		f.Meta = &FunctionMeta{

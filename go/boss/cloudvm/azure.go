@@ -5,7 +5,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"math/rand"
 	"os"
 	"strconv"
@@ -30,21 +30,25 @@ func Create(contents string) {
 	// Create a default request pipeline using your storage account name and account key.
 	credential, err := azidentity.NewDefaultAzureCredential(nil)
 	if err != nil {
-		log.Fatal("Invalid credentials with error: " + err.Error())
+		slog.Error("Invalid credentials with error: " + err.Error())
+		os.Exit(1)
 	}
 	serviceClient, err := azblob.NewServiceClient(url, credential, nil)
 	if err != nil {
-		log.Fatal("Invalid credentials with error: " + err.Error())
+		slog.Error("Invalid credentials with error: " + err.Error())
+		os.Exit(1)
 	}
 	containerName := fmt.Sprintf("quickstart-%s", randomString())
 	fmt.Printf("Creating a container named %s\n", containerName)
 	containerClient, err := serviceClient.NewContainerClient(containerName)
 	if err != nil {
-		log.Fatal(err)
+		slog.Error(err.Error())
+		os.Exit(1)
 	}
 	_, err = containerClient.Create(ctx, nil)
 	if err != nil {
-		log.Fatal(err)
+		slog.Error(err.Error())
+		os.Exit(1)
 	}
 
 	fmt.Printf("Creating a dummy file to test the upload and download\n")
@@ -54,13 +58,15 @@ func Create(contents string) {
 
 	blobClient, err := azblob.NewBlockBlobClient(url+containerName+"/"+blobName, credential, nil)
 	if err != nil {
-		log.Fatal(err)
+		slog.Error(err.Error())
+		os.Exit(1)
 	}
 	// Upload to data to blob storage
 	_, err = blobClient.UploadBuffer(ctx, data, azblob.UploadOption{})
 
 	if err != nil {
-		log.Fatalf("Failure to upload to blob: %+v", err)
+		slog.Error(fmt.Sprintf("Failure to upload to blob: %+v", err))
+		os.Exit(1)
 	}
 }
 
@@ -68,18 +74,21 @@ func Download() {
 	// Download the blob
 	get, err := blobClient.Download(ctx, nil)
 	if err != nil {
-		log.Fatal(err)
+		slog.Error(err.Error())
+		os.Exit(1)
 	}
 
 	downloadedData := &bytes.Buffer{}
 	reader := get.Body(&azblob.RetryReaderOptions{})
 	_, err = downloadedData.ReadFrom(reader)
 	if err != nil {
-		log.Fatal(err)
+		slog.Error(err.Error())
+		os.Exit(1)
 	}
 	err = reader.Close()
 	if err != nil {
-		log.Fatal(err)
+		slog.Error(err.Error())
+		os.Exit(1)
 	}
 
 	fmt.Println(downloadedData.String())
@@ -95,7 +104,8 @@ func Delete() {
 
 	_, err = blobClient.Delete(ctx, nil)
 	if err != nil {
-		log.Fatalf("Failure: %+v", err)
+		slog.Error(fmt.Sprintf("Failure: %+v", err))
+		os.Exit(1)
 	}
 
 	// Delete the container
@@ -103,7 +113,8 @@ func Delete() {
 	_, err = containerClient.Delete(ctx, nil)
 
 	if err != nil {
-		log.Fatalf("Failure: %+v", err)
+		slog.Error(fmt.Sprintf("Failure: %+v", err))
+		os.Exit(1)
 	}
 }
 
@@ -121,12 +132,14 @@ func AzureMain(contents string) {
 	// Create a default request pipeline using your storage account name and account key.
 	credential, err := azidentity.NewDefaultAzureCredential(nil)
 	if err != nil {
-		log.Fatal("Invalid credentials with error: " + err.Error())
+		slog.Error("Invalid credentials with error: " + err.Error())
+		os.Exit(1)
 	}
 
 	serviceClient, err := azblob.NewServiceClient(url, credential, nil)
 	if err != nil {
-		log.Fatal("Invalid credentials with error: " + err.Error())
+		slog.Error("Invalid credentials with error: " + err.Error())
+		os.Exit(1)
 	}
 
 	// Create the container
@@ -134,11 +147,13 @@ func AzureMain(contents string) {
 	fmt.Printf("Creating a container named %s\n", containerName)
 	containerClient, err := serviceClient.NewContainerClient(containerName)
 	if err != nil {
-		log.Fatal(err)
+		slog.Error(err.Error())
+		os.Exit(1)
 	}
 	_, err = containerClient.Create(ctx, nil)
 	if err != nil {
-		log.Fatal(err)
+		slog.Error(err.Error())
+		os.Exit(1)
 	}
 
 	fmt.Printf("Creating a dummy file to test the upload and download\n")
@@ -148,14 +163,16 @@ func AzureMain(contents string) {
 
 	blobClient, err := azblob.NewBlockBlobClient(url+containerName+"/"+blobName, credential, nil)
 	if err != nil {
-		log.Fatal(err)
+		slog.Error(err.Error())
+		os.Exit(1)
 	}
 
 	// Upload to data to blob storage
 	_, err = blobClient.UploadBuffer(ctx, data, azblob.UploadOption{})
 
 	if err != nil {
-		log.Fatalf("Failure to upload to blob: %+v", err)
+		slog.Error(fmt.Sprintf("Failure to upload to blob: %+v", err))
+		os.Exit(1)
 	}
 
 	// List the blobs in the container
@@ -172,24 +189,28 @@ func AzureMain(contents string) {
 	}
 
 	if err = pager.Err(); err != nil {
-		log.Fatalf("Failure to list blobs: %+v", err)
+		slog.Error(fmt.Sprintf("Failure to list blobs: %+v", err))
+		os.Exit(1)
 	}
 
 	// Download the blob
 	get, err := blobClient.Download(ctx, nil)
 	if err != nil {
-		log.Fatal(err)
+		slog.Error(err.Error())
+		os.Exit(1)
 	}
 
 	downloadedData := &bytes.Buffer{}
 	reader := get.Body(&azblob.RetryReaderOptions{})
 	_, err = downloadedData.ReadFrom(reader)
 	if err != nil {
-		log.Fatal(err)
+		slog.Error(err.Error())
+		os.Exit(1)
 	}
 	err = reader.Close()
 	if err != nil {
-		log.Fatal(err)
+		slog.Error(err.Error())
+		os.Exit(1)
 	}
 
 	fmt.Println(downloadedData.String())
@@ -203,7 +224,8 @@ func AzureMain(contents string) {
 
 	_, err = blobClient.Delete(ctx, nil)
 	if err != nil {
-		log.Fatalf("Failure: %+v", err)
+		slog.Error(fmt.Sprintf("Failure: %+v", err))
+		os.Exit(1)
 	}
 
 	// Delete the container
@@ -211,6 +233,7 @@ func AzureMain(contents string) {
 	_, err = containerClient.Delete(ctx, nil)
 
 	if err != nil {
-		log.Fatalf("Failure: %+v", err)
+		slog.Error(fmt.Sprintf("Failure: %+v", err))
+		os.Exit(1)
 	}
 }

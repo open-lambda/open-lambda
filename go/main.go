@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
@@ -303,8 +303,6 @@ func bossStart(ctx *cli.Context) error {
 
 // main runs the admin tool
 func main() {
-	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
-
 	cli.CommandHelpTemplate = `NAME:
    {{.HelpName}} - {{if .Description}}{{.Description}}{{else}}{{.Usage}}{{end}}
 USAGE:
@@ -401,6 +399,7 @@ OPTIONS:
 	}
 	err := app.Run(os.Args)
 	if err != nil {
-		log.Fatal(err)
+		slog.Error(err.Error())
+		os.Exit(1)
 	}
 }

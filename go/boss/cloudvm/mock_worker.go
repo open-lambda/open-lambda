@@ -2,7 +2,7 @@ package cloudvm
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 )
 
@@ -29,12 +29,12 @@ func (_ *MockWorkerPoolPlatform) NewWorker(workerId string) *Worker {
 }
 
 func (_ *MockWorkerPoolPlatform) CreateInstance(worker *Worker) error {
-	log.Printf("created new mock worker: %s\n", worker.workerId)
+	slog.Info(fmt.Sprintf("created new mock worker: %s", worker.workerId))
 	return nil
 }
 
 func (_ *MockWorkerPoolPlatform) DeleteInstance(worker *Worker) error {
-	log.Printf("deleted mock worker: %s\n", worker.workerId)
+	slog.Info(fmt.Sprintf("deleted mock worker: %s", worker.workerId))
 	return nil
 }
 

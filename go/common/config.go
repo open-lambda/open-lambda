@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
+	"log/slog"
 	"path"
 	"path/filepath"
 	"syscall"
@@ -311,7 +311,7 @@ func DumpConf() {
 	if err != nil {
 		panic(err)
 	}
-	log.Printf("CONFIG = %v\n", string(s))
+	slog.Info(fmt.Sprintf("CONFIG = %v", string(s)))
 }
 
 // DumpStr returns the Config as an indented JSON string.
