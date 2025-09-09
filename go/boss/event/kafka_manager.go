@@ -144,6 +144,6 @@ func (k *KafkaManager) Unregister(functionName string) error {
 	}
 
 	delete(k.functions, functionName)
-	slog.Info("[KafkaManager] Kafka consumer unregistered for %s", functionName)
+	slog.Info(fmt.Sprintf("[KafkaManager] Kafka consumer unregistered for %s", functionName))
 	return nil
 }
