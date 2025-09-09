@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -89,7 +89,7 @@ func NewLambdaStore(storeURL string, pool *cloudvm.WorkerPool) (*LambdaStore, er
 		if strings.HasSuffix(obj.Key, common.LambdaFileExtension) {
 			funcName := strings.TrimSuffix(obj.Key, common.LambdaFileExtension)
 			if err := store.loadConfigAndRegister(funcName); err != nil {
-				log.Printf("Failed to load lambda %s: %v", funcName, err)
+				slog.Error(fmt.Sprintf("Failed to load lambda %s: %v", funcName, err))
 			}
 		}
 	}
@@ -260,7 +260,7 @@ func (s *LambdaStore) addToRegistry(funcName string, body io.Reader) error {
 	}
 	defer func() {
 		if err := writer.Close(); err != nil {
-			log.Printf("warning: failed to close blob writer: %v", err)
+			slog.Error(fmt.Sprintf("warning: failed to close blob writer: %v", err))
 		}
 	}()
 
@@ -292,7 +292,7 @@ func (s *LambdaStore) removeFromRegistry(funcName string) error {
 
 	if s.eventManager != nil {
 		if err := s.eventManager.Unregister(funcName); err != nil {
-			log.Printf("failed to unregister triggers for %s: %v", funcName, err)
+			slog.Error(fmt.Sprintf("failed to unregister triggers for %s: %v", funcName, err))
 		}
 	}
 
@@ -303,7 +303,7 @@ func (s *LambdaStore) removeFromRegistry(funcName string) error {
 	// Background deletion
 	go func() {
 		if err := s.bucket.Delete(context.Background(), funcName+common.LambdaFileExtension); err != nil {
-			log.Printf("warning: failed to remove %s from blob storage: %v", funcName+common.LambdaFileExtension, err)
+			slog.Error(fmt.Sprintf("warning: failed to remove %s from blob storage: %v", funcName+common.LambdaFileExtension, err))
 		}
 	}()
 

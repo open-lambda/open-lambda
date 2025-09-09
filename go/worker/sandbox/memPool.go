@@ -3,7 +3,7 @@ package sandbox
 import (
 	"container/list"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 
 	"github.com/open-lambda/open-lambda/go/common"
@@ -50,7 +50,7 @@ func NewMemPool(name string, totalMB int) *MemPool {
 func (pool *MemPool) printf(format string, args ...any) {
 	if common.Conf.Trace.Memory {
 		msg := fmt.Sprintf(format, args...)
-		log.Printf("%s [MEM POOL %s]", strings.TrimRight(msg, "\n"), pool.name)
+		slog.Info(fmt.Sprintf("%s [MEM POOL %s]", strings.TrimRight(msg, "\n"), pool.name))
 	}
 }
 

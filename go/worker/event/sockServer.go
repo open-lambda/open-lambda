@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
@@ -118,7 +118,7 @@ func (server *SOCKServer) Create(w http.ResponseWriter, _ []string, args map[str
 	}
 
 	server.sandboxes.Store(c.ID(), c)
-	log.Printf("Save ID '%s' to map\n", c.ID())
+	slog.Info(fmt.Sprintf("Save ID '%s' to map", c.ID()))
 
 	w.Write([]byte(fmt.Sprintf("%v\n", c.ID())))
 	return nil
@@ -166,7 +166,7 @@ func (server *SOCKServer) Debug(w http.ResponseWriter, _ []string, _ map[string]
 
 // HandleInternal handles internal requests to the SOCK server.
 func (server *SOCKServer) HandleInternal(w http.ResponseWriter, r *http.Request) error {
-	log.Printf("%s %s", r.Method, r.URL.Path)
+	slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL.Path))
 
 	defer r.Body.Close()
 
@@ -187,7 +187,7 @@ func (server *SOCKServer) HandleInternal(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	log.Printf("Parsed Args: %v", args)
+	slog.Info(fmt.Sprintf("Parsed Args: %v", args))
 
 	rsrc := strings.Split(r.URL.Path, "/")
 	if len(rsrc) < 2 {
@@ -203,7 +203,7 @@ func (server *SOCKServer) HandleInternal(w http.ResponseWriter, r *http.Request)
 	}
 
 	if h, ok := routes[rsrc[1]]; ok {
-		log.Printf("Got %s", rsrc[1])
+		slog.Info(fmt.Sprintf("Got %s", rsrc[1]))
 		return h(w, rsrc[2:], args)
 	}
 
@@ -213,7 +213,7 @@ func (server *SOCKServer) HandleInternal(w http.ResponseWriter, r *http.Request)
 // Handle handles requests to the SOCK server.
 func (server *SOCKServer) Handle(w http.ResponseWriter, r *http.Request) {
 	if err := server.HandleInternal(w, r); err != nil {
-		log.Printf("Request Handler Failed: %v", err)
+		slog.Error(fmt.Sprintf("Request Handler Failed: %v", err))
 		w.WriteHeader(500)
 		w.Write([]byte(fmt.Sprintf("%v\n", err)))
 	}
@@ -230,7 +230,7 @@ func (server *SOCKServer) cleanup() {
 
 // NewSOCKServer creates a server based on the passed config.
 func NewSOCKServer() (*SOCKServer, error) {
-	log.Printf("Start SOCK Server")
+	slog.Info("Start SOCK Server")
 
 	mem := sandbox.NewMemPool("sandboxes", common.Conf.Mem_pool_mb)
 	sbPool, err := sandbox.NewSOCKPool("sandboxes", mem)

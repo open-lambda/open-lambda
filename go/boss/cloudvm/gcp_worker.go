@@ -2,7 +2,7 @@ package cloudvm
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -113,7 +113,7 @@ func (pool *GcpWorkerPool) CreateInstance(worker *Worker) error {
 }
 
 func (pool *GcpWorkerPool) DeleteInstance(worker *Worker) error {
-	log.Printf("deleting gcp worker: %s\n", worker.workerId)
+	slog.Info(fmt.Sprintf("deleting gcp worker: %s", worker.workerId))
 	worker.runCmd("./ol worker down")                                // TODO: check if runCmd fails
 	pool.client.Wait(pool.client.deleteGcpInstance(worker.workerId)) // wait until instance is completely deleted
 

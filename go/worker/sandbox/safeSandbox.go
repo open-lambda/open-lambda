@@ -9,7 +9,7 @@ package sandbox
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -53,7 +53,7 @@ func (sb *safeSandbox) startNotifyingListeners(eventHandlers []SandboxEventFunc)
 // like regular printf, with suffix indicating which sandbox produced the message
 func (sb *safeSandbox) printf(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
-	log.Printf("%s [SB %s]", strings.TrimRight(msg, "\n"), sb.Sandbox.ID())
+	slog.Info(fmt.Sprintf("%s [SB %s]", strings.TrimRight(msg, "\n"), sb.Sandbox.ID()))
 }
 
 // propogate event to anybody who signed up to listen (e.g., an evictor)

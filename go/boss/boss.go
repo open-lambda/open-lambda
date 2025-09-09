@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -40,7 +40,7 @@ type Boss struct {
 
 // BossStatus handles the request to get the status of the boss.
 func (boss *Boss) BossStatus(w http.ResponseWriter, req *http.Request) {
-	log.Printf("Receive request to %s\n", req.URL.Path)
+	slog.Info(fmt.Sprintf("Receive request to %s", req.URL.Path))
 
 	output := struct {
 		State map[string]int `json:"state"`
@@ -73,7 +73,7 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		_, err := w.Write([]byte("POST a count to /scaling/worker_count\n"))
 		if err != nil {
-			log.Printf("(1) could not write web response: %s\n", err.Error())
+			slog.Error(fmt.Sprintf("(1) could not write web response: %s", err.Error()))
 		}
 		return
 	}
@@ -83,7 +83,7 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, err := w.Write([]byte("could not read body of web request\n"))
 		if err != nil {
-			log.Printf("(2) could not write web response: %s\n", err.Error())
+			slog.Error(fmt.Sprintf("(2) could not write web response: %s", err.Error()))
 		}
 		return
 	}
@@ -93,16 +93,16 @@ func (b *Boss) ScalingWorker(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, err := w.Write([]byte("body of post to /scaling/worker_count should be an int\n"))
 		if err != nil {
-			log.Printf("(3) could not write web response: %s\n", err.Error())
+			slog.Error(fmt.Sprintf("(3) could not write web response: %s", err.Error()))
 		}
 		return
 	}
 
 	if worker_count > config.BossConf.Worker_Cap {
 		worker_count = config.BossConf.Worker_Cap
-		log.Printf("capping workers at %d to avoid big bills during debugging\n", worker_count)
+		slog.Info(fmt.Sprintf("capping workers at %d to avoid big bills during debugging", worker_count))
 	}
-	log.Printf("Receive request to %s, worker_count of %d requested\n", r.URL.Path, worker_count)
+	slog.Info(fmt.Sprintf("Receive request to %s, worker_count of %d requested", r.URL.Path, worker_count))
 
 	// STEP 2: adjust target worker count
 	b.workerPool.SetTarget(worker_count)
@@ -169,7 +169,7 @@ func BossMain() (err error) {
 	}
 
 	// Launch 1 worker by default when boss starts
-	log.Printf("Launching 1 worker by default")
+	slog.Info("Launching 1 worker by default")
 	boss.workerPool.SetTarget(1)
 
 	http.HandleFunc(BOSS_STATUS_PATH, boss.BossStatus)
@@ -185,7 +185,7 @@ func BossMain() (err error) {
 	signal.Notify(c, os.Interrupt, syscall.SIGINT)
 	go func() {
 		<-c
-		log.Printf("received kill signal, cleaning up")
+		slog.Info("received kill signal, cleaning up")
 		boss.Close(nil, nil)
 		os.Exit(0)
 	}()

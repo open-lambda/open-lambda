@@ -3,7 +3,7 @@ package dockerutil
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/exec"
 
@@ -74,19 +74,21 @@ func Dump(client *docker.Client) {
 	opts := docker.ListContainersOptions{All: true}
 	containers, err := client.ListContainers(opts)
 	if err != nil {
-		log.Fatal("Could not get container list")
+		slog.Error("Could not get container list")
+		os.Exit(1)
 	}
-	log.Printf("=====================================\n")
+	slog.Info("=====================================")
 	for idx, info := range containers {
 		container, err := client.InspectContainer(info.ID)
 		if err != nil {
-			log.Fatal("Could not get container")
+			slog.Error("Could not get container")
+			os.Exit(1)
 		}
 
-		log.Printf("CONTAINER %d: %v, %v, %v\n", idx,
+		slog.Info(fmt.Sprintf("CONTAINER %d: %v, %v, %v", idx,
 			info.Image,
 			container.ID[:8],
-			container.State.String())
+			container.State.String()))
 	}
 }
 

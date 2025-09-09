@@ -3,7 +3,7 @@ package sandbox
 import (
 	"container/list"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 
 	"github.com/open-lambda/open-lambda/go/common"
@@ -113,7 +113,7 @@ func (evictor *SOCKEvictor) nextEvent(block bool) *SandboxEvent {
 func (_ *SOCKEvictor) printf(format string, args ...any) {
 	if common.Conf.Trace.Evictor {
 		msg := fmt.Sprintf(format, args...)
-		log.Printf("%s [EVICTOR]", strings.TrimRight(msg, "\n"))
+		slog.Info(fmt.Sprintf("%s [EVICTOR]", strings.TrimRight(msg, "\n")))
 	}
 }
 

@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"container/list"
 	"fmt"
-	"log"
+	"log/slog"
 	"runtime"
 	"strconv"
 	"sync"
@@ -123,7 +123,7 @@ func (l *Latency) T1() {
 	l.t0 = zero
 
 	if Conf.Trace.Latency {
-		log.Printf("%s=%d ms", l.name, l.Milliseconds)
+		slog.Info(fmt.Sprintf("%s=%d ms", l.name, l.Milliseconds))
 	}
 }
 

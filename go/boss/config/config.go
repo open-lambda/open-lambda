@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
+	"log/slog"
 )
 
 var BossConf *Config
@@ -42,7 +42,7 @@ func LoadConf(path string) error {
 	}
 
 	if err := json.Unmarshal(config_raw, &BossConf); err != nil {
-		log.Printf("FILE: %v\n", config_raw)
+		slog.Info(fmt.Sprintf("FILE: %v", config_raw))
 		return fmt.Errorf("could not parse config (%v): %v\n", path, err.Error())
 	}
 
@@ -63,7 +63,7 @@ func DumpConf() {
 	if err != nil {
 		panic(err)
 	}
-	log.Printf("CONFIG = %v\n", string(s))
+	slog.Info(fmt.Sprintf("CONFIG = %v", string(s)))
 }
 
 // DumpStr returns the Config as an indented JSON string.
@@ -92,7 +92,7 @@ func (c *Config) GetLambdaStoreURL() string {
 	case "local":
 		return c.Local.LambdaStoreLocal
 	default:
-		log.Printf("Unsupported platform '%s' for lambda store URL. Defaulting to local", c.Platform)
+		slog.Info(fmt.Sprintf("Unsupported platform '%s' for lambda store URL. Defaulting to local", c.Platform))
 		return c.Local.LambdaStoreLocal
 	}
 }
