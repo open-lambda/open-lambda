@@ -12,10 +12,10 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/open-lambda/open-lambda/ol/boss/autoscaling"
-	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
-	"github.com/open-lambda/open-lambda/ol/boss/config"
-	"github.com/open-lambda/open-lambda/ol/boss/lambdastore"
+	"github.com/open-lambda/open-lambda/go/boss/autoscaling"
+	"github.com/open-lambda/open-lambda/go/boss/cloudvm"
+	"github.com/open-lambda/open-lambda/go/boss/config"
+	"github.com/open-lambda/open-lambda/go/boss/lambdastore"
 )
 
 const (

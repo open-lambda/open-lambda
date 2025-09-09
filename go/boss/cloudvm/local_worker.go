@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/open-lambda/open-lambda/ol/boss/config"
-	"github.com/open-lambda/open-lambda/ol/common"
+	"github.com/open-lambda/open-lambda/go/boss/config"
+	"github.com/open-lambda/open-lambda/go/common"
 )
 
 // WORKER IMPLEMENTATION: LocalWorker

@@ -13,9 +13,9 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/open-lambda/open-lambda/ol/common"
-	"github.com/open-lambda/open-lambda/ol/worker/embedded"
-	"github.com/open-lambda/open-lambda/ol/worker/sandbox"
+	"github.com/open-lambda/open-lambda/go/common"
+	"github.com/open-lambda/open-lambda/go/worker/embedded"
+	"github.com/open-lambda/open-lambda/go/worker/sandbox"
 )
 
 // PackagePuller is the interface for installing pip packages locally.

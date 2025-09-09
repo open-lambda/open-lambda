@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/open-lambda/open-lambda/ol/common"
+	"github.com/open-lambda/open-lambda/go/common"
 )
 
 type CgroupImpl struct {

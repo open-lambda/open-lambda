@@ -15,10 +15,10 @@ import (
 	"time"
 
 	docker "github.com/fsouza/go-dockerclient"
-	dutil "github.com/open-lambda/open-lambda/ol/worker/sandbox/dockerutil"
+	dutil "github.com/open-lambda/open-lambda/go/worker/sandbox/dockerutil"
 
-	"github.com/open-lambda/open-lambda/ol/common"
-	"github.com/open-lambda/open-lambda/ol/worker/embedded"
+	"github.com/open-lambda/open-lambda/go/common"
+	"github.com/open-lambda/open-lambda/go/worker/embedded"
 )
 
 func initOLBaseDir(baseDir string, dockerBaseImage string) error {

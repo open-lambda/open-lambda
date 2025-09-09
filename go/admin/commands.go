@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/open-lambda/open-lambda/ol/boss/config"
-	"github.com/open-lambda/open-lambda/ol/common"
+	"github.com/open-lambda/open-lambda/go/boss/config"
+	"github.com/open-lambda/open-lambda/go/common"
 
 	"github.com/urfave/cli/v2"
 )

@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/open-lambda/open-lambda/ol/common"
+	"github.com/open-lambda/open-lambda/go/common"
 )
 
 // if there are fewer than CGROUP_RESERVE available, more will be created.

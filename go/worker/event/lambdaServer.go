@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/open-lambda/open-lambda/ol/common"
-	"github.com/open-lambda/open-lambda/ol/worker/lambda"
+	"github.com/open-lambda/open-lambda/go/common"
+	"github.com/open-lambda/open-lambda/go/worker/lambda"
 )
 
 // LambdaServer is a worker server that listens to run lambda requests and forward

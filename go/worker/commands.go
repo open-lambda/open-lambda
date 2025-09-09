@@ -12,8 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/open-lambda/open-lambda/ol/common"
-	"github.com/open-lambda/open-lambda/ol/worker/event"
+	"github.com/open-lambda/open-lambda/go/common"
+	"github.com/open-lambda/open-lambda/go/worker/event"
 
 	"github.com/urfave/cli/v2"
 )

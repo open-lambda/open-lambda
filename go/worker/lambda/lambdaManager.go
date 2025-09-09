@@ -8,10 +8,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/open-lambda/open-lambda/ol/common"
-	"github.com/open-lambda/open-lambda/ol/worker/lambda/packages"
-	"github.com/open-lambda/open-lambda/ol/worker/lambda/zygote"
-	"github.com/open-lambda/open-lambda/ol/worker/sandbox"
+	"github.com/open-lambda/open-lambda/go/common"
+	"github.com/open-lambda/open-lambda/go/worker/lambda/packages"
+	"github.com/open-lambda/open-lambda/go/worker/lambda/zygote"
+	"github.com/open-lambda/open-lambda/go/worker/sandbox"
 )
 
 // LambdaMgr provides thread-safe getting of lambda functions and collects all

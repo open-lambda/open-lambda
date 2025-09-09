@@ -18,7 +18,7 @@ import (
 	_ "gocloud.dev/blob/s3blob"
 	"gocloud.dev/gcerrors"
 
-	"github.com/open-lambda/open-lambda/ol/common"
+	"github.com/open-lambda/open-lambda/go/common"
 )
 
 var errNotFound404 = errors.New("lambda not found in blob store")
