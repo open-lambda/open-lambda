@@ -1,7 +1,7 @@
 package cloudvm
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"sync"
@@ -46,8 +46,8 @@ type WorkerPool struct {
 
 	clusterLogFile *os.File
 	taskLogFile    *os.File
-	clusterLog     *log.Logger
-	taskLog        *log.Logger
+	clusterLog     *slog.Logger
+	taskLog        *slog.Logger
 	totalTask      int32
 	sumLatency     int64
 	nLatency       int64

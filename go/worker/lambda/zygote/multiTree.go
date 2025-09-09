@@ -1,7 +1,8 @@
 package zygote
 
 import (
-	"log"
+	"fmt"
+	"log/slog"
 	"math/rand"
 	"runtime"
 
@@ -26,7 +27,7 @@ func NewMultiTree(codeDirs *common.DirMaker, scratchDirs *common.DirMaker, sbPoo
 	default:
 		tree_count = cpus * 2
 	}
-	log.Printf("Starting MultiTree ZygoteProvider with %d trees (tree count equals CPU count, with min of 3 and max of 10).", tree_count)
+	slog.Info(fmt.Sprintf("Starting MultiTree ZygoteProvider with %d trees (tree count equals CPU count, with min of 3 and max of 10).", tree_count))
 
 	trees := make([]*ImportCache, tree_count)
 	for i := range trees {
