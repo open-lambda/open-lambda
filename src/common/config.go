@@ -112,6 +112,13 @@ type StorageConfig struct {
 	Code    StoreString `json:"code"`
 }
 
+// Limits defines resource constraints for a sandbox.
+// A value of 0 is used to indicate that the default should be used.
+type Limits struct {
+	MemMB      int `json:"mem_mb" yaml:"mem_mb"`
+	CPUPercent int `json:"cpu_percent" yaml:"cpu_percent"`
+}
+
 type LimitsConfig struct {
 	// how many processes can be created within a Sandbox?
 	Procs int `json:"procs"`

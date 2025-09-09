@@ -1,8 +1,9 @@
 package sandbox
 
 import (
-	"github.com/open-lambda/open-lambda/ol/common"
 	"net/http"
+
+	"github.com/open-lambda/open-lambda/ol/common"
 )
 
 type SandboxPool interface {
@@ -84,11 +85,11 @@ type Sandbox interface {
 	GetRuntimeType() common.RuntimeType // TODO: make it part of SandboxMeta?
 }
 
+// SandboxMeta contains metadata for initializing a sandbox, including resource limits.
 type SandboxMeta struct {
-	Installs   []string
-	Imports    []string
-	MemLimitMB int
-	CPUPercent int
+	Installs []string
+	Imports  []string
+	Limits   *common.Limits // Optional resource limits to override worker defaults.
 }
 
 type SandboxError string
