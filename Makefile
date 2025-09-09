@@ -1,8 +1,8 @@
 PWD=$(shell pwd)
 WASM_TARGET=wasm32-unknown-unknown
 GO=go
-OL_DIR=$(abspath ./src)
-OL_GO_FILES=$(shell find src/ -name '*.go')
+OL_DIR=$(abspath ./go)
+OL_GO_FILES=$(shell find go/ -name '*.go')
 LAMBDA_FILES = min-image/Dockerfile min-image/Makefile min-image/spin.c min-image/runtimes/python/server.py min-image/runtimes/python/setup.py min-image/runtimes/python/ol.c
 BUILDTYPE?=debug
 INSTALL_PREFIX?=/usr/local
@@ -99,7 +99,7 @@ test-all:
 	sudo python3 -u ./scripts/bin_test.py --worker_type=sock
 
 fmt:
-	#cd src && go fmt ...
+	#cd go && go fmt ...
 	cd wasm-worker && cargo fmt
 	cd bin-functions && cargo fmt
 	cd container-proxy && cargo fmt
@@ -110,7 +110,7 @@ check-fmt:
 	cd container-proxy && cargo fmt --check
 
 lint-go:
-	revive -exclude src/vendor/... -config golint.toml src/...
+	revive -exclude go/vendor/... -config golint.toml go/...
 
 lint-python:
 	pylint scripts --ignore=build --disable=missing-docstring,multiple-imports,global-statement,invalid-name,W0511,W1510,R0801,W3101,broad-exception-raised
