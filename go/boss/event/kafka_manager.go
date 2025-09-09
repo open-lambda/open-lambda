@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"sync"
 
@@ -97,7 +97,7 @@ func (k *KafkaManager) Register(functionName string, triggers []common.KafkaTrig
 		Triggers: triggers,
 		Worker:   selectedWorker,
 	}
-	log.Printf("[KafkaManager] Kafka consumer(s) registered for %s", functionName)
+	slog.Info(fmt.Sprintf("[KafkaManager] Kafka consumer(s) registered for %s", functionName))
 
 	return nil
 }
@@ -114,7 +114,7 @@ func (k *KafkaManager) Unregister(functionName string) error {
 
 	workerAddress, err := cloudvm.GetWorkerAddress(entry.Worker)
 	if err != nil {
-		log.Printf("[KafkaManager] Failed to get worker address for %s: %v", functionName, err)
+		slog.Error(fmt.Sprintf("[KafkaManager] Failed to get worker address for %s: %v", functionName, err))
 		return fmt.Errorf("get worker address failed: %w", err)
 	}
 
@@ -122,7 +122,7 @@ func (k *KafkaManager) Unregister(functionName string) error {
 
 	httpReq, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer([]byte(`{}`)))
 	if err != nil {
-		log.Printf("[KafkaManager] Failed to create unsetup request for %s: %v", functionName, err)
+		slog.Error(fmt.Sprintf("[KafkaManager] Failed to create unsetup request for %s: %v", functionName, err))
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
@@ -130,7 +130,7 @@ func (k *KafkaManager) Unregister(functionName string) error {
 
 	resp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
-		log.Printf("[KafkaManager] Failed to send Kafka unsetup request for %s: %v", functionName, err)
+		slog.Error(fmt.Sprintf("[KafkaManager] Failed to send Kafka unsetup request for %s: %v", functionName, err))
 		return fmt.Errorf("failed to send request: %w", err)
 	}
 
@@ -139,11 +139,11 @@ func (k *KafkaManager) Unregister(functionName string) error {
 	if resp.StatusCode != http.StatusOK {
 		// TODO: try again on error up to 3 times maybe?
 		body, _ := io.ReadAll(resp.Body)
-		log.Printf("[KafkaManager] Worker returned error on unsetup for %s: %s - %s", functionName, resp.Status, string(body))
+		slog.Error(fmt.Sprintf("[KafkaManager] Worker returned error on unsetup for %s: %s - %s", functionName, resp.Status, string(body)))
 		return fmt.Errorf("unsetup failed with status: %s", resp.Status)
 	}
 
 	delete(k.functions, functionName)
-	log.Printf("[KafkaManager] Kafka consumer unregistered for %s", functionName)
+	slog.Info(fmt.Sprintf("[KafkaManager] Kafka consumer unregistered for %s", functionName))
 	return nil
 }

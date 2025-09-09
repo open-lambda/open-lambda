@@ -1,7 +1,8 @@
 package config
 
 import (
-	"log"
+	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 )
@@ -15,7 +16,7 @@ type LocalPlatConfig struct {
 func GetLocalPlatformConfigDefaults() LocalPlatConfig {
 	currPath, err := os.Getwd()
 	if err != nil {
-		log.Printf("failed to get current path: %v", err)
+		slog.Error(fmt.Sprintf("failed to get current path: %v", err))
 	}
 
 	return LocalPlatConfig{

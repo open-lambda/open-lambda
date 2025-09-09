@@ -1,6 +1,8 @@
 package cloudvm
 
 import (
+	"fmt"
+	"log/slog"
 	"log"
 	"net/http"
 	"os"
@@ -30,7 +32,8 @@ func NewLocalWorkerPool() *WorkerPool {
 			// Get the worker config struct
 			defaultTemplateConfig, err := common.GetDefaultWorkerConfig("")
 			if err != nil {
-				log.Fatalf("failed to load default template config: %w", err)
+				slog.Error(fmt.Sprintf("failed to load default template config: %w", err))
+				os.Exit(1)
 			}
 
 			// Set platform-specific registry (local platform)
@@ -44,10 +47,12 @@ func NewLocalWorkerPool() *WorkerPool {
 			defaultTemplateConfig.Import_cache_tree = ""
 
 			if err := common.SaveConfig(defaultTemplateConfig, templatePath); err != nil {
-				log.Fatalf("failed to save template.json: %w", err)
+				slog.Error(fmt.Sprintf("failed to save template.json: %w", err))
+				os.Exit(1)
 			}
 		} else {
-			log.Fatalf("failed to stat template path: %w", err)
+			slog.Error(fmt.Sprintf("failed to stat template path: %w", err))
+			os.Exit(1)
 		}
 	}
 
@@ -66,22 +71,22 @@ func (_ *LocalWorkerPoolPlatform) NewWorker(workerId string) *Worker {
 }
 
 func (p *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) error {
-	log.Printf("Creating new local worker: %s\n", worker.workerId)
+	slog.Info(fmt.Sprintf("Creating new local worker: %s", worker.workerId))
 
 	// Initialize the worker directory if it doesn't exist
 	// TODO fix the "ol-min hardcoding"
 	initCmd := exec.Command("./ol", "worker", "init", "-p", worker.workerId, "-i", "ol-min")
 	// TODO: both the boss and this subprocess can write to the same stream concurrently, which may interleave their outputs.
-	// The boss should capture the output from initCmd and then print it using log.Printf which is lock-protected
+	// The boss should capture the output from initCmd and then print it using slog.Info which is lock-protected
 	initCmd.Stderr = os.Stderr
 	if err := initCmd.Run(); err != nil {
-		log.Printf("Failed to initialize worker %s: %w\n", worker.workerId, err)
+		slog.Error(fmt.Sprintf("Failed to initialize worker %s: %v", worker.workerId, err))
 		return err
 	}
 
 	currPath, err := os.Getwd()
 	if err != nil {
-		log.Printf("failed to get current path: %w", err)
+		slog.Error(fmt.Sprintf("failed to get current path: %v", err))
 		return err
 	}
 
@@ -102,7 +107,7 @@ func (p *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) error {
 	// Save to worker directory
 	configPath := filepath.Join(workerPath, "config.json")
 	if err := common.SaveConfig(cfg, configPath); err != nil {
-		log.Printf("Failed to save worker config: %w", err)
+		slog.Error(fmt.Sprintf("Failed to save template.json: %v", err))
 		return err
 	}
 
@@ -112,30 +117,30 @@ func (p *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) error {
 	// TODO fix the "ol-min hardcoding"
 	upCmd := exec.Command("./ol", "worker", "up", "-p", worker.workerId, "-i", "ol-min", "-d")
 	// TODO: both the boss and this subprocess can write to the same stream concurrently, which may interleave their outputs.
-	// The boss should capture the output from initCmd and then print it using log.Printf which is lock-protected
+	// The boss should capture the output from initCmd and then print it using slog.Info which is lock-protected
 	upCmd.Stderr = os.Stderr
 	if err := upCmd.Start(); err != nil {
-		log.Printf("Failed to start worker %s: %w\n", worker.workerId, err)
+		slog.Error(fmt.Sprintf("Failed to start worker %s: %v", worker.workerId, err))
 		return err
 	}
 
-	log.Printf("Worker %s started on %s\n", worker.workerId, worker.port)
+	slog.Info(fmt.Sprintf("Worker %s started on %s", worker.workerId, worker.port))
 
 	return nil
 }
 
 func (_ *LocalWorkerPoolPlatform) DeleteInstance(worker *Worker) error {
-	log.Printf("Deleting local worker: %s\n", worker.workerId)
+	slog.Info(fmt.Sprintf("Deleting local worker: %s", worker.workerId))
 
 	// Stop the worker process
 	downCmd := exec.Command("./ol", "worker", "down", "-p", worker.workerId)
 	err := downCmd.Run()
 	if err != nil {
-		log.Printf("Failed to stop worker %s: %w\n", worker.workerId, err)
+		slog.Error(fmt.Sprintf("Failed to stop worker %s: %v", worker.workerId, err))
 		return err
 	}
 
-	log.Printf("Worker %s stopped\n", worker.workerId)
+	slog.Info(fmt.Sprintf("Worker %s stopped", worker.workerId))
 
 	return nil
 }

@@ -4,10 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
-	"os"
+	"log/slog"
 	"path"
 	"path/filepath"
+	"os"
+	"log"
 	"syscall"
 
 	"github.com/urfave/cli/v2"
@@ -362,7 +363,7 @@ func DumpConf() {
 	if err != nil {
 		panic(err)
 	}
-	log.Printf("CONFIG = %v\n", string(s))
+	slog.Info(fmt.Sprintf("CONFIG = %v", string(s)))
 }
 
 // DumpStr returns the Config as an indented JSON string.

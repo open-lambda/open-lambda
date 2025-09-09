@@ -3,7 +3,7 @@ package sandbox
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
@@ -45,7 +45,7 @@ type SOCKContainer struct {
 // which containers
 func (container *SOCKContainer) printf(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
-	log.Printf("%s [SOCK %s]", strings.TrimRight(msg, "\n"), container.id)
+	slog.Info(fmt.Sprintf("%s [SOCK %s]", strings.TrimRight(msg, "\n"), container.id))
 }
 
 // ID returns the unique identifier of this container
