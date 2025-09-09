@@ -58,10 +58,10 @@ func (s *LambdaServer) RunLambda(w http.ResponseWriter, r *http.Request) {
 		// ergo we want [1] for name of sandbox
 		urlParts := getURLComponents(r)
 		
-		// The lambda name is always the second part. The people inside (server.py)
-        // will handle the rest of the path.
-	    lambdaName := urlParts[1]
-        s.lambdaMgr.Get(lambdaName).Invoke(w, r)
+		// The lambda name is always the second part. The code inside (server.py)
+                // will handle the rest of the path (which is possibly a Flask or Django request).
+	        lambdaName := urlParts[1]
+                s.lambdaMgr.Get(lambdaName).Invoke(w, r)
 
 	}
 }
