@@ -16,9 +16,9 @@ import (
 	_ "gocloud.dev/blob/gcsblob"
 	_ "gocloud.dev/blob/s3blob"
 
-	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
-	"github.com/open-lambda/open-lambda/ol/boss/event"
-	"github.com/open-lambda/open-lambda/ol/common"
+	"github.com/open-lambda/open-lambda/go/boss/cloudvm"
+	"github.com/open-lambda/open-lambda/go/boss/event"
+	"github.com/open-lambda/open-lambda/go/common"
 )
 
 type LambdaStore struct {

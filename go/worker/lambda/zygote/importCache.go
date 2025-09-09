@@ -9,9 +9,9 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/open-lambda/open-lambda/ol/common"
-	"github.com/open-lambda/open-lambda/ol/worker/lambda/packages"
-	"github.com/open-lambda/open-lambda/ol/worker/sandbox"
+	"github.com/open-lambda/open-lambda/go/common"
+	"github.com/open-lambda/open-lambda/go/worker/lambda/packages"
+	"github.com/open-lambda/open-lambda/go/worker/sandbox"
 )
 
 type ImportCache struct {

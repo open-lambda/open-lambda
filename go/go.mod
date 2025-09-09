@@ -1,4 +1,4 @@
-module github.com/open-lambda/open-lambda/ol
+module github.com/open-lambda/open-lambda/go
 
 go 1.24
 

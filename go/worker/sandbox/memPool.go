@@ -6,7 +6,7 @@ import (
 	"log"
 	"strings"
 
-	"github.com/open-lambda/open-lambda/ol/common"
+	"github.com/open-lambda/open-lambda/go/common"
 )
 
 type MemPool struct {

@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt"
-	"github.com/open-lambda/open-lambda/ol/boss/config"
+	"github.com/open-lambda/open-lambda/go/boss/config"
 )
 
 type GcpClient struct {

@@ -9,8 +9,8 @@ import (
 	"net/http/httptest"
 	"sync"
 
-	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
-	"github.com/open-lambda/open-lambda/ol/common"
+	"github.com/open-lambda/open-lambda/go/boss/cloudvm"
+	"github.com/open-lambda/open-lambda/go/common"
 	"github.com/robfig/cron/v3"
 )
 

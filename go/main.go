@@ -14,12 +14,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/open-lambda/open-lambda/ol/admin"
-	"github.com/open-lambda/open-lambda/ol/bench"
-	"github.com/open-lambda/open-lambda/ol/boss"
-	"github.com/open-lambda/open-lambda/ol/boss/config"
-	"github.com/open-lambda/open-lambda/ol/common"
-	"github.com/open-lambda/open-lambda/ol/worker"
+	"github.com/open-lambda/open-lambda/go/admin"
+	"github.com/open-lambda/open-lambda/go/bench"
+	"github.com/open-lambda/open-lambda/go/boss"
+	"github.com/open-lambda/open-lambda/go/boss/config"
+	"github.com/open-lambda/open-lambda/go/common"
+	"github.com/open-lambda/open-lambda/go/worker"
 
 	"github.com/urfave/cli/v2"
 )

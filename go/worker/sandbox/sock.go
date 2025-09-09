@@ -14,8 +14,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/open-lambda/open-lambda/ol/common"
-	"github.com/open-lambda/open-lambda/ol/worker/sandbox/cgroups"
+	"github.com/open-lambda/open-lambda/go/common"
+	"github.com/open-lambda/open-lambda/go/worker/sandbox/cgroups"
 )
 
 type SOCKContainer struct {

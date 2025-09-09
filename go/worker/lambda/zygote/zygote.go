@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/open-lambda/open-lambda/ol/common"
-	"github.com/open-lambda/open-lambda/ol/worker/lambda/packages"
-	"github.com/open-lambda/open-lambda/ol/worker/sandbox"
+	"github.com/open-lambda/open-lambda/go/common"
+	"github.com/open-lambda/open-lambda/go/worker/lambda/packages"
+	"github.com/open-lambda/open-lambda/go/worker/sandbox"
 )
 
 // NewZygoteProvider creates a new ZygoteProvider based on the specified import cache implementation.

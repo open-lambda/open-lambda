@@ -1,8 +1,8 @@
 package zygote
 
 import (
-	"github.com/open-lambda/open-lambda/ol/common"
-	"github.com/open-lambda/open-lambda/ol/worker/sandbox"
+	"github.com/open-lambda/open-lambda/go/common"
+	"github.com/open-lambda/open-lambda/go/worker/sandbox"
 )
 
 type ZygoteProvider interface {

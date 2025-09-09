@@ -2,7 +2,7 @@
 // implementations of the scaling logic
 package autoscaling
 
-import "github.com/open-lambda/open-lambda/ol/boss/cloudvm"
+import "github.com/open-lambda/open-lambda/go/boss/cloudvm"
 
 type Scaling interface {
 	Launch(pool *cloudvm.WorkerPool) // launch auto-scaler

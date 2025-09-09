@@ -1,7 +1,7 @@
 package sandbox
 
 import (
-	"github.com/open-lambda/open-lambda/ol/common"
+	"github.com/open-lambda/open-lambda/go/common"
 	"net/http"
 )
 

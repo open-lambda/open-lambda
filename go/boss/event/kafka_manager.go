@@ -9,8 +9,8 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
-	"github.com/open-lambda/open-lambda/ol/common"
+	"github.com/open-lambda/open-lambda/go/boss/cloudvm"
+	"github.com/open-lambda/open-lambda/go/common"
 )
 
 // NOTE: The worker-side implementation of Kafka triggers is still in progress.

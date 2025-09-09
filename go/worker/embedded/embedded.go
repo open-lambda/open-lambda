@@ -9,7 +9,7 @@ import _ "embed"
 //go:embed default-zygotes-40.json
 var DefaultZygotes40_json string
 
-// Used by github.com/open-lambda/open-lambda/ol/worker/lambda/packages
+// Used by github.com/open-lambda/open-lambda/go/worker/lambda/packages
 //
 // We invoke this lambda to do the pip install in a Sandbox.
 //

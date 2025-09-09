@@ -16,8 +16,8 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/open-lambda/open-lambda/ol/boss/lambdastore"
-	"github.com/open-lambda/open-lambda/ol/common"
+	"github.com/open-lambda/open-lambda/go/boss/lambdastore"
+	"github.com/open-lambda/open-lambda/go/common"
 )
 
 const (

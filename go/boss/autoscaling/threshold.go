@@ -1,7 +1,7 @@
 package autoscaling
 
 import (
-	"github.com/open-lambda/open-lambda/ol/boss/cloudvm"
+	"github.com/open-lambda/open-lambda/go/boss/cloudvm"
 	"log"
 	"time"
 )

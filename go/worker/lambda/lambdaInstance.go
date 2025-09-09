@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/open-lambda/open-lambda/ol/common"
-	"github.com/open-lambda/open-lambda/ol/worker/sandbox"
+	"github.com/open-lambda/open-lambda/go/common"
+	"github.com/open-lambda/open-lambda/go/worker/sandbox"
 )
 
 // This is essentially a virtual sandbox.  It is backed by a real
