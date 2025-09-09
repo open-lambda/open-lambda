@@ -2,7 +2,7 @@
 
 ''' Python runtime for sock '''
 
-import os, sys, json, argparse, importlib, traceback, time, fcntl, array, socket, struct
+import os, sys, json, argparse, importlib, traceback, time, fcntl, array, socket, struct, re
 
 sys.path.append("/usr/local/lib/python3.10/dist-packages")
 
@@ -14,13 +14,65 @@ import tornado.netutil
 
 import ol
 
+# This is a WSGI Middleware. Think of it as a "smart translator" that sits
+# between the web server and your Flask/Django application. Its only job is
+# to fix the URL path so your application's routing works correctly, even
+# when it's not running at the root of a domain (e.g., it's at /run/myapp).
+class PrefixWSGI:
+    
+    _any_re = re.compile(r"^/run/[^/]+")
+
+    def __init__(self, app, app_name=None):
+        self.app = app
+        self.app_name = app_name
+        self._fixed_prefix = f"/run/{app_name}" if app_name else None
+    
+    # This is the main "work" function. Because of the special name `__call__`,
+    # Python will run this code automatically for EVERY incoming web request.
+    # This is where the magic of the translation happens.
+    def __call__(self, environ, start_response):
+        path = environ.get("PATH_INFO") or "/"
+        script = environ.get("SCRIPT_NAME", "")
+
+        if self._fixed_prefix:
+            prefix = self._fixed_prefix
+            if path == prefix:
+                rest = "/"
+            elif path.startswith(prefix + "/"):
+                rest = path[len(prefix):]
+            else:
+                start_response("404 Not Found", [("Content-Type", "text/plain")])
+                return [b"Not Found"]
+        else:
+            m = self._any_re.match(path)
+            if not m:
+                start_response("404 Not Found", [("Content-Type", "text/plain")])
+                return [b"Not Found"]
+            prefix = m.group(0)
+            rest = path[len(prefix):] or "/"
+
+        environ["SCRIPT_NAME"] = script + prefix
+        environ["PATH_INFO"] = rest
+        environ.setdefault("HTTP_X_FORWARDWARDED_PREFIX", prefix)
+        
+        # Finally, with the environment now corrected, we pass the request
+        # along to the REAL Flask application to do its work.
+        return self.app(environ, start_response)
+
+
 file_sock_path = "/host/ol.sock"
 file_sock = None
 bootstrap_path = None
 
+
 def web_server():
     print(f"server.py: start web server on fd: {file_sock.fileno()}")
     sys.path.append('/handler')
+    
+    
+    # The user's dependencies (like Flask and Werkzeug) were installed into an 'app/'
+    # folder. We add that folder to Python's search path so it can find them.
+    sys.path.append('/handler/app')
 
     # TODO: as a safeguard, we should add a mechanism so that the
     # import doesn't happen until the cgroup move completes, so that a
@@ -67,16 +119,55 @@ def web_server():
             self.handle_request()
     
 
+    # Use the middleware class to wrap the WSGI app
+    
+    # First, we check if the user's code file ('f.py') contains a variable
+    # named "app". By convention, this is how Flask and other web frameworks
+    # expose their main application object. 
+    
     if hasattr(f, "app"):
-        # use WSGI entry
-        app = tornado.wsgi.WSGIContainer(f.app)
+    
+        # --- This is the "Smart Path" for Flask/Django Apps ---
+        # If the "app" variable exists, we know we're dealing with a complex
+        # WSGI application that needs special handling for its URL routing.
+
+        # 1. (Optional) Read an environment variable for a "strict mode."
+        #   This allows a user to lock the middleware to one specific app name.
+        
+        app_name = os.environ.get("OL_APP_NAME")  
+        
+        # 2. Wrap the real application in our middleware "translator."
+        #   Instead of giving the raw Flask app to the server, we first wrap it
+        #   in our PrefixWSGI class. The 'mounted' object is now our smart
+        #   translator, and it holds the real app inside it.
+        mounted = PrefixWSGI(f.app, app_name=app_name)
+        
+         # 3. Give the translator (not the app) to Tornado's WSGI adapter.
+         #   This is the final handoff. Tornado will now send every request
+         #   to our middleware first. The middleware will fix the URL path
+         #   and then pass the corrected request to the real Flask app.
+        app = tornado.wsgi.WSGIContainer(mounted)
+        
     else:
-        # use function entry
+    
+        # use original function entry
+        
         app = tornado.web.Application([
             (".*", SockFileHandler),
         ])
+
     server = tornado.httpserver.HTTPServer(app)
     server.add_socket(file_sock)
+    
+    
+    # The parent Go process that launched this sandbox is currently blocked,
+    # waiting for a signal that we are initialized and ready to accept connections.
+    # We send that signal by printing a newline to stdout and immediately flushing
+    # the buffer. This handshake must happen *before* we start Tornado's
+    # infinite event loop below, which is a blocking call that never returns.
+    print()
+    sys.stdout.flush()
+    
     tornado.ioloop.IOLoop.instance().start()
     server.start()
 
