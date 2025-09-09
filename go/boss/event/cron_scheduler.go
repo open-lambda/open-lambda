@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -84,8 +84,8 @@ func (c *CronScheduler) Invoke(functionName string) {
 	if resp.StatusCode != http.StatusOK {
 		// TODO: Improve how this error is surfaced. The platform operator can see logs,
 		// but function developers likely cannot — consider exposing errors through a user-facing mechanism.
-		log.Printf("[CronScheduler] Lambda %s returned non-200 (%d): %s", functionName, resp.StatusCode, string(body))
+		slog.Error(fmt.Sprintf("[CronScheduler] Lambda %s returned non-200 (%d): %s", functionName, resp.StatusCode, string(body)))
 	} else {
-		log.Printf("[CronScheduler] Lambda %s invoked successfully. Response: %s", functionName, string(body))
+		slog.Info(fmt.Sprintf("[CronScheduler] Lambda %s invoked successfully. Response: %s", functionName, string(body)))
 	}
 }

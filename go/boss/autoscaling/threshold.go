@@ -1,9 +1,11 @@
 package autoscaling
 
 import (
-	"github.com/open-lambda/open-lambda/go/boss/cloudvm"
-	"log"
+	"fmt"
+	"log/slog"
 	"time"
+
+	"github.com/open-lambda/open-lambda/go/boss/cloudvm"
 )
 
 const (
@@ -21,7 +23,7 @@ type ThresholdScaling struct {
 func (s *ThresholdScaling) Launch(pool *cloudvm.WorkerPool) {
 	s.pool = pool
 	s.exitChan = make(chan bool)
-	log.Println("lauching threshold-scaler")
+	slog.Info("launching threshold-scaler")
 	pool.SetTarget(1) // initial cluster size set to 1
 	go func() {
 		for {
@@ -43,7 +45,7 @@ func (s *ThresholdScaling) Scale() {
 
 	if pool.GetTarget() < pool.GetCap() && tasksPerWorker > UPPERBOUND {
 		new_target := pool.GetTarget() + tasksPerWorker/UPPERBOUND
-		log.Println("scale up (target=%d)\n", new_target)
+		slog.Info(fmt.Sprintf("scale up (target=%d)", new_target))
 		pool.SetTarget(new_target)
 	}
 
@@ -53,19 +55,19 @@ func (s *ThresholdScaling) Scale() {
 			new_target = 1
 		}
 
-		log.Println("scale down (target=%d)\n", new_target)
+		slog.Info(fmt.Sprintf("scale down (target=%d)", new_target))
 		pool.SetTarget(new_target)
 	}
 
 	s.timeout = time.AfterFunc(INACTIVITY_TIMEOUT*time.Second, func() {
 		if pool.GetTarget() > 1 {
-			log.Printf("scale down due to inactivity\n")
+			slog.Info("scale down due to inactivity")
 			pool.SetTarget(1)
 		}
 	})
 }
 
 func (s *ThresholdScaling) Close() {
-	log.Println("stopping threshold-scaler")
+	slog.Info("stopping threshold-scaler")
 	s.exitChan <- true
 }

@@ -2,7 +2,7 @@ package cloudvm
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"path/filepath"
 
 	"github.com/open-lambda/open-lambda/go/boss/config"
@@ -26,23 +26,23 @@ func SaveTemplateConfToWorkerDir(cfg *common.Config, workerPath string, workerPo
 	// Patch fields ONLY if they're empty
 	if cfgCopy.Worker_dir == "" {
 		cfgCopy.Worker_dir = defaultCfg.Worker_dir
-		log.Printf("Patched Worker_dir: %s", cfg.Worker_dir)
+		slog.Info(fmt.Sprintf("Patched Worker_dir: %s", cfg.Worker_dir))
 	}
 	if cfgCopy.Registry == "" {
 		cfgCopy.Registry = defaultCfg.Registry
-		log.Printf("Patched Registry: %s", cfg.Registry)
+		slog.Info(fmt.Sprintf("Patched Registry: %s", cfg.Registry))
 	}
 	if cfgCopy.Pkgs_dir == "" {
 		cfgCopy.Pkgs_dir = defaultCfg.Pkgs_dir
-		log.Printf("Patched Pkgs_dir: %s", cfg.Pkgs_dir)
+		slog.Info(fmt.Sprintf("Patched Pkgs_dir: %s", cfg.Pkgs_dir))
 	}
 	if cfgCopy.SOCK_base_path == "" {
 		cfgCopy.SOCK_base_path = defaultCfg.SOCK_base_path
-		log.Printf("Patched SOCK_base_path: %s", cfg.SOCK_base_path)
+		slog.Info(fmt.Sprintf("Patched SOCK_base_path: %s", cfg.SOCK_base_path))
 	}
 	if cfgCopy.Import_cache_tree == "" {
 		cfgCopy.Import_cache_tree = defaultCfg.Import_cache_tree
-		log.Printf("Patched Import_cache_tree: %s", cfg.Import_cache_tree)
+		slog.Info(fmt.Sprintf("Patched Import_cache_tree: %s", cfg.Import_cache_tree))
 	}
 
 	cfgCopy.Worker_port = workerPort

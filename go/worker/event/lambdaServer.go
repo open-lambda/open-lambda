@@ -2,7 +2,7 @@ package event
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -78,7 +78,7 @@ func (s *LambdaServer) cleanup() {
 
 // NewLambdaServer creates a server based on the passed config.
 func NewLambdaServer() (*LambdaServer, error) {
-	log.Printf("Starting new lambda server")
+	slog.Info("Starting new lambda server")
 
 	lambdaMgr, err := lambda.GetLambdaManagerInstance()
 	if err != nil {
@@ -89,13 +89,13 @@ func NewLambdaServer() (*LambdaServer, error) {
 		lambdaMgr: lambdaMgr,
 	}
 
-	log.Printf("Setups Handlers")
+	slog.Info("Setups Handlers")
 	port := fmt.Sprintf(":%s", common.Conf.Worker_port)
 	http.HandleFunc(RUN_PATH, server.RunLambda)
 	http.HandleFunc(DEBUG_PATH, server.Debug)
 
-	log.Printf("Execute handler by POSTing to localhost%s%s%s\n", port, RUN_PATH, "<lambda>")
-	log.Printf("Get status by sending request to localhost%s%s\n", port, STATUS_PATH)
+	slog.Info(fmt.Sprintf("Execute handler by POSTing to localhost%s%s%s", port, RUN_PATH, "<lambda>"))
+	slog.Info(fmt.Sprintf("Get status by sending request to localhost%s%s", port, STATUS_PATH))
 
 	return server, nil
 }

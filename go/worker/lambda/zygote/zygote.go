@@ -2,7 +2,7 @@ package zygote
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 
 	"github.com/open-lambda/open-lambda/go/common"
 	"github.com/open-lambda/open-lambda/go/worker/lambda/packages"
@@ -15,7 +15,7 @@ func NewZygoteProvider(codeDirs *common.DirMaker, scratchDirs *common.DirMaker, 
 	case "tree":
 		return NewImportCache(codeDirs, scratchDirs, sbPool, pp)
 	case "multitree":
-		log.Printf("ZygoteProvider %s is very experimental.", impl)
+		slog.Info(fmt.Sprintf("ZygoteProvider %s is very experimental.", impl))
 		return NewMultiTree(codeDirs, scratchDirs, sbPool, pp)
 	default:
 		return nil, fmt.Errorf("ZygoteProvider '%s' is not implemented", impl)

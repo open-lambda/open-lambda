@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -152,7 +152,7 @@ func ExtractConfigFromTarGz(tarPath string) (*LambdaConfig, error) {
 		}
 	}
 
-	log.Printf("[%s] %s not found, using default config", tarPath, LambdaConfigFilename)
+	slog.Info(fmt.Sprintf("[%s] %s not found, using default config", tarPath, LambdaConfigFilename))
 	return LoadDefaultLambdaConfig(), nil
 }
 

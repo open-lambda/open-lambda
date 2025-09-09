@@ -2,7 +2,8 @@ package lambda
 
 import (
 	"container/list"
-	"log"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -72,7 +73,7 @@ func newLambdaMgr() (res *LambdaMgr, err error) {
 	}
 	defer func() {
 		if err != nil {
-			log.Printf("Cleanup Lambda Manager due to error: %v", err)
+			slog.Error(fmt.Sprintf("Cleanup Lambda Manager due to error: %v", err))
 			mgr.Cleanup()
 		}
 	}()
@@ -86,33 +87,33 @@ func newLambdaMgr() (res *LambdaMgr, err error) {
 		return nil, err
 	}
 
-	log.Printf("Creating SandboxPool")
+	slog.Info("Creating SandboxPool")
 	mgr.sbPool, err = sandbox.SandboxPoolFromConfig("sandboxes", common.Conf.Mem_pool_mb)
 	if err != nil {
 		return nil, err
 	}
 
-	log.Printf("Creating DepTracer")
+	slog.Info("Creating DepTracer")
 	mgr.DepTracer, err = packages.NewDepTracer(filepath.Join(common.Conf.Worker_dir, "dep-trace.json"))
 	if err != nil {
 		return nil, err
 	}
 
-	log.Printf("Creating PackagePuller")
+	slog.Info("Creating PackagePuller")
 	mgr.PackagePuller, err = packages.NewPackagePuller(mgr.sbPool, mgr.DepTracer)
 	if err != nil {
 		return nil, err
 	}
 
 	if common.Conf.Features.Import_cache != "" {
-		log.Printf("Creating ImportCache")
+		slog.Info("Creating ImportCache")
 		mgr.ZygoteProvider, err = zygote.NewZygoteProvider(mgr.codeDirs, mgr.scratchDirs, mgr.sbPool, mgr.PackagePuller)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	log.Printf("Creating HandlerPuller")
+	slog.Info("Creating HandlerPuller")
 	mgr.HandlerPuller, err = NewHandlerPuller(mgr.codeDirs)
 	if err != nil {
 		return nil, err
@@ -165,13 +166,13 @@ func (_ *LambdaMgr) DumpStatsToLog() {
 		ptime := sec(parent)
 		tabs := strings.Repeat("\t", indent)
 		if ptime > 0 {
-			log.Printf("%s%s: %.3f (%.1f%%)", tabs, name, selftime, selftime/ptime*100)
+			slog.Info(fmt.Sprintf("%s%s: %.3f (%.1f%%)", tabs, name, selftime, selftime/ptime*100))
 		} else {
-			log.Printf("%s%s: %.3f", tabs, name, selftime)
+			slog.Info(fmt.Sprintf("%s%s: %.3f", tabs, name, selftime))
 		}
 	}
 
-	log.Printf("Request Profiling (cumulative seconds):")
+	slog.Info("Request Profiling (cumulative seconds):")
 	time(0, "LambdaFunc.Invoke", "")
 
 	time(1, "LambdaInstance-WaitSandbox", "LambdaFunc.Invoke")
@@ -202,7 +203,7 @@ func (mgr *LambdaMgr) Cleanup() {
 	// 2. cleanup Zygote Sandboxes (after the handlers, which depend on the Zygotes)
 	// 3. cleanup SandboxPool underlying both of above
 	for _, f := range mgr.lfuncMap {
-		log.Printf("Kill function: %s", f.name)
+		slog.Info(fmt.Sprintf("Kill function: %s", f.name))
 		f.Kill()
 	}
 

@@ -3,7 +3,7 @@ package cloudvm
 import (
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
@@ -15,10 +15,10 @@ import (
 func NewWorkerPool(platform string, worker_cap int) (*WorkerPool, error) {
 	clusterLogFile, _ := os.Create("cluster.log")
 	taskLogFile, _ := os.Create("tasks.log")
-	clusterLog := log.New(clusterLogFile, "", 0)
-	taskLog := log.New(taskLogFile, "", 0)
-	clusterLog.SetFlags(log.Lmicroseconds)
-	taskLog.SetFlags(log.Lmicroseconds)
+	
+	// Create simple slog handlers for each log file
+	clusterLog := slog.New(slog.NewTextHandler(clusterLogFile, nil))
+	taskLog := slog.New(slog.NewTextHandler(taskLogFile, nil))
 
 	var pool *WorkerPool
 	switch {
@@ -50,7 +50,7 @@ func NewWorkerPool(platform string, worker_cap int) (*WorkerPool, error) {
 	pool.platform = platform
 	pool.worker_cap = worker_cap
 
-	log.Printf("READY: worker pool of type %s", platform)
+	slog.Info(fmt.Sprintf("READY: worker pool of type %s", platform))
 
 	// log total outstanding tasks
 	go func() {
@@ -62,7 +62,9 @@ func NewWorkerPool(platform string, worker_cap int) (*WorkerPool, error) {
 			} else {
 				avgLatency = 0
 			}
-			taskLog.Printf("tasks=%d, average_latency(ms)=%d", pool.totalTask, avgLatency)
+			taskLog.Info("task metrics",
+				"tasks", pool.totalTask,
+				"average_latency(ms)", avgLatency)
 		}
 	}()
 
@@ -85,7 +87,7 @@ func (pool *WorkerPool) SetTarget(target int) {
 	pool.Lock()
 
 	pool.target = target
-	pool.clusterLog.Printf("set target=%d", pool.target)
+	pool.clusterLog.Info("set target", "target", pool.target)
 
 	pool.Unlock()
 
@@ -104,18 +106,19 @@ func (pool *WorkerPool) GetCap() int {
 func (pool *WorkerPool) startNewWorker() {
 	pool.Lock()
 
-	log.Printf("starting new worker\n")
+	slog.Info("starting new worker")
 	nextId := pool.nextId
 	pool.nextId += 1
 	worker := pool.NewWorker(fmt.Sprintf("worker-%d", nextId))
 	worker.state = STARTING
 	pool.workers[STARTING][worker.workerId] = worker
-	pool.clusterLog.Printf("%s: starting [target=%d, starting=%d, running=%d, cleaning=%d, destroying=%d]",
-		worker.workerId, pool.target,
-		len(pool.workers[STARTING]),
-		len(pool.workers[RUNNING]),
-		len(pool.workers[CLEANING]),
-		len(pool.workers[DESTROYING]))
+	pool.clusterLog.Info("worker starting",
+		"worker_id", worker.workerId,
+		"target", pool.target,
+		"starting", len(pool.workers[STARTING]),
+		"running", len(pool.workers[RUNNING]),
+		"cleaning", len(pool.workers[CLEANING]),
+		"destroying", len(pool.workers[DESTROYING]))
 
 	pool.Unlock()
 
@@ -123,7 +126,7 @@ func (pool *WorkerPool) startNewWorker() {
 		worker.numTask = 1
 
 		if err := pool.CreateInstance(worker); err != nil {
-			log.Printf("Failed to create instance for worker %s: %v\n", worker.workerId, err)
+			slog.Error(fmt.Sprintf("Failed to create instance for worker %s: %v", worker.workerId, err))
 			panic(err) // TODO: handle error in better way.
 		}
 
@@ -134,14 +137,15 @@ func (pool *WorkerPool) startNewWorker() {
 		delete(pool.workers[STARTING], worker.workerId)
 		pool.workers[RUNNING][worker.workerId] = worker
 
-		pool.clusterLog.Printf("%s: running [target=%d, starting=%d, running=%d, cleaning=%d, destroying=%d]",
-			worker.workerId, pool.target,
-			len(pool.workers[STARTING]),
-			len(pool.workers[RUNNING]),
-			len(pool.workers[CLEANING]),
-			len(pool.workers[DESTROYING]))
+		pool.clusterLog.Info("worker running",
+			"worker_id", worker.workerId,
+			"target", pool.target,
+			"starting", len(pool.workers[STARTING]),
+			"running", len(pool.workers[RUNNING]),
+			"cleaning", len(pool.workers[CLEANING]),
+			"destroying", len(pool.workers[DESTROYING]))
 		pool.queue <- worker
-		log.Printf("%s ready\n", worker.workerId)
+		slog.Info(fmt.Sprintf("%s ready", worker.workerId))
 		worker.numTask = 0
 
 		pool.Unlock()
@@ -154,17 +158,18 @@ func (pool *WorkerPool) startNewWorker() {
 func (pool *WorkerPool) recoverWorker(worker *Worker) {
 	pool.Lock()
 
-	log.Printf("recovering %s\n", worker.workerId)
+	slog.Info(fmt.Sprintf("recovering %s", worker.workerId))
 	worker.state = RUNNING
 	delete(pool.workers[CLEANING], worker.workerId)
 	pool.workers[RUNNING][worker.workerId] = worker
 
-	pool.clusterLog.Printf("%s: running [target=%d, starting=%d, running=%d, cleaning=%d, destroying=%d]",
-		worker.workerId, pool.target,
-		len(pool.workers[STARTING]),
-		len(pool.workers[RUNNING]),
-		len(pool.workers[CLEANING]),
-		len(pool.workers[DESTROYING]))
+	pool.clusterLog.Info("worker running",
+		"worker_id", worker.workerId,
+		"target", pool.target,
+		"starting", len(pool.workers[STARTING]),
+		"running", len(pool.workers[RUNNING]),
+		"cleaning", len(pool.workers[CLEANING]),
+		"destroying", len(pool.workers[DESTROYING]))
 
 	pool.Unlock()
 
@@ -175,23 +180,24 @@ func (pool *WorkerPool) recoverWorker(worker *Worker) {
 func (pool *WorkerPool) cleanWorker(worker *Worker) {
 	pool.Lock()
 
-	log.Printf("cleaning %s\n", worker.workerId)
+	slog.Info(fmt.Sprintf("cleaning %s", worker.workerId))
 	worker.state = CLEANING
 	delete(pool.workers[RUNNING], worker.workerId)
 	pool.workers[CLEANING][worker.workerId] = worker
 
-	pool.clusterLog.Printf("%s: cleaning [target=%d, starting=%d, running=%d, cleaning=%d, destroying=%d]",
-		worker.workerId, pool.target,
-		len(pool.workers[STARTING]),
-		len(pool.workers[RUNNING]),
-		len(pool.workers[CLEANING]),
-		len(pool.workers[DESTROYING]))
+	pool.clusterLog.Info("worker cleaning",
+		"worker_id", worker.workerId,
+		"target", pool.target,
+		"starting", len(pool.workers[STARTING]),
+		"running", len(pool.workers[RUNNING]),
+		"cleaning", len(pool.workers[CLEANING]),
+		"destroying", len(pool.workers[DESTROYING]))
 
 	pool.Unlock()
 
 	go func(worker *Worker) {
 		for worker.numTask > 0 { // wait until all task is completed
-			fmt.Printf("%s cleaning: %d", worker.workerId, worker.numTask)
+			slog.Info("worker cleaning progress", "worker_id", worker.workerId, "num_tasks", worker.numTask)
 			pool.Lock()
 			if _, ok := pool.workers[CLEANING][worker.workerId]; !ok {
 				return // stop if the worker is recovered
@@ -212,12 +218,13 @@ func (pool *WorkerPool) detroyWorker(worker *Worker) {
 	delete(pool.workers[CLEANING], worker.workerId)
 	pool.workers[DESTROYING][worker.workerId] = worker
 
-	pool.clusterLog.Printf("%s: destroying [target=%d, starting=%d, running=%d, cleaning=%d, destroying=%d]",
-		worker.workerId, pool.target,
-		len(pool.workers[STARTING]),
-		len(pool.workers[RUNNING]),
-		len(pool.workers[CLEANING]),
-		len(pool.workers[DESTROYING]))
+	pool.clusterLog.Info("worker destroying",
+		"worker_id", worker.workerId,
+		"target", pool.target,
+		"starting", len(pool.workers[STARTING]),
+		"running", len(pool.workers[RUNNING]),
+		"cleaning", len(pool.workers[CLEANING]),
+		"destroying", len(pool.workers[DESTROYING]))
 
 	pool.Unlock()
 
@@ -225,7 +232,7 @@ func (pool *WorkerPool) detroyWorker(worker *Worker) {
 		err := pool.DeleteInstance(worker) // delete new instance
 
 		if err != nil {
-			log.Printf("Failed to delete instance for worker %s: %v\n", worker.workerId, err)
+			slog.Error(fmt.Sprintf("Failed to delete instance for worker %s: %v", worker.workerId, err))
 			panic(err) // TODO: handle the error in a better way, retry?
 		}
 
@@ -234,13 +241,14 @@ func (pool *WorkerPool) detroyWorker(worker *Worker) {
 
 		delete(pool.workers[DESTROYING], worker.workerId)
 
-		log.Printf("%s destroyed\n", worker.workerId)
-		pool.clusterLog.Printf("%s: destroyed [target=%d, starting=%d, running=%d, cleaning=%d, destroying=%d]",
-			worker.workerId, pool.target,
-			len(pool.workers[STARTING]),
-			len(pool.workers[RUNNING]),
-			len(pool.workers[CLEANING]),
-			len(pool.workers[DESTROYING]))
+		slog.Info(fmt.Sprintf("%s destroyed", worker.workerId))
+		pool.clusterLog.Info("worker destroyed",
+			"worker_id", worker.workerId,
+			"target", pool.target,
+			"starting", len(pool.workers[STARTING]),
+			"running", len(pool.workers[RUNNING]),
+			"cleaning", len(pool.workers[CLEANING]),
+			"destroying", len(pool.workers[DESTROYING]))
 		pool.Unlock()
 
 		pool.updateCluster()
@@ -265,7 +273,7 @@ func (pool *WorkerPool) updateCluster() {
 	if toBeClean > 0 {
 		for i := 0; i < toBeClean; i++ { // TODO: policy: clean worker with least tasks
 			worker := <-pool.queue
-			fmt.Printf("cleaning %s\n", worker.workerId)
+			slog.Info("cleaning worker", "worker_id", worker.workerId)
 			pool.cleanWorker(worker)
 		}
 
@@ -307,7 +315,7 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 	err := pool.ForwardTask(w, r, worker)
 
 	if err != nil {
-		log.Printf("Failed to forward the task %s: %v\n", worker.workerId, err)
+		slog.Error(fmt.Sprintf("Failed to forward the task %s: %v", worker.workerId, err))
 		// TODO: handle the error better. retry?
 	}
 
@@ -322,7 +330,7 @@ func (pool *WorkerPool) RunLambda(w http.ResponseWriter, r *http.Request) {
 
 // force kill workers
 func (pool *WorkerPool) Close() {
-	log.Println("closing worker pool")
+	slog.Info("closing worker pool")
 	pool.SetTarget(0)
 
 	for {
@@ -354,13 +362,13 @@ func (w *Worker) runCmd(command string) {
 	for tries > 0 {
 		sshcmd := exec.Command("ssh", user.Username+"@"+w.host, "-o", "StrictHostKeyChecking=no", "-C", cmd)
 		stdoutStderr, err := sshcmd.CombinedOutput()
-		log.Printf("%s\n", stdoutStderr)
+		slog.Info(fmt.Sprintf("%s", stdoutStderr))
 		if err == nil {
 			break
 		}
 		tries -= 1
 		if tries == 0 {
-			log.Println(sshcmd.String())
+			slog.Info(sshcmd.String())
 			panic(err)
 		}
 		time.Sleep(5 * time.Second)

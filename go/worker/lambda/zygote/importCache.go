@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
+	"log/slog"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -109,7 +109,7 @@ func NewImportCache(codeDirs *common.DirMaker, scratchDirs *common.DirMaker, sbP
 		return nil, fmt.Errorf("root node in import cache may not import packages\n")
 	}
 	cache.recursiveInit(cache.root, []string{})
-	log.Printf("Import Cache Tree:")
+	slog.Info("Import Cache Tree:")
 	cache.root.Dump(0)
 
 	return cache, nil
@@ -117,7 +117,7 @@ func NewImportCache(codeDirs *common.DirMaker, scratchDirs *common.DirMaker, sbP
 
 // Cleanup performs cleanup operations for the ImportCache and its nodes.
 func (cache *ImportCache) Cleanup() {
-	log.Printf("Import Cache Tree:")
+	slog.Info("Import Cache Tree:")
 	cache.root.Dump(0)
 	cache.recursiveKill(cache.root)
 }
@@ -157,7 +157,7 @@ func (cache *ImportCache) Create(childSandboxPool sandbox.SandboxPool, isLeaf bo
 	if node == nil {
 		panic(fmt.Errorf("did not find Zygote; at least expected to find the root"))
 	}
-	log.Printf("Try using Zygote from <%v>", node)
+	slog.Info(fmt.Sprintf("Try using Zygote from <%v>", node))
 	return cache.createChildSandboxFromNode(childSandboxPool, node, isLeaf, codeDir, scratchDir, meta, rt_type)
 }
 
@@ -377,7 +377,7 @@ func (node *ImportCacheNode) Dump(indent int) {
 	childCreates := fmt.Sprintf("%d", atomic.LoadInt64(&node.createLeafChild)+atomic.LoadInt64(&node.createNonleafChild))
 	spaces := strings.Repeat(" ", indent*2+common.Max(0, 4-len(childCreates)))
 
-	log.Printf("%s%s - %s", childCreates, spaces, node.String())
+	slog.Info(fmt.Sprintf("%s%s - %s", childCreates, spaces, node.String()))
 	for _, child := range node.Children {
 		child.Dump(indent + 1)
 	}

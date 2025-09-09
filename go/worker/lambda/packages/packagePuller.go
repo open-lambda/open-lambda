@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -95,7 +95,7 @@ func (pp *PackagePuller) InstallRecursive(installs []string) ([]string, error) {
 	for i := 0; i < len(installs); i++ {
 		pkg := installs[i]
 		if common.Conf.Trace.Package {
-			log.Printf("On %v of %v", pkg, installs)
+			slog.Info(fmt.Sprintf("On %v of %v", pkg, installs))
 		}
 		p, err := pp.GetPkg(pkg)
 		if err != nil {
@@ -103,8 +103,8 @@ func (pp *PackagePuller) InstallRecursive(installs []string) ([]string, error) {
 		}
 
 		if common.Conf.Trace.Package {
-			log.Printf("Package '%s' has deps %v", pkg, p.Meta.Deps)
-			log.Printf("Package '%s' has top-level modules %v", pkg, p.Meta.TopLevel)
+			slog.Info(fmt.Sprintf("Package '%s' has deps %v", pkg, p.Meta.Deps))
+			slog.Info(fmt.Sprintf("Package '%s' has top-level modules %v", pkg, p.Meta.TopLevel))
 		}
 
 		// push any previously unseen deps on the list of ones to install
@@ -156,15 +156,15 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 	// same as scratchDir, which is the same as a sub-directory
 	// named after the package in the packages dir
 	scratchDir := filepath.Join(common.Conf.Pkgs_dir, p.Name)
-	log.Printf("do pip install, using scratchDir='%v'", scratchDir)
+	slog.Info(fmt.Sprintf("do pip install, using scratchDir='%v'", scratchDir))
 
 	alreadyInstalled := false
 	if _, err := os.Stat(scratchDir); err == nil {
 		// assume dir existence means it is installed already
-		log.Printf("%s appears already installed from previous run of OL", p.Name)
+		slog.Info(fmt.Sprintf("%s appears already installed from previous run of OL", p.Name))
 		alreadyInstalled = true
 	} else {
-		log.Printf("run pip install %s from a new Sandbox to %s on host", p.Name, scratchDir)
+		slog.Info(fmt.Sprintf("run pip install %s from a new Sandbox to %s on host", p.Name, scratchDir))
 		if err := os.Mkdir(scratchDir, 0700); err != nil {
 			return err
 		}

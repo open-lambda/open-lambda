@@ -3,7 +3,7 @@ package cgroups
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
+	"log/slog"
 	"os"
 	"path"
 	"strings"
@@ -74,7 +74,7 @@ func (pool *CgroupPool) NewCgroup() Cgroup {
 // which containers
 func (pool *CgroupPool) printf(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
-	log.Printf("%s [CGROUP POOL %s]", strings.TrimRight(msg, "\n"), pool.Name)
+	slog.Info(fmt.Sprintf("%s [CGROUP POOL %s]", strings.TrimRight(msg, "\n"), pool.Name))
 }
 
 func (pool *CgroupPool) cgTask() {
