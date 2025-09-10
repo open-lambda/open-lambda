@@ -3,8 +3,8 @@ package sandbox
 import (
 	"container/list"
 	"fmt"
+	"io"
 	"log/slog"
-	"strings"
 
 	"github.com/open-lambda/open-lambda/go/common"
 )
@@ -22,6 +22,9 @@ type MemPool struct {
 	// decrement requests read from memRequests that need to wait
 	// for memory sit here until it's available
 	memRequestsWaiting *list.List
+
+	logger      *slog.Logger
+	traceLogger *slog.Logger
 }
 
 type memReq struct {
@@ -34,12 +37,27 @@ type memReq struct {
 	resp chan int
 }
 
-func NewMemPool(name string, totalMB int) *MemPool {
+func NewMemPool(name string, totalMB int, logger *slog.Logger) *MemPool {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	
+	baseLogger := logger.With("component", "mem_pool", "pool", name)
+	
+	var traceLogger *slog.Logger
+	if common.Conf.Trace.Memory {
+		traceLogger = baseLogger
+	} else {
+		traceLogger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
+	
 	pool := &MemPool{
 		name:               name,
 		totalMB:            totalMB,
 		memRequests:        make(chan *memReq, 32),
 		memRequestsWaiting: list.New(),
+		logger:             baseLogger,
+		traceLogger:        traceLogger,
 	}
 
 	go pool.memTask()
@@ -47,12 +65,6 @@ func NewMemPool(name string, totalMB int) *MemPool {
 	return pool
 }
 
-func (pool *MemPool) printf(format string, args ...any) {
-	if common.Conf.Trace.Memory {
-		msg := fmt.Sprintf(format, args...)
-		slog.Info(fmt.Sprintf("%s [MEM POOL %s]", strings.TrimRight(msg, "\n"), pool.name))
-	}
-}
 
 // this task is responsible for tracking available memory in the
 // system, adding to the count when memory is released, and blocking
@@ -73,7 +85,7 @@ func (pool *MemPool) memTask() {
 
 		if req.mb >= 0 {
 			availableMB += req.mb
-			pool.printf("%d of %d MB available", availableMB, pool.totalMB)
+			pool.traceLogger.Debug("memory status", "available_mb", availableMB, "total_mb", pool.totalMB)
 			req.resp <- availableMB
 		} else {
 			pool.memRequestsWaiting.PushBack(req)
@@ -86,7 +98,7 @@ func (pool *MemPool) memTask() {
 			if availableMB+req.mb >= 0 {
 				pool.memRequestsWaiting.Remove(e)
 				availableMB += req.mb
-				pool.printf("%d of %d MB available", availableMB, pool.totalMB)
+				pool.traceLogger.Debug("memory status", "available_mb", availableMB, "total_mb", pool.totalMB)
 				req.resp <- availableMB
 			}
 		}

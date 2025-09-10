@@ -3,8 +3,8 @@ package sandbox
 import (
 	"container/list"
 	"fmt"
+	"io"
 	"log/slog"
-	"strings"
 
 	"github.com/open-lambda/open-lambda/go/common"
 )
@@ -43,6 +43,9 @@ type SOCKEvictor struct {
 
 	// Sandbox ID => List/Element position in a state queue
 	stateMap map[string]*ListLocation
+
+	logger      *slog.Logger
+	traceLogger *slog.Logger
 }
 
 type ListLocation struct {
@@ -59,13 +62,24 @@ func NewSOCKEvictor(sbPool *SOCKPool) *SOCKEvictor {
 		prioQueues[i] = list.New()
 	}
 
+	baseLogger := sbPool.logger.With("component", "evictor")
+	
+	var traceLogger *slog.Logger
+	if common.Conf.Trace.Evictor {
+		traceLogger = baseLogger
+	} else {
+		traceLogger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
+	
 	e := &SOCKEvictor{
-		mem:        sbPool.mem,
-		events:     make(chan SandboxEvent, 64),
-		priority:   make(map[string]int),
-		prioQueues: prioQueues,
-		evicting:   list.New(),
-		stateMap:   make(map[string]*ListLocation),
+		mem:         sbPool.mem,
+		events:      make(chan SandboxEvent, 64),
+		priority:    make(map[string]int),
+		prioQueues:  prioQueues,
+		evicting:    list.New(),
+		stateMap:    make(map[string]*ListLocation),
+		logger:      baseLogger,
+		traceLogger: traceLogger,
 	}
 
 	sbPool.AddListener(e.Event)
@@ -110,12 +124,6 @@ func (evictor *SOCKEvictor) nextEvent(block bool) *SandboxEvent {
 	}
 }
 
-func (_ *SOCKEvictor) printf(format string, args ...any) {
-	if common.Conf.Trace.Evictor {
-		msg := fmt.Sprintf(format, args...)
-		slog.Info(fmt.Sprintf("%s [EVICTOR]", strings.TrimRight(msg, "\n")))
-	}
-}
 
 // update state based on messages sent to this task.  this may be
 // stale, but correctness doesn't depend on freshness.
@@ -146,10 +154,10 @@ func (evictor *SOCKEvictor) updateState() {
 			prio -= 2
 		case EvDestroy, EvDestroyIgnored:
 		default:
-			evictor.printf("Unknown event: %v", event.EvType)
+			evictor.traceLogger.Debug("unknown event", "event_type", event.EvType)
 		}
 
-		evictor.printf("Evictor: Sandbox %v priority goes to %d", sb.ID(), prio)
+		evictor.traceLogger.Debug("sandbox priority changed", "sandbox", sb.ID(), "priority", prio)
 		if prio < 0 {
 			panic(fmt.Sprintf("priority should never go negative, but it went to %d for sandbox %d", prio, sb.ID()))
 			panic("priority should never go negative")
@@ -178,7 +186,7 @@ func (evictor *SOCKEvictor) evictFront(queue *list.List, force bool) {
 	front := queue.Front()
 	sb := front.Value.(Sandbox)
 
-	evictor.printf("Evict Sandbox %v", sb.ID())
+	evictor.traceLogger.Debug("evicting sandbox", "sandbox", sb.ID())
 	evictor.move(sb, evictor.evicting)
 
 	// destroy async (we'll know when it's done, because
@@ -230,7 +238,7 @@ func (evictor *SOCKEvictor) doEvictions() {
 	// TODO: create some parameters to better control eviction in
 	// this state
 	if freeSandboxes <= 0 && evictor.evicting.Len() == 0 {
-		evictor.printf("WARNING!  Critically low on memory, so evicting an active Sandbox")
+		evictor.logger.Warn("critically low on memory, evicting active sandbox")
 		if evictor.prioQueues[1].Len() > 0 {
 			evictor.evictFront(evictor.prioQueues[1], true)
 		}

@@ -2,11 +2,11 @@ package cgroups
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log/slog"
 	"os"
 	"path"
-	"strings"
 	"syscall"
 	"time"
 
@@ -18,26 +18,43 @@ import (
 const CGROUP_RESERVE = 16
 
 type CgroupPool struct {
-	Name     string
-	ready    chan *CgroupImpl
-	recycled chan *CgroupImpl
-	quit     chan chan bool
-	nextID   int
+	Name        string
+	ready       chan *CgroupImpl
+	recycled    chan *CgroupImpl
+	quit        chan chan bool
+	nextID      int
+	logger      *slog.Logger
+	traceLogger *slog.Logger
 }
 
 // NewCgroupPool creates a new CgroupPool with the specified name.
-func NewCgroupPool(name string) (*CgroupPool, error) {
+func NewCgroupPool(name string, logger *slog.Logger) (*CgroupPool, error) {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	
+	baseLogger := logger.With("component", "cgroup_pool", "pool", name)
+	
+	var traceLogger *slog.Logger
+	if common.Conf.Trace.Cgroups {
+		traceLogger = baseLogger
+	} else {
+		traceLogger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
+	
 	pool := &CgroupPool{
-		Name:     path.Base(path.Dir(common.Conf.Worker_dir)) + "-" + name,
-		ready:    make(chan *CgroupImpl, CGROUP_RESERVE),
-		recycled: make(chan *CgroupImpl, CGROUP_RESERVE),
-		quit:     make(chan chan bool),
-		nextID:   0,
+		Name:        path.Base(path.Dir(common.Conf.Worker_dir)) + "-" + name,
+		ready:       make(chan *CgroupImpl, CGROUP_RESERVE),
+		recycled:    make(chan *CgroupImpl, CGROUP_RESERVE),
+		quit:        make(chan chan bool),
+		nextID:      0,
+		logger:      baseLogger,
+		traceLogger: traceLogger,
 	}
 
 	// create cgroup
 	groupPath := pool.GroupPath()
-	pool.printf("create %s", groupPath)
+	pool.traceLogger.Debug("creating cgroup pool", "path", groupPath)
 	if err := syscall.Mkdir(groupPath, 0700); err != nil {
 		return nil, fmt.Errorf("Mkdir %s: %s", groupPath, err)
 	}
@@ -56,9 +73,12 @@ func NewCgroupPool(name string) (*CgroupPool, error) {
 func (pool *CgroupPool) NewCgroup() Cgroup {
 	pool.nextID++
 
+	cgName := fmt.Sprintf("cg-%d", pool.nextID)
 	cg := &CgroupImpl{
-		name: fmt.Sprintf("cg-%d", pool.nextID),
-		pool: pool,
+		name:        cgName,
+		pool:        pool,
+		logger:      pool.logger.With("cgroup", cgName),
+		traceLogger: pool.traceLogger.With("cgroup", cgName),
 	}
 
 	groupPath := cg.GroupPath()
@@ -66,23 +86,17 @@ func (pool *CgroupPool) NewCgroup() Cgroup {
 		panic(fmt.Errorf("Mkdir %s: %s", groupPath, err))
 	}
 
-	cg.printf("created")
+	cg.traceLogger.Debug("cgroup created")
 	return cg
 }
 
-// add ID to each log message so we know which logs correspond to
-// which containers
-func (pool *CgroupPool) printf(format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
-	slog.Info(fmt.Sprintf("%s [CGROUP POOL %s]", strings.TrimRight(msg, "\n"), pool.Name))
-}
 
 func (pool *CgroupPool) cgTask() {
 	// we'll be sent this as part of the quit request
 	var done chan bool
 
 	// loop until we get the quit message
-	pool.printf("start creating/serving CGs")
+	pool.traceLogger.Debug("starting cgroup creation/serving")
 Loop:
 	for {
 		var cg *CgroupImpl
@@ -113,14 +127,14 @@ Loop:
 		select {
 		case pool.ready <- cg:
 		case done = <-pool.quit:
-			pool.printf("received shutdown request")
+			pool.logger.Info("received shutdown request")
 			cg.Destroy()
 			break Loop
 		}
 	}
 
 	// empty queues, freeing all cgroups
-	pool.printf("empty queues and release CGs")
+	pool.traceLogger.Debug("emptying queues and releasing cgroups")
 Empty:
 	for {
 		select {
@@ -145,14 +159,14 @@ func (pool *CgroupPool) Destroy() {
 
 	// Destroy cgroup for this entire pool
 	gpath := pool.GroupPath()
-	pool.printf("Destroying cgroup pool with path \"%s\"", gpath)
+	pool.logger.Info("destroying cgroup pool", "path", gpath)
 	for i := 100; i >= 0; i-- {
 		if err := syscall.Rmdir(gpath); err != nil {
 			if i == 0 {
 				panic(fmt.Errorf("Rmdir %s: %s", gpath, err))
 			}
 
-			pool.printf("cgroup pool Rmdir failed, trying again in 5ms")
+			pool.traceLogger.Debug("cgroup pool rmdir failed, retrying")
 			time.Sleep(5 * time.Millisecond)
 		} else {
 			break

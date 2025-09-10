@@ -74,21 +74,22 @@ func Dump(client *docker.Client) {
 	opts := docker.ListContainersOptions{All: true}
 	containers, err := client.ListContainers(opts)
 	if err != nil {
-		slog.Error("Could not get container list")
+		slog.Error("could not get container list", "error", err)
 		os.Exit(1)
 	}
-	slog.Info("=====================================")
+	slog.Info("dumping all containers")
 	for idx, info := range containers {
 		container, err := client.InspectContainer(info.ID)
 		if err != nil {
-			slog.Error("Could not get container")
+			slog.Error("could not get container", "error", err)
 			os.Exit(1)
 		}
 
-		slog.Info(fmt.Sprintf("CONTAINER %d: %v, %v, %v", idx,
-			info.Image,
-			container.ID[:8],
-			container.State.String()))
+		slog.Info("container info",
+			"index", idx,
+			"image", info.Image,
+			"id", container.ID[:8],
+			"state", container.State.String())
 	}
 }
 
