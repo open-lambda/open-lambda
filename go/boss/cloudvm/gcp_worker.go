@@ -116,7 +116,8 @@ func (pool *GcpWorkerPool) CreateInstance(worker *Worker) error {
 
 	worker.host = lookup[worker.workerId]
 
-	worker.runCmd("./ol worker up -d") // TODO: check if runCmd fails.
+	// TODO: check if runCmd fails and fix the ol-min hardcoding
+	worker.runCmd("./ol worker up -d --image ol-min") 
 
 	return nil
 }
