@@ -42,11 +42,16 @@ func fillMetaDefaults(meta *SandboxMeta) {
 }
 
 func (meta *SandboxMeta) String() string {
+	if meta == nil {
+		return "<SandboxMeta:nil>"
+	}
 	return fmt.Sprintf(
-		"<installs=[%s], imports=[%s], mem-limit-mb=%d>",
+		"<installs=[%s], imports=[%s], mem=%dMB, cpu=%d%%, runtime=%ds>",
 		strings.Join(meta.Installs, ","),
 		strings.Join(meta.Imports, ","),
 		meta.Limits.MemMB,
+		meta.Limits.CPUPercent,
+		meta.Limits.RuntimeSec,
 	)
 }
 

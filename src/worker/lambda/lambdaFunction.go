@@ -75,27 +75,29 @@ func (f *LambdaFunc) printf(format string, args ...any) {
 // parseRequirementsTxt reads requirements.txt (if present) and returns normalized package names.
 func parseRequirementsTxt(codeDir string) ([]string, error) {
 	path := filepath.Join(codeDir, "requirements.txt")
-	file, err := os.Open(path)
+	f, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
-		// optional file
-		return nil, nil
+		return []string{}, nil // optional file
 	}
 	if err != nil {
 		return nil, fmt.Errorf("open requirements.txt: %w", err)
 	}
-	defer file.Close()
+	defer f.Close()
 
 	var installs []string
-	scnr := bufio.NewScanner(file)
-	for scnr.Scan() {
-		line := strings.ReplaceAll(scnr.Text(), " ", "")
-		pkg := strings.Split(line, "#")[0]
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		// strip inline comments and spaces
+		pkg := strings.TrimSpace(strings.Split(line, "#")[0])
 		if pkg != "" {
-			pkg = packages.NormalizePkg(pkg)
-			installs = append(installs, pkg)
+			installs = append(installs, packages.NormalizePkg(pkg))
 		}
 	}
-	if err := scnr.Err(); err != nil {
+	if err := sc.Err(); err != nil {
 		return nil, fmt.Errorf("scan requirements.txt: %w", err)
 	}
 	return installs, nil

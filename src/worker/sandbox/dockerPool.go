@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"syscall"
+	"time"
 
 	docker "github.com/fsouza/go-dockerclient"
 	"github.com/open-lambda/open-lambda/ol/common"
@@ -171,6 +172,7 @@ func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir 
 
 	c.httpClient = &http.Client{
 		Transport: &http.Transport{Dial: dial},
+		Timeout:   time.Second * time.Duration(meta.Limits.RuntimeSec),
 	}
 
 	// wrap to make thread-safe and handle container death
