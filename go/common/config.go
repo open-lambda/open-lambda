@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"path"
 	"path/filepath"
+	"os"
 	"syscall"
 
 	"github.com/urfave/cli/v2"
@@ -152,6 +153,55 @@ func LoadDefaults(olPath string) error {
 
 // GetDefaultWorkerConfig returns a config populated with reasonable defaults.
 func GetDefaultWorkerConfig(olPath string) (*Config, error) {
+	// Check if template.json exists - if so, use it and patch empty fields
+	currPath, err := os.Getwd()
+	if err == nil {
+		// First check current directory
+		templatePath := filepath.Join(currPath, "template.json")
+		if _, err := os.Stat(templatePath); err != nil {
+			// If not found, check parent directory (for workers running in subdirs)
+			parentPath := filepath.Dir(currPath)
+			templatePath = filepath.Join(parentPath, "template.json")
+		}
+
+		if _, err := os.Stat(templatePath); err == nil {
+			slog.Info("Loading config from template.json", "path", templatePath)
+			cfg, err := ReadInConfig(templatePath)
+			if err == nil {
+				// Patch worker-specific fields if they're empty (same logic as worker_config_template.go)
+				defaultCfg, err := getDefaultConfigForPatching(olPath)
+				if err != nil {
+					return nil, fmt.Errorf("failed to get defaults for patching: %w", err)
+				}
+
+				if cfg.Worker_dir == "" {
+					cfg.Worker_dir = defaultCfg.Worker_dir
+					slog.Info("Patched Worker_dir", "Worker_dir", cfg.Worker_dir)
+				}
+				if cfg.Pkgs_dir == "" {
+					cfg.Pkgs_dir = defaultCfg.Pkgs_dir
+					slog.Info("Patched Pkgs_dir", "Pkgs_dir", cfg.Pkgs_dir)
+				}
+				if cfg.SOCK_base_path == "" {
+					cfg.SOCK_base_path = defaultCfg.SOCK_base_path
+					slog.Info("Patched SOCK_base_path", "SOCK_base_path", cfg.SOCK_base_path)
+				}
+				if cfg.Import_cache_tree == "" {
+					cfg.Import_cache_tree = defaultCfg.Import_cache_tree
+					slog.Info("Patched Import_cache_tree", "Import_cache_tree", cfg.Import_cache_tree)
+				}
+
+				return cfg, nil
+			}
+		}
+	}
+
+	// Fallback: generate defaults if no template.json
+	return getDefaultConfigForPatching(olPath)
+}
+
+// getDefaultConfigForPatching generates the default config used for patching empty template fields
+func getDefaultConfigForPatching(olPath string) (*Config, error) {
 	var workerDir, registryDir, baseImgDir, zygoteTreePath, packagesDir string
 
 	if olPath != "" {
@@ -178,7 +228,7 @@ func GetDefaultWorkerConfig(olPath string) (*Config, error) {
 		// Registry URL with file:// prefix required by gocloud blob backend abstraction.
 		// The gocloud library uses URL schemes to route to appropriate storage drivers:
 		// file:// for local filesystem, s3:// for AWS S3, gs:// for Google Cloud Storage.
-		// By default, it will be configured to local
+		// Default to local file registry
 		Registry:          "file://" + registryDir,
 		Sandbox:           "sock",
 		Log_output:        true,
@@ -240,13 +290,13 @@ func LoadGlobalConfig(path string) error {
 func ReadInConfig(path string) (*Config, error) {
 	configRaw, err := ioutil.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("could not open config (%v): %v", path, err.Error())
+		return nil, fmt.Errorf("could not open config (%v): %w", path, err)
 	}
 
 	var templateConfig Config
 	if err := json.Unmarshal(configRaw, &templateConfig); err != nil {
 		fmt.Printf("Bad config file (%s):\n%s\n", path, string(configRaw))
-		return nil, fmt.Errorf("could not parse config (%v): %v", path, err.Error())
+		return nil, fmt.Errorf("could not parse config (%v): %w", path, err)
 	}
 
 	return &templateConfig, nil
@@ -305,6 +355,7 @@ func SandboxConfJson() string {
 	return string(s)
 }
 
+
 // Dump prints the Config as a JSON string.
 func DumpConf() {
 	s, err := json.Marshal(Conf)
@@ -328,12 +379,56 @@ func SaveGlobalConfig(path string) error {
 	return SaveConfig(Conf, path)
 }
 
-func SaveConfig(cfg *Config, path string) error {
-	s, err := json.MarshalIndent(cfg, "", "\t")
+// writeConfigToFile writes config data to a file with proper syncing
+func writeConfigToFile(cfg *Config, filePath string) error {
+	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
+		return fmt.Errorf("failed to create file: %w", err)
+	}
+	defer file.Close()
+
+	// Marshal config to JSON
+	data, err := json.MarshalIndent(cfg, "", "\t")
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	// Write and sync to ensure data is written to disk
+	if _, err := file.Write(data); err != nil {
+		return fmt.Errorf("failed to write file: %w", err)
+	}
+
+	if err := file.Sync(); err != nil {
+		return fmt.Errorf("failed to sync file: %w", err)
+	}
+
+	return nil
+}
+
+func SaveConfig(cfg *Config, path string) error {
+	// Write to temp file in same directory to ensure atomic rename
+	tempPath := path + ".tmp"
+	if err := writeConfigToFile(cfg, tempPath); err != nil {
+		os.Remove(tempPath) // Clean up on failure
 		return err
 	}
-	return ioutil.WriteFile(path, s, 0644)
+
+	// Atomic rename - this is the key operation that prevents corruption
+	if err := os.Rename(tempPath, path); err != nil {
+		os.Remove(tempPath) // Clean up on failure
+		return fmt.Errorf("failed to rename temp file: %w", err)
+	}
+
+	// Sync the directory to ensure the rename is persisted
+	dirFile, err := os.Open(filepath.Dir(path))
+	if err != nil {
+		return fmt.Errorf("failed to open directory for sync: %w", err)
+	}
+	defer dirFile.Close()
+	dirFile.Sync() // Ensure directory entry is synced
+
+	slog.Info("Atomically saved config", "path", path)
+	return nil
 }
 
 func GetOlPath(ctx *cli.Context) (string, error) {
