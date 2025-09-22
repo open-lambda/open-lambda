@@ -72,42 +72,53 @@ func (f *LambdaFunc) printf(format string, args ...any) {
 	log.Printf("%s [FUNC %s]", strings.TrimRight(msg, "\n"), f.name)
 }
 
-// parseMeta reads in a requirements.txt file that was built from pip-compile
-func parseMeta(codeDir string) (*FunctionMeta, error) {
-	sandboxMeta := &sandbox.SandboxMeta{
-		Installs: []string{},
-		Imports:  []string{},
-	}
-
+// parseRequirementsTxt reads requirements.txt (if present) and returns normalized package names.
+func parseRequirementsTxt(codeDir string) ([]string, error) {
 	path := filepath.Join(codeDir, "requirements.txt")
 	file, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
-		// having a requirements.txt is optional
-	} else if err != nil {
+		// optional file
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("open requirements.txt: %w", err)
+	}
+	defer file.Close()
+
+	var installs []string
+	scnr := bufio.NewScanner(file)
+	for scnr.Scan() {
+		line := strings.ReplaceAll(scnr.Text(), " ", "")
+		pkg := strings.Split(line, "#")[0]
+		if pkg != "" {
+			pkg = packages.NormalizePkg(pkg)
+			installs = append(installs, pkg)
+		}
+	}
+	if err := scnr.Err(); err != nil {
+		return nil, fmt.Errorf("scan requirements.txt: %w", err)
+	}
+	return installs, nil
+}
+
+// parseMeta reads in a requirements.txt file that was built from pip-compile
+func parseMeta(codeDir string) (*FunctionMeta, error) {
+	installs, err := parseRequirementsTxt(codeDir)
+	if err != nil {
 		return nil, err
-	} else {
-		defer file.Close()
 	}
 
-	if file != nil {
-		scnr := bufio.NewScanner(file)
-		for scnr.Scan() {
-			line := strings.ReplaceAll(scnr.Text(), " ", "")
-			pkg := strings.Split(line, "#")[0]
-			if pkg != "" {
-				pkg = packages.NormalizePkg(pkg)
-				sandboxMeta.Installs = append(sandboxMeta.Installs, pkg)
-			}
-		}
+	sandboxMeta := &sandbox.SandboxMeta{
+		Installs: installs,
+		Imports:  []string{},
 	}
 
 	// Load Lambda configuration from ol.yaml
 	lambdaConfig, err := common.LoadLambdaConfig(codeDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse lambda configuration file: %v", err)
+		return nil, fmt.Errorf("parse ol.yaml: %w", err)
 	}
 
-	// Return combined FunctionMeta
 	return &FunctionMeta{
 		Sandbox: sandboxMeta,
 		Config:  lambdaConfig,

@@ -65,21 +65,11 @@ func sbStr(sb Sandbox) string {
 }
 
 func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, meta *SandboxMeta, rtType common.RuntimeType) (sb Sandbox, err error) {
-	// Ensure meta is not nil to prevent panics.
+	// Ensure meta is not nil and fill defaults into meta.Limits
 	if meta == nil {
 		meta = &SandboxMeta{}
 	}
-
-	// Determine resource limits, falling back to worker defaults if not specified in meta.
-	memMB := common.Conf.Limits.Mem_mb
-	if meta.Limits != nil && meta.Limits.MemMB != 0 {
-		memMB = meta.Limits.MemMB
-	}
-
-	cpuPercent := common.Conf.Limits.CPU_percent
-	if meta.Limits != nil && meta.Limits.CPUPercent != 0 {
-		cpuPercent = meta.Limits.CPUPercent
-	}
+	fillMetaDefaults(meta) // populates zero values from worker defaults
 
 	id := fmt.Sprintf("%d", atomic.AddInt64(&nextId, 1))
 	pool.printf("<%v>.Create(%v, %v, %v, %v, %v)=%s...", pool.name, sbStr(parent), isLeaf, codeDir, scratchDir, meta, id)
@@ -106,7 +96,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 
 	// block until we have enough to cover the cgroup mem limits
 	t2 := t.T0("acquire-mem")
-	pool.mem.adjustAvailableMB(-memMB)
+	pool.mem.adjustAvailableMB(-meta.Limits.MemMB)
 	t2.T1()
 
 	t2 = t.T0("acquire-cgroup")
@@ -116,7 +106,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 	// don't want to use this cgroup feature, because the child
 	// would take the blame for ALL of the parent's allocations
 	moveMemCharge := (parent == nil)
-	cSock.cg = pool.cgPool.GetCg(memMB, moveMemCharge, cpuPercent)
+	cSock.cg = pool.cgPool.GetCg(meta.Limits.MemMB, moveMemCharge, meta.Limits.CPUPercent)
 	t2.T1()
 	cSock.printf("use cgroup %s", cSock.cg.Name())
 

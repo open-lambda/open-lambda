@@ -180,7 +180,6 @@ func (cache *ImportCache) createChildSandboxFromNode(
 		}
 
 		t2 := common.T0("ImportCache.createChildSandboxFromNode:childSandboxPool.Create")
-		// Use the meta object from the function invocation, which contains the correct limits.
 		sb, err := childSandboxPool.Create(zygoteSB, isLeaf, codeDir, scratchDir, meta, rt_type)
 
 		if err == nil {

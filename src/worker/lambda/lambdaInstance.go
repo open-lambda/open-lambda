@@ -1,12 +1,10 @@
 package lambda
 
 import (
-	"errors"
 	"io"
 	"log"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/open-lambda/open-lambda/ol/common"
 	"github.com/open-lambda/open-lambda/ol/worker/sandbox"
@@ -98,11 +96,9 @@ func (linst *LambdaInstance) Task() {
 		// if we don't already have a Sandbox, create one, and
 		// HTTP proxy over the channel
 		if sb == nil {
-			// Create a meta object to pass to the sandbox pool.
-			// This meta object will contain both the package/import requirements
-			// and the per-lambda resource limits.
+			// Build meta: package/import requirements + per-lambda limits.
 			meta := &sandbox.SandboxMeta{
-				Limits: &linst.lfunc.Meta.Config.Limits,
+				Limits: linst.lfunc.Meta.Config.Limits, // non-optional; defaults resolved in pools
 			}
 			if linst.meta != nil && linst.meta.Sandbox != nil {
 				meta.Installs = linst.meta.Sandbox.Installs
@@ -138,11 +134,9 @@ func (linst *LambdaInstance) Task() {
 
 		// below here, we're guaranteed (1) sb != nil, (2) proxy != nil, (3) sb is unpaused
 
-		// serve until we incoming queue is empty
+		// serve until the incoming queue is empty
 		t = common.T0("LambdaInstance-ServeRequests")
 		for req != nil {
-			// f.printf("Forwarding request to sandbox")
-
 			t2 := common.T0("LambdaInstance-RoundTrip")
 
 			// get response from sandbox
@@ -151,37 +145,7 @@ func (linst *LambdaInstance) Task() {
 			if err != nil {
 				linst.TrySendError(req, http.StatusInternalServerError, "Could not create NewRequest: "+err.Error(), sb)
 			} else {
-				// determine the runtime limit
-				maxRuntime := time.Duration(common.Conf.Limits.Max_runtime_default) * time.Second
-				if linst.lfunc.Meta.Config.MaxRuntimeSec != 0 {
-					maxRuntime = time.Duration(linst.lfunc.Meta.Config.MaxRuntimeSec) * time.Second
-				}
-
-				// make the request in a goroutine
-				type response struct {
-					resp *http.Response
-					err  error
-				}
-				ch := make(chan response, 1)
-				go func() {
-					resp, err := sb.Client().Do(httpReq)
-					ch <- response{resp: resp, err: err}
-				}()
-
-				// wait for response or timeout
-				var resp *http.Response
-				select {
-				case res := <-ch:
-					resp = res.resp
-					err = res.err
-				case <-time.After(maxRuntime):
-					// use a string builder to avoid repeated appends
-					var b strings.Builder
-					b.WriteString("lambda timed out after ")
-					b.WriteString(maxRuntime.String())
-					err = errors.New(b.String())
-					resp = nil
-				}
+				resp, err := sb.Client().Do(httpReq)
 
 				// copy response out
 				if err != nil {

@@ -89,7 +89,8 @@ type Sandbox interface {
 type SandboxMeta struct {
 	Installs []string
 	Imports  []string
-	Limits   *common.Limits // Optional resource limits to override worker defaults.
+	// Always set; zero means "use default" and gets resolved later.
+	Limits *common.Limits
 }
 
 type SandboxError string

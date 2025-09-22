@@ -117,6 +117,8 @@ type StorageConfig struct {
 type Limits struct {
 	MemMB      int `json:"mem_mb" yaml:"mem_mb"`
 	CPUPercent int `json:"cpu_percent" yaml:"cpu_percent"`
+	// Preferred place for per-lambda runtime. If 0, use worker default.
+	RuntimeSec int `json:"runtime_sec" yaml:"runtime_sec"`
 }
 
 type LimitsConfig struct {
