@@ -22,7 +22,6 @@ type SOCKContainer struct {
 	pool             *SOCKPool
 	id               string
 	meta             *SandboxMeta
-	memLimitMB       int // adding this to store the resolved memory limit
 	containerRootDir string
 	codeDir          string
 	scratchDir       string

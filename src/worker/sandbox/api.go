@@ -89,8 +89,8 @@ type Sandbox interface {
 type SandboxMeta struct {
 	Installs []string
 	Imports  []string
-	// Always set; zero means "use default" and gets resolved later.
-	Limits *common.Limits
+	// Always set; zero means "use default" and gets resolved in pools.
+	Limits common.Limits
 }
 
 type SandboxError string

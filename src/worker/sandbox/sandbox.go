@@ -36,9 +36,9 @@ func fillMetaDefaults(meta *SandboxMeta) {
 		meta.Limits.CPUPercent = common.Conf.Limits.CPU_percent
 	}
 	// If you moved runtime into Limits, resolve it here as well:
-	// if meta.Limits.RuntimeSec == 0 {
-	// 	meta.Limits.RuntimeSec = common.Conf.Limits.Max_runtime_default
-	// }
+	if meta.Limits.RuntimeSec == 0 {
+		meta.Limits.RuntimeSec = common.Conf.Limits.Max_runtime_default
+	}
 }
 
 func (meta *SandboxMeta) String() string {
