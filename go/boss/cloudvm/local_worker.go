@@ -3,7 +3,6 @@ package cloudvm
 import (
 	"fmt"
 	"log/slog"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -38,7 +37,7 @@ func NewLocalWorkerPool() *WorkerPool {
 
 			// Set platform-specific registry (local platform)
 			defaultTemplateConfig.Registry = config.BossConf.GetLambdaStoreURL()
-			log.Printf("Setting template.json registry to: %s", defaultTemplateConfig.Registry)
+			slog.Info("Setting template.json registry", "registry", defaultTemplateConfig.Registry)
 
 			// Clear worker-specific fields so they get patched later
 			defaultTemplateConfig.Worker_dir = ""
@@ -97,7 +96,7 @@ func (p *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) error {
 	// The template.json will be loaded and patched in GetDefaultWorkerConfig
 	cfg, err := common.GetDefaultWorkerConfig(workerPath)
 	if err != nil {
-		log.Printf("Failed to get worker config: %w", err)
+		slog.Error("Failed to get worker config", "workerId", worker.workerId, "error", err)
 		return err
 	}
 	

@@ -8,7 +8,6 @@ import (
 	"path"
 	"path/filepath"
 	"os"
-	"log"
 	"syscall"
 
 	"github.com/urfave/cli/v2"
@@ -166,7 +165,7 @@ func GetDefaultWorkerConfig(olPath string) (*Config, error) {
 		}
 
 		if _, err := os.Stat(templatePath); err == nil {
-			log.Printf("Loading config from template.json: %s", templatePath)
+			slog.Info("Loading config from template.json", "path", templatePath)
 			cfg, err := ReadInConfig(templatePath)
 			if err == nil {
 				// Patch worker-specific fields if they're empty (same logic as worker_config_template.go)
@@ -177,19 +176,19 @@ func GetDefaultWorkerConfig(olPath string) (*Config, error) {
 
 				if cfg.Worker_dir == "" {
 					cfg.Worker_dir = defaultCfg.Worker_dir
-					log.Printf("Patched Worker_dir: %s", cfg.Worker_dir)
+					slog.Info("Patched Worker_dir", "Worker_dir", cfg.Worker_dir)
 				}
 				if cfg.Pkgs_dir == "" {
 					cfg.Pkgs_dir = defaultCfg.Pkgs_dir
-					log.Printf("Patched Pkgs_dir: %s", cfg.Pkgs_dir)
+					slog.Info("Patched Pkgs_dir", "Pkgs_dir", cfg.Pkgs_dir)
 				}
 				if cfg.SOCK_base_path == "" {
 					cfg.SOCK_base_path = defaultCfg.SOCK_base_path
-					log.Printf("Patched SOCK_base_path: %s", cfg.SOCK_base_path)
+					slog.Info("Patched SOCK_base_path", "SOCK_base_path", cfg.SOCK_base_path)
 				}
 				if cfg.Import_cache_tree == "" {
 					cfg.Import_cache_tree = defaultCfg.Import_cache_tree
-					log.Printf("Patched Import_cache_tree: %s", cfg.Import_cache_tree)
+					slog.Info("Patched Import_cache_tree", "Import_cache_tree", cfg.Import_cache_tree)
 				}
 
 				return cfg, nil
@@ -428,7 +427,7 @@ func SaveConfig(cfg *Config, path string) error {
 	defer dirFile.Close()
 	dirFile.Sync() // Ensure directory entry is synced
 
-	log.Printf("Atomically saved config to: %s", path)
+	slog.Info("Atomically saved config", "path", path)
 	return nil
 }
 

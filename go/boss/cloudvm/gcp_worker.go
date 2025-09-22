@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"log"
 
 	"github.com/open-lambda/open-lambda/go/boss/config"
 	"github.com/open-lambda/open-lambda/go/common"
@@ -144,7 +143,7 @@ func createGcsTemplate() error {
 
 	templatePath := filepath.Join(currPath, "template.json")
 
-	log.Printf("Creating template.json with GCS registry at: %s", templatePath)
+	slog.Info("Creating template.json with GCS registry", "path", templatePath)
 
 	// Get default worker config
 	defaultTemplateConfig, err := common.GetDefaultWorkerConfig("")
@@ -154,7 +153,7 @@ func createGcsTemplate() error {
 
 	// Set the GCS registry URL
 	defaultTemplateConfig.Registry = config.BossConf.GetLambdaStoreURL()
-	log.Printf("Setting template.json registry to: %s", defaultTemplateConfig.Registry)
+	slog.Info("Setting template.json registry", "registry", defaultTemplateConfig.Registry)
 
 	// Clear worker-specific fields so they get patched later
 	defaultTemplateConfig.Worker_dir = ""
@@ -168,6 +167,6 @@ func createGcsTemplate() error {
 		return fmt.Errorf("failed to save template.json: %w", err)
 	}
 
-	log.Printf("template.json with GCS registry ready for snapshot")
+	slog.Info("template.json with GCS registry ready for snapshot")
 	return nil
 }
