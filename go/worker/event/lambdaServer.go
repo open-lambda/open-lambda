@@ -6,9 +6,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/open-lambda/open-lambda/ol/common"
-	"github.com/open-lambda/open-lambda/ol/worker/lambda"
+	"github.com/open-lambda/open-lambda/go/common"
+	"github.com/open-lambda/open-lambda/go/worker/lambda"
 )
+
 
 // LambdaServer is a worker server that listens to run lambda requests and forward
 // these requests to its sandboxes.
@@ -59,9 +60,9 @@ func (s *LambdaServer) RunLambda(w http.ResponseWriter, r *http.Request) {
 		urlParts := getURLComponents(r)
 		
 		// The lambda name is always the second part. The code inside (server.py)
-                // will handle the rest of the path (which is possibly a Flask or Django request).
-	        lambdaName := urlParts[1]
-                s.lambdaMgr.Get(lambdaName).Invoke(w, r)
+        // will handle the rest of the path (which is possibly a Flask or Django request).
+	    lambdaName := urlParts[1]
+        s.lambdaMgr.Get(lambdaName).Invoke(w, r)
 
 	}
 }
