@@ -63,6 +63,7 @@ type Config struct {
 	Sandbox_config any `json:"sandbox_config"`
 
 	Docker   DockerConfig   `json:"docker"`
+	Containerd ContainerdConfig `json:"containerd"`
 	Limits   LimitsConfig   `json:"limits"`
 	Features FeaturesConfig `json:"features"`
 	Trace    TraceConfig    `json:"trace"`
@@ -74,6 +75,20 @@ type DockerConfig struct {
 	Runtime string `json:"runtime"`
 	// name of the image used for Docker containers
 	Base_image string `json:"base_image"`
+}
+
+type ContainerdConfig struct {
+    // Path to containerd socket (default: /run/containerd/containerd.sock)
+    SocketAddress string `json:"socket_address"` // should remain configurable 
+    
+    // Namespace to use (default: "openlambda")
+    Namespace string `json:"namespace"`
+    
+    // Runtime handler (default: "io.containerd.runc.v2")
+    Runtime string `json:"runtime"`
+    
+    // Base image name for containers
+    Base_image string `json:"base_image"` // todo, to be removed? suggest making it non-configurable or adding doc about requirements about the base image, such as including "/spin" binary and python server executables
 }
 
 type FeaturesConfig struct {
@@ -241,6 +256,12 @@ func getDefaultConfigForPatching(olPath string) (*Config, error) {
 		Docker: DockerConfig{
 			Base_image: "ol-min",
 		},
+		Containerd: ContainerdConfig{
+			SocketAddress: "/run/containerd/containerd.sock",
+			Namespace:     "openlambda",
+			Runtime:       "io.containerd.runc.v2",
+			Base_image:    "ol-min",
+		},
 		Limits: LimitsConfig{
 			Procs:               10,
 			Mem_mb:              50,
@@ -339,6 +360,8 @@ func checkConf(cfg *Config) error {
 		if cfg.Features.Import_cache != "" {
 			return fmt.Errorf("features.import_cache must be disabled for docker Sandbox")
 		}
+	} else if cfg.Sandbox == "containerd" {
+		// no additional checks for now
 	} else {
 		return fmt.Errorf("Unknown Sandbox type '%s'", cfg.Sandbox)
 	}

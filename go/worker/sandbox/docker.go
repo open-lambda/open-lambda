@@ -15,8 +15,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log/slog"
-	"net/http"
 	"os"
+	"net/http"
 	"path/filepath"
 	"time"
 
@@ -304,7 +304,8 @@ func (*DockerContainer) childExit(_ Sandbox) {
 	panic("DockerContainers should not have children because fork is unsupported")
 }
 
-func waitForServerPipeReady(hostDir string) error {
+// extract this function somewhere so that both docker and containerd can use it?
+func WaitForServerPipeReady(hostDir string) error {
 	// upon success, the goroutine will send nil; else, it will send the error
 	ready := make(chan error, 1)
 

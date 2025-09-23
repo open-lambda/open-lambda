@@ -379,7 +379,9 @@ func stoppedDirtyToStoppedClean(olPath string) error {
 		// Log an error if unmounting the main directory fails.
 		if errors.Is(err, syscall.EINVAL) {
 			fmt.Printf("Sandbox mount root is not mounted. No need to clean up.\n")
-		} else {
+		} else if errors.Is(err, syscall.ENOENT) { // added this case
+        	fmt.Printf("Sandbox mount root doesn't exist. No need to clean up.\n")
+      	} else {
 			return fmt.Errorf("could not unmount %s: %s", dirName, err.Error())
 		}
 	}
