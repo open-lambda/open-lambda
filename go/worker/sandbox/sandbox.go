@@ -18,6 +18,8 @@ func SandboxPoolFromConfig(name string, sizeMb int) (cf SandboxPool, err error) 
 		}
 		NewSOCKEvictor(pool)
 		return pool, nil
+	} else if common.Conf.Sandbox == "containerd" {
+		return NewContainerdPool()
 	}
 
 	return nil, fmt.Errorf("invalid sandbox type: '%s'", common.Conf.Sandbox)
