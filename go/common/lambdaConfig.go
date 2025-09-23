@@ -114,6 +114,7 @@ func LoadLambdaConfig(codeDir string) (*LambdaConfig, error) {
 	file, err := os.Open(path)
 
 	if errors.Is(err, os.ErrNotExist) {
+		// TODO: use slog
 		fmt.Println("Config file not found. Loading defaults...")
 		return LoadDefaultLambdaConfig(), nil
 	} else if err != nil {
