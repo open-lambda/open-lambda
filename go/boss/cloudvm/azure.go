@@ -109,7 +109,7 @@ func Delete() {
 	}
 
 	// Delete the container
-	fmt.Printf("Deleting the blob %s\n", containerName)
+	fmt.Printf("Deleting the container %s\n", containerName)
 	_, err = containerClient.Delete(ctx, nil)
 
 	if err != nil {

@@ -327,7 +327,7 @@ func (cg *CgroupImpl) DebugString() string {
 	if kills, err := cg.TryReadIntKV("memory.events", "oom_kill"); err == nil {
 		s += fmt.Sprintf("OOM KILLS: %d\n", kills)
 	} else {
-		s += fmt.Sprintf("OOM KILLS: could not read because %v\n", err)
+		s += fmt.Sprintf("OOM KILLS: could not read because %w\n", err)
 	}
 	return s
 }
