@@ -64,8 +64,7 @@ func upCmd(ctx *cli.Context) error {
 	overrides := ctx.String("options")
 	if overrides != "" {
 		overridesPath := confPath + ".overrides"
-		err = overrideOpts(confPath, overridesPath, overrides)
-		if err != nil {
+		if err := overrideOpts(confPath, overridesPath, overrides); err != nil {
 			return err
 		}
 		confPath = overridesPath
@@ -107,6 +106,7 @@ func upCmd(ctx *cli.Context) error {
 		}
 		if ctx.Bool("rootless") {
 			attr.Sys = &syscall.SysProcAttr{
+				// Create user ns + mount ns + uts together so it works unprivileged
 				Unshareflags: syscall.CLONE_NEWUSER | syscall.CLONE_NEWNS | syscall.CLONE_NEWUTS,
 				UidMappings: []syscall.SysProcIDMap{
 					{ContainerID: 0, HostID: uid, Size: 1},
@@ -118,9 +118,8 @@ func upCmd(ctx *cli.Context) error {
 				},
 			}
 		} else {
-			attr.Sys = &syscall.SysProcAttr{
-				Unshareflags: syscall.CLONE_NEWNS,
-			}
+			// Legacy: do NOT unshare mount ns alone (Ubuntu EPERM). No unshare in legacy.
+			attr.Sys = &syscall.SysProcAttr{}
 		}
 
 		// build args for child (strip -d/--detach)
@@ -131,10 +130,13 @@ func upCmd(ctx *cli.Context) error {
 			}
 		}
 
-		// looks for ./ol path
+		// absolute path to self
 		binPath, err := exec.LookPath(os.Args[0])
 		if err != nil {
 			return err
+		}
+		if abs, err := filepath.Abs(binPath); err == nil {
+			binPath = abs
 		}
 
 		// start the worker process
@@ -194,7 +196,6 @@ func upCmd(ctx *cli.Context) error {
 				fmt.Printf("Ready!\n")
 				return nil // server is started and ready for requests
 			}
-
 			return fmt.Errorf("expected PID %v but found %v (port conflict?)", proc.Pid, pid)
 		}
 
@@ -204,17 +205,18 @@ func upCmd(ctx *cli.Context) error {
 	if err := event.Main(); err != nil {
 		return err
 	}
-
 	return fmt.Errorf("this code should not be reachable")
 }
 
 func preflightRootless() {
+	// Warn if Ubuntu blocks unprivileged user namespaces
 	if b, err := os.ReadFile("/proc/sys/kernel/unprivileged_userns_clone"); err == nil {
 		if strings.TrimSpace(string(b)) != "1" {
 			fmt.Println("WARNING: rootless user namespaces appear disabled (kernel.unprivileged_userns_clone=0).")
-			fmt.Println("         To enable temporarily: sudo sysctl kernel.unprivileged_userns_clone=1")
+			fmt.Println("         To enable: sudo sysctl kernel.unprivileged_userns_clone=1")
 		}
 	}
+	// Note systemd presence (used for rootless cgroup delegation)
 	if _, err := os.Stat("/run/systemd/system"); err == nil {
 		fmt.Println("INFO: systemd detected (cgroup v2 delegation likely available).")
 	} else {
@@ -228,8 +230,7 @@ func statusCmd(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	err = common.LoadGlobalConfig(filepath.Join(olPath, "config.json"))
-	if err != nil {
+	if err := common.LoadGlobalConfig(filepath.Join(olPath, "config.json")); err != nil {
 		return err
 	}
 

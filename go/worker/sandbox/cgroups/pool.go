@@ -2,10 +2,10 @@ package cgroups
 
 import (
 	"fmt"
-	"io/ioutil"
 	"log/slog"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -25,6 +25,55 @@ type CgroupPool struct {
 	nextID   int
 }
 
+// / NOTE (rootless): helpers used only for delegated user-slice resolution.
+func hostUIDForCgroups() int {
+	if b, err := os.ReadFile("/proc/self/uid_map"); err == nil {
+		for _, ln := range strings.Split(string(b), "\n") {
+			ln = strings.TrimSpace(ln)
+			if ln == "" {
+				continue
+			}
+			fs := strings.Fields(ln)
+			// first mapping: "0 <host_uid> <size>"
+			if len(fs) >= 2 && fs[0] == "0" {
+				if hid, err := strconv.Atoi(fs[1]); err == nil && hid >= 0 {
+					return hid
+				}
+			}
+		}
+	}
+	if su := os.Getenv("SUDO_UID"); su != "" {
+		if hid, err := strconv.Atoi(su); err == nil && hid > 0 {
+			return hid
+		}
+	}
+	return os.Getuid()
+}
+
+// NOTE (rootless): prefer systemd user slice when present for cgroup pool.
+func delegatedUserCgroupBase() (string, error) {
+	uid := hostUIDForCgroups()
+	p := fmt.Sprintf("/sys/fs/cgroup/user.slice/user-%d.slice/user@%d.service/user.slice", uid, uid)
+	if st, err := os.Stat(p); err == nil && st.IsDir() {
+		return p, nil
+	}
+	return "", fmt.Errorf("delegated user cgroup base not found for uid %d", uid)
+}
+
+// NOTE (rootless): best-effort guard for controller files.
+func writeOK(p string) bool {
+	st, err := os.Stat(p)
+	if err != nil || !st.Mode().IsRegular() {
+		return false
+	}
+	f, err := os.OpenFile(p, os.O_WRONLY, 0)
+	if err != nil {
+		return false
+	}
+	_ = f.Close()
+	return true
+}
+
 // NewCgroupPool creates a new CgroupPool with the specified name.
 func NewCgroupPool(name string) (*CgroupPool, error) {
 	pool := &CgroupPool{
@@ -35,17 +84,22 @@ func NewCgroupPool(name string) (*CgroupPool, error) {
 		nextID:   0,
 	}
 
-	// create cgroup
+	// create (or ensure) the pool directory
 	groupPath := pool.GroupPath()
-	pool.printf("create %s", groupPath)
-	if err := syscall.Mkdir(groupPath, 0700); err != nil {
-		return nil, fmt.Errorf("Mkdir %s: %s", groupPath, err)
+	pool.printf("using cgroup base: %s", groupPath)
+	if err := os.MkdirAll(groupPath, 0o700); err != nil {
+		return nil, fmt.Errorf("MkdirAll %s: %w", groupPath, err)
 	}
 
-	// Make controllers available to child groups
+	// Best-effort: make controllers available to child groups.
+	// Not all Ubuntu/systemd setups delegate +cpu/+memory/+pids to user slices.
+	// We ignore failures here and let later code skip writes if delegation is missing.
 	rpath := fmt.Sprintf("%s/cgroup.subtree_control", groupPath)
-	if err := ioutil.WriteFile(rpath, []byte("+pids +io +memory +cpu"), os.ModeAppend); err != nil {
-		panic(fmt.Sprintf("Error writing to %s: %v", rpath, err))
+	if f, err := os.OpenFile(rpath, os.O_WRONLY|os.O_APPEND, 0); err == nil {
+		_, _ = f.WriteString("+pids +io +memory +cpu\n")
+		_ = f.Close()
+	} else {
+		pool.printf("WARN: could not write %s (%v); continuing without delegating controllers", rpath, err)
 	}
 
 	go pool.cgTask()
@@ -62,7 +116,7 @@ func (pool *CgroupPool) NewCgroup() Cgroup {
 	}
 
 	groupPath := cg.GroupPath()
-	if err := syscall.Mkdir(groupPath, 0700); err != nil {
+	if err := os.Mkdir(groupPath, 0o700); err != nil {
 		panic(fmt.Errorf("Mkdir %s: %s", groupPath, err))
 	}
 
@@ -104,8 +158,20 @@ Loop:
 		default:
 			t := common.T0("fresh-cgroup")
 			cg = pool.NewCgroup().(*CgroupImpl)
-			cg.WriteInt("pids.max", int64(common.Conf.Limits.Procs))
-			cg.WriteInt("memory.swap.max", int64(common.Conf.Limits.Swappiness))
+			// Only attempt controller writes if the files are present & writable
+			pidsPath := path.Join(cg.GroupPath(), "pids.max")
+			swapPath := path.Join(cg.GroupPath(), "memory.swap.max")
+
+			if writeOK(pidsPath) {
+				cg.WriteInt("pids.max", int64(common.Conf.Limits.Procs))
+			} else {
+				cg.printf("WARN: skipping write pids.max (no delegation/permission)")
+			}
+			if writeOK(swapPath) {
+				cg.WriteInt("memory.swap.max", int64(common.Conf.Limits.Swappiness))
+			} else {
+				cg.printf("WARN: skipping write memory.swap.max (no delegation/permission)")
+			}
 			t.T1()
 		}
 
@@ -163,23 +229,34 @@ func (pool *CgroupPool) Destroy() {
 // GetCg retrieves a cgroup from the pool, setting its memory limit and CPU percentage.
 func (pool *CgroupPool) GetCg(memLimitMB int, moveMemCharge bool, cpuPercent int) Cgroup {
 	cg := <-pool.ready
-	cg.SetMemLimitMB(memLimitMB)
-	cg.SetCPUPercent(cpuPercent)
+	// Guard writes so missing delegation doesn't kill the worker
+	memMax := path.Join(cg.GroupPath(), "memory.max")
+	cpuWeight := path.Join(cg.GroupPath(), "cpu.weight")
+
+	if writeOK(memMax) {
+		cg.SetMemLimitMB(memLimitMB)
+	} else {
+		cg.printf("WARN: skipping memory.max (no delegation/permission)")
+	}
+	if writeOK(cpuWeight) {
+		cg.SetCPUPercent(cpuPercent)
+	} else {
+		cg.printf("WARN: skipping cpu.weight (no delegation/permission)")
+	}
 
 	// FIXME not supported in CG2?
 	var _ = moveMemCharge
-
-	/*
-		if moveMemCharge {
-			cg.WriteInt("memory.move_charge_at_immigrate", 1)
-		} else {
-			cg.WriteInt("memory.move_charge_at_immigrate", 0)
-		}*/
-
 	return cg
 }
 
 // GroupPath returns the path to the Cgroup pool for OpenLambda
 func (pool *CgroupPool) GroupPath() string {
+	if base, err := delegatedUserCgroupBase(); err == nil {
+		name := pool.Name
+		if !strings.HasSuffix(name, ".slice") {
+			name += ".slice"
+		}
+		return path.Join(base, name)
+	}
 	return fmt.Sprintf("/sys/fs/cgroup/%s", pool.Name)
 }
