@@ -108,20 +108,26 @@ func NewCgroupPool(name string) (*CgroupPool, error) {
 
 // NewCgroup creates a new CGroup in the pool
 func (pool *CgroupPool) NewCgroup() Cgroup {
-	pool.nextID++
+	for {
+		pool.nextID++
 
-	cg := &CgroupImpl{
-		name: fmt.Sprintf("cg-%d", pool.nextID),
-		pool: pool,
+		cg := &CgroupImpl{
+			name: fmt.Sprintf("cg-%d", pool.nextID),
+			pool: pool,
+		}
+
+		groupPath := cg.GroupPath()
+		if err := os.Mkdir(groupPath, 0700); err != nil {
+			// If a previous run left cg-N behind, try the next N
+			if os.IsExist(err) {
+				continue
+			}
+			panic(fmt.Errorf("Mkdir %s: %s", groupPath, err))
+		}
+
+		cg.printf("created")
+		return cg
 	}
-
-	groupPath := cg.GroupPath()
-	if err := os.Mkdir(groupPath, 0o700); err != nil {
-		panic(fmt.Errorf("Mkdir %s: %s", groupPath, err))
-	}
-
-	cg.printf("created")
-	return cg
 }
 
 // add ID to each log message so we know which logs correspond to
