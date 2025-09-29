@@ -290,17 +290,50 @@ func Main() (err error) {
 	http.HandleFunc(REGISTRY_BASE_PATH, RegistryHandler)
 
 	var s cleanable
+	var kafkaServer *KafkaServer
+
 	switch common.Conf.Server_mode {
 	case "lambda":
 		s, err = NewLambdaServer()
+		if err != nil {
+			os.Remove(pidPath)
+			return err
+		}
+
+		// Always create and start Kafka server alongside lambda server
+		lambdaServer := s.(*LambdaServer)
+		kafkaServer, err = NewKafkaServer(lambdaServer.lambdaMgr)
+		if err != nil {
+			os.Remove(pidPath)
+			return fmt.Errorf("failed to create Kafka server: %w", err)
+		}
+		slog.Info("Created kafka server")
+
+		// Connect the Kafka server to the Lambda manager for trigger registration
+		lambdaServer.SetKafkaServer(kafkaServer)
 	case "sock":
 		s, err = NewSOCKServer()
+		if err != nil {
+			os.Remove(pidPath)
+			return err
+		}
 	default:
 		return fmt.Errorf("unknown Server_mode %s", common.Conf.Server_mode)
 	}
-	if err != nil {
-		os.Remove(pidPath)
-		return err
+
+	// Start Kafka server in background goroutine if it was created
+	if kafkaServer != nil {
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error("Panic in Kafka server", "error", r)
+				}
+			}()
+
+			if err := kafkaServer.StartConsuming(); err != nil {
+				slog.Error("Kafka server error", "error", err)
+			}
+		}()
 	}
 
 	// clean up if signal hits us (e.g., from ctrl-C)
@@ -310,14 +343,28 @@ func Main() (err error) {
 	go func() {
 		<-c
 		slog.Info("Received kill signal, cleaning up.")
+
+		// Clean up Kafka server first
+		if kafkaServer != nil {
+			kafkaServer.cleanup()
+		}
+
 		shutdown(pidPath, s)
 	}()
 
 	port := fmt.Sprintf("%s:%s", common.Conf.Worker_url, common.Conf.Worker_port)
+	slog.Info("Starting HTTP server", "port", port)
+	if kafkaServer != nil {
+		slog.Info("Kafka server running in background")
+	}
+
 	err = http.ListenAndServe(port, nil)
 
 	// if ListenAndServer returned, there must have been some issue
 	// (probably a port collision)
+	if kafkaServer != nil {
+		kafkaServer.cleanup()
+	}
 	s.cleanup()
 	os.Remove(pidPath)
 	slog.Error(err.Error())

@@ -170,6 +170,9 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 
 		f.lmgr.DepTracer.TraceFunction(codeDir, meta.Sandbox.Installs)
 		f.Meta = meta
+
+		// Register Kafka triggers for this lambda function
+		f.lmgr.registerKafkaTriggers(f.name, meta.Config)
 	} else if rtType == common.RT_NATIVE {
 		slog.Info("Got native function")
 
@@ -178,6 +181,9 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 			Sandbox: nil,                              // Sandbox is nil for native functions
 			Config:  common.LoadDefaultLambdaConfig(), // Load default configuration
 		}
+
+		// Register Kafka triggers for native functions (usually none, but check anyway)
+		f.lmgr.registerKafkaTriggers(f.name, f.Meta.Config)
 	}
 
 	f.codeDir = codeDir
@@ -413,6 +419,11 @@ func (f *LambdaFunc) newInstance() {
 
 // Kill signals the lambda function to terminate all instances and perform cleanup.
 func (f *LambdaFunc) Kill() {
+	// Unregister Kafka triggers for this lambda function
+	if f.lmgr.kafkaServer != nil {
+		f.lmgr.kafkaServer.UnregisterLambdaKafkaTriggers(f.name)
+	}
+
 	done := make(chan bool)
 	f.killChan <- done
 	<-done

@@ -77,6 +77,11 @@ func (s *LambdaServer) cleanup() {
 	s.lambdaMgr.Cleanup()
 }
 
+// SetKafkaServer connects the Kafka server to the lambda manager for trigger registration
+func (s *LambdaServer) SetKafkaServer(ks *KafkaServer) {
+	s.lambdaMgr.SetKafkaServer(ks)
+}
+
 // NewLambdaServer creates a server based on the passed config.
 func NewLambdaServer() (*LambdaServer, error) {
 	slog.Info("Starting new lambda server")

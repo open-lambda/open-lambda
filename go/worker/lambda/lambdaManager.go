@@ -15,6 +15,13 @@ import (
 	"github.com/open-lambda/open-lambda/go/worker/sandbox"
 )
 
+// KafkaServerInterface defines the interface for registering Kafka triggers
+// This avoids circular dependencies between lambda and event packages
+type KafkaServerInterface interface {
+	RegisterLambdaKafkaTriggers(lambdaName string, triggers []common.KafkaTrigger) error
+	UnregisterLambdaKafkaTriggers(lambdaName string)
+}
+
 // LambdaMgr provides thread-safe getting of lambda functions and collects all
 // lambda subsystems (resource pullers and sandbox pools) in one place
 type LambdaMgr struct {
@@ -28,6 +35,9 @@ type LambdaMgr struct {
 	// storage dirs that we manage
 	codeDirs    *common.DirMaker
 	scratchDirs *common.DirMaker
+
+	// Kafka server for registering triggers
+	kafkaServer KafkaServerInterface
 
 	// thread-safe map from a lambda's name to its LambdaFunc
 	mapMutex sync.Mutex
@@ -63,6 +73,31 @@ func GetLambdaManagerInstance() (*LambdaMgr, error) {
 		lambdaMgr, err = newLambdaMgr()
 	})
 	return lambdaMgr, err
+}
+
+// SetKafkaServer sets the Kafka server for registering lambda triggers
+// This must be called after GetLambdaManagerInstance() but before creating lambda functions
+func (mgr *LambdaMgr) SetKafkaServer(ks KafkaServerInterface) {
+	mgr.kafkaServer = ks
+}
+
+// registerKafkaTriggers registers Kafka triggers for a lambda function
+func (mgr *LambdaMgr) registerKafkaTriggers(lambdaName string, config *common.LambdaConfig) {
+	if mgr.kafkaServer == nil || config == nil {
+		return
+	}
+
+	if len(config.Triggers.Kafka) > 0 {
+		if err := mgr.kafkaServer.RegisterLambdaKafkaTriggers(lambdaName, config.Triggers.Kafka); err != nil {
+			slog.Error("Failed to register Kafka triggers",
+				"lambda", lambdaName,
+				"error", err)
+		} else {
+			slog.Info("Registered Kafka triggers for lambda",
+				"lambda", lambdaName,
+				"triggers", len(config.Triggers.Kafka))
+		}
+	}
 }
 
 // newLambdaMgr creates a new LambdaMgr instance and initializes its subsystems.
