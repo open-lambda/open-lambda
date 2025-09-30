@@ -18,6 +18,7 @@ import (
 
 	"github.com/open-lambda/open-lambda/go/boss/lambdastore"
 	"github.com/open-lambda/open-lambda/go/common"
+	"github.com/open-lambda/open-lambda/go/worker/lambda"
 )
 
 const (
@@ -249,6 +250,69 @@ func RegistryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// preloadAllKafkaLambdas scans the registry for all lambdas with Kafka triggers
+// and registers them immediately to avoid lazy loading delays
+func preloadAllKafkaLambdas(kafkaServer *KafkaServer, lambdaMgr *lambda.LambdaMgr) error {
+	if lambdaStore == nil {
+		return fmt.Errorf("lambda store not initialized")
+	}
+
+	slog.Info("Starting preload of Kafka lambdas from registry")
+
+	// Get all lambda names from the registry
+	lambdaNames := lambdaStore.ListAllLambdas()
+
+	loadedCount := 0
+	errorCount := 0
+
+	for _, lambdaName := range lambdaNames {
+		// Get lambda configuration
+		config, err := lambdaStore.GetLambdaConfig(lambdaName)
+		if err != nil {
+			slog.Warn("Failed to load config for lambda during preload",
+				"lambda", lambdaName,
+				"error", err)
+			errorCount++
+			continue
+		}
+
+		// Debug: Print the loaded config
+		slog.Info("DEBUG: Loaded config for lambda",
+			"lambda", lambdaName,
+			"config", config)
+
+		// Check if lambda has Kafka triggers
+		if config == nil || len(config.Triggers.Kafka) == 0 {
+			slog.Info("Skipping the following lambda due to lack of config",
+				"lambda", lambdaName)
+			continue // Skip lambdas without Kafka triggers
+		}
+
+		// Register Kafka triggers immediately
+		err = kafkaServer.RegisterLambdaKafkaTriggers(lambdaName, config.Triggers.Kafka)
+		if err != nil {
+			slog.Error("Failed to preload Kafka triggers for lambda",
+				"lambda", lambdaName,
+				"triggers", len(config.Triggers.Kafka),
+				"error", err)
+			errorCount++
+			continue
+		}
+
+		loadedCount++
+		slog.Info("Preloaded Kafka triggers for lambda",
+			"lambda", lambdaName,
+			"triggers", len(config.Triggers.Kafka))
+	}
+
+	slog.Info("Completed Kafka lambda preload",
+		"total_lambdas", len(lambdaNames),
+		"loaded_with_kafka", loadedCount,
+		"errors", errorCount)
+
+	return nil
+}
+
 func Main() (err error) {
 	pidPath := filepath.Join(common.Conf.Worker_dir, "worker.pid")
 	if _, err := os.Stat(pidPath); err == nil {
@@ -311,6 +375,12 @@ func Main() (err error) {
 
 		// Connect the Kafka server to the Lambda manager for trigger registration
 		lambdaServer.SetKafkaServer(kafkaServer)
+
+		// Preload all Kafka consumers for lambdas in the registry
+		if err := preloadAllKafkaLambdas(kafkaServer, lambdaServer.lambdaMgr); err != nil {
+			slog.Warn("Failed to preload some Kafka lambdas", "error", err)
+			// Don't fail server startup for preload issues
+		}
 	case "sock":
 		s, err = NewSOCKServer()
 		if err != nil {

@@ -223,9 +223,12 @@ func (ks *KafkaServer) RegisterLambdaKafkaTriggers(lambdaName string, triggers [
 	}
 
 	// If lambda already has consumers, clean them up first
-	if existingConsumer, exists := ks.lambdaConsumers[lambdaName]; exists {
-		existingConsumer.cleanup()
-		delete(ks.lambdaConsumers, lambdaName)
+	for consumerName, consumer := range ks.lambdaConsumers {
+		if strings.HasPrefix(consumerName, lambdaName+"-") {
+			consumer.cleanup()
+			delete(ks.lambdaConsumers, consumerName)
+			slog.Info("Cleaned up existing Kafka consumer for lambda", "lambda", lambdaName, "consumer", consumerName)
+		}
 	}
 
 	// Create consumers for each Kafka trigger

@@ -142,12 +142,18 @@ func ExtractConfigFromTarGz(tarPath string) (*LambdaConfig, error) {
 			return nil, fmt.Errorf("invalid tar: %w", err)
 		}
 
-		if header.Name == LambdaConfigFilename {
+		// Debug: Log all files in the tarball
+		slog.Info("DEBUG: Found file in tarball", "filename", header.Name, "tarPath", tarPath)
+
+		// Check if this is the config file (handle both exact match and subdirectory cases)
+		if header.Name == LambdaConfigFilename || filepath.Base(header.Name) == LambdaConfigFilename {
+			slog.Info("DEBUG: Found config file", "filename", header.Name)
 			var config LambdaConfig
 			decoder := yaml.NewDecoder(tr)
 			if err := decoder.Decode(&config); err != nil {
 				return nil, fmt.Errorf("failed to parse %s: %w", LambdaConfigFilename, err)
 			}
+			slog.Info("DEBUG: Successfully parsed config from tarball", "config", config)
 			return &config, checkLambdaConfig(&config)
 		}
 	}

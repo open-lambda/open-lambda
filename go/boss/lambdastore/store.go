@@ -354,3 +354,15 @@ func (s *LambdaStore) listEntries() []string {
 	}
 	return funcNames
 }
+
+// ListAllLambdas returns a list of all lambda function names in the registry
+// This is used for eager loading of Kafka consumers at worker startup
+func (s *LambdaStore) ListAllLambdas() []string {
+	return s.listEntries()
+}
+
+// GetLambdaConfig returns the configuration for a specific lambda function
+// This is used for eager loading of Kafka consumers at worker startup
+func (s *LambdaStore) GetLambdaConfig(funcName string) (*common.LambdaConfig, error) {
+	return s.getConfig(funcName)
+}
