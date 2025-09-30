@@ -2,6 +2,7 @@ package event
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -10,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Shopify/sarama"
+	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/open-lambda/open-lambda/go/common"
 	"github.com/open-lambda/open-lambda/go/worker/lambda"
 )
@@ -18,13 +19,12 @@ import (
 
 // LambdaKafkaConsumer manages Kafka consumption for a specific lambda function
 type LambdaKafkaConsumer struct {
-	consumerName     string // Unique name for this consumer (may include index suffix)
-	lambdaName       string // Actual lambda function name for invocation
-	kafkaTrigger     *common.KafkaTrigger
-	consumer         sarama.Consumer
-	partitionConsumers []sarama.PartitionConsumer
-	lambdaManager    *lambda.LambdaMgr // Reference to lambda manager for direct calls
-	stopChan         chan struct{}
+	consumerName  string // Unique name for this consumer (may include index suffix)
+	lambdaName    string // Actual lambda function name for invocation
+	kafkaTrigger  *common.KafkaTrigger
+	client        *kgo.Client
+	lambdaManager *lambda.LambdaMgr // Reference to lambda manager for direct calls
+	stopChan      chan struct{}
 }
 
 // KafkaServer manages multiple lambda-specific Kafka consumers
@@ -37,32 +37,41 @@ type KafkaServer struct {
 
 // NewLambdaKafkaConsumer creates a new Kafka consumer for a specific lambda function
 func NewLambdaKafkaConsumer(consumerName string, lambdaName string, trigger *common.KafkaTrigger, lambdaManager *lambda.LambdaMgr) (*LambdaKafkaConsumer, error) {
-	// Setup Kafka consumer configuration
-	config := sarama.NewConfig()
-	config.Consumer.Return.Errors = true
+	// Validate that we have brokers and topics
+	if len(trigger.BootstrapServers) == 0 {
+		return nil, fmt.Errorf("no bootstrap servers configured for lambda %s", lambdaName)
+	}
+	if len(trigger.Topics) == 0 {
+		return nil, fmt.Errorf("no topics configured for lambda %s", lambdaName)
+	}
+
+	// Setup kgo client options
+	opts := []kgo.Opt{
+		kgo.SeedBrokers(trigger.BootstrapServers...),
+		kgo.ConsumerGroup(trigger.GroupId),
+		kgo.ConsumeTopics(trigger.Topics...),
+		kgo.SessionTimeout(10 * time.Second),
+		kgo.HeartbeatInterval(3 * time.Second),
+	}
 
 	// Use trigger-specific offset reset or default to latest
 	if trigger.AutoOffsetReset == "earliest" {
-		config.Consumer.Offsets.Initial = sarama.OffsetOldest
+		opts = append(opts, kgo.ConsumeResetOffset(kgo.NewOffset().AtStart()))
 	} else {
-		config.Consumer.Offsets.Initial = sarama.OffsetNewest
+		opts = append(opts, kgo.ConsumeResetOffset(kgo.NewOffset().AtEnd()))
 	}
 
-	config.Consumer.Group.Session.Timeout = 10 * time.Second
-	config.Consumer.Group.Heartbeat.Interval = 3 * time.Second
-	config.Version = sarama.V2_6_0_0
-
-	// Create consumer
-	consumer, err := sarama.NewConsumer(trigger.BootstrapServers, config)
+	// Create kgo client
+	client, err := kgo.NewClient(opts...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create Kafka consumer for lambda %s: %w", lambdaName, err)
+		return nil, fmt.Errorf("failed to create Kafka client for lambda %s: %w", lambdaName, err)
 	}
 
 	return &LambdaKafkaConsumer{
 		consumerName:  consumerName,
 		lambdaName:    lambdaName,
 		kafkaTrigger:  trigger,
-		consumer:      consumer,
+		client:        client,
 		lambdaManager: lambdaManager,
 		stopChan:      make(chan struct{}),
 	}, nil
@@ -89,105 +98,86 @@ func (lkc *LambdaKafkaConsumer) StartConsuming() error {
 		"brokers", lkc.kafkaTrigger.BootstrapServers,
 		"group_id", lkc.kafkaTrigger.GroupId)
 
-	// Subscribe to all topics for this lambda
-	for _, topic := range lkc.kafkaTrigger.Topics {
-		if err := lkc.subscribeToTopic(topic); err != nil {
-			return fmt.Errorf("failed to subscribe lambda %s to topic %s: %w", lkc.lambdaName, topic, err)
-		}
-	}
-
 	slog.Info("Kafka consumer started for lambda", "consumer", lkc.consumerName, "lambda", lkc.lambdaName)
+
+	// Start consuming loop
+	go lkc.consumeLoop()
 
 	// Block until shutdown
 	<-lkc.stopChan
 	return nil
 }
 
-// subscribeToTopic subscribes to a specific Kafka topic for this lambda
-func (lkc *LambdaKafkaConsumer) subscribeToTopic(topic string) error {
-	partitionList, err := lkc.consumer.Partitions(topic)
-	if err != nil {
-		return fmt.Errorf("failed to get partitions for topic %s: %w", topic, err)
-	}
-
-	for _, partition := range partitionList {
-		pc, err := lkc.consumer.ConsumePartition(topic, partition, sarama.OffsetOldest)
-		if err != nil {
-			return fmt.Errorf("failed to start partition consumer for %s:%d: %w",
-				topic, partition, err)
-		}
-
-		lkc.partitionConsumers = append(lkc.partitionConsumers, pc)
-
-		// Start goroutine to handle messages from this partition
-		go lkc.consumePartition(pc)
-	}
-
-	slog.Info("Lambda subscribed to topic",
-		"consumer", lkc.consumerName,
-		"lambda", lkc.lambdaName,
-		"topic", topic,
-		"partitions", len(partitionList))
-	return nil
-}
-
-// consumePartition handles messages from a specific partition for this lambda
-func (lkc *LambdaKafkaConsumer) consumePartition(pc sarama.PartitionConsumer) {
+// consumeLoop handles Kafka message consumption using kgo polling
+func (lkc *LambdaKafkaConsumer) consumeLoop() {
 	defer func() {
 		if r := recover(); r != nil {
-			slog.Error("Panic in partition consumer",
+			slog.Error("Panic in consume loop",
 				"lambda", lkc.lambdaName,
 				"error", r)
 		}
-		pc.Close()
 	}()
 
 	for {
 		select {
-		case message := <-pc.Messages():
-			if message != nil {
+		case <-lkc.stopChan:
+			slog.Info("Stopping Kafka consumer for lambda", "lambda", lkc.lambdaName)
+			return
+		default:
+			// Poll for messages with longer timeout to reduce aggressive polling
+			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+			fetches := lkc.client.PollFetches(ctx)
+			cancel()
+
+			if errs := fetches.Errors(); len(errs) > 0 {
+				// Log errors but don't spam - only log unique errors or every 10th occurrence
+				for _, err := range errs {
+					if !strings.Contains(err.Err.Error(), "context deadline exceeded") {
+						slog.Error("Kafka fetch error",
+							"lambda", lkc.lambdaName,
+							"error", err)
+					}
+				}
+				// If we have connection errors, sleep before retrying
+				time.Sleep(5 * time.Second)
+				continue
+			}
+
+			// Process each record
+			fetches.EachRecord(func(record *kgo.Record) {
 				slog.Info("Received Kafka message for lambda",
 					"consumer", lkc.consumerName,
 					"lambda", lkc.lambdaName,
-					"topic", message.Topic,
-					"partition", message.Partition,
-					"offset", message.Offset,
-					"size", len(message.Value))
-				go lkc.processMessage(message)
-			}
-		case err := <-pc.Errors():
-			if err != nil {
-				slog.Error("Partition consumer error",
-					"lambda", lkc.lambdaName,
-					"error", err)
-			}
-		case <-lkc.stopChan:
-			slog.Info("Stopping partition consumer for lambda", "lambda", lkc.lambdaName)
-			return
+					"topic", record.Topic,
+					"partition", record.Partition,
+					"offset", record.Offset,
+					"size", len(record.Value))
+				go lkc.processMessage(record)
+			})
 		}
 	}
 }
 
 // processMessage handles a single Kafka message by invoking the lambda function directly
-func (lkc *LambdaKafkaConsumer) processMessage(msg *sarama.ConsumerMessage) {
+func (lkc *LambdaKafkaConsumer) processMessage(record *kgo.Record) {
 	t := common.T0("kafka-message-processing")
 	defer t.T1()
 
 	// Create synthetic HTTP request from Kafka message
-	req, err := http.NewRequest("POST", "/", bytes.NewReader(msg.Value))
+	req, err := http.NewRequest("POST", "/", bytes.NewReader(record.Value))
 	if err != nil {
 		slog.Error("Failed to create request for lambda invocation",
 			"lambda", lkc.lambdaName,
 			"error", err,
-			"topic", msg.Topic)
+			"topic", record.Topic)
 		return
 	}
 
 	// Set headers with Kafka metadata
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Kafka-Topic", msg.Topic)
-	req.Header.Set("X-Kafka-Partition", fmt.Sprintf("%d", msg.Partition))
-	req.Header.Set("X-Kafka-Offset", fmt.Sprintf("%d", msg.Offset))
+	req.Header.Set("X-Kafka-Topic", record.Topic)
+	req.Header.Set("X-Kafka-Partition", fmt.Sprintf("%d", record.Partition))
+	req.Header.Set("X-Kafka-Offset", fmt.Sprintf("%d", record.Offset))
 	req.Header.Set("X-Kafka-Group-Id", lkc.kafkaTrigger.GroupId)
 
 	// Create response recorder to capture lambda output
@@ -201,36 +191,23 @@ func (lkc *LambdaKafkaConsumer) processMessage(msg *sarama.ConsumerMessage) {
 	slog.Info("Kafka message processed via direct invocation",
 		"consumer", lkc.consumerName,
 		"lambda", lkc.lambdaName,
-		"topic", msg.Topic,
-		"partition", msg.Partition,
-		"offset", msg.Offset,
+		"topic", record.Topic,
+		"partition", record.Partition,
+		"offset", record.Offset,
 		"status", w.Code)
 }
 
 
-// cleanup closes all partition consumers and the main consumer
+// cleanup closes the kgo client
 func (lkc *LambdaKafkaConsumer) cleanup() {
 	slog.Info("Shutting down Kafka consumer for lambda", "lambda", lkc.lambdaName)
 
 	// Signal all goroutines to stop
 	close(lkc.stopChan)
 
-	// Close partition consumers
-	for _, pc := range lkc.partitionConsumers {
-		if err := pc.Close(); err != nil {
-			slog.Error("Error closing partition consumer",
-				"lambda", lkc.lambdaName,
-				"error", err)
-		}
-	}
-
-	// Close main consumer
-	if lkc.consumer != nil {
-		if err := lkc.consumer.Close(); err != nil {
-			slog.Error("Error closing Kafka consumer",
-				"lambda", lkc.lambdaName,
-				"error", err)
-		}
+	// Close kgo client
+	if lkc.client != nil {
+		lkc.client.Close()
 	}
 
 	slog.Info("Kafka consumer shutdown complete for lambda", "lambda", lkc.lambdaName)

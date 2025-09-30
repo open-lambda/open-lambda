@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log/slog"
-	"os"
 	"path"
 	"path/filepath"
+	"os"
 	"syscall"
 
 	"github.com/urfave/cli/v2"
@@ -354,6 +354,7 @@ func SandboxConfJson() string {
 	}
 	return string(s)
 }
+
 
 // Dump prints the Config as a JSON string.
 func DumpConf() {
