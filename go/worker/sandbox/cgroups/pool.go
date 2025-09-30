@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"os"
 	"path"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -23,41 +22,6 @@ type CgroupPool struct {
 	recycled chan *CgroupImpl
 	quit     chan chan bool
 	nextID   int
-}
-
-// / NOTE (rootless): helpers used only for delegated user-slice resolution.
-func hostUIDForCgroups() int {
-	if b, err := os.ReadFile("/proc/self/uid_map"); err == nil {
-		for _, ln := range strings.Split(string(b), "\n") {
-			ln = strings.TrimSpace(ln)
-			if ln == "" {
-				continue
-			}
-			fs := strings.Fields(ln)
-			// first mapping: "0 <host_uid> <size>"
-			if len(fs) >= 2 && fs[0] == "0" {
-				if hid, err := strconv.Atoi(fs[1]); err == nil && hid >= 0 {
-					return hid
-				}
-			}
-		}
-	}
-	if su := os.Getenv("SUDO_UID"); su != "" {
-		if hid, err := strconv.Atoi(su); err == nil && hid > 0 {
-			return hid
-		}
-	}
-	return os.Getuid()
-}
-
-// NOTE (rootless): prefer systemd user slice when present for cgroup pool.
-func delegatedUserCgroupBase() (string, error) {
-	uid := hostUIDForCgroups()
-	p := fmt.Sprintf("/sys/fs/cgroup/user.slice/user-%d.slice/user@%d.service/user.slice", uid, uid)
-	if st, err := os.Stat(p); err == nil && st.IsDir() {
-		return p, nil
-	}
-	return "", fmt.Errorf("delegated user cgroup base not found for uid %d", uid)
 }
 
 // NOTE (rootless): best-effort guard for controller files.
@@ -84,16 +48,55 @@ func NewCgroupPool(name string) (*CgroupPool, error) {
 		nextID:   0,
 	}
 
-	// create (or ensure) the pool directory
-	groupPath := pool.GroupPath()
-	pool.printf("using cgroup base: %s", groupPath)
-	if err := os.MkdirAll(groupPath, 0o700); err != nil {
-		return nil, fmt.Errorf("MkdirAll %s: %w", groupPath, err)
+	// Try to create the pool directory with fallback logic:
+	// 1. Try systemd user slice (rootless-friendly)
+	// 2. Fall back to legacy path if that fails
+	var groupPath string
+	var createErr error
+
+	// Try systemd user slice first
+	if base, err := common.DelegatedUserCgroupBase(); err == nil {
+		poolName := pool.Name
+		if !strings.HasSuffix(poolName, ".slice") {
+			poolName += ".slice"
+		}
+		groupPath = path.Join(base, poolName)
+		pool.printf("trying systemd user slice: %s", groupPath)
+		if err := os.MkdirAll(groupPath, 0o755); err == nil {
+			pool.printf("using cgroup base: %s", groupPath)
+			// Best-effort: enable controllers
+			rpath := fmt.Sprintf("%s/cgroup.subtree_control", groupPath)
+			if f, err := os.OpenFile(rpath, os.O_WRONLY|os.O_APPEND, 0); err == nil {
+				_, _ = f.WriteString("+pids +io +memory +cpu\n")
+				_ = f.Close()
+			} else {
+				pool.printf("WARN: could not write %s (%v); continuing without delegating controllers", rpath, err)
+			}
+			go pool.cgTask()
+			return pool, nil
+		} else {
+			pool.printf("WARN: cannot create %s (%v); falling back to legacy path", groupPath, err)
+			createErr = err
+		}
 	}
 
-	// Best-effort: make controllers available to child groups.
-	// Not all Ubuntu/systemd setups delegate +cpu/+memory/+pids to user slices.
-	// We ignore failures here and let later code skip writes if delegation is missing.
+	// Fallback to legacy path
+	groupPath = fmt.Sprintf("/sys/fs/cgroup/%s", pool.Name)
+	pool.printf("trying legacy path: %s", groupPath)
+	if err := os.MkdirAll(groupPath, 0o700); err != nil {
+		// Both paths failed - provide helpful error message
+		errMsg := fmt.Sprintf("Failed to create cgroup pool at both systemd user slice and legacy path.\n")
+		if createErr != nil {
+			errMsg += fmt.Sprintf("  - User slice error: %v\n", createErr)
+		}
+		errMsg += fmt.Sprintf("  - Legacy path error: %v\n\n", err)
+		errMsg += common.GetCgroupDelegationInstructions()
+		return nil, fmt.Errorf("%s", errMsg)
+	}
+
+	pool.printf("using cgroup base: %s", groupPath)
+
+	// Best-effort: make controllers available to child groups
 	rpath := fmt.Sprintf("%s/cgroup.subtree_control", groupPath)
 	if f, err := os.OpenFile(rpath, os.O_WRONLY|os.O_APPEND, 0); err == nil {
 		_, _ = f.WriteString("+pids +io +memory +cpu\n")
@@ -257,7 +260,7 @@ func (pool *CgroupPool) GetCg(memLimitMB int, moveMemCharge bool, cpuPercent int
 
 // GroupPath returns the path to the Cgroup pool for OpenLambda
 func (pool *CgroupPool) GroupPath() string {
-	if base, err := delegatedUserCgroupBase(); err == nil {
+	if base, err := common.DelegatedUserCgroupBase(); err == nil {
 		name := pool.Name
 		if !strings.HasSuffix(name, ".slice") {
 			name += ".slice"
