@@ -2,7 +2,7 @@ package worker
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -64,8 +64,7 @@ func upCmd(ctx *cli.Context) error {
 	overrides := ctx.String("options")
 	if overrides != "" {
 		overridesPath := confPath + ".overrides"
-		err = overrideOpts(confPath, overridesPath, overrides)
-		if err != nil {
+		if err := overrideOpts(confPath, overridesPath, overrides); err != nil {
 			return err
 		}
 		confPath = overridesPath
@@ -74,6 +73,9 @@ func upCmd(ctx *cli.Context) error {
 		return err
 	}
 
+	// Rootless preflight info/warnings
+	preflightRootless()
+
 	// PREP STEP 3: ensure Open Lambda is in the StoppedClean state
 	if err := bringToStoppedClean(olPath); err != nil {
 		return err
@@ -81,37 +83,62 @@ func upCmd(ctx *cli.Context) error {
 
 	// should we run as a background process?
 	detach := ctx.Bool("detach")
+	if !detach && ctx.Bool("rootless") {
+		fmt.Println("NOTE: --rootless currently applied only in --detach mode.")
+	}
 
 	if detach {
 		// stdout+stderr both go to log
 		logPath := filepath.Join(olPath, "worker.out")
-		// creates a worker.out file
 		f, err := os.Create(logPath)
 		if err != nil {
 			return err
 		}
+
+		uid := os.Getuid()
+		gid := os.Getgid()
+
 		// holds attributes that will be used when os.StartProcess.
-		// we use CLONE_NEWNS because ol creates many mount points.
-		// we don't want them to show up in /proc/self/mountinfo
-		// for systemd because systemd creates a service for each
-		// mount point, which is a major overhead.
+		// legacy used CLONE_NEWNS so mounts don't spam systemd.
+		// now, if --rootless, also create a user+UTS namespace and map uid/gid -> 0 (fake root).
 		attr := os.ProcAttr{
 			Files: []*os.File{nil, f, f},
-			Sys: &syscall.SysProcAttr{
-				Unshareflags: syscall.CLONE_NEWNS,
-			},
 		}
+		if ctx.Bool("rootless") {
+			attr.Sys = &syscall.SysProcAttr{
+				// Create user ns + mount ns + uts together so it works unprivileged
+				Unshareflags: syscall.CLONE_NEWUSER | syscall.CLONE_NEWNS | syscall.CLONE_NEWUTS,
+				UidMappings: []syscall.SysProcIDMap{
+					{ContainerID: 0, HostID: uid, Size: 1},
+				},
+				// deny setgroups before writing gid_map (Go handles this when false)
+				GidMappingsEnableSetgroups: false,
+				GidMappings: []syscall.SysProcIDMap{
+					{ContainerID: 0, HostID: gid, Size: 1},
+				},
+			}
+		} else {
+			// Legacy: do NOT unshare mount ns alone (Ubuntu EPERM). No unshare in legacy.
+			attr.Sys = &syscall.SysProcAttr{}
+		}
+
+		// build args for child (strip -d/--detach)
 		cmd := []string{}
 		for _, arg := range os.Args {
 			if arg != "-d" && arg != "--detach" {
 				cmd = append(cmd, arg)
 			}
 		}
-		// looks for ./ol path
+
+		// absolute path to self
 		binPath, err := exec.LookPath(os.Args[0])
 		if err != nil {
 			return err
 		}
+		if abs, err := filepath.Abs(binPath); err == nil {
+			binPath = abs
+		}
+
 		// start the worker process
 		fmt.Printf("Starting worker in %s and waiting until it's ready.\n", olPath)
 		proc, err := os.StartProcess(binPath, cmd, &attr)
@@ -119,7 +146,7 @@ func upCmd(ctx *cli.Context) error {
 			return err
 		}
 
-		// died is error message
+		// wait/health-check loop
 		died := make(chan error)
 		go func() {
 			_, err := proc.Wait()
@@ -127,6 +154,7 @@ func upCmd(ctx *cli.Context) error {
 		}()
 
 		fmt.Printf("\tPID: %d\n\tPort: %s\n\tLog File: %s\n", proc.Pid, common.Conf.Worker_port, logPath)
+		fmt.Printf("\tRootless: %v (uid=%d gid=%d)\n", ctx.Bool("rootless"), uid, gid)
 
 		var pingErr error
 
@@ -142,10 +170,7 @@ func upCmd(ctx *cli.Context) error {
 			}
 
 			// is the worker still alive?
-			err := proc.Signal(syscall.Signal(0))
-			if err != nil {
-
-			}
+			_ = proc.Signal(syscall.Signal(0))
 
 			// is it reachable?
 			url := fmt.Sprintf("http://localhost:%s/pid", common.Conf.Worker_port)
@@ -158,7 +183,10 @@ func upCmd(ctx *cli.Context) error {
 			defer response.Body.Close()
 
 			// are we talking with the expected PID?
-			body, err := ioutil.ReadAll(response.Body)
+			body, err := io.ReadAll(response.Body)
+			if err != nil {
+				return fmt.Errorf("failed reading /pid response body: %s", err)
+			}
 			pid, err := strconv.Atoi(strings.TrimSpace(string(body)))
 			if err != nil {
 				return fmt.Errorf("/pid did not return an int :: %s", err)
@@ -168,7 +196,6 @@ func upCmd(ctx *cli.Context) error {
 				fmt.Printf("Ready!\n")
 				return nil // server is started and ready for requests
 			}
-
 			return fmt.Errorf("expected PID %v but found %v (port conflict?)", proc.Pid, pid)
 		}
 
@@ -178,8 +205,23 @@ func upCmd(ctx *cli.Context) error {
 	if err := event.Main(); err != nil {
 		return err
 	}
-
 	return fmt.Errorf("this code should not be reachable")
+}
+
+func preflightRootless() {
+	// Warn if Ubuntu blocks unprivileged user namespaces
+	if b, err := os.ReadFile("/proc/sys/kernel/unprivileged_userns_clone"); err == nil {
+		if strings.TrimSpace(string(b)) != "1" {
+			fmt.Println("WARNING: rootless user namespaces appear disabled (kernel.unprivileged_userns_clone=0).")
+			fmt.Println("         To enable: sudo sysctl kernel.unprivileged_userns_clone=1")
+		}
+	}
+	// Note systemd presence (used for rootless cgroup delegation)
+	if _, err := os.Stat("/run/systemd/system"); err == nil {
+		fmt.Println("INFO: systemd detected (cgroup v2 delegation likely available).")
+	} else {
+		fmt.Println("INFO: systemd not detected; rootless cgroup delegation may be unavailable.")
+	}
 }
 
 // statusCmd corresponds to the "status" command of the admin tool.
@@ -188,8 +230,7 @@ func statusCmd(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	err = common.LoadGlobalConfig(filepath.Join(olPath, "config.json"))
-	if err != nil {
+	if err := common.LoadGlobalConfig(filepath.Join(olPath, "config.json")); err != nil {
 		return err
 	}
 
@@ -200,7 +241,7 @@ func statusCmd(ctx *cli.Context) error {
 		return fmt.Errorf("could not send GET to %s", url)
 	}
 	defer response.Body.Close()
-	body, err := ioutil.ReadAll(response.Body)
+	body, err := io.ReadAll(response.Body)
 	if err != nil {
 		return fmt.Errorf("failed to read body from GET to %s", url)
 	}
@@ -283,6 +324,11 @@ func WorkerCommands() []*cli.Command {
 					Name:    "detach",
 					Aliases: []string{"d"},
 					Usage:   "Run worker in background",
+				},
+				&cli.BoolFlag{
+					Name:  "rootless",
+					Usage: "Enable rootless user namespace for worker (recommended)",
+					Value: true,
 				},
 			},
 			Action: upCmd,

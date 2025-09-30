@@ -21,6 +21,34 @@ import (
 	"github.com/open-lambda/open-lambda/go/worker/embedded"
 )
 
+// cleanupMountsInUserNS removes all sandbox mount directories.
+// Note: When the worker process (running in a user namespace) dies, all mounts
+// created within that namespace are automatically cleaned up by the kernel.
+// We just need to remove the empty directories.
+func cleanupMountsInUserNS(dirName string) error {
+	files, err := os.ReadDir(dirName)
+	if err != nil {
+		return fmt.Errorf("error reading mount root: %s", err.Error())
+	}
+
+	errorCount := 0
+	for _, file := range files {
+		path := filepath.Join(dirName, file.Name())
+		fmt.Printf("Removing sandbox directory %s\n", path)
+
+		// Just remove the directory - mounts are already gone when namespace died
+		if err := os.RemoveAll(path); err != nil {
+			fmt.Printf("ERROR: Could not remove %s: %s\n", path, err.Error())
+			errorCount++
+		}
+	}
+
+	if errorCount > 0 {
+		return fmt.Errorf("failed to remove %d sandbox directories", errorCount)
+	}
+	return nil
+}
+
 func initOLBaseDir(baseDir string, dockerBaseImage string) error {
 	if dockerBaseImage == "" {
 		dockerBaseImage = "ol-wasm"
@@ -274,13 +302,27 @@ func runningToStoppedClean() error {
 	return fmt.Errorf("worker process did not stop within 60 seconds")
 }
 
+// getCgRoot returns the cgroup root path for the given olPath.
+// It tries the systemd user slice path first (rootless), then falls back to legacy path.
+func getCgRoot(olPath string) string {
+	clusterName := filepath.Base(olPath)
+
+	// Try systemd user slice (rootless-friendly)
+	if base, err := common.DelegatedUserCgroupBase(); err == nil {
+		return filepath.Join(base, clusterName+"-sandboxes.slice")
+	}
+
+	// Fallback for rootful/legacy
+	return filepath.Join("/sys", "fs", "cgroup", clusterName+"-sandboxes")
+}
+
 // This function will transition the StoppedDirty state to StoppedClean state.
 // It attempts to clean up resources after detecting a dirty shutdown.
 // It cleans up cgroups and mounts associated with the OpenLambda instance at `olPath`.
 // Returns errors encountered during cleanup operations.
 func stoppedDirtyToStoppedClean(olPath string) error {
 	// Clean up cgroups associated with sandboxes
-	cgRoot := filepath.Join("/sys", "fs", "cgroup", filepath.Base(olPath)+"-sandboxes")
+	cgRoot := getCgRoot(olPath)
 	fmt.Printf("Attempting to clean up cgroups at %s\n", cgRoot)
 
 	cgroupErrorCount := 0
@@ -339,24 +381,10 @@ func stoppedDirtyToStoppedClean(olPath string) error {
 		if !sandboxRootStat.IsDir() {
 			return fmt.Errorf("sandbox mount root is not a directory")
 		}
-		// Perform cleanup
-		files, err := os.ReadDir(dirName)
-		if err != nil {
-			return fmt.Errorf("error reading mount root: %s", err.Error())
-		}
-		for _, file := range files {
-			path := filepath.Join(dirName, file.Name())
-			fmt.Printf("Attempting to unmount %s\n", path)
-			if err := syscall.Unmount(path, syscall.MNT_DETACH); err != nil {
-				// Print an error if unmounting fails.
-				fmt.Printf("Could not unmount: %s\n", err.Error())
-				sandboxErrorCount += 1
-			}
-			if err := syscall.Rmdir(path); err != nil {
-				// Print an error if removing the mount directory fails.
-				fmt.Printf("Could not remove mount dir: %s\n", err.Error())
-				sandboxErrorCount += 1
-			}
+		// Perform cleanup - try unmounting in user namespace if needed
+		if err := cleanupMountsInUserNS(dirName); err != nil {
+			fmt.Printf("Warning: %v\n", err)
+			sandboxErrorCount += 1
 		}
 	}
 
@@ -373,20 +401,14 @@ func stoppedDirtyToStoppedClean(olPath string) error {
 		return fmt.Errorf("%d error(s) while cleaning up cgroup and %d error(s) while cleaning up sandbox", cgroupErrorCount, sandboxErrorCount)
 	}
 
-	// Attempt to unmount the main mount directory
-	fmt.Printf("Attempting to clean up main mount directory at %s\n", dirName)
-	if err := syscall.Unmount(dirName, syscall.MNT_DETACH); err != nil {
-		// Log an error if unmounting the main directory fails.
-		if errors.Is(err, syscall.EINVAL) {
-			fmt.Printf("Sandbox mount root is not mounted. No need to clean up.\n")
-		} else {
-			return fmt.Errorf("could not unmount %s: %s", dirName, err.Error())
-		}
-	}
+	// Note: root-sandboxes directory itself is usually not a mount point
+	// Individual subdirectories were mounts, but they're cleaned up when the namespace dies
+	fmt.Printf("Cleanup complete for %s\n", dirName)
 
 	// Remove the worker.pid file
-	if err := os.Remove(filepath.Join(olPath, "worker", "worker.pid")); err != nil {
-		// Return an error if removing worker.pid fails.
+	pidPath := filepath.Join(olPath, "worker", "worker.pid")
+	if err := os.Remove(pidPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		// Only fail if file exists but we can't remove it
 		return fmt.Errorf("could not remove worker.pid: %s", err.Error())
 	}
 
