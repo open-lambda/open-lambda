@@ -249,6 +249,80 @@ func RegistryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// HandleKafkaRegister handles Kafka consumer registration/unregistration for lambdas
+func HandleKafkaRegister(kafkaServer *KafkaServer) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Extract lambda name
+		lambdaName := strings.TrimPrefix(r.URL.Path, "/kafka/register/")
+		if lambdaName == "" {
+			http.Error(w, "lambda name required", http.StatusBadRequest)
+			return
+		}
+
+		type Response struct {
+			Status  string `json:"status"`
+			Lambda  string `json:"lambda"`
+			Message string `json:"message"`
+		}
+
+		switch r.Method {
+		case "POST":
+			// Read lambda config from registry
+			config, err := lambdaStore.GetConfig(lambdaName)
+			if err != nil {
+				slog.Error("Failed to load lambda config for Kafka registration",
+					"lambda", lambdaName,
+					"error", err)
+				http.Error(w, fmt.Sprintf("failed to load lambda config: %v", err), http.StatusNotFound)
+				return
+			}
+
+			// Check if lambda has Kafka triggers
+			if config == nil || len(config.Triggers.Kafka) == 0 {
+				http.Error(w, "lambda has no Kafka triggers", http.StatusBadRequest)
+				return
+			}
+
+			// Register Kafka triggers
+			err = kafkaServer.RegisterLambdaKafkaTriggers(lambdaName, config.Triggers.Kafka)
+			if err != nil {
+				slog.Error("Failed to register Kafka triggers",
+					"lambda", lambdaName,
+					"error", err)
+				http.Error(w, fmt.Sprintf("failed to register Kafka triggers: %v", err), http.StatusInternalServerError)
+				return
+			}
+
+			slog.Info("Registered Kafka consumers via API",
+				"lambda", lambdaName,
+				"triggers", len(config.Triggers.Kafka))
+
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(Response{
+				Status:  "success",
+				Lambda:  lambdaName,
+				Message: fmt.Sprintf("Kafka consumers registered for %d trigger(s)", len(config.Triggers.Kafka)),
+			})
+
+		case "DELETE":
+			// Unregister Kafka triggers
+			kafkaServer.UnregisterLambdaKafkaTriggers(lambdaName)
+
+			slog.Info("Unregistered Kafka consumers via API", "lambda", lambdaName)
+
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(Response{
+				Status:  "success",
+				Lambda:  lambdaName,
+				Message: "Kafka consumers unregistered",
+			})
+
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}
+}
+
 func Main() (err error) {
 	pidPath := filepath.Join(common.Conf.Worker_dir, "worker.pid")
 	if _, err := os.Stat(pidPath); err == nil {
@@ -270,6 +344,22 @@ func Main() (err error) {
 		return err
 	}
 
+	var s cleanable
+	var kafkaServer *KafkaServer
+
+	defer func() {
+		if err != nil {
+			// Cleanup only on error, not normal signal-based shutdown
+			os.Remove(pidPath)
+			if kafkaServer != nil {
+				kafkaServer.cleanup()
+			}
+			if s != nil {
+				s.cleanup()
+			}
+		}
+	}()
+
 	// things shared by all servers
 	http.HandleFunc(PID_PATH, HandleGetPid)
 	http.HandleFunc(STATUS_PATH, Status)
@@ -282,25 +372,49 @@ func Main() (err error) {
 	slog.Info(fmt.Sprintf("Worker: Initializing LambdaStore with Registry = \"%s\"", common.Conf.Registry))
 	lambdaStore, err = lambdastore.NewLambdaStore(common.Conf.Registry, nil)
 	if err != nil {
-		os.Remove(pidPath)
 		return fmt.Errorf("failed to initialize lambda store at %s: %w", common.Conf.Registry, err)
 	}
 
 	// Registry handler
 	http.HandleFunc(REGISTRY_BASE_PATH, RegistryHandler)
 
-	var s cleanable
 	switch common.Conf.Server_mode {
 	case "lambda":
 		s, err = NewLambdaServer()
+		if err != nil {
+			return err
+		}
+
+		// Always create and start Kafka server alongside lambda server
+		lambdaServer := s.(*LambdaServer)
+		kafkaServer, err = NewKafkaServer(lambdaServer.lambdaMgr)
+		if err != nil {
+			return fmt.Errorf("failed to create Kafka server: %w", err)
+		}
+		slog.Info("Created kafka server")
+
+		// Register Kafka management endpoint
+		http.HandleFunc("/kafka/register/", HandleKafkaRegister(kafkaServer))
 	case "sock":
 		s, err = NewSOCKServer()
+		if err != nil {
+			return err
+		}
 	default:
 		return fmt.Errorf("unknown Server_mode %s", common.Conf.Server_mode)
 	}
-	if err != nil {
-		os.Remove(pidPath)
-		return err
+
+	// Start Kafka server in background goroutine if it was created
+	if kafkaServer != nil {
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error("Panic in Kafka server", "error", r)
+				}
+			}()
+
+			kafkaServer.StartConsuming()
+		}()
 	}
 
 	// clean up if signal hits us (e.g., from ctrl-C)
@@ -310,16 +424,24 @@ func Main() (err error) {
 	go func() {
 		<-c
 		slog.Info("Received kill signal, cleaning up.")
+
+		// Clean up Kafka server first
+		if kafkaServer != nil {
+			kafkaServer.cleanup()
+		}
+
 		shutdown(pidPath, s)
 	}()
 
 	port := fmt.Sprintf("%s:%s", common.Conf.Worker_url, common.Conf.Worker_port)
+	slog.Info("Starting HTTP server", "port", port)
+	if kafkaServer != nil {
+		slog.Info("Kafka server running in background")
+	}
+
 	err = http.ListenAndServe(port, nil)
 
-	// if ListenAndServer returned, there must have been some issue
-	// (probably a port collision)
-	s.cleanup()
-	os.Remove(pidPath)
+	// if ListenAndServe returned, there must have been some issue (probably a port collision)
 	slog.Error(err.Error())
 	os.Exit(1)
 	return nil
