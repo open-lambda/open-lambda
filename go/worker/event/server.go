@@ -249,6 +249,80 @@ func RegistryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// HandleKafkaRegister handles Kafka consumer registration/unregistration for lambdas
+func HandleKafkaRegister(kafkaServer *KafkaServer) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Extract lambda name
+		lambdaName := strings.TrimPrefix(r.URL.Path, "/kafka/register/")
+		if lambdaName == "" {
+			http.Error(w, "lambda name required", http.StatusBadRequest)
+			return
+		}
+
+		type Response struct {
+			Status  string `json:"status"`
+			Lambda  string `json:"lambda"`
+			Message string `json:"message"`
+		}
+
+		switch r.Method {
+		case "POST":
+			// Read lambda config from registry
+			config, err := lambdaStore.GetConfig(lambdaName)
+			if err != nil {
+				slog.Error("Failed to load lambda config for Kafka registration",
+					"lambda", lambdaName,
+					"error", err)
+				http.Error(w, fmt.Sprintf("failed to load lambda config: %v", err), http.StatusNotFound)
+				return
+			}
+
+			// Check if lambda has Kafka triggers
+			if config == nil || len(config.Triggers.Kafka) == 0 {
+				http.Error(w, "lambda has no Kafka triggers", http.StatusBadRequest)
+				return
+			}
+
+			// Register Kafka triggers
+			err = kafkaServer.RegisterLambdaKafkaTriggers(lambdaName, config.Triggers.Kafka)
+			if err != nil {
+				slog.Error("Failed to register Kafka triggers",
+					"lambda", lambdaName,
+					"error", err)
+				http.Error(w, fmt.Sprintf("failed to register Kafka triggers: %v", err), http.StatusInternalServerError)
+				return
+			}
+
+			slog.Info("Registered Kafka consumers via API",
+				"lambda", lambdaName,
+				"triggers", len(config.Triggers.Kafka))
+
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(Response{
+				Status:  "success",
+				Lambda:  lambdaName,
+				Message: fmt.Sprintf("Kafka consumers registered for %d trigger(s)", len(config.Triggers.Kafka)),
+			})
+
+		case "DELETE":
+			// Unregister Kafka triggers
+			kafkaServer.UnregisterLambdaKafkaTriggers(lambdaName)
+
+			slog.Info("Unregistered Kafka consumers via API", "lambda", lambdaName)
+
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(Response{
+				Status:  "success",
+				Lambda:  lambdaName,
+				Message: "Kafka consumers unregistered",
+			})
+
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}
+}
+
 func Main() (err error) {
 	pidPath := filepath.Join(common.Conf.Worker_dir, "worker.pid")
 	if _, err := os.Stat(pidPath); err == nil {
@@ -318,6 +392,9 @@ func Main() (err error) {
 			return fmt.Errorf("failed to create Kafka server: %w", err)
 		}
 		slog.Info("Created kafka server")
+
+		// Register Kafka management endpoint
+		http.HandleFunc("/kafka/register/", HandleKafkaRegister(kafkaServer))
 	case "sock":
 		s, err = NewSOCKServer()
 		if err != nil {

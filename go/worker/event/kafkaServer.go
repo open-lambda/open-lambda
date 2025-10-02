@@ -3,6 +3,7 @@ package event
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -125,22 +126,19 @@ func (lkc *LambdaKafkaConsumer) consumeLoop() {
 			slog.Info("Stopping Kafka consumer for lambda", "lambda", lkc.lambdaName)
 			return
 		default:
-			// Poll for messages with longer timeout to reduce aggressive polling
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 			fetches := lkc.client.PollFetches(ctx)
 			cancel()
 
 			if errs := fetches.Errors(); len(errs) > 0 {
-				// Log errors but don't spam - only log unique errors or every 10th occurrence
 				for _, err := range errs {
-					if !strings.Contains(err.Err.Error(), "context deadline exceeded") {
-						slog.Error("Kafka fetch error",
-							"lambda", lkc.lambdaName,
-							"error", err)
+					if errors.Is(err.Err, context.DeadlineExceeded) {
+						continue
 					}
+					slog.Warn("Kafka fetch error",
+						"lambda", lkc.lambdaName,
+						"error", err)
 				}
-				// If we have connection errors, sleep before retrying
-				time.Sleep(5 * time.Second)
 				continue
 			}
 
