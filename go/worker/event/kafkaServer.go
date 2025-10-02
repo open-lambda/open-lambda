@@ -11,28 +11,32 @@ import (
 	"sync"
 	"time"
 
-	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/open-lambda/open-lambda/go/common"
 	"github.com/open-lambda/open-lambda/go/worker/lambda"
+	"github.com/twmb/franz-go/pkg/kgo"
 )
 
+type KafkaClient interface {
+	PollFetches(context.Context) kgo.Fetches
+	Close()
+}
 
 // LambdaKafkaConsumer manages Kafka consumption for a specific lambda function
 type LambdaKafkaConsumer struct {
-	consumerName  string // Unique name for this consumer (may include index suffix)
-	lambdaName    string // Actual lambda function name for invocation
+	consumerName  string // Unique name for this consumer
+	lambdaName    string // lambda function name
 	kafkaTrigger  *common.KafkaTrigger
-	client        *kgo.Client
+	client        KafkaClient       // kgo.client implements the KafkaClient interface
 	lambdaManager *lambda.LambdaMgr // Reference to lambda manager for direct calls
-	stopChan      chan struct{}
+	stopChan      chan struct{}     // Shutdown signal for this consumer
 }
 
 // KafkaServer manages multiple lambda-specific Kafka consumers
 type KafkaServer struct {
 	lambdaConsumers map[string]*LambdaKafkaConsumer // lambdaName -> consumer
-	lambdaManager   *lambda.LambdaMgr          // Reference to lambda manager
-	mu              sync.RWMutex
-	stopChan        chan struct{}
+	lambdaManager   *lambda.LambdaMgr               // Reference to lambda manager
+	mu              sync.Mutex                      // Protects lambdaConsumers map
+	stopChan        chan struct{}                   // shutdown signal for all consumers in the worker
 }
 
 // NewLambdaKafkaConsumer creates a new Kafka consumer for a specific lambda function
@@ -90,7 +94,7 @@ func NewKafkaServer(lambdaManager *lambda.LambdaMgr) (*KafkaServer, error) {
 }
 
 // StartConsuming starts consuming messages for this lambda's Kafka triggers
-func (lkc *LambdaKafkaConsumer) StartConsuming() error {
+func (lkc *LambdaKafkaConsumer) StartConsuming() {
 	slog.Info("Starting Kafka consumer for lambda",
 		"consumer", lkc.consumerName,
 		"lambda", lkc.lambdaName,
@@ -98,14 +102,11 @@ func (lkc *LambdaKafkaConsumer) StartConsuming() error {
 		"brokers", lkc.kafkaTrigger.BootstrapServers,
 		"group_id", lkc.kafkaTrigger.GroupId)
 
-	slog.Info("Kafka consumer started for lambda", "consumer", lkc.consumerName, "lambda", lkc.lambdaName)
-
 	// Start consuming loop
 	go lkc.consumeLoop()
 
 	// Block until shutdown
 	<-lkc.stopChan
-	return nil
 }
 
 // consumeLoop handles Kafka message consumption using kgo polling
@@ -197,7 +198,6 @@ func (lkc *LambdaKafkaConsumer) processMessage(record *kgo.Record) {
 		"status", w.Code)
 }
 
-
 // cleanup closes the kgo client
 func (lkc *LambdaKafkaConsumer) cleanup() {
 	slog.Info("Shutting down Kafka consumer for lambda", "lambda", lkc.lambdaName)
@@ -247,11 +247,7 @@ func (ks *KafkaServer) RegisterLambdaKafkaTriggers(lambdaName string, triggers [
 
 		// Start consuming in background
 		go func(c *LambdaKafkaConsumer) {
-			if err := c.StartConsuming(); err != nil {
-				slog.Error("Kafka consumer error for lambda",
-					"lambda", lambdaName,
-					"error", err)
-			}
+			c.StartConsuming()
 		}(consumer)
 
 		slog.Info("Registered Kafka trigger for lambda",
@@ -280,12 +276,11 @@ func (ks *KafkaServer) UnregisterLambdaKafkaTriggers(lambdaName string) {
 }
 
 // StartConsuming starts the Kafka server (all lambda consumers are managed separately)
-func (ks *KafkaServer) StartConsuming() error {
+func (ks *KafkaServer) StartConsuming() {
 	slog.Info("Kafka server ready to manage lambda consumers")
 
 	// Block until shutdown
 	<-ks.stopChan
-	return nil
 }
 
 // cleanup closes all lambda consumers

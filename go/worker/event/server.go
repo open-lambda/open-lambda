@@ -18,7 +18,6 @@ import (
 
 	"github.com/open-lambda/open-lambda/go/boss/lambdastore"
 	"github.com/open-lambda/open-lambda/go/common"
-	"github.com/open-lambda/open-lambda/go/worker/lambda"
 )
 
 const (
@@ -250,69 +249,6 @@ func RegistryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// preloadAllKafkaLambdas scans the registry for all lambdas with Kafka triggers
-// and registers them immediately to avoid lazy loading delays
-func preloadAllKafkaLambdas(kafkaServer *KafkaServer, lambdaMgr *lambda.LambdaMgr) error {
-	if lambdaStore == nil {
-		return fmt.Errorf("lambda store not initialized")
-	}
-
-	slog.Info("Starting preload of Kafka lambdas from registry")
-
-	// Get all lambda names from the registry
-	lambdaNames := lambdaStore.ListAllLambdas()
-
-	loadedCount := 0
-	errorCount := 0
-
-	for _, lambdaName := range lambdaNames {
-		// Get lambda configuration
-		config, err := lambdaStore.GetLambdaConfig(lambdaName)
-		if err != nil {
-			slog.Warn("Failed to load config for lambda during preload",
-				"lambda", lambdaName,
-				"error", err)
-			errorCount++
-			continue
-		}
-
-		// Debug: Print the loaded config
-		slog.Info("DEBUG: Loaded config for lambda",
-			"lambda", lambdaName,
-			"config", config)
-
-		// Check if lambda has Kafka triggers
-		if config == nil || len(config.Triggers.Kafka) == 0 {
-			slog.Info("Skipping the following lambda due to lack of config",
-				"lambda", lambdaName)
-			continue // Skip lambdas without Kafka triggers
-		}
-
-		// Register Kafka triggers immediately
-		err = kafkaServer.RegisterLambdaKafkaTriggers(lambdaName, config.Triggers.Kafka)
-		if err != nil {
-			slog.Error("Failed to preload Kafka triggers for lambda",
-				"lambda", lambdaName,
-				"triggers", len(config.Triggers.Kafka),
-				"error", err)
-			errorCount++
-			continue
-		}
-
-		loadedCount++
-		slog.Info("Preloaded Kafka triggers for lambda",
-			"lambda", lambdaName,
-			"triggers", len(config.Triggers.Kafka))
-	}
-
-	slog.Info("Completed Kafka lambda preload",
-		"total_lambdas", len(lambdaNames),
-		"loaded_with_kafka", loadedCount,
-		"errors", errorCount)
-
-	return nil
-}
-
 func Main() (err error) {
 	pidPath := filepath.Join(common.Conf.Worker_dir, "worker.pid")
 	if _, err := os.Stat(pidPath); err == nil {
@@ -334,6 +270,22 @@ func Main() (err error) {
 		return err
 	}
 
+	var s cleanable
+	var kafkaServer *KafkaServer
+
+	defer func() {
+		if err != nil {
+			// Cleanup only on error, not normal signal-based shutdown
+			os.Remove(pidPath)
+			if kafkaServer != nil {
+				kafkaServer.cleanup()
+			}
+			if s != nil {
+				s.cleanup()
+			}
+		}
+	}()
+
 	// things shared by all servers
 	http.HandleFunc(PID_PATH, HandleGetPid)
 	http.HandleFunc(STATUS_PATH, Status)
@@ -346,21 +298,16 @@ func Main() (err error) {
 	slog.Info(fmt.Sprintf("Worker: Initializing LambdaStore with Registry = \"%s\"", common.Conf.Registry))
 	lambdaStore, err = lambdastore.NewLambdaStore(common.Conf.Registry, nil)
 	if err != nil {
-		os.Remove(pidPath)
 		return fmt.Errorf("failed to initialize lambda store at %s: %w", common.Conf.Registry, err)
 	}
 
 	// Registry handler
 	http.HandleFunc(REGISTRY_BASE_PATH, RegistryHandler)
 
-	var s cleanable
-	var kafkaServer *KafkaServer
-
 	switch common.Conf.Server_mode {
 	case "lambda":
 		s, err = NewLambdaServer()
 		if err != nil {
-			os.Remove(pidPath)
 			return err
 		}
 
@@ -368,23 +315,12 @@ func Main() (err error) {
 		lambdaServer := s.(*LambdaServer)
 		kafkaServer, err = NewKafkaServer(lambdaServer.lambdaMgr)
 		if err != nil {
-			os.Remove(pidPath)
 			return fmt.Errorf("failed to create Kafka server: %w", err)
 		}
 		slog.Info("Created kafka server")
-
-		// Connect the Kafka server to the Lambda manager for trigger registration
-		lambdaServer.SetKafkaServer(kafkaServer)
-
-		// Preload all Kafka consumers for lambdas in the registry
-		if err := preloadAllKafkaLambdas(kafkaServer, lambdaServer.lambdaMgr); err != nil {
-			slog.Warn("Failed to preload some Kafka lambdas", "error", err)
-			// Don't fail server startup for preload issues
-		}
 	case "sock":
 		s, err = NewSOCKServer()
 		if err != nil {
-			os.Remove(pidPath)
 			return err
 		}
 	default:
@@ -400,9 +336,7 @@ func Main() (err error) {
 				}
 			}()
 
-			if err := kafkaServer.StartConsuming(); err != nil {
-				slog.Error("Kafka server error", "error", err)
-			}
+			kafkaServer.StartConsuming()
 		}()
 	}
 
@@ -430,13 +364,7 @@ func Main() (err error) {
 
 	err = http.ListenAndServe(port, nil)
 
-	// if ListenAndServer returned, there must have been some issue
-	// (probably a port collision)
-	if kafkaServer != nil {
-		kafkaServer.cleanup()
-	}
-	s.cleanup()
-	os.Remove(pidPath)
+	// if ListenAndServe returned, there must have been some issue (probably a port collision)
 	slog.Error(err.Error())
 	os.Exit(1)
 	return nil

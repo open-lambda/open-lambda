@@ -134,7 +134,7 @@ func (s *LambdaStore) DeleteLambda(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *LambdaStore) ListLambda(w http.ResponseWriter) {
-	funcNames := s.listEntries()
+	funcNames := s.ListEntries()
 
 	if err := json.NewEncoder(w).Encode(funcNames); err != nil {
 		http.Error(w, "failed to encode lambda list", http.StatusInternalServerError)
@@ -157,7 +157,7 @@ func (s *LambdaStore) RetrieveLambdaConfig(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	cfg, err := s.getConfig(funcName)
+	cfg, err := s.GetConfig(funcName)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
@@ -310,7 +310,7 @@ func (s *LambdaStore) removeFromRegistry(funcName string) error {
 	return nil
 }
 
-func (s *LambdaStore) getConfig(funcName string) (*common.LambdaConfig, error) {
+func (s *LambdaStore) GetConfig(funcName string) (*common.LambdaConfig, error) {
 	lambdaEntry := s.getOrCreateEntry(funcName)
 	lambdaEntry.Lock.Lock()
 	defer lambdaEntry.Lock.Unlock()
@@ -344,7 +344,7 @@ func (s *LambdaStore) getOrCreateEntry(funcName string) *LambdaEntry {
 	return entry
 }
 
-func (s *LambdaStore) listEntries() []string {
+func (s *LambdaStore) ListEntries() []string {
 	s.mapLock.Lock()
 	defer s.mapLock.Unlock()
 
@@ -353,16 +353,4 @@ func (s *LambdaStore) listEntries() []string {
 		funcNames = append(funcNames, name)
 	}
 	return funcNames
-}
-
-// ListAllLambdas returns a list of all lambda function names in the registry
-// This is used for eager loading of Kafka consumers at worker startup
-func (s *LambdaStore) ListAllLambdas() []string {
-	return s.listEntries()
-}
-
-// GetLambdaConfig returns the configuration for a specific lambda function
-// This is used for eager loading of Kafka consumers at worker startup
-func (s *LambdaStore) GetLambdaConfig(funcName string) (*common.LambdaConfig, error) {
-	return s.getConfig(funcName)
 }
