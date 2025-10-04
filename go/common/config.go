@@ -26,6 +26,9 @@ type Config struct {
 	// port the worker server listens to
 	Worker_port string `json:"worker_port"`
 
+	// sock file the worker server interacts with
+	Worker_socket string `json:"worker_socket`
+
 	// log output of the runtime and proxy?
 	Log_output bool `json:"log_output"`
 
@@ -175,6 +178,7 @@ func GetDefaultWorkerConfig(olPath string) (*Config, error) {
 		Server_mode: "lambda",
 		Worker_url:  "localhost",
 		Worker_port: "5000",
+		Worker_socket: "",
 		// Registry URL with file:// prefix required by gocloud blob backend abstraction.
 		// The gocloud library uses URL schemes to route to appropriate storage drivers:
 		// file:// for local filesystem, s3:// for AWS S3, gs:// for Google Cloud Storage.
