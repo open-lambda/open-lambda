@@ -100,7 +100,7 @@ func Download() {
 
 func Delete() {
 	// Delete the blob
-	fmt.Printf("Deleting the blob " + blobName + "\n")
+	fmt.Printf("Deleting the blob %s\n", blobName)
 
 	_, err = blobClient.Delete(ctx, nil)
 	if err != nil {
@@ -109,7 +109,7 @@ func Delete() {
 	}
 
 	// Delete the container
-	fmt.Printf("Deleting the blob " + containerName + "\n")
+	fmt.Printf("Deleting the container %s\n", containerName)
 	_, err = containerClient.Delete(ctx, nil)
 
 	if err != nil {
@@ -220,7 +220,7 @@ func AzureMain(contents string) {
 	fmt.Printf("Cleaning up.\n")
 
 	// Delete the blob
-	fmt.Printf("Deleting the blob " + blobName + "\n")
+	fmt.Printf("Deleting the blob %s\n", blobName)
 
 	_, err = blobClient.Delete(ctx, nil)
 	if err != nil {
@@ -229,7 +229,7 @@ func AzureMain(contents string) {
 	}
 
 	// Delete the container
-	fmt.Printf("Deleting the blob " + containerName + "\n")
+	fmt.Printf("Deleting the container %s\n", containerName)
 	_, err = containerClient.Delete(ctx, nil)
 
 	if err != nil {
