@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -15,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/open-lambda/open-lambda/go/boss/lambdastore"
 	"github.com/open-lambda/open-lambda/go/common"
@@ -271,7 +273,6 @@ func Main() (err error) {
 	}
 
 	// things shared by all servers
-	http.HandleFunc(PID_PATH, HandleGetPid)
 	http.HandleFunc(STATUS_PATH, Status)
 	http.HandleFunc(STATS_PATH, Stats)
 	http.HandleFunc(PPROF_MEM_PATH, PprofMem)
@@ -314,6 +315,50 @@ func Main() (err error) {
 	}()
 
 	port := fmt.Sprintf("%s:%s", common.Conf.Worker_url, common.Conf.Worker_port)
+
+	// socket path uses config value, otherwise make a new worker.sock file
+	sockPath := common.Conf.Worker_socket
+    if sockPath == "" {
+        sockPath = filepath.Join("/run/openlambda", "pid.sock")
+    }
+
+	// ensure directory exists and stale socket is gone
+    if err := os.MkdirAll(filepath.Dir(sockPath), 0700); err != nil {
+        os.Remove(pidPath)
+        return fmt.Errorf("make socket dir: %w", err)
+    }
+    _ = os.Remove(sockPath)
+
+	ln, errUDS := net.Listen("unix", sockPath)
+	if errUDS != nil {
+		return fmt.Errorf("failed to listen on UDS %s: %w", sockPath, errUDS)
+	}
+	if err := os.Chmod(sockPath, 0o600); err != nil {
+		_ = ln.Close()
+		return fmt.Errorf("chmod UDS sock file %s: %w", sockPath, err)
+	}
+
+	// we are only testing PID for UDS
+	pidMux := http.NewServeMux()
+	pidMux.HandleFunc(PID_PATH, HandleGetPid)
+
+	pidSrv := &http.Server{
+		Handler:           pidMux,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+
+	// start serving /pid on the Unix socket
+	go func() {
+		slog.Info("worker /pid listening on UDS", "socket", sockPath)
+		if err := pidSrv.Serve(ln); err != nil && err != http.ErrServerClosed {
+			slog.Error("UDS /pid server exited", "err", err)
+		}
+	}()
+
+	// remove socket on exit
+	defer func() { _ = os.Remove(sockPath) }()
+
+
 	err = http.ListenAndServe(port, nil)
 
 	// if ListenAndServer returned, there must have been some issue

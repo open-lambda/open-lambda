@@ -1,8 +1,10 @@
 package worker
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -130,6 +132,17 @@ func upCmd(ctx *cli.Context) error {
 
 		var pingErr error
 
+		sockPath := common.Conf.Worker_socket
+		if sockPath == "" {
+			sockPath = filepath.Join("/run/openlambda", "pid.sock")
+		}
+
+		tr := &http.Transport{}
+		tr.DialContext = func(ctx context.Context, _, _ string) (net.Conn, error) {
+			return net.Dial("unix", sockPath)
+		}
+		client := &http.Client{Transport: tr, Timeout: 2 * time.Second}
+
 		for i := 0; i < 300; i++ {
 			// check if it has died
 			select {
@@ -148,8 +161,11 @@ func upCmd(ctx *cli.Context) error {
 			}
 
 			// is it reachable?
-			url := fmt.Sprintf("http://localhost:%s/pid", common.Conf.Worker_port)
-			response, err := http.Get(url)
+			// url := fmt.Sprintf("http://localhost:%s/pid", common.Conf.Worker_port)
+			// response, err := http.Get(url)
+
+			response, err := client.Get("http://unix/pid")
+
 			if err != nil {
 				pingErr = err
 				time.Sleep(100 * time.Millisecond)
