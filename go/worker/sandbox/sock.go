@@ -9,7 +9,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -28,6 +27,7 @@ type SOCKContainer struct {
 	cg               cgroups.Cgroup
 	rtType           common.RuntimeType
 	client           *http.Client
+	logger           *slog.Logger
 
 	// 1 for self, plus 1 for each child (we can't release memory
 	// until all descendants are dead, because they share the
@@ -41,12 +41,6 @@ type SOCKContainer struct {
 	containerProxy *os.Process
 }
 
-// add ID to each log message so we know which logs correspond to
-// which containers
-func (container *SOCKContainer) printf(format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
-	slog.Info(fmt.Sprintf("%s [SOCK %s]", strings.TrimRight(msg, "\n"), container.id))
-}
 
 // ID returns the unique identifier of this container
 func (container *SOCKContainer) ID() string {
@@ -287,7 +281,7 @@ func (container *SOCKContainer) DestroyIfPaused(reason string) {
 func (container *SOCKContainer) decCgRefCount() {
 	newCount := atomic.AddInt32(&container.cgRefCount, -1)
 
-	container.printf("CG ref count decremented to %d", newCount)
+	container.logger.Debug("CG ref count decremented", "count", newCount)
 	if newCount < 0 {
 		panic("cgRefCount should not be able to go negative")
 	}
@@ -303,22 +297,22 @@ func (container *SOCKContainer) decCgRefCount() {
 		t := common.T0("Destroy()/cleanup-cgroup")
 		if container.cg != nil {
 			container.cg.KillAllProcs()
-			container.printf("killed PIDs in CG\n")
+			container.logger.Debug("killed PIDs in CG")
 			container.cg.Release()
 			container.pool.mem.adjustAvailableMB(container.cg.GetMemLimitMB())
 		}
 		t.T1()
 
-		container.printf("unmount and remove dirs\n")
+		container.logger.Debug("unmount and remove dirs")
 		t = common.T0("Destroy()/detach-root")
 		if err := syscall.Unmount(container.containerRootDir, syscall.MNT_DETACH); err != nil {
-			container.printf("unmount root dir %s failed :: %v\n", container.containerRootDir, err)
+			container.logger.Error("unmount root dir failed", "dir", container.containerRootDir, "error", err)
 		}
 		t.T1()
 
 		t = common.T0("Destroy()/remove-root")
 		if err := os.RemoveAll(container.containerRootDir); err != nil {
-			container.printf("remove root dir %s failed :: %v\n", container.containerRootDir, err)
+			container.logger.Error("remove root dir failed", "dir", container.containerRootDir, "error", err)
 		}
 		t.T1()
 
@@ -399,7 +393,7 @@ func (container *SOCKContainer) fork(dst Sandbox) (err error) {
 				}
 			}
 			if !isOrig {
-				container.printf("move PID %v from CG %v to CG %v\n", pid, container.cg.Name(), dstSock.cg.Name())
+				container.logger.Debug("moving PID between cgroups", "pid", pid, "from", container.cg.Name(), "to", dstSock.cg.Name())
 				if err = dstSock.cg.AddPid(pid); err != nil {
 					return err
 				}

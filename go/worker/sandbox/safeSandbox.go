@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strings"
 	"sync"
 
 	"github.com/open-lambda/open-lambda/go/common"
@@ -24,6 +23,7 @@ type safeSandbox struct {
 	paused        bool
 	dead          error
 	eventHandlers []SandboxEventFunc
+	logger        *slog.Logger
 }
 
 // caller is responsible for calling startNotifyingListeners after
@@ -35,9 +35,13 @@ type safeSandbox struct {
 // E.g., would be problematic if an evictor (which is listening) were
 // to try to evict concurrently with us creating processes in the
 // Sandbox as part of setup.
-func newSafeSandbox(innerSB Sandbox) *safeSandbox {
+func newSafeSandbox(innerSB Sandbox, logger *slog.Logger) *safeSandbox {
+	if logger == nil {
+		logger = slog.Default()
+	}
 	sb := &safeSandbox{
 		Sandbox: innerSB,
+		logger:  logger.With("sandbox_id", innerSB.ID()),
 	}
 
 	return sb
@@ -50,11 +54,6 @@ func (sb *safeSandbox) startNotifyingListeners(eventHandlers []SandboxEventFunc)
 	sb.event(EvCreate)
 }
 
-// like regular printf, with suffix indicating which sandbox produced the message
-func (sb *safeSandbox) printf(format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
-	slog.Info(fmt.Sprintf("%s [SB %s]", strings.TrimRight(msg, "\n"), sb.Sandbox.ID()))
-}
 
 // propogate event to anybody who signed up to listen (e.g., an evictor)
 func (sb *safeSandbox) event(evType SandboxEventType) {
@@ -66,7 +65,7 @@ func (sb *safeSandbox) event(evType SandboxEventType) {
 // assumes lock is already held
 func (sb *safeSandbox) destroyOnErr(funcName string, origErr error) {
 	if origErr != nil {
-		sb.printf("Destroy() due to %v", origErr)
+		sb.logger.Debug("destroying due to error", "error", origErr)
 		sb.Sandbox.Destroy(fmt.Sprintf("%s returned %s", funcName, origErr))
 		sb.dead = SandboxDeadError(fmt.Sprintf("Sandbox previously killed automatically after %s returned %s", funcName, origErr))
 
@@ -76,7 +75,7 @@ func (sb *safeSandbox) destroyOnErr(funcName string, origErr error) {
 }
 
 func (sb *safeSandbox) Destroy(reason string) {
-	// sb.printf("Destroy()")
+	// sb.logger.Debug("destroying", "reason", reason)
 	t := common.T0("Destroy()")
 	defer t.T1()
 	sb.Mutex.Lock()
@@ -98,7 +97,7 @@ func (sb *safeSandbox) Destroy(reason string) {
 }
 
 func (sb *safeSandbox) DestroyIfPaused(reason string) {
-	sb.printf("DestroyIfPaused()")
+	sb.logger.Debug("destroy if paused", "reason", reason)
 	t := common.T0("DestroyIfPaused()")
 	defer t.T1()
 	sb.Mutex.Lock()
@@ -118,7 +117,7 @@ func (sb *safeSandbox) DestroyIfPaused(reason string) {
 }
 
 func (sb *safeSandbox) Pause() (err error) {
-	sb.printf("Pause()")
+	sb.logger.Debug("pausing")
 	t := common.T0("Pause()")
 	defer t.T1()
 	sb.Mutex.Lock()
@@ -141,7 +140,7 @@ func (sb *safeSandbox) Pause() (err error) {
 }
 
 func (sb *safeSandbox) Unpause() (err error) {
-	sb.printf("Unpause()")
+	sb.logger.Debug("unpausing")
 	t := common.T0("Unpause()")
 	defer t.T1()
 	sb.Mutex.Lock()
@@ -181,7 +180,7 @@ func (sb *safeSandbox) Client() *http.Client {
 
 // fork (as a private method) doesn't cleanup parent sb if fork fails
 func (sb *safeSandbox) fork(dst Sandbox) (err error) {
-	sb.printf("fork(SB %v)", dst.ID())
+	sb.logger.Debug("forking", "destination", dst.ID())
 	t := common.T0("fork()")
 	defer t.T1()
 	sb.Mutex.Lock()
@@ -200,7 +199,7 @@ func (sb *safeSandbox) fork(dst Sandbox) (err error) {
 }
 
 func (sb *safeSandbox) childExit(child Sandbox) {
-	sb.printf("childExit(SB %v)", child.ID())
+	sb.logger.Debug("child exit", "child", child.ID())
 	t := common.T0("childExit()")
 	defer t.T1()
 	sb.Mutex.Lock()
