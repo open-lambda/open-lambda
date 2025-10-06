@@ -44,6 +44,9 @@ type KafkaTrigger struct {
 type LambdaConfig struct {
 	Triggers Triggers `yaml:"triggers"` // List of HTTP triggers
 	// Additional configurations can be added here.
+	Limits Limits `yaml:"limits,omitempty"`
+	// Deprecated: prefer Limits.RuntimeSec. Kept for backward-compat with existing YAML.
+	MaxRuntimeSec int `yaml:"max_runtime_sec,omitempty"`
 }
 
 // LoadDefaultLambdaConfig initializes the configuration with default values.
