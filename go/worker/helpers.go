@@ -392,9 +392,8 @@ func stoppedDirtyToStoppedClean(olPath string) error {
 	}
 
 	// Remove the worker.pid file
-	pidPath := filepath.Join(olPath, "worker", "worker.pid")
-	// Only fail if file exists but we can't remove it
-	if err := os.Remove(pidPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := os.Remove(filepath.Join(olPath, "worker", "worker.pid")); err != nil {
+		// Return an error if removing worker.pid fails.
 		return fmt.Errorf("could not remove worker.pid: %s", err.Error())
 	}
 

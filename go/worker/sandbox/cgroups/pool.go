@@ -178,7 +178,5 @@ func (pool *CgroupPool) GetCg(memLimitMB int, moveMemCharge bool, cpuPercent int
 
 // GroupPath returns the path to the Cgroup pool for OpenLambda
 func (pool *CgroupPool) GroupPath() string {
-	base := common.CgroupPath()
-	poolName := pool.Name
-	return path.Join(base, poolName)
+	return path.Join(common.CgroupPath(), pool.Name)
 }
