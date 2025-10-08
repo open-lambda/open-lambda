@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log/slog"
+	"os"
 	"path"
 	"path/filepath"
-	"os"
 	"syscall"
 
 	"github.com/urfave/cli/v2"
@@ -111,6 +111,15 @@ type StorageConfig struct {
 	Root    StoreString `json:"root"`
 	Scratch StoreString `json:"scratch"`
 	Code    StoreString `json:"code"`
+}
+
+// Limits defines per-lambda resource constraints specified in ol.yaml.
+// Zero values mean "use worker defaults".
+type Limits struct {
+	MemMB      int `json:"mem_mb" yaml:"mem_mb"`
+	CPUPercent int `json:"cpu_percent" yaml:"cpu_percent"`
+	// Preferred location for per-lambda runtime limit. If 0, use worker default.
+	RuntimeSec int `json:"runtime_sec" yaml:"runtime_sec"`
 }
 
 type LimitsConfig struct {
@@ -354,7 +363,6 @@ func SandboxConfJson() string {
 	}
 	return string(s)
 }
-
 
 // Dump prints the Config as a JSON string.
 func DumpConf() {
