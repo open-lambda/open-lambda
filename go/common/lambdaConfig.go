@@ -42,9 +42,9 @@ type KafkaTrigger struct {
 
 // LambdaConfig defines the overall configuration for the lambda function.
 type LambdaConfig struct {
-	Triggers Triggers `yaml:"triggers" json:"triggers"` // List of HTTP triggers
+	Triggers Triggers `yaml:"Triggers" json:"Triggers"` // List of HTTP triggers
 	// Additional configurations can be added here.
-	Limits Limits `yaml:"limits,omitempty" json:"limits,omitempty"`
+	Limits Limits `yaml:"Limits,omitempty" json:"Limits,omitempty"`
 	// Back-compat (deprecated):
 	MaxRuntimeSec int `yaml:"max_runtime_sec,omitempty" json:"max_runtime_sec,omitempty"`
 }
