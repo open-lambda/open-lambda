@@ -274,13 +274,20 @@ func runningToStoppedClean() error {
 	return fmt.Errorf("worker process did not stop within 60 seconds")
 }
 
+// Returns the cgroup root path for the given olPath.
+func getCgRoot(olPath string) string {
+	clusterName := filepath.Base(olPath)
+	base := common.CgroupPath()
+	return filepath.Join(base, clusterName + "-sandboxes.slice")
+}
+
 // This function will transition the StoppedDirty state to StoppedClean state.
 // It attempts to clean up resources after detecting a dirty shutdown.
 // It cleans up cgroups and mounts associated with the OpenLambda instance at `olPath`.
 // Returns errors encountered during cleanup operations.
 func stoppedDirtyToStoppedClean(olPath string) error {
 	// Clean up cgroups associated with sandboxes
-	cgRoot := filepath.Join("/sys", "fs", "cgroup", filepath.Base(olPath)+"-sandboxes")
+	cgRoot := getCgRoot(olPath)
 	fmt.Printf("Attempting to clean up cgroups at %s\n", cgRoot)
 
 	cgroupErrorCount := 0
@@ -385,8 +392,9 @@ func stoppedDirtyToStoppedClean(olPath string) error {
 	}
 
 	// Remove the worker.pid file
-	if err := os.Remove(filepath.Join(olPath, "worker", "worker.pid")); err != nil {
-		// Return an error if removing worker.pid fails.
+	pidPath := filepath.Join(olPath, "worker", "worker.pid")
+	// Only fail if file exists but we can't remove it
+	if err := os.Remove(pidPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("could not remove worker.pid: %s", err.Error())
 	}
 
