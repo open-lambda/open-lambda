@@ -42,8 +42,21 @@ type KafkaTrigger struct {
 
 // LambdaConfig defines the overall configuration for the lambda function.
 type LambdaConfig struct {
-	Triggers Triggers `yaml:"triggers"` // List of HTTP triggers
+	Triggers Triggers `yaml:"triggers" json:"triggers"` // List of HTTP triggers
 	// Additional configurations can be added here.
+	Limits Limits `yaml:"limits,omitempty" json:"limits,omitempty"`
+	// Back-compat (deprecated):
+	MaxRuntimeSec int `yaml:"max_runtime_sec,omitempty" json:"max_runtime_sec,omitempty"`
+}
+
+// EffectiveLimits returns the per-lambda limits (zeros mean "use worker defaults").
+// If runtime_sec is not set but max_runtime_sec is, it copies it for back-compat.
+func (c *LambdaConfig) EffectiveLimits() Limits {
+	eff := c.Limits
+	if eff.RuntimeSec == 0 && c.MaxRuntimeSec > 0 {
+		eff.RuntimeSec = c.MaxRuntimeSec
+	}
+	return eff
 }
 
 // LoadDefaultLambdaConfig initializes the configuration with default values.
