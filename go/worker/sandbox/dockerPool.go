@@ -61,7 +61,11 @@ func NewDockerPool(pidMode string, caps []string) (*DockerPool, error) {
 
 // Create creates a docker sandbox from the handler and sandbox directory.
 func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, meta *SandboxMeta, _ common.RuntimeType) (sb Sandbox, err error) {
-	meta = fillMetaDefaults(meta)
+	if meta == nil {
+		meta = &SandboxMeta{}
+	}
+	// Resolve zero-valued limits to worker defaults
+	meta.Limits.FillDefaults(common.Conf.Limits.ToLimits())
 	t := common.T0("Create()")
 	defer t.T1()
 
@@ -108,7 +112,6 @@ func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir 
 	// create the container using the specified configuration
 	procLimit := int64(common.Conf.Limits.Procs)
 	swappiness := int64(common.Conf.Limits.Swappiness)
-	cpuPercent := int64(common.Conf.Limits.CPU_percent)
 	container, err := pool.client.CreateContainer(
 		docker.CreateContainerOptions{
 			Config: &docker.Config{
@@ -124,8 +127,8 @@ func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir 
 				Runtime:          pool.dockerRuntime,
 				PidsLimit:        &procLimit,
 				MemorySwappiness: &swappiness,
-				CPUPercent:       cpuPercent,
-				Memory:           int64(meta.MemLimitMB * 1024 * 1024),
+				CPUPercent:       int64(meta.Limits.CPUPercent),
+				Memory:           int64(meta.Limits.MemMB * 1024 * 1024),
 			},
 		},
 	)

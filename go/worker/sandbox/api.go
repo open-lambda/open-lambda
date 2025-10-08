@@ -1,8 +1,9 @@
 package sandbox
 
 import (
-	"github.com/open-lambda/open-lambda/go/common"
 	"net/http"
+
+	"github.com/open-lambda/open-lambda/go/common"
 )
 
 type SandboxPool interface {
@@ -85,10 +86,9 @@ type Sandbox interface {
 }
 
 type SandboxMeta struct {
-	Installs   []string
-	Imports    []string
-	MemLimitMB int
-	CPUPercent int
+	Installs []string
+	Imports  []string
+	Limits   common.Limits // required; zeros = use defaults
 }
 
 type SandboxError string
