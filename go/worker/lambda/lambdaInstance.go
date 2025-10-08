@@ -97,15 +97,24 @@ func (linst *LambdaInstance) Task() {
 		// if we don't already have a Sandbox, create one, and
 		// HTTP proxy over the channel
 		if sb == nil {
-			sb = nil
+			// Always build a meta that includes Limits (zeros => pools fill defaults)
+			meta := &sandbox.SandboxMeta{
+				Limits: common.Limits{},
+			}
+			if linst.meta != nil && linst.meta.Sandbox != nil {
+				meta.Installs = linst.meta.Sandbox.Installs
+				meta.Imports = linst.meta.Sandbox.Imports
+			}
 
 			if f.lmgr.ZygoteProvider != nil && f.rtType == common.RT_PYTHON {
 				scratchDir := f.lmgr.scratchDirs.Make(f.name)
 
 				// we don't specify parent SB, because ImportCache.Create chooses it for us
-				sb, err = f.lmgr.ZygoteProvider.Create(f.lmgr.sbPool, true, linst.codeDir, scratchDir, linst.meta.Sandbox, f.rtType)
+				sb, err = f.lmgr.ZygoteProvider.Create(
+					f.lmgr.sbPool, true, linst.codeDir, scratchDir, meta, f.rtType,
+				)
 				if err != nil {
-					f.printf("failed to get Sandbox from import cache")
+					f.printf("failed to get Sandbox from import cache: %v", err)
 					sb = nil
 				}
 			}
@@ -116,7 +125,9 @@ func (linst *LambdaInstance) Task() {
 			if sb == nil {
 				t2 := common.T0("LambdaInstance-WaitSandbox-NoImportCache")
 				scratchDir := f.lmgr.scratchDirs.Make(f.name)
-				sb, err = f.lmgr.sbPool.Create(nil, true, linst.codeDir, scratchDir, linst.meta.Sandbox, f.rtType)
+				sb, err = f.lmgr.sbPool.Create(
+					nil, true, linst.codeDir, scratchDir, meta, f.rtType,
+				)
 				t2.T1()
 			}
 
