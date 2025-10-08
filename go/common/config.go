@@ -144,6 +144,32 @@ type LimitsConfig struct {
 	Installer_mem_mb int `json:"installer_mem_mb"`
 }
 
+// ToLimits converts worker-level defaults (LimitsConfig) into a per-lambda Limits.
+func (lc LimitsConfig) ToLimits() Limits {
+	return Limits{
+		MemMB:      lc.Mem_mb,
+		CPUPercent: lc.CPU_percent,
+		RuntimeSec: lc.Max_runtime_default,
+	}
+}
+
+// FillDefaults sets zero-valued fields in l from defaults.
+// Zero means “use worker defaults”.
+func (l *Limits) FillDefaults(defaults Limits) {
+	if l == nil {
+		return
+	}
+	if l.MemMB == 0 {
+		l.MemMB = defaults.MemMB
+	}
+	if l.CPUPercent == 0 {
+		l.CPUPercent = defaults.CPUPercent
+	}
+	if l.RuntimeSec == 0 {
+		l.RuntimeSec = defaults.RuntimeSec
+	}
+}
+
 // Choose reasonable defaults for a worker deployment (based on memory capacity).
 // olPath need not exist (it is used to determine default paths for registry, etc).
 func LoadDefaults(olPath string) error {
