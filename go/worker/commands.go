@@ -132,10 +132,7 @@ func upCmd(ctx *cli.Context) error {
 
 		var pingErr error
 
-		sockPath := common.Conf.Worker_socket
-		if sockPath == "" {
-			sockPath = filepath.Join("/run/openlambda", "pid.sock")
-		}
+		const sockPath = "/run/openlambda/ol.sock"
 
 		tr := &http.Transport{}
 		tr.DialContext = func(ctx context.Context, _, _ string) (net.Conn, error) {
@@ -161,9 +158,6 @@ func upCmd(ctx *cli.Context) error {
 			}
 
 			// is it reachable?
-			// url := fmt.Sprintf("http://localhost:%s/pid", common.Conf.Worker_port)
-			// response, err := http.Get(url)
-
 			response, err := client.Get("http://unix/pid")
 
 			if err != nil {
