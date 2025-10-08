@@ -97,15 +97,20 @@ func (linst *LambdaInstance) Task() {
 		// if we don't already have a Sandbox, create one, and
 		// HTTP proxy over the channel
 		if sb == nil {
-			// Always build a meta that includes Limits (zeros => pools fill defaults)
+			// Build meta with resolved per-lambda limits.
+			var lim common.Limits
+			if linst.lfunc != nil && linst.lfunc.Meta != nil && linst.lfunc.Meta.Config != nil {
+				lim = linst.lfunc.Meta.Config.EffectiveLimits()
+			}
 			meta := &sandbox.SandboxMeta{
-				Limits: common.Limits{},
+				Limits: lim, // zeros mean "use worker defaults", pools will fill
 			}
 			if linst.meta != nil && linst.meta.Sandbox != nil {
 				meta.Installs = linst.meta.Sandbox.Installs
 				meta.Imports = linst.meta.Sandbox.Imports
 			}
 
+			// Try zygote (import cache) first for python
 			if f.lmgr.ZygoteProvider != nil && f.rtType == common.RT_PYTHON {
 				scratchDir := f.lmgr.scratchDirs.Make(f.name)
 
@@ -223,6 +228,7 @@ func (linst *LambdaInstance) Task() {
 			}
 		}
 
+		// pause sandbox when idle
 		if sb != nil {
 			if err := sb.Pause(); err != nil {
 				f.printf("discard sandbox %s due to Pause error: %v", sb.ID(), err)
