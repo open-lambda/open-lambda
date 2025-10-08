@@ -17,8 +17,6 @@ type Config struct {
 	Worker_Cap int             `json:"worker_cap"`
 	Gcp        GcpConfig       `json:"gcp"`
 	Local      LocalPlatConfig `json:"local"`
-	Transport string           `json:"transport"`
-	Boss_socket string         `json:"boss_socket"`
 }
 
 func LoadDefaults() error {
@@ -26,12 +24,10 @@ func LoadDefaults() error {
 		Platform:   "local",
 		Scaling:    "manual",
 		API_key:    "abc", // TODO: autogenerate a random key
-		Boss_port:  "",
+		Boss_port:  "5000",
 		Worker_Cap: 4,
 		Gcp:        GetGcpConfigDefaults(),
 		Local:      GetLocalPlatformConfigDefaults(),
-		Transport: "unix",
-		Boss_socket: "/run/openlambda/boss.sock",
 	}
 
 	return checkConf()

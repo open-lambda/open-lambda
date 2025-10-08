@@ -5,11 +5,9 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -192,48 +190,7 @@ func BossMain() (err error) {
 		os.Exit(0)
 	}()
 
-	if config.BossConf.Transport == "unix" {
-		sockPath := config.BossConf.Boss_socket
-		// ensure directory exists
-		os.MkdirAll(filepath.Dir(sockPath), 0700)
-		// remove stale socket if it exists
-		os.Remove(sockPath)
-
-		l, err := net.Listen("unix", sockPath)
-		slog.Info("boss config", "transport", config.BossConf.Transport, "boss_socket", config.BossConf.Boss_socket, "boss_port", config.BossConf.Boss_port)
-		if err != nil {
-			return fmt.Errorf("failed to listen on unix socket %s: %w", sockPath, err)
-		}
-		fmt.Printf("Listen on unix socket %s\n", sockPath)
-		return http.Serve(l, nil)
-	}
-
-	if config.BossConf.Transport != "unix" {
-        return fmt.Errorf("boss admin must run on unix socket; set transport=unix")
-    }
-
-   sockPath := config.BossConf.Boss_socket
-
-	if err := os.MkdirAll(filepath.Dir(sockPath), 0700); err != nil {
-		return fmt.Errorf("make socket dir: %w", err)
-	}
-	_ = os.Remove(sockPath)
-
-	ln, err := net.Listen("unix", sockPath)
-	slog.Info("boss config", "transport", config.BossConf.Transport, "boss_socket", config.BossConf.Boss_socket, "boss_port", config.BossConf.Boss_port)
-	if err != nil {
-		return fmt.Errorf("failed to listen on unix socket %s: %w", sockPath, err)
-	}
-	if err := os.Chmod(sockPath, 0600); err != nil {
-		return fmt.Errorf("chmod socket: %w", err)
-	}
-
-	slog.Info("boss config",
-		"transport", config.BossConf.Transport,
-		"boss_socket", config.BossConf.Boss_socket,
-		"boss_port", config.BossConf.Boss_port,
-	)
-	
-	fmt.Printf("Listen on unix socket %s\n", sockPath)
-    return http.Serve(ln, nil)
+	port := fmt.Sprintf(":%s", config.BossConf.Boss_port)
+	fmt.Printf("Listen on port %s\n", port)
+	return http.ListenAndServe(port, nil) // should never return if successful
 }

@@ -314,13 +314,8 @@ func Main() (err error) {
 		shutdown(pidPath, s)
 	}()
 
-	port := fmt.Sprintf("%s:%s", common.Conf.Worker_url, common.Conf.Worker_port)
-
 	// socket path uses config value, otherwise make a new worker.sock file
-	sockPath := common.Conf.Worker_socket
-    if sockPath == "" {
-        sockPath = filepath.Join("/run/openlambda", "pid.sock")
-    }
+	const sockPath = "/run/openlambda/ol.sock"
 
 	// ensure directory exists and stale socket is gone
     if err := os.MkdirAll(filepath.Dir(sockPath), 0700); err != nil {
@@ -358,7 +353,7 @@ func Main() (err error) {
 	// remove socket on exit
 	defer func() { _ = os.Remove(sockPath) }()
 
-
+	port := fmt.Sprintf("%s:%s", common.Conf.Worker_url, common.Conf.Worker_port)
 	err = http.ListenAndServe(port, nil)
 
 	// if ListenAndServer returned, there must have been some issue
