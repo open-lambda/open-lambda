@@ -172,9 +172,8 @@ func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir 
 
 	c.httpClient = &http.Client{
 		Transport: &http.Transport{Dial: dial},
-		Timeout:   time.Second * time.Duration(common.Conf.Limits.Max_runtime_default),
+		Timeout:   time.Second * time.Duration(meta.Limits.RuntimeSec),
 	}
-
 	// wrap to make thread-safe and handle container death
 	safe := newSafeSandbox(c)
 	safe.startNotifyingListeners(pool.eventHandlers)
