@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -169,10 +170,18 @@ func ExtractConfigFromTarGz(tarPath string) (*LambdaConfig, error) {
 	return LoadDefaultLambdaConfig(), nil
 }
 
-// IsHTTPMethodAllowed checks if a method is permitted for this function
+// IsHTTPMethodAllowed checks if a method is permitted for this function (case-insensitive)
 func (config *LambdaConfig) IsHTTPMethodAllowed(method string) bool {
+	if config == nil {
+		return true // be permissive if missing (shouldn't happen, but keeps old behavior)
+	}
+	req := strings.ToUpper(method)
 	for _, trigger := range config.Triggers.HTTP {
-		if trigger.Method == "*" || trigger.Method == method {
+		m := strings.TrimSpace(trigger.Method)
+		if m == "" {
+			continue
+		}
+		if m == "*" || strings.EqualFold(m, req) {
 			return true
 		}
 	}
