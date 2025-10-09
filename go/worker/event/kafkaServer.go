@@ -3,6 +3,7 @@ package event
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -12,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/open-lambda/open-lambda/go/boss/lambdastore"
 	"github.com/open-lambda/open-lambda/go/common"
 	"github.com/open-lambda/open-lambda/go/worker/lambda"
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -30,18 +32,19 @@ type LambdaKafkaConsumer struct {
 	client        KafkaClient       // kgo.client implements the KafkaClient interface
 	lambdaManager *lambda.LambdaMgr // Reference to lambda manager for direct calls
 	stopChan      chan struct{}     // Shutdown signal for this consumer
+	// When this channel is closed, the goroutine for the consumer exits
 }
 
-// KafkaServer manages multiple lambda-specific Kafka consumers
-type KafkaServer struct {
+// KafkaManager manages multiple lambda-specific Kafka consumers
+type KafkaManager struct {
 	lambdaConsumers map[string]*LambdaKafkaConsumer // lambdaName -> consumer
 	lambdaManager   *lambda.LambdaMgr               // Reference to lambda manager
 	mu              sync.Mutex                      // Protects lambdaConsumers map
 	stopChan        chan struct{}                   // shutdown signal for all consumers in the worker
 }
 
-// NewLambdaKafkaConsumer creates a new Kafka consumer for a specific lambda function
-func NewLambdaKafkaConsumer(consumerName string, lambdaName string, trigger *common.KafkaTrigger, lambdaManager *lambda.LambdaMgr) (*LambdaKafkaConsumer, error) {
+// newLambdaKafkaConsumer creates a new Kafka consumer for a specific lambda function
+func (km *KafkaManager) newLambdaKafkaConsumer(consumerName string, lambdaName string, trigger *common.KafkaTrigger) (*LambdaKafkaConsumer, error) {
 	// Validate that we have brokers and topics
 	if len(trigger.BootstrapServers) == 0 {
 		return nil, fmt.Errorf("no bootstrap servers configured for lambda %s", lambdaName)
@@ -77,21 +80,21 @@ func NewLambdaKafkaConsumer(consumerName string, lambdaName string, trigger *com
 		lambdaName:    lambdaName,
 		kafkaTrigger:  trigger,
 		client:        client,
-		lambdaManager: lambdaManager,
+		lambdaManager: km.lambdaManager,
 		stopChan:      make(chan struct{}),
 	}, nil
 }
 
-// NewKafkaServer creates and configures a new Kafka server
-func NewKafkaServer(lambdaManager *lambda.LambdaMgr) (*KafkaServer, error) {
-	server := &KafkaServer{
+// NewKafkaManager creates and configures a new Kafka manager
+func NewKafkaManager(lambdaManager *lambda.LambdaMgr) (*KafkaManager, error) {
+	manager := &KafkaManager{
 		lambdaConsumers: make(map[string]*LambdaKafkaConsumer),
 		lambdaManager:   lambdaManager,
 		stopChan:        make(chan struct{}),
 	}
 
-	slog.Info("Kafka server initialized")
-	return server, nil
+	slog.Info("Kafka manager initialized")
+	return manager, nil
 }
 
 // StartConsuming starts consuming messages for this lambda's Kafka triggers
@@ -105,21 +108,10 @@ func (lkc *LambdaKafkaConsumer) StartConsuming() {
 
 	// Start consuming loop
 	go lkc.consumeLoop()
-
-	// Block until shutdown
-	<-lkc.stopChan
 }
 
 // consumeLoop handles Kafka message consumption using kgo polling
 func (lkc *LambdaKafkaConsumer) consumeLoop() {
-	defer func() {
-		if r := recover(); r != nil {
-			slog.Error("Panic in consume loop",
-				"lambda", lkc.lambdaName,
-				"error", r)
-		}
-	}()
-
 	for {
 		select {
 		case <-lkc.stopChan:
@@ -132,9 +124,16 @@ func (lkc *LambdaKafkaConsumer) consumeLoop() {
 
 			if errs := fetches.Errors(); len(errs) > 0 {
 				for _, err := range errs {
+					// The franz-go package uses context.DeadlineExceeded to signal that the
+					// timeout has expired with no new messages. This is expected
+					// behaviour during idle periods and should not be logged.
 					if errors.Is(err.Err, context.DeadlineExceeded) {
 						continue
 					}
+
+					// TODO: Surface Kafka consumer errors to lambda developers by invoking an error
+					// handler lambda function. Could allow lambdas to specify an onError callback in
+					// ol.yaml that gets invoked with error details.
 					slog.Warn("Kafka fetch error",
 						"lambda", lkc.lambdaName,
 						"error", err)
@@ -151,7 +150,7 @@ func (lkc *LambdaKafkaConsumer) consumeLoop() {
 					"partition", record.Partition,
 					"offset", record.Offset,
 					"size", len(record.Value))
-				go lkc.processMessage(record)
+				lkc.processMessage(record)
 			})
 		}
 	}
@@ -172,14 +171,16 @@ func (lkc *LambdaKafkaConsumer) processMessage(record *kgo.Record) {
 		return
 	}
 
-	// Set headers with Kafka metadata
+	// Set headers with Kafka metadata (The X- prefix indicates a custom non-standard header)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Kafka-Topic", record.Topic)
 	req.Header.Set("X-Kafka-Partition", fmt.Sprintf("%d", record.Partition))
 	req.Header.Set("X-Kafka-Offset", fmt.Sprintf("%d", record.Offset))
 	req.Header.Set("X-Kafka-Group-Id", lkc.kafkaTrigger.GroupId)
 
-	// Create response recorder to capture lambda output
+	// Create response recorder to capture lambda output.
+	// TODO: Capture and log the lambda response body using httptest's response recorder
+	// for kafka triggered lambda invocations.
 	w := httptest.NewRecorder()
 
 	// Get lambda function and invoke directly
@@ -212,19 +213,19 @@ func (lkc *LambdaKafkaConsumer) cleanup() {
 }
 
 // RegisterLambdaKafkaTriggers registers Kafka triggers for a lambda function
-func (ks *KafkaServer) RegisterLambdaKafkaTriggers(lambdaName string, triggers []common.KafkaTrigger) error {
-	ks.mu.Lock()
-	defer ks.mu.Unlock()
+func (km *KafkaManager) RegisterLambdaKafkaTriggers(lambdaName string, triggers []common.KafkaTrigger) error {
+	km.mu.Lock()
+	defer km.mu.Unlock()
 
 	if len(triggers) == 0 {
 		return nil // No Kafka triggers for this lambda
 	}
 
 	// If lambda already has consumers, clean them up first
-	for consumerName, consumer := range ks.lambdaConsumers {
+	for consumerName, consumer := range km.lambdaConsumers {
 		if strings.HasPrefix(consumerName, lambdaName+"-") {
 			consumer.cleanup()
-			delete(ks.lambdaConsumers, consumerName)
+			delete(km.lambdaConsumers, consumerName)
 			slog.Info("Cleaned up existing Kafka consumer for lambda", "lambda", lambdaName, "consumer", consumerName)
 		}
 	}
@@ -232,7 +233,7 @@ func (ks *KafkaServer) RegisterLambdaKafkaTriggers(lambdaName string, triggers [
 	// Create consumers for each Kafka trigger
 	for i, trigger := range triggers {
 		consumerName := fmt.Sprintf("%s-%d", lambdaName, i)
-		consumer, err := NewLambdaKafkaConsumer(consumerName, lambdaName, &trigger, ks.lambdaManager)
+		consumer, err := km.newLambdaKafkaConsumer(consumerName, lambdaName, &trigger)
 		if err != nil {
 			slog.Error("Failed to create Kafka consumer for lambda",
 				"lambda", lambdaName,
@@ -241,7 +242,7 @@ func (ks *KafkaServer) RegisterLambdaKafkaTriggers(lambdaName string, triggers [
 			continue
 		}
 
-		ks.lambdaConsumers[consumerName] = consumer
+		km.lambdaConsumers[consumerName] = consumer
 
 		// Start consuming in background
 		go func(c *LambdaKafkaConsumer) {
@@ -259,46 +260,120 @@ func (ks *KafkaServer) RegisterLambdaKafkaTriggers(lambdaName string, triggers [
 }
 
 // UnregisterLambdaKafkaTriggers removes Kafka triggers for a lambda function
-func (ks *KafkaServer) UnregisterLambdaKafkaTriggers(lambdaName string) {
-	ks.mu.Lock()
-	defer ks.mu.Unlock()
+func (km *KafkaManager) UnregisterLambdaKafkaTriggers(lambdaName string) {
+	km.mu.Lock()
+	defer km.mu.Unlock()
 
 	// Find and cleanup all consumers for this lambda
-	for consumerName, consumer := range ks.lambdaConsumers {
+	for consumerName, consumer := range km.lambdaConsumers {
 		if strings.HasPrefix(consumerName, lambdaName+"-") {
 			consumer.cleanup()
-			delete(ks.lambdaConsumers, consumerName)
+			delete(km.lambdaConsumers, consumerName)
 			slog.Info("Unregistered Kafka consumer for lambda", "lambda", lambdaName)
 		}
 	}
 }
 
-// StartConsuming starts the Kafka server (all lambda consumers are managed separately)
-func (ks *KafkaServer) StartConsuming() {
-	slog.Info("Kafka server ready to manage lambda consumers")
+// StartConsuming starts the Kafka manager (all lambda consumers are managed separately)
+func (km *KafkaManager) StartConsuming() {
+	slog.Info("Kafka manager ready to manage lambda consumers")
 
 	// Block until shutdown
-	<-ks.stopChan
+	<-km.stopChan
 }
 
 // cleanup closes all lambda consumers
-func (ks *KafkaServer) cleanup() {
-	slog.Info("Shutting down Kafka server")
+func (km *KafkaManager) cleanup() {
+	slog.Info("Shutting down Kafka manager")
 
 	// Signal all goroutines to stop
-	close(ks.stopChan)
+	close(km.stopChan)
 
-	ks.mu.Lock()
-	defer ks.mu.Unlock()
+	km.mu.Lock()
+	defer km.mu.Unlock()
 
 	// Close all lambda consumers
-	for lambdaName, consumer := range ks.lambdaConsumers {
+	for lambdaName, consumer := range km.lambdaConsumers {
 		consumer.cleanup()
 		slog.Info("Cleaned up Kafka consumer for lambda", "lambda", lambdaName)
 	}
 
 	// Clear the map
-	ks.lambdaConsumers = make(map[string]*LambdaKafkaConsumer)
+	km.lambdaConsumers = make(map[string]*LambdaKafkaConsumer)
 
-	slog.Info("Kafka server shutdown complete")
+	slog.Info("Kafka manager shutdown complete")
+}
+
+// HandleKafkaRegister handles Kafka consumer registration/unregistration for lambdas
+func HandleKafkaRegister(kafkaManager *KafkaManager, lambdaStore *lambdastore.LambdaStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Extract lambda name
+		lambdaName := strings.TrimPrefix(r.URL.Path, "/kafka/register/")
+		if lambdaName == "" {
+			http.Error(w, "lambda name required", http.StatusBadRequest)
+			return
+		}
+
+		type Response struct {
+			Status  string `json:"status"`
+			Lambda  string `json:"lambda"`
+			Message string `json:"message"`
+		}
+
+		switch r.Method {
+		case "POST":
+			// Read lambda config from registry
+			config, err := lambdaStore.GetConfig(lambdaName)
+			if err != nil {
+				slog.Error("Failed to load lambda config for Kafka registration",
+					"lambda", lambdaName,
+					"error", err)
+				http.Error(w, fmt.Sprintf("failed to load lambda config: %v", err), http.StatusNotFound)
+				return
+			}
+
+			// Check if lambda has Kafka triggers
+			if config == nil || len(config.Triggers.Kafka) == 0 {
+				http.Error(w, "lambda has no Kafka triggers", http.StatusBadRequest)
+				return
+			}
+
+			// Register Kafka triggers
+			err = kafkaManager.RegisterLambdaKafkaTriggers(lambdaName, config.Triggers.Kafka)
+			if err != nil {
+				slog.Error("Failed to register Kafka triggers",
+					"lambda", lambdaName,
+					"error", err)
+				http.Error(w, fmt.Sprintf("failed to register Kafka triggers: %v", err), http.StatusInternalServerError)
+				return
+			}
+
+			slog.Info("Registered Kafka consumers via API",
+				"lambda", lambdaName,
+				"triggers", len(config.Triggers.Kafka))
+
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(Response{
+				Status:  "success",
+				Lambda:  lambdaName,
+				Message: fmt.Sprintf("Kafka consumers registered for %d trigger(s)", len(config.Triggers.Kafka)),
+			})
+
+		case "DELETE":
+			// Unregister Kafka triggers
+			kafkaManager.UnregisterLambdaKafkaTriggers(lambdaName)
+
+			slog.Info("Unregistered Kafka consumers via API", "lambda", lambdaName)
+
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(Response{
+				Status:  "success",
+				Lambda:  lambdaName,
+				Message: "Kafka consumers unregistered",
+			})
+
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}
 }

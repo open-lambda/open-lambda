@@ -43,6 +43,8 @@ var (
 	lambdaStore *lambdastore.LambdaStore
 )
 
+// cleanable represents a resource that requires cleanup on worker shutdown.
+// All server implementations and managers should implement this interface.
 type cleanable interface {
 	cleanup()
 }
@@ -171,8 +173,7 @@ func PprofCpuStop(w http.ResponseWriter, _ *http.Request) {
 	}
 }
 
-func shutdown(pidPath string, server cleanable) {
-	server.cleanup()
+func shutdown(pidPath string) {
 	statsPath := filepath.Join(common.Conf.Worker_dir, "stats.json")
 	snapshot := common.SnapshotStats()
 	rc := 0
@@ -249,80 +250,6 @@ func RegistryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// HandleKafkaRegister handles Kafka consumer registration/unregistration for lambdas
-func HandleKafkaRegister(kafkaServer *KafkaServer) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// Extract lambda name
-		lambdaName := strings.TrimPrefix(r.URL.Path, "/kafka/register/")
-		if lambdaName == "" {
-			http.Error(w, "lambda name required", http.StatusBadRequest)
-			return
-		}
-
-		type Response struct {
-			Status  string `json:"status"`
-			Lambda  string `json:"lambda"`
-			Message string `json:"message"`
-		}
-
-		switch r.Method {
-		case "POST":
-			// Read lambda config from registry
-			config, err := lambdaStore.GetConfig(lambdaName)
-			if err != nil {
-				slog.Error("Failed to load lambda config for Kafka registration",
-					"lambda", lambdaName,
-					"error", err)
-				http.Error(w, fmt.Sprintf("failed to load lambda config: %v", err), http.StatusNotFound)
-				return
-			}
-
-			// Check if lambda has Kafka triggers
-			if config == nil || len(config.Triggers.Kafka) == 0 {
-				http.Error(w, "lambda has no Kafka triggers", http.StatusBadRequest)
-				return
-			}
-
-			// Register Kafka triggers
-			err = kafkaServer.RegisterLambdaKafkaTriggers(lambdaName, config.Triggers.Kafka)
-			if err != nil {
-				slog.Error("Failed to register Kafka triggers",
-					"lambda", lambdaName,
-					"error", err)
-				http.Error(w, fmt.Sprintf("failed to register Kafka triggers: %v", err), http.StatusInternalServerError)
-				return
-			}
-
-			slog.Info("Registered Kafka consumers via API",
-				"lambda", lambdaName,
-				"triggers", len(config.Triggers.Kafka))
-
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(Response{
-				Status:  "success",
-				Lambda:  lambdaName,
-				Message: fmt.Sprintf("Kafka consumers registered for %d trigger(s)", len(config.Triggers.Kafka)),
-			})
-
-		case "DELETE":
-			// Unregister Kafka triggers
-			kafkaServer.UnregisterLambdaKafkaTriggers(lambdaName)
-
-			slog.Info("Unregistered Kafka consumers via API", "lambda", lambdaName)
-
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(Response{
-				Status:  "success",
-				Lambda:  lambdaName,
-				Message: "Kafka consumers unregistered",
-			})
-
-		default:
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		}
-	}
-}
-
 func Main() (err error) {
 	pidPath := filepath.Join(common.Conf.Worker_dir, "worker.pid")
 	if _, err := os.Stat(pidPath); err == nil {
@@ -344,18 +271,16 @@ func Main() (err error) {
 		return err
 	}
 
-	var s cleanable
-	var kafkaServer *KafkaServer
+	var cleanables []cleanable
 
 	defer func() {
 		if err != nil {
 			// Cleanup only on error, not normal signal-based shutdown
 			os.Remove(pidPath)
-			if kafkaServer != nil {
-				kafkaServer.cleanup()
-			}
-			if s != nil {
-				s.cleanup()
+			for _, c := range cleanables {
+				if c != nil {
+					c.cleanup()
+				}
 			}
 		}
 	}()
@@ -380,40 +305,38 @@ func Main() (err error) {
 
 	switch common.Conf.Server_mode {
 	case "lambda":
-		s, err = NewLambdaServer()
+		lambdaServer, err := NewLambdaServer()
 		if err != nil {
 			return err
 		}
+		cleanables = append(cleanables, lambdaServer)
 
-		// Always create and start Kafka server alongside lambda server
-		lambdaServer := s.(*LambdaServer)
-		kafkaServer, err = NewKafkaServer(lambdaServer.lambdaMgr)
+		// Always create and start Kafka manager alongside lambda server
+		kafkaManager, err := NewKafkaManager(lambdaServer.lambdaMgr)
 		if err != nil {
-			return fmt.Errorf("failed to create Kafka server: %w", err)
+			return fmt.Errorf("failed to create Kafka manager: %w", err)
 		}
-		slog.Info("Created kafka server")
+		cleanables = append(cleanables, kafkaManager)
+		slog.Info("Created kafka manager")
 
 		// Register Kafka management endpoint
-		http.HandleFunc("/kafka/register/", HandleKafkaRegister(kafkaServer))
+		http.HandleFunc("/kafka/register/", HandleKafkaRegister(kafkaManager, lambdaStore))
 	case "sock":
-		s, err = NewSOCKServer()
+		sockServer, err := NewSOCKServer()
 		if err != nil {
 			return err
 		}
+		cleanables = append(cleanables, sockServer)
 	default:
 		return fmt.Errorf("unknown Server_mode %s", common.Conf.Server_mode)
 	}
 
-	// Start Kafka server in background goroutine if it was created
-	if kafkaServer != nil {
+	// Start Kafka manager in background goroutine if we're in lambda mode
+	if common.Conf.Server_mode == "lambda" {
+		// kafkaManager is guaranteed to be in cleanables[1] for lambda mode
+		kafkaManager := cleanables[1].(*KafkaManager)
 		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					slog.Error("Panic in Kafka server", "error", r)
-				}
-			}()
-
-			kafkaServer.StartConsuming()
+			kafkaManager.StartConsuming()
 		}()
 	}
 
@@ -425,18 +348,20 @@ func Main() (err error) {
 		<-c
 		slog.Info("Received kill signal, cleaning up.")
 
-		// Clean up Kafka server first
-		if kafkaServer != nil {
-			kafkaServer.cleanup()
+		// Clean up all resources in order
+		for _, cleanable := range cleanables {
+			if cleanable != nil {
+				cleanable.cleanup()
+			}
 		}
 
-		shutdown(pidPath, s)
+		shutdown(pidPath)
 	}()
 
 	port := fmt.Sprintf("%s:%s", common.Conf.Worker_url, common.Conf.Worker_port)
 	slog.Info("Starting HTTP server", "port", port)
-	if kafkaServer != nil {
-		slog.Info("Kafka server running in background")
+	if common.Conf.Server_mode == "lambda" {
+		slog.Info("Kafka manager running in background")
 	}
 
 	err = http.ListenAndServe(port, nil)
