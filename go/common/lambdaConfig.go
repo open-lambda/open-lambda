@@ -77,11 +77,13 @@ func checkLambdaConfig(config *LambdaConfig) error {
 		return fmt.Errorf("LambdaConfig is not initialized")
 	}
 
-	// Validate HTTP triggers
-	for _, trigger := range config.Triggers.HTTP {
+	// Validate and normalize HTTP triggers
+	for i, trigger := range config.Triggers.HTTP {
 		if trigger.Method == "" {
 			return fmt.Errorf("HTTP trigger method cannot be empty")
 		}
+		// Normalize to uppercase (GET, POST, etc.)
+		config.Triggers.HTTP[i].Method = strings.ToUpper(trigger.Method)
 	}
 
 	// Validate cron triggers
