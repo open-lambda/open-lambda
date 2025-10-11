@@ -20,6 +20,22 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+// performs an HTTP GET request to the worker over its UDS
+func udsGet(olPath, requestPath string) (*http.Response, error) {
+	sockPath := filepath.Join(olPath, "ol.sock")
+
+	// create a transport that dials the socket
+	tr := &http.Transport{}
+	tr.DialContext = func(ctx context.Context, _, _ string) (net.Conn, error) {
+		return net.Dial("unix", sockPath)
+	}
+	client := &http.Client{Transport: tr, Timeout: 2 * time.Second}
+
+	// perform HTTP get request with custom client
+	url := "http://unix" + requestPath
+	return client.Get(url)
+}
+
 // initCmd corresponds to the "init" command of the admin tool.
 func initCmd(ctx *cli.Context) error {
 	olPath, err := common.GetOlPath(ctx)
@@ -132,14 +148,6 @@ func upCmd(ctx *cli.Context) error {
 
 		var pingErr error
 
-		const sockPath = "/run/openlambda/ol.sock"
-
-		tr := &http.Transport{}
-		tr.DialContext = func(ctx context.Context, _, _ string) (net.Conn, error) {
-			return net.Dial("unix", sockPath)
-		}
-		client := &http.Client{Transport: tr, Timeout: 2 * time.Second}
-
 		for i := 0; i < 300; i++ {
 			// check if it has died
 			select {
@@ -158,7 +166,7 @@ func upCmd(ctx *cli.Context) error {
 			}
 
 			// is it reachable?
-			response, err := client.Get("http://unix/pid")
+			response, err := udsGet(olPath, "/pid")
 
 			if err != nil {
 				pingErr = err

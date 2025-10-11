@@ -1,6 +1,7 @@
 package event
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -260,6 +261,9 @@ func Main() (err error) {
 		return err
 	}
 
+	// single error channel to handle any error or signal, buffered to prevent Goroutine leak
+	errorChannel := make(chan error, 1)
+
 	// start with a fresh env
 	if err := os.RemoveAll(common.Conf.Worker_dir); err != nil {
 		return err
@@ -273,11 +277,14 @@ func Main() (err error) {
 	}
 
 	// things shared by all servers
-	http.HandleFunc(STATUS_PATH, Status)
-	http.HandleFunc(STATS_PATH, Stats)
-	http.HandleFunc(PPROF_MEM_PATH, PprofMem)
-	http.HandleFunc(PPROF_CPU_START_PATH, PprofCpuStart)
-	http.HandleFunc(PPROF_CPU_STOP_PATH, PprofCpuStop)
+	udsMux := http.NewServeMux()
+	udsMux.HandleFunc(PID_PATH, HandleGetPid)
+	portMux := http.NewServeMux()
+	portMux.HandleFunc(STATUS_PATH, Status)
+	portMux.HandleFunc(STATS_PATH, Stats)
+	portMux.HandleFunc(PPROF_MEM_PATH, PprofMem)
+	portMux.HandleFunc(PPROF_CPU_START_PATH, PprofCpuStart)
+	portMux.HandleFunc(PPROF_CPU_STOP_PATH, PprofCpuStop)
 
 	// Initialize LambdaStore for registry
 	slog.Info(fmt.Sprintf("Worker: Initializing LambdaStore with Registry = \"%s\"", common.Conf.Registry))
@@ -288,7 +295,7 @@ func Main() (err error) {
 	}
 
 	// Registry handler
-	http.HandleFunc(REGISTRY_BASE_PATH, RegistryHandler)
+	portMux.HandleFunc(REGISTRY_BASE_PATH, RegistryHandler)
 
 	var s cleanable
 	switch common.Conf.Server_mode {
@@ -304,24 +311,19 @@ func Main() (err error) {
 		return err
 	}
 
-	// clean up if signal hits us (e.g., from ctrl-C)
+	// tell error channel to clean up if signal hits us (e.g., from ctrl-C)
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	signal.Notify(c, os.Interrupt, syscall.SIGINT)
 	go func() {
 		<-c
-		slog.Info("Received kill signal, cleaning up.")
-		shutdown(pidPath, s)
+		errorChannel <- fmt.Errorf("Received kill signal, cleaning up.")
 	}()
 
-	// socket path uses config value, otherwise make a new worker.sock file
-	const sockPath = "/run/openlambda/ol.sock"
+	// sock file is made in worker directory
+	sockPath := filepath.Join(common.Conf.Worker_dir, "ol.sock")
 
-	// ensure directory exists and stale socket is gone
-    if err := os.MkdirAll(filepath.Dir(sockPath), 0700); err != nil {
-        os.Remove(pidPath)
-        return fmt.Errorf("make socket dir: %w", err)
-    }
+	// ensure stale socket is gone
     _ = os.Remove(sockPath)
 
 	ln, errUDS := net.Listen("unix", sockPath)
@@ -333,20 +335,17 @@ func Main() (err error) {
 		return fmt.Errorf("chmod UDS sock file %s: %w", sockPath, err)
 	}
 
-	// we are only testing PID for UDS
-	pidMux := http.NewServeMux()
-	pidMux.HandleFunc(PID_PATH, HandleGetPid)
-
-	pidSrv := &http.Server{
-		Handler:           pidMux,
+	udsServer := &http.Server{
+		Handler:           udsMux,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	// start serving /pid on the Unix socket
+	// start serving on the UDS server
 	go func() {
-		slog.Info("worker /pid listening on UDS", "socket", sockPath)
-		if err := pidSrv.Serve(ln); err != nil && err != http.ErrServerClosed {
-			slog.Error("UDS /pid server exited", "err", err)
+		slog.Info("worker listening on UDS", "socket", sockPath)
+		err := udsServer.Serve(ln)
+		if err != nil && err != http.ErrServerClosed {
+			errorChannel <- fmt.Errorf("UDS server failed %w", err)
 		}
 	}()
 
@@ -354,13 +353,41 @@ func Main() (err error) {
 	defer func() { _ = os.Remove(sockPath) }()
 
 	port := fmt.Sprintf("%s:%s", common.Conf.Worker_url, common.Conf.Worker_port)
-	err = http.ListenAndServe(port, nil)
+	portServer := &http.Server{
+		Addr:    port,
+		Handler: portMux,
+	}
+	
+	// start serving on the HTTP Server
+	go func() {
+		slog.Info("worker listening on TCP", "port", port)
+		err := portServer.ListenAndServe()
+		if err != nil && err != http.ErrServerClosed {
+			errorChannel <- fmt.Errorf("Port server failed %w", err)
+		}
+	}()
 
-	// if ListenAndServer returned, there must have been some issue
-	// (probably a port collision)
-	s.cleanup()
-	os.Remove(pidPath)
-	slog.Error(err.Error())
-	os.Exit(1)
+	// wait for a shutdown signal from the error channel
+	shutdownSignal := <- errorChannel
+	slog.Warn("Shutdown signal received", "reason", shutdownSignal)
+
+	// allow for graceful shutdown
+	ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)
+	defer cancel()
+
+	// shutdown UDS server
+	slog.Info("Shutting down UDS server...")
+	if err := udsServer.Shutdown(ctx); err != nil {
+		slog.Error("Error during UDS server shutdown", "err", err)
+	}
+
+	// shutdown TCP server
+	slog.Info("Shutting down TCP server...")
+	if err := portServer.Shutdown(ctx); err != nil {
+		slog.Error("Error during TCP server shutdown", "err", err)
+	}
+
+	shutdown(pidPath, s)
+
 	return nil
 }
