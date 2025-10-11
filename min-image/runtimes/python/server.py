@@ -68,8 +68,22 @@ def web_server():
     
 
     if hasattr(f, "app"):
+        def path_wrapper(environ, start_response):
+            path = environ.get("PATH_INFO", "")
+            # split path to get individual components
+            parts = path.split("/")
+            # keep everything after the first two components
+            if len(parts) > 2:
+                # parts[0] is '', parts[1]='run', parts[2]=<func-name>, parts[3:]=rest of path
+                environ["PATH_INFO"] = '/' + '/'.join(parts[3:])  
+            else:
+                # if path is /run/<func-name>, redirect to /
+                environ["PATH_INFO"] = '/'
+            return f.app(environ, start_response)
+        
         # use WSGI entry
-        app = tornado.wsgi.WSGIContainer(f.app)
+        # call wrapper to strip /run/<func-name> from path
+        app = tornado.wsgi.WSGIContainer(path_wrapper)
     else:
         # use function entry
         app = tornado.web.Application([
