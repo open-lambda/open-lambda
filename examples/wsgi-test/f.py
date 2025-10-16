@@ -1,12 +1,16 @@
-from flask import Flask, request, Response
+from flask import Flask, render_template, request
 
 def page_not_found(e):
-    return f"404 Not Found: {request.method} {request.path}", 404
+    return f"{e}, {request.base_url}, {request.url_root}\n", 404
 
-app = Flask("WSGI")
+app = Flask(__name__)
 app.register_error_handler(404, page_not_found)
 
 @app.route("/home")
 def hi():
-    return Response(f"Request path: {request.path}\n", status=200)
+    return render_template("index.html")
 
+@app.route("/home/button")
+def button():
+    print("Button endpoint hit!")
+    return "You clicked the button!\n"
