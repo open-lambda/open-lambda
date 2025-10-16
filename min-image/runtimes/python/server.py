@@ -72,13 +72,9 @@ def web_server():
             path = environ.get("PATH_INFO", "")
             # split path to get individual components
             parts = path.split("/")
-            # keep everything after the first two components
-            if len(parts) > 2:
-                # parts[0] is '', parts[1]='run', parts[2]=<func-name>, parts[3:]=rest of path
-                environ["PATH_INFO"] = '/' + '/'.join(parts[3:])  
-            else:
-                # if path is /run/<func-name>, redirect to /
-                environ["PATH_INFO"] = '/'
+            # set new environment path
+            # `/run/<func-name>/a/b/c` -> `/a/b/c`
+            environ["PATH_INFO"] = '/' + '/'.join(parts[3:])
             return f.app(environ, start_response)
         
         # use WSGI entry
