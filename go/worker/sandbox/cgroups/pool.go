@@ -2,6 +2,7 @@ package cgroups
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log/slog"
 	"os"
 	"path"
@@ -24,20 +25,6 @@ type CgroupPool struct {
 	nextID   int
 }
 
-// NOTE (rootless): best-effort guard for controller files.
-func writeOK(p string) bool {
-	st, err := os.Stat(p)
-	if err != nil || !st.Mode().IsRegular() {
-		return false
-	}
-	f, err := os.OpenFile(p, os.O_WRONLY, 0)
-	if err != nil {
-		return false
-	}
-	_ = f.Close()
-	return true
-}
-
 // NewCgroupPool creates a new CgroupPool with the specified name.
 func NewCgroupPool(name string) (*CgroupPool, error) {
 	pool := &CgroupPool{
@@ -48,61 +35,17 @@ func NewCgroupPool(name string) (*CgroupPool, error) {
 		nextID:   0,
 	}
 
-	// Try to create the pool directory with fallback logic:
-	// 1. Try systemd user slice (rootless-friendly)
-	// 2. Fall back to legacy path if that fails
-	var groupPath string
-	var createErr error
-
-	// Try systemd user slice first
-	if base, err := common.DelegatedUserCgroupBase(); err == nil {
-		poolName := pool.Name
-		if !strings.HasSuffix(poolName, ".slice") {
-			poolName += ".slice"
-		}
-		groupPath = path.Join(base, poolName)
-		pool.printf("trying systemd user slice: %s", groupPath)
-		if err := os.MkdirAll(groupPath, 0o755); err == nil {
-			pool.printf("using cgroup base: %s", groupPath)
-			// Best-effort: enable controllers
-			rpath := fmt.Sprintf("%s/cgroup.subtree_control", groupPath)
-			if f, err := os.OpenFile(rpath, os.O_WRONLY|os.O_APPEND, 0); err == nil {
-				_, _ = f.WriteString("+pids +io +memory +cpu\n")
-				_ = f.Close()
-			} else {
-				pool.printf("WARN: could not write %s (%v); continuing without delegating controllers", rpath, err)
-			}
-			go pool.cgTask()
-			return pool, nil
-		} else {
-			pool.printf("WARN: cannot create %s (%v); falling back to legacy path", groupPath, err)
-			createErr = err
-		}
+	// create cgroup
+	groupPath := pool.GroupPath()
+	pool.printf("create %s", groupPath)
+	if err := syscall.Mkdir(groupPath, 0700); err != nil {
+		return nil, fmt.Errorf("Mkdir %s: %s", groupPath, err)
 	}
 
-	// Fallback to legacy path
-	groupPath = fmt.Sprintf("/sys/fs/cgroup/%s", pool.Name)
-	pool.printf("trying legacy path: %s", groupPath)
-	if err := os.MkdirAll(groupPath, 0o700); err != nil {
-		// Both paths failed - provide helpful error message
-		errMsg := fmt.Sprintf("Failed to create cgroup pool at both systemd user slice and legacy path.\n")
-		if createErr != nil {
-			errMsg += fmt.Sprintf("  - User slice error: %v\n", createErr)
-		}
-		errMsg += fmt.Sprintf("  - Legacy path error: %v\n\n", err)
-		errMsg += common.GetCgroupDelegationInstructions()
-		return nil, fmt.Errorf("%s", errMsg)
-	}
-
-	pool.printf("using cgroup base: %s", groupPath)
-
-	// Best-effort: make controllers available to child groups
+	// Make controllers available to child groups
 	rpath := fmt.Sprintf("%s/cgroup.subtree_control", groupPath)
-	if f, err := os.OpenFile(rpath, os.O_WRONLY|os.O_APPEND, 0); err == nil {
-		_, _ = f.WriteString("+pids +io +memory +cpu\n")
-		_ = f.Close()
-	} else {
-		pool.printf("WARN: could not write %s (%v); continuing without delegating controllers", rpath, err)
+	if err := ioutil.WriteFile(rpath, []byte("+pids +io +memory +cpu"), os.ModeAppend); err != nil {
+		panic(fmt.Sprintf("Error writing to %s: %v", rpath, err))
 	}
 
 	go pool.cgTask()
@@ -111,26 +54,20 @@ func NewCgroupPool(name string) (*CgroupPool, error) {
 
 // NewCgroup creates a new CGroup in the pool
 func (pool *CgroupPool) NewCgroup() Cgroup {
-	for {
-		pool.nextID++
+	pool.nextID++
 
-		cg := &CgroupImpl{
-			name: fmt.Sprintf("cg-%d", pool.nextID),
-			pool: pool,
-		}
-
-		groupPath := cg.GroupPath()
-		if err := os.Mkdir(groupPath, 0700); err != nil {
-			// If a previous run left cg-N behind, try the next N
-			if os.IsExist(err) {
-				continue
-			}
-			panic(fmt.Errorf("Mkdir %s: %s", groupPath, err))
-		}
-
-		cg.printf("created")
-		return cg
+	cg := &CgroupImpl{
+		name: fmt.Sprintf("cg-%d", pool.nextID),
+		pool: pool,
 	}
+
+	groupPath := cg.GroupPath()
+	if err := syscall.Mkdir(groupPath, 0700); err != nil {
+		panic(fmt.Errorf("Mkdir %s: %s", groupPath, err))
+	}
+
+	cg.printf("created")
+	return cg
 }
 
 // add ID to each log message so we know which logs correspond to
@@ -167,20 +104,8 @@ Loop:
 		default:
 			t := common.T0("fresh-cgroup")
 			cg = pool.NewCgroup().(*CgroupImpl)
-			// Only attempt controller writes if the files are present & writable
-			pidsPath := path.Join(cg.GroupPath(), "pids.max")
-			swapPath := path.Join(cg.GroupPath(), "memory.swap.max")
-
-			if writeOK(pidsPath) {
-				cg.WriteInt("pids.max", int64(common.Conf.Limits.Procs))
-			} else {
-				cg.printf("WARN: skipping write pids.max (no delegation/permission)")
-			}
-			if writeOK(swapPath) {
-				cg.WriteInt("memory.swap.max", int64(common.Conf.Limits.Swappiness))
-			} else {
-				cg.printf("WARN: skipping write memory.swap.max (no delegation/permission)")
-			}
+			cg.WriteInt("pids.max", int64(common.Conf.Limits.Procs))
+			cg.WriteInt("memory.swap.max", int64(common.Conf.Limits.Swappiness))
 			t.T1()
 		}
 
@@ -238,34 +163,23 @@ func (pool *CgroupPool) Destroy() {
 // GetCg retrieves a cgroup from the pool, setting its memory limit and CPU percentage.
 func (pool *CgroupPool) GetCg(memLimitMB int, moveMemCharge bool, cpuPercent int) Cgroup {
 	cg := <-pool.ready
-	// Guard writes so missing delegation doesn't kill the worker
-	memMax := path.Join(cg.GroupPath(), "memory.max")
-	cpuWeight := path.Join(cg.GroupPath(), "cpu.weight")
-
-	if writeOK(memMax) {
-		cg.SetMemLimitMB(memLimitMB)
-	} else {
-		cg.printf("WARN: skipping memory.max (no delegation/permission)")
-	}
-	if writeOK(cpuWeight) {
-		cg.SetCPUPercent(cpuPercent)
-	} else {
-		cg.printf("WARN: skipping cpu.weight (no delegation/permission)")
-	}
+	cg.SetMemLimitMB(memLimitMB)
+	cg.SetCPUPercent(cpuPercent)
 
 	// FIXME not supported in CG2?
 	var _ = moveMemCharge
+
+	/*
+		if moveMemCharge {
+			cg.WriteInt("memory.move_charge_at_immigrate", 1)
+		} else {
+			cg.WriteInt("memory.move_charge_at_immigrate", 0)
+		}*/
+
 	return cg
 }
 
 // GroupPath returns the path to the Cgroup pool for OpenLambda
 func (pool *CgroupPool) GroupPath() string {
-	if base, err := common.DelegatedUserCgroupBase(); err == nil {
-		name := pool.Name
-		if !strings.HasSuffix(name, ".slice") {
-			name += ".slice"
-		}
-		return path.Join(base, name)
-	}
 	return fmt.Sprintf("/sys/fs/cgroup/%s", pool.Name)
 }

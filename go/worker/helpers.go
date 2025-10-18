@@ -163,12 +163,12 @@ func initOLDir(olPath string, dockerBaseImage string, newBase bool) (err error) 
 
 	fmt.Printf("Init OL directory at %s\n", olPath)
 
-	if err := ioutil.WriteFile(initTimePath, []byte(time.Now().Local().String()+"\n"), 0400); err != nil {
+	if err := ioutil.WriteFile(initTimePath, []byte(time.Now().Local().String()+"\n"), 0644); err != nil {
 		return err
 	}
 
 	zygoteTreePath := filepath.Join(olPath, "default-zygotes-40.json")
-	if err := ioutil.WriteFile(zygoteTreePath, []byte(embedded.DefaultZygotes40_json), 0400); err != nil {
+	if err := ioutil.WriteFile(zygoteTreePath, []byte(embedded.DefaultZygotes40_json), 0644); err != nil {
 		return err
 	}
 
@@ -258,7 +258,7 @@ func checkState() (OlState, error) {
 // the process status separately.
 func readPidFile() (int, error) {
 	pidPath := filepath.Join(common.Conf.Worker_dir, "worker.pid")
-	data, err := os.ReadFile(pidPath)
+	data, err := ioutil.ReadFile(pidPath)
 	if os.IsNotExist(err) {
 		return -1, os.ErrNotExist
 	} else if err != nil {
@@ -303,16 +303,8 @@ func runningToStoppedClean() error {
 }
 
 // getCgRoot returns the cgroup root path for the given olPath.
-// It tries the systemd user slice path first (rootless), then falls back to legacy path.
 func getCgRoot(olPath string) string {
 	clusterName := filepath.Base(olPath)
-
-	// Try systemd user slice (rootless-friendly)
-	if base, err := common.DelegatedUserCgroupBase(); err == nil {
-		return filepath.Join(base, clusterName+"-sandboxes.slice")
-	}
-
-	// Fallback for rootful/legacy
 	return filepath.Join("/sys", "fs", "cgroup", clusterName+"-sandboxes")
 }
 
@@ -338,12 +330,12 @@ func stoppedDirtyToStoppedClean(olPath string) error {
 		}
 
 		// Perform cleanup
-		files, err := os.ReadDir(cgRoot)
+		files, err := ioutil.ReadDir(cgRoot)
 		if err != nil {
 			return fmt.Errorf("error reading cgroup root: %s", err.Error())
 		}
 		kill := filepath.Join(cgRoot, "cgroup.kill")
-		if err := os.WriteFile(kill, []byte(fmt.Sprintf("%d", 1)), os.ModeAppend); err != nil {
+		if err := ioutil.WriteFile(kill, []byte(fmt.Sprintf("%d", 1)), 0644); err != nil {
 			// Print an error if killing processes in the cgroup fails.
 			fmt.Printf("Could not kill processes in cgroup: %s\n", err.Error())
 			cgroupErrorCount += 1
