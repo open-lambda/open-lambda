@@ -43,8 +43,6 @@ var (
 	lambdaStore *lambdastore.LambdaStore
 )
 
-// cleanable represents a resource that requires cleanup on worker shutdown.
-// All server implementations and managers should implement this interface.
 type cleanable interface {
 	cleanup()
 }
@@ -173,10 +171,8 @@ func PprofCpuStop(w http.ResponseWriter, _ *http.Request) {
 	}
 }
 
-// shutdown performs final cleanup tasks before the worker exits.
-// It saves stats, CPU profile data, and removes the PID file.
-// Returns an exit code (0 for success, 1 for any errors).
-func shutdown(pidPath string) int {
+func shutdown(pidPath string, server cleanable) {
+	server.cleanup()
 	statsPath := filepath.Join(common.Conf.Worker_dir, "stats.json")
 	snapshot := common.SnapshotStats()
 	rc := 0
@@ -216,7 +212,7 @@ func shutdown(pidPath string) int {
 	}
 
 	slog.Info(fmt.Sprintf("Exiting worker (PID %d)", os.Getpid()))
-	return rc
+	os.Exit(rc)
 }
 
 // RegistryHandler handles registry requests using boss's LambdaStore
@@ -253,7 +249,7 @@ func RegistryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func Main() error {
+func Main() (err error) {
 	pidPath := filepath.Join(common.Conf.Worker_dir, "worker.pid")
 	if _, err := os.Stat(pidPath); err == nil {
 		return fmt.Errorf("Previous worker may be running, %s already exists", pidPath)
@@ -274,133 +270,57 @@ func Main() error {
 		return err
 	}
 
-	var cleanables []cleanable
-	var httpServer *http.Server
-	var shutdownComplete = make(chan int, 1) // Channel to receive exit code
-
-	// Consolidated cleanup - runs on both normal shutdown and error cases
-	defer func() {
-		slog.Info("Running cleanup")
-
-		// Clean up all resources in order
-		for _, c := range cleanables {
-			if c != nil {
-				c.cleanup()
-			}
-		}
-
-		// Perform final shutdown tasks and get exit code
-		exitCode := shutdown(pidPath)
-
-		// Exit with appropriate code
-		os.Exit(exitCode)
-	}()
-
-	// Create custom ServeMux instead of using DefaultServeMux
-	mux := http.NewServeMux()
-
 	// things shared by all servers
-	mux.HandleFunc(PID_PATH, HandleGetPid)
-	mux.HandleFunc(STATUS_PATH, Status)
-	mux.HandleFunc(STATS_PATH, Stats)
-	mux.HandleFunc(PPROF_MEM_PATH, PprofMem)
-	mux.HandleFunc(PPROF_CPU_START_PATH, PprofCpuStart)
-	mux.HandleFunc(PPROF_CPU_STOP_PATH, PprofCpuStop)
+	http.HandleFunc(PID_PATH, HandleGetPid)
+	http.HandleFunc(STATUS_PATH, Status)
+	http.HandleFunc(STATS_PATH, Stats)
+	http.HandleFunc(PPROF_MEM_PATH, PprofMem)
+	http.HandleFunc(PPROF_CPU_START_PATH, PprofCpuStart)
+	http.HandleFunc(PPROF_CPU_STOP_PATH, PprofCpuStop)
 
 	// Initialize LambdaStore for registry
 	slog.Info(fmt.Sprintf("Worker: Initializing LambdaStore with Registry = \"%s\"", common.Conf.Registry))
-	var err error
 	lambdaStore, err = lambdastore.NewLambdaStore(common.Conf.Registry, nil)
 	if err != nil {
+		os.Remove(pidPath)
 		return fmt.Errorf("failed to initialize lambda store at %s: %w", common.Conf.Registry, err)
 	}
 
 	// Registry handler
-	mux.HandleFunc(REGISTRY_BASE_PATH, RegistryHandler)
+	http.HandleFunc(REGISTRY_BASE_PATH, RegistryHandler)
 
+	var s cleanable
 	switch common.Conf.Server_mode {
 	case "lambda":
-		lambdaServer, err := NewLambdaServer()
-		if err != nil {
-			return err
-		}
-		cleanables = append(cleanables, lambdaServer)
-
-		// Always create and start Kafka manager alongside lambda server
-		kafkaManager, err := NewKafkaManager(lambdaServer.lambdaMgr)
-		if err != nil {
-			return fmt.Errorf("failed to create Kafka manager: %w", err)
-		}
-		cleanables = append(cleanables, kafkaManager)
-		slog.Info("Created kafka manager")
-
-		// Register Kafka management endpoint
-		mux.HandleFunc("/kafka/register/", HandleKafkaRegister(kafkaManager, lambdaStore))
+		s, err = NewLambdaServer()
 	case "sock":
-		sockServer, err := NewSOCKServer()
-		if err != nil {
-			return err
-		}
-		cleanables = append(cleanables, sockServer)
+		s, err = NewSOCKServer()
 	default:
 		return fmt.Errorf("unknown Server_mode %s", common.Conf.Server_mode)
 	}
-
-	// Start Kafka manager in background goroutine if we're in lambda mode
-	if common.Conf.Server_mode == "lambda" {
-		// kafkaManager is guaranteed to be in cleanables[1] for lambda mode
-		kafkaManager := cleanables[1].(*KafkaManager)
-		go func() {
-			kafkaManager.StartConsuming()
-		}()
-	}
-
-	// Create custom HTTP server for graceful shutdown
-	port := fmt.Sprintf("%s:%s", common.Conf.Worker_url, common.Conf.Worker_port)
-	httpServer = &http.Server{
-		Addr:    port,
-		Handler: mux,
+	if err != nil {
+		os.Remove(pidPath)
+		return err
 	}
 
 	// clean up if signal hits us (e.g., from ctrl-C)
 	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	signal.Notify(c, os.Interrupt, syscall.SIGINT)
 	go func() {
 		<-c
-		slog.Info("Received kill signal, shutting down gracefully")
-
-		// Close the HTTP server, which will cause ListenAndServe to return
-		if err := httpServer.Close(); err != nil {
-			slog.Error(fmt.Sprintf("Error closing HTTP server: %v", err))
-		}
-
-		shutdownComplete <- 0 // Normal shutdown
+		slog.Info("Received kill signal, cleaning up.")
+		shutdown(pidPath, s)
 	}()
 
-	slog.Info("Starting HTTP server", "port", port)
-	if common.Conf.Server_mode == "lambda" {
-		slog.Info("Kafka manager running in background")
-	}
+	port := fmt.Sprintf("%s:%s", common.Conf.Worker_url, common.Conf.Worker_port)
+	err = http.ListenAndServe(port, nil)
 
-	// This blocks until httpServer.Close() is called or an error occurs
-	err = httpServer.ListenAndServe()
-
-	// Check if this was a graceful shutdown or an error
-	if err != nil && err != http.ErrServerClosed {
-		// Unexpected error (e.g., port collision)
-		slog.Error(fmt.Sprintf("HTTP server error: %v", err))
-		shutdownComplete <- 1 // Error exit code
-	}
-
-	// Wait for shutdown signal if not already received
-	select {
-	case exitCode := <-shutdownComplete:
-		if exitCode != 0 {
-			return fmt.Errorf("server exited with error")
-		}
-	default:
-		// Server stopped for other reasons
-	}
-
+	// if ListenAndServer returned, there must have been some issue
+	// (probably a port collision)
+	s.cleanup()
+	os.Remove(pidPath)
+	slog.Error(err.Error())
+	os.Exit(1)
 	return nil
 }
