@@ -10,6 +10,7 @@ import (
 	"github.com/open-lambda/open-lambda/go/worker/lambda"
 )
 
+
 // LambdaServer is a worker server that listens to run lambda requests and forward
 // these requests to its sandboxes.
 type LambdaServer struct {
@@ -57,13 +58,12 @@ func (s *LambdaServer) RunLambda(w http.ResponseWriter, r *http.Request) {
 		// components represent run[0]/<name_of_sandbox>[1]/<extra_things>...
 		// ergo we want [1] for name of sandbox
 		urlParts := getURLComponents(r)
-		if len(urlParts) == 2 {
-			img := urlParts[1]
-			s.lambdaMgr.Get(img).Invoke(w, r)
-		} else {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("expected invocation format: /run/<lambda-name>"))
-		}
+		
+		// The lambda name is always the second part. The code inside (server.py)
+        // will handle the rest of the path (which is possibly a Flask or Django request).
+	    lambdaName := urlParts[1]
+        s.lambdaMgr.Get(lambdaName).Invoke(w, r)
+
 	}
 }
 
