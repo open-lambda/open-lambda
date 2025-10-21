@@ -57,13 +57,10 @@ func (s *LambdaServer) RunLambda(w http.ResponseWriter, r *http.Request) {
 		// components represent run[0]/<name_of_sandbox>[1]/<extra_things>...
 		// ergo we want [1] for name of sandbox
 		urlParts := getURLComponents(r)
-		if len(urlParts) == 2 {
-			img := urlParts[1]
-			s.lambdaMgr.Get(img).Invoke(w, r)
-		} else {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("expected invocation format: /run/<lambda-name>"))
-		}
+		
+		// Send entire path to app
+		lambdaName := urlParts[1]
+        s.lambdaMgr.Get(lambdaName).Invoke(w, r)
 	}
 }
 
