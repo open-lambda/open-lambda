@@ -325,8 +325,10 @@ func Main() (err error) {
 	// sock file is made in worker directory
 	sockPath := filepath.Join(common.Conf.Worker_dir, "ol.sock")
 
-	// ensure stale socket is gone
-    _ = os.Remove(sockPath)
+	
+	// remove socket on exit
+	defer func() { _ = os.Remove(sockPath) }()
+
 
 	ln, errUDS := net.Listen("unix", sockPath)
 	if errUDS != nil {
@@ -356,9 +358,6 @@ func Main() (err error) {
 			errorChannel <- fmt.Errorf("UDS server failed %w", err)
 		}
 	}()
-
-	// remove socket on exit
-	defer func() { _ = os.Remove(sockPath) }()
 
 	// start serving on the HTTP Server
 	go func() {
