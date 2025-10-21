@@ -332,11 +332,11 @@ func Main() (err error) {
 
 	ln, errUDS := net.Listen("unix", sockPath)
 	if errUDS != nil {
-		return fmt.Errorf("failed to listen on UDS %s: %w", sockPath, errUDS)
+		return fmt.Errorf("failed to listen on UNIX domain socket %s: %w", sockPath, errUDS)
 	}
 	if err := os.Chmod(sockPath, 0o600); err != nil {
 		_ = ln.Close()
-		return fmt.Errorf("chmod UDS sock file %s: %w", sockPath, err)
+		return fmt.Errorf("chmod UNIX domain socket sock file %s: %w", sockPath, err)
 	}
 
 	udsServer := &http.Server{
@@ -350,12 +350,12 @@ func Main() (err error) {
 		Handler: portMux,
 	}
 
-	// start serving on the UDS server
+	// start serving on the UNIX domain socket server
 	go func() {
-		slog.Info("worker listening on UDS", "socket", sockPath)
+		slog.Info("worker listening on UNIX domain socket", "socket", sockPath)
 		err := udsServer.Serve(ln)
 		if err != nil && err != http.ErrServerClosed {
-			errorChannel <- fmt.Errorf("UDS server failed %w", err)
+			errorChannel <- fmt.Errorf("UNIX domain socket server failed %w", err)
 		}
 	}()
 
@@ -376,10 +376,10 @@ func Main() (err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)
 	defer cancel()
 
-	// shutdown UDS server
-	slog.Info("Shutting down UDS server...")
+	// shutdown UNIX domain socket server
+	slog.Info("Shutting down UNIX domain socket server...")
 	if err := udsServer.Shutdown(ctx); err != nil {
-		slog.Error("Error during UDS server shutdown", "err", err)
+		slog.Error("Error during UNIX domain socket server shutdown", "err", err)
 	}
 
 	// shutdown TCP server
