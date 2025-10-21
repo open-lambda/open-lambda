@@ -71,11 +71,19 @@ func (container *SOCKContainer) freshProc() (err error) {
 	var cmd *exec.Cmd
 
 	if container.rtType == common.RT_PYTHON {
-		cmd = exec.Command(
-			"chroot", container.containerRootDir, "python3", "-u",
-			"/runtimes/python/server.py", "/host/bootstrap.py", strconv.Itoa(1),
-			strconv.FormatBool(common.Conf.Features.Enable_seccomp),
-		)
+		args := []string{
+    			"chroot", container.containerRootDir,
+    			"python3", "-u", "/runtimes/python/server.py",
+    			"--env", "sock",
+    			"--bootstrap", "/host/bootstrap.py",
+    			"--cgroup-count", strconv.Itoa(1),
+		}
+
+		if common.Conf.Features.Enable_seccomp {
+    			args = append(args, "--enable-seccomp")
+		}
+
+		cmd = exec.Command(args[0], args[1:]...)
 	} else if container.rtType == common.RT_NATIVE {
 		if container.containerProxy == nil {
 			err := container.launchContainerProxy()
