@@ -278,8 +278,10 @@ func Main() (err error) {
 
 	// things shared by all servers
 	udsMux := http.NewServeMux()
-	udsMux.HandleFunc(PID_PATH, HandleGetPid)
 	portMux := http.NewServeMux()
+	
+	// create handlers for servers
+	udsMux.HandleFunc(PID_PATH, HandleGetPid)
 	portMux.HandleFunc(STATUS_PATH, Status)
 	portMux.HandleFunc(STATS_PATH, Stats)
 	portMux.HandleFunc(PPROF_MEM_PATH, PprofMem)
@@ -339,6 +341,12 @@ func Main() (err error) {
 		Handler:           udsMux,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
+	
+	port := fmt.Sprintf("%s:%s", common.Conf.Worker_url, common.Conf.Worker_port)
+	portServer := &http.Server{
+		Addr:    port,
+		Handler: portMux,
+	}
 
 	// start serving on the UDS server
 	go func() {
@@ -352,12 +360,6 @@ func Main() (err error) {
 	// remove socket on exit
 	defer func() { _ = os.Remove(sockPath) }()
 
-	port := fmt.Sprintf("%s:%s", common.Conf.Worker_url, common.Conf.Worker_port)
-	portServer := &http.Server{
-		Addr:    port,
-		Handler: portMux,
-	}
-	
 	// start serving on the HTTP Server
 	go func() {
 		slog.Info("worker listening on TCP", "port", port)
