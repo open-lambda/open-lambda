@@ -303,7 +303,7 @@ func Main() (err error) {
 	}
 
 	// sock file is made in worker directory
-	sockPath := filepath.Join(common.Conf.Worker_dir, "ol.sock"
+	sockPath := filepath.Join(common.Conf.Worker_dir, "ol.sock")
 	// remove socket on exit
 	defer func() { _ = os.Remove(sockPath) }()
 	// worker access sock file
