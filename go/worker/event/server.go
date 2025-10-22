@@ -261,9 +261,6 @@ func Main() (err error) {
 		return err
 	}
 
-	// single error channel to handle any error or signal, buffered to prevent Goroutine leak
-	errorChannel := make(chan error, 1)
-
 	// start with a fresh env
 	if err := os.RemoveAll(common.Conf.Worker_dir); err != nil {
 		return err
@@ -313,23 +310,11 @@ func Main() (err error) {
 		return err
 	}
 
-	// tell error channel to clean up if signal hits us (e.g., from ctrl-C)
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	signal.Notify(c, os.Interrupt, syscall.SIGINT)
-	go func() {
-		<-c
-		errorChannel <- fmt.Errorf("Received kill signal, cleaning up.")
-	}()
-
 	// sock file is made in worker directory
-	sockPath := filepath.Join(common.Conf.Worker_dir, "ol.sock")
-
-	
+	sockPath := filepath.Join(common.Conf.Worker_dir, "ol.sock"
 	// remove socket on exit
 	defer func() { _ = os.Remove(sockPath) }()
-
-
+	// worker access sock file
 	ln, errUDS := net.Listen("unix", sockPath)
 	if errUDS != nil {
 		return fmt.Errorf("failed to listen on UNIX domain socket %s: %w", sockPath, errUDS)
@@ -338,6 +323,12 @@ func Main() (err error) {
 		_ = ln.Close()
 		return fmt.Errorf("chmod UNIX domain socket sock file %s: %w", sockPath, err)
 	}
+
+	// error channel to handle server errors
+	errorChannel := make(chan error, 1)
+	// error channel to handle signals (e.g., from ctrl-C)
+	signalChannel := make(chan os.Signal, 1)
+	signal.Notify(signalChannel, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
 
 	udsServer := &http.Server{
 		Handler:           udsMux,
@@ -368,13 +359,20 @@ func Main() (err error) {
 		}
 	}()
 
-	// wait for a shutdown signal from the error channel
-	shutdownSignal := <- errorChannel
-	slog.Warn("Shutdown signal received", "reason", shutdownSignal)
+	// wait for either kill signal or error from server
+	var shutdownSignal error
+	select {
+	// shutdown due to signal
+	case shutdownSignal := <- signalChannel:
+		slog.Info("Received kill signal")
+	// shutdown due to server error
+	case shutdownSignal := <- errorChannel:
+		slog.Error("Received server error:," shutdownSignal)
+	}
 
-	// allow for graceful shutdown
-	ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)
-	defer cancel()
+	// shutdown Lambda server
+	slog.Info("Shutting down Lambda server...")
+	s.cleanup()
 
 	// shutdown UNIX domain socket server
 	slog.Info("Shutting down UNIX domain socket server...")
