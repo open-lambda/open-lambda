@@ -174,8 +174,7 @@ func PprofCpuStop(w http.ResponseWriter, _ *http.Request) {
 	}
 }
 
-func shutdown(pidPath string, server cleanable) {
-	server.cleanup()
+func WriteFinalStats(pidPath string, server cleanable) {
 	statsPath := filepath.Join(common.Conf.Worker_dir, "stats.json")
 	snapshot := common.SnapshotStats()
 	rc := 0
@@ -208,14 +207,7 @@ func shutdown(pidPath string, server cleanable) {
 		rc = 1
 	}
 
-	slog.Info(fmt.Sprintf("Remove %s.", pidPath))
-	if err := os.Remove(pidPath); err != nil {
-		slog.Error(fmt.Sprintf("error: %s", err))
-		rc = 1
-	}
-
-	slog.Info(fmt.Sprintf("Exiting worker (PID %d)", os.Getpid()))
-	os.Exit(rc)
+	slog.Info(fmt.Sprintf("Printed final stats of worker (PID %d)", os.Getpid()))
 }
 
 // RegistryHandler handles registry requests using boss's LambdaStore
@@ -386,7 +378,11 @@ func Main() (err error) {
 		slog.Error("Error during TCP server shutdown", "err", err)
 	}
 
-	shutdown(pidPath, s)
+	WriteFinalStats(pidPath, s)
+	slog.Info(fmt.Sprintf("Remove %s.", pidPath))
+	if err := os.Remove(pidPath); err != nil {
+		slog.Error(fmt.Sprintf("error: %s", err))
+	}
 
 	return nil
 }
