@@ -78,7 +78,7 @@ func (s *LambdaServer) cleanup() {
 }
 
 // NewLambdaServer creates a server based on the passed config.
-func NewLambdaServer() (*LambdaServer, error) {
+func NewLambdaServer(mux *http.ServeMux) (*LambdaServer, error) {
 	slog.Info("Starting new lambda server")
 
 	lambdaMgr, err := lambda.GetLambdaManagerInstance()
@@ -92,8 +92,8 @@ func NewLambdaServer() (*LambdaServer, error) {
 
 	slog.Info("Setups Handlers")
 	port := fmt.Sprintf(":%s", common.Conf.Worker_port)
-	http.HandleFunc(RUN_PATH, server.RunLambda)
-	http.HandleFunc(DEBUG_PATH, server.Debug)
+	mux.HandleFunc(RUN_PATH, server.RunLambda)
+	mux.HandleFunc(DEBUG_PATH, server.Debug)
 
 	slog.Info(fmt.Sprintf("Execute handler by POSTing to localhost%s%s%s", port, RUN_PATH, "<lambda>"))
 	slog.Info(fmt.Sprintf("Get status by sending request to localhost%s%s", port, STATUS_PATH))
