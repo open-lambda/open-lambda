@@ -229,7 +229,7 @@ func (server *SOCKServer) cleanup() {
 }
 
 // NewSOCKServer creates a server based on the passed config.
-func NewSOCKServer() (*SOCKServer, error) {
+func NewSOCKServer(mux *http.ServeMux) (*SOCKServer, error) {
 	slog.Info("Start SOCK Server")
 
 	mem := sandbox.NewMemPool("sandboxes", common.Conf.Mem_pool_mb)
@@ -244,7 +244,7 @@ func NewSOCKServer() (*SOCKServer, error) {
 		sbPool: sbPool,
 	}
 
-	http.HandleFunc("/", server.Handle)
+	mux.HandleFunc("/", server.Handle)
 
 	return server, nil
 }
