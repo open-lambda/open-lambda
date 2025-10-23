@@ -297,7 +297,7 @@ func Main() error {
 	case "lambda":
 		s, err = NewLambdaServer(portMux)
 	case "sock":
-		s, err = NewSOCKServer()
+		s, err = NewSOCKServer(portMux)
 	default:
 		return fmt.Errorf("unknown server_mode %q", common.Conf.Server_mode)
 	}
