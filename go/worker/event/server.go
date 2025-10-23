@@ -282,6 +282,7 @@ func Main() error {
 	portMux.HandleFunc(PPROF_CPU_STOP_PATH, PprofCpuStop)
 
 	// Initialize LambdaStore for registry
+	var err error
 	slog.Info("Worker: Initializing LambdaStore", "registry", common.Conf.Registry)
 	lambdaStore, err = lambdastore.NewLambdaStore(common.Conf.Registry, nil)
 	if err != nil {
@@ -317,11 +318,11 @@ func Main() error {
 	// worker access sock file
 	ln, errUDS := net.Listen("unix", sockPath)
 	if errUDS != nil {
-		return fmt.Errorf("failed to listen on UNIX domain socket %s: %w", sockPath, "err", errUDS)
+		return fmt.Errorf("failed to listen on UNIX domain socket %s: %w", sockPath, errUDS)
 	}
 	if err := os.Chmod(sockPath, 0o600); err != nil {
 		_ = ln.Close()
-		return fmt.Errorf("chmod UNIX domain socket %s: %w", sockPath, "err", err)
+		return fmt.Errorf("chmod UNIX domain socket %s: %w", sockPath, err)
 	}
 	
 	udsServer := &http.Server{
@@ -370,7 +371,7 @@ func Main() error {
 		}
 		// Serve() always returns a non-nil error, so this should not be reachable
 		if err == nil {
-			slog.Error("Serve returned nil", "server", "uds")
+			slog.Error("Serve returned nil", "server", "tcp")
 			panic(err)
 		}
 	}()
