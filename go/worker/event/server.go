@@ -174,6 +174,7 @@ func PprofCpuStop(w http.ResponseWriter, _ *http.Request) {
 	}
 }
 
+// Writes final stats and any buffered CPU profile to disk.
 func WriteFinalStats(pidPath string, server cleanable) {
 	statsPath := filepath.Join(common.Conf.Worker_dir, "stats.json")
 	snapshot := common.SnapshotStats()
@@ -187,9 +188,9 @@ func WriteFinalStats(pidPath string, server cleanable) {
 
 		in, err := ioutil.ReadFile(filename)
 		if err != nil {
-			slog.Error(fmt.Sprintf("error: %s", err))
+			slog.Error("Read temp CPU profile", "file", filename, "err", err)
 		} else if err = ioutil.WriteFile("cpu.buf.prof", in, 0644); err != nil {
-			slog.Error(fmt.Sprintf("error: %s", err))
+			slog.Error("Write CPU profile buffer", "file", "cpu.buf.prof", "err", err)
 		}
 
 		os.Remove(filename)
@@ -197,12 +198,12 @@ func WriteFinalStats(pidPath string, server cleanable) {
 
 	slog.Info(fmt.Sprintf("save stats to %s", statsPath))
 	if s, err := json.MarshalIndent(snapshot, "", "\t"); err != nil {
-		slog.Error(fmt.Sprintf("error: %s", err))
+		slog.Error("Marshal stats", "err", err)
 	} else if err := ioutil.WriteFile(statsPath, s, 0644); err != nil {
-		slog.Error(fmt.Sprintf("error: %s", err))
+		slog.Error("Write stats", "path", statsPath, "err", err)
 	}
 
-	slog.Info(fmt.Sprintf("Printed final stats of worker (PID %d)", os.Getpid()))
+	slog.Info("Printed final stats of worker", "pid", os.Getpid())
 }
 
 // RegistryHandler handles registry requests using boss's LambdaStore
@@ -239,10 +240,10 @@ func RegistryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func Main() (err error) {
+func Main() error {
 	pidPath := filepath.Join(common.Conf.Worker_dir, "worker.pid")
 	if _, err := os.Stat(pidPath); err == nil {
-		return fmt.Errorf("Previous worker may be running, %s already exists", pidPath)
+		return fmt.Errorf("previous worker may be running: %s already exists", pidPath)
 	} else if !os.IsNotExist(err) {
 		// we were hoping to get the not-exist error, but got something else unexpected
 		return err
@@ -255,16 +256,16 @@ func Main() (err error) {
 		return err
 	}
 
-	slog.Info(fmt.Sprintf("Saved PID %d to file %s", os.Getpid(), pidPath))
+	slog.Info("Saved PID to file", "pid", os.Getpid(), "path", pidPath)
 	if err := ioutil.WriteFile(pidPath, []byte(fmt.Sprintf("%d", os.Getpid())), 0644); err != nil {
 		return err
 	}
 
 	// remove pidPath on exit
 	defer func() { 
-		slog.Info(fmt.Sprintf("Remove pidPath %s.", pidPath))
+		slog.Info("Remove PID file", "path", pidPath)
 		if err := os.Remove(pidPath); err != nil {
-			slog.Error(fmt.Sprintf("Remove pidPath error: %s", err))
+			slog.Error("Remove PID file", "path", pidPath, "err", err)
 		}
 	}()
 
@@ -281,7 +282,7 @@ func Main() (err error) {
 	portMux.HandleFunc(PPROF_CPU_STOP_PATH, PprofCpuStop)
 
 	// Initialize LambdaStore for registry
-	slog.Info(fmt.Sprintf("Worker: Initializing LambdaStore with Registry = \"%s\"", common.Conf.Registry))
+	slog.Info("Worker: Initializing LambdaStore", "registry", common.Conf.Registry)
 	lambdaStore, err = lambdastore.NewLambdaStore(common.Conf.Registry, nil)
 	if err != nil {
 		return fmt.Errorf("failed to initialize lambda store at %s: %w", common.Conf.Registry, err)
@@ -297,7 +298,7 @@ func Main() (err error) {
 	case "sock":
 		s, err = NewSOCKServer()
 	default:
-		return fmt.Errorf("unknown Server_mode %s", common.Conf.Server_mode)
+		return fmt.Errorf("unknown server_mode %q", common.Conf.Server_mode)
 	}
 	if err != nil {
 		return err
@@ -307,20 +308,20 @@ func Main() (err error) {
 	sockPath := filepath.Join(common.Conf.Worker_dir, "ol.sock")
 	// remove sock file on exit
 	defer func() { 
-		slog.Info(fmt.Sprintf("Remove sockPath %s.", sockPath))
+		slog.Info("Remove sock file", "path", sockPath)
 		if err := os.Remove(sockPath); err != nil {
-			slog.Error(fmt.Sprintf("Remove sockPath error: %s", err))
+			slog.Error("Remove sock file", "path", sockPath, "err", err)
 		}
 	}()
 
 	// worker access sock file
 	ln, errUDS := net.Listen("unix", sockPath)
 	if errUDS != nil {
-		return fmt.Errorf("failed to listen on UNIX domain socket %s: %w", sockPath, errUDS)
+		return fmt.Errorf("failed to listen on UNIX domain socket %s: %w", sockPath, "err", errUDS)
 	}
 	if err := os.Chmod(sockPath, 0o600); err != nil {
 		_ = ln.Close()
-		return fmt.Errorf("chmod UNIX domain socket sock file %s: %w", sockPath, err)
+		return fmt.Errorf("chmod UNIX domain socket %s: %w", sockPath, "err", err)
 	}
 	
 	udsServer := &http.Server{
@@ -351,7 +352,12 @@ func Main() (err error) {
 		slog.Info("worker listening on UNIX domain socket", "socket", sockPath)
 		err := udsServer.Serve(ln)
 		if err != nil && err != http.ErrServerClosed {
-			errorChannel <- fmt.Errorf("UNIX domain socket server failed %w", err)
+			errorChannel <- fmt.Errorf("UNIX domain socket server failed: %w", err)
+		}
+		// Serve() always returns a non-nil error, so this should not be reachable
+		if err == nil {
+			slog.Error("Serve returned nil", "server", "uds")
+			panic(err)
 		}
 	}()
 
@@ -360,38 +366,52 @@ func Main() (err error) {
 		slog.Info("worker listening on TCP", "port", port)
 		err := portServer.ListenAndServe()
 		if err != nil && err != http.ErrServerClosed {
-			errorChannel <- fmt.Errorf("Port server failed %w", err)
+			errorChannel <- fmt.Errorf("Port server failed: %w", err)
+		}
+		// Serve() always returns a non-nil error, so this should not be reachable
+		if err == nil {
+			slog.Error("Serve returned nil", "server", "uds")
+			panic(err)
 		}
 	}()
 
 	// wait for either kill signal or error from server
 	var trigger error
+	isKillSignal := false
+
 	select {
 	// shutdown due to signal
-	case signal := <- signalChannel:
-		slog.Info("Received kill signal")
-		trigger = fmt.Errorf("Kill signal: %v", signal)
+	case killSignal := <- signalChannel:
+		slog.Info("Received signal", "signal", killSignal.String())
+		trigger = fmt.Errorf("kill signal: %v", killSignal)
+		isKillSignal = true
 	// shutdown due to server error
 	case serverError := <- errorChannel:
-		slog.Error("Received server error: ", serverError)
+		slog.Error("Received server error", "err", serverError)
 		trigger = serverError
 	}
 	slog.Info("Shutting down", "reason", trigger.Error())
 
 	// shutdown Lambda server
-	slog.Info("Shutting down Lambda server...")
+	slog.Info("Shutting down Lambda server")
 	s.cleanup()
 
 	// shutdown HTTP servers
 	shutdownContext := context.Background()
 	for name, server := range servers {
-		slog.Info("Shutting down", name, "...")
+		slog.Info("Shutting down server", "name", name)
 		err := server.Shutdown(shutdownContext)
 		if err != nil && err != http.ErrServerClosed {
-			slog.Error("Error during shutdown", "server", server, "err", err)
+			slog.Error("Server shutdown error", "name", name, "err", err)
 		}
 	}
 
 	WriteFinalStats(pidPath, s)
+
+	// return an error if we shutdown due to server error
+	if !isKillSignal {
+		return trigger
+	}
+
 	return nil
 }
