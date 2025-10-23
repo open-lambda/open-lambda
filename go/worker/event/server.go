@@ -295,7 +295,7 @@ func Main() error {
 	var s cleanable
 	switch common.Conf.Server_mode {
 	case "lambda":
-		s, err = NewLambdaServer()
+		s, err = NewLambdaServer(portMux)
 	case "sock":
 		s, err = NewSOCKServer()
 	default:
