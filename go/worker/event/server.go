@@ -177,7 +177,6 @@ func PprofCpuStop(w http.ResponseWriter, _ *http.Request) {
 func WriteFinalStats(pidPath string, server cleanable) {
 	statsPath := filepath.Join(common.Conf.Worker_dir, "stats.json")
 	snapshot := common.SnapshotStats()
-	rc := 0
 
 	// "cpu-start"ed but have not "cpu-stop"ped before kill
 	slog.Info("save buffered profiled data to cpu.buf.prof")
@@ -189,10 +188,8 @@ func WriteFinalStats(pidPath string, server cleanable) {
 		in, err := ioutil.ReadFile(filename)
 		if err != nil {
 			slog.Error(fmt.Sprintf("error: %s", err))
-			rc = 1
 		} else if err = ioutil.WriteFile("cpu.buf.prof", in, 0644); err != nil {
 			slog.Error(fmt.Sprintf("error: %s", err))
-			rc = 1
 		}
 
 		os.Remove(filename)
@@ -201,10 +198,8 @@ func WriteFinalStats(pidPath string, server cleanable) {
 	slog.Info(fmt.Sprintf("save stats to %s", statsPath))
 	if s, err := json.MarshalIndent(snapshot, "", "\t"); err != nil {
 		slog.Error(fmt.Sprintf("error: %s", err))
-		rc = 1
 	} else if err := ioutil.WriteFile(statsPath, s, 0644); err != nil {
 		slog.Error(fmt.Sprintf("error: %s", err))
-		rc = 1
 	}
 
 	slog.Info(fmt.Sprintf("Printed final stats of worker (PID %d)", os.Getpid()))
@@ -265,6 +260,14 @@ func Main() (err error) {
 		return err
 	}
 
+	// remove pidPath on exit
+	defer func() { 
+		slog.Info(fmt.Sprintf("Remove pidPath %s.", pidPath))
+		if err := os.Remove(pidPath); err != nil {
+			slog.Error(fmt.Sprintf("Remove pidPath error: %s", err))
+		}
+	}()
+
 	// things shared by all servers
 	udsMux := http.NewServeMux()
 	portMux := http.NewServeMux()
@@ -281,7 +284,6 @@ func Main() (err error) {
 	slog.Info(fmt.Sprintf("Worker: Initializing LambdaStore with Registry = \"%s\"", common.Conf.Registry))
 	lambdaStore, err = lambdastore.NewLambdaStore(common.Conf.Registry, nil)
 	if err != nil {
-		os.Remove(pidPath)
 		return fmt.Errorf("failed to initialize lambda store at %s: %w", common.Conf.Registry, err)
 	}
 
@@ -298,14 +300,19 @@ func Main() (err error) {
 		return fmt.Errorf("unknown Server_mode %s", common.Conf.Server_mode)
 	}
 	if err != nil {
-		os.Remove(pidPath)
 		return err
 	}
 
 	// sock file is made in worker directory
 	sockPath := filepath.Join(common.Conf.Worker_dir, "ol.sock")
-	// remove socket on exit
-	defer func() { _ = os.Remove(sockPath) }()
+	// remove sock file on exit
+	defer func() { 
+		slog.Info(fmt.Sprintf("Remove sockPath %s.", sockPath))
+		if err := os.Remove(sockPath); err != nil {
+			slog.Error(fmt.Sprintf("Remove sockPath error: %s", err))
+		}
+	}()
+
 	// worker access sock file
 	ln, errUDS := net.Listen("unix", sockPath)
 	if errUDS != nil {
@@ -315,13 +322,7 @@ func Main() (err error) {
 		_ = ln.Close()
 		return fmt.Errorf("chmod UNIX domain socket sock file %s: %w", sockPath, err)
 	}
-
-	// error channel to handle server errors
-	errorChannel := make(chan error, 1)
-	// error channel to handle signals (e.g., from ctrl-C)
-	signalChannel := make(chan os.Signal, 1)
-	signal.Notify(signalChannel, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
-
+	
 	udsServer := &http.Server{
 		Handler:           udsMux,
 		ReadHeaderTimeout: 5 * time.Second,
@@ -332,6 +333,18 @@ func Main() (err error) {
 		Addr:    port,
 		Handler: portMux,
 	}
+
+	// list of servers so all shutdown logic can be in one place
+	servers := map[string] * http.Server{
+		"uds": udsServer,
+		"tcp": portServer,
+	}
+
+	// error channel to handle server errors
+	errorChannel := make(chan error, len(servers))
+	// error channel to handle signals (e.g., from ctrl-C)
+	signalChannel := make(chan os.Signal, 1)
+	signal.Notify(signalChannel, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
 
 	// start serving on the UNIX domain socket server
 	go func() {
@@ -352,37 +365,33 @@ func Main() (err error) {
 	}()
 
 	// wait for either kill signal or error from server
-	var shutdownSignal error
+	var trigger error
 	select {
 	// shutdown due to signal
-	case shutdownSignal := <- signalChannel:
+	case signal := <- signalChannel:
 		slog.Info("Received kill signal")
+		trigger = fmt.Errorf("Kill signal: %v", signal)
 	// shutdown due to server error
-	case shutdownSignal := <- errorChannel:
-		slog.Error("Received server error:," shutdownSignal)
+	case serverError := <- errorChannel:
+		slog.Error("Received server error: ", serverError)
+		trigger = serverError
 	}
+	slog.Info("Shutting down", "reason", trigger.Error())
 
 	// shutdown Lambda server
 	slog.Info("Shutting down Lambda server...")
 	s.cleanup()
 
-	// shutdown UNIX domain socket server
-	slog.Info("Shutting down UNIX domain socket server...")
-	if err := udsServer.Shutdown(ctx); err != nil {
-		slog.Error("Error during UNIX domain socket server shutdown", "err", err)
-	}
-
-	// shutdown TCP server
-	slog.Info("Shutting down TCP server...")
-	if err := portServer.Shutdown(ctx); err != nil {
-		slog.Error("Error during TCP server shutdown", "err", err)
+	// shutdown HTTP servers
+	shutdownContext := context.Background()
+	for name, server := range servers {
+		slog.Info("Shutting down", name, "...")
+		err := server.Shutdown(shutdownContext)
+		if err != nil && err != http.ErrServerClosed {
+			slog.Error("Error during shutdown", "server", server, "err", err)
+		}
 	}
 
 	WriteFinalStats(pidPath, s)
-	slog.Info(fmt.Sprintf("Remove %s.", pidPath))
-	if err := os.Remove(pidPath); err != nil {
-		slog.Error(fmt.Sprintf("error: %s", err))
-	}
-
 	return nil
 }
