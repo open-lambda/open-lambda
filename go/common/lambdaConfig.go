@@ -142,7 +142,7 @@ func ExtractConfigFromTarGz(tarPath string) (*LambdaConfig, error) {
 			return nil, fmt.Errorf("invalid tar: %w", err)
 		}
 
-		// Check if this is the config file handle exact matches (ol.yaml)
+		// Check if this is the config file. Should handle exact matches (ol.yaml)
 		// and ./ matches (./ol.yaml) as tar can encode ./ into filenames under
 		// certain conditions.
 		if filepath.Clean(header.Name) == LambdaConfigFilename {
