@@ -21,8 +21,8 @@ import (
 )
 
 // performs an HTTP GET request to the worker over its UDS
-func udsGet(olPath, requestPath string) (*http.Response, error) {
-	sockPath := filepath.Join(olPath, "ol.sock")
+func udsGet(requestPath string) (*http.Response, error) {
+	sockPath := filepath.Join(common.Conf.Worker_dir, "ol.sock")
 
 	// create a transport that dials the socket
 	tr := &http.Transport{}
@@ -166,7 +166,7 @@ func upCmd(ctx *cli.Context) error {
 			}
 
 			// is it reachable?
-			response, err := udsGet(olPath, "/pid")
+			response, err := udsGet("/pid")
 
 			if err != nil {
 				pingErr = err
