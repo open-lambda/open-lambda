@@ -175,7 +175,7 @@ func PprofCpuStop(w http.ResponseWriter, _ *http.Request) {
 }
 
 // Writes final stats and any buffered CPU profile to disk.
-func WriteFinalStats(pidPath string, server cleanable) {
+func WriteFinalStats() {
 	statsPath := filepath.Join(common.Conf.Worker_dir, "stats.json")
 	snapshot := common.SnapshotStats()
 
@@ -407,7 +407,7 @@ func Main() error {
 		}
 	}
 
-	WriteFinalStats(pidPath, s)
+	WriteFinalStats()
 
 	// return an error if we shutdown due to server error
 	if !isKillSignal {
