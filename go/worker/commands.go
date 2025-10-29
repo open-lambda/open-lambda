@@ -193,11 +193,8 @@ func upCmd(ctx *cli.Context) error {
 		return fmt.Errorf("worker still not reachable after 30 seconds: %w", pingErr)
 	}
 
-	if err := event.Main(); err != nil {
-		return err
-	}
 	// server had clean shutdown
-	return nil
+	return event.Main()
 }
 
 // statusCmd corresponds to the "status" command of the admin tool.
