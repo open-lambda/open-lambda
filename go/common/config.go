@@ -62,11 +62,12 @@ type Config struct {
 	// pass through to sandbox envirenment variable
 	Sandbox_config any `json:"sandbox_config"`
 
-	Docker   DockerConfig   `json:"docker"`
-	Limits   LimitsConfig   `json:"limits"`
-	Features FeaturesConfig `json:"features"`
-	Trace    TraceConfig    `json:"trace"`
-	Storage  StorageConfig  `json:"storage"`
+	Docker          DockerConfig   `json:"docker"`
+	Limits          LimitsConfig   `json:"limits"`
+	InstallerLimits LimitsConfig   `json:"installer_limits"` // limits profile for installers
+	Features        FeaturesConfig `json:"features"`
+	Trace           TraceConfig    `json:"trace"`
+	Storage         StorageConfig  `json:"storage"`
 }
 
 type DockerConfig struct {
@@ -113,35 +114,42 @@ type StorageConfig struct {
 	Code    StoreString `json:"code"`
 }
 
-// Limits defines per-lambda resource constraints specified in ol.yaml.
-// Zero values mean "use worker defaults".
-type Limits struct {
-	MemMB      int `json:"mem_mb" yaml:"mem_mb"`
-	CPUPercent int `json:"cpu_percent" yaml:"cpu_percent"`
-	// Preferred location for per-lambda runtime limit. If 0, use worker default.
-	RuntimeSec int `json:"runtime_sec" yaml:"runtime_sec"`
+// One unified limits struct for both worker defaults and per-lambda overrides.
+// For per-lambda ol.yaml, zero values mean "use worker defaults".
+type LimitsConfig struct {
+	// process & memory / CPU controls
+	Procs       int `json:"procs" yaml:"procs"`
+	Mem_mb      int `json:"mem_mb" yaml:"mem_mb"`
+	CPU_percent int `json:"cpu_percent" yaml:"cpu_percent"`
+	Swappiness  int `json:"swappiness" yaml:"swappiness"`
+
+	// worker default for runtime cap (seconds). Per-lambda may set runtime_sec.
+	Max_runtime_default int `json:"max_runtime_default" yaml:"max_runtime_default"`
+
+	// per-lambda override for runtime (seconds). 0 => use Max_runtime_default.
+	Runtime_sec int `json:"runtime_sec" yaml:"runtime_sec"`
 }
 
-type LimitsConfig struct {
-	// how many processes can be created within a Sandbox?
-	Procs int `json:"procs"`
-
-	// how much memory can a regular lambda use?  The lambda can
-	// always set a lower limit for itself.
-	Mem_mb int `json:"mem_mb"`
-
-	// what percent of a core can it use per period?  (0-100, or more for multiple cores)
-	CPU_percent int `json:"cpu_percent"`
-
-	// how many seconds can Lambdas run?  (maybe be overridden on per-lambda basis)
-	Max_runtime_default int `json:"max_runtime_default"`
-
-	// how aggressively will the mem of the Sandbox be swapped?
-	Swappiness int `json:"swappiness"`
-
-	// how much memory do we use for an admin lambda that is used
-	// for pip installs?
-	Installer_mem_mb int `json:"installer_mem_mb"`
+// FillDefaults copies zero fields from def.
+func (lc *LimitsConfig) FillDefaults(def LimitsConfig) {
+	if lc.Procs == 0 {
+		lc.Procs = def.Procs
+	}
+	if lc.Mem_mb == 0 {
+		lc.Mem_mb = def.Mem_mb
+	}
+	if lc.CPU_percent == 0 {
+		lc.CPU_percent = def.CPU_percent
+	}
+	if lc.Swappiness == 0 {
+		lc.Swappiness = def.Swappiness
+	}
+	if lc.Max_runtime_default == 0 {
+		lc.Max_runtime_default = def.Max_runtime_default
+	}
+	if lc.Runtime_sec == 0 {
+		lc.Runtime_sec = def.Runtime_sec
+	}
 }
 
 // Choose reasonable defaults for a worker deployment (based on memory capacity).
@@ -229,6 +237,24 @@ func getDefaultConfigForPatching(olPath string) (*Config, error) {
 	totalMb := uint64(in.Totalram) * uint64(in.Unit) / 1024 / 1024
 	memPoolMb := Max(int(totalMb-500), 500)
 
+	// Sensible defaults
+	userLimits := LimitsConfig{
+		Procs:               10,
+		Mem_mb:              50,
+		CPU_percent:         100,
+		Max_runtime_default: 30,
+		Swappiness:          0,
+		// Runtime_sec left 0 => uses Max_runtime_default by default
+	}
+	// Installers often need more resources; separate profile without the old hack field.
+	installerLimits := LimitsConfig{
+		Procs:               10,
+		Mem_mb:              Max(250, Min(500, memPoolMb/2)),
+		CPU_percent:         100,
+		Max_runtime_default: 300, // generous default for installs
+		Swappiness:          0,
+	}
+
 	cfg := &Config{
 		Worker_dir:  workerDir,
 		Server_mode: "lambda",
@@ -250,14 +276,8 @@ func getDefaultConfigForPatching(olPath string) (*Config, error) {
 		Docker: DockerConfig{
 			Base_image: "ol-min",
 		},
-		Limits: LimitsConfig{
-			Procs:               10,
-			Mem_mb:              50,
-			CPU_percent:         100,
-			Max_runtime_default: 30,
-			Installer_mem_mb:    Max(250, Min(500, memPoolMb/2)),
-			Swappiness:          0,
-		},
+		Limits:          userLimits,
+		InstallerLimits: installerLimits,
 		Features: FeaturesConfig{
 			Import_cache:        "tree",
 			Downsize_paused_mem: true,
@@ -331,8 +351,8 @@ func checkConf(cfg *Config) error {
 		// otherwise anything running will immediately be
 		// evicted.
 		//
-		// TODO: revise evictor and relax this
-		minMem := 2 * Max(cfg.Limits.Installer_mem_mb, cfg.Limits.Mem_mb)
+		// We check against both the regular user limits and the installer limits.
+		minMem := 2 * Max(cfg.InstallerLimits.Mem_mb, cfg.Limits.Mem_mb)
 		if minMem > cfg.Mem_pool_mb {
 			return fmt.Errorf("memPoolMb must be at least %d", minMem)
 		}
