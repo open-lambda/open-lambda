@@ -312,12 +312,7 @@ func Main() error {
 
 		// Register Kafka management endpoint
 		portMux.HandleFunc("/kafka/register/", HandleKafkaRegister(kafkaManager, lambdaStore))
-
-		// Start Kafka manager in background goroutine
-		go func() {
-			kafkaManager.StartConsuming()
-		}()
-		slog.Info("Kafka manager running in background")
+		slog.Info("Kafka manager ready")
 	case "sock":
 		s, err = NewSOCKServer(portMux)
 		if err != nil {

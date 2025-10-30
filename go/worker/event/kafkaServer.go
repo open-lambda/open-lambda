@@ -40,7 +40,6 @@ type KafkaManager struct {
 	lambdaConsumers map[string]*LambdaKafkaConsumer // lambdaName -> consumer
 	lambdaManager   *lambda.LambdaMgr               // Reference to lambda manager
 	mu              sync.Mutex                      // Protects lambdaConsumers map
-	stopChan        chan struct{}                   // shutdown signal for all consumers in the worker
 }
 
 // newLambdaKafkaConsumer creates a new Kafka consumer for a specific lambda function
@@ -90,7 +89,6 @@ func NewKafkaManager(lambdaManager *lambda.LambdaMgr) (*KafkaManager, error) {
 	manager := &KafkaManager{
 		lambdaConsumers: make(map[string]*LambdaKafkaConsumer),
 		lambdaManager:   lambdaManager,
-		stopChan:        make(chan struct{}),
 	}
 
 	slog.Info("Kafka manager initialized")
@@ -274,20 +272,9 @@ func (km *KafkaManager) UnregisterLambdaKafkaTriggers(lambdaName string) {
 	}
 }
 
-// StartConsuming starts the Kafka manager (all lambda consumers are managed separately)
-func (km *KafkaManager) StartConsuming() {
-	slog.Info("Kafka manager ready to manage lambda consumers")
-
-	// Block until shutdown
-	<-km.stopChan
-}
-
 // cleanup closes all lambda consumers
 func (km *KafkaManager) cleanup() {
 	slog.Info("Shutting down Kafka manager")
-
-	// Signal all goroutines to stop
-	close(km.stopChan)
 
 	km.mu.Lock()
 	defer km.mu.Unlock()
