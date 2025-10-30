@@ -373,8 +373,14 @@ func checkConf(cfg *Config) error {
 		//
 		// We check against both the regular user limits and the installer limits.
 		minMem := 2 * Max(cfg.InstallerLimits.Mem_mb, cfg.Limits.Mem_mb)
-		if minMem > cfg.Mem_pool_mb {
-			return fmt.Errorf("memPoolMb must be at least %d", minMem)
+		if cfg.Mem_pool_mb < minMem {
+			slog.Warn("mem_pool_mb below minimum; bumping",
+				"current", cfg.Mem_pool_mb,
+				"required", minMem,
+				"user_mem_mb", cfg.Limits.Mem_mb,
+				"installer_mem_mb", cfg.InstallerLimits.Mem_mb,
+			)
+			cfg.Mem_pool_mb = minMem
 		}
 	} else if cfg.Sandbox == "docker" {
 		if cfg.Pkgs_dir == "" {
