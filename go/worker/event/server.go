@@ -293,16 +293,38 @@ func Main() error {
 	portMux.HandleFunc(REGISTRY_BASE_PATH, RegistryHandler)
 
 	var s cleanable
+	var kafkaManager *KafkaManager
+
 	switch common.Conf.Server_mode {
 	case "lambda":
-		s, err = NewLambdaServer(portMux)
+		lambdaServer, err := NewLambdaServer(portMux)
+		if err != nil {
+			return err
+		}
+		s = lambdaServer
+
+		// Always create and start Kafka manager alongside lambda server
+		kafkaManager, err = NewKafkaManager(lambdaServer.lambdaMgr)
+		if err != nil {
+			return fmt.Errorf("failed to create Kafka manager: %w", err)
+		}
+		slog.Info("Created kafka manager")
+
+		// Register Kafka management endpoint
+		portMux.HandleFunc("/kafka/register/", HandleKafkaRegister(kafkaManager, lambdaStore))
+
+		// Start Kafka manager in background goroutine
+		go func() {
+			kafkaManager.StartConsuming()
+		}()
+		slog.Info("Kafka manager running in background")
 	case "sock":
 		s, err = NewSOCKServer(portMux)
+		if err != nil {
+			return err
+		}
 	default:
 		return fmt.Errorf("unknown server_mode %q", common.Conf.Server_mode)
-	}
-	if err != nil {
-		return err
 	}
 
 	// sock file is made in worker directory
@@ -392,6 +414,12 @@ func Main() error {
 		trigger = serverError
 	}
 	slog.Info("Shutting down", "reason", trigger.Error())
+
+	// shutdown Kafka manager if running
+	if kafkaManager != nil {
+		slog.Info("Shutting down Kafka manager")
+		kafkaManager.cleanup()
+	}
 
 	// shutdown Lambda server
 	slog.Info("Shutting down Lambda server")
