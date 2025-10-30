@@ -207,6 +207,19 @@ func GetDefaultWorkerConfig(olPath string) (*Config, error) {
 					cfg.Import_cache_tree = defaultCfg.Import_cache_tree
 					slog.Info("Patched Import_cache_tree", "Import_cache_tree", cfg.Import_cache_tree)
 				}
+				if cfg.Mem_pool_mb == 0 {
+					cfg.Mem_pool_mb = defaultCfg.Mem_pool_mb
+					slog.Info("Patched Mem_pool_mb", "Mem_pool_mb", cfg.Mem_pool_mb)
+				}
+				// If template omitted limits, inherit dynamic defaults
+				if cfg.Limits == (LimitsConfig{}) {
+					cfg.Limits = defaultCfg.Limits
+					slog.Info("Patched Limits to defaults")
+				}
+				if cfg.InstallerLimits == (LimitsConfig{}) {
+					cfg.InstallerLimits = defaultCfg.InstallerLimits
+					slog.Info("Patched InstallerLimits to defaults")
+				}
 
 				return cfg, nil
 			}
