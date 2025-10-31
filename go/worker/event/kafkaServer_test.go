@@ -54,7 +54,7 @@ func TestNewLambdaKafkaConsumer_NoBootstrapServers(t *testing.T) {
 	manager, _ := NewKafkaManager(nil)
 
 	trigger := &common.KafkaTrigger{
-		BootstrapServers: []string{}, // Empty
+		BootstrapServers: []string{},
 		Topics:           []string{"test-topic"},
 		GroupId:          "test-group",
 	}
@@ -76,7 +76,7 @@ func TestNewLambdaKafkaConsumer_NoTopics(t *testing.T) {
 
 	trigger := &common.KafkaTrigger{
 		BootstrapServers: []string{"localhost:9092"},
-		Topics:           []string{}, // Empty
+		Topics:           []string{},
 		GroupId:          "test-group",
 	}
 
@@ -111,7 +111,6 @@ func TestLambdaKafkaConsumer_Cleanup(t *testing.T) {
 	// Verify stopChan is closed
 	select {
 	case <-consumer.stopChan:
-		// Channel is closed, good
 	default:
 		t.Error("Expected stopChan to be closed")
 	}
@@ -286,14 +285,6 @@ func TestKafkaManager_Cleanup(t *testing.T) {
 		t.Errorf("Expected 0 consumers after cleanup, got %d", len(manager.lambdaConsumers))
 	}
 }
-
-// Note: HTTP handler tests for HandleKafkaRegister are not included here because
-// HandleKafkaRegister requires a *lambdastore.LambdaStore parameter, and creating
-// a full mock would require either modifying the source code to use interfaces
-// or creating integration tests with real LambdaStore instances. The core logic
-// of the HTTP handlers (validation, status codes, etc.) can be verified through
-// integration tests, while unit tests focus on the testable components like
-// consumer management, cleanup, and validation logic.
 
 // TestConsumeLoop_StopChannel tests that consumeLoop respects stop signal
 func TestConsumeLoop_StopChannel(t *testing.T) {
@@ -501,8 +492,6 @@ func TestMockKafkaClient_CustomClose(t *testing.T) {
 }
 
 // TestProcessMessage_Integration tests that processMessage is called when records arrive
-// Note: This test verifies the consume loop processes records but cannot fully test
-// lambda invocation without mocking LambdaMgr, which requires interface refactoring
 func TestProcessMessage_Integration(t *testing.T) {
 	recordsProcessed := 0
 	messageValue := []byte(`{"test": "data"}`)
@@ -516,9 +505,6 @@ func TestProcessMessage_Integration(t *testing.T) {
 			}
 			recordsProcessed++
 
-			// We can't easily create kgo.Fetches with records in tests
-			// because the internal structure is complex. This test demonstrates
-			// the pattern but actual record processing would need integration tests
 			return kgo.Fetches{}
 		},
 	}
@@ -546,19 +532,10 @@ func TestProcessMessage_Integration(t *testing.T) {
 	if recordsProcessed == 0 {
 		t.Error("Expected PollFetches to be called at least once")
 	}
-
-	// Note: Full lambda invocation testing requires either:
-	// 1. Refactoring kafkaServer.go to use interfaces for LambdaMgr
-	// 2. Integration tests with real LambdaMgr instances
-	// 3. Exposing processMessage as public and testing it separately
-	_ = messageValue // Would be used in full integration test
 }
 
 // TestProcessMessage_RequestHeaders verifies HTTP request construction from Kafka records
 func TestProcessMessage_RequestHeaders(t *testing.T) {
-	// This test documents the expected behavior of processMessage
-	// by manually constructing what the function should create
-
 	// Simulate a Kafka record
 	topic := "test-topic"
 	partition := int32(5)
@@ -628,8 +605,6 @@ func TestProcessMessage_MultipleMessages(t *testing.T) {
 			if callCount >= maxCalls {
 				return kgo.Fetches{} // Stop after maxCalls
 			}
-			// In a real scenario with messages, EachRecord would be called here
-			// Return empty fetches (no records to process)
 			return kgo.Fetches{}
 		},
 	}
