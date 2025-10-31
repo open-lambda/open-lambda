@@ -97,15 +97,21 @@ func (linst *LambdaInstance) Task() {
 		// if we don't already have a Sandbox, create one, and
 		// HTTP proxy over the channel
 		if sb == nil {
-			sb = nil
+			// Build meta: package/import requirements + per-lambda limits.
+			meta := &sandbox.SandboxMeta{
+				Limits: linst.lfunc.Meta.Config.Limits, // non-optional; defaults resolved in pools
+			}
+			if linst.meta != nil && linst.meta.Sandbox != nil {
+				meta.Installs = linst.meta.Sandbox.Installs
+				meta.Imports = linst.meta.Sandbox.Imports
+			}
 
 			if f.lmgr.ZygoteProvider != nil && f.rtType == common.RT_PYTHON {
 				scratchDir := f.lmgr.scratchDirs.Make(f.name)
-
 				// we don't specify parent SB, because ImportCache.Create chooses it for us
-				sb, err = f.lmgr.ZygoteProvider.Create(f.lmgr.sbPool, true, linst.codeDir, scratchDir, linst.meta.Sandbox, f.rtType)
+				sb, err = f.lmgr.ZygoteProvider.Create(f.lmgr.sbPool, true, linst.codeDir, scratchDir, meta, f.rtType)
 				if err != nil {
-					f.printf("failed to get Sandbox from import cache")
+					f.printf("failed to get Sandbox from import cache: %v", err)
 					sb = nil
 				}
 			}
@@ -116,7 +122,8 @@ func (linst *LambdaInstance) Task() {
 			if sb == nil {
 				t2 := common.T0("LambdaInstance-WaitSandbox-NoImportCache")
 				scratchDir := f.lmgr.scratchDirs.Make(f.name)
-				sb, err = f.lmgr.sbPool.Create(nil, true, linst.codeDir, scratchDir, linst.meta.Sandbox, f.rtType)
+				// Create a new sandbox using the specified metadata.
+				sb, err = f.lmgr.sbPool.Create(nil, true, linst.codeDir, scratchDir, meta, f.rtType)
 				t2.T1()
 			}
 
@@ -130,11 +137,9 @@ func (linst *LambdaInstance) Task() {
 
 		// below here, we're guaranteed (1) sb != nil, (2) proxy != nil, (3) sb is unpaused
 
-		// serve until we incoming queue is empty
+		// serve until the incoming queue is empty
 		t = common.T0("LambdaInstance-ServeRequests")
 		for req != nil {
-			// f.printf("Forwarding request to sandbox")
-
 			t2 := common.T0("LambdaInstance-RoundTrip")
 
 			// get response from sandbox

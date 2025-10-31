@@ -259,7 +259,8 @@ func (container *SOCKContainer) Unpause() (err error) {
 		// block until we have enough mem to upsize limit to the
 		// normal size before unpausing
 		oldLimit := container.cg.GetMemLimitMB()
-		newLimit := common.Conf.Limits.Mem_mb
+		// use the container’s resolved memory limit
+		newLimit := container.meta.Limits.MemMB
 		container.pool.mem.adjustAvailableMB(oldLimit - newLimit)
 		container.cg.SetMemLimitMB(newLimit)
 	}

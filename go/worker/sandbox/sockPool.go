@@ -65,8 +65,13 @@ func sbStr(sb Sandbox) string {
 }
 
 func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, meta *SandboxMeta, rtType common.RuntimeType) (sb Sandbox, err error) {
+	// Ensure meta is not nil and fill defaults into meta.Limits
+	if meta == nil {
+		meta = &SandboxMeta{}
+	}
+	fillMetaDefaults(meta) // populates zero values from worker defaults
+
 	id := fmt.Sprintf("%d", atomic.AddInt64(&nextId, 1))
-	meta = fillMetaDefaults(meta)
 	pool.printf("<%v>.Create(%v, %v, %v, %v, %v)=%s...", pool.name, sbStr(parent), isLeaf, codeDir, scratchDir, meta, id)
 	defer func() {
 		pool.printf("...returns %v, %v", sbStr(sb), err)
@@ -91,7 +96,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 
 	// block until we have enough to cover the cgroup mem limits
 	t2 := t.T0("acquire-mem")
-	pool.mem.adjustAvailableMB(-meta.MemLimitMB)
+	pool.mem.adjustAvailableMB(-meta.Limits.MemMB)
 	t2.T1()
 
 	t2 = t.T0("acquire-cgroup")
@@ -101,7 +106,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 	// don't want to use this cgroup feature, because the child
 	// would take the blame for ALL of the parent's allocations
 	moveMemCharge := (parent == nil)
-	cSock.cg = pool.cgPool.GetCg(meta.MemLimitMB, moveMemCharge, meta.CPUPercent)
+	cSock.cg = pool.cgPool.GetCg(meta.Limits.MemMB, moveMemCharge, meta.Limits.CPUPercent)
 	t2.T1()
 	cSock.printf("use cgroup %s", cSock.cg.Name())
 

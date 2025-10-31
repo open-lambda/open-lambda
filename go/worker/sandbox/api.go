@@ -1,8 +1,9 @@
 package sandbox
 
 import (
-	"github.com/open-lambda/open-lambda/go/common"
 	"net/http"
+
+	"github.com/open-lambda/open-lambda/go/common"
 )
 
 type SandboxPool interface {
@@ -84,11 +85,12 @@ type Sandbox interface {
 	GetRuntimeType() common.RuntimeType // TODO: make it part of SandboxMeta?
 }
 
+// SandboxMeta contains metadata for initializing a sandbox, including resource limits.
 type SandboxMeta struct {
-	Installs   []string
-	Imports    []string
-	MemLimitMB int
-	CPUPercent int
+	Installs []string
+	Imports  []string
+	// Always set; zero means "use default" and gets resolved in pools.
+	Limits common.Limits
 }
 
 type SandboxError string

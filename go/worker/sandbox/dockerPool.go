@@ -61,7 +61,12 @@ func NewDockerPool(pidMode string, caps []string) (*DockerPool, error) {
 
 // Create creates a docker sandbox from the handler and sandbox directory.
 func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, meta *SandboxMeta, _ common.RuntimeType) (sb Sandbox, err error) {
-	meta = fillMetaDefaults(meta)
+	// Ensure meta is not nil and populate defaults directly into meta.Limits
+	if meta == nil {
+		meta = &SandboxMeta{}
+	}
+	fillMetaDefaults(meta) // central place for defaults
+
 	t := common.T0("Create()")
 	defer t.T1()
 
@@ -77,7 +82,6 @@ func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir 
 		fmt.Sprintf("%s:%s", scratchDir, "/host"),
 		fmt.Sprintf("%s:%s:ro", pool.pkgsDir, "/packages"),
 	}
-
 	if codeDir != "" {
 		volumes = append(volumes, fmt.Sprintf("%s:%s:ro", codeDir, "/handler"))
 	}
@@ -87,16 +91,15 @@ func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir 
 	_, statErr := os.Stat(pipe)
 	if statErr == nil {
 		if err := os.Remove(pipe); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("remove existing server_pipe: %w", err)
 		}
 	}
 	if statErr == nil || os.IsNotExist(statErr) {
-		if err := syscall.Mkfifo(pipe, 0777); err != nil {
-			fmt.Println("PIPE CREATION IN Create FAILED")
-			return nil, err
+		if err := syscall.Mkfifo(pipe, 0o777); err != nil {
+			return nil, fmt.Errorf("mkfifo server_pipe: %w", err)
 		}
 	} else {
-		return nil, statErr
+		return nil, fmt.Errorf("stat server_pipe: %w", statErr)
 	}
 
 	// add installed packages to the path
@@ -108,7 +111,7 @@ func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir 
 	// create the container using the specified configuration
 	procLimit := int64(common.Conf.Limits.Procs)
 	swappiness := int64(common.Conf.Limits.Swappiness)
-	cpuPercent := int64(common.Conf.Limits.CPU_percent)
+
 	container, err := pool.client.CreateContainer(
 		docker.CreateContainerOptions{
 			Config: &docker.Config{
@@ -124,13 +127,13 @@ func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir 
 				Runtime:          pool.dockerRuntime,
 				PidsLimit:        &procLimit,
 				MemorySwappiness: &swappiness,
-				CPUPercent:       cpuPercent,
-				Memory:           int64(meta.MemLimitMB * 1024 * 1024),
+				CPUPercent:       int64(meta.Limits.CPUPercent),
+				Memory:           int64(meta.Limits.MemMB * 1024 * 1024),
 			},
 		},
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("docker CreateContainer: %w", err)
 	}
 
 	c := &DockerContainer{
@@ -144,17 +147,17 @@ func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir 
 
 	if err := c.start(); err != nil {
 		c.Destroy("c.start() failed")
-		return nil, err
+		return nil, fmt.Errorf("container start: %w", err)
 	}
 
 	if err := c.runServer(); err != nil {
 		c.Destroy("c.runServer() failed")
-		return nil, err
+		return nil, fmt.Errorf("container runServer: %w", err)
 	}
 
 	if err := waitForServerPipeReady(c.HostDir()); err != nil {
 		c.Destroy("waitForServerPipeReady failed")
-		return nil, err
+		return nil, fmt.Errorf("waitForServerPipeReady: %w", err)
 	}
 
 	// start HTTP client
@@ -169,7 +172,7 @@ func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir 
 
 	c.httpClient = &http.Client{
 		Transport: &http.Transport{Dial: dial},
-		Timeout:   time.Second * time.Duration(common.Conf.Limits.Max_runtime_default),
+		Timeout:   time.Second * time.Duration(meta.Limits.RuntimeSec),
 	}
 
 	// wrap to make thread-safe and handle container death

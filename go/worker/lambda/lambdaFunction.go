@@ -72,39 +72,55 @@ func (f *LambdaFunc) printf(format string, args ...any) {
 	slog.Info(fmt.Sprintf("%s [FUNC %s]", strings.TrimRight(msg, "\n"), f.name))
 }
 
+// parseRequirementsTxt reads requirements.txt (if present) and returns normalized package names.
+func parseRequirementsTxt(codeDir string) ([]string, error) {
+	path := filepath.Join(codeDir, "requirements.txt")
+	f, err := os.Open(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return []string{}, nil // optional file
+	}
+	if err != nil {
+		return nil, fmt.Errorf("open requirements.txt: %w", err)
+	}
+	defer f.Close()
+
+	var installs []string
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		// strip inline comments and spaces
+		pkg := strings.TrimSpace(strings.Split(line, "#")[0])
+		if pkg != "" {
+			installs = append(installs, packages.NormalizePkg(pkg))
+		}
+	}
+	if err := sc.Err(); err != nil {
+		return nil, fmt.Errorf("scan requirements.txt: %w", err)
+	}
+	return installs, nil
+}
+
 // parseMeta reads in a requirements.txt file that was built from pip-compile
 func parseMeta(codeDir string) (*FunctionMeta, error) {
-	sandboxMeta := &sandbox.SandboxMeta{
-		Installs: []string{},
-		Imports:  []string{},
-	}
-
-	path := filepath.Join(codeDir, "requirements.txt")
-	file, err := os.Open(path)
-	if errors.Is(err, os.ErrNotExist) {
-		// having a requirements.txt is optional
-	} else if err != nil {
+	installs, err := parseRequirementsTxt(codeDir)
+	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
 
-	scnr := bufio.NewScanner(file)
-	for scnr.Scan() {
-		line := strings.ReplaceAll(scnr.Text(), " ", "")
-		pkg := strings.Split(line, "#")[0]
-		if pkg != "" {
-			pkg = packages.NormalizePkg(pkg)
-			sandboxMeta.Installs = append(sandboxMeta.Installs, pkg)
-		}
+	sandboxMeta := &sandbox.SandboxMeta{
+		Installs: installs,
+		Imports:  []string{},
 	}
 
 	// Load Lambda configuration from ol.yaml
 	lambdaConfig, err := common.LoadLambdaConfig(codeDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse lambda configuration file: %v", err)
+		return nil, fmt.Errorf("parse ol.yaml: %w", err)
 	}
 
-	// Return combined FunctionMeta
 	return &FunctionMeta{
 		Sandbox: sandboxMeta,
 		Config:  lambdaConfig,
@@ -152,14 +168,12 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 		}
 	}()
 
-	if rtType == common.RT_PYTHON {
-		// inspect new code for dependencies; if we can install
-		// everything necessary, start using new code
-		meta, err := parseMeta(codeDir)
-		if err != nil {
-			return err
-		}
+	meta, err := parseMeta(codeDir)
+	if err != nil {
+		return err
+	}
 
+	if rtType == common.RT_PYTHON {
 		// make sure all specified dependencies are installed
 		// (but don't recursively find others)
 		for _, pkg := range meta.Sandbox.Installs {
@@ -180,13 +194,14 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 		}
 	}
 
+	f.Meta = meta
 	f.codeDir = codeDir
 	f.lastPull = &now
 	return nil
 }
 
 // this Task receives lambda requests, fetches new lambda code as
-// needed, and dispatches to a set of lambda instances.  Task also
+// needed, and dispatches to a set of lambda instances. Task also
 // monitors outstanding requests, and scales the number of instances
 // up or down as needed.
 //
@@ -204,11 +219,11 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 // If either LambdaFunc.funcChan or LambdaFunc.instChan is full, we
 // respond to the client with a backoff message: StatusTooManyRequests
 func (f *LambdaFunc) Task() {
-	f.printf("debug: LambdaFunc.Task() runs on goroutine %d", common.GetGoroutineID())
-
 	// we want to perform various cleanup actions, such as killing
 	// instances and deleting old code.  We want to do these
 	// asynchronously, but in order.  Thus, we use a chan to get
+	// instances and deleting old code. We want to do these
+	// asynchronously, but in order. Thus, we use a chan to get
 	// FIFO behavior and a single cleanup task to get async.
 	//
 	// two types can be sent to this chan:
