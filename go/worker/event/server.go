@@ -175,7 +175,7 @@ func PprofCpuStop(w http.ResponseWriter, _ *http.Request) {
 }
 
 // Writes final stats and any buffered CPU profile to disk.
-func WriteFinalStats(pidPath string, server cleanable) {
+func WriteFinalStats() {
 	statsPath := filepath.Join(common.Conf.Worker_dir, "stats.json")
 	snapshot := common.SnapshotStats()
 
@@ -369,13 +369,13 @@ func Main() error {
 	go func() {
 		slog.Info("worker listening on UNIX domain socket", "socket", sockPath)
 		err := udsServer.Serve(ln)
-		if err != nil && err != http.ErrServerClosed {
-			errorChannel <- fmt.Errorf("UNIX domain socket server failed: %w", err)
-		}
 		// Serve() always returns a non-nil error, so this should not be reachable
 		if err == nil {
 			slog.Error("Serve returned nil", "server", "uds")
 			panic(err)
+		}
+		if err != nil && err != http.ErrServerClosed {
+			errorChannel <- fmt.Errorf("UNIX domain socket server failed: %w", err)
 		}
 	}()
 
@@ -383,13 +383,13 @@ func Main() error {
 	go func() {
 		slog.Info("worker listening on TCP", "port", port)
 		err := portServer.ListenAndServe()
-		if err != nil && err != http.ErrServerClosed {
-			errorChannel <- fmt.Errorf("Port server failed: %w", err)
-		}
 		// Serve() always returns a non-nil error, so this should not be reachable
 		if err == nil {
 			slog.Error("Serve returned nil", "server", "tcp")
 			panic(err)
+		}
+		if err != http.ErrServerClosed {
+			errorChannel <- fmt.Errorf("Port server failed: %w", err)
 		}
 	}()
 
@@ -430,7 +430,7 @@ func Main() error {
 		}
 	}
 
-	WriteFinalStats(pidPath, backend)
+	WriteFinalStats()
 
 	// return an error if we shutdown due to server error
 	if !isKillSignal {
