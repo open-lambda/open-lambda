@@ -262,7 +262,7 @@ func Main() error {
 	}
 
 	// remove pidPath on exit
-	defer func() { 
+	defer func() {
 		slog.Info("Remove PID file", "path", pidPath)
 		if err := os.Remove(pidPath); err != nil {
 			slog.Error("Remove PID file", "path", pidPath, "err", err)
@@ -272,7 +272,7 @@ func Main() error {
 	// things shared by all servers
 	udsMux := http.NewServeMux()
 	portMux := http.NewServeMux()
-	
+
 	// create handlers for servers
 	udsMux.HandleFunc(PID_PATH, HandleGetPid)
 	portMux.HandleFunc(STATUS_PATH, Status)
@@ -281,36 +281,12 @@ func Main() error {
 	portMux.HandleFunc(PPROF_CPU_START_PATH, PprofCpuStart)
 	portMux.HandleFunc(PPROF_CPU_STOP_PATH, PprofCpuStop)
 
-	// Initialize LambdaStore for registry
-	var err error
-	slog.Info("Worker: Initializing LambdaStore", "registry", common.Conf.Registry)
-	lambdaStore, err = lambdastore.NewLambdaStore(common.Conf.Registry, nil)
-	if err != nil {
-		return fmt.Errorf("failed to initialize lambda store at %s: %w", common.Conf.Registry, err)
-	}
-
-	// Registry handler
-	portMux.HandleFunc(REGISTRY_BASE_PATH, RegistryHandler)
-
-	var s cleanable
-	switch common.Conf.Server_mode {
-	case "lambda":
-		s, err = NewLambdaServer(portMux)
-	case "sock":
-		s, err = NewSOCKServer(portMux)
-	default:
-		return fmt.Errorf("unknown server_mode %q", common.Conf.Server_mode)
-	}
-	if err != nil {
-		return err
-	}
-
 	// sock file is made in worker directory
 	sockPath := filepath.Join(common.Conf.Worker_dir, "ol.sock")
 	// remove sock file on exit
-	defer func() { 
+	defer func() {
 		slog.Info("Remove sock file", "path", sockPath)
-		if err := os.Remove(sockPath); err != nil {
+		if err := os.Remove(sockPath); err != nil && !os.IsNotExist(err) {
 			slog.Error("Remove sock file", "path", sockPath, "err", err)
 		}
 	}()
@@ -324,12 +300,12 @@ func Main() error {
 		_ = ln.Close()
 		return fmt.Errorf("chmod UNIX domain socket %s: %w", sockPath, err)
 	}
-	
+
 	udsServer := &http.Server{
 		Handler:           udsMux,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
-	
+
 	port := fmt.Sprintf("%s:%s", common.Conf.Worker_url, common.Conf.Worker_port)
 	portServer := &http.Server{
 		Addr:    port,
@@ -337,9 +313,50 @@ func Main() error {
 	}
 
 	// list of servers so all shutdown logic can be in one place
-	servers := map[string] * http.Server{
+	servers := map[string]*http.Server{
 		"uds": udsServer,
 		"tcp": portServer,
+	}
+
+	// Initialize LambdaStore for registry
+	var err error
+	slog.Info("Worker: Initializing LambdaStore", "registry", common.Conf.Registry)
+	lambdaStore, err = lambdastore.NewLambdaStore(common.Conf.Registry, nil)
+	if err != nil {
+		return fmt.Errorf("failed to initialize lambda store at %s: %w", common.Conf.Registry, err)
+	}
+
+	// Registry handler
+	portMux.HandleFunc(REGISTRY_BASE_PATH, RegistryHandler)
+
+	var backend cleanable
+	var kafkaManager *KafkaManager
+
+	switch common.Conf.Server_mode {
+	case "lambda":
+		lambdaServer, err := NewLambdaServer(portMux)
+		if err != nil {
+			return err
+		}
+		backend = lambdaServer
+
+		// Always create and start Kafka manager alongside lambda server
+		kafkaManager, err = NewKafkaManager(lambdaServer.lambdaMgr)
+		if err != nil {
+			return fmt.Errorf("failed to create Kafka manager: %w", err)
+		}
+		slog.Info("Created kafka manager")
+
+		// Register Kafka management endpoint
+		portMux.HandleFunc("/kafka/register/", HandleKafkaRegister(kafkaManager, lambdaStore))
+		slog.Info("Kafka manager ready")
+	case "sock":
+		backend, err = NewSOCKServer(portMux)
+		if err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("unknown server_mode %q", common.Conf.Server_mode)
 	}
 
 	// error channel to handle server errors
@@ -382,20 +399,26 @@ func Main() error {
 
 	select {
 	// shutdown due to signal
-	case killSignal := <- signalChannel:
+	case killSignal := <-signalChannel:
 		slog.Info("Received signal", "signal", killSignal.String())
 		trigger = fmt.Errorf("kill signal: %v", killSignal)
 		isKillSignal = true
 	// shutdown due to server error
-	case serverError := <- errorChannel:
+	case serverError := <-errorChannel:
 		slog.Error("Received server error", "err", serverError)
 		trigger = serverError
 	}
 	slog.Info("Shutting down", "reason", trigger.Error())
 
+	// shutdown Kafka manager if running
+	if kafkaManager != nil {
+		slog.Info("Shutting down Kafka manager")
+		kafkaManager.cleanup()
+	}
+
 	// shutdown Lambda server
 	slog.Info("Shutting down Lambda server")
-	s.cleanup()
+	backend.cleanup()
 
 	// shutdown HTTP servers
 	shutdownContext := context.Background()
