@@ -58,9 +58,13 @@ func initCmd(ctx *cli.Context) error {
 }
 
 // upCmd corresponds to the "up" command of the admin tool.
+// If it returns a non-nil error at any point, `urfave/cli` will
+// automatically catch it, print the error message to stderr.
+// Then we exit the program and return to main, where we call os.Exit(1)
 func upCmd(ctx *cli.Context) error {
 	// get path of worker files
 	olPath, err := common.GetOlPath(ctx)
+
 	if err != nil {
 		return err
 	}
@@ -193,11 +197,8 @@ func upCmd(ctx *cli.Context) error {
 		return fmt.Errorf("worker still not reachable after 30 seconds: %w", pingErr)
 	}
 
-	if err := event.Main(); err != nil {
-		return err
-	}
 	// server had clean shutdown
-	return nil
+	return event.Main()
 }
 
 // statusCmd corresponds to the "status" command of the admin tool.
