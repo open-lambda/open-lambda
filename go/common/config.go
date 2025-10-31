@@ -123,33 +123,29 @@ type LimitsConfig struct {
 	CPU_percent int `json:"cpu_percent" yaml:"cpu_percent"`
 	Swappiness  int `json:"swappiness" yaml:"swappiness"`
 
-	// worker default for runtime cap (seconds). Per-lambda may set runtime_sec.
-	Max_runtime_default int `json:"max_runtime_default" yaml:"max_runtime_default"`
-
-	// per-lambda override for runtime (seconds). 0 => use Max_runtime_default.
+	// per-lambda override for runtime (seconds). 0 => inherit from worker defaults.
 	Runtime_sec int `json:"runtime_sec" yaml:"runtime_sec"`
 }
 
-// FillDefaults copies zero fields from def.
-func (lc *LimitsConfig) FillDefaults(def LimitsConfig) {
-	if lc.Procs == 0 {
-		lc.Procs = def.Procs
+// WithDefaults returns a new LimitsConfig where zero fields are filled from def.
+func (lc LimitsConfig) WithDefaults(def LimitsConfig) LimitsConfig {
+	out := lc
+	if out.Procs == 0 {
+		out.Procs = def.Procs
 	}
-	if lc.Mem_mb == 0 {
-		lc.Mem_mb = def.Mem_mb
+	if out.Mem_mb == 0 {
+		out.Mem_mb = def.Mem_mb
 	}
-	if lc.CPU_percent == 0 {
-		lc.CPU_percent = def.CPU_percent
+	if out.CPU_percent == 0 {
+		out.CPU_percent = def.CPU_percent
 	}
-	if lc.Swappiness == 0 {
-		lc.Swappiness = def.Swappiness
+	if out.Swappiness == 0 {
+		out.Swappiness = def.Swappiness
 	}
-	if lc.Max_runtime_default == 0 {
-		lc.Max_runtime_default = def.Max_runtime_default
+	if out.Runtime_sec == 0 {
+		out.Runtime_sec = def.Runtime_sec
 	}
-	if lc.Runtime_sec == 0 {
-		lc.Runtime_sec = def.Runtime_sec
-	}
+	return out
 }
 
 // Choose reasonable defaults for a worker deployment (based on memory capacity).
@@ -220,13 +216,6 @@ func GetDefaultWorkerConfig(olPath string) (*Config, error) {
 					cfg.InstallerLimits = defaultCfg.InstallerLimits
 					slog.Info("Patched InstallerLimits to defaults")
 				}
-				// NEW: enforce min required mem pool based on (possibly patched) limits
-				minRequired := 2 * Max(cfg.InstallerLimits.Mem_mb, cfg.Limits.Mem_mb)
-				if cfg.Mem_pool_mb < minRequired {
-					slog.Info("Bumping Mem_pool_mb to satisfy minimum",
-						"from", cfg.Mem_pool_mb, "to", minRequired)
-					cfg.Mem_pool_mb = minRequired
-				}
 
 				return cfg, nil
 			}
@@ -259,20 +248,21 @@ func getDefaultConfigForPatching(olPath string) (*Config, error) {
 
 	// Sensible defaults
 	userLimits := LimitsConfig{
-		Procs:               10,
-		Mem_mb:              50,
-		CPU_percent:         100,
-		Max_runtime_default: 30,
-		Swappiness:          0,
-		// Runtime_sec left 0 => uses Max_runtime_default by default
+		Procs:       10,
+		Mem_mb:      50,
+		CPU_percent: 100,
+		Swappiness:  0,
+		// worker default runtime cap for user lambdas
+		Runtime_sec: 30,
 	}
 	// Installers often need more resources; separate profile without the old hack field.
 	installerLimits := LimitsConfig{
-		Procs:               10,
-		Mem_mb:              Max(250, Min(500, memPoolMb/2)),
-		CPU_percent:         100,
-		Max_runtime_default: 300, // generous default for installs
-		Swappiness:          0,
+		Procs:       10,
+		Mem_mb:      Max(250, Min(500, memPoolMb/2)),
+		CPU_percent: 100,
+		Swappiness:  0,
+		// generous default for installer runs
+		Runtime_sec: 300,
 	}
 
 	cfg := &Config{
@@ -373,14 +363,11 @@ func checkConf(cfg *Config) error {
 		//
 		// We check against both the regular user limits and the installer limits.
 		minMem := 2 * Max(cfg.InstallerLimits.Mem_mb, cfg.Limits.Mem_mb)
-		if cfg.Mem_pool_mb < minMem {
-			slog.Warn("mem_pool_mb below minimum; bumping",
-				"current", cfg.Mem_pool_mb,
-				"required", minMem,
-				"user_mem_mb", cfg.Limits.Mem_mb,
-				"installer_mem_mb", cfg.InstallerLimits.Mem_mb,
+		if minMem > cfg.Mem_pool_mb {
+			return fmt.Errorf(
+				"memPoolMb must be at least %d (current=%d, user_mem_mb=%d, installer_mem_mb=%d)",
+				minMem, cfg.Mem_pool_mb, cfg.Limits.Mem_mb, cfg.InstallerLimits.Mem_mb,
 			)
-			cfg.Mem_pool_mb = minMem
 		}
 	} else if cfg.Sandbox == "docker" {
 		if cfg.Pkgs_dir == "" {
