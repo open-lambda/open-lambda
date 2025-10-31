@@ -326,6 +326,22 @@ func LoadGlobalConfig(path string) error {
 		return err
 	}
 
+	// Ensure mem_pool_mb meets the minimum based on current limits.
+	// This keeps the hard error in checkConf for truly undersized configs,
+	// but allows legacy/template configs to be normalized before validation.
+	if cfg != nil {
+		// If limits are missing in file, we cannot assume defaults here.
+		// We only normalize mem_pool_mb against whatever the file specifies.
+		minRequired := 2 * Max(cfg.InstallerLimits.Mem_mb, cfg.Limits.Mem_mb)
+		if minRequired > 0 && cfg.Mem_pool_mb < minRequired {
+			slog.Info("Bumping Mem_pool_mb to satisfy minimum for loaded config",
+				"from", cfg.Mem_pool_mb, "to", minRequired,
+				"user_mem_mb", cfg.Limits.Mem_mb, "installer_mem_mb", cfg.InstallerLimits.Mem_mb,
+			)
+			cfg.Mem_pool_mb = minRequired
+		}
+	}
+
 	if err := checkConf(cfg); err != nil {
 		return err
 	}
