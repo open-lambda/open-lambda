@@ -228,6 +228,21 @@ func GetDefaultWorkerConfig(olPath string) (*Config, error) {
 					cfg.InstallerLimits = defaultCfg.InstallerLimits
 					slog.Info("Patched InstallerLimits to defaults")
 				}
+
+				// Ensure template-based config satisfies mem pool minimum derived from limits.
+				// This only affects our generated defaults (template.json + patches), not
+				// user-supplied config loaded via LoadGlobalConfig.
+				minRequired := 2 * Max(cfg.InstallerLimits.Mem_mb, cfg.Limits.Mem_mb)
+				if cfg.Mem_pool_mb < minRequired {
+					slog.Info("Bumping Mem_pool_mb to satisfy minimum for template-based config",
+						"from", cfg.Mem_pool_mb,
+						"to", minRequired,
+						"user_mem_mb", cfg.Limits.Mem_mb,
+						"installer_mem_mb", cfg.InstallerLimits.Mem_mb,
+					)
+					cfg.Mem_pool_mb = minRequired
+				}
+
 				return cfg, nil
 			}
 		}
