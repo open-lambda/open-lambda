@@ -177,7 +177,7 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 	}()
 
 	// Use installer profile and inherit any zeros from worker defaults
-	inst := common.Conf.InstallerLimits.WithDefaults(common.Conf.Limits)
+	inst := common.Conf.InstallerLimits.WithDefaults(&common.Conf.Limits)
 
 	meta := &sandbox.SandboxMeta{
 		MemLimitMB: inst.Mem_mb,

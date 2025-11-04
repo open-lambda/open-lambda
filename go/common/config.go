@@ -117,19 +117,31 @@ type StorageConfig struct {
 // One unified limits struct for both worker defaults and per-lambda overrides.
 // For per-lambda ol.yaml, zero values mean "use worker defaults".
 type LimitsConfig struct {
-	// process & memory / CPU controls
-	Procs       int `json:"procs" yaml:"procs"`
-	Mem_mb      int `json:"mem_mb" yaml:"mem_mb"`
-	CPU_percent int `json:"cpu_percent" yaml:"cpu_percent"`
-	Swappiness  int `json:"swappiness" yaml:"swappiness"`
+	// how many processes can be created within a Sandbox?
+	Procs int `json:"procs" yaml:"procs"`
 
-	// per-lambda override for runtime (seconds). 0 => inherit from worker defaults.
+	// how much memory can a regular lambda use?  The lambda can
+	// always set a lower limit for itself.
+	Mem_mb int `json:"mem_mb" yaml:"mem_mb"`
+
+	// what percent of a core can it use per period?  (0-100, or more for multiple cores)
+	CPU_percent int `json:"cpu_percent" yaml:"cpu_percent"`
+
+	// how aggressively will the mem of the Sandbox be swapped?
+	Swappiness int `json:"swappiness" yaml:"swappiness"`
+
 	Runtime_sec int `json:"runtime_sec" yaml:"runtime_sec"`
 }
 
 // WithDefaults returns a new LimitsConfig where zero fields are filled from def.
-func (lc LimitsConfig) WithDefaults(def LimitsConfig) LimitsConfig {
-	out := lc
+func (lc *LimitsConfig) WithDefaults(def *LimitsConfig) LimitsConfig {
+	var out LimitsConfig
+	if lc != nil {
+		out = *lc
+	}
+	if def == nil {
+		return out
+	}
 	if out.Procs == 0 {
 		out.Procs = def.Procs
 	}
@@ -216,15 +228,6 @@ func GetDefaultWorkerConfig(olPath string) (*Config, error) {
 					cfg.InstallerLimits = defaultCfg.InstallerLimits
 					slog.Info("Patched InstallerLimits to defaults")
 				}
-				// Enforce min required mem pool based on limits for template-based configs
-				minRequired := 2 * Max(cfg.InstallerLimits.Mem_mb, cfg.Limits.Mem_mb)
-				if cfg.Mem_pool_mb < minRequired {
-					slog.Info("Bumping Mem_pool_mb to satisfy minimum for template-based config",
-						"from", cfg.Mem_pool_mb, "to", minRequired,
-						"user_mem_mb", cfg.Limits.Mem_mb, "installer_mem_mb", cfg.InstallerLimits.Mem_mb,
-					)
-					cfg.Mem_pool_mb = minRequired
-				}
 				return cfg, nil
 			}
 		}
@@ -254,7 +257,7 @@ func getDefaultConfigForPatching(olPath string) (*Config, error) {
 	totalMb := uint64(in.Totalram) * uint64(in.Unit) / 1024 / 1024
 	memPoolMb := Max(int(totalMb-500), 500)
 
-	// Sensible defaults
+	// Sensible defaults for user lambdas
 	userLimits := LimitsConfig{
 		Procs:       10,
 		Mem_mb:      50,
@@ -263,14 +266,12 @@ func getDefaultConfigForPatching(olPath string) (*Config, error) {
 		// worker default runtime cap for user lambdas
 		Runtime_sec: 30,
 	}
-	// Installers often need more resources; separate profile without the old hack field.
+	// Installers often need more resources; separate profile that overrides
+	// only the fields that differ from userLimits.
 	installerLimits := LimitsConfig{
-		Procs:       10,
 		Mem_mb:      Max(250, Min(500, memPoolMb/2)),
-		CPU_percent: 100,
-		Swappiness:  0,
-		// generous default for installer runs
-		Runtime_sec: 300,
+		Runtime_sec: 300, // generous default for installer runs
+		// Procs, CPU_percent, Swappiness will inherit from userLimits via WithDefaults
 	}
 
 	cfg := &Config{
@@ -326,22 +327,7 @@ func LoadGlobalConfig(path string) error {
 		return err
 	}
 
-	// Ensure mem_pool_mb meets the minimum based on current limits.
-	// This keeps the hard error in checkConf for truly undersized configs,
-	// but allows legacy/template configs to be normalized before validation.
-	if cfg != nil {
-		// If limits are missing in file, we cannot assume defaults here.
-		// We only normalize mem_pool_mb against whatever the file specifies.
-		minRequired := 2 * Max(cfg.InstallerLimits.Mem_mb, cfg.Limits.Mem_mb)
-		if minRequired > 0 && cfg.Mem_pool_mb < minRequired {
-			slog.Info("Bumping Mem_pool_mb to satisfy minimum for loaded config",
-				"from", cfg.Mem_pool_mb, "to", minRequired,
-				"user_mem_mb", cfg.Limits.Mem_mb, "installer_mem_mb", cfg.InstallerLimits.Mem_mb,
-			)
-			cfg.Mem_pool_mb = minRequired
-		}
-	}
-
+	// Do not auto-adjust mem_pool_mb here; rely on checkConf to validate.
 	if err := checkConf(cfg); err != nil {
 		return err
 	}
@@ -385,6 +371,7 @@ func checkConf(cfg *Config) error {
 		// otherwise anything running will immediately be
 		// evicted.
 		//
+		// TODO: revise evictor and relax this
 		// We check against both the regular user limits and the installer limits.
 		minMem := 2 * Max(cfg.InstallerLimits.Mem_mb, cfg.Limits.Mem_mb)
 		if minMem > cfg.Mem_pool_mb {
