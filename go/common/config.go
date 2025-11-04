@@ -130,6 +130,7 @@ type LimitsConfig struct {
 	// how aggressively will the mem of the Sandbox be swapped?
 	Swappiness int `json:"swappiness" yaml:"swappiness"`
 
+	// per-lambda or per-profile runtime cap in seconds.
 	Runtime_sec int `json:"runtime_sec" yaml:"runtime_sec"`
 }
 
@@ -229,20 +230,6 @@ func GetDefaultWorkerConfig(olPath string) (*Config, error) {
 					slog.Info("Patched InstallerLimits to defaults")
 				}
 
-				// Ensure template-based config satisfies mem pool minimum derived from limits.
-				// This only affects our generated defaults (template.json + patches), not
-				// user-supplied config loaded via LoadGlobalConfig.
-				minRequired := 2 * Max(cfg.InstallerLimits.Mem_mb, cfg.Limits.Mem_mb)
-				if cfg.Mem_pool_mb < minRequired {
-					slog.Info("Bumping Mem_pool_mb to satisfy minimum for template-based config",
-						"from", cfg.Mem_pool_mb,
-						"to", minRequired,
-						"user_mem_mb", cfg.Limits.Mem_mb,
-						"installer_mem_mb", cfg.InstallerLimits.Mem_mb,
-					)
-					cfg.Mem_pool_mb = minRequired
-				}
-
 				return cfg, nil
 			}
 		}
@@ -284,7 +271,7 @@ func getDefaultConfigForPatching(olPath string) (*Config, error) {
 	// Installers often need more resources; separate profile that overrides
 	// only the fields that differ from userLimits.
 	installerLimits := LimitsConfig{
-		Mem_mb:      Max(250, Min(500, memPoolMb/2)),
+		Mem_mb:      250,
 		Runtime_sec: 300, // generous default for installer runs
 		// Procs, CPU_percent, Swappiness will inherit from userLimits via WithDefaults
 	}
