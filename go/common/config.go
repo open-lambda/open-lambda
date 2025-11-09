@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log/slog"
+	"os"
 	"path"
 	"path/filepath"
-	"os"
 	"syscall"
 
 	"github.com/urfave/cli/v2"
@@ -62,11 +62,12 @@ type Config struct {
 	// pass through to sandbox envirenment variable
 	Sandbox_config any `json:"sandbox_config"`
 
-	Docker   DockerConfig   `json:"docker"`
-	Limits   LimitsConfig   `json:"limits"`
-	Features FeaturesConfig `json:"features"`
-	Trace    TraceConfig    `json:"trace"`
-	Storage  StorageConfig  `json:"storage"`
+	Docker          DockerConfig   `json:"docker"`
+	Limits          LimitsConfig   `json:"limits"`
+	InstallerLimits LimitsConfig   `json:"installer_limits"` // limits profile for installers
+	Features        FeaturesConfig `json:"features"`
+	Trace           TraceConfig    `json:"trace"`
+	Storage         StorageConfig  `json:"storage"`
 }
 
 type DockerConfig struct {
@@ -113,26 +114,51 @@ type StorageConfig struct {
 	Code    StoreString `json:"code"`
 }
 
+// One unified limits struct for both worker defaults and per-lambda overrides.
+// For per-lambda ol.yaml, zero values mean "use worker defaults".
 type LimitsConfig struct {
 	// how many processes can be created within a Sandbox?
-	Procs int `json:"procs"`
+	Procs int `json:"procs" yaml:"procs"`
 
 	// how much memory can a regular lambda use?  The lambda can
 	// always set a lower limit for itself.
-	Mem_mb int `json:"mem_mb"`
+	Mem_mb int `json:"mem_mb" yaml:"mem_mb"`
 
 	// what percent of a core can it use per period?  (0-100, or more for multiple cores)
-	CPU_percent int `json:"cpu_percent"`
-
-	// how many seconds can Lambdas run?  (maybe be overridden on per-lambda basis)
-	Max_runtime_default int `json:"max_runtime_default"`
+	CPU_percent int `json:"cpu_percent" yaml:"cpu_percent"`
 
 	// how aggressively will the mem of the Sandbox be swapped?
-	Swappiness int `json:"swappiness"`
+	Swappiness int `json:"swappiness" yaml:"swappiness"`
 
-	// how much memory do we use for an admin lambda that is used
-	// for pip installs?
-	Installer_mem_mb int `json:"installer_mem_mb"`
+	// per-lambda or per-profile runtime cap in seconds.
+	Runtime_sec int `json:"runtime_sec" yaml:"runtime_sec"`
+}
+
+// WithDefaults returns a new LimitsConfig where zero fields are filled from def.
+func (lc *LimitsConfig) WithDefaults(def *LimitsConfig) LimitsConfig {
+	var out LimitsConfig
+	if lc != nil {
+		out = *lc
+	}
+	if def == nil {
+		return out
+	}
+	if out.Procs == 0 {
+		out.Procs = def.Procs
+	}
+	if out.Mem_mb == 0 {
+		out.Mem_mb = def.Mem_mb
+	}
+	if out.CPU_percent == 0 {
+		out.CPU_percent = def.CPU_percent
+	}
+	if out.Swappiness == 0 {
+		out.Swappiness = def.Swappiness
+	}
+	if out.Runtime_sec == 0 {
+		out.Runtime_sec = def.Runtime_sec
+	}
+	return out
 }
 
 // Choose reasonable defaults for a worker deployment (based on memory capacity).
@@ -190,6 +216,19 @@ func GetDefaultWorkerConfig(olPath string) (*Config, error) {
 					cfg.Import_cache_tree = defaultCfg.Import_cache_tree
 					slog.Info("Patched Import_cache_tree", "Import_cache_tree", cfg.Import_cache_tree)
 				}
+				if cfg.Mem_pool_mb == 0 {
+					cfg.Mem_pool_mb = defaultCfg.Mem_pool_mb
+					slog.Info("Patched Mem_pool_mb", "Mem_pool_mb", cfg.Mem_pool_mb)
+				}
+				// If template omitted limits, inherit dynamic defaults
+				if cfg.Limits == (LimitsConfig{}) {
+					cfg.Limits = defaultCfg.Limits
+					slog.Info("Patched Limits to defaults")
+				}
+				if cfg.InstallerLimits == (LimitsConfig{}) {
+					cfg.InstallerLimits = defaultCfg.InstallerLimits
+					slog.Info("Patched InstallerLimits to defaults")
+				}
 
 				return cfg, nil
 			}
@@ -220,6 +259,23 @@ func getDefaultConfigForPatching(olPath string) (*Config, error) {
 	totalMb := uint64(in.Totalram) * uint64(in.Unit) / 1024 / 1024
 	memPoolMb := Max(int(totalMb-500), 500)
 
+	// Sensible defaults for user lambdas
+	userLimits := LimitsConfig{
+		Procs:       10,
+		Mem_mb:      50,
+		CPU_percent: 100,
+		Swappiness:  0,
+		// worker default runtime cap for user lambdas
+		Runtime_sec: 30,
+	}
+	// Installers often need more resources; separate profile that overrides
+	// only the fields that differ from userLimits.
+	installerLimits := LimitsConfig{
+		Mem_mb:      250,
+		Runtime_sec: 300, // generous default for installer runs
+		// Procs, CPU_percent, Swappiness will inherit from userLimits via WithDefaults
+	}
+
 	cfg := &Config{
 		Worker_dir:  workerDir,
 		Server_mode: "lambda",
@@ -241,14 +297,8 @@ func getDefaultConfigForPatching(olPath string) (*Config, error) {
 		Docker: DockerConfig{
 			Base_image: "ol-min",
 		},
-		Limits: LimitsConfig{
-			Procs:               10,
-			Mem_mb:              50,
-			CPU_percent:         100,
-			Max_runtime_default: 30,
-			Installer_mem_mb:    Max(250, Min(500, memPoolMb/2)),
-			Swappiness:          0,
-		},
+		Limits:          userLimits,
+		InstallerLimits: installerLimits,
 		Features: FeaturesConfig{
 			Import_cache:        "tree",
 			Downsize_paused_mem: true,
@@ -279,6 +329,7 @@ func LoadGlobalConfig(path string) error {
 		return err
 	}
 
+	// Do not auto-adjust mem_pool_mb here; rely on checkConf to validate.
 	if err := checkConf(cfg); err != nil {
 		return err
 	}
@@ -323,9 +374,13 @@ func checkConf(cfg *Config) error {
 		// evicted.
 		//
 		// TODO: revise evictor and relax this
-		minMem := 2 * Max(cfg.Limits.Installer_mem_mb, cfg.Limits.Mem_mb)
+		// We check against both the regular user limits and the installer limits.
+		minMem := 2 * Max(cfg.InstallerLimits.Mem_mb, cfg.Limits.Mem_mb)
 		if minMem > cfg.Mem_pool_mb {
-			return fmt.Errorf("memPoolMb must be at least %d", minMem)
+			return fmt.Errorf(
+				"memPoolMb must be at least %d (current=%d, user_mem_mb=%d, installer_mem_mb=%d)",
+				minMem, cfg.Mem_pool_mb, cfg.Limits.Mem_mb, cfg.InstallerLimits.Mem_mb,
+			)
 		}
 	} else if cfg.Sandbox == "docker" {
 		if cfg.Pkgs_dir == "" {
@@ -354,7 +409,6 @@ func SandboxConfJson() string {
 	}
 	return string(s)
 }
-
 
 // Dump prints the Config as a JSON string.
 func DumpConf() {
