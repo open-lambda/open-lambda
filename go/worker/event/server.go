@@ -275,11 +275,14 @@ func Main() error {
 	
 	// create handlers for servers
 	udsMux.HandleFunc(PID_PATH, HandleGetPid)
+	udsMux.HandleFunc(STATUS_PATH, Status)
+	udsMux.HandleFunc(STATS_PATH, Stats)
+	udsMux.HandleFunc(PPROF_MEM_PATH, PprofMem)
+	udsMux.HandleFunc(PPROF_CPU_START_PATH, PprofCpuStart)
+	udsMux.HandleFunc(PPROF_CPU_STOP_PATH, PprofCpuStop)
+
+	// add a status handler to portMUX so LambdaStore can pass health check
 	portMux.HandleFunc(STATUS_PATH, Status)
-	portMux.HandleFunc(STATS_PATH, Stats)
-	portMux.HandleFunc(PPROF_MEM_PATH, PprofMem)
-	portMux.HandleFunc(PPROF_CPU_START_PATH, PprofCpuStart)
-	portMux.HandleFunc(PPROF_CPU_STOP_PATH, PprofCpuStop)
 
 	// Initialize LambdaStore for registry
 	var err error
