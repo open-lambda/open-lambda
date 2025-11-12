@@ -51,13 +51,13 @@ func ComputeTriggerKey(trigger *common.KafkaTrigger) TriggerKey {
 // LambdaKafkaConsumer manages Kafka consumption for one or more lambda functions
 // with identical trigger configurations
 type LambdaKafkaConsumer struct {
-	triggerKey    TriggerKey                   // Unique identifier for this trigger config
-	kafkaTrigger  *common.KafkaTrigger         // Trigger configuration
-	client        KafkaClient                  // kgo.client implements the KafkaClient interface
-	lambdaManager *lambda.LambdaMgr            // Reference to lambda manager for direct calls
-	lambdas       map[string]struct{}          // Set of lambda names using this consumer
-	lambdasMu     sync.RWMutex                 // Protects lambdas map
-	stopChan      chan struct{}                // Shutdown signal for this consumer
+	triggerKey    TriggerKey           // Unique identifier for this trigger config
+	kafkaTrigger  *common.KafkaTrigger // Trigger configuration
+	client        KafkaClient          // kgo.client implements the KafkaClient interface
+	lambdaManager *lambda.LambdaMgr    // Reference to lambda manager for direct calls
+	lambdas       map[string]struct{}  // Set of lambda names using this consumer
+	lambdasMu     sync.RWMutex         // Protects lambdas map
+	stopChan      chan struct{}        // Shutdown signal for this consumer
 }
 
 // KafkaManager manages Kafka consumers shared across lambda functions
@@ -153,7 +153,7 @@ func NewKafkaManager(lambdaManager *lambda.LambdaMgr) (*KafkaManager, error) {
 		lambdaManager:  lambdaManager,
 	}
 
-	slog.Info("Kafka manager initialized with consumer sharing enabled")
+	slog.Info("Kafka manager initialized")
 	return manager, nil
 }
 
@@ -228,7 +228,7 @@ func (lkc *LambdaKafkaConsumer) processMessage(record *kgo.Record) {
 		return
 	}
 
-	slog.Info("Processing Kafka message for multiple lambdas",
+	slog.Info("Processing Kafka message for lambda(s)",
 		"trigger_key", lkc.triggerKey,
 		"topic", record.Topic,
 		"partition", record.Partition,
