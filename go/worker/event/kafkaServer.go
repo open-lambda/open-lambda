@@ -230,6 +230,7 @@ func (km *KafkaManager) RegisterLambdaKafkaTriggers(lambdaName string, triggers 
 
 	// Create consumers for each Kafka trigger
 	for i, trigger := range triggers {
+		trigger.GroupId = fmt.Sprintf("lambda-%s", lambdaName)
 		consumerName := fmt.Sprintf("%s-%d", lambdaName, i)
 		consumer, err := km.newLambdaKafkaConsumer(consumerName, lambdaName, &trigger)
 		if err != nil {
