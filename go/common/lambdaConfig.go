@@ -36,7 +36,7 @@ type CronTrigger struct {
 type KafkaTrigger struct {
 	BootstrapServers []string `yaml:"bootstrap_servers" json:"bootstrap_servers"` // e.g., ["localhost:9092"]
 	Topics           []string `yaml:"topics" json:"topics"`                       // e.g., ["events", "logs"]
-	GroupId          string   `yaml:"group_id" json:"group_id"`                   // e.g., "lambda-group"
+	GroupId          string   `yaml:"-" json:"-"`                                 // Auto-generated based on lambda name
 	AutoOffsetReset  string   `yaml:"auto_offset_reset" json:"auto_offset_reset"` // "earliest" or "latest"
 }
 
@@ -84,9 +84,6 @@ func checkLambdaConfig(config *LambdaConfig) error {
 		}
 		if len(trigger.BootstrapServers) == 0 {
 			return fmt.Errorf("Kafka trigger must specify at least one bootstrap server")
-		}
-		if trigger.GroupId == "" {
-			return fmt.Errorf("Kafka trigger must have a group ID")
 		}
 	}
 
@@ -143,7 +140,10 @@ func ExtractConfigFromTarGz(tarPath string) (*LambdaConfig, error) {
 			return nil, fmt.Errorf("invalid tar: %w", err)
 		}
 
-		if header.Name == LambdaConfigFilename {
+		// Check if this is the config file. Should handle exact matches (ol.yaml)
+		// and ./ matches (./ol.yaml) as tar can encode ./ into filenames under
+		// certain conditions.
+		if filepath.Clean(header.Name) == LambdaConfigFilename {
 			var config LambdaConfig
 			decoder := yaml.NewDecoder(tr)
 			if err := decoder.Decode(&config); err != nil {

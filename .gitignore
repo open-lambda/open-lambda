@@ -49,10 +49,12 @@
 /imgs
 /util/cluster
 /bin
+/default-ol
 /lambda/ol-init
 /lambda/spin
 /lambda/ns.so
 /lambda/fdclient
+/min-image/spin
 /sock/sock-init
 /test-dir
 /test.json

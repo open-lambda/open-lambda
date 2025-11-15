@@ -1,10 +1,12 @@
 package event
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -15,6 +17,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/open-lambda/open-lambda/go/boss/lambdastore"
 	"github.com/open-lambda/open-lambda/go/common"
@@ -171,11 +174,10 @@ func PprofCpuStop(w http.ResponseWriter, _ *http.Request) {
 	}
 }
 
-func shutdown(pidPath string, server cleanable) {
-	server.cleanup()
+// Writes final stats and any buffered CPU profile to disk.
+func WriteFinalStats() {
 	statsPath := filepath.Join(common.Conf.Worker_dir, "stats.json")
 	snapshot := common.SnapshotStats()
-	rc := 0
 
 	// "cpu-start"ed but have not "cpu-stop"ped before kill
 	slog.Info("save buffered profiled data to cpu.buf.prof")
@@ -186,11 +188,9 @@ func shutdown(pidPath string, server cleanable) {
 
 		in, err := ioutil.ReadFile(filename)
 		if err != nil {
-			slog.Error(fmt.Sprintf("error: %s", err))
-			rc = 1
+			slog.Error("Read temp CPU profile", "file", filename, "err", err)
 		} else if err = ioutil.WriteFile("cpu.buf.prof", in, 0644); err != nil {
-			slog.Error(fmt.Sprintf("error: %s", err))
-			rc = 1
+			slog.Error("Write CPU profile buffer", "file", "cpu.buf.prof", "err", err)
 		}
 
 		os.Remove(filename)
@@ -198,21 +198,12 @@ func shutdown(pidPath string, server cleanable) {
 
 	slog.Info(fmt.Sprintf("save stats to %s", statsPath))
 	if s, err := json.MarshalIndent(snapshot, "", "\t"); err != nil {
-		slog.Error(fmt.Sprintf("error: %s", err))
-		rc = 1
+		slog.Error("Marshal stats", "err", err)
 	} else if err := ioutil.WriteFile(statsPath, s, 0644); err != nil {
-		slog.Error(fmt.Sprintf("error: %s", err))
-		rc = 1
+		slog.Error("Write stats", "path", statsPath, "err", err)
 	}
 
-	slog.Info(fmt.Sprintf("Remove %s.", pidPath))
-	if err := os.Remove(pidPath); err != nil {
-		slog.Error(fmt.Sprintf("error: %s", err))
-		rc = 1
-	}
-
-	slog.Info(fmt.Sprintf("Exiting worker (PID %d)", os.Getpid()))
-	os.Exit(rc)
+	slog.Info("Printed final stats of worker", "pid", os.Getpid())
 }
 
 // RegistryHandler handles registry requests using boss's LambdaStore
@@ -249,10 +240,10 @@ func RegistryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func Main() (err error) {
+func Main() error {
 	pidPath := filepath.Join(common.Conf.Worker_dir, "worker.pid")
 	if _, err := os.Stat(pidPath); err == nil {
-		return fmt.Errorf("Previous worker may be running, %s already exists", pidPath)
+		return fmt.Errorf("previous worker may be running: %s already exists", pidPath)
 	} else if !os.IsNotExist(err) {
 		// we were hoping to get the not-exist error, but got something else unexpected
 		return err
@@ -265,62 +256,186 @@ func Main() (err error) {
 		return err
 	}
 
-	slog.Info(fmt.Sprintf("Saved PID %d to file %s", os.Getpid(), pidPath))
+	slog.Info("Saved PID to file", "pid", os.Getpid(), "path", pidPath)
 	if err := ioutil.WriteFile(pidPath, []byte(fmt.Sprintf("%d", os.Getpid())), 0644); err != nil {
 		return err
 	}
 
+	// remove pidPath on exit
+	defer func() {
+		slog.Info("Remove PID file", "path", pidPath)
+		if err := os.Remove(pidPath); err != nil {
+			slog.Error("Remove PID file", "path", pidPath, "err", err)
+		}
+	}()
+
 	// things shared by all servers
-	http.HandleFunc(PID_PATH, HandleGetPid)
-	http.HandleFunc(STATUS_PATH, Status)
-	http.HandleFunc(STATS_PATH, Stats)
-	http.HandleFunc(PPROF_MEM_PATH, PprofMem)
-	http.HandleFunc(PPROF_CPU_START_PATH, PprofCpuStart)
-	http.HandleFunc(PPROF_CPU_STOP_PATH, PprofCpuStop)
+	udsMux := http.NewServeMux()
+	portMux := http.NewServeMux()
+
+	// create handlers for servers
+	udsMux.HandleFunc(PID_PATH, HandleGetPid)
+	portMux.HandleFunc(STATUS_PATH, Status)
+	portMux.HandleFunc(STATS_PATH, Stats)
+	portMux.HandleFunc(PPROF_MEM_PATH, PprofMem)
+	portMux.HandleFunc(PPROF_CPU_START_PATH, PprofCpuStart)
+	portMux.HandleFunc(PPROF_CPU_STOP_PATH, PprofCpuStop)
+
+	// sock file is made in worker directory
+	sockPath := filepath.Join(common.Conf.Worker_dir, "ol.sock")
+	// remove sock file on exit
+	defer func() {
+		slog.Info("Remove sock file", "path", sockPath)
+		if err := os.Remove(sockPath); err != nil && !os.IsNotExist(err) {
+			slog.Error("Remove sock file", "path", sockPath, "err", err)
+		}
+	}()
+
+	// worker access sock file
+	ln, errUDS := net.Listen("unix", sockPath)
+	if errUDS != nil {
+		return fmt.Errorf("failed to listen on UNIX domain socket %s: %w", sockPath, errUDS)
+	}
+	if err := os.Chmod(sockPath, 0o600); err != nil {
+		_ = ln.Close()
+		return fmt.Errorf("chmod UNIX domain socket %s: %w", sockPath, err)
+	}
+
+	udsServer := &http.Server{
+		Handler:           udsMux,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+
+	port := fmt.Sprintf("%s:%s", common.Conf.Worker_url, common.Conf.Worker_port)
+	portServer := &http.Server{
+		Addr:    port,
+		Handler: portMux,
+	}
+
+	// list of servers so all shutdown logic can be in one place
+	servers := map[string]*http.Server{
+		"uds": udsServer,
+		"tcp": portServer,
+	}
 
 	// Initialize LambdaStore for registry
-	slog.Info(fmt.Sprintf("Worker: Initializing LambdaStore with Registry = \"%s\"", common.Conf.Registry))
+	var err error
+	slog.Info("Worker: Initializing LambdaStore", "registry", common.Conf.Registry)
 	lambdaStore, err = lambdastore.NewLambdaStore(common.Conf.Registry, nil)
 	if err != nil {
-		os.Remove(pidPath)
 		return fmt.Errorf("failed to initialize lambda store at %s: %w", common.Conf.Registry, err)
 	}
 
 	// Registry handler
-	http.HandleFunc(REGISTRY_BASE_PATH, RegistryHandler)
+	portMux.HandleFunc(REGISTRY_BASE_PATH, RegistryHandler)
 
-	var s cleanable
+	var backend cleanable
+	var kafkaManager *KafkaManager
+
 	switch common.Conf.Server_mode {
 	case "lambda":
-		s, err = NewLambdaServer()
+		lambdaServer, err := NewLambdaServer(portMux)
+		if err != nil {
+			return err
+		}
+		backend = lambdaServer
+
+		// Always create and start Kafka manager alongside lambda server
+		kafkaManager, err = NewKafkaManager(lambdaServer.lambdaMgr)
+		if err != nil {
+			return fmt.Errorf("failed to create Kafka manager: %w", err)
+		}
+		slog.Info("Created kafka manager")
+
+		// Register Kafka management endpoint
+		portMux.HandleFunc("/kafka/register/", HandleKafkaRegister(kafkaManager, lambdaStore))
+		slog.Info("Kafka manager ready")
 	case "sock":
-		s, err = NewSOCKServer()
+		backend, err = NewSOCKServer(portMux)
+		if err != nil {
+			return err
+		}
 	default:
-		return fmt.Errorf("unknown Server_mode %s", common.Conf.Server_mode)
-	}
-	if err != nil {
-		os.Remove(pidPath)
-		return err
+		return fmt.Errorf("unknown server_mode %q", common.Conf.Server_mode)
 	}
 
-	// clean up if signal hits us (e.g., from ctrl-C)
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	signal.Notify(c, os.Interrupt, syscall.SIGINT)
+	// error channel to handle server errors
+	errorChannel := make(chan error, len(servers))
+	// error channel to handle signals (e.g., from ctrl-C)
+	signalChannel := make(chan os.Signal, 1)
+	signal.Notify(signalChannel, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
+
+	// start serving on the UNIX domain socket server
 	go func() {
-		<-c
-		slog.Info("Received kill signal, cleaning up.")
-		shutdown(pidPath, s)
+		slog.Info("worker listening on UNIX domain socket", "socket", sockPath)
+		err := udsServer.Serve(ln)
+		// Serve() always returns a non-nil error, so this should not be reachable
+		if err == nil {
+			slog.Error("Serve returned nil", "server", "uds")
+			panic(err)
+		}
+		if err != nil && err != http.ErrServerClosed {
+			errorChannel <- fmt.Errorf("UNIX domain socket server failed: %w", err)
+		}
 	}()
 
-	port := fmt.Sprintf("%s:%s", common.Conf.Worker_url, common.Conf.Worker_port)
-	err = http.ListenAndServe(port, nil)
+	// start serving on the HTTP Server
+	go func() {
+		slog.Info("worker listening on TCP", "port", port)
+		err := portServer.ListenAndServe()
+		// Serve() always returns a non-nil error, so this should not be reachable
+		if err == nil {
+			slog.Error("Serve returned nil", "server", "tcp")
+			panic(err)
+		}
+		if err != http.ErrServerClosed {
+			errorChannel <- fmt.Errorf("Port server failed: %w", err)
+		}
+	}()
 
-	// if ListenAndServer returned, there must have been some issue
-	// (probably a port collision)
-	s.cleanup()
-	os.Remove(pidPath)
-	slog.Error(err.Error())
-	os.Exit(1)
+	// wait for either kill signal or error from server
+	var trigger error
+	isKillSignal := false
+
+	select {
+	// shutdown due to signal
+	case killSignal := <-signalChannel:
+		slog.Info("Received signal", "signal", killSignal.String())
+		trigger = fmt.Errorf("kill signal: %v", killSignal)
+		isKillSignal = true
+	// shutdown due to server error
+	case serverError := <-errorChannel:
+		slog.Error("Received server error", "err", serverError)
+		trigger = serverError
+	}
+	slog.Info("Shutting down", "reason", trigger.Error())
+
+	// shutdown Kafka manager if running
+	if kafkaManager != nil {
+		slog.Info("Shutting down Kafka manager")
+		kafkaManager.cleanup()
+	}
+
+	// shutdown Lambda server
+	slog.Info("Shutting down Lambda server")
+	backend.cleanup()
+
+	// shutdown HTTP servers
+	shutdownContext := context.Background()
+	for name, server := range servers {
+		slog.Info("Shutting down server", "name", name)
+		err := server.Shutdown(shutdownContext)
+		if err != nil && err != http.ErrServerClosed {
+			slog.Error("Server shutdown error", "name", name, "err", err)
+		}
+	}
+
+	WriteFinalStats()
+
+	// return an error if we shutdown due to server error
+	if !isKillSignal {
+		return trigger
+	}
+
 	return nil
 }
