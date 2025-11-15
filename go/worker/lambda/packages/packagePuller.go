@@ -165,7 +165,8 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 		alreadyInstalled = true
 	} else {
 		slog.Info(fmt.Sprintf("run pip install %s from a new Sandbox to %s on host", p.Name, scratchDir))
-		if err := os.Mkdir(scratchDir, 0700); err != nil {
+		filesDir := filepath.Join(scratchDir, "files")
+		if err := os.MkdirAll(filesDir, 0700); err != nil { // creates dir for /host and /host/files for pip install location
 			return err
 		}
 	}

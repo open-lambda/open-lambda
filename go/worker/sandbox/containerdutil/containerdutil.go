@@ -131,66 +131,6 @@ func CleanupContainerdResources(ctx context.Context, containerID string,
 	return !hasErrors
 }
 
-// SafeKill kills a containerd container. Unpause if necessary.
-/*
-func SafeKill(ctx context.Context, container containerd.Container) error {
-	task, err := container.Task(ctx, nil)
-	if err != nil {
-		if errdefs.IsNotFound(err) {
-			log.Printf("Container %s has no task, already stopped\n", container.ID())
-			return nil
-		}
-		return fmt.Errorf("failed to get task for container %s: %v", container.ID(), err)
-	}
-
-	status, err := task.Status(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get task status: %v", err)
-	}
-
-	if status.Status != containerd.Stopped { 
-		// If the container is paused, unpause it first
-		if status.Status == containerd.Paused {
-			log.Printf("Unpause container %s\n", container.ID())
-			if err := task.Resume(ctx); err != nil {
-				return fmt.Errorf("failed to unpause container %s: %v", container.ID(), err)
-			}
-		}
-
-		log.Printf("Kill container %s\n", container.ID())
-		if err := task.Kill(ctx, syscall.SIGKILL); err != nil {
-			if !errdefs.IsNotFound(err) {
-				return fmt.Errorf("failed to kill container %s: %v", container.ID(), err)
-			}
-		}
-
-		// Wait for task to exit
-		exitCh, err := task.Wait(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to wait for task: %v", err)
-		}
-		
-		select {
-		case <-exitCh:
-			// Task exited
-		case <-time.After(10 * time.Second):
-			return fmt.Errorf("timeout waiting for task to exit")
-		}
-	} else {
-		log.Printf("Container %s is already stopped\n", container.ID())
-	}
-
-	// Delete the task
-	if _, err := task.Delete(ctx); err != nil {
-		if !errdefs.IsNotFound(err) {
-			return fmt.Errorf("failed to delete task: %v", err)
-		}
-	}
-
-	return nil
-}
-*/
-
 // hard kill at shutdown
 func SafeKill(ctx context.Context, container containerd.Container) error {
 	task, err := container.Task(ctx, nil)
