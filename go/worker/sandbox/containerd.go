@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"net/http"
 	"log/slog"
-        "io/ioutil"
-        "path/filepath"
+	"io/ioutil"
+	"path/filepath"
 
 	"github.com/containerd/containerd"
-        
+
 	"github.com/open-lambda/open-lambda/go/common"
 	"github.com/open-lambda/open-lambda/go/worker/sandbox/containerdutil"
 )
@@ -17,17 +17,15 @@ import (
 
 type ContainerdContainer struct {
 	// core containerd resources
-	id        	string
 	container 	containerd.Container  // containerd container handle
 	task      	containerd.Task       // Running process inside the container
 	client		*containerd.Client
 	ctx			context.Context
 	scratchDir	string
 
-	execProcess	containerd.Process  
+	execProcess	containerd.Process
 
 	// state tracking
-	destroyed	bool        // tracks if WE destroyed it, not just if it's gone
 	isPaused	bool        // cached pause state to avoid API calls
 	// Lambda execution resources
 	meta		*SandboxMeta
@@ -36,22 +34,17 @@ type ContainerdContainer struct {
 }
 
 func (c *ContainerdContainer) ID() string {
-	return c.id
+	return c.container.ID()
 }
 
 func (c *ContainerdContainer) Destroy(reason string) {
-	if c.destroyed {
-		return // destruction was already attempted
-	}
-
-	slog.Info("Destroying container", "container_id", c.id, "reason", reason)
+	slog.Info("Destroying container", "container_id", c.container.ID(), "reason", reason)
 
 	// Use the shared cleanup function from containerdutil for consistent error handling
-	cleanupSuccessful := containerdutil.CleanupContainerdResources(c.ctx, c.id, c.container, c.task, c.execProcess)
+	cleanupSuccessful := containerdutil.CleanupContainerdResources(c.ctx, c.container.ID(), c.container, c.task, c.execProcess)
 	if !cleanupSuccessful {
-		slog.Error("Errors occurred during cleanup of container", "container_id", c.id)
+		slog.Error("Errors occurred during cleanup of container", "container_id", c.container.ID())
 	}
-	c.destroyed = true
 }
 
 func (c *ContainerdContainer) DestroyIfPaused(reason string) {
@@ -59,17 +52,13 @@ func (c *ContainerdContainer) DestroyIfPaused(reason string) {
 }
 
 func (c *ContainerdContainer) Pause() error {
-        // Optimized: Use cached state and skip if already paused
-        if c.destroyed {
-                return fmt.Errorf("cannot pause destroyed container %s", c.id)
-        }
 
         // Skip if already paused (cached state)
         if c.isPaused {
                 return nil
         }
 
-        // Attempt pause directly - containerd handles already-paused containers gracefully
+        // Attempt pause directly - containerd handles already-paused containers gracefully (not checking status first bc it takes significant time)
         if err := c.task.Pause(c.ctx); err != nil {
                 // Only check status if pause fails (rare case)
                 if status, statusErr := c.task.Status(c.ctx); statusErr == nil {
@@ -80,7 +69,7 @@ func (c *ContainerdContainer) Pause() error {
                                 return nil
                         }
                 }
-                return fmt.Errorf("failed to pause container %s: %v", c.id, err)
+                return fmt.Errorf("failed to pause container %s: %v", c.container.ID(), err)
         }
 
         c.isPaused = true
@@ -92,10 +81,6 @@ func (c *ContainerdContainer) Pause() error {
 }
 
 func (c *ContainerdContainer) Unpause() error {
-        // Optimized: Use cached state and skip unnecessary operations
-        if c.destroyed {
-                return fmt.Errorf("cannot unpause destroyed container %s", c.id)
-        }
 
         // Skip if already running (cached state)
         if !c.isPaused {
@@ -112,7 +97,7 @@ func (c *ContainerdContainer) Unpause() error {
                                 return nil
                         }
                 }
-                return fmt.Errorf("failed to resume container %s: %v", c.id, err)
+                return fmt.Errorf("failed to resume container %s: %v", c.container.ID(), err)
         }
 
         c.isPaused = false
@@ -142,7 +127,7 @@ func (c *ContainerdContainer) GetProxyLog() (string) {
 }
 
 func (c *ContainerdContainer) DebugString() string {
-	return "ContainerdContainer ID: " + c.id
+	return "ContainerdContainer ID: " + c.container.ID()
 }
 
 func (c *ContainerdContainer) fork(dst Sandbox) error {
