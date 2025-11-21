@@ -273,7 +273,7 @@ func (container *DockerContainer) runServer() error {
 		return fmt.Errorf("Unsupported runtime")
 	}
 
-	cmd := []string{"python3", "/runtimes/python/server_legacy.py"}
+	cmd := []string{"python3", "/runtimes/python/server.py", "--env", "docker"}
 
 	execOpts := docker.CreateExecOptions{
 		AttachStdin:  false,
