@@ -2,17 +2,22 @@ package sandbox
 
 import (
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/open-lambda/open-lambda/go/common"
 )
 
-func SandboxPoolFromConfig(name string, sizeMb int) (cf SandboxPool, err error) {
+func SandboxPoolFromConfig(name string, sizeMb int, logger *slog.Logger) (cf SandboxPool, err error) {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	
 	if common.Conf.Sandbox == "docker" {
 		return NewDockerPool("", nil)
 	} else if common.Conf.Sandbox == "sock" {
-		mem := NewMemPool(name, sizeMb)
-		pool, err := NewSOCKPool(name, mem)
+		mem := NewMemPool(name, sizeMb, logger)
+		pool, err := NewSOCKPool(name, mem, logger)
 		if err != nil {
 			return nil, err
 		}

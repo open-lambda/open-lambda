@@ -88,7 +88,7 @@ func newLambdaMgr() (res *LambdaMgr, err error) {
 	}
 
 	slog.Info("Creating SandboxPool")
-	mgr.sbPool, err = sandbox.SandboxPoolFromConfig("sandboxes", common.Conf.Mem_pool_mb)
+	mgr.sbPool, err = sandbox.SandboxPoolFromConfig("sandboxes", common.Conf.Mem_pool_mb, slog.Default())
 	if err != nil {
 		return nil, err
 	}
