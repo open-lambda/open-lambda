@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"log/slog"
 	"os/exec"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/errdefs"
+	"github.com/containerd/containerd/snapshots"
 )
 
 const (
@@ -26,12 +28,12 @@ func ImageExists(ctx context.Context, client *containerd.Client, name string) (b
 		if errdefs.IsNotFound(err) {
 			return false, nil
 		}
-		return false, fmt.Errorf("error checking image %s: %v", name, err)
+		return false, fmt.Errorf("error checking image %s: %w", name, err)
 	}
 	return true, nil
 }
 
-// graceful cleanup during normal Destroy(): 
+// graceful cleanup during normal Destroy():
 // Resumes if paused;
 // Sends SIGKILL to ALL processes
 // WAITS for processes to exit
@@ -88,7 +90,6 @@ func CleanupContainerdResources(ctx context.Context, containerID string,
 		if waitCh, err := task.Wait(ctx); err == nil {
 			select {
 			case <-waitCh:
-				// Task has stopped
 			case <-ctx.Done():
 				slog.Warn("Context cancelled while waiting for task to stop for container", "container_id", containerID)
 			}
@@ -102,7 +103,6 @@ func CleanupContainerdResources(ctx context.Context, containerID string,
 		}
 	}
 
-	// Clean up exec process if it exists
 	if execProcess != nil {
 		if _, err := execProcess.Delete(ctx); err != nil {
 			if !errdefs.IsNotFound(err) {
@@ -139,13 +139,13 @@ func SafeKill(ctx context.Context, container containerd.Container) error {
 			slog.Info("Container has no task, already stopped", "container_id", container.ID())
 			return nil
 		}
-		return fmt.Errorf("failed to get task for container %s: %v", container.ID(), err)
+		return fmt.Errorf("failed to get task for container %s: %w", container.ID(), err)
 	}
 
 	// Ignoring status and forcibly delete the task
 	if _, err := task.Delete(ctx, containerd.WithProcessKill); err != nil {
 		if !errdefs.IsNotFound(err) {
-			return fmt.Errorf("failed to delete task: %v", err)
+			return fmt.Errorf("failed to delete task: %w", err)
 		}
 	}
 
@@ -161,7 +161,7 @@ func SafeRemove(ctx context.Context, client *containerd.Client, container contai
 	slog.Info("Remove container", "container_id", container.ID())
 	if err := container.Delete(ctx, containerd.WithSnapshotCleanup); err != nil {
 		if !errdefs.IsNotFound(err) {
-			return fmt.Errorf("failed to remove container %s: %v", container.ID(), err)
+			return fmt.Errorf("failed to remove container %s: %w", container.ID(), err)
 		}
 	}
 
@@ -174,7 +174,7 @@ func SafeRemove(ctx context.Context, client *containerd.Client, container contai
 func EnsureImageExists(ctx context.Context, client *containerd.Client, imageName string) error {
 	exists, err := ImageExists(ctx, client, imageName)
 	if err != nil {
-		return fmt.Errorf("error checking if image %s exists: %v", imageName, err)
+		return fmt.Errorf("error checking if image %s exists: %w", imageName, err)
 	}
 
 	if exists {
@@ -182,62 +182,59 @@ func EnsureImageExists(ctx context.Context, client *containerd.Client, imageName
 		return nil
 	}
 
-	// Image not found in containerd, try to import from Docker
 	slog.Info("Image not found in containerd, attempting to import from Docker", "image_name", imageName)
-	
+
 	// First check if Docker has the image
 	checkCmd := exec.Command("docker", "images", "-q", imageName)
 	output, err := checkCmd.Output()
 	if err != nil {
-		return fmt.Errorf("failed to check Docker for image %s: %v\nMake sure Docker is running and the image exists", imageName, err)
+		return fmt.Errorf("failed to check Docker for image %s: %w\nMake sure Docker is running and the image exists", imageName, err)
 	}
-	
+
 	if len(output) == 0 {
 		return fmt.Errorf("image %s not found in Docker either. Please build it first with: make imgs/%s", imageName, imageName)
 	}
-	
-	// Import the image from Docker to containerd
+
 	slog.Info("Importing image from Docker to containerd namespace", "image_name", imageName, "namespace", "openlambda")
 
 	// Create the pipeline: docker save | ctr import
 	saveCmd := exec.Command("docker", "save", imageName)
-	importCmd := exec.Command("ctr", "-n", "openlambda", "images", "import", "-")
-	
-	// Connect the commands via pipe
+	importCmd := exec.Command("ctr", "-n", "openlambda", "images", "import", "-") // imported as " docker.io/library/imageName:latest"
+
 	pipe, err := saveCmd.StdoutPipe()
 	if err != nil {
-		return fmt.Errorf("failed to create pipe: %v", err)
+		return fmt.Errorf("failed to create pipe: %w", err)
 	}
 	importCmd.Stdin = pipe
-	
+
 	// Capture import command output for error reporting
 	var importOutput bytes.Buffer
 	importCmd.Stderr = &importOutput
-	
+
 	if err := importCmd.Start(); err != nil {
-		return fmt.Errorf("failed to start ctr import: %v", err)
+		return fmt.Errorf("failed to start ctr import: %w", err)
 	}
-	
+
 	if err := saveCmd.Start(); err != nil {
-		return fmt.Errorf("failed to start docker save: %v", err)
+		return fmt.Errorf("failed to start docker save: %w", err)
 	}
-	
+
 	saveErr := saveCmd.Wait()
 	importErr := importCmd.Wait()
-	
+
 	if saveErr != nil {
-		return fmt.Errorf("docker save failed: %v", saveErr)
+		return fmt.Errorf("docker save failed: %w", saveErr)
 	}
-	
+
 	if importErr != nil {
-		return fmt.Errorf("ctr import failed: %v\nOutput: %s", importErr, importOutput.String())
+		return fmt.Errorf("ctr import failed: %w\nOutput: %s", importErr, importOutput.String())
 	}
-	
+
 	exists, err = ImageExists(ctx, client, imageName)
 	if err != nil {
-		return fmt.Errorf("error verifying imported image: %v", err)
+		return fmt.Errorf("error verifying imported image: %w", err)
 	}
-	
+
 	if !exists {
 		return fmt.Errorf("image import appeared successful but image %s still not found in containerd", imageName)
 	}
@@ -262,7 +259,7 @@ func Dump(ctx context.Context, client *containerd.Client, namespace string) {
 			slog.Error("Could not get container info", "error", err)
 			continue
 		}
-		
+
 		var taskStatus string = "no task"
 		task, err := container.Task(ctx, nil)
 		if err == nil {
@@ -278,4 +275,35 @@ func Dump(ctx context.Context, client *containerd.Client, namespace string) {
 			"task_status", taskStatus)
 	}
 	slog.Info("=====================================")
+}
+
+func RemoveOrphanedResources(ctx context.Context, client *containerd.Client, clusterLabel string) {
+	// check for any remaining containers with our cluster label
+	containers, err := client.Containers(ctx,
+		fmt.Sprintf("labels.%q==%q", CONTAINERD_LABEL_CLUSTER, clusterLabel))
+	if err != nil {
+		slog.Error("Failed to list containers for orphan cleanup", "error", err)
+	} else if len(containers) > 0 {
+		slog.Warn("Found orphaned containers, trying to clean up", "count", len(containers))
+		for _, c := range containers {
+			slog.Info("Removing orphaned container", "container_id", c.ID())
+			if err := SafeRemove(ctx, client, c); err != nil {
+				slog.Error("Failed to remove orphaned container", "container_id", c.ID(), "error", err)
+			}
+		}
+	}
+
+	snapshotService := client.SnapshotService("")
+	err = snapshotService.Walk(ctx, func(ctx context.Context, info snapshots.Info) error {
+		if strings.HasPrefix(info.Name, "ctrd-") {
+			slog.Info("Removing orphaned snapshot", "snapshot_name", info.Name)
+			if err := snapshotService.Remove(ctx, info.Name); err != nil {
+				slog.Error("Failed to remove orphaned snapshot", "snapshot_name", info.Name, "error", err)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		slog.Error("Failed to walk snapshots for cleanup", "error", err)
+	}
 }

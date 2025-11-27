@@ -330,7 +330,7 @@ func getDefaultConfigForPatching(olPath string) (*Config, error) {
 			SocketAddress: "/run/containerd/containerd.sock",
 			Namespace:     "openlambda",
 			Runtime:       "io.containerd.runc.v2",
-			Base_image:    "ol-min",
+			Base_image:    "docker.io/library/ol-min:latest",
 		},
 		Limits:          userLimits,
 		InstallerLimits: installerLimits,
@@ -437,7 +437,9 @@ func checkConf(cfg *Config) error {
 			return fmt.Errorf("features.import_cache must be disabled for docker Sandbox")
 		}
 	} else if cfg.Sandbox == "containerd" {
-		// no additional checks for now
+		if cfg.Features.Import_cache != "" {
+			return fmt.Errorf("features.import_cache must be disabled for containerd Sandbox")
+		}
 	} else if cfg.Sandbox == "mock" {
 		// mock sandbox: no additional requirements
 	} else {

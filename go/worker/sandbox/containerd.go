@@ -3,34 +3,30 @@ package sandbox
 import (
 	"context"
 	"fmt"
-	"net/http"
-	"log/slog"
 	"io/ioutil"
+	"log/slog"
+	"net/http"
 	"path/filepath"
 
 	"github.com/containerd/containerd"
 
-	"github.com/open-lambda/open-lambda/go/common"
 	"github.com/open-lambda/open-lambda/go/worker/sandbox/containerdutil"
 )
 
-
 type ContainerdContainer struct {
 	// core containerd resources
-	container 	containerd.Container  // containerd container handle
-	task      	containerd.Task       // Running process inside the container
-	client		*containerd.Client
-	ctx			context.Context
-	scratchDir	string
+	container  containerd.Container // containerd container handle
+	task       containerd.Task      // Running process inside the container
+	ctx        context.Context
+	scratchDir string
 
-	execProcess	containerd.Process
+	execProcess containerd.Process
 
 	// state tracking
-	isPaused	bool        // cached pause state to avoid API calls
+	isPaused bool // cached pause state to avoid API calls
 	// Lambda execution resources
-	meta		*SandboxMeta
-	rtType		common.RuntimeType
-	httpClient	*http.Client
+	meta       *SandboxMeta
+	httpClient *http.Client
 }
 
 func (c *ContainerdContainer) ID() string {
@@ -40,7 +36,6 @@ func (c *ContainerdContainer) ID() string {
 func (c *ContainerdContainer) Destroy(reason string) {
 	slog.Info("Destroying container", "container_id", c.container.ID(), "reason", reason)
 
-	// Use the shared cleanup function from containerdutil for consistent error handling
 	cleanupSuccessful := containerdutil.CleanupContainerdResources(c.ctx, c.container.ID(), c.container, c.task, c.execProcess)
 	if !cleanupSuccessful {
 		slog.Error("Errors occurred during cleanup of container", "container_id", c.container.ID())
@@ -48,60 +43,48 @@ func (c *ContainerdContainer) Destroy(reason string) {
 }
 
 func (c *ContainerdContainer) DestroyIfPaused(reason string) {
-		c.Destroy(reason) // safeSandbox.DestroyIfPaused() checks if paused in wrapper
+	c.Destroy(reason) // safeSandbox.DestroyIfPaused() checks if paused in wrapper
 }
 
 func (c *ContainerdContainer) Pause() error {
 
-        // Skip if already paused (cached state)
-        if c.isPaused {
-                return nil
-        }
-
-        // Attempt pause directly - containerd handles already-paused containers gracefully (not checking status first bc it takes significant time)
-        if err := c.task.Pause(c.ctx); err != nil {
-                // Only check status if pause fails (rare case)
-                if status, statusErr := c.task.Status(c.ctx); statusErr == nil {
-                        if status.Status == containerd.Paused {
-                                // Container was already paused, not an error
-                                c.isPaused = true
-                                c.httpClient.CloseIdleConnections()
-                                return nil
-                        }
-                }
-                return fmt.Errorf("failed to pause container %s: %v", c.container.ID(), err)
-        }
-
-        c.isPaused = true
-
-        // idle connections use a LOT of memory in the OL process
-        c.httpClient.CloseIdleConnections()
-
-        return nil
+	if c.isPaused {
+		return nil
+	}
+	// Attempt pausing directly (not checking status first bc it takes significant time)
+	if err := c.task.Pause(c.ctx); err != nil {
+		// Only check status if pause fails (rare case)
+		status, statusErr := c.task.Status(c.ctx)
+		if statusErr != nil || status.Status != containerd.Paused {
+			return fmt.Errorf("failed to pause container %s: %v", c.container.ID(), err)
+		}
+	}
+	c.isPaused = true
+	c.httpClient.CloseIdleConnections()
+	return nil
 }
 
 func (c *ContainerdContainer) Unpause() error {
 
-        // Skip if already running (cached state)
-        if !c.isPaused {
-                return nil
-        }
+	if !c.isPaused {
+		return nil
+	}
 
-        // Attempt resume directly - containerd handles already-running containers gracefully
-        if err := c.task.Resume(c.ctx); err != nil {
-                // Only check status if resume fails (rare case)
-                if status, statusErr := c.task.Status(c.ctx); statusErr == nil {
-                        if status.Status == containerd.Running {
-                                // Container was already running, not an error
-                                c.isPaused = false
-                                return nil
-                        }
-                }
-                return fmt.Errorf("failed to resume container %s: %v", c.container.ID(), err)
-        }
+	// Attempt resume directly - containerd handles already-running containers gracefully
+	if err := c.task.Resume(c.ctx); err != nil {
+		// Only check status if resume fails (rare case)
+		if status, statusErr := c.task.Status(c.ctx); statusErr == nil {
+			if status.Status == containerd.Running {
+				// Container was already running, not an error
+				c.isPaused = false
+				return nil
+			}
+		}
+		return fmt.Errorf("failed to resume container %s: %v", c.container.ID(), err)
+	}
 
-        c.isPaused = false
-        return nil
+	c.isPaused = false
+	return nil
 }
 
 func (c *ContainerdContainer) Client() *http.Client {
@@ -112,17 +95,17 @@ func (c *ContainerdContainer) Meta() *SandboxMeta {
 	return c.meta
 }
 
-func (c *ContainerdContainer) GetRuntimeLog() (string) {
+func (c *ContainerdContainer) GetRuntimeLog() string {
 	data, err := ioutil.ReadFile(filepath.Join(c.scratchDir, "stdout"))
 
-      if err == nil {
-          return string(data)
-      }
+	if err == nil {
+		return string(data)
+	}
 
-      return ""
+	return ""
 }
 
-func (c *ContainerdContainer) GetProxyLog() (string) {
+func (c *ContainerdContainer) GetProxyLog() string {
 	return "containerd does not use proxy"
 }
 
@@ -135,13 +118,3 @@ func (c *ContainerdContainer) fork(dst Sandbox) error {
 }
 
 func (c *ContainerdContainer) childExit(child Sandbox) {}
-
-func (c *ContainerdContainer) GetRuntimeType() common.RuntimeType {
-	return c.rtType
-}
-
-
-// this function is not implemented for containerd, because we are reusing WaitForServerPipeReady() from docker.go
-// func waitForServerPipeReadyContainerd(hostDir string) error {
-// 	return nil
-// }
