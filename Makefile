@@ -85,11 +85,13 @@ install: build
 	cp ol ${INSTALL_PREFIX}/bin/
 	cp ol-wasm ${INSTALL_PREFIX}/bin/
 	cp ol-container-proxy ${INSTALL_PREFIX}/bin/
+	cp autocomplete/bash_autocomplete /etc/bash_completion.d/ol 
 
 sudo-install: build
 	sudo cp ol ${INSTALL_PREFIX}/bin/
 	sudo cp ol-wasm ${INSTALL_PREFIX}/bin/
 	sudo cp ol-container-proxy ${INSTALL_PREFIX}/bin/
+	sudo cp autocomplete/bash_autocomplete /etc/bash_completion.d/ol 
 
 test-all:
 	sudo python3 -u ./scripts/test.py --worker_type=sock
