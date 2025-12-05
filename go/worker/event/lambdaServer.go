@@ -49,9 +49,6 @@ func (s *LambdaServer) RunLambda(w http.ResponseWriter, r *http.Request) {
 	// components represent run[0]/<name_of_sandbox>[1]/<extra_things>...
 	// ergo we want [1] for name of sandbox
 	urlParts := getURLComponents(r)
-	// check accept handler from client to determine correct content
-	acceptHeader = r.Header.Get("Accept")
-	w.Header().Set("Content-Type", acceptHeader)
 
 	if len(urlParts) < 2 {
 		// client error, so we return bad request status
