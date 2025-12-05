@@ -49,19 +49,24 @@ func (s *LambdaServer) RunLambda(w http.ResponseWriter, r *http.Request) {
 	// components represent run[0]/<name_of_sandbox>[1]/<extra_things>...
 	// ergo we want [1] for name of sandbox
 	urlParts := getURLComponents(r)
+	// check accept handler from client to determine correct content
+	acceptHeader = r.Header.Get("Accept")
+	w.Header().Set("Content-Type", acceptHeader)
+
 	if len(urlParts) < 2 {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("expected invocation format: /run/<lambda-name>"))
-	} else {
-		// components represent run[0]/<name_of_sandbox>[1]/<extra_things>...
-		// ergo we want [1] for name of sandbox
-		urlParts := getURLComponents(r)
-		
-		// Send entire path to app
-		lambdaName := urlParts[1]
-        s.lambdaMgr.Get(lambdaName).Invoke(w, r)
+		// client error, so we return bad request status
+		http.Error(w, "expected invocation format: /run/<lambda-name>", http.StatusBadRequest)
+		return
 	}
+	// Send entire path to app
+	lambdaName := urlParts[1]
+	f, err := s.lambdaMgr.Get(lambdaName)
+	if err != nil {
+		http.Error(w, "lambda server error: " + err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	f.Invoke(w, r)
 }
 
 // Debug returns the debug information of the lambda manager.
