@@ -102,3 +102,9 @@ go/ol-linux
 go/input.bin
 go/payload.json
 go/main.go.bak
+
+# build artifacts
+ol-linux
+input.bin
+payload.json
+main.go.bak
