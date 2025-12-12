@@ -359,6 +359,7 @@ OPTIONS:
 			UsageText:   "ol bench <cmd>",
 			Subcommands: bench.BenchCommands(),
 		},
+		invokeCommand(),
 		&cli.Command{
 			Name:      "pprof",
 			Usage:     "Profile OL worker",
