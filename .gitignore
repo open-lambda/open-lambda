@@ -96,3 +96,9 @@ azure.json
 boss.json
 cluster.log
 tasks.log
+
+# build artifacts (local only)
+go/ol-linux
+go/input.bin
+go/payload.json
+go/main.go.bak
