@@ -113,6 +113,7 @@ func upCmd(ctx *cli.Context) error {
 	if detach {
 		// stdout+stderr both go to log
 		logPath := filepath.Join(olPath, "worker.out")
+		// creates a worker.out file
 		f, err := os.Create(logPath)
 		if err != nil {
 			return err
@@ -129,12 +130,10 @@ func upCmd(ctx *cli.Context) error {
 		}
 		if ctx.Bool("rootless") {
 			attr.Sys = &syscall.SysProcAttr{
-				// Create user ns + mount ns + uts together so it works unprivileged
 				Unshareflags: syscall.CLONE_NEWUSER | syscall.CLONE_NEWNS | syscall.CLONE_NEWUTS,
 				UidMappings: []syscall.SysProcIDMap{
 					{ContainerID: 0, HostID: uid, Size: 1},
 				},
-				// deny setgroups before writing gid_map (Go handles this when false)
 				GidMappingsEnableSetgroups: false,
 				GidMappings: []syscall.SysProcIDMap{
 					{ContainerID: 0, HostID: gid, Size: 1},
@@ -152,8 +151,7 @@ func upCmd(ctx *cli.Context) error {
 				cmd = append(cmd, arg)
 			}
 		}
-
-		// absolute path to self
+		// looks for ./ol path
 		binPath, err := exec.LookPath(os.Args[0])
 		if err != nil {
 			return err
@@ -169,7 +167,7 @@ func upCmd(ctx *cli.Context) error {
 			return err
 		}
 
-		// wait/health-check loop
+		// died is error message
 		died := make(chan error)
 		go func() {
 			_, err := proc.Wait()
@@ -193,7 +191,10 @@ func upCmd(ctx *cli.Context) error {
 			}
 
 			// is the worker still alive?
-			_ = proc.Signal(syscall.Signal(0))
+			err := proc.Signal(syscall.Signal(0))
+			if err != nil {
+
+			}
 
 			// is it reachable?
 			response, err := udsGet("/pid")
@@ -206,9 +207,6 @@ func upCmd(ctx *cli.Context) error {
 
 			// are we talking with the expected PID?
 			body, err := io.ReadAll(response.Body)
-			if err != nil {
-				return fmt.Errorf("failed reading /pid response body: %s", err)
-			}
 			pid, err := strconv.Atoi(strings.TrimSpace(string(body)))
 			if err != nil {
 				return fmt.Errorf("/pid did not return an int:  %s", err)
@@ -251,7 +249,8 @@ func statusCmd(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := common.LoadGlobalConfig(filepath.Join(olPath, "config.json")); err != nil {
+	err = common.LoadGlobalConfig(filepath.Join(olPath, "config.json"))
+	if err != nil {
 		return err
 	}
 
