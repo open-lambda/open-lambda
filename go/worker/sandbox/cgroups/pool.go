@@ -43,7 +43,7 @@ func NewCgroupPool(name string) (*CgroupPool, error) {
 	// Make controllers available to child groups
 	rpath := fmt.Sprintf("%s/cgroup.subtree_control", groupPath)
 	if err := os.WriteFile(rpath, []byte("+pids +io +memory +cpu"), os.ModeAppend); err != nil {
-		panic(fmt.Errorf("Error writing to %s: %v", rpath, err))
+		return nil, fmt.Errorf("Error writing to %s: %w", rpath, err)
 	}
 	go pool.cgTask()
 	return pool, nil
