@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -55,7 +54,7 @@ func initOLBaseDir(baseDir string, dockerBaseImage string) error {
 	// need this because Docker containers don't have a dns server in /etc/resolv.conf
 	// TODO: make it a config option
 	dnsPath := filepath.Join(baseDir, "etc", "resolv.conf")
-	if err := ioutil.WriteFile(dnsPath, []byte("nameserver 8.8.8.8\n"), 0644); err != nil {
+	if err := os.WriteFile(dnsPath, []byte("nameserver 8.8.8.8\n"), 0644); err != nil {
 		return err
 	}
 
@@ -106,7 +105,7 @@ func initOLDir(olPath string, dockerBaseImage string, newBase bool) (err error) 
 			}
 
 			// remove directory contents
-			items, err := ioutil.ReadDir(olPath)
+			items, err := os.ReadDir(olPath)
 			if err != nil {
 				return err
 			}
@@ -135,12 +134,12 @@ func initOLDir(olPath string, dockerBaseImage string, newBase bool) (err error) 
 
 	fmt.Printf("Init OL directory at %s\n", olPath)
 
-	if err := ioutil.WriteFile(initTimePath, []byte(time.Now().Local().String()+"\n"), 0644); err != nil {
+	if err := os.WriteFile(initTimePath, []byte(time.Now().Local().String()+"\n"), 0644); err != nil {
 		return err
 	}
 
 	zygoteTreePath := filepath.Join(olPath, "default-zygotes-40.json")
-	if err := ioutil.WriteFile(zygoteTreePath, []byte(embedded.DefaultZygotes40_json), 0644); err != nil {
+	if err := os.WriteFile(zygoteTreePath, []byte(embedded.DefaultZygotes40_json), 0644); err != nil {
 		return err
 	}
 
@@ -438,7 +437,7 @@ func bringToStoppedClean(olPath string) error {
 //
 // apply changes in optsStr to config from confPath, saving result to overridePath
 func overrideOpts(confPath, overridePath, optsStr string) error {
-	b, err := ioutil.ReadFile(confPath)
+	b, err := os.ReadFile(confPath)
 	if err != nil {
 		return err
 	}
@@ -501,5 +500,5 @@ func overrideOpts(confPath, overridePath, optsStr string) error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(overridePath, s, 0644)
+	return os.WriteFile(overridePath, s, 0644)
 }
