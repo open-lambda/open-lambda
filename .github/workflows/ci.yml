@@ -58,6 +58,10 @@ jobs:
         make ol imgs/ol-wasm wasm-worker wasm-functions native-functions container-proxy
         make install-python-bindings
         make sudo-install
+    - name: Test Go Common
+      working-directory: go/common
+      run: go test -v
+      timeout-minutes: 5
     - name: Test Python (Docker)
       # not all features are supported by docker yet, so we only run some of the tests
       run: sudo env "PATH=$PATH" ./scripts/test.py --worker_type=docker --test_blocklist=max_mem_alloc

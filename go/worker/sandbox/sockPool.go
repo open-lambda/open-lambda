@@ -192,7 +192,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 
 	cSock.client = &http.Client{
 		Transport: &http.Transport{Dial: dial},
-		Timeout:   time.Second * time.Duration(common.Conf.Limits.Max_runtime_default),
+		Timeout:   time.Second * time.Duration(common.Conf.Limits.Runtime_sec),
 	}
 
 	// event handling

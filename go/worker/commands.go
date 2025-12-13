@@ -1,8 +1,11 @@
 package worker
 
 import (
+	"context"
 	"fmt"
 	"io"
+	"io/ioutil"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -17,6 +20,23 @@ import (
 
 	"github.com/urfave/cli/v2"
 )
+
+// performs an HTTP GET request to the worker over its UDS
+func udsGet(requestPath string) (*http.Response, error) {
+	sockPath := filepath.Join(common.Conf.Worker_dir, "ol.sock")
+
+	// create a transport that dials the socket
+	tr := &http.Transport{}
+	tr.DialContext = func(ctx context.Context, _, _ string) (net.Conn, error) {
+		var d net.Dialer
+		return d.DialContext(ctx, "unix", sockPath)
+	}
+	client := &http.Client{Transport: tr, Timeout: 2 * time.Second}
+
+	// perform HTTP GET request with custom client
+	url := "http://unix" + requestPath
+	return client.Get(url)
+}
 
 // initCmd corresponds to the "init" command of the admin tool.
 func initCmd(ctx *cli.Context) error {
@@ -39,9 +59,13 @@ func initCmd(ctx *cli.Context) error {
 }
 
 // upCmd corresponds to the "up" command of the admin tool.
+// If it returns a non-nil error at any point, `urfave/cli` will
+// automatically catch it, print the error message to stderr.
+// Then we exit the program and return to main, where we call os.Exit(1)
 func upCmd(ctx *cli.Context) error {
 	// get path of worker files
 	olPath, err := common.GetOlPath(ctx)
+
 	if err != nil {
 		return err
 	}
@@ -165,7 +189,7 @@ func upCmd(ctx *cli.Context) error {
 				if err != nil {
 					return err
 				}
-				return fmt.Errorf("worker process %d does not a appear to be running, check worker.out", proc.Pid)
+				return fmt.Errorf("worker process %d does not appear to be running; check worker.out", proc.Pid)
 			default:
 			}
 
@@ -173,8 +197,7 @@ func upCmd(ctx *cli.Context) error {
 			_ = proc.Signal(syscall.Signal(0))
 
 			// is it reachable?
-			url := fmt.Sprintf("http://localhost:%s/pid", common.Conf.Worker_port)
-			response, err := http.Get(url)
+			response, err := udsGet("/pid")
 			if err != nil {
 				pingErr = err
 				time.Sleep(100 * time.Millisecond)
@@ -189,23 +212,22 @@ func upCmd(ctx *cli.Context) error {
 			}
 			pid, err := strconv.Atoi(strings.TrimSpace(string(body)))
 			if err != nil {
-				return fmt.Errorf("/pid did not return an int :: %s", err)
+				return fmt.Errorf("/pid did not return an int:  %s", err)
 			}
 
 			if pid == proc.Pid {
 				fmt.Printf("Ready!\n")
 				return nil // server is started and ready for requests
 			}
-			return fmt.Errorf("expected PID %v but found %v (port conflict?)", proc.Pid, pid)
+
+			return fmt.Errorf("pid mismatch: expected %v but found %v (another worker running?)", proc.Pid, pid)
 		}
 
-		return fmt.Errorf("worker still not reachable after 30 seconds :: %s", pingErr)
+		return fmt.Errorf("worker still not reachable after 30 seconds: %w", pingErr)
 	}
 
-	if err := event.Main(); err != nil {
-		return err
-	}
-	return fmt.Errorf("this code should not be reachable")
+	// server had clean shutdown
+	return event.Main()
 }
 
 func preflightRootless() {
