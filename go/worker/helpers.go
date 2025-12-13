@@ -134,12 +134,12 @@ func initOLDir(olPath string, dockerBaseImage string, newBase bool) (err error) 
 
 	fmt.Printf("Init OL directory at %s\n", olPath)
 
-	if err := os.WriteFile(initTimePath, []byte(time.Now().Local().String()+"\n"), 0644); err != nil {
+	if err := os.WriteFile(initTimePath, []byte(time.Now().Local().String()+"\n"), 0400); err != nil {
 		return err
 	}
 
 	zygoteTreePath := filepath.Join(olPath, "default-zygotes-40.json")
-	if err := os.WriteFile(zygoteTreePath, []byte(embedded.DefaultZygotes40_json), 0644); err != nil {
+	if err := os.WriteFile(zygoteTreePath, []byte(embedded.DefaultZygotes40_json), 0400); err != nil {
 		return err
 	}
 
@@ -307,7 +307,7 @@ func stoppedDirtyToStoppedClean(olPath string) error {
 			return fmt.Errorf("error reading cgroup root: %s", err.Error())
 		}
 		kill := filepath.Join(cgRoot, "cgroup.kill")
-		if err := os.WriteFile(kill, []byte(fmt.Sprintf("%d", 1)), 0644); err != nil {
+		if err := os.WriteFile(kill, []byte(fmt.Sprintf("%d", 1)), os.ModeAppend); err != nil {
 			// Print an error if killing processes in the cgroup fails.
 			fmt.Printf("Could not kill processes in cgroup: %s\n", err.Error())
 			cgroupErrorCount += 1

@@ -87,7 +87,8 @@ func upCmd(ctx *cli.Context) error {
 	overrides := ctx.String("options")
 	if overrides != "" {
 		overridesPath := confPath + ".overrides"
-		if err := overrideOpts(confPath, overridesPath, overrides); err != nil {
+		err = overrideOpts(confPath, overridesPath, overrides)
+		if err != nil {
 			return err
 		}
 		confPath = overridesPath
@@ -235,7 +236,7 @@ func preflightRootless() {
 			fmt.Println("         To enable: sudo sysctl kernel.unprivileged_userns_clone=1")
 		}
 	}
-	// Note systemd presence (used for rootless cgroup delegation)
+	// Check if systemd is available
 	if _, err := os.Stat("/run/systemd/system"); err == nil {
 		fmt.Println("INFO: systemd detected (cgroup v2 delegation likely available).")
 	} else {
