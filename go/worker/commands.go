@@ -107,8 +107,12 @@ func upCmd(ctx *cli.Context) error {
 
 	// should we run as a background process?
 	detach := ctx.Bool("detach")
-	if !detach && ctx.Bool("rootless") {
-		fmt.Println("NOTE: --rootless currently applied only in --detach mode.")
+	rootless := ctx.Bool("rootless")
+
+	// Rootless mode only works in detached mode
+	if !detach && rootless {
+		fmt.Println("NOTE: --rootless not supported in non-detached mode, disabling.")
+		rootless = false
 	}
 
 	if detach {
@@ -129,7 +133,7 @@ func upCmd(ctx *cli.Context) error {
 		attr := os.ProcAttr{
 			Files: []*os.File{nil, f, f},
 		}
-		if ctx.Bool("rootless") {
+		if rootless {
 			attr.Sys = &syscall.SysProcAttr{
 				Unshareflags: syscall.CLONE_NEWUSER | syscall.CLONE_NEWNS | syscall.CLONE_NEWUTS,
 				UidMappings: []syscall.SysProcIDMap{
@@ -176,7 +180,7 @@ func upCmd(ctx *cli.Context) error {
 		}()
 
 		fmt.Printf("\tPID: %d\n\tPort: %s\n\tLog File: %s\n", proc.Pid, common.Conf.Worker_port, logPath)
-		fmt.Printf("\tRootless: %v (uid=%d gid=%d)\n", ctx.Bool("rootless"), uid, gid)
+		fmt.Printf("\tRootless: %v (uid=%d gid=%d)\n", rootless, uid, gid)
 
 		var pingErr error
 

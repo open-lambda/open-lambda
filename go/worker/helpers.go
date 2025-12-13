@@ -39,15 +39,15 @@ func initOLBaseDir(baseDir string, dockerBaseImage string) error {
 
 	// PART 2: various files/dirs on top of the extracted image
 	fmt.Printf("\tCreate handler/host/packages/resolve.conf over base image.\n")
-	if err := os.Mkdir(path.Join(baseDir, "handler"), 0700); err != nil {
+	if err := os.Mkdir(path.Join(baseDir, "handler"), 0755); err != nil {
 		return err
 	}
 
-	if err := os.Mkdir(path.Join(baseDir, "host"), 0700); err != nil {
+	if err := os.Mkdir(path.Join(baseDir, "host"), 0755); err != nil {
 		return err
 	}
 
-	if err := os.Mkdir(path.Join(baseDir, "packages"), 0700); err != nil {
+	if err := os.Mkdir(path.Join(baseDir, "packages"), 0755); err != nil {
 		return err
 	}
 
@@ -127,19 +127,19 @@ func initOLDir(olPath string, dockerBaseImage string, newBase bool) (err error) 
 			return fmt.Errorf("Directory %s already exists but does not contain a previous OL deployment", olPath)
 		}
 	} else {
-		if err := os.Mkdir(olPath, 0700); err != nil {
+		if err := os.Mkdir(olPath, 0755); err != nil {
 			return err
 		}
 	}
 
 	fmt.Printf("Init OL directory at %s\n", olPath)
 
-	if err := os.WriteFile(initTimePath, []byte(time.Now().Local().String()+"\n"), 0400); err != nil {
+	if err := os.WriteFile(initTimePath, []byte(time.Now().Local().String()+"\n"), 0644); err != nil {
 		return err
 	}
 
 	zygoteTreePath := filepath.Join(olPath, "default-zygotes-40.json")
-	if err := os.WriteFile(zygoteTreePath, []byte(embedded.DefaultZygotes40_json), 0400); err != nil {
+	if err := os.WriteFile(zygoteTreePath, []byte(embedded.DefaultZygotes40_json), 0644); err != nil {
 		return err
 	}
 
@@ -148,7 +148,7 @@ func initOLDir(olPath string, dockerBaseImage string, newBase bool) (err error) 
 		return err
 	}
 
-	if err := os.Mkdir(common.Conf.Worker_dir, 0700); err != nil {
+	if err := os.Mkdir(common.Conf.Worker_dir, 0755); err != nil {
 		return err
 	}
 
@@ -159,6 +159,22 @@ func initOLDir(olPath string, dockerBaseImage string, newBase bool) (err error) 
 		}
 	} else {
 		fmt.Printf("\tReusing prior base at %s (pass -b to reconstruct this)\n", baseDir)
+	}
+
+	// For rootless mode: make lambda base readable so worker can bind mount it
+	if err := exec.Command("chmod", "-R", "755", baseDir).Run(); err != nil {
+		return fmt.Errorf("failed to chmod base dir: %v", err)
+	}
+
+	// For rootless mode: if run with sudo, give olPath and worker dir to actual user
+	if sudoUser := os.Getenv("SUDO_USER"); sudoUser != "" {
+		// Change ownership of entire olPath (except lambda which stays root-owned)
+		if err := exec.Command("chown", sudoUser+":"+sudoUser, olPath).Run(); err != nil {
+			return fmt.Errorf("failed to chown olPath: %v", err)
+		}
+		if err := exec.Command("chown", "-R", sudoUser+":"+sudoUser, common.Conf.Worker_dir).Run(); err != nil {
+			return fmt.Errorf("failed to chown worker dir: %v", err)
+		}
 	}
 
 	return nil
@@ -307,7 +323,7 @@ func stoppedDirtyToStoppedClean(olPath string) error {
 			return fmt.Errorf("error reading cgroup root: %s", err.Error())
 		}
 		kill := filepath.Join(cgRoot, "cgroup.kill")
-		if err := os.WriteFile(kill, []byte(fmt.Sprintf("%d", 1)), os.ModeAppend); err != nil {
+		if err := os.WriteFile(kill, []byte(fmt.Sprintf("%d", 1)), 0644); err != nil {
 			// Print an error if killing processes in the cgroup fails.
 			fmt.Printf("Could not kill processes in cgroup: %s\n", err.Error())
 			cgroupErrorCount += 1
