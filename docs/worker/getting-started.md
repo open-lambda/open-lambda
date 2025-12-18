@@ -13,15 +13,12 @@ OpenLambda does not work with cgroups v1.
 Make sure you have all basic dependencies installed:
 ```
 apt update
-apt install -y docker.io llvm-14-dev libclang-common-14-dev build-essential python3 zlib1g-dev
+apt install -y docker.io llvm-14-dev libclang-common-14-dev build-essential python3 zlib1g-dev golang-go
 ```
 
-For a recent version of go, run the following:
-```
-wget -q -O /tmp/go.tar.gz https://go.dev/dl/go1.21.5.linux-amd64.tar.gz
-tar -C /usr/local -xzf /tmp/go.tar.gz
-ln -s /usr/local/go/bin/go /usr/bin/go
-```
+If the `go version` is 1.21+ (as it should be on the Ubuntu 24.04), a
+build will automatically pull the Go version specified in
+`./go/go.mod` for the sake of building OpenLambda.
 
 ### Optional: Full Deployment (with WebAssembly Support)
 
@@ -52,17 +49,22 @@ sudo gpasswd -a $USER docker
 
 ## Build
 
-For a full deployment with Python+WASM support, run:
+### Python Only
+
+Just run this:
+
+```
+make ol imgs/ol-min
+```
+
+### Python+WASM (for Rust support)
+
 ```
 make all
 make sudo-install
 ```
 
 The `make sudo-install` step installs the binaries (`ol`, `ol-wasm`, and `ol-container-proxy`) to `/usr/local/bin/`, which is required for running the full test suite.
-
-For a "min" deployment (just Python), run `make ol imgs/ol-min`.
-
-## Test
 
 If you have a complete setup (Python+WASM), now is a good time to test
 your environment: `make test-all`.
