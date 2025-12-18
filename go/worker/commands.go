@@ -97,25 +97,42 @@ func upCmd(ctx *cli.Context) error {
 		return err
 	}
 
-	// Rootless preflight info/warnings
-	preflightRootless()
-
 	// PREP STEP 3: ensure Open Lambda is in the StoppedClean state
 	if err := bringToStoppedClean(olPath); err != nil {
 		return err
 	}
 
+	// are we root?
+	isRoot := os.Getuid() == 0
 	// should we run as a background process?
 	detach := ctx.Bool("detach")
+	// should we run in rootless mode?
 	rootless := ctx.Bool("rootless")
 
-	// Rootless mode only works in detached mode
-	if !detach && rootless {
-		fmt.Println("NOTE: --rootless not supported in non-detached mode, disabling.")
-		rootless = false
+	// both parent and child processes require either root privileges or rootless mode enabled
+	if !isRoot && !rootless {
+		return fmt.Errorf("Insufficient Privileges - Enable detached rootless mode with '--rootless=true -d' or run as 'sudo'.")
 	}
 
+	// parent process can only be rootless in detached mode
+	// continue if running as root or child process after detach
+	if !isRoot && rootless && !detach {
+		return fmt.Errorf("Rootless mode only supported in detached mode. Run with '-d'.")
+	}
+
+	// parent process
 	if detach {
+		// check root status in parent (child runs as fakeroot)
+		isRoot := os.Getuid() == 0
+		if isRoot && rootless {
+			return fmt.Errorf("Rootless mode not supported when running as root")
+		} else if !isRoot && rootless {
+			// check if system supports rootless mode
+			if err := checkRootlessSupport(); err != nil {
+				return err
+			}
+		}
+
 		// stdout+stderr both go to log
 		logPath := filepath.Join(olPath, "worker.out")
 		// creates a worker.out file
@@ -128,11 +145,15 @@ func upCmd(ctx *cli.Context) error {
 		gid := os.Getgid()
 
 		// holds attributes that will be used when os.StartProcess.
-		// legacy used CLONE_NEWNS so mounts don't spam systemd.
-		// now, if --rootless, also create a user+UTS namespace and map uid/gid -> 0 (fake root).
+		// use CLONE_NEWNS so mounts don't spam systemd.
 		attr := os.ProcAttr{
 			Files: []*os.File{nil, f, f},
+			Sys: &syscall.SysProcAttr{
+				Unshareflags: syscall.CLONE_NEWNS,
+			},
 		}
+
+		// if rootless, also create a user+UTS namespace and map uid/gid -> 0 (fake root).
 		if rootless {
 			attr.Sys = &syscall.SysProcAttr{
 				Unshareflags: syscall.CLONE_NEWUSER | syscall.CLONE_NEWNS | syscall.CLONE_NEWUTS,
@@ -144,9 +165,6 @@ func upCmd(ctx *cli.Context) error {
 					{ContainerID: 0, HostID: gid, Size: 1},
 				},
 			}
-		} else {
-			// Legacy: do NOT unshare mount ns alone (Ubuntu EPERM). No unshare in legacy.
-			attr.Sys = &syscall.SysProcAttr{}
 		}
 
 		// build args for child (strip -d/--detach)
@@ -232,20 +250,21 @@ func upCmd(ctx *cli.Context) error {
 	return event.Main()
 }
 
-func preflightRootless() {
-	// Warn if Ubuntu blocks unprivileged user namespaces
+func checkRootlessSupport() error {
+	// Check if unprivileged user namespaces are enabled
 	if b, err := os.ReadFile("/proc/sys/kernel/unprivileged_userns_clone"); err == nil {
 		if strings.TrimSpace(string(b)) != "1" {
-			fmt.Println("WARNING: rootless user namespaces appear disabled (kernel.unprivileged_userns_clone=0).")
-			fmt.Println("         To enable: sudo sysctl kernel.unprivileged_userns_clone=1")
+			return fmt.Errorf("User namespaces disabled (kernel.unprivileged_userns_clone=0).")
 		}
-	}
-	// Check if systemd is available
-	if _, err := os.Stat("/run/systemd/system"); err == nil {
-		fmt.Println("INFO: systemd detected (cgroup v2 delegation likely available).")
 	} else {
-		fmt.Println("INFO: systemd not detected; rootless cgroup delegation may be unavailable.")
+		return err
 	}
+
+	// Check if systemd is available
+	if _, err := os.Stat("/run/systemd/system"); err != nil {
+		return fmt.Errorf("systemd not available.")
+	}
+	return nil
 }
 
 // statusCmd corresponds to the "status" command of the admin tool.
@@ -353,7 +372,7 @@ func WorkerCommands() []*cli.Command {
 				&cli.BoolFlag{
 					Name:  "rootless",
 					Usage: "Enable rootless user namespace for worker (recommended)",
-					Value: true,
+					Value: false,
 				},
 			},
 			Action: upCmd,
