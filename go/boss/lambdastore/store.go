@@ -52,12 +52,16 @@ func NewLambdaStore(storeURL string, pool *cloudvm.WorkerPool) (*LambdaStore, er
 		storeURL = "file://" + storeURL
 	}
 
-	// If using local file storage, ensure the directory exists
+	// If using local file storage, ensure the directory exists and configure
+	// fileblob to create temp files in the same directory as the target.
+	// This avoids "invalid cross-device link" errors when /tmp is on a
+	// different filesystem/mount than the registry directory.
 	if strings.HasPrefix(storeURL, "file://") {
 		dir := strings.TrimPrefix(storeURL, "file://")
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return nil, fmt.Errorf("failed to create local lambda store directory %s: %w", dir, err)
 		}
+		storeURL = storeURL + "?no_tmp_dir=true"
 	}
 
 	bucket, err := blob.OpenBucket(ctx, storeURL)
