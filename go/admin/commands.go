@@ -136,6 +136,10 @@ func createTarGz(funcDir string) ([]byte, error) {
 			return nil
 		}
 
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("cannot archive non-regular file %q (mode: %s)", path, info.Mode().String())
+		}
+
 		relPath, err := filepath.Rel(funcDir, path)
 		if err != nil {
 			return fmt.Errorf("unable to compute relative path: %v", err)

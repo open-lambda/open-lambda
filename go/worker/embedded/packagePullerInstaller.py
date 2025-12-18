@@ -69,10 +69,11 @@ def f(event):
     if not alreadyInstalled:
         try:
             subprocess.check_output(
-                ['pip3', 'install', '--no-deps', pkg, '--cache-dir', '/tmp/.cache', '-t', '/host/files'])
+                ['pip3', 'install', '--no-deps', pkg, '--cache-dir', '/tmp/.cache', '-t', '/host/files'],
+                stderr=subprocess.STDOUT)
         except subprocess.CalledProcessError as e:
-            print(f'pip install failed with error code {e.returncode}')
-            print(f'Output: {e.output}')
+            output = e.output.decode('utf-8') if e.output else ''
+            raise Exception(f'pip install failed for {pkg} (exit code {e.returncode}): {output}') from None
 
     name = pkg.split("==")[0]
     d = deps("/host/files")
