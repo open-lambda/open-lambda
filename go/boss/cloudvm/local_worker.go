@@ -118,7 +118,10 @@ func (p *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) error {
 	// TODO: both the boss and this subprocess can write to the same stream concurrently, which may interleave their outputs.
 	// The boss should capture the output from initCmd and then print it using slog.Info which is lock-protected
 	upCmd.Stderr = os.Stderr
-	if err := upCmd.Start(); err != nil {
+	// Use Run() instead of Start() to wait for the worker to be ready.
+	// The "ol worker up -d" command has a built-in health check that waits
+	// up to 30 seconds for the worker to respond before returning.
+	if err := upCmd.Run(); err != nil {
 		slog.Error(fmt.Sprintf("Failed to start worker %s: %v", worker.workerId, err))
 		return err
 	}
