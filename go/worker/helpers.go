@@ -39,15 +39,15 @@ func initOLBaseDir(baseDir string, dockerBaseImage string) error {
 
 	// PART 2: various files/dirs on top of the extracted image
 	fmt.Printf("\tCreate handler/host/packages/resolve.conf over base image.\n")
-	if err := os.Mkdir(path.Join(baseDir, "handler"), 0755); err != nil {
+	if err := os.Mkdir(path.Join(baseDir, "handler"), 0700); err != nil {
 		return err
 	}
 
-	if err := os.Mkdir(path.Join(baseDir, "host"), 0755); err != nil {
+	if err := os.Mkdir(path.Join(baseDir, "host"), 0700); err != nil {
 		return err
 	}
 
-	if err := os.Mkdir(path.Join(baseDir, "packages"), 0755); err != nil {
+	if err := os.Mkdir(path.Join(baseDir, "packages"), 0700); err != nil {
 		return err
 	}
 
@@ -127,7 +127,7 @@ func initOLDir(olPath string, dockerBaseImage string, newBase bool) (err error) 
 			return fmt.Errorf("Directory %s already exists but does not contain a previous OL deployment", olPath)
 		}
 	} else {
-		if err := os.Mkdir(olPath, 0755); err != nil {
+		if err := os.Mkdir(olPath, 0700); err != nil {
 			return err
 		}
 	}
@@ -148,7 +148,7 @@ func initOLDir(olPath string, dockerBaseImage string, newBase bool) (err error) 
 		return err
 	}
 
-	if err := os.Mkdir(common.Conf.Worker_dir, 0755); err != nil {
+	if err := os.Mkdir(common.Conf.Worker_dir, 0700); err != nil {
 		return err
 	}
 
@@ -161,14 +161,8 @@ func initOLDir(olPath string, dockerBaseImage string, newBase bool) (err error) 
 		fmt.Printf("\tReusing prior base at %s (pass -b to reconstruct this)\n", baseDir)
 	}
 
-	// For rootless mode: make lambda base readable so worker can bind mount it
-	if err := exec.Command("chmod", "-R", "755", baseDir).Run(); err != nil {
-		return fmt.Errorf("failed to chmod base dir: %v", err)
-	}
-
-	// For rootless mode: if run with sudo, give olPath and worker dir to actual user
+	// Change ownership of entire olPath (except lambda) to the real user
 	if sudoUser := os.Getenv("SUDO_USER"); sudoUser != "" {
-		// Change ownership of entire olPath (except lambda which stays root-owned)
 		if err := exec.Command("chown", sudoUser+":"+sudoUser, olPath).Run(); err != nil {
 			return fmt.Errorf("failed to chown olPath: %v", err)
 		}
