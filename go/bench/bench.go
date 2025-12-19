@@ -3,12 +3,15 @@ package bench
 
 import (
 	"bytes"
+	"encoding/csv"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -334,6 +337,57 @@ func make_action(name string, tasks int, functions int, func_template string) fu
 		return err
 	}
 }
+func run_reqbench_init(ctx *cli.Context) error {
+
+	// above is TODO
+	// pull requirements.csv
+	csvUrl := "https://raw.githubusercontent.com/open-lambda/ReqBench/refs/heads/main/files/requirements.csv"
+	csvFilename := "requirements.csv"
+	csvFile, err := os.Create(csvFilename)
+	if err != nil {
+		return err
+	}
+	defer csvFile.Close()
+	response, err := http.Get(csvUrl)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	_, err = io.Copy(csvFile, response.Body)
+	if err != nil {
+		return err
+	}
+	// for each line
+	reader := csv.NewReader(csvFile)
+	for i := 0; ; i++ {
+		repo, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		// get requirements.txt
+		// http.Get https://raw.githubusercontent.com/repo[1]/repo[2]/repo[3]
+		// OR repo[8]
+		txtUrl := "https://raw.githubusercontent.com/" + repo[1] + "/" + repo[2] + "/" + repo[3]
+		txtFilename := "requirements" + strconv.Itoa(i) + ".txt"
+		txtFile, err := os.Create(txtFilename)
+		if err != nil {
+			return err
+		}
+
+		// TODO create lambdas
+		// TODO ol admin install
+		create_lambdas(ctx)
+
+		txtFile.Close()
+		os.Remove(txtFilename)
+	}
+
+	return nil
+}
+
+func run_billibench_init(ctx *cli.Context) error {
+
+}
 
 // BenchCommands returns a list of CLI commands for benchmarking.
 func BenchCommands() []*cli.Command {
@@ -352,6 +406,10 @@ func BenchCommands() []*cli.Command {
 			},
 			// TODO: add param to decide how many to create
 		},
+		// TODO add reqbench and billibench
+		// name reqbench
+		//
+		// ol bench reqbench init
 		{
 			Name:      "play",
 			Usage:     "play a trace using a .txt file with one lambda function per line",
