@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log/slog"
+	"os"
 	"path"
 	"path/filepath"
 	"syscall"
@@ -61,11 +62,12 @@ type Config struct {
 	// pass through to sandbox envirenment variable
 	Sandbox_config any `json:"sandbox_config"`
 
-	Docker   DockerConfig   `json:"docker"`
-	Limits   LimitsConfig   `json:"limits"`
-	Features FeaturesConfig `json:"features"`
-	Trace    TraceConfig    `json:"trace"`
-	Storage  StorageConfig  `json:"storage"`
+	Docker          DockerConfig   `json:"docker"`
+	Limits          LimitsConfig   `json:"limits"`
+	InstallerLimits LimitsConfig   `json:"installer_limits"` // limits profile for installers
+	Features        FeaturesConfig `json:"features"`
+	Trace           TraceConfig    `json:"trace"`
+	Storage         StorageConfig  `json:"storage"`
 }
 
 type DockerConfig struct {
@@ -112,26 +114,51 @@ type StorageConfig struct {
 	Code    StoreString `json:"code"`
 }
 
+// One unified limits struct for both worker defaults and per-lambda overrides.
+// For per-lambda ol.yaml, zero values mean "use worker defaults".
 type LimitsConfig struct {
 	// how many processes can be created within a Sandbox?
-	Procs int `json:"procs"`
+	Procs int `json:"procs" yaml:"procs"`
 
 	// how much memory can a regular lambda use?  The lambda can
 	// always set a lower limit for itself.
-	Mem_mb int `json:"mem_mb"`
+	Mem_mb int `json:"mem_mb" yaml:"mem_mb"`
 
 	// what percent of a core can it use per period?  (0-100, or more for multiple cores)
-	CPU_percent int `json:"cpu_percent"`
-
-	// how many seconds can Lambdas run?  (maybe be overridden on per-lambda basis)
-	Max_runtime_default int `json:"max_runtime_default"`
+	CPU_percent int `json:"cpu_percent" yaml:"cpu_percent"`
 
 	// how aggressively will the mem of the Sandbox be swapped?
-	Swappiness int `json:"swappiness"`
+	Swappiness int `json:"swappiness" yaml:"swappiness"`
 
-	// how much memory do we use for an admin lambda that is used
-	// for pip installs?
-	Installer_mem_mb int `json:"installer_mem_mb"`
+	// per-lambda or per-profile runtime cap in seconds.
+	Runtime_sec int `json:"runtime_sec" yaml:"runtime_sec"`
+}
+
+// WithDefaults returns a new LimitsConfig where zero fields are filled from def.
+func (lc *LimitsConfig) WithDefaults(def *LimitsConfig) LimitsConfig {
+	var out LimitsConfig
+	if lc != nil {
+		out = *lc
+	}
+	if def == nil {
+		return out
+	}
+	if out.Procs == 0 {
+		out.Procs = def.Procs
+	}
+	if out.Mem_mb == 0 {
+		out.Mem_mb = def.Mem_mb
+	}
+	if out.CPU_percent == 0 {
+		out.CPU_percent = def.CPU_percent
+	}
+	if out.Swappiness == 0 {
+		out.Swappiness = def.Swappiness
+	}
+	if out.Runtime_sec == 0 {
+		out.Runtime_sec = def.Runtime_sec
+	}
+	return out
 }
 
 // Choose reasonable defaults for a worker deployment (based on memory capacity).
@@ -152,6 +179,68 @@ func LoadDefaults(olPath string) error {
 
 // GetDefaultWorkerConfig returns a config populated with reasonable defaults.
 func GetDefaultWorkerConfig(olPath string) (*Config, error) {
+	// Check if template.json exists - if so, use it and patch empty fields
+	currPath, err := os.Getwd()
+	if err == nil {
+		// First check current directory
+		templatePath := filepath.Join(currPath, "template.json")
+		if _, err := os.Stat(templatePath); err != nil {
+			// If not found, check parent directory (for workers running in subdirs)
+			parentPath := filepath.Dir(currPath)
+			templatePath = filepath.Join(parentPath, "template.json")
+		}
+
+		if _, err := os.Stat(templatePath); err == nil {
+			slog.Info("Loading config from template.json", "path", templatePath)
+			cfg, err := ReadInConfig(templatePath)
+			if err == nil {
+				// Patch worker-specific fields if they're empty (same logic as worker_config_template.go)
+				defaultCfg, err := getDefaultConfigForPatching(olPath)
+				if err != nil {
+					return nil, fmt.Errorf("failed to get defaults for patching: %w", err)
+				}
+
+				if cfg.Worker_dir == "" {
+					cfg.Worker_dir = defaultCfg.Worker_dir
+					slog.Info("Patched Worker_dir", "Worker_dir", cfg.Worker_dir)
+				}
+				if cfg.Pkgs_dir == "" {
+					cfg.Pkgs_dir = defaultCfg.Pkgs_dir
+					slog.Info("Patched Pkgs_dir", "Pkgs_dir", cfg.Pkgs_dir)
+				}
+				if cfg.SOCK_base_path == "" {
+					cfg.SOCK_base_path = defaultCfg.SOCK_base_path
+					slog.Info("Patched SOCK_base_path", "SOCK_base_path", cfg.SOCK_base_path)
+				}
+				if cfg.Import_cache_tree == "" {
+					cfg.Import_cache_tree = defaultCfg.Import_cache_tree
+					slog.Info("Patched Import_cache_tree", "Import_cache_tree", cfg.Import_cache_tree)
+				}
+				if cfg.Mem_pool_mb == 0 {
+					cfg.Mem_pool_mb = defaultCfg.Mem_pool_mb
+					slog.Info("Patched Mem_pool_mb", "Mem_pool_mb", cfg.Mem_pool_mb)
+				}
+				// If template omitted limits, inherit dynamic defaults
+				if cfg.Limits == (LimitsConfig{}) {
+					cfg.Limits = defaultCfg.Limits
+					slog.Info("Patched Limits to defaults")
+				}
+				if cfg.InstallerLimits == (LimitsConfig{}) {
+					cfg.InstallerLimits = defaultCfg.InstallerLimits
+					slog.Info("Patched InstallerLimits to defaults")
+				}
+
+				return cfg, nil
+			}
+		}
+	}
+
+	// Fallback: generate defaults if no template.json
+	return getDefaultConfigForPatching(olPath)
+}
+
+// getDefaultConfigForPatching generates the default config used for patching empty template fields
+func getDefaultConfigForPatching(olPath string) (*Config, error) {
 	var workerDir, registryDir, baseImgDir, zygoteTreePath, packagesDir string
 
 	if olPath != "" {
@@ -170,6 +259,23 @@ func GetDefaultWorkerConfig(olPath string) (*Config, error) {
 	totalMb := uint64(in.Totalram) * uint64(in.Unit) / 1024 / 1024
 	memPoolMb := Max(int(totalMb-500), 500)
 
+	// Sensible defaults for user lambdas
+	userLimits := LimitsConfig{
+		Procs:       10,
+		Mem_mb:      50,
+		CPU_percent: 100,
+		Swappiness:  0,
+		// worker default runtime cap for user lambdas
+		Runtime_sec: 30,
+	}
+	// Installers often need more resources; separate profile that overrides
+	// only the fields that differ from userLimits.
+	installerLimits := LimitsConfig{
+		Mem_mb:      250,
+		Runtime_sec: 300, // generous default for installer runs
+		// Procs, CPU_percent, Swappiness will inherit from userLimits via WithDefaults
+	}
+
 	cfg := &Config{
 		Worker_dir:  workerDir,
 		Server_mode: "lambda",
@@ -178,7 +284,7 @@ func GetDefaultWorkerConfig(olPath string) (*Config, error) {
 		// Registry URL with file:// prefix required by gocloud blob backend abstraction.
 		// The gocloud library uses URL schemes to route to appropriate storage drivers:
 		// file:// for local filesystem, s3:// for AWS S3, gs:// for Google Cloud Storage.
-		// By default, it will be configured to local
+		// Default to local file registry
 		Registry:          "file://" + registryDir,
 		Sandbox:           "sock",
 		Log_output:        true,
@@ -191,14 +297,8 @@ func GetDefaultWorkerConfig(olPath string) (*Config, error) {
 		Docker: DockerConfig{
 			Base_image: "ol-min",
 		},
-		Limits: LimitsConfig{
-			Procs:               10,
-			Mem_mb:              50,
-			CPU_percent:         100,
-			Max_runtime_default: 30,
-			Installer_mem_mb:    Max(250, Min(500, memPoolMb/2)),
-			Swappiness:          0,
-		},
+		Limits:          userLimits,
+		InstallerLimits: installerLimits,
 		Features: FeaturesConfig{
 			Import_cache:        "tree",
 			Downsize_paused_mem: true,
@@ -229,6 +329,7 @@ func LoadGlobalConfig(path string) error {
 		return err
 	}
 
+	// Do not auto-adjust mem_pool_mb here; rely on checkConf to validate.
 	if err := checkConf(cfg); err != nil {
 		return err
 	}
@@ -240,13 +341,13 @@ func LoadGlobalConfig(path string) error {
 func ReadInConfig(path string) (*Config, error) {
 	configRaw, err := ioutil.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("could not open config (%v): %v", path, err.Error())
+		return nil, fmt.Errorf("could not open config (%v): %w", path, err)
 	}
 
 	var templateConfig Config
 	if err := json.Unmarshal(configRaw, &templateConfig); err != nil {
 		fmt.Printf("Bad config file (%s):\n%s\n", path, string(configRaw))
-		return nil, fmt.Errorf("could not parse config (%v): %v", path, err.Error())
+		return nil, fmt.Errorf("could not parse config (%v): %w", path, err)
 	}
 
 	return &templateConfig, nil
@@ -273,9 +374,13 @@ func checkConf(cfg *Config) error {
 		// evicted.
 		//
 		// TODO: revise evictor and relax this
-		minMem := 2 * Max(cfg.Limits.Installer_mem_mb, cfg.Limits.Mem_mb)
+		// We check against both the regular user limits and the installer limits.
+		minMem := 2 * Max(cfg.InstallerLimits.Mem_mb, cfg.Limits.Mem_mb)
 		if minMem > cfg.Mem_pool_mb {
-			return fmt.Errorf("memPoolMb must be at least %d", minMem)
+			return fmt.Errorf(
+				"memPoolMb must be at least %d (current=%d, user_mem_mb=%d, installer_mem_mb=%d)",
+				minMem, cfg.Mem_pool_mb, cfg.Limits.Mem_mb, cfg.InstallerLimits.Mem_mb,
+			)
 		}
 	} else if cfg.Sandbox == "docker" {
 		if cfg.Pkgs_dir == "" {
@@ -328,12 +433,56 @@ func SaveGlobalConfig(path string) error {
 	return SaveConfig(Conf, path)
 }
 
-func SaveConfig(cfg *Config, path string) error {
-	s, err := json.MarshalIndent(cfg, "", "\t")
+// writeConfigToFile writes config data to a file with proper syncing
+func writeConfigToFile(cfg *Config, filePath string) error {
+	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
+		return fmt.Errorf("failed to create file: %w", err)
+	}
+	defer file.Close()
+
+	// Marshal config to JSON
+	data, err := json.MarshalIndent(cfg, "", "\t")
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	// Write and sync to ensure data is written to disk
+	if _, err := file.Write(data); err != nil {
+		return fmt.Errorf("failed to write file: %w", err)
+	}
+
+	if err := file.Sync(); err != nil {
+		return fmt.Errorf("failed to sync file: %w", err)
+	}
+
+	return nil
+}
+
+func SaveConfig(cfg *Config, path string) error {
+	// Write to temp file in same directory to ensure atomic rename
+	tempPath := path + ".tmp"
+	if err := writeConfigToFile(cfg, tempPath); err != nil {
+		os.Remove(tempPath) // Clean up on failure
 		return err
 	}
-	return ioutil.WriteFile(path, s, 0644)
+
+	// Atomic rename - this is the key operation that prevents corruption
+	if err := os.Rename(tempPath, path); err != nil {
+		os.Remove(tempPath) // Clean up on failure
+		return fmt.Errorf("failed to rename temp file: %w", err)
+	}
+
+	// Sync the directory to ensure the rename is persisted
+	dirFile, err := os.Open(filepath.Dir(path))
+	if err != nil {
+		return fmt.Errorf("failed to open directory for sync: %w", err)
+	}
+	defer dirFile.Close()
+	dirFile.Sync() // Ensure directory entry is synced
+
+	slog.Info("Atomically saved config", "path", path)
+	return nil
 }
 
 func GetOlPath(ctx *cli.Context) (string, error) {

@@ -52,12 +52,16 @@ func NewLambdaStore(storeURL string, pool *cloudvm.WorkerPool) (*LambdaStore, er
 		storeURL = "file://" + storeURL
 	}
 
-	// If using local file storage, ensure the directory exists
+	// If using local file storage, ensure the directory exists and configure
+	// fileblob to create temp files in the same directory as the target.
+	// This avoids "invalid cross-device link" errors when /tmp is on a
+	// different filesystem/mount than the registry directory.
 	if strings.HasPrefix(storeURL, "file://") {
 		dir := strings.TrimPrefix(storeURL, "file://")
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return nil, fmt.Errorf("failed to create local lambda store directory %s: %w", dir, err)
 		}
+		storeURL = storeURL + "?no_tmp_dir=true"
 	}
 
 	bucket, err := blob.OpenBucket(ctx, storeURL)
@@ -134,7 +138,7 @@ func (s *LambdaStore) DeleteLambda(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *LambdaStore) ListLambda(w http.ResponseWriter) {
-	funcNames := s.listEntries()
+	funcNames := s.ListEntries()
 
 	if err := json.NewEncoder(w).Encode(funcNames); err != nil {
 		http.Error(w, "failed to encode lambda list", http.StatusInternalServerError)
@@ -157,7 +161,7 @@ func (s *LambdaStore) RetrieveLambdaConfig(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	cfg, err := s.getConfig(funcName)
+	cfg, err := s.GetConfig(funcName)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
@@ -310,7 +314,7 @@ func (s *LambdaStore) removeFromRegistry(funcName string) error {
 	return nil
 }
 
-func (s *LambdaStore) getConfig(funcName string) (*common.LambdaConfig, error) {
+func (s *LambdaStore) GetConfig(funcName string) (*common.LambdaConfig, error) {
 	lambdaEntry := s.getOrCreateEntry(funcName)
 	lambdaEntry.Lock.Lock()
 	defer lambdaEntry.Lock.Unlock()
@@ -344,7 +348,7 @@ func (s *LambdaStore) getOrCreateEntry(funcName string) *LambdaEntry {
 	return entry
 }
 
-func (s *LambdaStore) listEntries() []string {
+func (s *LambdaStore) ListEntries() []string {
 	s.mapLock.Lock()
 	defer s.mapLock.Unlock()
 

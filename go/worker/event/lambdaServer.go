@@ -57,13 +57,10 @@ func (s *LambdaServer) RunLambda(w http.ResponseWriter, r *http.Request) {
 		// components represent run[0]/<name_of_sandbox>[1]/<extra_things>...
 		// ergo we want [1] for name of sandbox
 		urlParts := getURLComponents(r)
-		if len(urlParts) == 2 {
-			img := urlParts[1]
-			s.lambdaMgr.Get(img).Invoke(w, r)
-		} else {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("expected invocation format: /run/<lambda-name>"))
-		}
+		
+		// Send entire path to app
+		lambdaName := urlParts[1]
+        s.lambdaMgr.Get(lambdaName).Invoke(w, r)
 	}
 }
 
@@ -78,7 +75,7 @@ func (s *LambdaServer) cleanup() {
 }
 
 // NewLambdaServer creates a server based on the passed config.
-func NewLambdaServer() (*LambdaServer, error) {
+func NewLambdaServer(mux *http.ServeMux) (*LambdaServer, error) {
 	slog.Info("Starting new lambda server")
 
 	lambdaMgr, err := lambda.GetLambdaManagerInstance()
@@ -92,8 +89,8 @@ func NewLambdaServer() (*LambdaServer, error) {
 
 	slog.Info("Setups Handlers")
 	port := fmt.Sprintf(":%s", common.Conf.Worker_port)
-	http.HandleFunc(RUN_PATH, server.RunLambda)
-	http.HandleFunc(DEBUG_PATH, server.Debug)
+	mux.HandleFunc(RUN_PATH, server.RunLambda)
+	mux.HandleFunc(DEBUG_PATH, server.Debug)
 
 	slog.Info(fmt.Sprintf("Execute handler by POSTing to localhost%s%s%s", port, RUN_PATH, "<lambda>"))
 	slog.Info(fmt.Sprintf("Get status by sending request to localhost%s%s", port, STATUS_PATH))

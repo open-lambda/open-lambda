@@ -162,7 +162,7 @@ func (linst *LambdaInstance) Task() {
 					if _, err := io.Copy(req.w, resp.Body); err != nil {
 						// already used WriteHeader, so can't use that to surface on error anymore
 						msg := "reading lambda response failed: " + err.Error() + "\n"
-						f.printf("error: " + msg)
+						f.printf("error: %s", msg)
 						linst.TrySendError(req, 0, msg, sb)
 					}
 

@@ -16,7 +16,6 @@ import (
 
 // WORKER IMPLEMENTATION: LocalWorker
 type LocalWorkerPoolPlatform struct {
-	configTemplate *common.Config
 	// lock protects nextWorkerPort from race conditions caused by concurrent access.
 	lock           sync.Mutex
 	nextWorkerPort int
@@ -32,31 +31,33 @@ func NewLocalWorkerPool() *WorkerPool {
 			// Get the worker config struct
 			defaultTemplateConfig, err := common.GetDefaultWorkerConfig("")
 			if err != nil {
-				slog.Error(fmt.Sprintf("failed to load default template config: %v", err))
+				slog.Error(fmt.Sprintf("failed to load default template config: %w", err))
 				os.Exit(1)
 			}
 
+			// Set platform-specific registry (local platform)
+			defaultTemplateConfig.Registry = config.BossConf.GetLambdaStoreURL()
+			slog.Info("Setting template.json registry", "registry", defaultTemplateConfig.Registry)
+
+			// Clear worker-specific fields so they get patched later
+			defaultTemplateConfig.Worker_dir = ""
+			defaultTemplateConfig.Pkgs_dir = ""
+			defaultTemplateConfig.SOCK_base_path = ""
+			defaultTemplateConfig.Import_cache_tree = ""
+
 			if err := common.SaveConfig(defaultTemplateConfig, templatePath); err != nil {
-				slog.Error(fmt.Sprintf("failed to save template.json: %v", err))
+				slog.Error(fmt.Sprintf("failed to save template.json: %w", err))
 				os.Exit(1)
 			}
 		} else {
-			slog.Error(fmt.Sprintf("failed to stat template path: %v", err))
+			slog.Error(fmt.Sprintf("failed to stat template path: %w", err))
 			os.Exit(1)
 		}
-	}
-
-	// Load the template and save locally
-	cfg, err := common.ReadInConfig(templatePath)
-	if err != nil {
-		slog.Error(fmt.Sprintf("failed to load template config: %v", err))
-		os.Exit(1)
 	}
 
 	return &WorkerPool{
 		WorkerPoolPlatform: &LocalWorkerPoolPlatform{
 			nextWorkerPort: startPort,
-			configTemplate: cfg,
 		},
 	}
 }
@@ -91,9 +92,21 @@ func (p *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) error {
 	workerPath := filepath.Join(currPath, worker.workerId)
 	workerPort := p.GetNextWorkerPort()
 
-	// Load worker configuration
-	if err := SaveTemplateConfToWorkerDir(p.configTemplate, workerPath, workerPort); err != nil {
-		slog.Error(fmt.Sprintf("Failed to load template.json: %v", err))
+	// Create worker-specific config.json from template
+	// The template.json will be loaded and patched in GetDefaultWorkerConfig
+	cfg, err := common.GetDefaultWorkerConfig(workerPath)
+	if err != nil {
+		slog.Error("Failed to get worker config", "workerId", worker.workerId, "error", err)
+		return err
+	}
+	
+	// Set worker-specific port
+	cfg.Worker_port = workerPort
+	
+	// Save to worker directory
+	configPath := filepath.Join(workerPath, "config.json")
+	if err := common.SaveConfig(cfg, configPath); err != nil {
+		slog.Error(fmt.Sprintf("Failed to save template.json: %v", err))
 		return err
 	}
 
@@ -105,7 +118,10 @@ func (p *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) error {
 	// TODO: both the boss and this subprocess can write to the same stream concurrently, which may interleave their outputs.
 	// The boss should capture the output from initCmd and then print it using slog.Info which is lock-protected
 	upCmd.Stderr = os.Stderr
-	if err := upCmd.Start(); err != nil {
+	// Use Run() instead of Start() to wait for the worker to be ready.
+	// The "ol worker up -d" command has a built-in health check that waits
+	// up to 30 seconds for the worker to respond before returning.
+	if err := upCmd.Run(); err != nil {
 		slog.Error(fmt.Sprintf("Failed to start worker %s: %v", worker.workerId, err))
 		return err
 	}
