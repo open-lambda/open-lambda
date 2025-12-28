@@ -153,34 +153,13 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 		}
 	}()
 
+	// Parse meta for native functions to get config
+	meta, err := parseMeta(codeDir)
+	if err != nil {
+		return err
+	}
+
 	if rtType == common.RT_PYTHON {
-		// inspect new code for dependencies; if we can install
-		// everything necessary, start using new code
-		meta, err := parseMeta(codeDir)
-		if err != nil {
-			return err
-		}
-
-		// Write environment variables to .env file if any are specified
-		if meta.Config.Environment != nil && len(meta.Config.Environment) > 0 {
-			envPath := filepath.Join(codeDir, ".env")
-			envFile, err := os.Create(envPath)
-			if err != nil {
-				return fmt.Errorf("failed to create .env file: %w", err)
-			}
-			defer envFile.Close()
-
-			for key, value := range meta.Config.Environment {
-				// Quote the value if it contains spaces or special characters
-				if strings.ContainsAny(value, " \t\n#=") {
-					escapedValue := strings.ReplaceAll(value, `"`, `\"`)
-					fmt.Fprintf(envFile, "%s=\"%s\"\n", key, escapedValue)
-				} else {
-					fmt.Fprintf(envFile, "%s=%s\n", key, value)
-				}
-			}
-		}
-
 		// make sure all specified dependencies are installed
 		// (but don't recursively find others)
 		for _, pkg := range meta.Sandbox.Installs {
@@ -193,36 +172,30 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 		f.Meta = meta
 	} else if rtType == common.RT_NATIVE {
 		slog.Info("Got native function")
-
-		// Parse meta for native functions to get config
-		meta, err := parseMeta(codeDir)
-		if err != nil {
-			return err
-		}
-
-		// Write environment variables to .env file if any are specified
-		if meta.Config.Environment != nil && len(meta.Config.Environment) > 0 {
-			envPath := filepath.Join(codeDir, ".env")
-			envFile, err := os.Create(envPath)
-			if err != nil {
-				return fmt.Errorf("failed to create .env file: %w", err)
-			}
-			defer envFile.Close()
-
-			for key, value := range meta.Config.Environment {
-				// Quote the value if it contains spaces or special characters
-				if strings.ContainsAny(value, " \t\n#=") {
-					escapedValue := strings.ReplaceAll(value, `"`, `\"`)
-					fmt.Fprintf(envFile, "%s=\"%s\"\n", key, escapedValue)
-				} else {
-					fmt.Fprintf(envFile, "%s=%s\n", key, value)
-				}
-			}
-		}
-
-		f.Meta = meta
 	}
 
+	// Write environment variables to .env file if any are specified
+	if meta.Config.Environment != nil && len(meta.Config.Environment) > 0 {
+		slog.Info("creating .env for lambda", "entries", len(meta.Config.Environment))
+		envPath := filepath.Join(codeDir, ".env")
+		envFile, err := os.Create(envPath)
+		if err != nil {
+			return fmt.Errorf("failed to create .env file: %w", err)
+		}
+		defer envFile.Close()
+
+		for key, value := range meta.Config.Environment {
+			// Quote the value if it contains spaces or special characters
+			if strings.ContainsAny(value, " \t\n#=") {
+				escapedValue := strings.ReplaceAll(value, `"`, `\"`)
+				fmt.Fprintf(envFile, "%s=\"%s\"\n", key, escapedValue)
+			} else {
+				fmt.Fprintf(envFile, "%s=%s\n", key, value)
+			}
+		}
+	}
+
+	f.Meta = meta
 	f.codeDir = codeDir
 	f.lastPull = &now
 	return nil

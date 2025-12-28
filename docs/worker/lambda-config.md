@@ -13,12 +13,18 @@ triggers:
   http:
     - method: PUT
     - method: PATCH
+
+environment:
+  MY_ENV_VAR1: "value1"
+  MY_ENV_VAR2: "value2"
 ```
 
-## 3. Trigger Types
+## 3. Configuration Options
+
+### a. Triggers
 OpenLambda only supports HTTP trigger for now, but future development plans include supporting other trigger types.
 
-### a. HTTP Triggers
+#### HTTP Triggers
 Defines which HTTP methods can be used to invoke the lambda.
 
 Example:
@@ -29,6 +35,20 @@ triggers:
     - method: POST
 ```
 In this case, the lambda accepts GET and POST requests.
+
+### b. Environment Variables
+Defines environment variables that will be available to the lambda function at runtime.
+
+Example:
+```yaml
+environment:
+  MY_ENV_VAR1: "production"
+  MY_ENV_VAR2: "enabled"
+```
+
+These variables can be accessed in your lambda code using standard environment variable methods (e.g., `os.environ` in Python).
+
+**Note:** Environment variables defined in `ol.yaml` are written to a `.env` file in the lambda's directory during execution. If your lambda already has a `.env` file, it will be overwritten with the values from `ol.yaml`.
 
 ## 4. How to Use
 ### a. Define Configuration
