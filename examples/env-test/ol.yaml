@@ -1,0 +1,11 @@
+triggers:
+  http:
+    - method: GET
+    - method: POST
+
+environment:
+  MY_ENV_VAR: "Hello from environment"
+  DATABASE_URL: "postgresql://user:pass@localhost/db"
+  DEBUG_MODE: "true"
+  API_KEY: "secret-key-123"
+  CUSTOM_PATH: "/usr/local/bin"

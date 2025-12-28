@@ -336,6 +336,43 @@ def test_http_method_restrictions():
             f"for PUT, not {repr(r.text)}"
         )
 
+@test
+def env_test():
+    """Test that environment variables from ol.yaml are properly loaded"""
+    open_lambda = OpenLambda()
+    
+    # Call the env-test function  
+    result = open_lambda.run("env-test", {})
+    
+    # Verify that all configured environment variables are present
+    expected_vars = {
+        "MY_ENV_VAR": "Hello from environment",
+        "DATABASE_URL": "postgresql://user:pass@localhost/db", 
+        "DEBUG_MODE": "true",
+        "API_KEY": "secret-key-123",
+        "CUSTOM_PATH": "/usr/local/bin"
+    }
+    
+    # Check that the configured_env_vars match what we expect
+    if "configured_env_vars" not in result:
+        raise ValueError(f"configured_env_vars not found in response: {result}")
+    
+    configured = result["configured_env_vars"]
+    
+    for key, expected_value in expected_vars.items():
+        if key not in configured:
+            raise ValueError(f"Environment variable {key} not found in response")
+        if configured[key] != expected_value:
+            raise ValueError(f"Environment variable {key}={configured[key]} but expected {expected_value}")
+    
+    print(f"✓ All {len(expected_vars)} environment variables loaded correctly")
+    
+    # Verify DEBUG_MODE enabled all env vars to be returned
+    if "all_env_vars" not in result:
+        raise ValueError("DEBUG_MODE=true but all_env_vars not returned")
+    
+    return {"env_vars_tested": len(expected_vars)}
+
 
 def run_tests():
     ping_test()
@@ -359,6 +396,9 @@ def run_tests():
     # make sure we can use WSGI apps based on frameworks like Flask
     flask_test()
     test_http_method_restrictions()
+    
+    # test environment variables from ol.yaml
+    env_test()
 
     # make sure code updates get pulled within the cache time
     with tempfile.TemporaryDirectory() as reg_dir:
