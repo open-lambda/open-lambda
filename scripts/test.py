@@ -28,7 +28,8 @@ from helper.test import (
     start_tests,
     check_test_results,
     set_worker_type,
-    test
+    get_worker_type,
+    test,
 )
 
 # You can either install the OpenLambda Python bindings
@@ -39,7 +40,6 @@ from open_lambda import OpenLambda
 # These will be set by argparse in main()
 OL_DIR = None
 
-@test
 def install_examples_to_worker_registry():
     """Install all lambda functions from examples directory to
     worker registry using admin install"""
@@ -76,8 +76,10 @@ def install_examples_to_worker_registry():
                 print(f"✓ Successfully installed {func_name}")
             else:
                 print(f"✗ Failed to install {func_name}: {result.stderr}")
+                raise Exception(f"install failed for {func_name}")
         except Exception as e:
             print(f"✗ Error installing {func_name}: {e}")
+            raise e
     print("Finished installing example functions")
 
 
@@ -349,7 +351,7 @@ def env_test():
         "MY_ENV_VAR": "Hello from environment",
         "DATABASE_URL": "postgresql://user:pass@localhost/db", 
         "DEBUG_MODE": "true",
-        "API_KEY": "secret-key-123",
+        "API_KEY": "secret-key-789",
         "CUSTOM_PATH": "/usr/local/bin"
     }
     
@@ -375,6 +377,14 @@ def env_test():
 
 
 def run_tests():
+    worker_type = get_worker_type()
+    worker = worker_type()
+    assert worker
+    print("Worker started")
+    install_examples_to_worker_registry()
+    print("Examples installed")
+    worker.stop()
+
     ping_test()
 
     # do smoke tests under various configs
@@ -463,8 +473,6 @@ def main():
             set_worker_type(SockWorker)
         else:
             raise RuntimeError(f"Invalid worker type {args.worker_type}")
-
-        install_examples_to_worker_registry()
 
         start_tests()
         run_tests()
