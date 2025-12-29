@@ -28,7 +28,8 @@ from helper.test import (
     start_tests,
     check_test_results,
     set_worker_type,
-    test
+    get_worker_type,
+    test,
 )
 
 # You can either install the OpenLambda Python bindings
@@ -39,7 +40,6 @@ from open_lambda import OpenLambda
 # These will be set by argparse in main()
 OL_DIR = None
 
-@test
 def install_examples_to_worker_registry():
     """Install all lambda functions from examples directory to
     worker registry using admin install"""
@@ -76,8 +76,10 @@ def install_examples_to_worker_registry():
                 print(f"✓ Successfully installed {func_name}")
             else:
                 print(f"✗ Failed to install {func_name}: {result.stderr}")
+                raise Exception(f"install failed for {func_name}")
         except Exception as e:
             print(f"✗ Error installing {func_name}: {e}")
+            raise e
     print("Finished installing example functions")
 
 
@@ -336,8 +338,54 @@ def test_http_method_restrictions():
             f"for PUT, not {repr(r.text)}"
         )
 
+@test
+def env_test():
+    """Test that environment variables from ol.yaml are properly loaded"""
+    open_lambda = OpenLambda()
+
+    # Call the env-test function
+    result = open_lambda.run("env-test", {})
+
+    # Verify that all configured environment variables are present
+    expected_vars = {
+        "MY_ENV_VAR": "Hello from environment",
+        "DATABASE_URL": "postgresql://user:pass@localhost/db", 
+        "DEBUG_MODE": "true",
+        "API_KEY": "secret-key-789",
+        "CUSTOM_PATH": "/usr/local/bin"
+    }
+
+    # Check that the configured_env_vars match what we expect
+    if "configured_env_vars" not in result:
+        raise ValueError(f"configured_env_vars not found in response: {result}")
+
+    configured = result["configured_env_vars"]
+
+    for key, expected_value in expected_vars.items():
+        if key not in configured:
+            raise ValueError(f"Environment variable {key} not found in response")
+        if configured[key] != expected_value:
+            raise ValueError(
+                f"Environment variable {key}={configured[key]} but expected {expected_value}")
+
+    print(f"✓ All {len(expected_vars)} environment variables loaded correctly")
+
+    # Verify DEBUG_MODE enabled all env vars to be returned
+    if "all_env_vars" not in result:
+        raise ValueError("DEBUG_MODE=true but all_env_vars not returned")
+
+    return {"env_vars_tested": len(expected_vars)}
+
 
 def run_tests():
+    worker_type = get_worker_type()
+    worker = worker_type()
+    assert worker
+    print("Worker started")
+    install_examples_to_worker_registry()
+    print("Examples installed")
+    worker.stop()
+
     ping_test()
 
     # do smoke tests under various configs
@@ -359,6 +407,9 @@ def run_tests():
     # make sure we can use WSGI apps based on frameworks like Flask
     flask_test()
     test_http_method_restrictions()
+
+    # test environment variables from ol.yaml
+    env_test()
 
     # make sure code updates get pulled within the cache time
     with tempfile.TemporaryDirectory() as reg_dir:
@@ -423,8 +474,6 @@ def main():
             set_worker_type(SockWorker)
         else:
             raise RuntimeError(f"Invalid worker type {args.worker_type}")
-
-        install_examples_to_worker_registry()
 
         start_tests()
         run_tests()

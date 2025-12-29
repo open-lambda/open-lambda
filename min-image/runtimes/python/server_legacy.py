@@ -14,6 +14,7 @@ import argparse
 import importlib
 import traceback
 
+from dotenv import load_dotenv
 import tornado.ioloop
 import tornado.web
 import tornado.httpserver
@@ -23,6 +24,12 @@ import tornado.wsgi
 HOST_DIR = '/host'
 PKGS_DIR = '/packages'
 HANDLER_DIR = '/handler'
+
+# Load environment variables from .env file if it exists
+env_path = f'{HANDLER_DIR}/.env'
+if os.path.exists(env_path):
+    load_dotenv(env_path)
+    print(f"server_legacy.py: loaded environment variables from {env_path}")
 
 sys.path.append(PKGS_DIR)
 sys.path.append(HANDLER_DIR)

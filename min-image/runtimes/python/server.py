@@ -6,6 +6,7 @@ import os, sys, json, argparse, importlib, traceback, time, fcntl, array, socket
 
 sys.path.append("/usr/local/lib/python3.10/dist-packages")
 
+from dotenv import load_dotenv
 import tornado.ioloop
 import tornado.web
 import tornado.httpserver
@@ -21,6 +22,12 @@ bootstrap_path = None
 def web_server():
     print(f"server.py: start web server on fd: {file_sock.fileno()}")
     sys.path.append('/handler')
+    
+    # Load environment variables from .env file if it exists
+    env_path = '/handler/.env'
+    if os.path.exists(env_path):
+        load_dotenv(env_path)
+        print(f"server.py: loaded environment variables from {env_path}")
 
     # TODO: as a safeguard, we should add a mechanism so that the
     # import doesn't happen until the cgroup move completes, so that a

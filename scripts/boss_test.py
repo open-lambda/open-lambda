@@ -134,7 +134,8 @@ def verify_lambda_config(lambda_name):
             "HTTP": [{"Method": "POST"}],
             "Cron": None,
             "Kafka": None,
-        }
+        },
+        "Environment": None,
     }
     assert actual_config == expected_config, (
         f"Lambda config mismatch!\nExpected: {expected_config}\nActual: {actual_config}"

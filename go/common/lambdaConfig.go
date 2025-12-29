@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -42,7 +43,8 @@ type KafkaTrigger struct {
 
 // LambdaConfig defines the overall configuration for the lambda function.
 type LambdaConfig struct {
-	Triggers Triggers `yaml:"triggers"` // List of HTTP triggers
+	Triggers    Triggers          `yaml:"triggers"`    // List of HTTP triggers
+	Environment map[string]string `yaml:"environment"` // Environment variables for the lambda
 	// Additional configurations can be added here.
 }
 
@@ -54,6 +56,7 @@ func LoadDefaultLambdaConfig() *LambdaConfig {
 				{Method: "*"}, // Default to allow all methods
 			},
 		},
+		Environment: make(map[string]string),
 	}
 }
 
@@ -85,6 +88,19 @@ func checkLambdaConfig(config *LambdaConfig) error {
 		if len(trigger.BootstrapServers) == 0 {
 			return fmt.Errorf("Kafka trigger must specify at least one bootstrap server")
 		}
+	}
+
+	// Validate environment variables
+	for key, value := range config.Environment {
+		if key == "" {
+			return fmt.Errorf("Environment variable key cannot be empty")
+		}
+		// Optionally validate that keys are valid environment variable names
+		if strings.Contains(key, "=") {
+			return fmt.Errorf("Environment variable key '%s' cannot contain '='", key)
+		}
+		// Value can be empty (that's valid)
+		_ = value
 	}
 
 	return nil
