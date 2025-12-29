@@ -262,14 +262,17 @@ func (s *LambdaStore) addToRegistry(funcName string, body io.Reader) error {
 	if err != nil {
 		return fmt.Errorf("failed to create blob writer: %w", err)
 	}
-	defer func() {
-		if err := writer.Close(); err != nil {
-			slog.Error(fmt.Sprintf("warning: failed to close blob writer: %v", err))
-		}
-	}()
 
 	if _, err := io.Copy(writer, tempFile); err != nil {
+		// Close writer to release resources (ignore close error since we already have an error)
+		writer.Close()
 		return fmt.Errorf("failed to upload to blob storage: %w", err)
+	}
+
+	// Close the writer to finalize the upload - this is where the actual commit happens
+	// for many blob storage implementations, so we must check the error
+	if err := writer.Close(); err != nil {
+		return fmt.Errorf("failed to finalize blob upload: %w", err)
 	}
 
 	lambdaEntry.Config = cfg
