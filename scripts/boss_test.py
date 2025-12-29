@@ -200,11 +200,8 @@ def tester(platform):
     clear_config()
     launch_boss(platform)
 
-    # Step 1: scale up worker
-    status = json.loads(boss_get("status"))
-    assert status["state"]["running"] == 0
+    # Step 1: scale to 1 worker (boss may auto-launch 1 on some platforms)
     scale_workers(1)
-    assert json.loads(boss_get("status"))["state"]["starting"] == 1
     wait_for_workers(1)
 
     # Step 2: upload and verify lambda

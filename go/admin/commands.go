@@ -31,7 +31,10 @@ func checkStatus(port string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return fmt.Errorf("boss/worker returned status %d (failed to read response body: %v)", resp.StatusCode, readErr)
+		}
 		return fmt.Errorf("boss/worker returned status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -205,7 +208,10 @@ func uploadToLambdaStore(funcName string, tarData []byte, port string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusCreated {
-		body, _ := io.ReadAll(resp.Body)
+		body, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return fmt.Errorf("upload failed with status %d (failed to read response body: %v)", resp.StatusCode, readErr)
+		}
 		return fmt.Errorf("upload failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
