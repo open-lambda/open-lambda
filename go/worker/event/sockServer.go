@@ -104,15 +104,16 @@ func (server *SOCKServer) Create(w http.ResponseWriter, _ []string, args map[str
 		}
 	}
 
-	if parent != nil && parent.GetRuntimeType() != rtType {
+	if parent != nil && parent.Meta().Runtime != rtType {
 		return fmt.Errorf("Parent and child have different runtimes")
 	}
 
 	meta := &sandbox.SandboxMeta{
+		Runtime:  rtType,
 		Installs: packages,
 	}
 
-	c, err := server.sbPool.Create(parent, leaf, codeDir, scratchDir, meta, rtType)
+	c, err := server.sbPool.Create(parent, leaf, codeDir, scratchDir, meta)
 	if err != nil {
 		return err
 	}

@@ -18,16 +18,17 @@ import (
 )
 
 type FunctionMeta struct {
-	Config  *common.LambdaConfig `json:"config"`  // New Lambda config (from YAML)
-	Sandbox *sandbox.SandboxMeta `json:"sandbox"` // Existing sandbox metadata
+	// user-specified config (via ol.yaml)
+	Config  *common.LambdaConfig `json:"config"`
+	// container-specific settings, inferred by file contents
+	// (e.g., do we have Python or native code?  what is in requirements.txt?)
+	Sandbox *sandbox.SandboxMeta `json:"sandbox"`
 }
 
 // LambdaFunc represents a single lambda function (the code)
 type LambdaFunc struct {
 	lmgr *LambdaMgr
 	name string
-
-	rtType common.RuntimeType
 
 	// lambda code
 	lastPull *time.Time
@@ -81,21 +82,33 @@ func parseMeta(codeDir string) (*FunctionMeta, error) {
 		Imports:  []string{},
 	}
 
-	// having a requirements.txt is optional
-	path := filepath.Join(codeDir, "requirements.txt")
-	file, err := os.Open(path)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return nil, err
+	// Determine runtime type by checking for f.py or f.bin
+	if _, err := os.Stat(filepath.Join(codeDir, "f.py")); err == nil {
+		sandboxMeta.Runtime = common.RT_PYTHON
+	} else if _, err := os.Stat(filepath.Join(codeDir, "f.bin")); err == nil {
+		sandboxMeta.Runtime = common.RT_NATIVE
+	} else {
+		return nil, fmt.Errorf("cannot determine runtime: no f.py or f.bin found in %s", codeDir)
 	}
-	defer file.Close()
 
-	scnr := bufio.NewScanner(file)
-	for scnr.Scan() {
-		line := strings.ReplaceAll(scnr.Text(), " ", "")
-		pkg := strings.Split(line, "#")[0]
-		if pkg != "" {
-			pkg = packages.NormalizePkg(pkg)
-			sandboxMeta.Installs = append(sandboxMeta.Installs, pkg)
+	// Parse requirements.txt for Python functions (optional)
+	if sandboxMeta.Runtime == common.RT_PYTHON {
+		path := filepath.Join(codeDir, "requirements.txt")
+		file, err := os.Open(path)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+		if err == nil {
+			defer file.Close()
+			scnr := bufio.NewScanner(file)
+			for scnr.Scan() {
+				line := strings.ReplaceAll(scnr.Text(), " ", "")
+				pkg := strings.Split(line, "#")[0]
+				if pkg != "" {
+					pkg = packages.NormalizePkg(pkg)
+					sandboxMeta.Installs = append(sandboxMeta.Installs, pkg)
+				}
+			}
 		}
 	}
 
@@ -126,7 +139,7 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 	}
 
 	// is there new code?
-	rtType, codeDir, err := f.lmgr.HandlerPuller.Pull(f.name)
+	codeDir, err := f.lmgr.HandlerPuller.Pull(f.name)
 	if err != nil {
 		return err
 	}
@@ -135,7 +148,11 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 		return nil
 	}
 
-	f.rtType = rtType
+	// Parse meta to get runtime type and config
+	meta, err := parseMeta(codeDir)
+	if err != nil {
+		return err
+	}
 
 	defer func() {
 		if err != nil {
@@ -143,7 +160,7 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 				slog.Error(fmt.Sprintf("could not cleanup %s after failed pull", codeDir))
 			}
 
-			if rtType == common.RT_PYTHON {
+			if meta.Sandbox.Runtime == common.RT_PYTHON {
 				// we dirty this dir (e.g., by setting up
 				// symlinks to packages, so we want the
 				// HandlerPuller to give us a new one next
@@ -153,13 +170,7 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 		}
 	}()
 
-	// Parse meta for native functions to get config
-	meta, err := parseMeta(codeDir)
-	if err != nil {
-		return err
-	}
-
-	if rtType == common.RT_PYTHON {
+	if meta.Sandbox.Runtime == common.RT_PYTHON {
 		// make sure all specified dependencies are installed
 		// (but don't recursively find others)
 		for _, pkg := range meta.Sandbox.Installs {
@@ -169,8 +180,7 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 		}
 
 		f.lmgr.DepTracer.TraceFunction(codeDir, meta.Sandbox.Installs)
-		f.Meta = meta
-	} else if rtType == common.RT_NATIVE {
+	} else if meta.Sandbox.Runtime == common.RT_NATIVE {
 		slog.Info("Got native function")
 	}
 

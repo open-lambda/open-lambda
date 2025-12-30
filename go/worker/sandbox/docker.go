@@ -33,7 +33,6 @@ type DockerContainer struct {
 	client     *docker.Client
 	installed  map[string]bool
 	meta       *SandboxMeta
-	rtType     common.RuntimeType
 	httpClient *http.Client
 }
 
@@ -253,11 +252,6 @@ func (container *DockerContainer) ID() string {
 	return container.hostID
 }
 
-// GetRuntimeType returns what runtime is being used by this container?
-func (container *DockerContainer) GetRuntimeType() common.RuntimeType {
-	return container.rtType
-}
-
 // DockerID returns the id assigned by docker itself, not by open lambda
 func (container *DockerContainer) DockerID() string {
 	return container.container.ID
@@ -269,7 +263,7 @@ func (container *DockerContainer) HostDir() string {
 }
 
 func (container *DockerContainer) runServer() error {
-	if container.rtType != common.RT_PYTHON {
+	if container.meta.Runtime != common.RT_PYTHON {
 		return fmt.Errorf("Unsupported runtime")
 	}
 

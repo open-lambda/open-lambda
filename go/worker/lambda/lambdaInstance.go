@@ -99,11 +99,11 @@ func (linst *LambdaInstance) Task() {
 		if sb == nil {
 			sb = nil
 
-			if f.lmgr.ZygoteProvider != nil && f.rtType == common.RT_PYTHON {
+			if f.lmgr.ZygoteProvider != nil && linst.meta.Sandbox.Runtime == common.RT_PYTHON {
 				scratchDir := f.lmgr.scratchDirs.Make(f.name)
 
 				// we don't specify parent SB, because ImportCache.Create chooses it for us
-				sb, err = f.lmgr.ZygoteProvider.Create(f.lmgr.sbPool, true, linst.codeDir, scratchDir, linst.meta.Sandbox, f.rtType)
+				sb, err = f.lmgr.ZygoteProvider.Create(f.lmgr.sbPool, true, linst.codeDir, scratchDir, linst.meta.Sandbox)
 				if err != nil {
 					f.printf("failed to get Sandbox from import cache")
 					sb = nil
@@ -116,7 +116,7 @@ func (linst *LambdaInstance) Task() {
 			if sb == nil {
 				t2 := common.T0("LambdaInstance-WaitSandbox-NoImportCache")
 				scratchDir := f.lmgr.scratchDirs.Make(f.name)
-				sb, err = f.lmgr.sbPool.Create(nil, true, linst.codeDir, scratchDir, linst.meta.Sandbox, f.rtType)
+				sb, err = f.lmgr.sbPool.Create(nil, true, linst.codeDir, scratchDir, linst.meta.Sandbox)
 				t2.T1()
 			}
 
