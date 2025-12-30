@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -41,6 +42,28 @@ func checkStatus(port string) error {
 	return nil
 }
 
+// isGitURL returns true if the path looks like a git repository URL
+func isGitURL(path string) bool {
+	return strings.HasSuffix(path, ".git")
+}
+
+// cloneGitRepo clones a git repository to a temporary directory
+func cloneGitRepo(gitURL string) (string, error) {
+	tmpDir, err := os.MkdirTemp("", "ol-install-*")
+	if err != nil {
+		return "", fmt.Errorf("failed to create temp directory: %v", err)
+	}
+
+	cmd := exec.Command("git", "clone", "--depth", "1", gitURL, tmpDir)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		os.RemoveAll(tmpDir)
+		return "", fmt.Errorf("git clone failed: %v\n%s", err, string(output))
+	}
+
+	return tmpDir, nil
+}
+
 func adminInstall(ctx *cli.Context) error {
 	args := ctx.Args().Slice()
 	var installTarget string
@@ -49,7 +72,7 @@ func adminInstall(ctx *cli.Context) error {
 	workerPath := ctx.String("path")
 
 	if len(args) == 0 {
-		return fmt.Errorf("usage: ol admin install [boss | -p <worker_path>] <function_directory>")
+		return fmt.Errorf("usage: ol admin install [boss | -p <worker_path>] <directory_or_git_url>")
 	}
 	if len(args) == 1 {
 		funcDir = args[0]
@@ -62,7 +85,7 @@ func adminInstall(ctx *cli.Context) error {
 			return fmt.Errorf("cannot use both 'boss' and '-p' flags together")
 		}
 	} else {
-		return fmt.Errorf("usage: ol admin install [boss | -p <worker_path>] <function_directory>")
+		return fmt.Errorf("usage: ol admin install [boss | -p <worker_path>] <directory_or_git_url>")
 	}
 
 	var portToUploadLambda string
@@ -99,15 +122,29 @@ func adminInstall(ctx *cli.Context) error {
 		portToUploadLambda = common.Conf.Worker_port
 	}
 
-	funcDir = strings.TrimSuffix(funcDir, "/")
+	var funcName string
+	var tmpDir string
 
-	funcName := filepath.Base(funcDir)
-
-	if _, err := os.Stat(funcDir); os.IsNotExist(err) {
-		return fmt.Errorf("directory %s does not exist", funcDir)
+	if isGitURL(funcDir) {
+		funcName = strings.TrimSuffix(filepath.Base(funcDir), ".git")
+		clonedDir, err := cloneGitRepo(funcDir)
+		if err != nil {
+			return err
+		}
+		tmpDir = clonedDir
+		funcDir = clonedDir
+	} else {
+		funcDir = strings.TrimSuffix(funcDir, "/")
+		funcName = filepath.Base(funcDir)
+		if _, err := os.Stat(funcDir); os.IsNotExist(err) {
+			return fmt.Errorf("directory %s does not exist", funcDir)
+		}
 	}
 
 	tarData, err := createTarGz(funcDir)
+	if tmpDir != "" {
+		os.RemoveAll(tmpDir)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to create tar.gz: %v", err)
 	}
@@ -222,8 +259,8 @@ func AdminCommands() []*cli.Command {
 	return []*cli.Command{
 		{
 			Name:      "install",
-			Usage:     "Install a lambda function from directory",
-			UsageText: "ol admin install [boss | -p <worker_path>] <function_directory>",
+			Usage:     "Install a lambda function from directory or git repo",
+			UsageText: "ol admin install [boss | -p <worker_path>] <function_directory_or_git_url>",
 			Action:    adminInstall,
 			Flags: []cli.Flag{
 				&cli.StringFlag{
