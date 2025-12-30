@@ -42,9 +42,14 @@ func checkStatus(port string) error {
 	return nil
 }
 
+const installUsage = "ol admin install [-c <config>] [-n <name>] [boss | -p <worker_path>] <directory_or_git_url>"
+
 // isGitURL returns true if the path looks like a git repository URL
 func isGitURL(path string) bool {
-	return strings.HasSuffix(path, ".git")
+	if !strings.HasSuffix(path, ".git") {
+		return false
+	}
+	return strings.HasPrefix(path, "https://") || strings.HasPrefix(path, "git@")
 }
 
 // cloneGitRepo clones a git repository to a temporary directory
@@ -72,7 +77,7 @@ func adminInstall(ctx *cli.Context) error {
 	workerPath := ctx.String("path")
 
 	if len(args) == 0 {
-		return fmt.Errorf("usage: ol admin install [boss | -p <worker_path>] <directory_or_git_url>")
+		return fmt.Errorf("usage: %s", installUsage)
 	}
 	if len(args) == 1 {
 		funcDir = args[0]
@@ -85,7 +90,7 @@ func adminInstall(ctx *cli.Context) error {
 			return fmt.Errorf("cannot use both 'boss' and '-p' flags together")
 		}
 	} else {
-		return fmt.Errorf("usage: ol admin install [boss | -p <worker_path>] <directory_or_git_url>")
+		return fmt.Errorf("usage: %s", installUsage)
 	}
 
 	var portToUploadLambda string
@@ -141,7 +146,27 @@ func adminInstall(ctx *cli.Context) error {
 		}
 	}
 
-	tarData, err := createTarGz(funcDir)
+	// Override function name if specified
+	if name := ctx.String("name"); name != "" {
+		funcName = name
+	}
+
+	// Build overrides map
+	overrides := make(map[string]string)
+	configPath := ctx.String("config")
+	if configPath != "" {
+		if _, err := os.Stat(configPath); os.IsNotExist(err) {
+			return fmt.Errorf("config file %s does not exist", configPath)
+		}
+		// Warn if ol.yaml already exists in the source
+		existingConfig := filepath.Join(funcDir, "ol.yaml")
+		if _, err := os.Stat(existingConfig); err == nil {
+			fmt.Printf("Warning: overriding existing ol.yaml in source with %s\n", configPath)
+		}
+		overrides["ol.yaml"] = configPath
+	}
+
+	tarData, err := createTarGz(funcDir, overrides)
 	if tmpDir != "" {
 		os.RemoveAll(tmpDir)
 	}
@@ -157,7 +182,7 @@ func adminInstall(ctx *cli.Context) error {
 	return nil
 }
 
-func createTarGz(funcDir string) ([]byte, error) {
+func createTarGz(funcDir string, overrides map[string]string) ([]byte, error) {
 	var buf bytes.Buffer
 	gzWriter := gzip.NewWriter(&buf)
 	tarWriter := tar.NewWriter(gzWriter)
@@ -183,6 +208,11 @@ func createTarGz(funcDir string) ([]byte, error) {
 		relPath, err := filepath.Rel(funcDir, path)
 		if err != nil {
 			return fmt.Errorf("unable to compute relative path: %v", err)
+		}
+
+		// Skip files that will be overridden
+		if _, ok := overrides[relPath]; ok {
+			return nil
 		}
 
 		header, err := tar.FileInfoHeader(info, "")
@@ -213,6 +243,38 @@ func createTarGz(funcDir string) ([]byte, error) {
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	// Add override files
+	for relPath, localPath := range overrides {
+		info, err := os.Stat(localPath)
+		if err != nil {
+			return nil, fmt.Errorf("unable to stat override file %s: %v", localPath, err)
+		}
+
+		header, err := tar.FileInfoHeader(info, "")
+		if err != nil {
+			return nil, fmt.Errorf("unable to create header for override %s: %v", relPath, err)
+		}
+		header.Name = relPath
+
+		if err := tarWriter.WriteHeader(header); err != nil {
+			return nil, fmt.Errorf("failed to write header for override %s: %v", relPath, err)
+		}
+
+		file, err := os.Open(localPath)
+		if err != nil {
+			return nil, fmt.Errorf("unable to open override file %s: %v", localPath, err)
+		}
+
+		if _, err := io.Copy(tarWriter, file); err != nil {
+			file.Close()
+			return nil, fmt.Errorf("error copying override file %s: %v", localPath, err)
+		}
+
+		if err := file.Close(); err != nil {
+			return nil, fmt.Errorf("error closing override file %s: %v", localPath, err)
+		}
 	}
 
 	if err := tarWriter.Close(); err != nil {
@@ -260,13 +322,23 @@ func AdminCommands() []*cli.Command {
 		{
 			Name:      "install",
 			Usage:     "Install a lambda function from directory or git repo",
-			UsageText: "ol admin install [boss | -p <worker_path>] <function_directory_or_git_url>",
+			UsageText: installUsage,
 			Action:    adminInstall,
 			Flags: []cli.Flag{
 				&cli.StringFlag{
 					Name:    "path",
 					Aliases: []string{"p"},
 					Usage:   "Worker directory path (e.g., -p myworker)",
+				},
+				&cli.StringFlag{
+					Name:    "config",
+					Aliases: []string{"c"},
+					Usage:   "Path to ol.yaml config file to include (overrides existing ol.yaml in source)",
+				},
+				&cli.StringFlag{
+					Name:    "name",
+					Aliases: []string{"n"},
+					Usage:   "Lambda function name (defaults to directory or repo name)",
 				},
 			},
 		},
