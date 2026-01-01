@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/open-lambda/open-lambda/go/common"
+	"golang.org/x/sys/unix"
 )
 
 type CgroupImpl struct {
@@ -193,9 +194,32 @@ func (cg *CgroupImpl) setFreezeState(state int64) error {
 
 	timeout := 5 * time.Second
 
+	eventFile, err := os.Open(cg.ResourcePath("cgroup.events"))
+
+	if err != nil {
+		return fmt.Errorf("failed to open freeze event file :: %v", err)
+	}
+
+	defer eventFile.Close()
+
+	pollFDs := []unix.PollFd{
+		{
+			Fd: int32(eventFile.Fd()),
+			Events: unix.POLLPRI,
+		},
+	}
+
 	start := time.Now()
 	for {
-		freezerState, err := cg.TryReadInt("cgroup.freeze")
+		elapsed := time.Since(start)
+		events, err := unix.Poll(pollFDs, int(timeout - elapsed))
+
+		if err != nil {
+			return fmt.Errorf("poll syscall failed :: %v", err)
+		}
+
+		freezerState, err := cg.TryReadIntKV("cgroup.events", "frozen")
+
 		if err != nil {
 			return fmt.Errorf("failed to check self_freezing state :: %v", err)
 		}
@@ -204,11 +228,12 @@ func (cg *CgroupImpl) setFreezeState(state int64) error {
 			return nil
 		}
 
-		if time.Since(start) > timeout {
+		//no POLLPRI events detected, timed out
+		if events == 0 {
 			return fmt.Errorf("cgroup stuck on %v after %v (should be %v)", freezerState, timeout, state)
 		}
 
-		time.Sleep(1 * time.Millisecond)
+
 	}
 }
 
