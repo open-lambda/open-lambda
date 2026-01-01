@@ -32,7 +32,10 @@ def web_server():
     # TODO: as a safeguard, we should add a mechanism so that the
     # import doesn't happen until the cgroup move completes, so that a
     # malicious child cannot eat up Zygote resources
-    import f
+    entry_file = os.environ.get('OL_ENTRY_FILE', 'f.py')
+    # Remove .py extension for import
+    module_name = entry_file[:-3]
+    handler_module = importlib.import_module(module_name)
 
     class SockFileHandler(tornado.web.RequestHandler):
         # TODO: we should consider how are the different requests used in the context of different applications and functions
@@ -47,7 +50,7 @@ def web_server():
                     self.write(f'bad request data: "{data}"')
                     return
 
-                result = f.f(event) if event is not None else f.f({}) 
+                result = handler_module.f(event) if event is not None else handler_module.f({}) 
                 self.write(json.dumps(result))  # Return the result as JSON
             except Exception:
                 self.set_status(500)  # Internal server error for unhandled exceptions
@@ -74,7 +77,7 @@ def web_server():
             self.handle_request()
     
 
-    if hasattr(f, "app"):
+    if hasattr(handler_module, "app"):
         def path_wrapper(environ, start_response):
             path = environ.get("PATH_INFO", "")
             # split path to get individual components
@@ -87,8 +90,8 @@ def web_server():
             # set the root of the application
             app_name = parts[2]
             environ["SCRIPT_NAME"] = '/run/' + app_name
-            
-            return f.app(environ, start_response)
+
+            return handler_module.app(environ, start_response)
         
         # use WSGI entry
         # call wrapper to strip /run/<func-name> from path
