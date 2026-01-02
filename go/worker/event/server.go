@@ -373,8 +373,7 @@ func Main() error {
 		if err == nil {
 			slog.Error("Serve returned nil", "server", "uds")
 			panic(err)
-		}
-		if err != nil && err != http.ErrServerClosed {
+		} else if err != http.ErrServerClosed {
 			errorChannel <- fmt.Errorf("UNIX domain socket server failed: %w", err)
 		}
 	}()
