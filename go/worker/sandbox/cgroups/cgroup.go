@@ -190,8 +190,6 @@ func (cg *CgroupImpl) AddPid(pid string) error {
 }
 
 func (cg *CgroupImpl) setFreezeState(state int64) error {
-	cg.WriteInt("cgroup.freeze", state)
-
 	timeout := 5 * time.Second
 
 	eventFile, err := os.Open(cg.ResourcePath("cgroup.events"))
@@ -210,9 +208,23 @@ func (cg *CgroupImpl) setFreezeState(state int64) error {
 	}
 
 	start := time.Now()
+
+	buf := make([]byte, 1024)
+	_, err = eventFile.Read(buf)
+
+	if err != nil {
+		return fmt.Errorf("couldn't read file %v", err)
+	}
+
+	go func() {
+		cg.WriteInt("cgroup.freeze", state)
+	}()
+	
+
 	for {
 		elapsed := time.Since(start)
-		events, err := unix.Poll(pollFDs, int(timeout - elapsed))
+		remaining := timeout - elapsed
+		events, err := unix.Poll(pollFDs, int(remaining.Milliseconds()))
 
 		if err != nil {
 			return fmt.Errorf("poll syscall failed :: %v", err)
