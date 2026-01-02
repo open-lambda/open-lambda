@@ -33,7 +33,8 @@ def web_server():
     # import doesn't happen until the cgroup move completes, so that a
     # malicious child cannot eat up Zygote resources
     entry_file = os.environ.get('OL_ENTRY_FILE', 'f.py')
-    # Remove .py extension for import
+    if not entry_file.endswith('.py'):
+        raise ValueError(f"OL_ENTRY_FILE must end with .py, got: {entry_file}")
     module_name = entry_file[:-3]
     handler_module = importlib.import_module(module_name)
 

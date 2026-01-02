@@ -62,12 +62,12 @@ jobs:
       working-directory: go/common
       run: go test -v
       timeout-minutes: 5
-    - name: Test Python (Docker)
-      # not all features are supported by docker yet, so we only run some of the tests
-      run: sudo env "PATH=$PATH" ./scripts/test.py --worker_type=docker --test_blocklist=max_mem_alloc
     - name: Test Python (SOCK)
       run: sudo env "PATH=$PATH" ./scripts/test.py --worker_type=sock
       timeout-minutes: 20
+    - name: Test Python (Docker)
+      # not all features are supported by docker yet, so we only run some of the tests
+      run: sudo env "PATH=$PATH" ./scripts/test.py --worker_type=docker --test_blocklist=max_mem_alloc
     - name: Boss/Lambda Store Tests
       run: sudo env "PATH=$PATH" python3 scripts/boss_test.py local
       timeout-minutes: 5
