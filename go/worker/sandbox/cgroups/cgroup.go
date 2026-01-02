@@ -10,6 +10,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"errors"
 
 	"github.com/open-lambda/open-lambda/go/common"
 	"golang.org/x/sys/unix"
@@ -193,10 +194,10 @@ func (cg *CgroupImpl) setFreezeState(state int64) error {
 	timeout := 5 * time.Second
 
 	eventFile, err := os.Open(cg.ResourcePath("cgroup.events"))
-
 	if err != nil {
-		return fmt.Errorf("failed to open freeze event file :: %v", err)
+		return fmt.Errorf("failed to open %s: %v", cg.ResourcePath("cgroup.events"), err)
 	}
+
 
 	defer eventFile.Close()
 
@@ -216,8 +217,12 @@ func (cg *CgroupImpl) setFreezeState(state int64) error {
 		remaining := timeout - elapsed
 		events, err := unix.Poll(pollFDs, int(remaining.Milliseconds()))
 
+		if errors.Is(err, syscall.EINTR) {
+			continue
+		}
+
 		if err != nil {
-			return fmt.Errorf("poll syscall failed :: %v", err)
+			return fmt.Errorf("poll syscall failed on %s: %v", cg.ResourcePath("cgroup.events"), err)
 		}
 
 		freezerState, err := cg.TryReadIntKV("cgroup.events", "frozen")
