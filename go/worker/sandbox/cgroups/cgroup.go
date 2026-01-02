@@ -216,10 +216,6 @@ func (cg *CgroupImpl) setFreezeState(state int64) error {
 		remaining := timeout - elapsed
 		events, err := unix.Poll(pollFDs, int(remaining.Milliseconds()))
 
-		if err == unix.EINTR {
-			continue
-		}
-
 		if err != nil {
 			return fmt.Errorf("poll syscall failed :: %v", err)
 		}
