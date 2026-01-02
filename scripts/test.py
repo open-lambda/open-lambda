@@ -308,6 +308,25 @@ def flask_test():
         raise ValueError(f"r.text should be 'hi\n', not {repr(r.text)}")
 
 @test
+def wsgi_post_echo_test():
+    """Test that POST body is properly forwarded to WSGI/Flask apps"""
+    url = 'http://localhost:5000/run/wsgi-post-echo'
+
+    # Test with plain text body
+    test_body = "hello world"
+    r = requests.post(url, data=test_body, headers={"Content-Type": "text/plain"})
+    check_status_code(r)
+    if r.text != test_body:
+        raise ValueError(f"expected '{test_body}', but got '{r.text}'")
+
+    # Test with JSON body
+    test_json = '{"key": "value"}'
+    r = requests.post(url, data=test_json, headers={"Content-Type": "application/json"})
+    check_status_code(r)
+    if r.text != test_json:
+        raise ValueError(f"expected '{test_json}', but got '{r.text}'")
+
+@test
 def flask_entry_test():
     """Test OL_ENTRY_FILE feature with a Flask app using app.py instead of f.py"""
     # Test the index route
@@ -430,6 +449,7 @@ def run_tests():
 
     # make sure we can use WSGI apps based on frameworks like Flask
     flask_test()
+    wsgi_post_echo_test()
     flask_entry_test()
     test_http_method_restrictions()
 

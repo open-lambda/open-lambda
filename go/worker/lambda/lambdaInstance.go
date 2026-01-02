@@ -143,6 +143,15 @@ func (linst *LambdaInstance) Task() {
 			if err != nil {
 				linst.TrySendError(req, http.StatusInternalServerError, "Could not create NewRequest: "+err.Error(), sb)
 			} else {
+				// Copy headers from original request
+				for k, vv := range req.r.Header {
+					for _, v := range vv {
+						httpReq.Header.Add(k, v)
+					}
+				}
+				// Preserve ContentLength (parsed from Content-Length header)
+				httpReq.ContentLength = req.r.ContentLength
+
 				resp, err := sb.Client().Do(httpReq)
 
 				// copy response out
