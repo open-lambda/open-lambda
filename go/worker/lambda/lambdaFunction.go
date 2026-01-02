@@ -82,13 +82,28 @@ func parseMeta(codeDir string) (*FunctionMeta, error) {
 		Imports:  []string{},
 	}
 
-	// Determine runtime type by checking for f.py or f.bin
-	if _, err := os.Stat(filepath.Join(codeDir, "f.py")); err == nil {
+	// Load Lambda configuration from ol.yaml first (needed to check OL_ENTRY_FILE)
+	lambdaConfig, err := common.LoadLambdaConfig(codeDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse lambda configuration file: %v", err)
+	}
+
+	// Determine the Python entry file (default to f.py)
+	pythonEntryFile := "f.py"
+	if lambdaConfig.Environment != nil {
+		if entryFile, ok := lambdaConfig.Environment["OL_ENTRY_FILE"]; ok {
+			pythonEntryFile = entryFile
+		}
+	}
+
+	// Determine runtime type by checking for entry file or f.bin
+	// TODO: support OL_ENTRY_FILE for native runtime
+	if _, err := os.Stat(filepath.Join(codeDir, pythonEntryFile)); err == nil {
 		sandboxMeta.Runtime = common.RT_PYTHON
 	} else if _, err := os.Stat(filepath.Join(codeDir, "f.bin")); err == nil {
 		sandboxMeta.Runtime = common.RT_NATIVE
 	} else {
-		return nil, fmt.Errorf("cannot determine runtime: no f.py or f.bin found in %s", codeDir)
+		return nil, fmt.Errorf("cannot determine runtime: no %s or f.bin found in %s", pythonEntryFile, codeDir)
 	}
 
 	// Parse requirements.txt for Python functions (optional)
@@ -110,12 +125,6 @@ func parseMeta(codeDir string) (*FunctionMeta, error) {
 				}
 			}
 		}
-	}
-
-	// Load Lambda configuration from ol.yaml
-	lambdaConfig, err := common.LoadLambdaConfig(codeDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse lambda configuration file: %v", err)
 	}
 
 	// Return combined FunctionMeta
