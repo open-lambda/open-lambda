@@ -209,13 +209,6 @@ func (cg *CgroupImpl) setFreezeState(state int64) error {
 
 	start := time.Now()
 
-	buf := make([]byte, 1024)
-	_, err = eventFile.Read(buf)
-
-	if err != nil {
-		return fmt.Errorf("couldn't read file %v", err)
-	}
-
 	cg.WriteInt("cgroup.freeze", state)
 	
 
