@@ -157,6 +157,8 @@ func (linst *LambdaInstance) Task() {
 				// copy response out
 				if err != nil {
 					linst.TrySendError(req, http.StatusBadGateway, "RoundTrip failed: "+err.Error()+"\n", sb)
+					sb.Destroy("Sandbox's HTTP client returned an error")
+					sb = nil
 				} else {
 					// copy headers
 					// (adapted from copyHeaders: https://go.dev/src/net/http/httputil/reverseproxy.go)
@@ -193,17 +195,18 @@ func (linst *LambdaInstance) Task() {
 			// check whether we should shutdown (non-blocking)
 			select {
 			case killed := <-linst.killChan:
-				rtLog := sb.GetRuntimeLog()
-				sb.Destroy("Lambda instance kill signal received")
+				if sb != nil {
+					rtLog := sb.GetRuntimeLog()
+					sb.Destroy("Lambda instance kill signal received")
+					slog.Info("Stopped sandbox")
 
-				slog.Info("Stopped sandbox")
+					if common.Conf.Log_output {
+						if rtLog != "" {
+							slog.Info("Runtime output is:")
 
-				if common.Conf.Log_output {
-					if rtLog != "" {
-						slog.Info("Runtime output is:")
-
-						for _, line := range strings.Split(rtLog, "\n") {
-							slog.Info(fmt.Sprintf("   %s", line))
+							for _, line := range strings.Split(rtLog, "\n") {
+								slog.Info(fmt.Sprintf("   %s", line))
+							}
 						}
 					}
 				}
