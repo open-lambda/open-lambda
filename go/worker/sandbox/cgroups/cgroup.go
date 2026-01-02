@@ -216,9 +216,7 @@ func (cg *CgroupImpl) setFreezeState(state int64) error {
 		return fmt.Errorf("couldn't read file %v", err)
 	}
 
-	go func() {
-		cg.WriteInt("cgroup.freeze", state)
-	}()
+	cg.WriteInt("cgroup.freeze", state)
 	
 
 	for {
