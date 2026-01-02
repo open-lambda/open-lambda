@@ -1,11 +1,13 @@
 package lambda
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"strings"
+	"syscall"
 
 	"github.com/open-lambda/open-lambda/go/common"
 	"github.com/open-lambda/open-lambda/go/worker/sandbox"
@@ -34,7 +36,7 @@ type LambdaInstance struct {
 //
 // 1. Sandbox.Pause/Unpause: discard Sandbox, create new one to handle request
 // 2. Sandbox.Create/Channel: discard Sandbox, propagate HTTP 500 to client
-// 3. Error inside Sandbox: simply propagate whatever occurred to the client (TODO: restart Sandbox)
+// 3. Error inside Sandbox: simply propagate whatever occurred to the client
 func (linst *LambdaInstance) Task() {
 	f := linst.lfunc
 
@@ -148,6 +150,13 @@ func (linst *LambdaInstance) Task() {
 				// copy response out
 				if err != nil {
 					linst.TrySendError(req, http.StatusBadGateway, "RoundTrip failed: "+err.Error()+"\n", sb)
+
+					// if network refused, the sandbox is likely dead, so discard it.
+					if errors.Is(err, syscall.ECONNREFUSED) || errors.Is(err, io.EOF) {
+						f.printf("discard sandbox %s due to NewRequest error: %v", sb.ID(), err)
+						sb.Destroy("Sandbox failed to service request.")
+						sb = nil
+					}
 				} else {
 					// copy headers
 					// (adapted from copyHeaders: https://go.dev/src/net/http/httputil/reverseproxy.go)
