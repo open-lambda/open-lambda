@@ -187,9 +187,20 @@ func createTarGz(funcDir string, overrides map[string]string) ([]byte, error) {
 	gzWriter := gzip.NewWriter(&buf)
 	tarWriter := tar.NewWriter(gzWriter)
 
-	fpyPath := filepath.Join(funcDir, "f.py")
-	if _, err := os.Stat(fpyPath); os.IsNotExist(err) {
-		return nil, fmt.Errorf("required file f.py not found in %s", funcDir)
+	// Determine the Python entry file (default to f.py, or use OL_ENTRY_FILE from ol.yaml)
+	// TODO: support OL_ENTRY_FILE for native runtime
+	pythonEntryFile := "f.py"
+	if lambdaConfig, err := common.LoadLambdaConfig(funcDir); err == nil {
+		if lambdaConfig.Environment != nil {
+			if entryFile, ok := lambdaConfig.Environment["OL_ENTRY_FILE"]; ok {
+				pythonEntryFile = entryFile
+			}
+		}
+	}
+
+	entryPath := filepath.Join(funcDir, pythonEntryFile)
+	if _, err := os.Stat(entryPath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("required file %s not found in %s", pythonEntryFile, funcDir)
 	}
 
 	err := filepath.Walk(funcDir, func(path string, info os.FileInfo, err error) error {
