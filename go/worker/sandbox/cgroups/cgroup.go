@@ -211,7 +211,6 @@ func (cg *CgroupImpl) setFreezeState(state int64) error {
 
 	cg.WriteInt("cgroup.freeze", state)
 	
-
 	for {
 		elapsed := time.Since(start)
 		remaining := timeout - elapsed
@@ -235,7 +234,7 @@ func (cg *CgroupImpl) setFreezeState(state int64) error {
 			return nil
 		}
 
-		//no POLLPRI events detected, timed out
+		// no POLLPRI events detected, timed out
 		if events == 0 {
 			return fmt.Errorf("cgroup stuck on %v after %v (should be %v)", freezerState, timeout, state)
 		}
