@@ -52,7 +52,7 @@ jobs:
     - name: Install revive (go linter)
       run: go install github.com/mgechev/revive@v1.5.1
     - name: Install cross
-      run: cargo install cross
+      run: cargo install --locked cross
     - name: Build OpenLambda
       run: |
         make ol imgs/ol-wasm wasm-worker wasm-functions native-functions container-proxy
