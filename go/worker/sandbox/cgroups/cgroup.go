@@ -2,6 +2,7 @@ package cgroups
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log/slog"
@@ -10,7 +11,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-	"errors"
 
 	"github.com/open-lambda/open-lambda/go/common"
 	"golang.org/x/sys/unix"
@@ -191,19 +191,21 @@ func (cg *CgroupImpl) AddPid(pid string) error {
 }
 
 func (cg *CgroupImpl) setFreezeState(state int64) error {
-	timeout := 5 * time.Second
+	warningFired := false
+	timeout := 20 * time.Second
 
-	eventFile, err := os.Open(cg.ResourcePath("cgroup.events"))
+	resourcePath := cg.ResourcePath("cgroup.events")
+
+	eventFile, err := os.Open(resourcePath)
 	if err != nil {
-		return fmt.Errorf("failed to open %s: %v", cg.ResourcePath("cgroup.events"), err)
+		return fmt.Errorf("failed to open %s: %w", resourcePath, err)
 	}
-
-
 	defer eventFile.Close()
 
+	// poll(2): POLLPRI indicates "cgroup.events file modified"
 	pollFDs := []unix.PollFd{
 		{
-			Fd: int32(eventFile.Fd()),
+			Fd:     int32(eventFile.Fd()),
 			Events: unix.POLLPRI,
 		},
 	}
@@ -211,36 +213,45 @@ func (cg *CgroupImpl) setFreezeState(state int64) error {
 	start := time.Now()
 
 	cg.WriteInt("cgroup.freeze", state)
-	
+
 	for {
 		elapsed := time.Since(start)
+		if !warningFired && elapsed >= 250*time.Millisecond {
+			cg.printf("WARNING!  setFreezeState taking >= 250ms to complete")
+			warningFired = true
+		}
+
 		remaining := timeout - elapsed
-		events, err := unix.Poll(pollFDs, int(remaining.Milliseconds()))
 
-		if errors.Is(err, syscall.EINTR) {
-			continue
-		}
+		if remaining < 0 {
+			freezerState, err := cg.TryReadIntKV("cgroup.events", "frozen")
 
-		if err != nil {
-			return fmt.Errorf("poll syscall failed on %s: %v", cg.ResourcePath("cgroup.events"), err)
-		}
+			if err != nil {
+				return fmt.Errorf("failed to check self_freezing state :: %w", err)
+			}
 
-		freezerState, err := cg.TryReadIntKV("cgroup.events", "frozen")
-
-		if err != nil {
-			return fmt.Errorf("failed to check self_freezing state :: %v", err)
-		}
-
-		if freezerState == state {
-			return nil
-		}
-
-		// no POLLPRI events detected, timed out
-		if events == 0 {
 			return fmt.Errorf("cgroup stuck on %v after %v (should be %v)", freezerState, timeout, state)
 		}
 
+		events, err := unix.Poll(pollFDs, int(remaining.Milliseconds()))
+		if err != nil {
+			if errors.Is(err, unix.EINTR) {
+				continue
+			}
+			return fmt.Errorf("poll syscall failed on %s: %w", resourcePath, err)
+		}
+		// no POLLPRI events, timed out & no state change occurred
+		if events == 0 {
+			return fmt.Errorf("cgroup freeze timeout after %v (expected state %v)", timeout, state)
+		}
 
+		freezerState, err := cg.TryReadIntKV("cgroup.events", "frozen")
+		if err != nil {
+			return fmt.Errorf("failed to check self_freezing state :: %w", err)
+		}
+		if freezerState == state {
+			return nil
+		}
 	}
 }
 
