@@ -28,7 +28,8 @@ from helper.test import (
     start_tests,
     check_test_results,
     set_worker_type,
-    test
+    get_worker_type,
+    test,
 )
 
 # You can either install the OpenLambda Python bindings
@@ -39,7 +40,6 @@ from open_lambda import OpenLambda
 # These will be set by argparse in main()
 OL_DIR = None
 
-@test
 def install_examples_to_worker_registry():
     """Install all lambda functions from examples directory to
     worker registry using admin install"""
@@ -49,14 +49,12 @@ def install_examples_to_worker_registry():
     if not os.path.exists(examples_dir):
         print(f"Examples directory not found at {examples_dir}")
         return
-    # Get all directories in examples
+    # Get all directories in examples (each directory is a lambda function)
     example_functions = []
     for item in os.listdir(examples_dir):
         item_path = os.path.join(examples_dir, item)
         if os.path.isdir(item_path):
-            # Check if it has f.py (required for lambda functions)
-            if os.path.exists(os.path.join(item_path, "f.py")):
-                example_functions.append(item_path)
+            example_functions.append(item_path)
     print(f"Found {len(example_functions)} lambda functions in examples directory")
     # Install each function using admin install command
     # Find the ol binary - it should be in the project root
@@ -76,8 +74,10 @@ def install_examples_to_worker_registry():
                 print(f"✓ Successfully installed {func_name}")
             else:
                 print(f"✗ Failed to install {func_name}: {result.stderr}")
+                raise Exception(f"install failed for {func_name}")
         except Exception as e:
             print(f"✗ Error installing {func_name}: {e}")
+            raise e
     print("Finished installing example functions")
 
 
@@ -308,6 +308,51 @@ def flask_test():
         raise ValueError(f"r.text should be 'hi\n', not {repr(r.text)}")
 
 @test
+def wsgi_post_echo_test():
+    """Test that POST body is properly forwarded to WSGI/Flask apps"""
+    url = 'http://localhost:5000/run/wsgi-post-echo'
+
+    # Test with plain text body
+    test_body = "hello world"
+    r = requests.post(url, data=test_body, headers={"Content-Type": "text/plain"})
+    check_status_code(r)
+    if r.text != test_body:
+        raise ValueError(f"expected '{test_body}', but got '{r.text}'")
+
+    # Test with JSON body
+    test_json = '{"key": "value"}'
+    r = requests.post(url, data=test_json, headers={"Content-Type": "application/json"})
+    check_status_code(r)
+    if r.text != test_json:
+        raise ValueError(f"expected '{test_json}', but got '{r.text}'")
+
+@test
+def flask_entry_test():
+    """Test OL_ENTRY_FILE feature with a Flask app using app.py instead of f.py"""
+    # Test the index route
+    url = 'http://localhost:5000/run/flask-entry-test'
+    print("URL", url)
+    r = requests.get(url)
+    print("RESPONSE", r)
+
+    if r.status_code != 200:
+        raise ValueError(f"expected status code 200, but got {r.status_code}")
+    if r.text != "Hello from app.py!\n":
+        raise ValueError(f"r.text should be 'Hello from app.py!\\n', not {repr(r.text)}")
+
+    # Test the info route
+    url_info = 'http://localhost:5000/run/flask-entry-test/info'
+    print("URL", url_info)
+    r = requests.get(url_info)
+    print("RESPONSE", r)
+
+    if r.status_code != 200:
+        raise ValueError(f"expected status code 200, but got {r.status_code}")
+    data = r.json()
+    if data.get("entry_file") != "app.py":
+        raise ValueError(f"expected entry_file='app.py', got {data}")
+
+@test
 def test_http_method_restrictions():
     url = 'http://localhost:5000/run/lambda-config-test'
     print("URL", url)
@@ -336,8 +381,54 @@ def test_http_method_restrictions():
             f"for PUT, not {repr(r.text)}"
         )
 
+@test
+def env_test():
+    """Test that environment variables from ol.yaml are properly loaded"""
+    open_lambda = OpenLambda()
+
+    # Call the env-test function
+    result = open_lambda.run("env-test", {})
+
+    # Verify that all configured environment variables are present
+    expected_vars = {
+        "MY_ENV_VAR": "Hello from environment",
+        "DATABASE_URL": "postgresql://user:pass@localhost/db", 
+        "DEBUG_MODE": "true",
+        "API_KEY": "secret-key-789",
+        "CUSTOM_PATH": "/usr/local/bin"
+    }
+
+    # Check that the configured_env_vars match what we expect
+    if "configured_env_vars" not in result:
+        raise ValueError(f"configured_env_vars not found in response: {result}")
+
+    configured = result["configured_env_vars"]
+
+    for key, expected_value in expected_vars.items():
+        if key not in configured:
+            raise ValueError(f"Environment variable {key} not found in response")
+        if configured[key] != expected_value:
+            raise ValueError(
+                f"Environment variable {key}={configured[key]} but expected {expected_value}")
+
+    print(f"✓ All {len(expected_vars)} environment variables loaded correctly")
+
+    # Verify DEBUG_MODE enabled all env vars to be returned
+    if "all_env_vars" not in result:
+        raise ValueError("DEBUG_MODE=true but all_env_vars not returned")
+
+    return {"env_vars_tested": len(expected_vars)}
+
 
 def run_tests():
+    worker_type = get_worker_type()
+    worker = worker_type()
+    assert worker
+    print("Worker started")
+    install_examples_to_worker_registry()
+    print("Examples installed")
+    worker.stop()
+
     ping_test()
 
     # do smoke tests under various configs
@@ -358,7 +449,12 @@ def run_tests():
 
     # make sure we can use WSGI apps based on frameworks like Flask
     flask_test()
+    wsgi_post_echo_test()
+    flask_entry_test()
     test_http_method_restrictions()
+
+    # test environment variables from ol.yaml
+    env_test()
 
     # make sure code updates get pulled within the cache time
     with tempfile.TemporaryDirectory() as reg_dir:
@@ -423,8 +519,6 @@ def main():
             set_worker_type(SockWorker)
         else:
             raise RuntimeError(f"Invalid worker type {args.worker_type}")
-
-        install_examples_to_worker_registry()
 
         start_tests()
         run_tests()

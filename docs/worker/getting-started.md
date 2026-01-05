@@ -197,6 +197,22 @@ If you initialized a worker with a specific path (e.g., `./ol worker init -p myw
 
 If no `-p` flag is specified, the command will default to the worker running on port 5000 using the default config.
 
+### Installing from a Git Repository
+
+You can also install lambdas directly from a Git repository (GitHub, GitLab, etc.):
+
+```bash
+./ol admin install https://github.com/open-lambda/hello-lambda-example.git
+```
+
+This works with both HTTPS and SSH URLs:
+
+```bash
+./ol admin install git@github.com:open-lambda/hello-lambda-example.git
+```
+
+The function name is derived from the repository name (e.g., `hello-lambda-example`).
+
 ## Invoke Lambda
 
 Invoke your lambda with `curl` (the result should be the same as the POST body):

@@ -14,6 +14,7 @@ import argparse
 import importlib
 import traceback
 
+from dotenv import load_dotenv
 import tornado.ioloop
 import tornado.web
 import tornado.httpserver
@@ -23,6 +24,12 @@ import tornado.wsgi
 HOST_DIR = '/host'
 PKGS_DIR = '/packages'
 HANDLER_DIR = '/handler'
+
+# Load environment variables from .env file if it exists
+env_path = f'{HANDLER_DIR}/.env'
+if os.path.exists(env_path):
+    load_dotenv(env_path)
+    print(f"server_legacy.py: loaded environment variables from {env_path}")
 
 sys.path.append(PKGS_DIR)
 sys.path.append(HANDLER_DIR)
@@ -41,12 +48,15 @@ parser.add_argument('--cache', action='store_true', default=False, help='Begin a
 
 # run after forking into sandbox
 def init():
-    global initialized, f
+    global initialized, handler_module
     if initialized:
         return
 
-    # assume submitted .py file is /handler/f.py
-    import f
+    entry_file = os.environ.get('OL_ENTRY_FILE', 'f.py')
+    if not entry_file.endswith('.py'):
+        raise ValueError(f"OL_ENTRY_FILE must end with .py, got: {entry_file}")
+    module_name = entry_file[:-3]
+    handler_module = importlib.import_module(module_name)
 
     initialized = True
 
@@ -61,7 +71,7 @@ class SockFileHandler(tornado.web.RequestHandler):
                 self.write(f'bad request data: "{data}"')
                 return
 
-            result = f.f(event) if event is not None else f.f({}) 
+            result = handler_module.f(event) if event is not None else handler_module.f({}) 
             self.write(json.dumps(result))  # Return the result as JSON
         except Exception:
             self.set_status(500)  # Internal server error for unhandled exceptions
@@ -91,7 +101,7 @@ class SockFileHandler(tornado.web.RequestHandler):
 # listen on sock file with Tornado
 def lambda_server():
     init()
-    if hasattr(f, "app"):
+    if hasattr(handler_module, "app"):
         def path_wrapper(environ, start_response):
             path = environ.get("PATH_INFO", "")
             # split path to get individual components
@@ -105,7 +115,7 @@ def lambda_server():
             app_name = parts[2]
             environ["SCRIPT_NAME"] = '/run/' + app_name
 
-            return f.app(environ, start_response)
+            return handler_module.app(environ, start_response)
 
         # use WSGI entry
         # call wrapper to strip /run/<func-name> from path

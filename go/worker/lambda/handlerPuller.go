@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -23,8 +22,6 @@ import (
 
 var errNotFound404 = errors.New("lambda not found in blob store")
 
-var RT_UNKNOWN common.RuntimeType
-
 type HandlerPuller struct {
 	bucket   *blob.Bucket
 	dirCache sync.Map // key=lambda name, value=*CacheEntry
@@ -34,7 +31,6 @@ type HandlerPuller struct {
 type CacheEntry struct {
 	version time.Time // blob modification time
 	path    string
-	runtime common.RuntimeType
 }
 
 func NewHandlerPuller(dirMaker *common.DirMaker) (*HandlerPuller, error) {
@@ -67,12 +63,12 @@ func NewHandlerPuller(dirMaker *common.DirMaker) (*HandlerPuller, error) {
 	}, nil
 }
 
-func (cp *HandlerPuller) Pull(name string) (common.RuntimeType, string, error) {
+func (cp *HandlerPuller) Pull(name string) (string, error) {
 	t := common.T0("pull-lambda")
 	defer t.T1()
 
 	if err := common.ValidateFunctionName(name); err != nil {
-		return RT_UNKNOWN, "", err
+		return "", err
 	}
 
 	key := name + common.LambdaFileExtension
@@ -81,71 +77,62 @@ func (cp *HandlerPuller) Pull(name string) (common.RuntimeType, string, error) {
 	if err == nil {
 		version := attrs.ModTime
 		if cached := cp.getCache(name); cached != nil && cached.version.Equal(version) {
-			return cached.runtime, cached.path, nil
+			return cached.path, nil
 		}
 	}
 
-	rt, dir, err := cp.pullFromBlob(key, name)
+	dir, err := cp.pullFromBlob(key, name)
 	if err == nil {
 		var version time.Time
 		if attrs != nil {
 			version = attrs.ModTime
 		}
-		cp.putCache(name, version, dir, rt)
-		return rt, dir, nil
+		cp.putCache(name, version, dir)
+		return dir, nil
 	} else if err != errNotFound404 {
-		return RT_UNKNOWN, "", err
+		return "", err
 	}
-	return RT_UNKNOWN, "", fmt.Errorf(
+	return "", fmt.Errorf(
 		"lambda %q not found in blob store (bucket=%q, key=%q)",
 		name, common.Conf.Registry, key,
 	)
 }
 
-func (cp *HandlerPuller) pullFromBlob(key, lambdaName string) (common.RuntimeType, string, error) {
+func (cp *HandlerPuller) pullFromBlob(key, lambdaName string) (string, error) {
 	ctx := context.Background()
 	reader, err := cp.bucket.NewReader(ctx, key, nil)
 	if err != nil {
 		if gcerrors.Code(err) == gcerrors.NotFound {
-			return RT_UNKNOWN, "", errNotFound404
+			return "", errNotFound404
 		}
-		return RT_UNKNOWN, "", err
+		return "", err
 	}
 	defer reader.Close()
 
 	tmpFile, err := os.CreateTemp("", lambdaName+"_blob")
-
 	if err != nil {
-		return RT_UNKNOWN, "", err
+		return "", err
 	}
 
 	tmpPath := tmpFile.Name()
 	if _, err := io.Copy(tmpFile, reader); err != nil {
 		tmpFile.Close()
-		return RT_UNKNOWN, "", err
+		return "", err
 	}
 	tmpFile.Close()
 	defer os.Remove(tmpPath)
 
 	targetDir := cp.dirMaker.Get(lambdaName)
 	if err := os.MkdirAll(targetDir, 0755); err != nil {
-		return RT_UNKNOWN, "", err
+		return "", err
 	}
 
 	cmd := exec.Command("tar", "-xzf", tmpPath, "--directory", targetDir)
 	if output, err := cmd.CombinedOutput(); err != nil {
-		return RT_UNKNOWN, "", fmt.Errorf("tar extract failed: %v :: %s", err, output)
+		return "", fmt.Errorf("tar extract failed: %v :: %s", err, output)
 	}
 
-	var rt common.RuntimeType
-	if _, err := os.Stat(filepath.Join(targetDir, "f.py")); err == nil {
-		rt = common.RT_PYTHON
-	} else if _, err := os.Stat(filepath.Join(targetDir, "f.bin")); err == nil {
-		rt = common.RT_NATIVE
-	} else {
-		return RT_UNKNOWN, "", fmt.Errorf("runtime type not found in extracted archive")
-	}
-	return rt, targetDir, nil
+	return targetDir, nil
 }
 
 func (cp *HandlerPuller) Reset(name string) {
@@ -159,10 +146,10 @@ func (cp *HandlerPuller) getCache(name string) *CacheEntry {
 	}
 	return entry.(*CacheEntry)
 }
-func (cp *HandlerPuller) putCache(name string, version time.Time, path string, runtime common.RuntimeType) {
+func (cp *HandlerPuller) putCache(name string, version time.Time, path string) {
 	// Clean up old cache entry if it exists
 	if old := cp.getCache(name); old != nil && old.path != path {
 		os.RemoveAll(old.path)
 	}
-	cp.dirCache.Store(name, &CacheEntry{version, path, runtime})
+	cp.dirCache.Store(name, &CacheEntry{version, path})
 }

@@ -26,7 +26,6 @@ type SOCKContainer struct {
 	codeDir          string
 	scratchDir       string
 	cg               cgroups.Cgroup
-	rtType           common.RuntimeType
 	client           *http.Client
 
 	// 1 for self, plus 1 for each child (we can't release memory
@@ -53,10 +52,6 @@ func (container *SOCKContainer) ID() string {
 	return container.id
 }
 
-func (container *SOCKContainer) GetRuntimeType() common.RuntimeType {
-	return container.rtType
-}
-
 func (container *SOCKContainer) freshProc() (err error) {
 	// get FD to cgroup
 	cgFiles := make([]*os.File, 1)
@@ -70,13 +65,13 @@ func (container *SOCKContainer) freshProc() (err error) {
 
 	var cmd *exec.Cmd
 
-	if container.rtType == common.RT_PYTHON {
+	if container.meta.Runtime == common.RT_PYTHON {
 		cmd = exec.Command(
 			"chroot", container.containerRootDir, "python3", "-u",
 			"/runtimes/python/server.py", "/host/bootstrap.py", strconv.Itoa(1),
 			strconv.FormatBool(common.Conf.Features.Enable_seccomp),
 		)
-	} else if container.rtType == common.RT_NATIVE {
+	} else if container.meta.Runtime == common.RT_NATIVE {
 		if container.containerProxy == nil {
 			err := container.launchContainerProxy()
 
