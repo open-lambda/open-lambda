@@ -374,9 +374,61 @@ func run_reqbench_init(ctx *cli.Context) error {
 			return err
 		}
 
-		// TODO create lambdas
-		// TODO ol admin install
-		create_lambdas(ctx)
+		txtResponse, err := http.Get(txtUrl)
+		if err != nil {
+			fmt.Printf("Failed to download requirements for lambda %d: %v\n", i, err)
+			txtFile.Close()
+			os.Remove(txtFilename)
+			continue
+		}
+
+		if txtResponse.StatusCode != 200 {
+			fmt.Printf("Requirements not found for lambda %d (status %d)\n", i, txtResponse.StatusCode)
+			txtResponse.Body.Close()
+			txtFile.Close()
+			os.Remove(txtFilename)
+			continue
+		}
+
+		requirementsContent, err := ioutil.ReadAll(txtResponse.Body)
+		txtResponse.Body.Close()
+		if err != nil {
+			fmt.Printf("Failed to read requirements for lambda %d: %v\n", i, err)
+			txtFile.Close()
+			os.Remove(txtFilename)
+			continue
+		}
+
+		lambdaName := fmt.Sprintf("reqbench-%d", i)
+		lambdaPath := filepath.Join(common.Conf.Registry, lambdaName)
+
+		if err := os.MkdirAll(lambdaPath, 0755); err != nil {
+			fmt.Printf("Failed to create lambda dir %s: %v\n", lambdaName, err)
+			txtFile.Close()
+			os.Remove(txtFilename)
+			continue
+		}
+
+		reqPath := filepath.Join(lambdaPath, "requirements.txt")
+		if err := ioutil.WriteFile(reqPath, requirementsContent, 0644); err != nil {
+			fmt.Printf("Failed to write requirements for %s: %v\n", lambdaName, err)
+			txtFile.Close()
+			os.Remove(txtFilename)
+			continue
+		}
+
+		functionCode := `def f(event):
+    return {"status": "ok"}
+`
+		functionPath := filepath.Join(lambdaPath, "f.py")
+		if err := ioutil.WriteFile(functionPath, []byte(functionCode), 0644); err != nil {
+			fmt.Printf("Failed to write function for %s: %v\n", lambdaName, err)
+			txtFile.Close()
+			os.Remove(txtFilename)
+			continue
+		}
+
+		fmt.Printf("Created lambda %s\n", lambdaName)
 
 		txtFile.Close()
 		os.Remove(txtFilename)
@@ -386,7 +438,7 @@ func run_reqbench_init(ctx *cli.Context) error {
 }
 
 func run_billibench_init(ctx *cli.Context) error {
-
+	return nil
 }
 
 // BenchCommands returns a list of CLI commands for benchmarking.
