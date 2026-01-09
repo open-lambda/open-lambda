@@ -368,18 +368,94 @@ func run_reqbench_init(ctx *cli.Context) error {
 		// http.Get https://raw.githubusercontent.com/repo[1]/repo[2]/repo[3]
 		// OR repo[8]
 		txtUrl := "https://raw.githubusercontent.com/" + repo[1] + "/" + repo[2] + "/" + repo[3]
-		txtFilename := "requirements" + strconv.Itoa(i) + ".txt"
-		txtFile, err := os.Create(txtFilename)
-		if err != nil {
-			return err
+
+		// Create lambda function
+		lambdaName := fmt.Sprintf("reqbench-%d", i)
+		lambdaPath := filepath.Join(common.Conf.Registry, lambdaName)
+
+		// Create lambda directory
+		if err := os.MkdirAll(lambdaPath, 0755); err != nil {
+			fmt.Printf("Failed to create lambda dir %s: %v\n", lambdaName, err)
+			continue
 		}
 
-		// TODO create lambdas
-		// TODO ol admin install
-		create_lambdas(ctx)
+		// Write requirements.txt
+		reqPath := filepath.Join(lambdaPath, "requirements.txt")
+		// Get requirements.txt from GitHub
+		txtUrl := fmt.Sprintf("https://raw.githubusercontent.com/%s/%s/%s/requirements.txt",
+			repo[1], repo[2], repo[3])
 
-		txtFile.Close()
-		os.Remove(txtFilename)
+		// Download the individual requirements.txt file
+		txtResponse, err := http.Get(txtUrl)
+		if err != nil {
+			fmt.Printf("Failed to download requirements for lambda %d: %v\n", i, err)
+			continue
+		}
+
+		if txtResponse.StatusCode != 200 {
+			fmt.Printf("Requirements not found for lambda %d (status %d)\n", i, txtResponse.StatusCode)
+			txtResponse.Body.Close()
+			continue
+		}
+
+		requirementsContent, err := ioutil.ReadAll(txtResponse.Body)
+		txtResponse.Body.Close()
+		if err != nil {
+			fmt.Printf("Failed to read requirements for lambda %d: %v\n", i, err)
+			continue
+		}
+
+		// Create lambda function
+		lambdaName := fmt.Sprintf("reqbench-%d", i)
+		lambdaPath := filepath.Join(common.Conf.Registry, lambdaName)
+
+		// Create lambda directory
+		if err := os.MkdirAll(lambdaPath, 0755); err != nil {
+			fmt.Printf("Failed to create lambda dir %s: %v\n", lambdaName, err)
+			continue
+		}
+
+		// Write requirements.txt
+		reqPath := filepath.Join(lambdaPath, "requirements.txt")
+		if err := ioutil.WriteFile(reqPath, requirementsContent, 0644); err != nil {
+			fmt.Printf("Failed to write requirements for %s: %v\n", lambdaName, err)
+			continue
+		}
+
+		// Create simple lambda function
+		functionCode := `def f(event):
+    return {"status": "ok", "lambda": "` + lambdaName + `"}
+`
+		functionPath := filepath.Join(lambdaPath, "f.py")
+		if err := ioutil.WriteFile(functionPath, []byte(functionCode), 0644); err != nil {
+			fmt.Printf("Failed to write function for %s: %v\n", lambdaName, err)
+			continue
+		}
+
+		fmt.Printf("Created lambda %s\n", lambdaName)
+		// Packages install on first invocation (lazy loading)
+		if err != nil {
+			fmt.Printf("Failed to read requirements for %s: %v\n", lambdaName, err)
+			continue
+		}
+		if err := ioutil.WriteFile(reqPath, requirementsContent, 0644); err != nil {
+			fmt.Printf("Failed to write requirements for %s: %v\n", lambdaName, err)
+			continue
+		}
+
+		// Create simple lambda function
+		functionCode := `def f(event):
+    return {"status": "ok", "lambda": "` + lambdaName + `"}
+`
+		functionPath := filepath.Join(lambdaPath, "f.py")
+		if err := ioutil.WriteFile(functionPath, []byte(functionCode), 0644); err != nil {
+			fmt.Printf("Failed to write function for %s: %v\n", lambdaName, err)
+			continue
+		}
+
+		fmt.Printf("Created lambda %s\n", lambdaName)
+		// Packages install on first invocation (lazy loading)
+
 	}
 
 	return nil
