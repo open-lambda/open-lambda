@@ -191,7 +191,6 @@ func (cg *CgroupImpl) AddPid(pid string) error {
 }
 
 func (cg *CgroupImpl) setFreezeState(state int64) error {
-	warningFired := false
 	timeout := 20 * time.Second
 
 	resourcePath := cg.ResourcePath("cgroup.events")
@@ -212,25 +211,22 @@ func (cg *CgroupImpl) setFreezeState(state int64) error {
 
 	start := time.Now()
 
+	defer func(start time.Time) {
+		elapsed := time.Since(start)
+		if elapsed >= 250*time.Millisecond {
+			cg.printf("WARNING!  setFreezeState to state %v took %v to complete", state, elapsed)
+		}
+	}(start)
+
 	cg.WriteInt("cgroup.freeze", state)
 
 	for {
 		elapsed := time.Since(start)
-		if !warningFired && elapsed >= 250*time.Millisecond {
-			cg.printf("WARNING!  setFreezeState taking >= 250ms to complete")
-			warningFired = true
-		}
 
 		remaining := timeout - elapsed
-
 		if remaining < 0 {
-			freezerState, err := cg.TryReadIntKV("cgroup.events", "frozen")
-
-			if err != nil {
-				return fmt.Errorf("failed to check self_freezing state :: %w", err)
-			}
-
-			return fmt.Errorf("cgroup stuck on %v after %v (should be %v)", freezerState, timeout, state)
+			oppositeState := 1 - state
+			return fmt.Errorf("cgroup stuck on %v after %v (should be %v)", oppositeState, timeout, state)
 		}
 
 		events, err := unix.Poll(pollFDs, int(remaining.Milliseconds()))
@@ -242,7 +238,8 @@ func (cg *CgroupImpl) setFreezeState(state int64) error {
 		}
 		// no POLLPRI events, timed out & no state change occurred
 		if events == 0 {
-			return fmt.Errorf("cgroup freeze timeout after %v (expected state %v)", timeout, state)
+			oppositeState := 1 - state
+			return fmt.Errorf("cgroup stuck on %v after %v (should be %v)", oppositeState, timeout, state)
 		}
 
 		freezerState, err := cg.TryReadIntKV("cgroup.events", "frozen")
