@@ -38,6 +38,21 @@ def web_server():
     module_name = entry_file[:-3]
     handler_module = importlib.import_module(module_name)
 
+    # Determine entry point
+    # TODO: add OL_FUNCTION_ENTRY for explicit function entry points
+    wsgi_entry = os.environ.get('OL_WSGI_ENTRY')
+    if wsgi_entry:
+        entry_point = getattr(handler_module, wsgi_entry)
+        is_wsgi = True
+    elif hasattr(handler_module, 'f'):
+        entry_point = handler_module.f
+        is_wsgi = False
+    elif hasattr(handler_module, 'app'):
+        entry_point = handler_module.app
+        is_wsgi = True
+    else:
+        raise ValueError("No entry point found. Set OL_WSGI_ENTRY or define 'f' or 'app' in your module.")
+
     class SockFileHandler(tornado.web.RequestHandler):
         # TODO: we should consider how are the different requests used in the context of different applications and functions
         # and consider what does the validations should look like for example, should we allow POST requests with no payload etc.
@@ -51,7 +66,7 @@ def web_server():
                     self.write(f'bad request data: "{data}"')
                     return
 
-                result = handler_module.f(event) if event is not None else handler_module.f({}) 
+                result = entry_point(event) if event is not None else entry_point({}) 
                 self.write(json.dumps(result))  # Return the result as JSON
             except Exception:
                 self.set_status(500)  # Internal server error for unhandled exceptions
@@ -78,7 +93,7 @@ def web_server():
             self.handle_request()
     
 
-    if hasattr(handler_module, "app"):
+    if is_wsgi:
         def path_wrapper(environ, start_response):
             path = environ.get("PATH_INFO", "")
             # split path to get individual components
@@ -92,8 +107,8 @@ def web_server():
             app_name = parts[2]
             environ["SCRIPT_NAME"] = '/run/' + app_name
 
-            return handler_module.app(environ, start_response)
-        
+            return entry_point(environ, start_response)
+
         # use WSGI entry
         # call wrapper to strip /run/<func-name> from path
         app = tornado.wsgi.WSGIContainer(path_wrapper)
