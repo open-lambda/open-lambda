@@ -1,2 +1,2 @@
 flask
-werkzeug<3.1
+werkzeug<3.2
