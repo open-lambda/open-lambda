@@ -225,21 +225,12 @@ func (cg *CgroupImpl) setFreezeState(state int64) error {
 
 		remaining := timeout - elapsed
 		if remaining < 0 {
-			oppositeState := 1 - state
-			return fmt.Errorf("cgroup stuck on %v after %v (should be %v)", oppositeState, timeout, state)
+			return fmt.Errorf("cgroup freeze timeout after %v (expected state %v)", timeout, state)
 		}
 
-		events, err := unix.Poll(pollFDs, int(remaining.Milliseconds()))
-		if err != nil {
-			if errors.Is(err, unix.EINTR) {
-				continue
-			}
+		_, err := unix.Poll(pollFDs, int(remaining.Milliseconds()))
+		if err != nil && !errors.Is(err, unix.EINTR) {
 			return fmt.Errorf("poll syscall failed on %s: %w", resourcePath, err)
-		}
-		// no POLLPRI events, timed out & no state change occurred
-		if events == 0 {
-			oppositeState := 1 - state
-			return fmt.Errorf("cgroup stuck on %v after %v (should be %v)", oppositeState, timeout, state)
 		}
 
 		freezerState, err := cg.TryReadIntKV("cgroup.events", "frozen")
