@@ -20,5 +20,5 @@ markupsafe==3.0.3
     #   werkzeug
 pip-tools==5.5.0
     # via -r requirements.in
-werkzeug==3.1.4
+werkzeug==3.1.5
     # via flask
