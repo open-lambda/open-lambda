@@ -222,6 +222,11 @@ func (linst *LambdaInstance) Task() {
 			default:
 				req = nil
 			}
+
+			// if sandbox was destroyed, break out so outer loop can create a new one
+			if sb == nil {
+				break
+			}
 		}
 
 		if sb != nil {
