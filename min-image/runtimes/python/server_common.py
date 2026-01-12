@@ -12,7 +12,6 @@ import importlib
 import traceback
 from enum import Enum
 from http.server import BaseHTTPRequestHandler
-from io import BytesIO
 from urllib.parse import urlparse
 
 from dotenv import load_dotenv
@@ -25,17 +24,25 @@ class EntryType(Enum):
 
 
 class RequestParser(BaseHTTPRequestHandler):
-    def __init__(self, request_data):
-        self.rfile = BytesIO(request_data)
+    def __init__(self, conn):
+        self.rfile = conn.makefile('rb', buffering=65536)
         self.raw_requestline = self.rfile.readline()
         self.parse_request()
+        self.remaining = int(self.headers.get('Content-Length', 0))
+
+    def read(self, size=-1):
+        if size < 0:
+            size = self.remaining
+        size = min(size, self.remaining)
+        data = self.rfile.read(size)
+        self.remaining -= len(data)
+        return data
 
 
 def handle_func(conn, request, entry_point):
     """Handle direct function calls: f(event) -> result"""
     try:
-        content_length = int(request.headers.get('Content-Length', 0))
-        body = request.rfile.read(content_length) if content_length else b""
+        body = request.read()
         event = json.loads(body) if body else {}
         result = entry_point(event)
         response_body = json.dumps(result).encode()
@@ -55,9 +62,6 @@ def handle_func(conn, request, entry_point):
 
 def handle_wsgi(conn, request, entry_point, app_name, path_info, query_string):
     """Handle WSGI apps: app(environ, start_response) -> iterable"""
-    content_length = request.headers.get('Content-Length', '')
-    body = request.rfile.read(int(content_length)) if content_length else b""
-
     # Host header is required in HTTP/1.1 (RFC 2616 section 14.23)
     # Note: we listen on a Unix socket, so port may not be meaningful
     host = request.headers['Host']
@@ -79,7 +83,7 @@ def handle_wsgi(conn, request, entry_point, app_name, path_info, query_string):
         # wsgi.* variables (required)
         "wsgi.version": (1, 0),       # PEP 3333 specifies tuple (1, 0)
         "wsgi.url_scheme": "http",
-        "wsgi.input": BytesIO(body),
+        "wsgi.input": request,  # request.read() handles Content-Length limiting
         "wsgi.errors": sys.stderr,
         "wsgi.multithread": False,
         "wsgi.multiprocess": False,
@@ -111,8 +115,8 @@ def handle_wsgi(conn, request, entry_point, app_name, path_info, query_string):
 
 def handle_asgi(conn, request, entry_point, app_name, path_info, query_string):
     """Handle ASGI apps: await app(scope, receive, send)"""
-    content_length = int(request.headers.get('Content-Length', 0))
-    body = request.rfile.read(content_length) if content_length else b""
+    # TODO: stream body using more_body flag instead of reading all upfront
+    body = request.read()
 
     # ASGI 3.0: https://asgi.readthedocs.io/en/latest/specs/www.html#http-connection-scope
     scope = {
@@ -206,8 +210,7 @@ def web_server_on_sock(file_sock, server_name="server"):
 
     while True:
         conn, _ = file_sock.accept()
-        data = conn.recv(4096)
-        request = RequestParser(data)
+        request = RequestParser(conn)
 
         # Parse path: `/run/<app-name>/a/b/c` -> app_name, `/a/b/c`, query
         parsed = urlparse(request.path)
