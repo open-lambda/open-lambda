@@ -1,0 +1,2 @@
+flask
+werkzeug<3.1

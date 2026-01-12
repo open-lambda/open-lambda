@@ -45,6 +45,25 @@ six==1.16.0
     # via python-dateutil
 ```
 
+### Using the pip-compile Lambda
+
+If you don't have pip-tools installed locally, you can use the
+`pip-compile` lambda included in OpenLambda. First, install it:
+
+```bash
+ol admin install ./examples/pip-compile
+```
+
+Then compile your requirements (from a file or URL):
+
+```bash
+# From a local file
+curl -X POST --data-binary @requirements.in http://localhost:5000/run/pip-compile/text > requirements.txt
+
+# From a URL
+curl -X POST -d 'https://example.com/requirements.in' http://localhost:5000/run/pip-compile/url > requirements.txt
+```
+
 ## Try It
 
 Start an OpenLambda worker (if not already started).  For example, you

@@ -1,0 +1,7 @@
+triggers:
+  http:
+    - method: GET
+    - method: POST
+
+environment:
+  OL_ENTRY_FILE: "app.py"

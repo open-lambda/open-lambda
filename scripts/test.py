@@ -49,14 +49,12 @@ def install_examples_to_worker_registry():
     if not os.path.exists(examples_dir):
         print(f"Examples directory not found at {examples_dir}")
         return
-    # Get all directories in examples
+    # Get all directories in examples (each directory is a lambda function)
     example_functions = []
     for item in os.listdir(examples_dir):
         item_path = os.path.join(examples_dir, item)
         if os.path.isdir(item_path):
-            # Check if it has f.py (required for lambda functions)
-            if os.path.exists(os.path.join(item_path, "f.py")):
-                example_functions.append(item_path)
+            example_functions.append(item_path)
     print(f"Found {len(example_functions)} lambda functions in examples directory")
     # Install each function using admin install command
     # Find the ol binary - it should be in the project root
@@ -310,6 +308,79 @@ def flask_test():
         raise ValueError(f"r.text should be 'hi\n', not {repr(r.text)}")
 
 @test
+def wsgi_post_echo_test():
+    """Test that POST body is properly forwarded to WSGI/Flask apps"""
+    url = 'http://localhost:5000/run/wsgi-post-echo'
+
+    # Test with plain text body
+    test_body = "hello world"
+    r = requests.post(url, data=test_body, headers={"Content-Type": "text/plain"})
+    check_status_code(r)
+    if r.text != test_body:
+        raise ValueError(f"expected '{test_body}', but got '{r.text}'")
+
+    # Test with JSON body
+    test_json = '{"key": "value"}'
+    r = requests.post(url, data=test_json, headers={"Content-Type": "application/json"})
+    check_status_code(r)
+    if r.text != test_json:
+        raise ValueError(f"expected '{test_json}', but got '{r.text}'")
+
+@test
+def flask_entry_test():
+    """Test OL_ENTRY_FILE feature with a Flask app using app.py instead of f.py"""
+    # Test the index route
+    url = 'http://localhost:5000/run/flask-entry-test'
+    print("URL", url)
+    r = requests.get(url)
+    print("RESPONSE", r)
+
+    if r.status_code != 200:
+        raise ValueError(f"expected status code 200, but got {r.status_code}")
+    if r.text != "Hello from app.py!\n":
+        raise ValueError(f"r.text should be 'Hello from app.py!\\n', not {repr(r.text)}")
+
+    # Test the info route
+    url_info = 'http://localhost:5000/run/flask-entry-test/info'
+    print("URL", url_info)
+    r = requests.get(url_info)
+    print("RESPONSE", r)
+
+    if r.status_code != 200:
+        raise ValueError(f"expected status code 200, but got {r.status_code}")
+    data = r.json()
+    if data.get("entry_file") != "app.py":
+        raise ValueError(f"expected entry_file='app.py', got {data}")
+
+@test
+def wsgi_entry_test():
+    """Test OL_WSGI_ENTRY feature with a WSGI entry point not named 'app'"""
+    # Test the index route
+    url = 'http://localhost:5000/run/wsgi-entry-test'
+    print("URL", url)
+    r = requests.get(url)
+    print("RESPONSE", r)
+
+    if r.status_code != 200:
+        raise ValueError(f"expected status code 200, but got {r.status_code}")
+    if r.text != "Hello from my_wsgi_app!\n":
+        raise ValueError(f"r.text should be 'Hello from my_wsgi_app!\\n', not {repr(r.text)}")
+
+    # Test the info route
+    url_info = 'http://localhost:5000/run/wsgi-entry-test/info'
+    print("URL", url_info)
+    r = requests.get(url_info)
+    print("RESPONSE", r)
+
+    if r.status_code != 200:
+        raise ValueError(f"expected status code 200, but got {r.status_code}")
+    data = r.json()
+    if data.get("entry_point") != "my_wsgi_app":
+        raise ValueError(f"expected entry_point='my_wsgi_app', got {data}")
+    if data.get("entry_file") != "main.py":
+        raise ValueError(f"expected entry_file='main.py', got {data}")
+
+@test
 def test_http_method_restrictions():
     url = 'http://localhost:5000/run/lambda-config-test'
     print("URL", url)
@@ -406,6 +477,9 @@ def run_tests():
 
     # make sure we can use WSGI apps based on frameworks like Flask
     flask_test()
+    wsgi_post_echo_test()
+    flask_entry_test()
+    wsgi_entry_test()
     test_http_method_restrictions()
 
     # test environment variables from ol.yaml

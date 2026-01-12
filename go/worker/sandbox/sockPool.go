@@ -64,7 +64,7 @@ func sbStr(sb Sandbox) string {
 	return fmt.Sprintf("<SB %s>", sb.ID())
 }
 
-func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, meta *SandboxMeta, rtType common.RuntimeType) (sb Sandbox, err error) {
+func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, meta *SandboxMeta) (sb Sandbox, err error) {
 	id := fmt.Sprintf("%d", atomic.AddInt64(&nextId, 1))
 	meta = fillMetaDefaults(meta)
 	pool.printf("<%v>.Create(%v, %v, %v, %v, %v)=%s...", pool.name, sbStr(parent), isLeaf, codeDir, scratchDir, meta, id)
@@ -84,7 +84,6 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 		cgRefCount:       1,
 		children:         make(map[string]Sandbox),
 		meta:             meta,
-		rtType:           rtType,
 		containerProxy:   nil,
 	}
 	var c Sandbox = cSock
@@ -122,7 +121,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 	}
 	t2.T1()
 
-	if rtType == common.RT_PYTHON {
+	if meta.Runtime == common.RT_PYTHON {
 		// add installed packages to the path, and import the modules we'll need
 		var pyCode []string
 
@@ -153,7 +152,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 		if err := ioutil.WriteFile(path, code, 0600); err != nil {
 			return nil, err
 		}
-	} else if rtType == common.RT_NATIVE {
+	} else if meta.Runtime == common.RT_NATIVE {
 		// nothing to do?
 	} else {
 		return nil, fmt.Errorf("Unsupported runtime")

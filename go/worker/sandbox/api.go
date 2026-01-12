@@ -12,8 +12,8 @@ type SandboxPool interface {
 	// isLeaf: true iff this is not being created as a sandbox we can fork later
 	// codeDir: directory where lambda code exists
 	// scratchDir: directory where handler code can write (caller is responsible for creating and deleting)
-	// meta: details about installs, imports, etc.  Will be populated with defaults if not specified
-	Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, meta *SandboxMeta, rtType common.RuntimeType) (sb Sandbox, err error)
+	// meta: details about runtime, installs, imports, etc.  Will be populated with defaults if not specified
+	Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, meta *SandboxMeta) (sb Sandbox, err error)
 
 	// blocks until all Sandboxes are deleted, so caller must
 	// either delete them before this call, or from another asyncronously
@@ -80,15 +80,16 @@ type Sandbox interface {
 
 	// Child calls this on parent to notify of child Destroy
 	childExit(child Sandbox)
-
-	GetRuntimeType() common.RuntimeType // TODO: make it part of SandboxMeta?
 }
 
 type SandboxMeta struct {
-	Installs   []string
-	Imports    []string
+	Runtime    common.RuntimeType
 	MemLimitMB int
 	CPUPercent int
+
+	// Python specific fields:
+	Installs []string
+	Imports  []string
 }
 
 type SandboxError string
