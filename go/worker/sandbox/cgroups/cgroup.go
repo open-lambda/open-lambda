@@ -39,13 +39,10 @@ func (cg *CgroupImpl) Release() {
 	// if there's room in the recycled channel, add it there.
 	// Otherwise, just delete it.
 	if common.Conf.Features.Reuse_cgroups {
-		err := cg.watchEventsFile(20, 0, "populated")
+		timeout := 20 * time.Second
+		err := cg.watchEventsFile(timeout, 0, "populated")
 		if err != nil {
 			panic(err)
-		}
-		pids, err := cg.GetPIDs()
-		if len(pids) > 0 {
-			panic(fmt.Errorf("Cannot release cgroup that contains processes: %v", pids))
 		}
 
 		select {
@@ -196,7 +193,7 @@ func (cg *CgroupImpl) watchEventsFile(timeout time.Duration, state int64, key st
 	defer func(start time.Time) {
 		elapsed := time.Since(start)
 		if elapsed >= 250*time.Millisecond {
-			cg.printf("WARNING!  watchEventsFile to state %v took %v to complete", state, elapsed)
+			cg.printf("WARNING!  watchEventsFile to state %v on key %s took %v to complete", state, key, elapsed)
 		}
 	}(start)
 
@@ -205,7 +202,7 @@ func (cg *CgroupImpl) watchEventsFile(timeout time.Duration, state int64, key st
 
 		remaining := timeout - elapsed
 		if remaining < 0 {
-			return fmt.Errorf("watchEventsFile timeout after %v (expected state %v)", timeout, state)
+			return fmt.Errorf("watchEventsFile timeout after %v (key %s, expected state %v)", timeout, key, state)
 		}
 
 		_, err := unix.Poll(pollFDs, int(remaining.Milliseconds()))
@@ -213,11 +210,11 @@ func (cg *CgroupImpl) watchEventsFile(timeout time.Duration, state int64, key st
 			return fmt.Errorf("poll syscall failed on %s: %w", resourcePath, err)
 		}
 
-		freezerState, err := cg.TryReadIntKV("cgroup.events", key)
+		keyState, err := cg.TryReadIntKV("cgroup.events", key)
 		if err != nil {
 			return fmt.Errorf("failed to check self_%s state :: %w", key, err)
 		}
-		if freezerState == state {
+		if keyState == state {
 			return nil
 		}
 	}
