@@ -8,10 +8,10 @@ import os
 import sys
 import json
 import asyncio
+import http.client
 import importlib
 import traceback
 from enum import Enum
-from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse
 
 from dotenv import load_dotenv
@@ -23,11 +23,25 @@ class EntryType(Enum):
     ASGI = "asgi"    # await app(scope, receive, send)
 
 
-class RequestParser(BaseHTTPRequestHandler):
+class RequestParser:
+    '''
+    Parses an HTTP/1.x request from a connection.
+
+    Uses iso-8859-1 (Latin-1) for the request line per RFC 7230 Section 3.2.4:
+    "Historically, HTTP has allowed field content with text in the ISO-8859-1
+    charset." This encoding also provides a safe 1-to-1 byte-to-codepoint mapping,
+    ensuring any byte sequence decodes without error.
+    '''
     def __init__(self, conn):
         self.rfile = conn.makefile('rb', buffering=65536)
-        self.raw_requestline = self.rfile.readline()
-        self.parse_request()
+
+        # Parse request line: "METHOD /path HTTP/1.1\r\n"
+        line = self.rfile.readline().decode('iso-8859-1').rstrip('\r\n')
+        self.command, self.path, self.request_version = line.split(None, 2)
+
+        # Parse headers using stdlib (documented API)
+        self.headers = http.client.parse_headers(self.rfile)
+
         self.remaining = int(self.headers.get('Content-Length', 0))
 
     def read(self, size=-1):
@@ -56,6 +70,7 @@ def handle_func(conn, request, entry_point):
     conn.sendall(f"HTTP/1.1 {status} {status_text}\r\n".encode())
     conn.sendall(f"Content-Type: {content_type}\r\n".encode())
     conn.sendall(f"Content-Length: {len(response_body)}\r\n".encode())
+    conn.sendall(b"Connection: close\r\n")
     conn.sendall(b"\r\n")
     conn.sendall(response_body)
 
@@ -103,6 +118,7 @@ def handle_wsgi(conn, request, entry_point, app_name, path_info, query_string):
         conn.sendall(f"HTTP/1.1 {status}\r\n".encode())
         for name, value in response_headers:
             conn.sendall(f"{name}: {value}\r\n".encode())
+        conn.sendall(b"Connection: close\r\n")
         conn.sendall(b"\r\n")
 
     result = entry_point(environ, start_response)
@@ -144,6 +160,7 @@ def handle_asgi(conn, request, entry_point, app_name, path_info, query_string):
             conn.sendall(f"HTTP/1.1 {status} OK\r\n".encode())
             for name, value in message.get("headers", []):
                 conn.sendall(name + b": " + value + b"\r\n")
+            conn.sendall(b"Connection: close\r\n")
             conn.sendall(b"\r\n")
         elif message["type"] == "http.response.body":
             conn.sendall(message.get("body", b""))
@@ -156,6 +173,7 @@ def handle_asgi(conn, request, entry_point, app_name, path_info, query_string):
             conn.sendall(b"HTTP/1.1 500 Internal Server Error\r\n")
             conn.sendall(b"Content-Type: text/plain\r\n")
             conn.sendall(f"Content-Length: {len(error)}\r\n".encode())
+            conn.sendall(b"Connection: close\r\n")
             conn.sendall(b"\r\n")
             conn.sendall(error)
 

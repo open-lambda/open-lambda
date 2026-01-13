@@ -14,6 +14,7 @@ import tarfile
 import subprocess
 
 from time import time
+from datetime import datetime
 from subprocess import call
 from multiprocessing import Pool
 
@@ -467,7 +468,7 @@ def run_tests():
     worker_type = get_worker_type()
     worker = worker_type()
     assert worker
-    print("Worker started")
+    print(f"Worker started at {datetime.now().strftime('%I:%M%p').lstrip('0').lower()}")
     install_examples_to_worker_registry()
     print("Examples installed")
     worker.stop()
