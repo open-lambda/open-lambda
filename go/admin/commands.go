@@ -203,11 +203,13 @@ func createTarGz(funcDir string, overrides map[string]string) ([]byte, error) {
 	if configOverride, ok := overrides["ol.yaml"]; ok {
 		configDir = filepath.Dir(configOverride)
 	}
-	if lambdaConfig, err := common.LoadLambdaConfig(configDir); err == nil {
-		if lambdaConfig.Environment != nil {
-			if entryFile, ok := lambdaConfig.Environment["OL_ENTRY_FILE"]; ok {
-				pythonEntryFile = entryFile
-			}
+	lambdaConfig, err := common.LoadLambdaConfig(configDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse config in %s: %v", configDir, err)
+	}
+	if lambdaConfig.Environment != nil {
+		if entryFile, ok := lambdaConfig.Environment["OL_ENTRY_FILE"]; ok {
+			pythonEntryFile = entryFile
 		}
 	}
 
@@ -216,7 +218,7 @@ func createTarGz(funcDir string, overrides map[string]string) ([]byte, error) {
 		return nil, fmt.Errorf("required file %s not found in %s", pythonEntryFile, funcDir)
 	}
 
-	err := filepath.Walk(funcDir, func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(funcDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return fmt.Errorf("walk error: %v", err)
 		}
