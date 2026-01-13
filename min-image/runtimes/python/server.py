@@ -90,8 +90,6 @@ def start_container():
     # child, which will actually use it.  This is so that the parent
     # can know that once the child exits, it is safe to start sending
     # messages to the sock file.
-    if os.path.exists(file_sock_path):
-        os.remove(file_sock_path)
     file_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     file_sock.bind(file_sock_path)
     file_sock.listen(1)  # backlog=1: we handle one request at a time, no concurrency
