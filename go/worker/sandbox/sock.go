@@ -277,7 +277,7 @@ func (container *SOCKContainer) DestroyIfPaused(reason string) {
 }
 
 // when the count goes to zero, it means (a) this container and (b)
-// all it's descendants are destroyed. Thus, it's safe to release it's
+// all it's descendants are destroyed. Thus, it's safe to release its
 // cgroups, and return the memory allocation to the memPool
 func (container *SOCKContainer) decCgRefCount() {
 	newCount := atomic.AddInt32(&container.cgRefCount, -1)

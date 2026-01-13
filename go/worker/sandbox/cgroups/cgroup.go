@@ -39,20 +39,13 @@ func (cg *CgroupImpl) Release() {
 	// if there's room in the recycled channel, add it there.
 	// Otherwise, just delete it.
 	if common.Conf.Features.Reuse_cgroups {
-		for i := 100; i >= 0; i-- {
-			pids, err := cg.GetPIDs()
-			if err != nil {
-				panic(err)
-			} else if len(pids) > 0 {
-				if i == 0 {
-					panic(fmt.Errorf("Cannot release cgroup that contains processes: %v", pids))
-				}
-
-				cg.printf("cgroup Rmdir failed, trying again in 5ms")
-				time.Sleep(5 * time.Millisecond)
-			} else {
-				break
-			}
+		err := cg.watchEventsFile(20, 0, "populated")
+		if err != nil {
+			panic(err)
+		}
+		pids, err := cg.GetPIDs()
+		if len(pids) > 0 {
+			panic(fmt.Errorf("Cannot release cgroup that contains processes: %v", pids))
 		}
 
 		select {
@@ -180,18 +173,7 @@ func (cg *CgroupImpl) ReadInt(resource string) int64 {
 	return val
 }
 
-// AddPid adds a process ID to the cgroup.
-func (cg *CgroupImpl) AddPid(pid string) error {
-	err := ioutil.WriteFile(cg.ResourcePath("cgroup.procs"), []byte(pid), os.ModeAppend)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (cg *CgroupImpl) setFreezeState(state int64) error {
-	timeout := 20 * time.Second
+func (cg *CgroupImpl) watchEventsFile(timeout time.Duration, state int64, key string) error {
 
 	resourcePath := cg.ResourcePath("cgroup.events")
 
@@ -214,18 +196,16 @@ func (cg *CgroupImpl) setFreezeState(state int64) error {
 	defer func(start time.Time) {
 		elapsed := time.Since(start)
 		if elapsed >= 250*time.Millisecond {
-			cg.printf("WARNING!  setFreezeState to state %v took %v to complete", state, elapsed)
+			cg.printf("WARNING!  watchEventsFile to state %v took %v to complete", state, elapsed)
 		}
 	}(start)
-
-	cg.WriteInt("cgroup.freeze", state)
 
 	for {
 		elapsed := time.Since(start)
 
 		remaining := timeout - elapsed
 		if remaining < 0 {
-			return fmt.Errorf("cgroup freeze timeout after %v (expected state %v)", timeout, state)
+			return fmt.Errorf("watchEventsFile timeout after %v (expected state %v)", timeout, state)
 		}
 
 		_, err := unix.Poll(pollFDs, int(remaining.Milliseconds()))
@@ -233,14 +213,31 @@ func (cg *CgroupImpl) setFreezeState(state int64) error {
 			return fmt.Errorf("poll syscall failed on %s: %w", resourcePath, err)
 		}
 
-		freezerState, err := cg.TryReadIntKV("cgroup.events", "frozen")
+		freezerState, err := cg.TryReadIntKV("cgroup.events", key)
 		if err != nil {
-			return fmt.Errorf("failed to check self_freezing state :: %w", err)
+			return fmt.Errorf("failed to check self_%s state :: %w", key, err)
 		}
 		if freezerState == state {
 			return nil
 		}
 	}
+
+}
+
+// AddPid adds a process ID to the cgroup.
+func (cg *CgroupImpl) AddPid(pid string) error {
+	err := ioutil.WriteFile(cg.ResourcePath("cgroup.procs"), []byte(pid), os.ModeAppend)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (cg *CgroupImpl) setFreezeState(state int64) error {
+	timeout := 20 * time.Second
+	cg.WriteInt("cgroup.freeze", state)
+	return cg.watchEventsFile(timeout, state, "frozen")
 }
 
 // get mem usage in MB
