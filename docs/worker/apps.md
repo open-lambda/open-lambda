@@ -33,7 +33,9 @@ triggers:
     - method: "*"
 environment:
   OL_ENTRY_FILE: app.py
+  OL_ASGI_ENTRY: app
   MEASUREMENTS_CACHE_DIR: /host/tmp/cache
+  STATIONS_CACHE_FILE: /host/tmp/cache/wisconsin_stations_cache.csv
 ```
 
 Install pip-compile and pin requirements.txt to versions suitable for OpenLambda:
@@ -50,14 +52,12 @@ Install and test:
 
 # simple test
 curl http://localhost:5000/run/ag_forecasting_api/
-```
 
-NOTE: the full app doesn't work yet (we need to make sure code and writable directories are as expected).  This fails:
-
-```bash
 # get a forecast for the ALTN station
 curl "http://localhost:5000/run/ag_forecasting_api/ag_models_wrappers/wisconet?forecasting_date=2024-07-01&risk_days=1&station_id=ALTN"
 ```
+
+Note, the first request may take minutes because OpenLambda will install all the packages in requirements.txt upon the first call.
 
 TODO: update ag_forecasting_api URLs from tylerharter fork to UW-Madison-DSI once env option is merged upstream.
 
