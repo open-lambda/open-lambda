@@ -155,7 +155,7 @@ def stress_one_lambda_task(args):
     start, seconds = args
     pos = 0
     while time() < start + seconds:
-        result = open_lambda.run("echo", pos, json=False)
+        result = open_lambda.run("echo", pos, json=False, timeout=60)
         assert_eq(result, str(pos))
         pos += 1
     return pos
