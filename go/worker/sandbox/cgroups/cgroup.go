@@ -40,7 +40,7 @@ func (cg *CgroupImpl) Release() {
 	// Otherwise, just delete it.
 	if common.Conf.Features.Reuse_cgroups {
 		timeout := 20 * time.Second
-		err := cg.watchEventsFile(timeout, 0, "populated")
+		err := cg.watchEvents("populated", 0, timeout, 250*time.Millisecond)
 		if err != nil {
 			panic(err)
 		}
@@ -170,7 +170,7 @@ func (cg *CgroupImpl) ReadInt(resource string) int64 {
 	return val
 }
 
-func (cg *CgroupImpl) watchEventsFile(timeout time.Duration, state int64, key string) error {
+func (cg *CgroupImpl) watchEvents(key string, state int64, timeout time.Duration, warningTimeout time.Duration) error {
 
 	resourcePath := cg.ResourcePath("cgroup.events")
 
@@ -180,7 +180,7 @@ func (cg *CgroupImpl) watchEventsFile(timeout time.Duration, state int64, key st
 	}
 	defer eventFile.Close()
 
-	// poll(2): POLLPRI indicates "cgroup.events file modified"
+	// cgroups(7): POLLPRI indicates "cgroup.events file modified"
 	pollFDs := []unix.PollFd{
 		{
 			Fd:     int32(eventFile.Fd()),
@@ -192,8 +192,8 @@ func (cg *CgroupImpl) watchEventsFile(timeout time.Duration, state int64, key st
 
 	defer func(start time.Time) {
 		elapsed := time.Since(start)
-		if elapsed >= 250*time.Millisecond {
-			cg.printf("WARNING!  watchEventsFile to state %v on key %s took %v to complete", state, key, elapsed)
+		if elapsed >= warningTimeout {
+			cg.printf("WARNING!  watchEvents took %v to complete (key %s, expected state %v)", elapsed, key, state)
 		}
 	}(start)
 
@@ -202,7 +202,7 @@ func (cg *CgroupImpl) watchEventsFile(timeout time.Duration, state int64, key st
 
 		remaining := timeout - elapsed
 		if remaining < 0 {
-			return fmt.Errorf("watchEventsFile timeout after %v (key %s, expected state %v)", timeout, key, state)
+			return fmt.Errorf("watchEvents timeout after %v (key %s, expected state %v)", timeout, key, state)
 		}
 
 		_, err := unix.Poll(pollFDs, int(remaining.Milliseconds()))
@@ -234,7 +234,7 @@ func (cg *CgroupImpl) AddPid(pid string) error {
 func (cg *CgroupImpl) setFreezeState(state int64) error {
 	timeout := 20 * time.Second
 	cg.WriteInt("cgroup.freeze", state)
-	return cg.watchEventsFile(timeout, state, "frozen")
+	return cg.watchEvents("frozen", state, timeout, 250*time.Millisecond)
 }
 
 // get mem usage in MB
