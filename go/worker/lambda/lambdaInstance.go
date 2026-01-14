@@ -257,11 +257,3 @@ func (linst *LambdaInstance) TrySendError(req *Invocation, statusCode int, msg s
 		linst.lfunc.printf("TrySendError failed: %s\n", err.Error())
 	}
 }
-
-// AsyncKill signals the instance to die, return chan that can be used to block
-// until it's done
-func (linst *LambdaInstance) AsyncKill() chan bool {
-	done := make(chan bool)
-	linst.killChan <- done
-	return done
-}
