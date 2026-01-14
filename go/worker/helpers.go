@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -55,7 +54,7 @@ func initOLBaseDir(baseDir string, dockerBaseImage string) error {
 	// need this because Docker containers don't have a dns server in /etc/resolv.conf
 	// TODO: make it a config option
 	dnsPath := filepath.Join(baseDir, "etc", "resolv.conf")
-	if err := ioutil.WriteFile(dnsPath, []byte("nameserver 8.8.8.8\n"), 0644); err != nil {
+	if err := os.WriteFile(dnsPath, []byte("nameserver 8.8.8.8\n"), 0644); err != nil {
 		return err
 	}
 
@@ -106,7 +105,7 @@ func initOLDir(olPath string, dockerBaseImage string, newBase bool) (err error) 
 			}
 
 			// remove directory contents
-			items, err := ioutil.ReadDir(olPath)
+			items, err := os.ReadDir(olPath)
 			if err != nil {
 				return err
 			}
@@ -135,12 +134,12 @@ func initOLDir(olPath string, dockerBaseImage string, newBase bool) (err error) 
 
 	fmt.Printf("Init OL directory at %s\n", olPath)
 
-	if err := ioutil.WriteFile(initTimePath, []byte(time.Now().Local().String()+"\n"), 0400); err != nil {
+	if err := os.WriteFile(initTimePath, []byte(time.Now().Local().String()+"\n"), 0644); err != nil {
 		return err
 	}
 
 	zygoteTreePath := filepath.Join(olPath, "default-zygotes-40.json")
-	if err := ioutil.WriteFile(zygoteTreePath, []byte(embedded.DefaultZygotes40_json), 0400); err != nil {
+	if err := os.WriteFile(zygoteTreePath, []byte(embedded.DefaultZygotes40_json), 0644); err != nil {
 		return err
 	}
 
@@ -160,6 +159,16 @@ func initOLDir(olPath string, dockerBaseImage string, newBase bool) (err error) 
 		}
 	} else {
 		fmt.Printf("\tReusing prior base at %s (pass -b to reconstruct this)\n", baseDir)
+	}
+
+	// Change ownership of entire olPath (except lambda) to the real user
+	if sudoUser := os.Getenv("SUDO_USER"); sudoUser != "" {
+		if err := exec.Command("chown", sudoUser+":"+sudoUser, olPath).Run(); err != nil {
+			return fmt.Errorf("failed to chown olPath: %v", err)
+		}
+		if err := exec.Command("chown", "-R", sudoUser+":"+sudoUser, common.Conf.Worker_dir).Run(); err != nil {
+			return fmt.Errorf("failed to chown worker dir: %v", err)
+		}
 	}
 
 	return nil
@@ -274,13 +283,20 @@ func runningToStoppedClean() error {
 	return fmt.Errorf("worker process did not stop within 60 seconds")
 }
 
+// getCgRoot returns the cgroup root path for the given olPath.
+func getCgRoot(olPath string) string {
+	clusterName := filepath.Base(olPath)
+	base := common.CgroupPath()
+	return filepath.Join(base, clusterName + "-sandboxes")
+}
+
 // This function will transition the StoppedDirty state to StoppedClean state.
 // It attempts to clean up resources after detecting a dirty shutdown.
 // It cleans up cgroups and mounts associated with the OpenLambda instance at `olPath`.
 // Returns errors encountered during cleanup operations.
 func stoppedDirtyToStoppedClean(olPath string) error {
 	// Clean up cgroups associated with sandboxes
-	cgRoot := filepath.Join("/sys", "fs", "cgroup", filepath.Base(olPath)+"-sandboxes")
+	cgRoot := getCgRoot(olPath)
 	fmt.Printf("Attempting to clean up cgroups at %s\n", cgRoot)
 
 	cgroupErrorCount := 0
@@ -301,7 +317,7 @@ func stoppedDirtyToStoppedClean(olPath string) error {
 			return fmt.Errorf("error reading cgroup root: %s", err.Error())
 		}
 		kill := filepath.Join(cgRoot, "cgroup.kill")
-		if err := os.WriteFile(kill, []byte(fmt.Sprintf("%d", 1)), os.ModeAppend); err != nil {
+		if err := os.WriteFile(kill, []byte(fmt.Sprintf("%d", 1)), 0644); err != nil {
 			// Print an error if killing processes in the cgroup fails.
 			fmt.Printf("Could not kill processes in cgroup: %s\n", err.Error())
 			cgroupErrorCount += 1
@@ -377,7 +393,7 @@ func stoppedDirtyToStoppedClean(olPath string) error {
 	fmt.Printf("Attempting to clean up main mount directory at %s\n", dirName)
 	if err := syscall.Unmount(dirName, syscall.MNT_DETACH); err != nil {
 		// Log an error if unmounting the main directory fails.
-		if errors.Is(err, syscall.EINVAL) {
+		if errors.Is(err, syscall.EINVAL) || errors.Is(err, syscall.EPERM) {
 			fmt.Printf("Sandbox mount root is not mounted. No need to clean up.\n")
 		} else {
 			return fmt.Errorf("could not unmount %s: %s", dirName, err.Error())
@@ -431,7 +447,7 @@ func bringToStoppedClean(olPath string) error {
 //
 // apply changes in optsStr to config from confPath, saving result to overridePath
 func overrideOpts(confPath, overridePath, optsStr string) error {
-	b, err := ioutil.ReadFile(confPath)
+	b, err := os.ReadFile(confPath)
 	if err != nil {
 		return err
 	}
@@ -494,5 +510,5 @@ func overrideOpts(confPath, overridePath, optsStr string) error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(overridePath, s, 0644)
+	return os.WriteFile(overridePath, s, 0644)
 }
