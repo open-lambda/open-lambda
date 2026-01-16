@@ -223,22 +223,30 @@ func (cg *CgroupImpl) setFreezeState(state int64) error {
 	}
 	defer eventFile.Close()
 
-	// poll(2): POLLPRI indicates "cgroup.events file modified"
+	// cgroups(7): POLLPRI indicates "cgroup.events file modified"
+	// for poll to decide a POLLPRI event occurs it maintains 2 event counters:
+	// 1. the event counter when you last read the file
+	// 2. the file's current event counter
+	// if the last read's counter is different from the current event counter poll returns POLLPRI
 	pollFDs := []unix.PollFd{
 		{
 			Fd:     int32(eventFile.Fd()),
 			Events: unix.POLLPRI,
 		},
 	}
+	pollCalls := 0
 
 	start := time.Now()
 
-	defer func(start time.Time) {
+	defer func() {
 		elapsed := time.Since(start)
 		if elapsed >= 250*time.Millisecond {
 			cg.printf("WARNING!  setFreezeState to state %v took %v to complete", state, elapsed)
 		}
-	}(start)
+		if pollCalls > 5 {
+			cg.printf("WARNING!  setFreezeState called poll %v times, could be busy waiting", pollCalls)
+		}
+	}()
 
 	cg.WriteInt("cgroup.freeze", state)
 
@@ -250,12 +258,13 @@ func (cg *CgroupImpl) setFreezeState(state int64) error {
 			return fmt.Errorf("cgroup freeze timeout after %v (expected state %v)", timeout, state)
 		}
 
+		pollCalls++
 		_, err := unix.Poll(pollFDs, int(remaining.Milliseconds()))
 		if err != nil && !errors.Is(err, unix.EINTR) {
 			return fmt.Errorf("poll syscall failed on %s: %w", resourcePath, err)
 		}
 
-		// reads
+		// read from the same file to update event counter, prevents busy wait
 		freezerState, err := cg.TryReadIntKVFromFile(eventFile, "frozen")
 		if err != nil {
 			return fmt.Errorf("failed to check self_freezing state :: %w", err)
