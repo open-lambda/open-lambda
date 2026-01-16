@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"golang.org/x/sys/unix"
+	"io"
 	"io/ioutil"
 	"log/slog"
 	"os"
@@ -138,20 +139,7 @@ func (cg *CgroupImpl) WriteString(resource string, val string) {
 	}
 }
 
-func TryReadIntKVFromFile(file os.File, key string, buf []byte) (int64, error) {
-	_, err := file.ReadAt(buf, 0)
-	if err != nil || errors.Is(err, io.EOF) {
-		return 0, err
-	}
-
-}
-
-func (cg *CgroupImpl) TryReadIntKV(resource string, key string) (int64, error) {
-	raw, err := ioutil.ReadFile(cg.ResourcePath(resource))
-	if err != nil {
-		return 0, err
-	}
-	body := string(raw)
+func ScanIntKV(body string, key string) (int64, error) {
 	lines := strings.Split(body, "\n")
 	for i := 0; i <= len(lines); i++ {
 		parts := strings.Split(lines[i], " ")
@@ -164,6 +152,24 @@ func (cg *CgroupImpl) TryReadIntKV(resource string, key string) (int64, error) {
 		}
 	}
 	return 0, fmt.Errorf("could not find key '%s' in file: %s", key, body)
+}
+
+func (cg *CgroupImpl) TryReadIntKVFromFile(file *os.File, key string, buf []byte) (int64, error) {
+	bytesRead, err := file.ReadAt(buf, 0)
+	if err != nil || errors.Is(err, io.EOF) {
+		return 0, err
+	}
+	body := string(buf[bytesRead:])
+	return ScanIntKV(body, key)
+}
+
+func (cg *CgroupImpl) TryReadIntKV(resource string, key string) (int64, error) {
+	raw, err := ioutil.ReadFile(cg.ResourcePath(resource))
+	if err != nil {
+		return 0, err
+	}
+	body := string(raw)
+	return ScanIntKV(body, key)
 }
 
 func (cg *CgroupImpl) TryReadInt(resource string) (int64, error) {
@@ -218,6 +224,7 @@ func (cg *CgroupImpl) setFreezeState(state int64) error {
 	}
 
 	start := time.Now()
+	buf := make([]byte, 1024)
 
 	defer func(start time.Time) {
 		elapsed := time.Since(start)
@@ -241,7 +248,7 @@ func (cg *CgroupImpl) setFreezeState(state int64) error {
 			return fmt.Errorf("poll syscall failed on %s: %w", resourcePath, err)
 		}
 
-		freezerState, err := cg.TryReadIntKV("cgroup.events", "frozen")
+		freezerState, err := cg.TryReadIntKVFromFile(eventFile, "frozen", buf)
 		if err != nil {
 			return fmt.Errorf("failed to check self_freezing state :: %w", err)
 		}
