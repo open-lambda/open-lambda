@@ -100,6 +100,12 @@ test-all:
 	sudo python3 -u ./scripts/bin_test.py --worker_type=wasm
 	sudo python3 -u ./scripts/bin_test.py --worker_type=sock
 
+test-sock:
+	sudo python3 -u ./scripts/test.py --worker_type=sock
+	sudo python3 -u ./scripts/sock_test.py
+	sudo python3 -u ./scripts/bin_test.py --worker_type=sock
+
+
 fmt:
 	#cd go && go fmt ...
 	cd wasm-worker && cargo fmt
