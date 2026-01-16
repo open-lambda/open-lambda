@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log/slog"
 	"os"
@@ -128,12 +129,7 @@ func (cg *CgroupImpl) WriteString(resource string, val string) {
 	}
 }
 
-func (cg *CgroupImpl) TryReadIntKV(resource string, key string) (int64, error) {
-	raw, err := ioutil.ReadFile(cg.ResourcePath(resource))
-	if err != nil {
-		return 0, err
-	}
-	body := string(raw)
+func GetIntKV(body string, key string) (int64, error) {
 	lines := strings.Split(body, "\n")
 	for i := 0; i <= len(lines); i++ {
 		parts := strings.Split(lines[i], " ")
@@ -146,6 +142,26 @@ func (cg *CgroupImpl) TryReadIntKV(resource string, key string) (int64, error) {
 		}
 	}
 	return 0, fmt.Errorf("could not find key '%s' in file: %s", key, body)
+
+}
+
+func (cg *CgroupImpl) TryReadIntKV(resource string, key string) (int64, error) {
+	raw, err := ioutil.ReadFile(cg.ResourcePath(resource))
+	if err != nil {
+		return 0, err
+	}
+	body := string(raw)
+	return GetIntKV(body, key)
+}
+
+func (cg *CgroupImpl) TryReadIntKVFromFile(file *os.File, key string, buf []byte) (int64, error) {
+	n, err := file.ReadAt(buf, 0)
+	if err != nil && err != io.EOF {
+		return 0, err
+	}
+
+	body := string(buf[:n])
+	return GetIntKV(body, key)
 }
 
 func (cg *CgroupImpl) TryReadInt(resource string) (int64, error) {
@@ -187,6 +203,7 @@ func (cg *CgroupImpl) watchEvents(key string, state int64, timeout time.Duration
 			Events: unix.POLLPRI,
 		},
 	}
+	buf := make([]byte, 256)
 
 	start := time.Now()
 
@@ -210,7 +227,8 @@ func (cg *CgroupImpl) watchEvents(key string, state int64, timeout time.Duration
 			return fmt.Errorf("poll syscall failed on %s: %w", resourcePath, err)
 		}
 
-		keyState, err := cg.TryReadIntKV("cgroup.events", key)
+		keyState, err := cg.TryReadIntKVFromFile(eventFile, key, buf)
+		//keyState, err := cg.TryReadIntKV("cgroup.events", key)
 		if err != nil {
 			return fmt.Errorf("failed to check self_%s state :: %w", key, err)
 		}
