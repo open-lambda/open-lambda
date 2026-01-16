@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"golang.org/x/sys/unix"
-	"io"
 	"io/ioutil"
 	"log/slog"
 	"os"
@@ -155,7 +154,8 @@ func ScanIntKV(body string, key string) (int64, error) {
 }
 
 func (cg *CgroupImpl) TryReadIntKVFromFile(file *os.File, key string, buf []byte) (int64, error) {
-	bytesRead, err := file.ReadAt(buf, 0)
+	//bytesRead, err := file.ReadAt(buf, 0)
+	bytesRead, err := file.Read(buf)
 	if err != nil {
 		return 0, err
 	}
