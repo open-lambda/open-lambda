@@ -139,7 +139,13 @@ func (cg *CgroupImpl) WriteString(resource string, val string) {
 	}
 }
 
-func (cg *CgroupImpl) ScanIntKV(body string, key string) (int64, error) {
+func (_ *CgroupImpl) TryReadIntKVFromFile(file *os.File, key string) (int64, error) {
+	file.Seek(0, io.SeekStart)
+	data, err := io.ReadAll(file)
+	if err != nil && err != io.EOF {
+		return 0, fmt.Errorf("failed to read key %s from file: %w", key, err)
+	}
+	body := string(data)
 	lines := strings.Split(body, "\n")
 	for i := 0; i <= len(lines); i++ {
 		parts := strings.Split(lines[i], " ")
@@ -154,24 +160,24 @@ func (cg *CgroupImpl) ScanIntKV(body string, key string) (int64, error) {
 	return 0, fmt.Errorf("could not find key '%s' in file: %s", key, body)
 }
 
-func (cg *CgroupImpl) TryReadIntKVFromFile(file *os.File, key string, buf []byte) (int64, error) {
-	file.Seek(0, io.SeekStart)
-	data, err := io.ReadAll(file)
-	if err != nil && err != io.EOF {
-		return 0, err
-	}
-	//body := string(buf[:bytesRead])
-	body := string(data)
-	return cg.ScanIntKV(body, key)
-}
-
 func (cg *CgroupImpl) TryReadIntKV(resource string, key string) (int64, error) {
 	raw, err := ioutil.ReadFile(cg.ResourcePath(resource))
 	if err != nil {
 		return 0, err
 	}
 	body := string(raw)
-	return cg.ScanIntKV(body, key)
+	lines := strings.Split(body, "\n")
+	for i := 0; i <= len(lines); i++ {
+		parts := strings.Split(lines[i], " ")
+		if len(parts) == 2 && parts[0] == key {
+			val, err := strconv.ParseInt(strings.TrimSpace(string(parts[1])), 10, 64)
+			if err != nil {
+				return 0, err
+			}
+			return val, nil
+		}
+	}
+	return 0, fmt.Errorf("could not find key '%s' in file: %s", key, body)
 }
 
 func (cg *CgroupImpl) TryReadInt(resource string) (int64, error) {
@@ -226,7 +232,6 @@ func (cg *CgroupImpl) setFreezeState(state int64) error {
 	}
 
 	start := time.Now()
-	buf := make([]byte, 256)
 
 	defer func(start time.Time) {
 		elapsed := time.Since(start)
@@ -250,7 +255,8 @@ func (cg *CgroupImpl) setFreezeState(state int64) error {
 			return fmt.Errorf("poll syscall failed on %s: %w", resourcePath, err)
 		}
 
-		freezerState, err := cg.TryReadIntKVFromFile(eventFile, "frozen", buf)
+		// reads
+		freezerState, err := cg.TryReadIntKVFromFile(eventFile, "frozen")
 		if err != nil {
 			return fmt.Errorf("failed to check self_freezing state :: %w", err)
 		}
