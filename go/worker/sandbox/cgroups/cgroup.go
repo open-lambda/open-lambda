@@ -139,7 +139,7 @@ func (cg *CgroupImpl) WriteString(resource string, val string) {
 	}
 }
 
-func ScanIntKV(body string, key string) (int64, error) {
+func (cg *CgroupImpl) ScanIntKV(body string, key string) (int64, error) {
 	lines := strings.Split(body, "\n")
 	for i := 0; i <= len(lines); i++ {
 		parts := strings.Split(lines[i], " ")
@@ -156,12 +156,11 @@ func ScanIntKV(body string, key string) (int64, error) {
 
 func (cg *CgroupImpl) TryReadIntKVFromFile(file *os.File, key string, buf []byte) (int64, error) {
 	bytesRead, err := file.ReadAt(buf, 0)
-	//bytesRead, err := file.Read(buf)
 	if err != nil && err != io.EOF {
 		return 0, err
 	}
 	body := string(buf[:bytesRead])
-	return ScanIntKV(body, key)
+	return cg.ScanIntKV(body, key)
 }
 
 func (cg *CgroupImpl) TryReadIntKV(resource string, key string) (int64, error) {
@@ -170,7 +169,7 @@ func (cg *CgroupImpl) TryReadIntKV(resource string, key string) (int64, error) {
 		return 0, err
 	}
 	body := string(raw)
-	return ScanIntKV(body, key)
+	return cg.ScanIntKV(body, key)
 }
 
 func (cg *CgroupImpl) TryReadInt(resource string) (int64, error) {
