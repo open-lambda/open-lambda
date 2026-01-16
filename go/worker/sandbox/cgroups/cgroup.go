@@ -155,11 +155,13 @@ func (cg *CgroupImpl) ScanIntKV(body string, key string) (int64, error) {
 }
 
 func (cg *CgroupImpl) TryReadIntKVFromFile(file *os.File, key string, buf []byte) (int64, error) {
-	bytesRead, err := file.ReadAt(buf, 0)
+	file.Seek(0, io.SeekStart)
+	data, err := io.ReadAll(file)
 	if err != nil && err != io.EOF {
 		return 0, err
 	}
-	body := string(buf[:bytesRead])
+	//body := string(buf[:bytesRead])
+	body := string(data)
 	return cg.ScanIntKV(body, key)
 }
 
