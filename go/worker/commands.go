@@ -212,9 +212,9 @@ func statusCmd(ctx *cli.Context) error {
 		return err
 	}
 
-	fmt.Printf("Worker Ping:\n")
-	url := fmt.Sprintf("http://localhost:%s/status", common.Conf.Worker_port)
-	response, err := http.Get(url)
+	fmt.Printf("Worker Ping: ")
+	url := fmt.Sprintf("http://unix/status")
+	response, err := udsGet("/status")
 	if err != nil {
 		return fmt.Errorf("could not send GET to %s", url)
 	}
@@ -223,7 +223,7 @@ func statusCmd(ctx *cli.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to read body from GET to %s", url)
 	}
-	fmt.Printf("  %s => %s [%s]\n", url, body, response.Status)
+	fmt.Printf("%s => %s [%s]\n", url, body, response.Status)
 	fmt.Printf("\n")
 
 	return nil
