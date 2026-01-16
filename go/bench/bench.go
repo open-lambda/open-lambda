@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -371,28 +370,15 @@ func run_reqbench_init(ctx *cli.Context) error {
 		// get requirements.txt
 		// http.Get https://raw.githubusercontent.com/repo[1]/repo[2]/repo[3]
 		txtUrl := "https://raw.githubusercontent.com/" + repo[1] + "/" + repo[2] + "/" + repo[3]
-		txtFilename := "requirements" + strconv.Itoa(i) + ".txt" // could remove the number?
-		txtFile, err := os.Create(txtFilename)
-		if err != nil {
-			fmt.Printf("Failed to create requirements%d.txt file: %v\n", i, err)
-			txtFile.Close()
-			os.Remove(txtFilename)
-			continue
-		}
-
 		txtResponse, err := http.Get(txtUrl)
 		if err != nil {
 			fmt.Printf("Failed to download requirements for lambda %d: %v\n", i, err)
-			txtFile.Close()
-			os.Remove(txtFilename)
 			continue
 		}
 
 		if txtResponse.StatusCode != 200 {
 			fmt.Printf("Requirements not found for lambda %d (status %d)\n", i, txtResponse.StatusCode)
 			txtResponse.Body.Close()
-			txtFile.Close()
-			os.Remove(txtFilename)
 			continue
 		}
 
@@ -400,8 +386,6 @@ func run_reqbench_init(ctx *cli.Context) error {
 		txtResponse.Body.Close()
 		if err != nil {
 			fmt.Printf("Failed to read requirements for lambda %d: %v\n", i, err)
-			txtFile.Close()
-			os.Remove(txtFilename)
 			continue
 		}
 		lambdaName := fmt.Sprintf("reqbench-%d", i)
@@ -409,16 +393,12 @@ func run_reqbench_init(ctx *cli.Context) error {
 
 		if err := os.MkdirAll(lambdaPath, 0755); err != nil {
 			fmt.Printf("Failed to create lambda dir %s: %v\n", lambdaName, err)
-			txtFile.Close()
-			os.Remove(txtFilename)
 			continue
 		}
 
 		reqPath := filepath.Join(lambdaPath, "requirements.txt")
 		if err := os.WriteFile(reqPath, requirementsContent, 0644); err != nil {
 			fmt.Printf("Failed to write requirements for %s: %v\n", lambdaName, err)
-			txtFile.Close()
-			os.Remove(txtFilename)
 			continue
 		}
 
@@ -428,15 +408,15 @@ func run_reqbench_init(ctx *cli.Context) error {
 		functionPath := filepath.Join(lambdaPath, "f.py")
 		if err := os.WriteFile(functionPath, []byte(functionCode), 0644); err != nil {
 			fmt.Printf("Failed to write function for %s: %v\n", lambdaName, err)
-			txtFile.Close()
-			os.Remove(txtFilename)
 			continue
 		}
-
+		err = create_lambdas(ctx)
+		if err != nil {
+			fmt.Printf("Failed to create lambdas: %v\n", err)
+			continue
+		}
 		fmt.Printf("Created lambda %s\n", lambdaName)
 
-		txtFile.Close()
-		os.Remove(txtFilename)
 	}
 
 	return nil
