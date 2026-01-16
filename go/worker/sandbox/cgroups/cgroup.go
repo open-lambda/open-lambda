@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"golang.org/x/sys/unix"
 	"io/ioutil"
 	"log/slog"
 	"os"
@@ -13,7 +14,6 @@ import (
 	"time"
 
 	"github.com/open-lambda/open-lambda/go/common"
-	"golang.org/x/sys/unix"
 )
 
 type CgroupImpl struct {
@@ -39,10 +39,20 @@ func (cg *CgroupImpl) Release() {
 	// if there's room in the recycled channel, add it there.
 	// Otherwise, just delete it.
 	if common.Conf.Features.Reuse_cgroups {
-		timeout := 20 * time.Second
-		err := cg.watchEvents("populated", 0, timeout, 250*time.Millisecond)
-		if err != nil {
-			panic(err)
+		for i := 100; i >= 0; i-- {
+			pids, err := cg.GetPIDs()
+			if err != nil {
+				panic(err)
+			} else if len(pids) > 0 {
+				if i == 0 {
+					panic(fmt.Errorf("Cannot release cgroup that contains processes: %v", pids))
+				}
+
+				cg.printf("cgroup Rmdir failed, trying again in 5ms")
+				time.Sleep(5 * time.Millisecond)
+			} else {
+				break
+			}
 		}
 
 		select {
@@ -128,6 +138,14 @@ func (cg *CgroupImpl) WriteString(resource string, val string) {
 	}
 }
 
+func TryReadIntKVFromFile(file os.File, key string, buf []byte) (int64, error) {
+	_, err := file.ReadAt(buf, 0)
+	if err != nil || errors.Is(err, io.EOF) {
+		return 0, err
+	}
+
+}
+
 func (cg *CgroupImpl) TryReadIntKV(resource string, key string) (int64, error) {
 	raw, err := ioutil.ReadFile(cg.ResourcePath(resource))
 	if err != nil {
@@ -170,57 +188,6 @@ func (cg *CgroupImpl) ReadInt(resource string) int64 {
 	return val
 }
 
-func (cg *CgroupImpl) watchEvents(key string, state int64, timeout time.Duration, warningTimeout time.Duration) error {
-
-	resourcePath := cg.ResourcePath("cgroup.events")
-
-	eventFile, err := os.Open(resourcePath)
-	if err != nil {
-		return fmt.Errorf("failed to open %s: %w", resourcePath, err)
-	}
-	defer eventFile.Close()
-
-	// cgroups(7): POLLPRI indicates "cgroup.events file modified"
-	pollFDs := []unix.PollFd{
-		{
-			Fd:     int32(eventFile.Fd()),
-			Events: unix.POLLPRI,
-		},
-	}
-
-	start := time.Now()
-
-	defer func(start time.Time) {
-		elapsed := time.Since(start)
-		if elapsed >= warningTimeout {
-			cg.printf("WARNING!  watchEvents took %v to complete (key %s, expected state %v)", elapsed, key, state)
-		}
-	}(start)
-
-	for {
-		elapsed := time.Since(start)
-
-		remaining := timeout - elapsed
-		if remaining < 0 {
-			return fmt.Errorf("watchEvents timeout after %v (key %s, expected state %v)", timeout, key, state)
-		}
-
-		_, err := unix.Poll(pollFDs, int(remaining.Milliseconds()))
-		if err != nil && !errors.Is(err, unix.EINTR) {
-			return fmt.Errorf("poll syscall failed on %s: %w", resourcePath, err)
-		}
-
-		keyState, err := cg.TryReadIntKV("cgroup.events", key)
-		if err != nil {
-			return fmt.Errorf("failed to check self_%s state :: %w", key, err)
-		}
-		if keyState == state {
-			return nil
-		}
-	}
-
-}
-
 // AddPid adds a process ID to the cgroup.
 func (cg *CgroupImpl) AddPid(pid string) error {
 	err := ioutil.WriteFile(cg.ResourcePath("cgroup.procs"), []byte(pid), os.ModeAppend)
@@ -233,8 +200,55 @@ func (cg *CgroupImpl) AddPid(pid string) error {
 
 func (cg *CgroupImpl) setFreezeState(state int64) error {
 	timeout := 20 * time.Second
+
+	resourcePath := cg.ResourcePath("cgroup.events")
+
+	eventFile, err := os.Open(resourcePath)
+	if err != nil {
+		return fmt.Errorf("failed to open %s: %w", resourcePath, err)
+	}
+	defer eventFile.Close()
+
+	// poll(2): POLLPRI indicates "cgroup.events file modified"
+	pollFDs := []unix.PollFd{
+		{
+			Fd:     int32(eventFile.Fd()),
+			Events: unix.POLLPRI,
+		},
+	}
+
+	start := time.Now()
+
+	defer func(start time.Time) {
+		elapsed := time.Since(start)
+		if elapsed >= 250*time.Millisecond {
+			cg.printf("WARNING!  setFreezeState to state %v took %v to complete", state, elapsed)
+		}
+	}(start)
+
 	cg.WriteInt("cgroup.freeze", state)
-	return cg.watchEvents("frozen", state, timeout, 250*time.Millisecond)
+
+	for {
+		elapsed := time.Since(start)
+
+		remaining := timeout - elapsed
+		if remaining < 0 {
+			return fmt.Errorf("cgroup freeze timeout after %v (expected state %v)", timeout, state)
+		}
+
+		_, err := unix.Poll(pollFDs, int(remaining.Milliseconds()))
+		if err != nil && !errors.Is(err, unix.EINTR) {
+			return fmt.Errorf("poll syscall failed on %s: %w", resourcePath, err)
+		}
+
+		freezerState, err := cg.TryReadIntKV("cgroup.events", "frozen")
+		if err != nil {
+			return fmt.Errorf("failed to check self_freezing state :: %w", err)
+		}
+		if freezerState == state {
+			return nil
+		}
+	}
 }
 
 // get mem usage in MB
