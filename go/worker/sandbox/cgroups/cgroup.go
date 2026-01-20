@@ -140,7 +140,10 @@ func (cg *CgroupImpl) WriteString(resource string, val string) {
 }
 
 func (_ *CgroupImpl) TryReadIntKVFromFile(file *os.File, key string) (int64, error) {
-	file.Seek(0, io.SeekStart)
+	_, err := file.Seek(0, io.SeekStart)
+	if err != nil {
+		return 0, fmt.Errorf("failed to seek to start of file: %w", err)
+	}
 	data, err := io.ReadAll(file)
 	if err != nil {
 		return 0, fmt.Errorf("failed to read key %s from file: %w", key, err)
