@@ -166,6 +166,7 @@ func (cg *CgroupImpl) TryReadIntKV(resource string, key string) (int64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to open file %s: %w", resourcePath, err)
 	}
+	defer file.Close()
 	return cg.TryReadIntKVFromFile(file, key)
 }
 
