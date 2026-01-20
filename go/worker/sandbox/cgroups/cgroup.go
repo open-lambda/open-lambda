@@ -161,23 +161,12 @@ func (_ *CgroupImpl) TryReadIntKVFromFile(file *os.File, key string) (int64, err
 }
 
 func (cg *CgroupImpl) TryReadIntKV(resource string, key string) (int64, error) {
-	raw, err := ioutil.ReadFile(cg.ResourcePath(resource))
+	resourcePath := cg.ResourcePath(resource)
+	file, err := os.Open(resourcePath)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("failed to open file %s: %w", resourcePath, err)
 	}
-	body := string(raw)
-	lines := strings.Split(body, "\n")
-	for i := 0; i <= len(lines); i++ {
-		parts := strings.Split(lines[i], " ")
-		if len(parts) == 2 && parts[0] == key {
-			val, err := strconv.ParseInt(strings.TrimSpace(string(parts[1])), 10, 64)
-			if err != nil {
-				return 0, err
-			}
-			return val, nil
-		}
-	}
-	return 0, fmt.Errorf("could not find key '%s' in file: %s", key, body)
+	return cg.TryReadIntKVFromFile(file, key)
 }
 
 func (cg *CgroupImpl) TryReadInt(resource string) (int64, error) {
