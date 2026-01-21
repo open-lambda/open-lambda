@@ -182,7 +182,14 @@ func (lkc *LambdaKafkaConsumer) processMessage(record *kgo.Record) {
 	w := httptest.NewRecorder()
 
 	// Get lambda function and invoke directly
-	lambdaFunc := lkc.lambdaManager.Get(lkc.lambdaName)
+	lambdaFunc, err := lkc.lambdaManager.Get(lkc.lambdaName)
+	if err != nil {
+		slog.Error("Failed to invoke lambda function",
+			"lambda", lkc.lambdaName,
+			"error", err,
+			"topic", record.Topic)
+		return
+	}
 	lambdaFunc.Invoke(w, req)
 
 	// Log the result
