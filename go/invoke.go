@@ -3,17 +3,17 @@ package main
 
 import (
 	"bytes"
-	"path/filepath"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/urfave/cli/v2"
 	"github.com/open-lambda/open-lambda/go/common"
+	"github.com/urfave/cli/v2"
 )
 
 func invokeAction(ctx *cli.Context) error {
@@ -35,7 +35,7 @@ func invokeAction(ctx *cli.Context) error {
 		return cli.Exit(fmt.Sprintf("failed to resolve worker URL: %v", err), 1)
 	}
 
-	url := strings.TrimRight(baseURL, "/") + "/invoke/" + funcName
+	url := strings.TrimRight(baseURL, "/") + "/run/" + funcName
 
 	// Body: no arg → "null"; with arg → must be valid JSON
 	var body []byte
@@ -106,7 +106,7 @@ func invokeCommand() *cli.Command {
 		Name:        "invoke",
 		Usage:       "Invoke a function on an OL worker (minimal: POST JSON only)",
 		UsageText:   "ol invoke <func> [json] [-p PROJECT]",
-		Description: "POSTs JSON (or null) to /invoke/<func>. Will resolve worker URL same as 'ol worker up'.",
+		Description: "POSTs JSON (or null) to /run/<func>. Will resolve worker URL same as 'ol worker up'.",
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "project", Aliases: []string{"p"}, Usage: "Project/deploy name (like 'ol worker up')"},
 			&cli.IntFlag{Name: "timeout", Value: 15, Usage: "HTTP timeout seconds"},
