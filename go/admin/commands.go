@@ -42,7 +42,7 @@ func checkStatus(port string) error {
 	return nil
 }
 
-const installUsage = "ol admin install [-c <config>] [-n <name>] [boss | -p <worker_path>] <directory_or_git_url>"
+const installUsage = "ol admin install [-c <config>] [-r <requirements>] [-n <name>] [boss | -p <worker_path>] <directory_or_git_url>"
 
 // isGitURL returns true if the path looks like a git repository URL
 func isGitURL(path string) bool {
@@ -153,17 +153,26 @@ func adminInstall(ctx *cli.Context) error {
 
 	// Build overrides map
 	overrides := make(map[string]string)
-	configPath := ctx.String("config")
-	if configPath != "" {
-		if _, err := os.Stat(configPath); os.IsNotExist(err) {
-			return fmt.Errorf("config file %s does not exist", configPath)
+	addOverride := func(flagName, targetFile string) error {
+		path := ctx.String(flagName)
+		if path == "" {
+			return nil
 		}
-		// Warn if ol.yaml already exists in the source
-		existingConfig := filepath.Join(funcDir, "ol.yaml")
-		if _, err := os.Stat(existingConfig); err == nil {
-			fmt.Printf("Warning: overriding existing ol.yaml in source with %s\n", configPath)
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			return fmt.Errorf("%s file %s does not exist", flagName, path)
 		}
-		overrides["ol.yaml"] = configPath
+		if _, err := os.Stat(filepath.Join(funcDir, targetFile)); err == nil {
+			fmt.Printf("Warning: overriding existing %s in source with %s\n", targetFile, path)
+		}
+		overrides[targetFile] = path
+		return nil
+	}
+
+	if err := addOverride("config", "ol.yaml"); err != nil {
+		return err
+	}
+	if err := addOverride("requirements", "requirements.txt"); err != nil {
+		return err
 	}
 
 	tarData, err := createTarGz(funcDir, overrides)
@@ -188,13 +197,19 @@ func createTarGz(funcDir string, overrides map[string]string) ([]byte, error) {
 	tarWriter := tar.NewWriter(gzWriter)
 
 	// Determine the Python entry file (default to f.py, or use OL_ENTRY_FILE from ol.yaml)
-	// TODO: support OL_ENTRY_FILE for native runtime
+	// Check override config first, then fall back to source config
 	pythonEntryFile := "f.py"
-	if lambdaConfig, err := common.LoadLambdaConfig(funcDir); err == nil {
-		if lambdaConfig.Environment != nil {
-			if entryFile, ok := lambdaConfig.Environment["OL_ENTRY_FILE"]; ok {
-				pythonEntryFile = entryFile
-			}
+	configDir := funcDir
+	if configOverride, ok := overrides["ol.yaml"]; ok {
+		configDir = filepath.Dir(configOverride)
+	}
+	lambdaConfig, err := common.LoadLambdaConfig(configDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse config in %s: %v", configDir, err)
+	}
+	if lambdaConfig.Environment != nil {
+		if entryFile, ok := lambdaConfig.Environment["OL_ENTRY_FILE"]; ok {
+			pythonEntryFile = entryFile
 		}
 	}
 
@@ -203,7 +218,7 @@ func createTarGz(funcDir string, overrides map[string]string) ([]byte, error) {
 		return nil, fmt.Errorf("required file %s not found in %s", pythonEntryFile, funcDir)
 	}
 
-	err := filepath.Walk(funcDir, func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(funcDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return fmt.Errorf("walk error: %v", err)
 		}
@@ -345,6 +360,11 @@ func AdminCommands() []*cli.Command {
 					Name:    "config",
 					Aliases: []string{"c"},
 					Usage:   "Path to ol.yaml config file to include (overrides existing ol.yaml in source)",
+				},
+				&cli.StringFlag{
+					Name:    "requirements",
+					Aliases: []string{"r"},
+					Usage:   "Path to requirements.txt file to include (overrides existing requirements.txt in source)",
 				},
 				&cli.StringFlag{
 					Name:    "name",

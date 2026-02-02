@@ -317,6 +317,12 @@ func (container *SOCKContainer) decCgRefCount() {
 		}
 		t.T1()
 
+		// Clean up ol.sock from scratchDir (scratchDir itself may be reused, e.g., for package caching)
+		sockPath := filepath.Join(container.scratchDir, "ol.sock")
+		if err := os.Remove(sockPath); err != nil && !os.IsNotExist(err) {
+			container.printf("remove socket %s failed :: %v\n", sockPath, err)
+		}
+
 		if container.parent != nil {
 			container.parent.childExit(container)
 		}

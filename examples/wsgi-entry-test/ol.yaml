@@ -1,0 +1,8 @@
+triggers:
+  http:
+    - method: GET
+    - method: POST
+
+environment:
+  OL_ENTRY_FILE: "main.py"
+  OL_WSGI_ENTRY: "my_wsgi_app"

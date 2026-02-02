@@ -1,3 +1,2 @@
 flask
 pip-tools==5.5.0
-tomli

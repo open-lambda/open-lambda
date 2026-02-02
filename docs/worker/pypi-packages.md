@@ -54,10 +54,14 @@ If you don't have pip-tools installed locally, you can use the
 ol admin install ./examples/pip-compile
 ```
 
-Then compile your requirements:
+Then compile your requirements (from a file or URL):
 
 ```bash
-curl -X POST -H "Content-Type: text/plain" --data-binary @requirements.in http://localhost:5000/run/pip-compile > requirements.txt
+# From a local file
+curl -X POST --data-binary @requirements.in http://localhost:5000/run/pip-compile/text > requirements.txt
+
+# From a URL
+curl -X POST -d 'https://example.com/requirements.in' http://localhost:5000/run/pip-compile/url > requirements.txt
 ```
 
 ## Try It

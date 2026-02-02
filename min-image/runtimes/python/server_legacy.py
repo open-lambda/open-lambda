@@ -9,17 +9,14 @@ this is still here because we haven't updated docker.go yet.
 
 import os
 import sys
-import json
 import argparse
 import importlib
-import traceback
+import socket
+
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from dotenv import load_dotenv
-import tornado.ioloop
-import tornado.web
-import tornado.httpserver
-import tornado.netutil
-import tornado.wsgi
+from server_common import web_server_on_sock
 
 HOST_DIR = '/host'
 PKGS_DIR = '/packages'
@@ -34,114 +31,41 @@ if os.path.exists(env_path):
 sys.path.append(PKGS_DIR)
 sys.path.append(HANDLER_DIR)
 
-FS_PATH = os.path.join(HOST_DIR, 'fs.sock')
 SOCK_PATH = os.path.join(HOST_DIR, 'ol.sock')
+FS_PATH = os.path.join(HOST_DIR, 'fs.sock')
 STDOUT_PATH = os.path.join(HOST_DIR, 'stdout')
 STDERR_PATH = os.path.join(HOST_DIR, 'stderr')
 SERVER_PIPE_PATH = os.path.join(HOST_DIR, 'server_pipe')
 
 PROCESSES_DEFAULT = 10
-initialized = False
 
 parser = argparse.ArgumentParser(description='Listen and serve cache requests or lambda invocations.')
 parser.add_argument('--cache', action='store_true', default=False, help='Begin as a cache entry.')
 
-# run after forking into sandbox
-def init():
-    global initialized, handler_module
-    if initialized:
-        return
 
-    entry_file = os.environ.get('OL_ENTRY_FILE', 'f.py')
-    if not entry_file.endswith('.py'):
-        raise ValueError(f"OL_ENTRY_FILE must end with .py, got: {entry_file}")
-    module_name = entry_file[:-3]
-    handler_module = importlib.import_module(module_name)
-
-    initialized = True
-
-class SockFileHandler(tornado.web.RequestHandler):
-    def handle_request(self):
-        try:
-            data = self.request.body
-            try:
-                event = json.loads(data) if data else None
-            except:
-                self.set_status(400)  # Bad request if JSON parsing fails
-                self.write(f'bad request data: "{data}"')
-                return
-
-            result = handler_module.f(event) if event is not None else handler_module.f({}) 
-            self.write(json.dumps(result))  # Return the result as JSON
-        except Exception:
-            self.set_status(500)  # Internal server error for unhandled exceptions
-            self.write(traceback.format_exc())  # Include traceback in response
-    
-    
-    # Define methods for each HTTP method
-    def get(self):
-        self.handle_request()
-
-    def post(self):
-        self.handle_request()
-
-    def put(self):
-        self.handle_request()
-
-    def delete(self):
-        self.handle_request()
-
-    def patch(self):
-        self.handle_request()
-
-    def options(self):
-        self.handle_request()
-        
-
-# listen on sock file with Tornado
 def lambda_server():
-    init()
-    if hasattr(handler_module, "app"):
-        def path_wrapper(environ, start_response):
-            path = environ.get("PATH_INFO", "")
-            # split path to get individual components
-            parts = path.split("/") # ["", "run", <app-name>]
+    """Start the lambda server on a Unix socket."""
+    # Create and bind the socket
+    if os.path.exists(SOCK_PATH):
+        os.remove(SOCK_PATH)
+    file_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    file_sock.bind(SOCK_PATH)
+    file_sock.listen(1)
 
-            # set new environment path
-            # `/run/<func-name>/a/b/c` -> `/a/b/c`
-            environ["PATH_INFO"] = '/' + '/'.join(parts[3:])
-
-            # set the root of the application
-            app_name = parts[2]
-            environ["SCRIPT_NAME"] = '/run/' + app_name
-
-            return handler_module.app(environ, start_response)
-
-        # use WSGI entry
-        # call wrapper to strip /run/<func-name> from path
-        tornado_app = tornado.wsgi.WSGIContainer(path_wrapper)
-    else:
-        # use function entry
-        tornado_app = tornado.web.Application([
-            (".*", SockFileHandler),
-        ])
-    server = tornado.httpserver.HTTPServer(tornado_app)
-    socket = tornado.netutil.bind_unix_socket(SOCK_PATH)
-    server.add_socket(socket)
-    # notify worker server that we are ready through stdout
-    # flush is necessary, and don't put it after tornado start; won't work
+    # Notify worker server that we are ready
     with open(SERVER_PIPE_PATH, 'w', encoding='utf-8') as pipe:
         pipe.write('ready')
-    tornado.ioloop.IOLoop.instance().start()
-    server.start(PROCESSES_DEFAULT)
 
-# listen for fds to forkenter
+    # Run the web server
+    web_server_on_sock(file_sock, server_name="server_legacy.py")
+
+
 def cache_loop():
+    """Listen for fds to forkenter (Docker cache mode)."""
     import ns
 
     signal = "cache"
     r = -1
-    count = 0
     # only child meant to serve ever escapes the loop
     while r != 0 or signal == "cache":
         if r == 0:
@@ -175,21 +99,22 @@ def cache_loop():
         print('')
         flush()
 
-        count += 1
-
     print('SERVING HANDLERS')
     flush()
     lambda_server()
 
+
 def flush():
     sys.stdout.flush()
     sys.stderr.flush()
+
 
 def redirect():
     sys.stdout.close()
     sys.stderr.close()
     sys.stdout = open(STDOUT_PATH, 'w')
     sys.stderr = open(STDERR_PATH, 'w')
+
 
 if __name__ == '__main__':
     args = parser.parse_args()

@@ -11,14 +11,14 @@ class OpenLambda:
         self._address = address
         self._session = Session()
 
-    def _post(self, path, data=None):
+    def _post(self, path, data=None, timeout=None):
         ''' Issues a _post request to the OL worker '''
-        return self._session.post(f'http://{self._address}/{path}', pyjson.dumps(data))
+        return self._session.post(f'http://{self._address}/{path}', pyjson.dumps(data), timeout=timeout)
 
-    def run(self, fn_name, args, json=True):
+    def run(self, fn_name, args, json=True, timeout=60):
         ''' Execute a serverless function '''
 
-        resp = self._post(f"run/{fn_name}", args)
+        resp = self._post(f"run/{fn_name}", args, timeout=timeout)
         self._check_status_code(resp, "run")
 
         if json:

@@ -14,6 +14,7 @@ import tarfile
 import subprocess
 
 from time import time
+from datetime import datetime
 from subprocess import call
 from multiprocessing import Pool
 
@@ -154,7 +155,7 @@ def stress_one_lambda_task(args):
     start, seconds = args
     pos = 0
     while time() < start + seconds:
-        result = open_lambda.run("echo", pos, json=False)
+        result = open_lambda.run("echo", pos, json=False, timeout=60)
         assert_eq(result, str(pos))
         pos += 1
     return pos
@@ -353,6 +354,49 @@ def flask_entry_test():
         raise ValueError(f"expected entry_file='app.py', got {data}")
 
 @test
+def fastapi_test():
+    """Test ASGI support with FastAPI"""
+    url = 'http://localhost:5000/run/fastapi-test'
+    print("URL", url)
+    r = requests.get(url)
+    print("RESPONSE", r)
+
+    if r.status_code != 200:
+        raise ValueError(f"expected status code 200, but got {r.status_code}")
+
+    data = r.json()
+    if data != {"message": "hello world"}:
+        raise ValueError(f"expected {{'message': 'hello world'}}, but got {data}")
+
+@test
+def wsgi_entry_test():
+    """Test OL_WSGI_ENTRY feature with a WSGI entry point not named 'app'"""
+    # Test the index route
+    url = 'http://localhost:5000/run/wsgi-entry-test'
+    print("URL", url)
+    r = requests.get(url)
+    print("RESPONSE", r)
+
+    if r.status_code != 200:
+        raise ValueError(f"expected status code 200, but got {r.status_code}")
+    if r.text != "Hello from my_wsgi_app!\n":
+        raise ValueError(f"r.text should be 'Hello from my_wsgi_app!\\n', not {repr(r.text)}")
+
+    # Test the info route
+    url_info = 'http://localhost:5000/run/wsgi-entry-test/info'
+    print("URL", url_info)
+    r = requests.get(url_info)
+    print("RESPONSE", r)
+
+    if r.status_code != 200:
+        raise ValueError(f"expected status code 200, but got {r.status_code}")
+    data = r.json()
+    if data.get("entry_point") != "my_wsgi_app":
+        raise ValueError(f"expected entry_point='my_wsgi_app', got {data}")
+    if data.get("entry_file") != "main.py":
+        raise ValueError(f"expected entry_file='main.py', got {data}")
+
+@test
 def test_http_method_restrictions():
     url = 'http://localhost:5000/run/lambda-config-test'
     print("URL", url)
@@ -424,7 +468,7 @@ def run_tests():
     worker_type = get_worker_type()
     worker = worker_type()
     assert worker
-    print("Worker started")
+    print(f"Worker started at {datetime.now().strftime('%I:%M%p').lstrip('0').lower()}")
     install_examples_to_worker_registry()
     print("Examples installed")
     worker.stop()
@@ -451,7 +495,11 @@ def run_tests():
     flask_test()
     wsgi_post_echo_test()
     flask_entry_test()
+    wsgi_entry_test()
     test_http_method_restrictions()
+
+    # test ASGI support with FastAPI
+    fastapi_test()
 
     # test environment variables from ol.yaml
     env_test()
