@@ -69,6 +69,25 @@ With this configuration:
 
 This is useful when you want to use conventional naming (e.g., `app.py` for Flask applications) or integrate existing code without renaming files.
 
+### d. Sandbox Reuse
+
+#### reuse_sandbox
+By default, OpenLambda reuses the same sandbox across multiple invocations of a lambda function to improve performance. In some cases, such as when strict isolation is required or when avoiding state persistence between invocations, it may be desirable to create a fresh sandbox for each invocation.
+
+This behavior can be controlled using the reuse-sandbox option.
+
+Example:
+```yaml
+reuse-sandbox: false
+```
+
+With this configuration:
+
+- A new sandbox is created for each lambda invocation
+- The sandbox is destroyed after the invocation completes
+
+If reuse-sandbox is not specified, OpenLambda defaults to reusing sandboxes across invocations.
+
 ## 4. How to Use
 ### a. Define Configuration
 Create an `ol.yaml` file inside the lambda function directory with the desired configuration.

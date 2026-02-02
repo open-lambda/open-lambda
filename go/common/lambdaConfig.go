@@ -43,8 +43,10 @@ type KafkaTrigger struct {
 
 // LambdaConfig defines the overall configuration for the lambda function.
 type LambdaConfig struct {
-	Triggers    Triggers          `yaml:"triggers"`    // List of HTTP triggers
-	Environment map[string]string `yaml:"environment"` // Environment variables for the lambda
+	Triggers     Triggers          `yaml:"triggers"`                // List of HTTP triggers
+	Environment  map[string]string `yaml:"environment"`             // Environment variables for the lambda
+	ReuseSandbox *bool             `yaml:"reuse-sandbox,omitempty"` // controls whether a sandbox is reused across
+	// invocations.
 	// Additional configurations can be added here.
 }
 
@@ -170,6 +172,14 @@ func ExtractConfigFromTarGz(tarPath string) (*LambdaConfig, error) {
 
 	slog.Info(fmt.Sprintf("[%s] %s not found, using default config", tarPath, LambdaConfigFilename))
 	return LoadDefaultLambdaConfig(), nil
+}
+
+// ReuseSandboxEnabled returns true if sandbox reuse is enabled, defaulting to true if not specified.
+func (c *LambdaConfig) ReuseSandboxEnabled() bool {
+	if c == nil || c.ReuseSandbox == nil {
+		return true
+	}
+	return *c.ReuseSandbox
 }
 
 // IsHTTPMethodAllowed checks if a method is permitted for this function
