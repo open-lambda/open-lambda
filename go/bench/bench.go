@@ -7,11 +7,11 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -346,7 +346,6 @@ func run_reqbench_init(ctx *cli.Context) error {
     	if err := common.LoadGlobalConfig(configPath); err != nil {
         	return err
     	}
-	// above is TODO
 	// pull requirements.csv
 	csvUrl := "https://raw.githubusercontent.com/open-lambda/ReqBench/refs/heads/main/files/requirements.csv"
 	csvFilename := "requirements.csv"
@@ -367,6 +366,11 @@ func run_reqbench_init(ctx *cli.Context) error {
 
 	csvFile.Seek(0, 0)	// for each line
 	reader := csv.NewReader(csvFile)
+	// skip the first line (just column names)
+	_, err = reader.Read()
+	if err != nil {
+		log.Fatal(err)
+	}
 	for i := 0; ; i++ {
 		repo, err := reader.Read()
 		if err == io.EOF {
@@ -374,55 +378,37 @@ func run_reqbench_init(ctx *cli.Context) error {
 		}
 		// get requirements.txt
 		// http.Get https://raw.githubusercontent.com/repo[1]/repo[2]/repo[3]
-		// OR repo[8]
 		txtUrl := "https://raw.githubusercontent.com/" + repo[1] + "/" + repo[2] + "/" + repo[3]
-		txtFilename := "requirements" + strconv.Itoa(i) + ".txt"
-		txtFile, err := os.Create(txtFilename)
-		if err != nil {
-			return err
-		}
-
 		txtResponse, err := http.Get(txtUrl)
 		if err != nil {
 			fmt.Printf("Failed to download requirements for lambda %d: %v\n", i, err)
-			txtFile.Close()
-			os.Remove(txtFilename)
 			continue
 		}
 
 		if txtResponse.StatusCode != 200 {
 			fmt.Printf("Requirements not found for lambda %d (status %d)\n", i, txtResponse.StatusCode)
 			txtResponse.Body.Close()
-			txtFile.Close()
-			os.Remove(txtFilename)
 			continue
 		}
 
-		requirementsContent, err := ioutil.ReadAll(txtResponse.Body)
+		requirementsContent, err := io.ReadAll(txtResponse.Body)
 		txtResponse.Body.Close()
 		if err != nil {
 			fmt.Printf("Failed to read requirements for lambda %d: %v\n", i, err)
-			txtFile.Close()
-			os.Remove(txtFilename)
 			continue
 		}
-
 		lambdaName := fmt.Sprintf("reqbench-%d", i)
 		registryPath := strings.TrimPrefix(common.Conf.Registry, "file://")
 		lambdaPath := filepath.Join(registryPath, lambdaName)
 
 		if err := os.MkdirAll(lambdaPath, 0755); err != nil {
 			fmt.Printf("Failed to create lambda dir %s: %v\n", lambdaName, err)
-			txtFile.Close()
-			os.Remove(txtFilename)
 			continue
 		}
 
 		reqPath := filepath.Join(lambdaPath, "requirements.txt")
-		if err := ioutil.WriteFile(reqPath, requirementsContent, 0644); err != nil {
+		if err := os.WriteFile(reqPath, requirementsContent, 0644); err != nil {
 			fmt.Printf("Failed to write requirements for %s: %v\n", lambdaName, err)
-			txtFile.Close()
-			os.Remove(txtFilename)
 			continue
 		}
 
@@ -430,17 +416,17 @@ func run_reqbench_init(ctx *cli.Context) error {
     return {"status": "ok"}
 `
 		functionPath := filepath.Join(lambdaPath, "f.py")
-		if err := ioutil.WriteFile(functionPath, []byte(functionCode), 0644); err != nil {
+		if err := os.WriteFile(functionPath, []byte(functionCode), 0644); err != nil {
 			fmt.Printf("Failed to write function for %s: %v\n", lambdaName, err)
-			txtFile.Close()
-			os.Remove(txtFilename)
 			continue
 		}
-
+		err = create_lambdas(ctx)
+		if err != nil {
+			fmt.Printf("Failed to create lambdas: %v\n", err)
+			continue
+		}
 		fmt.Printf("Created lambda %s\n", lambdaName)
 
-		txtFile.Close()
-		os.Remove(txtFilename)
 	}
 
 	return nil
@@ -594,11 +580,7 @@ func BenchCommands() []*cli.Command {
 					Usage:   "Path location for OL environment",
 				},
 			},
-			// TODO: add param to decide how many to create
 		},
-		// TODO add reqbench and billibench
-		// name reqbench
-		//
 		{
 			Name:      "reqbench-init",
 			Usage:     "creates ReqBench lambdas from GitHub requirements",
@@ -646,7 +628,6 @@ func BenchCommands() []*cli.Command {
 				},
 			},
 		},
-		// ol bench reqbench init
 		{
 			Name:      "play",
 			Usage:     "play a trace using a .txt file with one lambda function per line",
