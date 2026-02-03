@@ -67,15 +67,25 @@ configure these).
 
 ## Example lambdas
 
+Complete working examples are available in the
+[examples/](../../examples/) directory:
+
+- [kafka-basic](../../examples/kafka-basic/) — Simple `f(event)` handler
+  that processes the Kafka message body.
+- [kafka-metadata](../../examples/kafka-metadata/) — Flask WSGI handler
+  that accesses Kafka metadata headers (topic, partition, offset, group
+  ID) alongside the message body.
+
 ### Simple handler (body only)
 
 The default `f(event)` handler receives the Kafka message body as a
-parsed dict, but cannot access headers:
+parsed dict, but cannot access headers
+([full example](../../examples/kafka-basic/)):
 
 ```python
 def f(event):
     # event is the JSON-parsed Kafka message value
-    print(f"Received: {event}")
+    print(f"Received message: {event}")
     return {"status": "ok"}
 ```
 
@@ -83,7 +93,8 @@ def f(event):
 
 A WSGI handler can access Kafka metadata via the `environ` dict.
 HTTP headers are available with an `HTTP_` prefix, uppercased, and
-with dashes replaced by underscores:
+with dashes replaced by underscores
+([full example](../../examples/kafka-metadata/)):
 
 ```python
 from flask import Flask, request
@@ -93,9 +104,15 @@ app = Flask(__name__)
 @app.route("/", methods=["POST"])
 def handle():
     topic = request.headers.get("X-Kafka-Topic", "unknown")
+    partition = request.headers.get("X-Kafka-Partition", "unknown")
+    offset = request.headers.get("X-Kafka-Offset", "unknown")
+    group_id = request.headers.get("X-Kafka-Group-Id", "unknown")
+
     body = request.get_json()
 
-    print(f"Received message from {topic}: {body}")
+    print(f"topic={topic} partition={partition} offset={offset} group={group_id}")
+    print(f"body={body}")
+
     return {"status": "ok"}
 ```
 

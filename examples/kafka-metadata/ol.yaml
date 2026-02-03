@@ -1,4 +1,6 @@
 triggers:
+  http:
+    - method: POST
   kafka:
     - bootstrap_servers:
         - "localhost:9092"
