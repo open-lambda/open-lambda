@@ -1,0 +1,7 @@
+triggers:
+  kafka:
+    - bootstrap_servers:
+        - "localhost:9092"
+      topics:
+        - "my-topic"
+      auto_offset_reset: "latest"
