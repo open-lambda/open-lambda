@@ -494,7 +494,6 @@ func TestMockKafkaClient_CustomClose(t *testing.T) {
 // TestProcessMessage_Integration tests that processMessage is called when records arrive
 func TestProcessMessage_Integration(t *testing.T) {
 	recordsProcessed := 0
-	messageValue := []byte(`{"test": "data"}`)
 
 	// Create a mock client that returns a record on first call, then stops
 	mockClient := &MockKafkaClient{
