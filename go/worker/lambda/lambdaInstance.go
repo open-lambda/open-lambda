@@ -99,11 +99,11 @@ func (linst *LambdaInstance) Task() {
 		if sb == nil {
 			sb = nil
 
-			if f.lmgr.ZygoteProvider != nil && f.rtType == common.RT_PYTHON {
+			if f.lmgr.ZygoteProvider != nil && linst.meta.Sandbox.Runtime == common.RT_PYTHON {
 				scratchDir := f.lmgr.scratchDirs.Make(f.name)
 
 				// we don't specify parent SB, because ImportCache.Create chooses it for us
-				sb, err = f.lmgr.ZygoteProvider.Create(f.lmgr.sbPool, true, linst.codeDir, scratchDir, linst.meta.Sandbox, f.rtType)
+				sb, err = f.lmgr.ZygoteProvider.Create(f.lmgr.sbPool, true, linst.codeDir, scratchDir, linst.meta.Sandbox)
 				if err != nil {
 					f.printf("failed to get Sandbox from import cache")
 					sb = nil
@@ -116,7 +116,7 @@ func (linst *LambdaInstance) Task() {
 			if sb == nil {
 				t2 := common.T0("LambdaInstance-WaitSandbox-NoImportCache")
 				scratchDir := f.lmgr.scratchDirs.Make(f.name)
-				sb, err = f.lmgr.sbPool.Create(nil, true, linst.codeDir, scratchDir, linst.meta.Sandbox, f.rtType)
+				sb, err = f.lmgr.sbPool.Create(nil, true, linst.codeDir, scratchDir, linst.meta.Sandbox)
 				t2.T1()
 			}
 
@@ -143,11 +143,22 @@ func (linst *LambdaInstance) Task() {
 			if err != nil {
 				linst.TrySendError(req, http.StatusInternalServerError, "Could not create NewRequest: "+err.Error(), sb)
 			} else {
+				// Copy headers from original request
+				for k, vv := range req.r.Header {
+					for _, v := range vv {
+						httpReq.Header.Add(k, v)
+					}
+				}
+				// Preserve ContentLength (parsed from Content-Length header)
+				httpReq.ContentLength = req.r.ContentLength
+
 				resp, err := sb.Client().Do(httpReq)
 
 				// copy response out
 				if err != nil {
 					linst.TrySendError(req, http.StatusBadGateway, "RoundTrip failed: "+err.Error()+"\n", sb)
+					sb.Destroy("Sandbox's HTTP client returned an error")
+					sb = nil
 				} else {
 					// copy headers
 					// (adapted from copyHeaders: https://go.dev/src/net/http/httputil/reverseproxy.go)
@@ -184,17 +195,18 @@ func (linst *LambdaInstance) Task() {
 			// check whether we should shutdown (non-blocking)
 			select {
 			case killed := <-linst.killChan:
-				rtLog := sb.GetRuntimeLog()
-				sb.Destroy("Lambda instance kill signal received")
+				if sb != nil {
+					rtLog := sb.GetRuntimeLog()
+					sb.Destroy("Lambda instance kill signal received")
+					slog.Info("Stopped sandbox")
 
-				slog.Info("Stopped sandbox")
+					if common.Conf.Log_output {
+						if rtLog != "" {
+							slog.Info("Runtime output is:")
 
-				if common.Conf.Log_output {
-					if rtLog != "" {
-						slog.Info("Runtime output is:")
-
-						for _, line := range strings.Split(rtLog, "\n") {
-							slog.Info(fmt.Sprintf("   %s", line))
+							for _, line := range strings.Split(rtLog, "\n") {
+								slog.Info(fmt.Sprintf("   %s", line))
+							}
 						}
 					}
 				}
@@ -209,6 +221,11 @@ func (linst *LambdaInstance) Task() {
 			case req = <-f.instChan:
 			default:
 				req = nil
+			}
+
+			// if sandbox was destroyed, break out so outer loop can create a new one
+			if sb == nil {
+				break
 			}
 		}
 

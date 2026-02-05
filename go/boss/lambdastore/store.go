@@ -52,12 +52,16 @@ func NewLambdaStore(storeURL string, pool *cloudvm.WorkerPool) (*LambdaStore, er
 		storeURL = "file://" + storeURL
 	}
 
-	// If using local file storage, ensure the directory exists
+	// If using local file storage, ensure the directory exists and configure
+	// fileblob to create temp files in the same directory as the target.
+	// This avoids "invalid cross-device link" errors when /tmp is on a
+	// different filesystem/mount than the registry directory.
 	if strings.HasPrefix(storeURL, "file://") {
 		dir := strings.TrimPrefix(storeURL, "file://")
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return nil, fmt.Errorf("failed to create local lambda store directory %s: %w", dir, err)
 		}
+		storeURL = storeURL + "?no_tmp_dir=true"
 	}
 
 	bucket, err := blob.OpenBucket(ctx, storeURL)
@@ -258,14 +262,17 @@ func (s *LambdaStore) addToRegistry(funcName string, body io.Reader) error {
 	if err != nil {
 		return fmt.Errorf("failed to create blob writer: %w", err)
 	}
-	defer func() {
-		if err := writer.Close(); err != nil {
-			slog.Error(fmt.Sprintf("warning: failed to close blob writer: %v", err))
-		}
-	}()
 
 	if _, err := io.Copy(writer, tempFile); err != nil {
+		// Close writer to release resources (ignore close error since we already have an error)
+		writer.Close()
 		return fmt.Errorf("failed to upload to blob storage: %w", err)
+	}
+
+	// Close the writer to finalize the upload - this is where the actual commit happens
+	// for many blob storage implementations, so we must check the error
+	if err := writer.Close(); err != nil {
+		return fmt.Errorf("failed to finalize blob upload: %w", err)
 	}
 
 	lambdaEntry.Config = cfg

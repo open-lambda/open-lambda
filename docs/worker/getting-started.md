@@ -13,15 +13,12 @@ OpenLambda does not work with cgroups v1.
 Make sure you have all basic dependencies installed:
 ```
 apt update
-apt install -y docker.io llvm-14-dev libclang-common-14-dev build-essential python3 zlib1g-dev
+apt install -y docker.io llvm-14-dev libclang-common-14-dev build-essential python3 zlib1g-dev golang-go
 ```
 
-For a recent version of go, run the following:
-```
-wget -q -O /tmp/go.tar.gz https://go.dev/dl/go1.21.5.linux-amd64.tar.gz
-tar -C /usr/local -xzf /tmp/go.tar.gz
-ln -s /usr/local/go/bin/go /usr/bin/go
-```
+If the `go version` is 1.21+ (as it should be on the Ubuntu 24.04), a
+build will automatically pull the Go version specified in
+`./go/go.mod` for the sake of building OpenLambda.
 
 ### Optional: Full Deployment (with WebAssembly Support)
 
@@ -52,17 +49,22 @@ sudo gpasswd -a $USER docker
 
 ## Build
 
-For a full deployment with Python+WASM support, run:
+### Python Only
+
+Just run this:
+
+```
+make ol imgs/ol-min
+```
+
+### Python+WASM (for Rust support)
+
 ```
 make all
 make sudo-install
 ```
 
 The `make sudo-install` step installs the binaries (`ol`, `ol-wasm`, and `ol-container-proxy`) to `/usr/local/bin/`, which is required for running the full test suite.
-
-For a "min" deployment (just Python), run `make ol imgs/ol-min`.
-
-## Test
 
 If you have a complete setup (Python+WASM), now is a good time to test
 your environment: `make test-all`.
@@ -194,6 +196,22 @@ If you initialized a worker with a specific path (e.g., `./ol worker init -p myw
 ```
 
 If no `-p` flag is specified, the command will default to the worker running on port 5000 using the default config.
+
+### Installing from a Git Repository
+
+You can also install lambdas directly from a Git repository (GitHub, GitLab, etc.):
+
+```bash
+./ol admin install https://github.com/open-lambda/hello-lambda-example.git
+```
+
+This works with both HTTPS and SSH URLs:
+
+```bash
+./ol admin install git@github.com:open-lambda/hello-lambda-example.git
+```
+
+The function name is derived from the repository name (e.g., `hello-lambda-example`).
 
 ## Invoke Lambda
 

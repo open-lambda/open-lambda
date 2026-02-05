@@ -14,7 +14,7 @@ from . import ol_oom_killer, mounts, get_ol_stats, get_current_config, get_worke
 
 TEST_FILTER = []
 TEST_BLOCKLIST = []
-WORKER_TYPE = []
+WORKER_TYPE = None
 RESULTS = OrderedDict({"runs": []})
 START_TIME = None
 
@@ -22,6 +22,9 @@ def set_worker_type(new_val):
     ''' Setup up the worker type for all following tests '''
     global WORKER_TYPE
     WORKER_TYPE = new_val
+
+def get_worker_type():
+    return WORKER_TYPE
 
 def set_test_filter(new_val):
     ''' Sets up the filter for all following tests '''
@@ -114,21 +117,18 @@ def test(func):
         worker = WORKER_TYPE()
         assert worker
         print("Worker started")
-
-        if worker:
-            try:
-                # run test/benchmark
-                test_t0 = time()
-                return_val = func(**kwargs)
-                test_t1 = time()
-                result["test_seconds"] = test_t1 - test_t0
-                result["pass"] = True
-            except Exception as err:
-                print(f"Failed to run test: {err}")
-                result["pass"] = False
-                result["errors"].append(traceback.format_exc().split("\n"))
-
-            worker.stop()
+        try:
+            # run test/benchmark
+            test_t0 = time()
+            return_val = func(**kwargs)
+            test_t1 = time()
+            result["test_seconds"] = test_t1 - test_t0
+            result["pass"] = True
+        except Exception as err:
+            print(f"Failed to run test: {err}")
+            result["pass"] = False
+            result["errors"].append(traceback.format_exc().split("\n"))
+        worker.stop()
 
         mounts1 = mounts()
         if len(mounts0) != len(mounts1):

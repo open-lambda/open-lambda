@@ -176,10 +176,14 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 		}
 	}()
 
+	// Use installer profile and inherit any zeros from worker defaults
+	inst := common.Conf.InstallerLimits.WithDefaults(&common.Conf.Limits)
+
 	meta := &sandbox.SandboxMeta{
-		MemLimitMB: common.Conf.Limits.Installer_mem_mb,
+		Runtime:    common.RT_PYTHON,
+		MemLimitMB: inst.Mem_mb,
 	}
-	sb, err := pp.sbPool.Create(nil, true, pp.pipLambda, scratchDir, meta, common.RT_PYTHON)
+	sb, err := pp.sbPool.Create(nil, true, pp.pipLambda, scratchDir, meta)
 	if err != nil {
 		return err
 	}
