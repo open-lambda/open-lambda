@@ -4,10 +4,36 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 )
 
+/*
+ * =========================
+ * Configuration
+ * =========================
+ */
+
+type SandboxSetConfig struct {
+	MaxSandboxes         int
+	HealthCheckOnRelease bool
+	HealthCheckTimeout   time.Duration
+}
+
+func DefaultSandboxSetConfig() *SandboxSetConfig {
+	return &SandboxSetConfig{
+		MaxSandboxes:         10,
+		HealthCheckOnRelease: false,
+		HealthCheckTimeout:   1 * time.Second,
+	}
+}
+
+/*
+ * =========================
+ * SandboxSet
+ * =========================
+ */
+
 // SandboxSet manages a thread-safe pool of sandboxes.
-// It handles dynamic creation and reuse of sandboxes without goroutines.
 type SandboxSet struct {
 	mutex sync.Mutex
 
@@ -15,7 +41,7 @@ type SandboxSet struct {
 	sandboxes []*sandboxWrapper
 
 	// Configuration
-	maxSandboxes int
+	config *SandboxSetConfig
 
 	// Dependencies for creating new sandboxes
 	sbPool SandboxPool
@@ -27,183 +53,313 @@ type SandboxSet struct {
 	scratchDir string
 
 	// Statistics
-	created  int
-	borrowed int
-	released int
+	created        int
+	borrowed       int
+	released       int
+	removed        int
+	healthChecks   int
+	healthFailures int
 }
 
-// sandboxWrapper tracks a sandbox and its usage state
+// sandboxWrapper tracks sandbox state safely
 type sandboxWrapper struct {
-	sb    Sandbox
-	inUse bool
+	sb        Sandbox
+	inUse     bool
+	checking  bool
+	lastUsed  time.Time
 }
 
-// NewSandboxSet creates a new sandbox pool
+/*
+ * =========================
+ * Constructors
+ * =========================
+ */
+
+// Backwards-compatible constructor
 func NewSandboxSet(
 	sbPool SandboxPool,
 	meta *SandboxMeta,
 	isLeaf bool,
 	codeDir string,
 	scratchDir string,
-	maxSandboxes int) *SandboxSet {
+	maxSandboxes int,
+) *SandboxSet {
 
-	if maxSandboxes <= 0 {
-		maxSandboxes = 10 // reasonable default
+	cfg := DefaultSandboxSetConfig()
+	cfg.MaxSandboxes = maxSandboxes
+
+	return NewSandboxSetWithConfig(sbPool, meta, isLeaf, codeDir, scratchDir, cfg)
+}
+
+// Configurable constructor
+func NewSandboxSetWithConfig(
+	sbPool SandboxPool,
+	meta *SandboxMeta,
+	isLeaf bool,
+	codeDir string,
+	scratchDir string,
+	config *SandboxSetConfig,
+) *SandboxSet {
+
+	if config == nil {
+		config = DefaultSandboxSetConfig()
 	}
 
-	// Fill in default values for meta
+	if config.MaxSandboxes <= 0 {
+		config.MaxSandboxes = 10
+	}
+
+	if config.HealthCheckTimeout <= 0 {
+		config.HealthCheckTimeout = 1 * time.Second
+	}
+
 	meta = fillMetaDefaults(meta)
 
 	return &SandboxSet{
-		sandboxes:    []*sandboxWrapper{},
-		maxSandboxes: maxSandboxes,
-		sbPool:       sbPool,
-		meta:         meta,
-		isLeaf:       isLeaf,
-		codeDir:      codeDir,
-		scratchDir:   scratchDir,
-		created:      0,
-		borrowed:     0,
-		released:     0,
+		sandboxes:  []*sandboxWrapper{},
+		config:     config,
+		sbPool:     sbPool,
+		meta:       meta,
+		isLeaf:     isLeaf,
+		codeDir:    codeDir,
+		scratchDir: scratchDir,
 	}
 }
 
+/*
+ * =========================
+ * Core API
+ * =========================
+ */
+
 // GetSandbox returns an available sandbox or creates a new one.
-// Returns error if all sandboxes are busy and max capacity reached.
 func (set *SandboxSet) GetSandbox() (Sandbox, error) {
 	set.mutex.Lock()
 	defer set.mutex.Unlock()
 
-	// First, try to find an unused sandbox
-	for _, wrapper := range set.sandboxes {
-		if !wrapper.inUse && wrapper.sb != nil {
-			wrapper.inUse = true
+	// Reuse idle sandbox
+	for _, w := range set.sandboxes {
+		if !w.inUse && !w.checking && w.sb != nil {
+			w.inUse = true
 			set.borrowed++
-			return wrapper.sb, nil
+			return w.sb, nil
 		}
 	}
 
-	// All sandboxes are in use - check if we can create a new one
-	if len(set.sandboxes) >= set.maxSandboxes {
+	// Capacity check
+	if len(set.sandboxes) >= set.config.MaxSandboxes {
 		return nil, fmt.Errorf(
-			"SandboxSet at capacity (%d/%d sandboxes in use)",
-			len(set.sandboxes), set.maxSandboxes)
+			"SandboxSet at capacity (%d/%d)",
+			len(set.sandboxes),
+			set.config.MaxSandboxes,
+		)
 	}
 
-	// Create a new sandbox
+	// Create new sandbox
 	sb, err := set.createSandbox()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create sandbox: %v", err)
+		return nil, err
 	}
 
-	// Add to pool and mark as in-use
-	wrapper := &sandboxWrapper{
-		sb:    sb,
-		inUse: true,
-	}
-	set.sandboxes = append(set.sandboxes, wrapper)
+	set.sandboxes = append(set.sandboxes, &sandboxWrapper{
+		sb:       sb,
+		inUse:    true,
+		lastUsed: time.Now(),
+	})
+
 	set.created++
 	set.borrowed++
 
 	return sb, nil
 }
 
-// ReleaseSandbox marks a sandbox as available for reuse
+// ReleaseSandbox releases a sandbox back to the pool.
 func (set *SandboxSet) ReleaseSandbox(sb Sandbox) error {
 	if sb == nil {
 		return errors.New("cannot release nil sandbox")
 	}
 
+	var wrapper *sandboxWrapper
+
+	// Mark as checking (prevents reuse during health check)
+	set.mutex.Lock()
+	for _, w := range set.sandboxes {
+		if w.sb == sb {
+			if !w.inUse {
+				set.mutex.Unlock()
+				return fmt.Errorf("sandbox %s was not in use", sb.ID())
+			}
+			w.checking = true
+			wrapper = w
+			break
+		}
+	}
+	set.mutex.Unlock()
+
+	if wrapper == nil {
+		return fmt.Errorf("sandbox %s not found", sb.ID())
+	}
+
+	// Optional health check (no lock held)
+	if set.config.HealthCheckOnRelease {
+		if !set.checkSandboxHealth(sb) {
+			return set.DestroyAndRemove(sb)
+		}
+	}
+
+	// Finalize release
 	set.mutex.Lock()
 	defer set.mutex.Unlock()
 
-	// Find the sandbox in our pool
-	for _, wrapper := range set.sandboxes {
-		if wrapper.sb == sb {
-			if !wrapper.inUse {
-				return fmt.Errorf("sandbox %s was not in use", sb.ID())
-			}
-			wrapper.inUse = false
-			set.released++
+	wrapper.inUse = false
+	wrapper.checking = false
+	wrapper.lastUsed = time.Now()
+	set.released++
+
+	return nil
+}
+
+// DestroyAndRemove permanently removes a sandbox from the pool.
+func (set *SandboxSet) DestroyAndRemove(sb Sandbox) error {
+	if sb == nil {
+		return errors.New("cannot destroy nil sandbox")
+	}
+
+	set.mutex.Lock()
+	defer set.mutex.Unlock()
+
+	for i, w := range set.sandboxes {
+		if w.sb == sb {
+			sb.Destroy("removed from SandboxSet")
+			set.sandboxes = append(set.sandboxes[:i], set.sandboxes[i+1:]...)
+			set.removed++
 			return nil
 		}
 	}
 
-	return fmt.Errorf("sandbox %s not found in this set", sb.ID())
+	return fmt.Errorf("sandbox %s not found", sb.ID())
 }
 
-// createSandbox is a helper that creates a new sandbox
-// Assumes mutex is already held by caller
+/*
+ * =========================
+ * Health Checking
+ * =========================
+ */
+
+func (set *SandboxSet) checkSandboxHealth(sb Sandbox) bool {
+	set.incrementHealthCheck()
+
+	done := make(chan error, 1)
+
+	go func() {
+		select {
+		case done <- sb.Pause():
+		default:
+		}
+	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			set.incrementHealthFailure()
+			return false
+		}
+		sb.Unpause()
+		return true
+
+	case <-time.After(set.config.HealthCheckTimeout):
+		set.incrementHealthFailure()
+		return false
+	}
+}
+
+func (set *SandboxSet) incrementHealthCheck() {
+	set.mutex.Lock()
+	set.healthChecks++
+	set.mutex.Unlock()
+}
+
+func (set *SandboxSet) incrementHealthFailure() {
+	set.mutex.Lock()
+	set.healthFailures++
+	set.mutex.Unlock()
+}
+
+/*
+ * =========================
+ * Helpers
+ * =========================
+ */
+
 func (set *SandboxSet) createSandbox() (Sandbox, error) {
-	// Create the sandbox using the pool
-	sb, err := set.sbPool.Create(
-		nil, // no parent (zygote support will come in Step 3)
+	return set.sbPool.Create(
+		nil,
 		set.isLeaf,
 		set.codeDir,
 		set.scratchDir,
 		set.meta,
 	)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return sb, nil
 }
 
-// Destroy cleans up all sandboxes in the set
 func (set *SandboxSet) Destroy() {
 	set.mutex.Lock()
 	defer set.mutex.Unlock()
 
-	for _, wrapper := range set.sandboxes {
-		if wrapper.sb != nil {
-			wrapper.sb.Destroy("SandboxSet cleanup")
+	for _, w := range set.sandboxes {
+		if w.sb != nil {
+			w.sb.Destroy("SandboxSet cleanup")
 		}
 	}
 	set.sandboxes = nil
 }
 
-// Stats returns statistics about the sandbox set
+/*
+ * =========================
+ * Introspection
+ * =========================
+ */
+
 func (set *SandboxSet) Stats() map[string]int {
 	set.mutex.Lock()
 	defer set.mutex.Unlock()
 
 	inUse := 0
-	for _, wrapper := range set.sandboxes {
-		if wrapper.inUse {
+	for _, w := range set.sandboxes {
+		if w.inUse {
 			inUse++
 		}
 	}
 
 	return map[string]int{
-		"total":    len(set.sandboxes),
-		"in_use":   inUse,
-		"idle":     len(set.sandboxes) - inUse,
-		"max":      set.maxSandboxes,
-		"created":  set.created,
-		"borrowed": set.borrowed,
-		"released": set.released,
+		"total":           len(set.sandboxes),
+		"in_use":          inUse,
+		"idle":            len(set.sandboxes) - inUse,
+		"max":             set.config.MaxSandboxes,
+		"created":         set.created,
+		"borrowed":        set.borrowed,
+		"released":        set.released,
+		"removed":         set.removed,
+		"health_checks":   set.healthChecks,
+		"health_failures": set.healthFailures,
 	}
 }
 
-// Size returns the current number of sandboxes in the set
 func (set *SandboxSet) Size() int {
 	set.mutex.Lock()
 	defer set.mutex.Unlock()
 	return len(set.sandboxes)
 }
 
-// InUse returns the number of sandboxes currently in use
 func (set *SandboxSet) InUse() int {
 	set.mutex.Lock()
 	defer set.mutex.Unlock()
 
-	inUse := 0
-	for _, wrapper := range set.sandboxes {
-		if wrapper.inUse {
-			inUse++
+	count := 0
+	for _, w := range set.sandboxes {
+		if w.inUse {
+			count++
 		}
 	}
-	return inUse
+	return count
 }
+
