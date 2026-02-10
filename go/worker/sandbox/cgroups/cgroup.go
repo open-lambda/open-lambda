@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"golang.org/x/sys/unix"
+	"io"
 	"io/ioutil"
 	"log/slog"
 	"os"
@@ -13,7 +15,6 @@ import (
 	"time"
 
 	"github.com/open-lambda/open-lambda/go/common"
-	"golang.org/x/sys/unix"
 )
 
 type CgroupImpl struct {
@@ -138,12 +139,16 @@ func (cg *CgroupImpl) WriteString(resource string, val string) {
 	}
 }
 
-func (cg *CgroupImpl) TryReadIntKV(resource string, key string) (int64, error) {
-	raw, err := ioutil.ReadFile(cg.ResourcePath(resource))
+func (_ *CgroupImpl) TryReadIntKVFromFile(file *os.File, key string) (int64, error) {
+	_, err := file.Seek(0, io.SeekStart)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("failed to seek to start of file: %w", err)
 	}
-	body := string(raw)
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return 0, fmt.Errorf("failed to read key %s from file: %w", key, err)
+	}
+	body := string(data)
 	lines := strings.Split(body, "\n")
 	for i := 0; i <= len(lines); i++ {
 		parts := strings.Split(lines[i], " ")
@@ -156,6 +161,16 @@ func (cg *CgroupImpl) TryReadIntKV(resource string, key string) (int64, error) {
 		}
 	}
 	return 0, fmt.Errorf("could not find key '%s' in file: %s", key, body)
+}
+
+func (cg *CgroupImpl) TryReadIntKV(resource string, key string) (int64, error) {
+	resourcePath := cg.ResourcePath(resource)
+	file, err := os.Open(resourcePath)
+	if err != nil {
+		return 0, fmt.Errorf("failed to open file %s: %w", resourcePath, err)
+	}
+	defer file.Close()
+	return cg.TryReadIntKVFromFile(file, key)
 }
 
 func (cg *CgroupImpl) TryReadInt(resource string) (int64, error) {
@@ -201,22 +216,30 @@ func (cg *CgroupImpl) setFreezeState(state int64) error {
 	}
 	defer eventFile.Close()
 
-	// poll(2): POLLPRI indicates "cgroup.events file modified"
+	// cgroups(7): POLLPRI indicates "cgroup.events file modified"
+	// for poll to decide a POLLPRI event occurs it maintains 2 event counters:
+	// 1. the event counter when you last read the file
+	// 2. the file's current event counter
+	// if the last read's counter is different from the current event counter poll returns POLLPRI
 	pollFDs := []unix.PollFd{
 		{
 			Fd:     int32(eventFile.Fd()),
 			Events: unix.POLLPRI,
 		},
 	}
+	pollCalls := 0
 
 	start := time.Now()
 
-	defer func(start time.Time) {
+	defer func() {
 		elapsed := time.Since(start)
 		if elapsed >= 250*time.Millisecond {
 			cg.printf("WARNING!  setFreezeState to state %v took %v to complete", state, elapsed)
 		}
-	}(start)
+		if pollCalls > 5 {
+			cg.printf("WARNING!  setFreezeState called poll %v times, could be busy waiting", pollCalls)
+		}
+	}()
 
 	cg.WriteInt("cgroup.freeze", state)
 
@@ -228,12 +251,14 @@ func (cg *CgroupImpl) setFreezeState(state int64) error {
 			return fmt.Errorf("cgroup freeze timeout after %v (expected state %v)", timeout, state)
 		}
 
+		pollCalls++
 		_, err := unix.Poll(pollFDs, int(remaining.Milliseconds()))
 		if err != nil && !errors.Is(err, unix.EINTR) {
 			return fmt.Errorf("poll syscall failed on %s: %w", resourcePath, err)
 		}
 
-		freezerState, err := cg.TryReadIntKV("cgroup.events", "frozen")
+		// read from the same file to update event counter, prevents busy wait
+		freezerState, err := cg.TryReadIntKVFromFile(eventFile, "frozen")
 		if err != nil {
 			return fmt.Errorf("failed to check self_freezing state :: %w", err)
 		}
