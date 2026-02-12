@@ -58,15 +58,74 @@ func TestRealContainers(t *testing.T) {
 }
 
 func setup(t *testing.T) {
-	if err := common.LoadDefaults("../../../"); err != nil {
-		t.Fatalf("Config load failed: %v", err)
+	// Create test directory structure
+	testRoot := "/tmp/ol-sandboxset-test"
+	os.RemoveAll(testRoot)
+
+	dirs := []string{
+		testRoot,
+		testRoot + "/worker",
+		testRoot + "/lambda",
+		testRoot + "/lambda/packages",
+		testRoot + "/registry",
+		"/tmp/test-code",
+		"/tmp/test-scratch",
+	}
+	for _, d := range dirs {
+		if err := os.MkdirAll(d, 0755); err != nil {
+			t.Fatalf("Failed to create dir %s: %v", d, err)
+		}
 	}
 
-	dirs := []string{"/tmp/test-code", "/tmp/test-scratch"}
-	for _, d := range dirs {
-		os.RemoveAll(d)
-		os.MkdirAll(d, 0755)
+	// Set up minimal config for testing
+	common.Conf = &common.Config{
+		Worker_dir:   testRoot + "/worker",
+		Worker_url:   "localhost",
+		Worker_port:  "5001",
+		Log_output:   true,
+		Sandbox:      "docker",
+		Server_mode:  "lambda",
+		Registry:     "file://" + testRoot + "/registry",
+		Pkgs_dir:     testRoot + "/lambda/packages",
+		Mem_pool_mb:  2048,
+		SOCK_base_path: testRoot + "/lambda",
+
+		Docker: common.DockerConfig{
+			Runtime:    "",
+			Base_image: "ol-min",
+		},
+
+		Limits: common.LimitsConfig{
+			Procs:       10,
+			Mem_mb:      50,
+			CPU_percent: 100,
+			Swappiness:  0,
+			Runtime_sec: 30,
+		},
+
+		InstallerLimits: common.LimitsConfig{
+			Procs:       0,
+			Mem_mb:      250,
+			CPU_percent: 0,
+			Swappiness:  0,
+			Runtime_sec: 300,
+		},
+
+		Features: common.FeaturesConfig{
+			Reuse_cgroups:       false,
+			Import_cache:        "tree",
+			Downsize_paused_mem: true,
+			Enable_seccomp:      true,
+		},
+
+		Storage: common.StorageConfig{
+			Root:    "private",
+			Scratch: "",
+			Code:    "",
+		},
 	}
+
+	t.Logf("Test environment initialized at: %s", testRoot)
 }
 
 func createPool(t *testing.T) SandboxPool {
