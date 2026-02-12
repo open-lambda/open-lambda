@@ -2,7 +2,6 @@ package cgroups
 
 import (
 	"fmt"
-	"io/ioutil"
 	"log/slog"
 	"os"
 	"path"
@@ -41,13 +40,11 @@ func NewCgroupPool(name string) (*CgroupPool, error) {
 	if err := syscall.Mkdir(groupPath, 0700); err != nil {
 		return nil, fmt.Errorf("Mkdir %s: %s", groupPath, err)
 	}
-
 	// Make controllers available to child groups
 	rpath := fmt.Sprintf("%s/cgroup.subtree_control", groupPath)
-	if err := ioutil.WriteFile(rpath, []byte("+pids +io +memory +cpu"), os.ModeAppend); err != nil {
-		panic(fmt.Sprintf("Error writing to %s: %v", rpath, err))
+	if err := os.WriteFile(rpath, []byte("+pids +io +memory +cpu"), os.ModeAppend); err != nil {
+		return nil, fmt.Errorf("Error writing to %s: %w", rpath, err)
 	}
-
 	go pool.cgTask()
 	return pool, nil
 }
@@ -181,5 +178,5 @@ func (pool *CgroupPool) GetCg(memLimitMB int, moveMemCharge bool, cpuPercent int
 
 // GroupPath returns the path to the Cgroup pool for OpenLambda
 func (pool *CgroupPool) GroupPath() string {
-	return fmt.Sprintf("/sys/fs/cgroup/%s", pool.Name)
+	return path.Join(common.CgroupPath(), pool.Name)
 }

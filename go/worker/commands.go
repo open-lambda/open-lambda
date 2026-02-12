@@ -3,7 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -102,10 +102,37 @@ func upCmd(ctx *cli.Context) error {
 		return err
 	}
 
+	// are we root?
+	isRoot := os.Getuid() == 0
 	// should we run as a background process?
 	detach := ctx.Bool("detach")
+	// should we run in rootless mode?
+	rootless := ctx.Bool("rootless")
 
+	// both parent and child processes require either root privileges or rootless mode enabled
+	if !isRoot && !rootless {
+		return fmt.Errorf("Insufficient Privileges - Enable detached rootless mode with '--rootless=true -d' or run as 'sudo'.")
+	}
+
+	// parent process can only be rootless in detached mode
+	// continue if running as root or child process after detach
+	if !isRoot && rootless && !detach {
+		return fmt.Errorf("Rootless mode only supported in detached mode. Run with '-d'.")
+	}
+
+	// parent process
 	if detach {
+		// check root status in parent (child runs as fakeroot)
+		isRoot := os.Getuid() == 0
+		if isRoot && rootless {
+			return fmt.Errorf("Rootless mode not supported when running as root")
+		} else if !isRoot && rootless {
+			// check if system supports rootless mode
+			if err := checkRootlessSupport(); err != nil {
+				return err
+			}
+		}
+
 		// stdout+stderr both go to log
 		logPath := filepath.Join(olPath, "worker.out")
 		// creates a worker.out file
@@ -113,17 +140,34 @@ func upCmd(ctx *cli.Context) error {
 		if err != nil {
 			return err
 		}
+
+		uid := os.Getuid()
+		gid := os.Getgid()
+
 		// holds attributes that will be used when os.StartProcess.
-		// we use CLONE_NEWNS because ol creates many mount points.
-		// we don't want them to show up in /proc/self/mountinfo
-		// for systemd because systemd creates a service for each
-		// mount point, which is a major overhead.
+		// use CLONE_NEWNS so mounts don't spam systemd.
 		attr := os.ProcAttr{
 			Files: []*os.File{nil, f, f},
 			Sys: &syscall.SysProcAttr{
 				Unshareflags: syscall.CLONE_NEWNS,
 			},
 		}
+
+		// if rootless, also create a user+UTS namespace and map uid/gid -> 0 (fake root).
+		if rootless {
+			attr.Sys = &syscall.SysProcAttr{
+				Unshareflags: syscall.CLONE_NEWUSER | syscall.CLONE_NEWNS | syscall.CLONE_NEWUTS,
+				UidMappings: []syscall.SysProcIDMap{
+					{ContainerID: 0, HostID: uid, Size: 1},
+				},
+				GidMappingsEnableSetgroups: false,
+				GidMappings: []syscall.SysProcIDMap{
+					{ContainerID: 0, HostID: gid, Size: 1},
+				},
+			}
+		}
+
+		// build args for child (strip -d/--detach)
 		cmd := []string{}
 		for _, arg := range os.Args {
 			if arg != "-d" && arg != "--detach" {
@@ -135,6 +179,10 @@ func upCmd(ctx *cli.Context) error {
 		if err != nil {
 			return err
 		}
+		if abs, err := filepath.Abs(binPath); err == nil {
+			binPath = abs
+		}
+
 		// start the worker process
 		fmt.Printf("Starting worker in %s and waiting until it's ready.\n", olPath)
 		proc, err := os.StartProcess(binPath, cmd, &attr)
@@ -150,6 +198,7 @@ func upCmd(ctx *cli.Context) error {
 		}()
 
 		fmt.Printf("\tPID: %d\n\tPort: %s\n\tLog File: %s\n", proc.Pid, common.Conf.Worker_port, logPath)
+		fmt.Printf("\tRootless: %v (uid=%d gid=%d)\n", rootless, uid, gid)
 
 		var pingErr error
 
@@ -180,7 +229,7 @@ func upCmd(ctx *cli.Context) error {
 			defer response.Body.Close()
 
 			// are we talking with the expected PID?
-			body, err := ioutil.ReadAll(response.Body)
+			body, err := io.ReadAll(response.Body)
 			pid, err := strconv.Atoi(strings.TrimSpace(string(body)))
 			if err != nil {
 				return fmt.Errorf("/pid did not return an int:  %s", err)
@@ -201,6 +250,23 @@ func upCmd(ctx *cli.Context) error {
 	return event.Main()
 }
 
+func checkRootlessSupport() error {
+	// Check if unprivileged user namespaces are enabled
+	if b, err := os.ReadFile("/proc/sys/kernel/unprivileged_userns_clone"); err == nil {
+		if strings.TrimSpace(string(b)) != "1" {
+			return fmt.Errorf("User namespaces disabled (kernel.unprivileged_userns_clone=0).")
+		}
+	} else {
+		return err
+	}
+
+	// Check if systemd is available
+	if _, err := os.Stat("/run/systemd/system"); err != nil {
+		return fmt.Errorf("systemd not available.")
+	}
+	return nil
+}
+
 // statusCmd corresponds to the "status" command of the admin tool.
 func statusCmd(ctx *cli.Context) error {
 	olPath, err := common.GetOlPath(ctx)
@@ -219,7 +285,7 @@ func statusCmd(ctx *cli.Context) error {
 		return fmt.Errorf("could not send GET to %s", url)
 	}
 	defer response.Body.Close()
-	body, err := ioutil.ReadAll(response.Body)
+	body, err := io.ReadAll(response.Body)
 	if err != nil {
 		return fmt.Errorf("failed to read body from GET to %s", url)
 	}
@@ -302,6 +368,11 @@ func WorkerCommands() []*cli.Command {
 					Name:    "detach",
 					Aliases: []string{"d"},
 					Usage:   "Run worker in background",
+				},
+				&cli.BoolFlag{
+					Name:  "rootless",
+					Usage: "Enable rootless user namespace for worker (recommended)",
+					Value: false,
 				},
 			},
 			Action: upCmd,
