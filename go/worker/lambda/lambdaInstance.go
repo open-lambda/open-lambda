@@ -79,10 +79,6 @@ func (linst *LambdaInstance) Task() {
 		}
 
 		reuse := linst.meta.Config.ReuseSandbox
-		if !reuse && sb != nil {
-			sb.Destroy("reuse-sandbox disabled: fresh sandbox per invocation")
-			sb = nil
-		}
 
 		t := common.T0("LambdaInstance-WaitSandbox")
 		// if we have a sandbox, try unpausing it to see if it is still alive
