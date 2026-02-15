@@ -233,8 +233,9 @@ func (server *SOCKServer) cleanup() {
 func NewSOCKServer(mux *http.ServeMux) (*SOCKServer, error) {
 	slog.Info("Start SOCK Server")
 
-	mem := sandbox.NewMemPool("sandboxes", common.Conf.Mem_pool_mb)
-	sbPool, err := sandbox.NewSOCKPool("sandboxes", mem)
+	logger := slog.Default()
+	mem := sandbox.NewMemPool("sandboxes", common.Conf.Mem_pool_mb, logger)
+	sbPool, err := sandbox.NewSOCKPool("sandboxes", mem, logger)
 	if err != nil {
 		return nil, err
 	}

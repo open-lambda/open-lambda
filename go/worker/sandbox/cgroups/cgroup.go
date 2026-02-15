@@ -18,17 +18,13 @@ import (
 )
 
 type CgroupImpl struct {
-	name       string
-	pool       *CgroupPool
-	memLimitMB int
+	name        string
+	pool        *CgroupPool
+	memLimitMB  int
+	logger      *slog.Logger
+	traceLogger *slog.Logger
 }
 
-func (cg *CgroupImpl) printf(format string, args ...any) {
-	if common.Conf.Trace.Cgroups {
-		msg := fmt.Sprintf(format, args...)
-		slog.Info(fmt.Sprintf("%s [CGROUP %s: %s]", strings.TrimRight(msg, "\n"), cg.pool.Name, cg.name))
-	}
-}
 
 // Name returns the name of the cgroup.
 func (cg *CgroupImpl) Name() string {
@@ -49,7 +45,7 @@ func (cg *CgroupImpl) Release() {
 					panic(fmt.Errorf("Cannot release cgroup that contains processes: %v", pids))
 				}
 
-				cg.printf("cgroup Rmdir failed, trying again in 5ms")
+				cg.traceLogger.Debug("cgroup rmdir failed, retrying")
 				time.Sleep(5 * time.Millisecond)
 			} else {
 				break
@@ -58,20 +54,20 @@ func (cg *CgroupImpl) Release() {
 
 		select {
 		case cg.pool.recycled <- cg:
-			cg.printf("release and recycle")
+			cg.traceLogger.Debug("releasing and recycling cgroup")
 			return
 		default:
 		}
 	}
 
-	cg.printf("release and Destroy")
+	cg.traceLogger.Debug("releasing and destroying cgroup")
 	cg.Destroy()
 }
 
 // Destroy destroys the cgroup.
 func (cg *CgroupImpl) Destroy() {
 	gpath := cg.GroupPath()
-	cg.printf("Destroying cgroup with path \"%s\"", gpath)
+	cg.traceLogger.Debug("destroying cgroup", "path", gpath)
 
 	for i := 100; i >= 0; i-- {
 		if err := syscall.Rmdir(gpath); err != nil {
@@ -79,7 +75,7 @@ func (cg *CgroupImpl) Destroy() {
 				panic(fmt.Errorf("Rmdir(2) %s: %s", gpath, err))
 			}
 
-			cg.printf("cgroup Rmdir failed, trying again in 5ms")
+			cg.traceLogger.Debug("cgroup rmdir failed, retrying")
 			time.Sleep(5 * time.Millisecond)
 		} else {
 			break

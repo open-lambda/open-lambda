@@ -115,13 +115,13 @@ func (container *DockerContainer) Client() *http.Client {
 // Start starts the container.
 func (container *DockerContainer) start() error {
 	if err := container.client.StartContainer(container.container.ID, nil); err != nil {
-		slog.Info(fmt.Sprintf("failed to start container with err %v\n", err))
+		slog.Error("failed to start container", "error", err)
 		return container.dockerError(err)
 	}
 
 	inspect, err := container.client.InspectContainer(container.container.ID)
 	if err != nil {
-		slog.Info(fmt.Sprintf("failed to inpect container with err %v\n", err))
+		slog.Error("failed to inspect container", "error", err)
 		return container.dockerError(err)
 	}
 	container.container = inspect
@@ -140,7 +140,7 @@ func (container *DockerContainer) Pause() error {
 	}
 
 	if err := container.client.PauseContainer(container.container.ID); err != nil {
-		slog.Info(fmt.Sprintf("failed to pause container with error %v\n", err))
+		slog.Error("failed to pause container", "error", err)
 		return container.dockerError(err)
 	}
 
@@ -160,7 +160,7 @@ func (container *DockerContainer) Unpause() error {
 	}
 
 	if err := container.client.UnpauseContainer(container.container.ID); err != nil {
-		slog.Info(fmt.Sprintf("failed to unpause container %s with err %v\n", container.container.Name, err))
+		slog.Error("failed to unpause container", "container", container.container.Name, "error", err)
 		return container.dockerError(err)
 	}
 
@@ -186,7 +186,7 @@ func (container *DockerContainer) internalDestroy() error {
 	// before killing?  (i.e., use SIGTERM instead SIGKILL)
 	opts := docker.KillContainerOptions{ID: container.container.ID}
 	if err := container.client.KillContainer(opts); err != nil {
-		slog.Info(fmt.Sprintf("failed to kill container with error %v\n", err))
+		slog.Error("failed to kill container", "error", err)
 		return container.dockerError(err)
 	}
 
@@ -201,7 +201,7 @@ func (container *DockerContainer) internalDestroy() error {
 	if err := container.client.RemoveContainer(docker.RemoveContainerOptions{
 		ID: container.container.ID,
 	}); err != nil {
-		slog.Info(fmt.Sprintf("failed to rm container with err %v", err))
+		slog.Error("failed to remove container", "error", err)
 		return container.dockerError(err)
 	}
 
@@ -306,7 +306,7 @@ func waitForServerPipeReady(hostDir string) error {
 		pipeFile := filepath.Join(hostDir, "server_pipe")
 		pipe, err := os.OpenFile(pipeFile, os.O_RDWR, 0777)
 		if err != nil {
-			slog.Info(fmt.Sprintf("Cannot open pipe: %v\n", err))
+			slog.Error("cannot open pipe", "error", err)
 			return
 		}
 		defer pipe.Close()

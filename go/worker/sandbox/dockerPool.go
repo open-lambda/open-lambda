@@ -2,6 +2,7 @@ package sandbox
 
 import (
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -173,7 +174,7 @@ func (pool *DockerPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir 
 	}
 
 	// wrap to make thread-safe and handle container death
-	safe := newSafeSandbox(c)
+	safe := newSafeSandbox(c, slog.Default().With("docker_container", c.hostID))
 	safe.startNotifyingListeners(pool.eventHandlers)
 	return safe, nil
 }

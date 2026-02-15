@@ -29,12 +29,19 @@ type SOCKPool struct {
 	cgPool        *cgroups.CgroupPool
 	mem           *MemPool
 	eventHandlers []SandboxEventFunc
+	logger        *slog.Logger
 	debugger
 }
 
 // NewSOCKPool creates a SOCKPool.
-func NewSOCKPool(name string, mem *MemPool) (cf *SOCKPool, err error) {
-	cgPool, err := cgroups.NewCgroupPool(name)
+func NewSOCKPool(name string, mem *MemPool, logger *slog.Logger) (cf *SOCKPool, err error) {
+	// Create a child logger with pool context
+	if logger == nil {
+		logger = slog.Default()
+	}
+	poolLogger := logger.With("component", "sock_pool", "pool", name)
+	
+	cgPool, err := cgroups.NewCgroupPool(name, poolLogger.With("component", "cgroup_pool"))
 	if err != nil {
 		return nil, err
 	}
@@ -50,6 +57,7 @@ func NewSOCKPool(name string, mem *MemPool) (cf *SOCKPool, err error) {
 		cgPool:        cgPool,
 		rootDirs:      rootDirs,
 		eventHandlers: []SandboxEventFunc{},
+		logger:        poolLogger,
 	}
 
 	pool.debugger = newDebugger(pool)
@@ -67,9 +75,15 @@ func sbStr(sb Sandbox) string {
 func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir string, meta *SandboxMeta) (sb Sandbox, err error) {
 	id := fmt.Sprintf("%d", atomic.AddInt64(&nextId, 1))
 	meta = fillMetaDefaults(meta)
-	pool.printf("<%v>.Create(%v, %v, %v, %v, %v)=%s...", pool.name, sbStr(parent), isLeaf, codeDir, scratchDir, meta, id)
+	pool.logger.Debug("creating sandbox",
+		"parent", sbStr(parent),
+		"isLeaf", isLeaf,
+		"codeDir", codeDir,
+		"scratchDir", scratchDir,
+		"meta", meta,
+		"id", id)
 	defer func() {
-		pool.printf("...returns %v, %v", sbStr(sb), err)
+		pool.logger.Debug("create complete", "sandbox", sbStr(sb), "error", err)
 	}()
 
 	t := common.T0("Create()")
@@ -85,6 +99,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 		children:         make(map[string]Sandbox),
 		meta:             meta,
 		containerProxy:   nil,
+		logger:           pool.logger.With("container_id", id),
 	}
 	var c Sandbox = cSock
 
@@ -102,7 +117,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 	moveMemCharge := (parent == nil)
 	cSock.cg = pool.cgPool.GetCg(meta.MemLimitMB, moveMemCharge, meta.CPUPercent)
 	t2.T1()
-	cSock.printf("use cgroup %s", cSock.cg.Name())
+	cSock.logger.Debug("using cgroup", "cgroup", cSock.cg.Name())
 
 	defer func() {
 		if err != nil {
@@ -158,14 +173,14 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 		return nil, fmt.Errorf("Unsupported runtime")
 	}
 
-	safe := newSafeSandbox(c)
+	safe := newSafeSandbox(c, cSock.logger)
 	c = safe
 
 	// create new process in container (fresh, or forked from parent)
 	if parent != nil {
 		t2 := t.T0("fork-proc")
 		if err := parent.fork(c); err != nil {
-			pool.printf("parent.fork returned %v", err)
+			pool.logger.Error("parent fork failed", "error", err)
 			return nil, FORK_FAILED
 		}
 		cSock.parent = parent
@@ -184,7 +199,7 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 		return nil, fmt.Errorf("socket path length cannot exceed 108 characters (try moving cluster closer to the root directory")
 	}
 
-	slog.Info(fmt.Sprintf("Connecting to container at '%s'", sockPath))
+	pool.logger.Info("connecting to container", "socket_path", sockPath)
 	dial := func(_, _ string) (net.Conn, error) {
 		return net.Dial("unix", sockPath)
 	}
@@ -199,10 +214,6 @@ func (pool *SOCKPool) Create(parent Sandbox, isLeaf bool, codeDir, scratchDir st
 	return c, nil
 }
 
-func (pool *SOCKPool) printf(format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
-	slog.Info(fmt.Sprintf("%s [SOCK POOL %s]", strings.TrimRight(msg, "\n"), pool.name))
-}
 
 // handler(...) will be called everytime a sandbox-related event occurs,
 // such as Create, Destroy, etc.
@@ -217,9 +228,9 @@ func (pool *SOCKPool) AddListener(handler SandboxEventFunc) {
 func (pool *SOCKPool) Cleanup() {
 	// user is required to kill all containers before they call
 	// this.  If they did, the memory pool should be full.
-	pool.printf("make sure all memory is free")
+	pool.logger.Info("ensuring all memory is free")
 	pool.mem.adjustAvailableMB(-pool.mem.totalMB)
-	pool.printf("memory pool emptied")
+	pool.logger.Info("memory pool emptied")
 
 	pool.cgPool.Destroy()
 	if err := pool.rootDirs.Cleanup(); err != nil {
