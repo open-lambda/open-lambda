@@ -78,7 +78,7 @@ func (linst *LambdaInstance) Task() {
 			return
 		}
 
-		reuse := linst.meta.Config.ReuseSandboxEnabled()
+		reuse := linst.meta.Config.ReuseSandbox
 		if !reuse && sb != nil {
 			sb.Destroy("reuse-sandbox disabled: fresh sandbox per invocation")
 			sb = nil

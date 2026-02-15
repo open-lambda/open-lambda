@@ -43,9 +43,9 @@ type KafkaTrigger struct {
 
 // LambdaConfig defines the overall configuration for the lambda function.
 type LambdaConfig struct {
-	Triggers     Triggers          `yaml:"triggers"`                // List of HTTP triggers
-	Environment  map[string]string `yaml:"environment"`             // Environment variables for the lambda
-	ReuseSandbox *bool             `yaml:"reuse-sandbox,omitempty"` // controls whether a sandbox is reused across
+	Triggers     Triggers          `yaml:"triggers"`      // List of HTTP triggers
+	Environment  map[string]string `yaml:"environment"`   // Environment variables for the lambda
+	ReuseSandbox bool              `yaml:"reuse-sandbox"` // controls whether a sandbox is reused across
 	// invocations.
 	// Additional configurations can be added here.
 }
@@ -58,7 +58,8 @@ func LoadDefaultLambdaConfig() *LambdaConfig {
 				{Method: "*"}, // Default to allow all methods
 			},
 		},
-		Environment: make(map[string]string),
+		Environment:  make(map[string]string),
+		ReuseSandbox: true,
 	}
 }
 
@@ -122,15 +123,15 @@ func LoadLambdaConfig(codeDir string) (*LambdaConfig, error) {
 	}
 	defer file.Close()
 
-	var config LambdaConfig
+	config := LoadDefaultLambdaConfig()
 
 	decoder := yaml.NewDecoder(file)
-	err = decoder.Decode(&config) // Use LambdaConf instead of Conf
+	err = decoder.Decode(config) // Use LambdaConf instead of Conf
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse YAML file: %v", err)
 	}
 
-	return &config, checkLambdaConfig(&config)
+	return config, checkLambdaConfig(config)
 }
 
 func ExtractConfigFromTarGz(tarPath string) (*LambdaConfig, error) {
@@ -161,25 +162,17 @@ func ExtractConfigFromTarGz(tarPath string) (*LambdaConfig, error) {
 		// and ./ matches (./ol.yaml) as tar can encode ./ into filenames under
 		// certain conditions.
 		if filepath.Clean(header.Name) == LambdaConfigFilename {
-			var config LambdaConfig
+			config := LoadDefaultLambdaConfig()
 			decoder := yaml.NewDecoder(tr)
-			if err := decoder.Decode(&config); err != nil {
+			if err := decoder.Decode(config); err != nil {
 				return nil, fmt.Errorf("failed to parse %s: %w", LambdaConfigFilename, err)
 			}
-			return &config, checkLambdaConfig(&config)
+			return config, checkLambdaConfig(config)
 		}
 	}
 
 	slog.Info(fmt.Sprintf("[%s] %s not found, using default config", tarPath, LambdaConfigFilename))
 	return LoadDefaultLambdaConfig(), nil
-}
-
-// ReuseSandboxEnabled returns true if sandbox reuse is enabled, defaulting to true if not specified.
-func (c *LambdaConfig) ReuseSandboxEnabled() bool {
-	if c == nil || c.ReuseSandbox == nil {
-		return true
-	}
-	return *c.ReuseSandbox
 }
 
 // IsHTTPMethodAllowed checks if a method is permitted for this function
