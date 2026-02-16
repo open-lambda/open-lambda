@@ -37,9 +37,9 @@ func (cg *CgroupImpl) Name() string {
 
 // KillAndRelease stops all processes inside the cgroup and releases the cgroup back to the pool or destroys it if the pool is full.
 // Note, the CG most be paused beforehand
-func (cg *CgroupImpl) KillAndRelease() {
-
-}
+//func (cg *CgroupImpl) KillAndRelease() {
+//
+//}
 
 func (cg *CgroupImpl) Release() {
 	// if there's room in the recycled channel, add it there.
@@ -272,7 +272,7 @@ func (cg *CgroupImpl) AddPid(pid string) error {
 
 func (cg *CgroupImpl) setFreezeState(state int64) error {
 	timeout := 20 * time.Second
-	return cg.WriteEventAndWait("cgroup.events", "frozen", state, timeout)
+	return cg.WriteEventAndWait("cgroup.freeze", "frozen", state, timeout)
 
 	// eventFile, err := os.Open(resourcePath)
 	//
