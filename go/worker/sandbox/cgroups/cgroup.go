@@ -38,27 +38,19 @@ func (cg *CgroupImpl) Name() string {
 // KillAndRelease stops all processes inside the cgroup and releases the cgroup back to the pool or destroys it if the pool is full.
 // Note, the CG most be paused beforehand
 func (cg *CgroupImpl) KillAndRelease() {
+	err := cg.WriteEventAndWait("cgroup.kill", "populated", 1, 20*time.Second)
+	if err != nil {
+		panic(fmt.Errorf("can't write \"1\" to cgroup.kill: %w", err))
+	}
 
-}
-
-func (cg *CgroupImpl) Release() {
 	// if there's room in the recycled channel, add it there.
 	// Otherwise, just delete it.
 	if common.Conf.Features.Reuse_cgroups {
-		for i := 100; i >= 0; i-- {
-			pids, err := cg.GetPIDs()
-			if err != nil {
-				panic(err)
-			} else if len(pids) > 0 {
-				if i == 0 {
-					panic(fmt.Errorf("Cannot release cgroup that contains processes: %v", pids))
-				}
-
-				cg.printf("cgroup Rmdir failed, trying again in 5ms")
-				time.Sleep(5 * time.Millisecond)
-			} else {
-				break
-			}
+		pids, err := cg.GetPIDs()
+		if err != nil {
+			panic(err)
+		} else if len(pids) > 0 {
+			panic(fmt.Errorf("Cannot release cgroup that contains processes: %v", pids))
 		}
 
 		select {
@@ -358,10 +350,6 @@ func (cg *CgroupImpl) GetPIDs() ([]string, error) {
 // CgroupProcsPath returns the path to the cgroup.procs file.
 func (cg *CgroupImpl) CgroupProcsPath() string {
 	return cg.ResourcePath("cgroup.procs")
-}
-
-func (cg *CgroupImpl) KillAllProcs() {
-	cg.WriteInt("cgroup.kill", 1)
 }
 
 // DebugString returns a string representation of the cgroup's state.
