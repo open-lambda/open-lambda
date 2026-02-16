@@ -138,9 +138,9 @@ func (cg *CgroupImpl) WriteInt(resource string, val int64) {
 	}
 }
 
-// writes to cgroup.events file and waits the file is updated or timeout
-func (cg *CgroupImpl) WriteEventAndWait(resource string, state int64, timeout time.Duration) error {
-	resourcePath := cg.ResourcePath(resource)
+// writes to cgroup controller file and waits the file is updated or timeout
+func (cg *CgroupImpl) WriteEventAndWait(resource string, key string, state int64, timeout time.Duration) error {
+	resourcePath := cg.ResourcePath("cgroup.events")
 	eventFile, err := os.Open(resourcePath)
 	if err != nil {
 		return fmt.Errorf("failed to open %s: %w", resourcePath, err)
@@ -187,7 +187,7 @@ func (cg *CgroupImpl) WriteEventAndWait(resource string, state int64, timeout ti
 		}
 
 		// read from the same file to update event counter, prevents busy wait
-		freezerState, err := cg.TryReadIntKVFromFile(eventFile, "frozen")
+		freezerState, err := cg.TryReadIntKVFromFile(eventFile, key)
 		if err != nil {
 			return fmt.Errorf("failed to check self_freezing state :: %w", err)
 		}
@@ -272,7 +272,7 @@ func (cg *CgroupImpl) AddPid(pid string) error {
 
 func (cg *CgroupImpl) setFreezeState(state int64) error {
 	timeout := 20 * time.Second
-	return cg.WriteEventAndWait("cgroup.events", state, timeout)
+	return cg.WriteEventAndWait("cgroup.events", "frozen", state, timeout)
 
 	// eventFile, err := os.Open(resourcePath)
 	//
