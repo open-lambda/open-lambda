@@ -7,7 +7,6 @@ type Cgroup interface {
 	SetMemLimitMB(mb int)
 	Pause() error
 	Unpause() error
-	Release()
 	AddPid(pid string) error
 	GetPIDs() ([]string, error)
 	KillAndRelease()
