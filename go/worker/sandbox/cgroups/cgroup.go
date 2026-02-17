@@ -46,13 +46,6 @@ func (cg *CgroupImpl) KillAndRelease() {
 	// if there's room in the recycled channel, add it there.
 	// Otherwise, just delete it.
 	if common.Conf.Features.Reuse_cgroups {
-		pids, err := cg.GetPIDs()
-		if err != nil {
-			panic(err)
-		} else if len(pids) > 0 {
-			panic(fmt.Errorf("Cannot release cgroup that contains processes: %v", pids))
-		}
-
 		select {
 		case cg.pool.recycled <- cg:
 			cg.printf("release and recycle")
