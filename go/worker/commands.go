@@ -39,6 +39,10 @@ func udsGet(requestPath string) (*http.Response, error) {
 
 // initCmd corresponds to the "init" command of the admin tool.
 func initCmd(ctx *cli.Context) error {
+	if os.Getuid() != 0 {
+		return fmt.Errorf("'ol worker init' must be run with sudo")
+	}
+
 	olPath, err := common.GetOlPath(ctx)
 	if err != nil {
 		return err
