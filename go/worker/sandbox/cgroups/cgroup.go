@@ -38,7 +38,7 @@ func (cg *CgroupImpl) Name() string {
 // KillAndRelease stops all processes inside the cgroup and releases the cgroup back to the pool or destroys it if the pool is full.
 // Note, the CG most be paused beforehand
 func (cg *CgroupImpl) KillAndRelease() {
-	err := cg.WriteEventAndWait("cgroup.kill", "populated", 1, 20*time.Second)
+	err := cg.WriteEventAndWait("cgroup.kill", 1, "populated", 0, 20*time.Second)
 	if err != nil {
 		panic(fmt.Errorf("can't write \"1\" to cgroup.kill: %w", err))
 	}
@@ -131,7 +131,7 @@ func (cg *CgroupImpl) WriteInt(resource string, val int64) {
 }
 
 // writes to cgroup controller file and waits the file is updated or timeout
-func (cg *CgroupImpl) WriteEventAndWait(resource string, key string, state int64, timeout time.Duration) error {
+func (cg *CgroupImpl) WriteEventAndWait(controller string, controllerState int64, event string, eventState int64, timeout time.Duration) error {
 	resourcePath := cg.ResourcePath("cgroup.events")
 	eventFile, err := os.Open(resourcePath)
 	if err != nil {
@@ -156,20 +156,20 @@ func (cg *CgroupImpl) WriteEventAndWait(resource string, key string, state int64
 	defer func() {
 		elapsed := time.Since(start)
 		if elapsed >= 250*time.Millisecond {
-			cg.printf("WARNING!  WriteEventAndWait to state %v took %v to complete", state, elapsed)
+			cg.printf("WARNING!  WriteEventAndWait to state %v took %v to complete", controllerState, elapsed)
 		}
 		if pollCalls > 5 {
 			cg.printf("WARNING!  WriteEventAndWait called poll %v times, could be busy waiting", pollCalls)
 		}
 	}()
 
-	cg.WriteInt(resource, state)
+	cg.WriteInt(controller, controllerState)
 	for {
 		elapsed := time.Since(start)
 
 		remaining := timeout - elapsed
 		if remaining < 0 {
-			return fmt.Errorf("%s timeout after %v (expected state %v)", resource, timeout, state)
+			return fmt.Errorf("%s timeout after %v (expected state %v)", controller, timeout, eventState)
 		}
 
 		pollCalls++
@@ -179,11 +179,11 @@ func (cg *CgroupImpl) WriteEventAndWait(resource string, key string, state int64
 		}
 
 		// read from the same file to update event counter, prevents busy wait
-		freezerState, err := cg.TryReadIntKVFromFile(eventFile, key)
+		freezerState, err := cg.TryReadIntKVFromFile(eventFile, event)
 		if err != nil {
 			return fmt.Errorf("failed to check self_freezing state :: %w", err)
 		}
-		if freezerState == state {
+		if freezerState == eventState {
 			return nil
 		}
 	}
@@ -263,7 +263,7 @@ func (cg *CgroupImpl) AddPid(pid string) error {
 
 func (cg *CgroupImpl) setFreezeState(state int64) error {
 	timeout := 20 * time.Second
-	return cg.WriteEventAndWait("cgroup.freeze", "frozen", state, timeout)
+	return cg.WriteEventAndWait("cgroup.freeze", state, "frozen", state, timeout)
 }
 
 // get mem usage in MB
