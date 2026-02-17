@@ -70,17 +70,8 @@ func (cg *CgroupImpl) Destroy() {
 	gpath := cg.GroupPath()
 	cg.printf("Destroying cgroup with path \"%s\"", gpath)
 
-	for i := 100; i >= 0; i-- {
-		if err := syscall.Rmdir(gpath); err != nil {
-			if i == 0 {
-				panic(fmt.Errorf("Rmdir(2) %s: %s", gpath, err))
-			}
-
-			cg.printf("cgroup Rmdir failed, trying again in 5ms")
-			time.Sleep(5 * time.Millisecond)
-		} else {
-			break
-		}
+	if err := syscall.Rmdir(gpath); err != nil {
+		panic(fmt.Errorf("Rmdir(2) %s: %s", gpath, err))
 	}
 }
 
