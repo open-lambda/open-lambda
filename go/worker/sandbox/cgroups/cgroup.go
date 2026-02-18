@@ -35,27 +35,18 @@ func (cg *CgroupImpl) Name() string {
 	return cg.name
 }
 
-// Release releases the cgroup back to the pool or destroys it if the pool is full.
-func (cg *CgroupImpl) Release() {
+// KillAndRelease stops all processes inside the cgroup.
+// After releasing, the cgroup can be recycled or destroyed depending on configuration.
+// Note, the CG most be paused beforehand.
+func (cg *CgroupImpl) KillAndRelease() {
+	err := cg.WriteEventAndWait("cgroup.kill", 1, "populated", 0, 20*time.Second)
+	if err != nil {
+		panic(fmt.Errorf("can't write \"1\" to cgroup.kill: %w", err))
+	}
+
 	// if there's room in the recycled channel, add it there.
 	// Otherwise, just delete it.
 	if common.Conf.Features.Reuse_cgroups {
-		for i := 100; i >= 0; i-- {
-			pids, err := cg.GetPIDs()
-			if err != nil {
-				panic(err)
-			} else if len(pids) > 0 {
-				if i == 0 {
-					panic(fmt.Errorf("Cannot release cgroup that contains processes: %v", pids))
-				}
-
-				cg.printf("cgroup Rmdir failed, trying again in 5ms")
-				time.Sleep(5 * time.Millisecond)
-			} else {
-				break
-			}
-		}
-
 		select {
 		case cg.pool.recycled <- cg:
 			cg.printf("release and recycle")
@@ -133,6 +124,65 @@ func (cg *CgroupImpl) WriteInt(resource string, val int64) {
 	}
 }
 
+// WriteEventAndWait() writes to cgroup controller file and waits for the corresponding event in cgroup.events to be updated
+func (cg *CgroupImpl) WriteEventAndWait(controller string, controllerState int64, event string, eventState int64, timeout time.Duration) error {
+	resourcePath := cg.ResourcePath("cgroup.events")
+	eventFile, err := os.Open(resourcePath)
+	if err != nil {
+		return fmt.Errorf("failed to open %s: %w", resourcePath, err)
+	}
+
+	// cgroups(7): POLLPRI indicates "cgroup.events file modified"
+	// for poll to decide a POLLPRI event occurs it maintains 2 event counters:
+	// 1. the event counter when you last read the file
+	// 2. the file's current event counter
+	// if the last read's counter is different from the current event counter poll returns POLLPRI
+	pollFDs := []unix.PollFd{
+		{
+			Fd:     int32(eventFile.Fd()),
+			Events: unix.POLLPRI,
+		},
+	}
+	pollCalls := 0
+
+	start := time.Now()
+
+	defer func() {
+		elapsed := time.Since(start)
+		if elapsed >= 250*time.Millisecond {
+			cg.printf("WARNING!  WriteEventAndWait to state %v took %v to complete", controllerState, elapsed)
+		}
+		if pollCalls > 5 {
+			cg.printf("WARNING!  WriteEventAndWait called poll %v times, could be busy waiting", pollCalls)
+		}
+	}()
+
+	cg.WriteInt(controller, controllerState)
+	for {
+		elapsed := time.Since(start)
+
+		remaining := timeout - elapsed
+		if remaining < 0 {
+			return fmt.Errorf("%s timeout after %v (expected state %v)", controller, timeout, eventState)
+		}
+
+		pollCalls++
+		_, err := unix.Poll(pollFDs, int(remaining.Milliseconds()))
+		if err != nil && !errors.Is(err, unix.EINTR) {
+			return fmt.Errorf("poll syscall failed on %s: %w", resourcePath, err)
+		}
+
+		// read from the same file to update event counter, prevents busy wait
+		currEventState, err := cg.TryReadIntKVFromFile(eventFile, event)
+		if err != nil {
+			return fmt.Errorf("failed to check %s in %s :: %w", event, resourcePath, err)
+		}
+		if currEventState == eventState {
+			return nil
+		}
+	}
+}
+
 func (cg *CgroupImpl) WriteString(resource string, val string) {
 	if err := cg.TryWriteString(resource, val); err != nil {
 		panic(fmt.Sprintf("Error writing %v to %s: %v", val, resource, err))
@@ -207,65 +257,7 @@ func (cg *CgroupImpl) AddPid(pid string) error {
 
 func (cg *CgroupImpl) setFreezeState(state int64) error {
 	timeout := 20 * time.Second
-
-	resourcePath := cg.ResourcePath("cgroup.events")
-
-	eventFile, err := os.Open(resourcePath)
-	if err != nil {
-		return fmt.Errorf("failed to open %s: %w", resourcePath, err)
-	}
-	defer eventFile.Close()
-
-	// cgroups(7): POLLPRI indicates "cgroup.events file modified"
-	// for poll to decide a POLLPRI event occurs it maintains 2 event counters:
-	// 1. the event counter when you last read the file
-	// 2. the file's current event counter
-	// if the last read's counter is different from the current event counter poll returns POLLPRI
-	pollFDs := []unix.PollFd{
-		{
-			Fd:     int32(eventFile.Fd()),
-			Events: unix.POLLPRI,
-		},
-	}
-	pollCalls := 0
-
-	start := time.Now()
-
-	defer func() {
-		elapsed := time.Since(start)
-		if elapsed >= 250*time.Millisecond {
-			cg.printf("WARNING!  setFreezeState to state %v took %v to complete", state, elapsed)
-		}
-		if pollCalls > 5 {
-			cg.printf("WARNING!  setFreezeState called poll %v times, could be busy waiting", pollCalls)
-		}
-	}()
-
-	cg.WriteInt("cgroup.freeze", state)
-
-	for {
-		elapsed := time.Since(start)
-
-		remaining := timeout - elapsed
-		if remaining < 0 {
-			return fmt.Errorf("cgroup freeze timeout after %v (expected state %v)", timeout, state)
-		}
-
-		pollCalls++
-		_, err := unix.Poll(pollFDs, int(remaining.Milliseconds()))
-		if err != nil && !errors.Is(err, unix.EINTR) {
-			return fmt.Errorf("poll syscall failed on %s: %w", resourcePath, err)
-		}
-
-		// read from the same file to update event counter, prevents busy wait
-		freezerState, err := cg.TryReadIntKVFromFile(eventFile, "frozen")
-		if err != nil {
-			return fmt.Errorf("failed to check self_freezing state :: %w", err)
-		}
-		if freezerState == state {
-			return nil
-		}
-	}
+	return cg.WriteEventAndWait("cgroup.freeze", state, "frozen", state, timeout)
 }
 
 // get mem usage in MB
@@ -352,12 +344,6 @@ func (cg *CgroupImpl) GetPIDs() ([]string, error) {
 // CgroupProcsPath returns the path to the cgroup.procs file.
 func (cg *CgroupImpl) CgroupProcsPath() string {
 	return cg.ResourcePath("cgroup.procs")
-}
-
-// KillAllProcs stops all processes inside the cgroup.
-// Note, the CG most be paused beforehand
-func (cg *CgroupImpl) KillAllProcs() {
-	cg.WriteInt("cgroup.kill", 1)
 }
 
 // DebugString returns a string representation of the cgroup's state.
