@@ -31,7 +31,6 @@ func PoolPath(olPath string) string {
 }
 
 // InitPoolRoot creates the cgroup pool root directory and enables controllers.
-// Must be called as root during ol worker init.
 func InitPoolRoot(olPath string) error {
 	poolPath := PoolPath(olPath)
 
@@ -56,8 +55,6 @@ func InitPoolRoot(olPath string) error {
 	return nil
 }
 
-// NewCgroupPool reuses the pre-created pool root.
-// The pool path is derived from the OL directory (parent of Worker_dir).
 func NewCgroupPool(name string) (*CgroupPool, error) {
 	olPath := filepath.Dir(common.Conf.Worker_dir)
 	poolPath := PoolPath(olPath)
