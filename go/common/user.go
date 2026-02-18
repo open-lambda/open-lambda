@@ -8,7 +8,6 @@ import (
 )
 
 // GetLoginUID reads the original login UID from the kernel audit subsystem.
-// Works regardless of how root was obtained (sudo, su, direct login).
 func GetLoginUID() (int, error) {
 	data, err := os.ReadFile("/proc/self/loginuid")
 	if err != nil {
