@@ -35,8 +35,9 @@ func (cg *CgroupImpl) Name() string {
 	return cg.name
 }
 
-// KillAndRelease stops all processes inside the cgroup and releases the cgroup back to the pool or destroys it if the pool is full.
-// Note, the CG most be paused beforehand
+// KillAndRelease stops all processes inside the cgroup.
+// After releasing, the cgroup can be recycled or destroyed depending on configuration.
+// Note, the CG most be paused beforehand.
 func (cg *CgroupImpl) KillAndRelease() {
 	err := cg.WriteEventAndWait("cgroup.kill", 1, "populated", 0, 20*time.Second)
 	if err != nil {
@@ -63,8 +64,17 @@ func (cg *CgroupImpl) Destroy() {
 	gpath := cg.GroupPath()
 	cg.printf("Destroying cgroup with path \"%s\"", gpath)
 
-	if err := syscall.Rmdir(gpath); err != nil {
-		panic(fmt.Errorf("Rmdir(2) %s: %s", gpath, err))
+	for i := 100; i >= 0; i-- {
+		if err := syscall.Rmdir(gpath); err != nil {
+			if i == 0 {
+				panic(fmt.Errorf("Rmdir(2) %s: %s", gpath, err))
+			}
+
+			cg.printf("cgroup Rmdir failed, trying again in 5ms")
+			time.Sleep(5 * time.Millisecond)
+		} else {
+			break
+		}
 	}
 }
 
@@ -114,7 +124,7 @@ func (cg *CgroupImpl) WriteInt(resource string, val int64) {
 	}
 }
 
-// writes to cgroup controller file and waits the file is updated or timeout
+// WriteEventAndWait() writes to cgroup controller file and waits for the corresponding event in cgroup.events to be updated
 func (cg *CgroupImpl) WriteEventAndWait(controller string, controllerState int64, event string, eventState int64, timeout time.Duration) error {
 	resourcePath := cg.ResourcePath("cgroup.events")
 	eventFile, err := os.Open(resourcePath)
@@ -163,11 +173,11 @@ func (cg *CgroupImpl) WriteEventAndWait(controller string, controllerState int64
 		}
 
 		// read from the same file to update event counter, prevents busy wait
-		freezerState, err := cg.TryReadIntKVFromFile(eventFile, event)
+		currEventState, err := cg.TryReadIntKVFromFile(eventFile, event)
 		if err != nil {
-			return fmt.Errorf("failed to check self_freezing state :: %w", err)
+			return fmt.Errorf("failed to check %s in %s :: %w", event, resourcePath, err)
 		}
-		if freezerState == eventState {
+		if currEventState == eventState {
 			return nil
 		}
 	}
