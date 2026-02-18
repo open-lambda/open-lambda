@@ -16,6 +16,7 @@ import (
 
 	"github.com/open-lambda/open-lambda/go/common"
 	"github.com/open-lambda/open-lambda/go/worker/event"
+	"github.com/open-lambda/open-lambda/go/worker/sandbox/cgroups"
 
 	"github.com/urfave/cli/v2"
 )
@@ -55,6 +56,11 @@ func initCmd(ctx *cli.Context) error {
 	if err := initOLDir(olPath, ctx.String("image"), ctx.Bool("newbase")); err != nil {
 		return err
 	}
+
+	if err := cgroups.InitPoolRoot(olPath); err != nil {
+		return err
+	}
+
 	fmt.Printf("\nYou may optionally modify the defaults here: %s\n\n",
 		filepath.Join(olPath, "config.json"))
 	fmt.Printf("Next start a worker using the \"ol worker up\" command.\n")

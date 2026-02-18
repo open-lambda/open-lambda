@@ -19,6 +19,7 @@ import (
 
 	"github.com/open-lambda/open-lambda/go/common"
 	"github.com/open-lambda/open-lambda/go/worker/embedded"
+	"github.com/open-lambda/open-lambda/go/worker/sandbox/cgroups"
 )
 
 func initOLBaseDir(baseDir string, dockerBaseImage string) error {
@@ -74,29 +75,6 @@ func initOLBaseDir(baseDir string, dockerBaseImage string) error {
 	path = filepath.Join(baseDir, "dev", "urandom")
 
 	return exec.Command("mknod", "-m", "0644", path, "c", "1", "9").Run()
-}
-
-// initCgroupPool creates the cgroup pool root directory and enables controllers.
-func initCgroupPool(olPath string) (string, error) {
-	poolName := filepath.Base(olPath) + "-sandboxes"
-	poolPath := filepath.Join("/sys/fs/cgroup", poolName)
-
-	if err := os.MkdirAll(poolPath, 0700); err != nil {
-		return "", fmt.Errorf("failed to create cgroup pool root %s: %w", poolPath, err)
-	}
-
-	ctrlPath := filepath.Join(poolPath, "cgroup.subtree_control")
-	if err := os.WriteFile(ctrlPath, []byte("+pids +io +memory +cpu"), os.ModeAppend); err != nil {
-		return "", fmt.Errorf("failed to enable controllers at %s: %w", ctrlPath, err)
-	}
-
-	sudoUser := os.Getenv("SUDO_USER")
-	if err := exec.Command("chown", "-R", sudoUser+":"+sudoUser, poolPath).Run(); err != nil {
-		return "", fmt.Errorf("failed to chown cgroup pool root: %w", err)
-	}
-
-	fmt.Printf("\tCreated cgroup pool root at %s\n", poolPath)
-	return poolPath, nil
 }
 
 // initOLDir prepares a directory at olPath with necessary files for a
@@ -166,12 +144,6 @@ func initOLDir(olPath string, dockerBaseImage string, newBase bool) (err error) 
 	if err := ioutil.WriteFile(zygoteTreePath, []byte(embedded.DefaultZygotes40_json), 0400); err != nil {
 		return err
 	}
-
-	poolPath, err := initCgroupPool(olPath)
-	if err != nil {
-		return err
-	}
-	common.Conf.Cgroup_pool_path = poolPath
 
 	confPath := filepath.Join(olPath, "config.json")
 	if err := common.SaveGlobalConfig(confPath); err != nil {
@@ -309,7 +281,7 @@ func runningToStoppedClean() error {
 // Returns errors encountered during cleanup operations.
 func stoppedDirtyToStoppedClean(olPath string) error {
 	// Clean up child cgroups, preserving the pool root
-	cgRoot := common.Conf.Cgroup_pool_path
+	cgRoot := cgroups.PoolPath(olPath)
 	fmt.Printf("Attempting to clean up cgroups at %s\n", cgRoot)
 
 	cgroupErrorCount := 0

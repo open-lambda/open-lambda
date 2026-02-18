@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -16,28 +17,65 @@ const CGROUP_RESERVE = 16
 
 type CgroupPool struct {
 	Name     string
+	poolPath string
 	ready    chan *CgroupImpl
 	recycled chan *CgroupImpl
 	quit     chan chan bool
 	nextID   int
 }
 
-// NewCgroupPool reuses the pre-created pool root from config.
+// PoolPath returns the cgroup pool root path derived from the OL directory.
+func PoolPath(olPath string) string {
+	poolName := filepath.Base(olPath) + "-sandboxes"
+	return filepath.Join("/sys/fs/cgroup", poolName)
+}
+
+// InitPoolRoot creates the cgroup pool root directory and enables controllers.
+// Must be called as root during ol worker init.
+func InitPoolRoot(olPath string) error {
+	poolPath := PoolPath(olPath)
+
+	if err := os.MkdirAll(poolPath, 0700); err != nil {
+		return fmt.Errorf("failed to create cgroup pool root %s: %w", poolPath, err)
+	}
+
+	ctrlPath := filepath.Join(poolPath, "cgroup.subtree_control")
+	if err := os.WriteFile(ctrlPath, []byte("+pids +io +memory +cpu"), os.ModeAppend); err != nil {
+		return fmt.Errorf("failed to enable controllers at %s: %w", ctrlPath, err)
+	}
+
+	uid, err := common.GetLoginUID()
+	if err != nil {
+		return fmt.Errorf("failed to determine real user: %w", err)
+	}
+	if err := os.Chown(poolPath, uid, uid); err != nil {
+		return fmt.Errorf("failed to chown cgroup pool root: %w", err)
+	}
+
+	fmt.Printf("\tCreated cgroup pool root at %s\n", poolPath)
+	return nil
+}
+
+// NewCgroupPool reuses the pre-created pool root.
+// The pool path is derived from the OL directory (parent of Worker_dir).
 func NewCgroupPool(name string) (*CgroupPool, error) {
+	olPath := filepath.Dir(common.Conf.Worker_dir)
+	poolPath := PoolPath(olPath)
+
 	pool := &CgroupPool{
 		Name:     name,
+		poolPath: poolPath,
 		ready:    make(chan *CgroupImpl, CGROUP_RESERVE),
 		recycled: make(chan *CgroupImpl, CGROUP_RESERVE),
 		quit:     make(chan chan bool),
 		nextID:   0,
 	}
 
-	groupPath := pool.GroupPath()
-	if st, err := os.Stat(groupPath); err != nil || !st.IsDir() {
-		return nil, fmt.Errorf("cgroup pool root %s does not exist; run 'sudo ol worker init' first", groupPath)
+	if st, err := os.Stat(poolPath); err != nil || !st.IsDir() {
+		return nil, fmt.Errorf("cgroup pool root %s does not exist; run 'sudo ol worker init' first", poolPath)
 	}
 
-	pool.printf("reusing pool root %s", groupPath)
+	pool.printf("reusing pool root %s", poolPath)
 	go pool.cgTask()
 	return pool, nil
 }
@@ -156,6 +194,6 @@ func (pool *CgroupPool) GetCg(memLimitMB int, moveMemCharge bool, cpuPercent int
 }
 
 // GroupPath returns the path to the cgroup pool root directory.
-func (_ *CgroupPool) GroupPath() string {
-	return common.Conf.Cgroup_pool_path
+func (pool *CgroupPool) GroupPath() string {
+	return pool.poolPath
 }

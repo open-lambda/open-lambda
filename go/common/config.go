@@ -59,9 +59,6 @@ type Config struct {
 	// base image path for sock containers
 	SOCK_base_path string `json:"sock_base_path"`
 
-	// absolute path to the cgroup pool root directory
-	Cgroup_pool_path string `json:"cgroup_pool_path"`
-
 	// pass through to sandbox envirenment variable
 	Sandbox_config any `json:"sandbox_config"`
 
@@ -215,10 +212,6 @@ func GetDefaultWorkerConfig(olPath string) (*Config, error) {
 					cfg.SOCK_base_path = defaultCfg.SOCK_base_path
 					slog.Info("Patched SOCK_base_path", "SOCK_base_path", cfg.SOCK_base_path)
 				}
-				if cfg.Cgroup_pool_path == "" {
-					cfg.Cgroup_pool_path = defaultCfg.Cgroup_pool_path
-					slog.Info("Patched Cgroup_pool_path", "Cgroup_pool_path", cfg.Cgroup_pool_path)
-				}
 				if cfg.Import_cache_tree == "" {
 					cfg.Import_cache_tree = defaultCfg.Import_cache_tree
 					slog.Info("Patched Import_cache_tree", "Import_cache_tree", cfg.Import_cache_tree)
@@ -248,7 +241,7 @@ func GetDefaultWorkerConfig(olPath string) (*Config, error) {
 
 // getDefaultConfigForPatching generates the default config used for patching empty template fields
 func getDefaultConfigForPatching(olPath string) (*Config, error) {
-	var workerDir, registryDir, baseImgDir, zygoteTreePath, packagesDir, cgroupPoolPath string
+	var workerDir, registryDir, baseImgDir, zygoteTreePath, packagesDir string
 
 	if olPath != "" {
 		workerDir = filepath.Join(olPath, "worker")
@@ -256,7 +249,6 @@ func getDefaultConfigForPatching(olPath string) (*Config, error) {
 		baseImgDir = filepath.Join(olPath, "lambda")
 		zygoteTreePath = filepath.Join(olPath, "default-zygotes-40.json")
 		packagesDir = filepath.Join(baseImgDir, "packages")
-		cgroupPoolPath = filepath.Join("/sys/fs/cgroup", filepath.Base(olPath)+"-sandboxes")
 	}
 
 	in := &syscall.Sysinfo_t{}
@@ -299,7 +291,6 @@ func getDefaultConfigForPatching(olPath string) (*Config, error) {
 		Pkgs_dir:          packagesDir,
 		Sandbox_config:    map[string]any{},
 		SOCK_base_path:    baseImgDir,
-		Cgroup_pool_path: cgroupPoolPath,
 		Registry_cache_ms: 5000, // 5 seconds
 		Mem_pool_mb:       memPoolMb,
 		Import_cache_tree: zygoteTreePath,
@@ -374,14 +365,6 @@ func checkConf(cfg *Config) error {
 
 		if !path.IsAbs(cfg.SOCK_base_path) {
 			return fmt.Errorf("sock_base_path cannot be relative")
-		}
-
-		if cfg.Cgroup_pool_path == "" {
-			return fmt.Errorf("cgroup_pool_path not set; run 'sudo ol worker init' first")
-		}
-
-		if !path.IsAbs(cfg.Cgroup_pool_path) {
-			return fmt.Errorf("cgroup_pool_path cannot be relative")
 		}
 
 		// evictor will ALWAYS try to kill if there's not
