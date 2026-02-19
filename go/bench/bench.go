@@ -3,8 +3,11 @@ package bench
 
 import (
 	"bytes"
+	"encoding/csv"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"log"
 	"math/rand"
 	"net/http"
 	"os"
@@ -334,6 +337,233 @@ func make_action(name string, tasks int, functions int, func_template string) fu
 		return err
 	}
 }
+func run_reqbench_init(ctx *cli.Context) error {
+	olPath, err := common.GetOlPath(ctx)
+    	if err != nil {
+        	return err
+    	}
+    	configPath := filepath.Join(olPath, "config.json")
+    	if err := common.LoadGlobalConfig(configPath); err != nil {
+        	return err
+    	}
+	// pull requirements.csv
+	csvUrl := "https://raw.githubusercontent.com/open-lambda/ReqBench/refs/heads/main/files/requirements.csv"
+	csvFilename := "requirements.csv"
+	csvFile, err := os.Create(csvFilename)
+	if err != nil {
+		return err
+	}
+	defer csvFile.Close()
+	response, err := http.Get(csvUrl)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	_, err = io.Copy(csvFile, response.Body)
+	if err != nil {
+		return err
+	}
+
+	csvFile.Seek(0, 0)	// for each line
+	reader := csv.NewReader(csvFile)
+	// skip the first line (just column names)
+	_, err = reader.Read()
+	if err != nil {
+		log.Fatal(err)
+	}
+	for i := 0; ; i++ {
+		repo, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		// get requirements.txt
+		// http.Get https://raw.githubusercontent.com/repo[1]/repo[2]/repo[3]
+		txtUrl := "https://raw.githubusercontent.com/" + repo[1] + "/" + repo[2] + "/" + repo[3]
+		txtResponse, err := http.Get(txtUrl)
+		if err != nil {
+			fmt.Printf("Failed to download requirements for lambda %d: %v\n", i, err)
+			continue
+		}
+
+		if txtResponse.StatusCode != 200 {
+			fmt.Printf("Requirements not found for lambda %d (status %d)\n", i, txtResponse.StatusCode)
+			txtResponse.Body.Close()
+			continue
+		}
+
+		requirementsContent, err := io.ReadAll(txtResponse.Body)
+		txtResponse.Body.Close()
+		if err != nil {
+			fmt.Printf("Failed to read requirements for lambda %d: %v\n", i, err)
+			continue
+		}
+		lambdaName := fmt.Sprintf("reqbench-%d", i)
+		registryPath := strings.TrimPrefix(common.Conf.Registry, "file://")
+		lambdaPath := filepath.Join(registryPath, lambdaName)
+
+		if err := os.MkdirAll(lambdaPath, 0755); err != nil {
+			fmt.Printf("Failed to create lambda dir %s: %v\n", lambdaName, err)
+			continue
+		}
+
+		reqPath := filepath.Join(lambdaPath, "requirements.txt")
+		if err := os.WriteFile(reqPath, requirementsContent, 0644); err != nil {
+			fmt.Printf("Failed to write requirements for %s: %v\n", lambdaName, err)
+			continue
+		}
+
+		functionCode := `def f(event):
+    return {"status": "ok"}
+`
+		functionPath := filepath.Join(lambdaPath, "f.py")
+		if err := os.WriteFile(functionPath, []byte(functionCode), 0644); err != nil {
+			fmt.Printf("Failed to write function for %s: %v\n", lambdaName, err)
+			continue
+		}
+		err = create_lambdas(ctx)
+		if err != nil {
+			fmt.Printf("Failed to create lambdas: %v\n", err)
+			continue
+		}
+		fmt.Printf("Created lambda %s\n", lambdaName)
+
+	}
+
+	return nil
+}
+
+func run_reqbench(ctx *cli.Context) error {
+	olPath, err := common.GetOlPath(ctx)
+	if err != nil {
+		return err
+	}
+	configPath := filepath.Join(olPath, "config.json")
+	if err := common.LoadGlobalConfig(configPath); err != nil {
+		return err
+	}
+
+	registryPath := strings.TrimPrefix(common.Conf.Registry, "file://")
+	files, err := ioutil.ReadDir(registryPath)
+	if err != nil {
+		return fmt.Errorf("failed to read registry: %v", err)
+	}
+
+	lambdaCount := 0
+	lambdaNames := []string{}
+	for _, file := range files {
+		if file.IsDir() && strings.HasPrefix(file.Name(), "reqbench-") {
+			lambdaNames = append(lambdaNames, file.Name())
+			lambdaCount++
+		}
+	}
+
+	if lambdaCount == 0 {
+		return fmt.Errorf("no ReqBench lambdas found. Run 'ol bench reqbench-init' first")
+	}
+
+	fmt.Printf("Found %d ReqBench lambdas\n", lambdaCount)
+
+	tasks := ctx.Int("tasks")
+	if tasks == 0 {
+		tasks = 5
+	}
+
+	seconds := ctx.Float64("seconds")
+	if seconds == 0 {
+		seconds = 60.0
+	}
+
+	callWarmup := ctx.Bool("warmup")
+
+	reqQ := make(chan Call, tasks)
+	errQ := make(chan error, tasks)
+	for i := 0; i < tasks; i++ {
+		go task(reqQ, errQ)
+	}
+
+	if callWarmup {
+		fmt.Printf("Warming up (calling each lambda once)\n")
+		for i, name := range lambdaNames {
+			if i%100 == 0 {
+				fmt.Printf("Warmup progress: %d/%d\n", i, len(lambdaNames))
+			}
+			reqQ <- Call{name: name}
+			if err := <-errQ; err != nil {
+				fmt.Printf("Warmup error for %s: %v\n", name, err)
+			}
+		}
+		fmt.Printf("Warmup complete\n")
+	}
+
+	fmt.Printf("Starting ReqBench (%.1f seconds, %d parallel tasks)\n", seconds, tasks)
+	errors := 0
+	successes := 0
+	waiting := 0
+
+	start := time.Now()
+	progressSnapshot := 0.0
+	progressSuccess := 0
+
+	for time.Since(start).Seconds() < seconds {
+		elapsed := time.Since(start).Seconds()
+
+		select {
+		case reqQ <- Call{name: lambdaNames[rand.Intn(len(lambdaNames))]}:
+			waiting++
+		case err := <-errQ:
+			if err != nil {
+				errors++
+				if errors <= 10 {
+					fmt.Printf("Error: %s\n", err.Error())
+				}
+			} else {
+				successes++
+				progressSuccess++
+			}
+			waiting--
+		}
+
+		if elapsed > progressSnapshot+1 {
+			fmt.Printf("Throughput: %.1f ops/sec\n", float64(progressSuccess)/(elapsed-progressSnapshot))
+			progressSnapshot = elapsed
+			progressSuccess = 0
+		}
+	}
+	actualSeconds := time.Since(start).Seconds()
+
+	fmt.Printf("Cleaning up...\n")
+	close(reqQ)
+	waiting += tasks
+	for waiting > 0 {
+		if err := <-errQ; err != nil {
+			errors++
+		}
+		waiting--
+	}
+
+	if errors > 5*(errors+successes)/100 {
+		return fmt.Errorf("more than 5%% of requests failed (%d/%d)", errors, errors+successes)
+	}
+
+	result := fmt.Sprintf("{\"benchmark\": \"reqbench\", \"lambdas\": %d, \"seconds\": %.3f, \"successes\": %d, \"errors\": %d, \"ops/s\": %.3f}",
+		lambdaCount, actualSeconds, successes, errors, float64(successes)/actualSeconds)
+
+	fmt.Printf("\n%s\n", result)
+
+	outputFile := ctx.String("output")
+	if outputFile != "" {
+		if err := ioutil.WriteFile(outputFile, []byte(result), 0644); err != nil {
+			return fmt.Errorf("failed to write output file: %v", err)
+		}
+		fmt.Printf("Results written to %s\n", outputFile)
+	}
+
+	return nil
+}
+
+func run_billibench_init(ctx *cli.Context) error {
+	return nil
+}
 
 // BenchCommands returns a list of CLI commands for benchmarking.
 func BenchCommands() []*cli.Command {
@@ -350,7 +580,53 @@ func BenchCommands() []*cli.Command {
 					Usage:   "Path location for OL environment",
 				},
 			},
-			// TODO: add param to decide how many to create
+		},
+		{
+			Name:      "reqbench-init",
+			Usage:     "creates ReqBench lambdas from GitHub requirements",
+			UsageText: "ol bench reqbench-init [--path=NAME]",
+			Action:    run_reqbench_init,
+			Flags: []cli.Flag{
+				&cli.StringFlag{
+					Name:    "path",
+					Aliases: []string{"p"},
+					Usage:   "Path location for OL environment",
+				},
+			},
+		},
+		{
+			Name:      "reqbench",
+			Usage:     "run ReqBench workload with created lambdas",
+			UsageText: "ol bench reqbench [--path=NAME] [--seconds=SECONDS] [--tasks=TASKS]",
+			Action:    run_reqbench,
+			Flags: []cli.Flag{
+				&cli.StringFlag{
+					Name:    "path",
+					Aliases: []string{"p"},
+					Usage:   "Path location for OL environment",
+				},
+				&cli.Float64Flag{
+					Name:    "seconds",
+					Aliases: []string{"s"},
+					Usage:   "Seconds to run benchmark",
+				},
+				&cli.IntFlag{
+					Name:    "tasks",
+					Aliases: []string{"t"},
+					Usage:   "Number of parallel tasks",
+				},
+				&cli.BoolFlag{
+					Name:    "warmup",
+					Aliases: []string{"w"},
+					Value:   true,
+					Usage:   "Call each lambda once before benchmark",
+				},
+				&cli.StringFlag{
+					Name:    "output",
+					Aliases: []string{"o"},
+					Usage:   "Store result in json to output file",
+				},
+			},
 		},
 		{
 			Name:      "play",
