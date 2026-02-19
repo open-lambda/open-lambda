@@ -31,7 +31,7 @@ func NewLocalWorkerPool() *WorkerPool {
 			// Get the worker config struct
 			defaultTemplateConfig, err := common.GetDefaultWorkerConfig("")
 			if err != nil {
-				slog.Error(fmt.Sprintf("failed to load default template config: %v", err))
+				slog.Error("failed to load default template config", "error", err)
 				os.Exit(1)
 			}
 
@@ -46,11 +46,11 @@ func NewLocalWorkerPool() *WorkerPool {
 			defaultTemplateConfig.Import_cache_tree = ""
 
 			if err := common.SaveConfig(defaultTemplateConfig, templatePath); err != nil {
-				slog.Error(fmt.Sprintf("failed to save template.json: %v", err))
+				slog.Error("failed to save template.json", "error", err)
 				os.Exit(1)
 			}
 		} else {
-			slog.Error(fmt.Sprintf("failed to stat template path: %v", err))
+			slog.Error("failed to stat template path", "error", err)
 			os.Exit(1)
 		}
 	}
@@ -99,10 +99,10 @@ func (p *LocalWorkerPoolPlatform) CreateInstance(worker *Worker) error {
 		slog.Error("Failed to get worker config", "workerId", worker.workerId, "error", err)
 		return err
 	}
-	
+
 	// Set worker-specific port
 	cfg.Worker_port = workerPort
-	
+
 	// Save to worker directory
 	configPath := filepath.Join(workerPath, "config.json")
 	if err := common.SaveConfig(cfg, configPath); err != nil {
