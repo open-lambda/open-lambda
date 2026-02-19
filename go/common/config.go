@@ -492,3 +492,8 @@ func GetOlPath(ctx *cli.Context) (string, error) {
 	}
 	return filepath.Abs(olPath)
 }
+
+// CgroupPoolPath returns the cgroup pool root path for the given OL directory.
+func CgroupPoolPath(olPath string) string {
+	return filepath.Join("/sys/fs/cgroup", filepath.Base(olPath)+"-sandboxes")
+}

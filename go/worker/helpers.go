@@ -19,8 +19,8 @@ import (
 
 	"github.com/open-lambda/open-lambda/go/common"
 	"github.com/open-lambda/open-lambda/go/worker/embedded"
-	"github.com/open-lambda/open-lambda/go/worker/sandbox/cgroups"
 )
+
 
 func initOLBaseDir(baseDir string, dockerBaseImage string) error {
 	if dockerBaseImage == "" {
@@ -281,7 +281,7 @@ func runningToStoppedClean() error {
 // Returns errors encountered during cleanup operations.
 func stoppedDirtyToStoppedClean(olPath string) error {
 	// Clean up child cgroups, preserving the pool root
-	cgRoot := cgroups.PoolPath(olPath)
+	cgRoot := common.CgroupPoolPath(olPath)
 	fmt.Printf("Attempting to clean up cgroups at %s\n", cgRoot)
 
 	cgroupErrorCount := 0

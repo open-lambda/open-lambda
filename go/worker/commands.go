@@ -46,19 +46,19 @@ func initCmd(ctx *cli.Context) error {
 
 	olPath, err := common.GetOlPath(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w", err)
 	}
 
 	if err := common.LoadDefaults(olPath); err != nil {
-		return err
+		return fmt.Errorf("%w", err)
 	}
 
 	if err := initOLDir(olPath, ctx.String("image"), ctx.Bool("newbase")); err != nil {
-		return err
+		return fmt.Errorf("%w", err)
 	}
 
-	if err := cgroups.InitPoolRoot(olPath); err != nil {
-		return err
+	if err := cgroups.InitPoolRoot(common.CgroupPoolPath(olPath)); err != nil {
+		return fmt.Errorf("%w", err)
 	}
 
 	fmt.Printf("\nYou may optionally modify the defaults here: %s\n\n",

@@ -24,15 +24,8 @@ type CgroupPool struct {
 	nextID   int
 }
 
-// PoolPath returns the cgroup pool root path derived from the OL directory.
-func PoolPath(olPath string) string {
-	poolName := filepath.Base(olPath) + "-sandboxes"
-	return filepath.Join("/sys/fs/cgroup", poolName)
-}
-
 // InitPoolRoot creates the cgroup pool root directory and enables controllers.
-func InitPoolRoot(olPath string) error {
-	poolPath := PoolPath(olPath)
+func InitPoolRoot(poolPath string) error {
 
 	if err := os.MkdirAll(poolPath, 0700); err != nil {
 		return fmt.Errorf("failed to create cgroup pool root %s: %w", poolPath, err)
@@ -55,10 +48,7 @@ func InitPoolRoot(olPath string) error {
 	return nil
 }
 
-func NewCgroupPool(name string) (*CgroupPool, error) {
-	olPath := filepath.Dir(common.Conf.Worker_dir)
-	poolPath := PoolPath(olPath)
-
+func NewCgroupPool(name string, poolPath string) (*CgroupPool, error) {
 	pool := &CgroupPool{
 		Name:     name,
 		poolPath: poolPath,
@@ -69,7 +59,7 @@ func NewCgroupPool(name string) (*CgroupPool, error) {
 	}
 
 	if st, err := os.Stat(poolPath); err != nil || !st.IsDir() {
-		return nil, fmt.Errorf("cgroup pool root %s does not exist; run 'sudo ol worker init' first", poolPath)
+		return nil, fmt.Errorf("cgroup pool root %s does not exist.", poolPath)
 	}
 
 	pool.printf("reusing pool root %s", poolPath)
