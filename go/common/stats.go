@@ -70,6 +70,7 @@ func statsTask() {
 		case *snapshotMsg:
 			for k, cnt := range msCounts {
 				msg.stats[k+".cnt"] = cnt
+				msg.stats[k+".ms-sum"] = msSums[k]
 				msg.stats[k+".ms-avg"] = msSums[k] / cnt
 			}
 			msg.done <- true
