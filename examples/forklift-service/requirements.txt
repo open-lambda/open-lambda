@@ -1,5 +1,1 @@
-# these are needed by forklift
-pandas
-numpy
-requests
-packaging
+
