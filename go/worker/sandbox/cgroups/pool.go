@@ -179,8 +179,3 @@ func (pool *CgroupPool) GetCg(memLimitMB int, moveMemCharge bool, cpuPercent int
 
 	return cg
 }
-
-// GroupPath returns the path to the cgroup pool root directory.
-func (pool *CgroupPool) GroupPath() string {
-	return pool.poolPath
-}
