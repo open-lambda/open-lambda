@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -24,32 +25,92 @@ type KafkaClient interface {
 	Close()
 }
 
-// LambdaKafkaConsumer manages Kafka consumption for a specific lambda function
+// TriggerKey uniquely identifies a Kafka trigger configuration
+type TriggerKey string
+
+// ComputeTriggerKey creates a deterministic key from trigger config
+func ComputeTriggerKey(trigger *common.KafkaTrigger) TriggerKey {
+	// Sort brokers and topics for consistency
+	brokers := make([]string, len(trigger.BootstrapServers))
+	copy(brokers, trigger.BootstrapServers)
+	sort.Strings(brokers)
+
+	topics := make([]string, len(trigger.Topics))
+	copy(topics, trigger.Topics)
+	sort.Strings(topics)
+
+	// Create canonical key: brokers|topics|offset_reset
+	key := fmt.Sprintf("%s|%s|%s",
+		strings.Join(brokers, ","),
+		strings.Join(topics, ","),
+		trigger.AutoOffsetReset)
+
+	return TriggerKey(key)
+}
+
+// LambdaKafkaConsumer manages Kafka consumption for one or more lambda functions
+// with identical trigger configurations
 type LambdaKafkaConsumer struct {
-	consumerName  string // Unique name for this consumer
-	lambdaName    string // lambda function name
-	kafkaTrigger  *common.KafkaTrigger
-	client        KafkaClient       // kgo.client implements the KafkaClient interface
-	lambdaManager *lambda.LambdaMgr // Reference to lambda manager for direct calls
-	stopChan      chan struct{}     // Shutdown signal for this consumer
-	// When this channel is closed, the goroutine for the consumer exits
+	triggerKey    TriggerKey           // Unique identifier for this trigger config
+	kafkaTrigger  *common.KafkaTrigger // Trigger configuration
+	client        KafkaClient          // kgo.client implements the KafkaClient interface
+	lambdaManager *lambda.LambdaMgr    // Reference to lambda manager for direct calls
+	lambdas       map[string]struct{}  // Set of lambda names using this consumer
+	lambdasMu     sync.RWMutex         // Protects lambdas map
+	stopChan      chan struct{}        // Shutdown signal for this consumer
 }
 
-// KafkaManager manages multiple lambda-specific Kafka consumers
+// KafkaManager manages Kafka consumers shared across lambda functions
 type KafkaManager struct {
-	lambdaConsumers map[string]*LambdaKafkaConsumer // lambdaName -> consumer
-	lambdaManager   *lambda.LambdaMgr               // Reference to lambda manager
-	mu              sync.Mutex                      // Protects lambdaConsumers map
+	consumers      map[TriggerKey]*LambdaKafkaConsumer // triggerKey -> consumer
+	lambdaTriggers map[string][]TriggerKey             // lambdaName -> triggerKeys
+	lambdaManager  *lambda.LambdaMgr                   // Reference to lambda manager
+	mu             sync.Mutex                          // Protects consumers and lambdaTriggers maps
 }
 
-// newLambdaKafkaConsumer creates a new Kafka consumer for a specific lambda function
-func (km *KafkaManager) newLambdaKafkaConsumer(consumerName string, lambdaName string, trigger *common.KafkaTrigger) (*LambdaKafkaConsumer, error) {
+// Helper methods for LambdaKafkaConsumer
+
+// addLambda adds a lambda to this consumer
+func (lkc *LambdaKafkaConsumer) addLambda(lambdaName string) {
+	lkc.lambdasMu.Lock()
+	defer lkc.lambdasMu.Unlock()
+	lkc.lambdas[lambdaName] = struct{}{}
+}
+
+// removeLambda removes a lambda from this consumer
+func (lkc *LambdaKafkaConsumer) removeLambda(lambdaName string) {
+	lkc.lambdasMu.Lock()
+	defer lkc.lambdasMu.Unlock()
+	delete(lkc.lambdas, lambdaName)
+}
+
+// getLambdaCount returns the number of lambdas using this consumer
+func (lkc *LambdaKafkaConsumer) getLambdaCount() int {
+	lkc.lambdasMu.RLock()
+	defer lkc.lambdasMu.RUnlock()
+	return len(lkc.lambdas)
+}
+
+// getLambdaNames returns a snapshot of lambda names (thread-safe)
+func (lkc *LambdaKafkaConsumer) getLambdaNames() []string {
+	lkc.lambdasMu.RLock()
+	defer lkc.lambdasMu.RUnlock()
+
+	names := make([]string, 0, len(lkc.lambdas))
+	for name := range lkc.lambdas {
+		names = append(names, name)
+	}
+	return names
+}
+
+// newLambdaKafkaConsumer creates a new Kafka consumer for a trigger configuration
+func (km *KafkaManager) newLambdaKafkaConsumer(triggerKey TriggerKey, trigger *common.KafkaTrigger) (*LambdaKafkaConsumer, error) {
 	// Validate that we have brokers and topics
 	if len(trigger.BootstrapServers) == 0 {
-		return nil, fmt.Errorf("no bootstrap servers configured for lambda %s", lambdaName)
+		return nil, fmt.Errorf("no bootstrap servers configured for trigger %s", triggerKey)
 	}
 	if len(trigger.Topics) == 0 {
-		return nil, fmt.Errorf("no topics configured for lambda %s", lambdaName)
+		return nil, fmt.Errorf("no topics configured for trigger %s", triggerKey)
 	}
 
 	// Setup kgo client options
@@ -71,15 +132,15 @@ func (km *KafkaManager) newLambdaKafkaConsumer(consumerName string, lambdaName s
 	// Create kgo client
 	client, err := kgo.NewClient(opts...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create Kafka client for lambda %s: %w", lambdaName, err)
+		return nil, fmt.Errorf("failed to create Kafka client for trigger %s: %w", triggerKey, err)
 	}
 
 	return &LambdaKafkaConsumer{
-		consumerName:  consumerName,
-		lambdaName:    lambdaName,
+		triggerKey:    triggerKey,
 		kafkaTrigger:  trigger,
 		client:        client,
 		lambdaManager: km.lambdaManager,
+		lambdas:       make(map[string]struct{}),
 		stopChan:      make(chan struct{}),
 	}, nil
 }
@@ -87,22 +148,23 @@ func (km *KafkaManager) newLambdaKafkaConsumer(consumerName string, lambdaName s
 // NewKafkaManager creates and configures a new Kafka manager
 func NewKafkaManager(lambdaManager *lambda.LambdaMgr) (*KafkaManager, error) {
 	manager := &KafkaManager{
-		lambdaConsumers: make(map[string]*LambdaKafkaConsumer),
-		lambdaManager:   lambdaManager,
+		consumers:      make(map[TriggerKey]*LambdaKafkaConsumer),
+		lambdaTriggers: make(map[string][]TriggerKey),
+		lambdaManager:  lambdaManager,
 	}
 
 	slog.Info("Kafka manager initialized")
 	return manager, nil
 }
 
-// StartConsuming starts consuming messages for this lambda's Kafka triggers
+// StartConsuming starts consuming messages for Kafka triggers
 func (lkc *LambdaKafkaConsumer) StartConsuming() {
-	slog.Info("Starting Kafka consumer for lambda",
-		"consumer", lkc.consumerName,
-		"lambda", lkc.lambdaName,
+	slog.Info("Starting Kafka consumer",
+		"trigger_key", lkc.triggerKey,
 		"topics", lkc.kafkaTrigger.Topics,
 		"brokers", lkc.kafkaTrigger.BootstrapServers,
-		"group_id", lkc.kafkaTrigger.GroupId)
+		"group_id", lkc.kafkaTrigger.GroupId,
+		"initial_lambdas", lkc.getLambdaCount())
 
 	// Start consuming loop
 	go lkc.consumeLoop()
@@ -113,7 +175,7 @@ func (lkc *LambdaKafkaConsumer) consumeLoop() {
 	for {
 		select {
 		case <-lkc.stopChan:
-			slog.Info("Stopping Kafka consumer for lambda", "lambda", lkc.lambdaName)
+			slog.Info("Stopping Kafka consumer", "trigger_key", lkc.triggerKey)
 			return
 		default:
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
@@ -133,7 +195,7 @@ func (lkc *LambdaKafkaConsumer) consumeLoop() {
 					// handler lambda function. Could allow lambdas to specify an onError callback in
 					// ol.yaml that gets invoked with error details.
 					slog.Warn("Kafka fetch error",
-						"lambda", lkc.lambdaName,
+						"trigger_key", lkc.triggerKey,
 						"error", err)
 				}
 				continue
@@ -141,9 +203,8 @@ func (lkc *LambdaKafkaConsumer) consumeLoop() {
 
 			// Process each record
 			fetches.EachRecord(func(record *kgo.Record) {
-				slog.Info("Received Kafka message for lambda",
-					"consumer", lkc.consumerName,
-					"lambda", lkc.lambdaName,
+				slog.Info("Received Kafka message",
+					"trigger_key", lkc.triggerKey,
 					"topic", record.Topic,
 					"partition", record.Partition,
 					"offset", record.Offset,
@@ -154,16 +215,46 @@ func (lkc *LambdaKafkaConsumer) consumeLoop() {
 	}
 }
 
-// processMessage handles a single Kafka message by invoking the lambda function directly
+// processMessage handles a single Kafka message by invoking all registered lambda functions
 func (lkc *LambdaKafkaConsumer) processMessage(record *kgo.Record) {
 	t := common.T0("kafka-message-processing")
 	defer t.T1()
 
+	// Get snapshot of lambdas (thread-safe)
+	lambdaNames := lkc.getLambdaNames()
+
+	if len(lambdaNames) == 0 {
+		slog.Warn("No lambdas registered for consumer", "trigger_key", lkc.triggerKey)
+		return
+	}
+
+	slog.Info("Processing Kafka message for lambda(s)",
+		"trigger_key", lkc.triggerKey,
+		"topic", record.Topic,
+		"partition", record.Partition,
+		"offset", record.Offset,
+		"lambda_count", len(lambdaNames))
+
+	// Invoke all lambdas in parallel
+	var wg sync.WaitGroup
+	for _, lambdaName := range lambdaNames {
+		wg.Add(1)
+		go func(name string) {
+			defer wg.Done()
+			lkc.invokeLambda(name, record)
+		}(lambdaName)
+	}
+
+	wg.Wait()
+}
+
+// invokeLambda invokes a single lambda function with a Kafka message
+func (lkc *LambdaKafkaConsumer) invokeLambda(lambdaName string, record *kgo.Record) {
 	// Create synthetic HTTP request from Kafka message
 	req, err := http.NewRequest("POST", "/", bytes.NewReader(record.Value))
 	if err != nil {
 		slog.Error("Failed to create request for lambda invocation",
-			"lambda", lkc.lambdaName,
+			"lambda", lambdaName,
 			"error", err,
 			"topic", record.Topic)
 		return
@@ -182,22 +273,21 @@ func (lkc *LambdaKafkaConsumer) processMessage(record *kgo.Record) {
 	w := httptest.NewRecorder()
 
 	// Get lambda function and invoke directly
-	lambdaFunc := lkc.lambdaManager.Get(lkc.lambdaName)
+	lambdaFunc := lkc.lambdaManager.Get(lambdaName)
 	lambdaFunc.Invoke(w, req)
 
 	// Log the result
-	slog.Info("Kafka message processed via direct invocation",
-		"consumer", lkc.consumerName,
-		"lambda", lkc.lambdaName,
+	slog.Info("Lambda invoked from Kafka consumer",
+		"lambda", lambdaName,
+		"trigger_key", lkc.triggerKey,
 		"topic", record.Topic,
-		"partition", record.Partition,
 		"offset", record.Offset,
 		"status", w.Code)
 }
 
 // cleanup closes the kgo client
 func (lkc *LambdaKafkaConsumer) cleanup() {
-	slog.Info("Shutting down Kafka consumer for lambda", "lambda", lkc.lambdaName)
+	slog.Info("Shutting down Kafka consumer", "trigger_key", lkc.triggerKey)
 
 	// Signal all goroutines to stop
 	close(lkc.stopChan)
@@ -207,7 +297,7 @@ func (lkc *LambdaKafkaConsumer) cleanup() {
 		lkc.client.Close()
 	}
 
-	slog.Info("Kafka consumer shutdown complete for lambda", "lambda", lkc.lambdaName)
+	slog.Info("Kafka consumer shutdown complete", "trigger_key", lkc.triggerKey)
 }
 
 // RegisterLambdaKafkaTriggers registers Kafka triggers for a lambda function
@@ -219,41 +309,57 @@ func (km *KafkaManager) RegisterLambdaKafkaTriggers(lambdaName string, triggers 
 		return nil // No Kafka triggers for this lambda
 	}
 
-	// If lambda already has consumers, clean them up first
-	for consumerName, consumer := range km.lambdaConsumers {
-		if strings.HasPrefix(consumerName, lambdaName+"-") {
-			consumer.cleanup()
-			delete(km.lambdaConsumers, consumerName)
-			slog.Info("Cleaned up existing Kafka consumer for lambda", "lambda", lambdaName, "consumer", consumerName)
-		}
-	}
+	// Step 1: Unregister old triggers for this lambda (if any)
+	km.unregisterLambdaInternal(lambdaName)
 
-	// Create consumers for each Kafka trigger
-	for i, trigger := range triggers {
-		trigger.GroupId = fmt.Sprintf("lambda-%s", lambdaName)
-		consumerName := fmt.Sprintf("%s-%d", lambdaName, i)
-		consumer, err := km.newLambdaKafkaConsumer(consumerName, lambdaName, &trigger)
-		if err != nil {
-			slog.Error("Failed to create Kafka consumer for lambda",
+	var registeredKeys []TriggerKey
+
+	// Step 2: Process each trigger
+	for _, trigger := range triggers {
+		// Compute trigger identity
+		triggerKey := ComputeTriggerKey(&trigger)
+
+		// Step 3: Check if consumer already exists
+		consumer, exists := km.consumers[triggerKey]
+
+		if exists {
+			// REUSE: Add lambda to existing consumer
+			consumer.addLambda(lambdaName)
+			slog.Info("Reusing existing Kafka consumer",
 				"lambda", lambdaName,
-				"trigger_index", i,
-				"error", err)
-			continue
+				"trigger_key", triggerKey,
+				"total_lambdas", consumer.getLambdaCount())
+		} else {
+			// CREATE: New consumer needed
+			trigger.GroupId = string(triggerKey) // Use trigger key as group ID
+
+			consumer, err := km.newLambdaKafkaConsumer(triggerKey, &trigger)
+			if err != nil {
+				slog.Error("Failed to create Kafka consumer",
+					"lambda", lambdaName,
+					"error", err)
+				continue
+			}
+
+			consumer.addLambda(lambdaName) // Add first lambda
+			km.consumers[triggerKey] = consumer
+
+			// Start consuming
+			go consumer.StartConsuming()
+
+			slog.Info("Created new Kafka consumer",
+				"lambda", lambdaName,
+				"trigger_key", triggerKey,
+				"topics", trigger.Topics,
+				"brokers", trigger.BootstrapServers,
+				"group_id", trigger.GroupId)
 		}
 
-		km.lambdaConsumers[consumerName] = consumer
-
-		// Start consuming in background
-		go func(c *LambdaKafkaConsumer) {
-			c.StartConsuming()
-		}(consumer)
-
-		slog.Info("Registered Kafka trigger for lambda",
-			"lambda", lambdaName,
-			"topics", trigger.Topics,
-			"brokers", trigger.BootstrapServers,
-			"group_id", trigger.GroupId)
+		registeredKeys = append(registeredKeys, triggerKey)
 	}
+
+	// Step 4: Track reverse mapping
+	km.lambdaTriggers[lambdaName] = registeredKeys
 
 	return nil
 }
@@ -262,15 +368,42 @@ func (km *KafkaManager) RegisterLambdaKafkaTriggers(lambdaName string, triggers 
 func (km *KafkaManager) UnregisterLambdaKafkaTriggers(lambdaName string) {
 	km.mu.Lock()
 	defer km.mu.Unlock()
+	km.unregisterLambdaInternal(lambdaName)
+}
 
-	// Find and cleanup all consumers for this lambda
-	for consumerName, consumer := range km.lambdaConsumers {
-		if strings.HasPrefix(consumerName, lambdaName+"-") {
+// unregisterLambdaInternal removes lambda from all consumers (must be called with lock held)
+func (km *KafkaManager) unregisterLambdaInternal(lambdaName string) {
+	// Find triggers this lambda was using
+	triggerKeys, exists := km.lambdaTriggers[lambdaName]
+	if !exists {
+		return
+	}
+
+	// Remove lambda from each consumer
+	for _, triggerKey := range triggerKeys {
+		consumer, exists := km.consumers[triggerKey]
+		if !exists {
+			continue
+		}
+
+		consumer.removeLambda(lambdaName)
+
+		// Check if consumer is now unused
+		if consumer.getLambdaCount() == 0 {
+			slog.Info("Shutting down unused Kafka consumer",
+				"trigger_key", triggerKey)
+
 			consumer.cleanup()
-			delete(km.lambdaConsumers, consumerName)
-			slog.Info("Unregistered Kafka consumer for lambda", "lambda", lambdaName)
+			delete(km.consumers, triggerKey)
+		} else {
+			slog.Info("Lambda removed from shared consumer",
+				"lambda", lambdaName,
+				"trigger_key", triggerKey,
+				"remaining_lambdas", consumer.getLambdaCount())
 		}
 	}
+
+	delete(km.lambdaTriggers, lambdaName)
 }
 
 // cleanup closes all lambda consumers
@@ -280,14 +413,18 @@ func (km *KafkaManager) cleanup() {
 	km.mu.Lock()
 	defer km.mu.Unlock()
 
-	// Close all lambda consumers
-	for lambdaName, consumer := range km.lambdaConsumers {
+	// Close all consumers
+	for triggerKey, consumer := range km.consumers {
+		lambdaCount := consumer.getLambdaCount()
 		consumer.cleanup()
-		slog.Info("Cleaned up Kafka consumer for lambda", "lambda", lambdaName)
+		slog.Info("Cleaned up Kafka consumer",
+			"trigger_key", triggerKey,
+			"lambdas_affected", lambdaCount)
 	}
 
-	// Clear the map
-	km.lambdaConsumers = make(map[string]*LambdaKafkaConsumer)
+	// Clear the maps
+	km.consumers = make(map[TriggerKey]*LambdaKafkaConsumer)
+	km.lambdaTriggers = make(map[string][]TriggerKey)
 
 	slog.Info("Kafka manager shutdown complete")
 }
