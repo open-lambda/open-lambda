@@ -78,6 +78,8 @@ func (linst *LambdaInstance) Task() {
 			return
 		}
 
+		reuse := linst.meta.Config.ReuseSandbox
+
 		t := common.T0("LambdaInstance-WaitSandbox")
 		// if we have a sandbox, try unpausing it to see if it is still alive
 		if sb != nil {
@@ -192,6 +194,14 @@ func (linst *LambdaInstance) Task() {
 			}
 			f.doneChan <- req
 
+			// If reuse is disabled, destroy the sandbox after invocation and stop processing more requests.
+			if !reuse && sb != nil {
+				sb.Destroy("reuse-sandbox disabled: destroying sandbox after invocation")
+				sb = nil
+				req = nil
+				break
+			}
+
 			// check whether we should shutdown (non-blocking)
 			select {
 			case killed := <-linst.killChan:
@@ -229,7 +239,7 @@ func (linst *LambdaInstance) Task() {
 			}
 		}
 
-		if sb != nil {
+		if reuse && sb != nil {
 			if err := sb.Pause(); err != nil {
 				f.printf("discard sandbox %s due to Pause error: %v", sb.ID(), err)
 				sb = nil
