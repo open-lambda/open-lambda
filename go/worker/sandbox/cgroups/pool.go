@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -36,9 +37,13 @@ func InitPoolRoot(poolPath string) error {
 		return fmt.Errorf("failed to enable controllers at %s: %w", ctrlPath, err)
 	}
 
-	uid, err := common.GetLoginUID()
+	uidStr := os.Getenv("SUDO_UID")
+	if uidStr == "" {
+		return fmt.Errorf("SUDO_UID not set; worker must be run with sudo")
+	}
+	uid, err := strconv.Atoi(uidStr)
 	if err != nil {
-		return fmt.Errorf("failed to determine real user: %w", err)
+		return fmt.Errorf("invalid SUDO_UID value %q: %w", uidStr, err)
 	}
 	if err := os.Chown(poolPath, uid, uid); err != nil {
 		return fmt.Errorf("failed to chown cgroup pool root: %w", err)
