@@ -277,7 +277,7 @@ func (container *SOCKContainer) DestroyIfPaused(reason string) {
 }
 
 // when the count goes to zero, it means (a) this container and (b)
-// all it's descendants are destroyed. Thus, it's safe to release it's
+// all its descendants are destroyed. Thus, it's safe to release its
 // cgroups, and return the memory allocation to the memPool
 func (container *SOCKContainer) decCgRefCount() {
 	newCount := atomic.AddInt32(&container.cgRefCount, -1)
@@ -297,9 +297,8 @@ func (container *SOCKContainer) decCgRefCount() {
 
 		t := common.T0("Destroy()/cleanup-cgroup")
 		if container.cg != nil {
-			container.cg.KillAllProcs()
+			container.cg.KillAndRelease()
 			container.printf("killed PIDs in CG\n")
-			container.cg.Release()
 			container.pool.mem.adjustAvailableMB(container.cg.GetMemLimitMB())
 		}
 		t.T1()
