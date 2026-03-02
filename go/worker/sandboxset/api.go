@@ -3,9 +3,16 @@
 //
 // Sandbox lifecycle inside a SandboxSet:
 //
-//	created ──► paused (available) ──► in-use (unpaused) ──► paused (available)
-//	                  │                       │
-//	                  └───────── destroyed ◄──┘  (on error or Close)
+//	[created]
+//	    |
+//	    v
+//	[paused]  <---+
+//	    |         |
+//	    v         |
+//	[in-use]  ----+  (Put)
+//	    |
+//	    v
+//	[destroyed]     (Destroy / Close / error)
 //
 // Usage:
 //
