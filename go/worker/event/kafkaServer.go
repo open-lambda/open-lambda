@@ -24,21 +24,36 @@ type KafkaClient interface {
 	Close()
 }
 
+// LambdaInvoker abstracts the lambda invocation layer for testability
+type LambdaInvoker interface {
+	Invoke(lambdaName string, w http.ResponseWriter, r *http.Request)
+}
+
+// lambdaMgrInvoker wraps *lambda.LambdaMgr to implement LambdaInvoker
+type lambdaMgrInvoker struct {
+	mgr *lambda.LambdaMgr
+}
+
+func (i *lambdaMgrInvoker) Invoke(lambdaName string, w http.ResponseWriter, r *http.Request) {
+	f := i.mgr.Get(lambdaName)
+	f.Invoke(w, r)
+}
+
 // LambdaKafkaConsumer manages Kafka consumption for a specific lambda function
 type LambdaKafkaConsumer struct {
-	consumerName  string // Unique name for this consumer
-	lambdaName    string // lambda function name
-	kafkaTrigger  *common.KafkaTrigger
-	client        KafkaClient       // kgo.client implements the KafkaClient interface
-	lambdaManager *lambda.LambdaMgr // Reference to lambda manager for direct calls
-	stopChan      chan struct{}     // Shutdown signal for this consumer
+	consumerName string // Unique name for this consumer
+	lambdaName   string // lambda function name
+	kafkaTrigger *common.KafkaTrigger
+	client       KafkaClient    // kgo.client implements the KafkaClient interface
+	invoker      LambdaInvoker  // Abstraction for lambda invocation
+	stopChan     chan struct{}   // Shutdown signal for this consumer
 	// When this channel is closed, the goroutine for the consumer exits
 }
 
 // KafkaManager manages multiple lambda-specific Kafka consumers
 type KafkaManager struct {
 	lambdaConsumers map[string]*LambdaKafkaConsumer // lambdaName -> consumer
-	lambdaManager   *lambda.LambdaMgr               // Reference to lambda manager
+	invoker         LambdaInvoker                   // Abstraction for lambda invocation
 	mu              sync.Mutex                      // Protects lambdaConsumers map
 }
 
@@ -75,20 +90,25 @@ func (km *KafkaManager) newLambdaKafkaConsumer(consumerName string, lambdaName s
 	}
 
 	return &LambdaKafkaConsumer{
-		consumerName:  consumerName,
-		lambdaName:    lambdaName,
-		kafkaTrigger:  trigger,
-		client:        client,
-		lambdaManager: km.lambdaManager,
-		stopChan:      make(chan struct{}),
+		consumerName: consumerName,
+		lambdaName:   lambdaName,
+		kafkaTrigger: trigger,
+		client:       client,
+		invoker:      km.invoker,
+		stopChan:     make(chan struct{}),
 	}, nil
 }
 
 // NewKafkaManager creates and configures a new Kafka manager
 func NewKafkaManager(lambdaManager *lambda.LambdaMgr) (*KafkaManager, error) {
+	var invoker LambdaInvoker
+	if lambdaManager != nil {
+		invoker = &lambdaMgrInvoker{mgr: lambdaManager}
+	}
+
 	manager := &KafkaManager{
 		lambdaConsumers: make(map[string]*LambdaKafkaConsumer),
-		lambdaManager:   lambdaManager,
+		invoker:         invoker,
 	}
 
 	slog.Info("Kafka manager initialized")
@@ -185,9 +205,8 @@ func (lkc *LambdaKafkaConsumer) processMessage(record *kgo.Record) {
 	// for kafka triggered lambda invocations.
 	w := httptest.NewRecorder()
 
-	// Get lambda function and invoke directly
-	lambdaFunc := lkc.lambdaManager.Get(lkc.lambdaName)
-	lambdaFunc.Invoke(w, req)
+	// Invoke the lambda function directly
+	lkc.invoker.Invoke(lkc.lambdaName, w, req)
 
 	// Log the result
 	slog.Info("Kafka message processed via direct invocation",
