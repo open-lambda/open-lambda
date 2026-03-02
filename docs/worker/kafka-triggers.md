@@ -27,12 +27,81 @@ Even if multiple lambdas subscribe to the same topic, each one receives
 its own copy of every message, and offset tracking is maintained
 separately per lambda.
 
+## Quick start
+
+This walkthrough starts a Kafka broker, deploys a lambda with a Kafka
+trigger, and publishes a message to verify end-to-end.
+
+### 1. Start a Kafka broker
+
+The easiest way to get a single-node broker is with Docker. The
+[apache/kafka](https://hub.docker.com/r/apache/kafka) image bundles
+KRaft mode so no separate ZooKeeper container is needed:
+
+```bash
+docker run -d --name kafka \
+  -p 9092:9092 \
+  apache/kafka:latest
+```
+
+See the [Apache Kafka quickstart](https://kafka.apache.org/quickstart)
+for more details.
+
+### 2. Create a topic
+
+```bash
+docker exec kafka \
+  /opt/kafka/bin/kafka-topics.sh --create \
+    --topic my-topic \
+    --bootstrap-server localhost:9092
+```
+
+### 3. Write the lambda
+
+Create a directory for the lambda with two files:
+
+**f.py**
+```python
+def f(event):
+    print(f"Received: {event}")
+    return {"status": "ok"}
+```
+
+**ol.yaml**
+```yaml
+triggers:
+  kafka:
+    - bootstrap_servers:
+        - "localhost:9092"
+      topics:
+        - "my-topic"
+      auto_offset_reset: "earliest"
+```
+
+Upload the lambda to the registry. When a lambda with Kafka triggers is
+uploaded, the worker automatically starts consumers for the configured
+topics — no extra registration step is needed.
+
+### 4. Publish a test message
+
+```bash
+echo '{"hello":"world"}' | docker exec -i kafka \
+  /opt/kafka/bin/kafka-console-producer.sh \
+    --topic my-topic \
+    --bootstrap-server localhost:9092
+```
+
+The worker should pick up the message and invoke your lambda. Check the
+worker logs to confirm.
+
 ## How it works
 
 1. When the worker starts in `lambda` mode, it creates a `KafkaManager`
    alongside the `LambdaServer`.
-2. Kafka triggers are registered via the `/kafka/register/<lambda-name>`
-   HTTP endpoint (POST to register, DELETE to unregister).
+2. When a lambda with Kafka triggers is uploaded, the boss automatically
+   registers its Kafka consumers on the worker. Consumers can also be
+   managed manually via the `/kafka/register/<lambda-name>` HTTP
+   endpoint (POST to register, DELETE to unregister).
 3. For each trigger entry, the manager creates a `LambdaKafkaConsumer`
    backed by a [franz-go](https://github.com/twmb/franz-go) (`kgo`)
    client.
@@ -127,10 +196,3 @@ runtime:
   cleaned up first.
 - **`DELETE /kafka/register/<lambda-name>`** — Stops and removes all
   Kafka consumers for the given lambda.
-
-## Shutdown
-
-When the worker receives a shutdown signal (SIGTERM/SIGINT), the Kafka
-manager is cleaned up before the lambda server. Each consumer's polling
-loop is stopped via its stop channel, and the underlying `kgo` client is
-closed.

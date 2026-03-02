@@ -64,9 +64,9 @@ Major cloud offerings (like AWS lambda) offer a variety of lambda
 triggers, such as HTTP requests, queue messages, cron, DB/S3 triggers,
 etc.
 
-OpenLambda currently supports two types of triggers: **HTTP requests**
-and **Kafka messages**. The event code is in the
-github.com/open-lambda/open-lambda/ol/worker/event package.
+OpenLambda currently supports three types of triggers: **HTTP
+requests**, **Kafka messages**, and **cron schedules**. The event code
+is in the github.com/open-lambda/open-lambda/ol/worker/event package.
 
 **HTTP triggers:** Requests to http(s)://WORKER_ADDR:PORT/run/LAMBDA_NAME
 invoke lambdas directly.
@@ -75,3 +75,7 @@ invoke lambdas directly.
 topics. The worker runs Kafka consumers that poll for messages and
 invoke the corresponding lambda function automatically. See
 [kafka-triggers.md](kafka-triggers.md) for details.
+
+**Cron triggers:** Lambdas can be invoked on a schedule using cron
+expressions. The boss component runs a cron scheduler that
+automatically invokes lambdas at the configured times.
