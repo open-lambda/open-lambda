@@ -62,6 +62,11 @@ type Config struct {
 	// pass through to sandbox envirenment variable
 	Sandbox_config any `json:"sandbox_config"`
 
+	// KAFKA CACHE OPTIONS
+	Kafka_cache_size_mb         int `json:"kafka_cache_size_mb"`         // max message cache size in MB (default: 256)
+	Kafka_batch_size            int `json:"kafka_batch_size"`            // messages per fetch batch (default: 100)
+	Kafka_consumer_idle_timeout int `json:"kafka_consumer_idle_timeout"` // seconds before idle on-demand consumers close (default: 30)
+
 	Docker          DockerConfig   `json:"docker"`
 	Limits          LimitsConfig   `json:"limits"`
 	InstallerLimits LimitsConfig   `json:"installer_limits"` // limits profile for installers
@@ -291,9 +296,12 @@ func getDefaultConfigForPatching(olPath string) (*Config, error) {
 		Pkgs_dir:          packagesDir,
 		Sandbox_config:    map[string]any{},
 		SOCK_base_path:    baseImgDir,
-		Registry_cache_ms: 5000, // 5 seconds
-		Mem_pool_mb:       memPoolMb,
-		Import_cache_tree: zygoteTreePath,
+		Registry_cache_ms:          5000, // 5 seconds
+		Mem_pool_mb:                memPoolMb,
+		Import_cache_tree:          zygoteTreePath,
+		Kafka_cache_size_mb:         256,
+		Kafka_batch_size:            100,
+		Kafka_consumer_idle_timeout: 30,
 		Docker: DockerConfig{
 			Base_image: "ol-min",
 		},

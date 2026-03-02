@@ -347,8 +347,9 @@ func Main() error {
 		}
 		slog.Info("Created kafka manager")
 
-		// Register Kafka management endpoint
+		// Register Kafka management endpoints
 		portMux.HandleFunc("/kafka/register/", HandleKafkaRegister(kafkaManager, lambdaStore))
+		portMux.HandleFunc("/kafka/consume/", HandleKafkaConsume(kafkaManager))
 		slog.Info("Kafka manager ready")
 	case "sock":
 		backend, err = NewSOCKServer(portMux)
