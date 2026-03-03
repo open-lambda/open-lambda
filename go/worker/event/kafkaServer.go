@@ -37,14 +37,14 @@ type LambdaKafkaConsumer struct {
 }
 
 // KafkaManager manages Kafka consumption for all lambdas on a worker.
-// It maintains a shared message cache and on-demand consumer pool for the
-// pull-based consumption model, as well as legacy push-based consumers.
+// It maintains a shared message cache and a KafkaFetcher for the pull-based
+// consumption model, as well as legacy push-based consumers.
 type KafkaManager struct {
 	lambdaConsumers map[string]*LambdaKafkaConsumer // push-model consumers (legacy)
 	triggerConfigs  map[string][]common.KafkaTrigger // lambdaName → trigger configs for pull model
 	lambdaManager   *lambda.LambdaMgr
 	cache           *MessageCache
-	consumerPool    *ConsumerPool
+	fetcher         *KafkaFetcher
 	offsets         map[string]map[string]map[int32]int64 // groupId → topic → partition → next offset
 	mu              sync.Mutex
 }
@@ -97,15 +97,15 @@ func (km *KafkaManager) newLambdaKafkaConsumer(consumerName string, lambdaName s
 	}, nil
 }
 
-// NewKafkaManager creates a KafkaManager with a shared message cache and consumer pool.
+// NewKafkaManager creates a KafkaManager with a shared message cache and fetcher.
 func NewKafkaManager(lambdaManager *lambda.LambdaMgr) (*KafkaManager, error) {
 	cacheSizeMb := common.Conf.Kafka_cache_size_mb
 	if cacheSizeMb <= 0 {
 		cacheSizeMb = 256
 	}
-	idleTimeout := common.Conf.Kafka_consumer_idle_timeout
-	if idleTimeout <= 0 {
-		idleTimeout = 30
+	maxConcurrent := common.Conf.Kafka_max_concurrent_fetches
+	if maxConcurrent <= 0 {
+		maxConcurrent = 10
 	}
 
 	manager := &KafkaManager{
@@ -113,13 +113,13 @@ func NewKafkaManager(lambdaManager *lambda.LambdaMgr) (*KafkaManager, error) {
 		triggerConfigs:  make(map[string][]common.KafkaTrigger),
 		lambdaManager:   lambdaManager,
 		cache:           NewMessageCache(int64(cacheSizeMb) * 1024 * 1024),
-		consumerPool:    NewConsumerPool(time.Duration(idleTimeout) * time.Second),
+		fetcher:         NewKafkaFetcher(maxConcurrent),
 		offsets:         make(map[string]map[string]map[int32]int64),
 	}
 
 	slog.Info("Kafka manager initialized",
 		"cache_size_mb", cacheSizeMb,
-		"consumer_idle_timeout_sec", idleTimeout)
+		"max_concurrent_fetches", maxConcurrent)
 	return manager, nil
 }
 
@@ -325,9 +325,11 @@ func (km *KafkaManager) ConsumeFromCache(lambdaName string, w http.ResponseWrite
 					"missOffset", missOffset,
 					"batchSize", batchSize)
 
-				records, err := km.consumerPool.Fetch(
-					trigger.BootstrapServers, topic, partition, missOffset, batchSize,
+				fetchCtx, fetchCancel := context.WithTimeout(context.Background(), 15*time.Second)
+				records, err := km.fetcher.Fetch(
+					fetchCtx, trigger.BootstrapServers, topic, partition, missOffset, batchSize,
 				)
+				fetchCancel()
 				if err != nil {
 					slog.Error("Failed to fetch from Kafka",
 						"lambda", lambdaName,
@@ -456,10 +458,6 @@ func (km *KafkaManager) cleanup() {
 	}
 	km.lambdaConsumers = make(map[string]*LambdaKafkaConsumer)
 	km.triggerConfigs = make(map[string][]common.KafkaTrigger)
-
-	if km.consumerPool != nil {
-		km.consumerPool.Close()
-	}
 
 	slog.Info("Kafka manager shutdown complete")
 }

@@ -1,64 +1,62 @@
 package event
 
 import (
-	"sort"
+	"context"
 	"testing"
 	"time"
 )
 
-func TestConsumerKey(t *testing.T) {
-	// Order of brokers should not matter
-	key1 := consumerKey([]string{"b1:9092", "b2:9092"}, "topic1")
-	key2 := consumerKey([]string{"b2:9092", "b1:9092"}, "topic1")
-
-	if key1 != key2 {
-		t.Fatalf("expected same key regardless of broker order: %q vs %q", key1, key2)
-	}
-
-	// Different topics should produce different keys
-	key3 := consumerKey([]string{"b1:9092"}, "topic2")
-	if key1 == key3 {
-		t.Fatal("expected different keys for different topics")
+func TestNewKafkaFetcher_DefaultConcurrency(t *testing.T) {
+	kf := NewKafkaFetcher(0)
+	if cap(kf.sem) != 10 {
+		t.Fatalf("expected default capacity 10, got %d", cap(kf.sem))
 	}
 }
 
-func TestConsumerKey_SortedBrokers(t *testing.T) {
-	brokers := []string{"c:9092", "a:9092", "b:9092"}
-	key := consumerKey(brokers, "t")
-
-	sorted := make([]string, len(brokers))
-	copy(sorted, brokers)
-	sort.Strings(sorted)
-
-	// Original slice should not be mutated
-	if brokers[0] != "c:9092" {
-		t.Fatal("consumerKey should not mutate the input slice")
-	}
-
-	expected := "a:9092,b:9092,c:9092|t"
-	if key != expected {
-		t.Fatalf("expected %q, got %q", expected, key)
+func TestNewKafkaFetcher_CustomConcurrency(t *testing.T) {
+	kf := NewKafkaFetcher(5)
+	if cap(kf.sem) != 5 {
+		t.Fatalf("expected capacity 5, got %d", cap(kf.sem))
 	}
 }
 
-func TestNewConsumerPool(t *testing.T) {
-	cp := NewConsumerPool(30 * time.Second)
-	defer cp.Close()
+func TestKafkaFetcher_SemaphoreBlocksAtCapacity(t *testing.T) {
+	kf := NewKafkaFetcher(1)
 
-	if len(cp.consumers) != 0 {
-		t.Fatal("expected empty consumer map")
+	// Fill the semaphore slot
+	kf.sem <- struct{}{}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	// Fetch should block and then fail with context deadline since the slot is taken
+	_, err := kf.Fetch(ctx, []string{"localhost:9092"}, "test-topic", 0, 0, 1)
+	if err == nil {
+		t.Fatal("expected error when semaphore is full and context expires")
 	}
+	if err != context.DeadlineExceeded {
+		t.Fatalf("expected DeadlineExceeded, got %v", err)
+	}
+
+	// Release the slot
+	<-kf.sem
 }
 
-func TestConsumerPool_Close(t *testing.T) {
-	cp := NewConsumerPool(30 * time.Second)
-	cp.Close()
+func TestKafkaFetcher_SemaphoreReleasedAfterFetch(t *testing.T) {
+	kf := NewKafkaFetcher(1)
 
-	// Closing again should not panic (stopChan already closed)
-	// The cleanup loop should have exited
-	cp.mu.Lock()
-	if len(cp.consumers) != 0 {
-		t.Fatal("expected empty consumer map after close")
+	// Fetch will fail (no real broker) but should still release the semaphore slot
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	// This will error because there's no broker, but the semaphore should be released
+	kf.Fetch(ctx, []string{"localhost:19092"}, "nonexistent", 0, 0, 1)
+
+	// Verify the semaphore slot was released by acquiring it without blocking
+	select {
+	case kf.sem <- struct{}{}:
+		<-kf.sem // clean up
+	default:
+		t.Fatal("semaphore slot was not released after Fetch")
 	}
-	cp.mu.Unlock()
 }
