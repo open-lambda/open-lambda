@@ -118,59 +118,6 @@ func TestMessageCache_UpdateExisting(t *testing.T) {
 	}
 }
 
-func TestMessageCache_GetBatch_AllHit(t *testing.T) {
-	cache := NewMessageCache(4096)
-
-	for i := 0; i < 5; i++ {
-		key := CacheKey{Topic: "t", Partition: 0, Offset: int64(i)}
-		cache.Put(key, makeMsg(fmt.Sprintf("msg-%d", i), 50))
-	}
-
-	msgs, missOffset := cache.GetBatch("t", 0, 0, 5)
-	if missOffset != -1 {
-		t.Fatalf("expected no miss, got miss at offset %d", missOffset)
-	}
-	if len(msgs) != 5 {
-		t.Fatalf("expected 5 messages, got %d", len(msgs))
-	}
-	for i, msg := range msgs {
-		expected := fmt.Sprintf("msg-%d", i)
-		if string(msg.Value) != expected {
-			t.Fatalf("message %d: expected %q, got %q", i, expected, string(msg.Value))
-		}
-	}
-}
-
-func TestMessageCache_GetBatch_PartialHit(t *testing.T) {
-	cache := NewMessageCache(4096)
-
-	// Only cache offsets 0, 1, 2 — offset 3 is missing
-	for i := 0; i < 3; i++ {
-		key := CacheKey{Topic: "t", Partition: 0, Offset: int64(i)}
-		cache.Put(key, makeMsg(fmt.Sprintf("msg-%d", i), 50))
-	}
-
-	msgs, missOffset := cache.GetBatch("t", 0, 0, 5)
-	if missOffset != 3 {
-		t.Fatalf("expected miss at offset 3, got %d", missOffset)
-	}
-	if len(msgs) != 3 {
-		t.Fatalf("expected 3 messages, got %d", len(msgs))
-	}
-}
-
-func TestMessageCache_GetBatch_CompleteMiss(t *testing.T) {
-	cache := NewMessageCache(4096)
-
-	msgs, missOffset := cache.GetBatch("t", 0, 100, 10)
-	if missOffset != 100 {
-		t.Fatalf("expected miss at offset 100, got %d", missOffset)
-	}
-	if len(msgs) != 0 {
-		t.Fatalf("expected 0 messages, got %d", len(msgs))
-	}
-}
-
 func TestMessageCache_ConcurrentAccess(t *testing.T) {
 	cache := NewMessageCache(100000)
 	var wg sync.WaitGroup

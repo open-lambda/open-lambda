@@ -62,28 +62,6 @@ func (mc *MessageCache) Get(key CacheKey) (*CachedMessage, bool) {
 	return elem.Value.(*cacheEntry).message, true
 }
 
-// GetBatch retrieves a contiguous run of cached messages starting at startOffset
-// for the given topic and partition. It returns up to count messages and the first
-// offset that was missing. If all requested messages are found, missOffset is -1.
-func (mc *MessageCache) GetBatch(topic string, partition int32, startOffset int64, count int) ([]*CachedMessage, int64) {
-	mc.mu.Lock()
-	defer mc.mu.Unlock()
-
-	messages := make([]*CachedMessage, 0, count)
-
-	for i := 0; i < count; i++ {
-		key := CacheKey{Topic: topic, Partition: partition, Offset: startOffset + int64(i)}
-		elem, ok := mc.entries[key]
-		if !ok {
-			return messages, startOffset + int64(i)
-		}
-		mc.lruList.MoveToFront(elem)
-		messages = append(messages, elem.Value.(*cacheEntry).message)
-	}
-
-	return messages, -1
-}
-
 // Put inserts a message into the cache. If the key already exists, the entry is
 // updated and promoted to MRU. Evicts LRU entries if the cache exceeds maxSize.
 func (mc *MessageCache) Put(key CacheKey, msg *CachedMessage) {

@@ -63,8 +63,7 @@ type Config struct {
 	Sandbox_config any `json:"sandbox_config"`
 
 	// KAFKA CACHE OPTIONS
-	Kafka_cache_size_mb        int `json:"kafka_cache_size_mb"`        // max message cache size in MB (default: 256)
-	Kafka_batch_size           int `json:"kafka_batch_size"`           // messages per fetch batch (default: 100)
+	Kafka_cache_size_mb          int `json:"kafka_cache_size_mb"`          // max message cache size in MB (default: 256)
 	Kafka_max_concurrent_fetches int `json:"kafka_max_concurrent_fetches"` // max simultaneous Kafka consumers (default: 10)
 
 	Docker          DockerConfig   `json:"docker"`
@@ -300,7 +299,6 @@ func getDefaultConfigForPatching(olPath string) (*Config, error) {
 		Mem_pool_mb:                memPoolMb,
 		Import_cache_tree:          zygoteTreePath,
 		Kafka_cache_size_mb:          256,
-		Kafka_batch_size:             100,
 		Kafka_max_concurrent_fetches: 10,
 		Docker: DockerConfig{
 			Base_image: "ol-min",

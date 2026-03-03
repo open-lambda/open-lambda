@@ -3,7 +3,6 @@ package event
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -49,15 +48,6 @@ type KafkaManager struct {
 	mu              sync.Mutex
 }
 
-// batchMessage is a single Kafka message in the JSON batch sent to lambdas.
-type batchMessage struct {
-	Topic     string `json:"topic"`
-	Partition int32  `json:"partition"`
-	Offset    int64  `json:"offset"`
-	Key       string `json:"key"`
-	Value     string `json:"value"`
-	Timestamp string `json:"timestamp"`
-}
 
 // newLambdaKafkaConsumer creates a new Kafka consumer for push-based consumption.
 func (km *KafkaManager) newLambdaKafkaConsumer(consumerName string, lambdaName string, trigger *common.KafkaTrigger) (*LambdaKafkaConsumer, error) {
@@ -277,12 +267,12 @@ func (km *KafkaManager) setOffset(groupId, topic string, partition int32, offset
 	km.offsets[groupId][topic][partition] = offset
 }
 
-// ConsumeFromCache reads messages from the shared cache for a lambda's registered
-// Kafka triggers. On cache miss, it fetches from Kafka via the consumer pool, caches
-// the results, then invokes the lambda with a batched JSON payload.
+// ConsumeFromCache reads the next message from the shared cache for a lambda's
+// registered Kafka triggers. On cache miss, it fetches a single message from
+// Kafka, caches it, then invokes the lambda with the message body.
 //
-// Returns the number of messages consumed and any error.
-func (km *KafkaManager) ConsumeFromCache(lambdaName string, w http.ResponseWriter) (int, error) {
+// Returns true if a message was consumed, or false if none were available.
+func (km *KafkaManager) ConsumeFromCache(lambdaName string, w http.ResponseWriter) (bool, error) {
 	t := common.T0("kafka-consume-from-cache")
 	defer t.T1()
 
@@ -291,15 +281,8 @@ func (km *KafkaManager) ConsumeFromCache(lambdaName string, w http.ResponseWrite
 	km.mu.Unlock()
 
 	if !ok || len(triggers) == 0 {
-		return 0, fmt.Errorf("no Kafka triggers registered for lambda %s", lambdaName)
+		return false, fmt.Errorf("no Kafka triggers registered for lambda %s", lambdaName)
 	}
-
-	batchSize := common.Conf.Kafka_batch_size
-	if batchSize <= 0 {
-		batchSize = 100
-	}
-
-	var allMessages []batchMessage
 
 	for _, trigger := range triggers {
 		groupId := trigger.GroupId
@@ -310,24 +293,25 @@ func (km *KafkaManager) ConsumeFromCache(lambdaName string, w http.ResponseWrite
 			partition := int32(0)
 
 			km.mu.Lock()
-			startOffset := km.getOffset(groupId, topic, partition)
+			offset := km.getOffset(groupId, topic, partition)
 			km.mu.Unlock()
 
-			// Try cache first
-			cached, missOffset := km.cache.GetBatch(topic, partition, startOffset, batchSize)
+			key := CacheKey{Topic: topic, Partition: partition, Offset: offset}
 
-			if missOffset != -1 {
+			// Try cache first
+			msg, hit := km.cache.Get(key)
+
+			if !hit {
 				// Cache miss — fetch from Kafka
 				slog.Info("Cache miss, fetching from Kafka",
 					"lambda", lambdaName,
 					"topic", topic,
 					"partition", partition,
-					"missOffset", missOffset,
-					"batchSize", batchSize)
+					"offset", offset)
 
 				fetchCtx, fetchCancel := context.WithTimeout(context.Background(), 15*time.Second)
 				records, err := km.fetcher.Fetch(
-					fetchCtx, trigger.BootstrapServers, topic, partition, missOffset, batchSize,
+					fetchCtx, trigger.BootstrapServers, topic, partition, offset, 1,
 				)
 				fetchCancel()
 				if err != nil {
@@ -338,91 +322,63 @@ func (km *KafkaManager) ConsumeFromCache(lambdaName string, w http.ResponseWrite
 					continue
 				}
 
-				// Cache fetched records
-				for _, r := range records {
-					headers := make(map[string]string)
-					for _, h := range r.Headers {
-						headers[h.Key] = string(h.Value)
-					}
-					msg := &CachedMessage{
-						Key:       r.Key,
-						Value:     r.Value,
-						Headers:   headers,
-						Timestamp: r.Timestamp,
-						size:      int64(len(r.Key) + len(r.Value) + 64), // approximate overhead
-					}
-					km.cache.Put(CacheKey{
-						Topic:     r.Topic,
-						Partition: r.Partition,
-						Offset:    r.Offset,
-					}, msg)
+				if len(records) == 0 {
+					continue
 				}
 
-				// Re-read from cache to get the full contiguous batch
-				cached, _ = km.cache.GetBatch(topic, partition, startOffset, batchSize)
+				// Cache the fetched record
+				r := records[0]
+				headers := make(map[string]string)
+				for _, h := range r.Headers {
+					headers[h.Key] = string(h.Value)
+				}
+				msg = &CachedMessage{
+					Key:       r.Key,
+					Value:     r.Value,
+					Headers:   headers,
+					Timestamp: r.Timestamp,
+					size:      int64(len(r.Key) + len(r.Value) + 64),
+				}
+				km.cache.Put(CacheKey{
+					Topic:     r.Topic,
+					Partition: r.Partition,
+					Offset:    r.Offset,
+				}, msg)
 			}
 
-			// Build batch messages
-			for i, msg := range cached {
-				allMessages = append(allMessages, batchMessage{
-					Topic:     topic,
-					Partition: partition,
-					Offset:    startOffset + int64(i),
-					Key:       base64.StdEncoding.EncodeToString(msg.Key),
-					Value:     base64.StdEncoding.EncodeToString(msg.Value),
-					Timestamp: msg.Timestamp.Format(time.RFC3339),
-				})
+			// Invoke the lambda with the message value as the request body
+			requestPath := fmt.Sprintf("/run/%s/", lambdaName)
+			req, err := http.NewRequest("POST", requestPath, bytes.NewReader(msg.Value))
+			if err != nil {
+				return false, fmt.Errorf("failed to create request: %w", err)
 			}
+			req.RequestURI = requestPath
 
-			// Advance offset past consumed messages
-			if len(cached) > 0 {
-				newOffset := startOffset + int64(len(cached))
-				km.mu.Lock()
-				km.setOffset(groupId, topic, partition, newOffset)
-				km.mu.Unlock()
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("X-Kafka-Topic", topic)
+			req.Header.Set("X-Kafka-Partition", fmt.Sprintf("%d", partition))
+			req.Header.Set("X-Kafka-Offset", fmt.Sprintf("%d", offset))
+			req.Header.Set("X-Kafka-Group-Id", groupId)
 
-				slog.Info("Advanced consumer offset",
-					"lambda", lambdaName,
-					"topic", topic,
-					"partition", partition,
-					"oldOffset", startOffset,
-					"newOffset", newOffset)
-			}
+			lambdaFunc := km.lambdaManager.Get(lambdaName)
+			lambdaFunc.Invoke(w, req)
+
+			// Advance offset
+			km.mu.Lock()
+			km.setOffset(groupId, topic, partition, offset+1)
+			km.mu.Unlock()
+
+			slog.Info("Kafka message consumed and lambda invoked",
+				"lambda", lambdaName,
+				"topic", topic,
+				"partition", partition,
+				"offset", offset)
+
+			return true, nil
 		}
 	}
 
-	if len(allMessages) == 0 {
-		slog.Info("No messages available for lambda", "lambda", lambdaName)
-		return 0, nil
-	}
-
-	// Serialize batch and invoke lambda
-	batchJSON, err := json.Marshal(allMessages)
-	if err != nil {
-		return 0, fmt.Errorf("failed to marshal message batch: %w", err)
-	}
-
-	requestPath := fmt.Sprintf("/run/%s/", lambdaName)
-	req, err := http.NewRequest("POST", requestPath, bytes.NewReader(batchJSON))
-	if err != nil {
-		return 0, fmt.Errorf("failed to create synthetic request: %w", err)
-	}
-	req.RequestURI = requestPath
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Kafka-Batch", "true")
-	req.Header.Set("X-Kafka-Message-Count", fmt.Sprintf("%d", len(allMessages)))
-	req.Header.Set("X-Kafka-Group-Id", triggers[0].GroupId)
-
-	lambdaFunc := km.lambdaManager.Get(lambdaName)
-	lambdaFunc.Invoke(w, req)
-
-	slog.Info("Kafka batch consumed from cache and lambda invoked",
-		"lambda", lambdaName,
-		"messageCount", len(allMessages),
-		"status", "invoked")
-
-	return len(allMessages), nil
+	return false, nil
 }
 
 // UnregisterLambdaKafkaTriggers removes Kafka triggers for a lambda function.
@@ -532,8 +488,8 @@ func HandleKafkaRegister(kafkaManager *KafkaManager, lambdaStore *lambdastore.La
 }
 
 // HandleKafkaConsume handles pull-based Kafka consumption for a lambda.
-// POST /kafka/consume/<lambda> reads messages from the cache (fetching on miss)
-// and invokes the lambda with a batched JSON payload.
+// POST /kafka/consume/<lambda> reads the next message from the cache (fetching
+// on miss) and invokes the lambda with the message body.
 func HandleKafkaConsume(kafkaManager *KafkaManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
@@ -547,11 +503,9 @@ func HandleKafkaConsume(kafkaManager *KafkaManager) http.HandlerFunc {
 			return
 		}
 
-		// Use a recorder to capture the lambda's response so we can
-		// wrap it with cache metadata for the caller.
 		recorder := httptest.NewRecorder()
 
-		count, err := kafkaManager.ConsumeFromCache(lambdaName, recorder)
+		consumed, err := kafkaManager.ConsumeFromCache(lambdaName, recorder)
 		if err != nil {
 			slog.Error("Failed to consume from cache",
 				"lambda", lambdaName,
@@ -563,7 +517,7 @@ func HandleKafkaConsume(kafkaManager *KafkaManager) http.HandlerFunc {
 		type Response struct {
 			Status       string `json:"status"`
 			Lambda       string `json:"lambda"`
-			MessageCount int    `json:"message_count"`
+			Consumed     bool   `json:"consumed"`
 			LambdaStatus int    `json:"lambda_status"`
 		}
 
@@ -571,7 +525,7 @@ func HandleKafkaConsume(kafkaManager *KafkaManager) http.HandlerFunc {
 		json.NewEncoder(w).Encode(Response{
 			Status:       "success",
 			Lambda:       lambdaName,
-			MessageCount: count,
+			Consumed:     consumed,
 			LambdaStatus: recorder.Code,
 		})
 	}
