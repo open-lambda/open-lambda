@@ -21,6 +21,7 @@ import (
 	"github.com/open-lambda/open-lambda/go/worker/embedded"
 )
 
+
 func initOLBaseDir(baseDir string, dockerBaseImage string) error {
 	if dockerBaseImage == "" {
 		dockerBaseImage = "ol-wasm"
@@ -279,8 +280,8 @@ func runningToStoppedClean() error {
 // It cleans up cgroups and mounts associated with the OpenLambda instance at `olPath`.
 // Returns errors encountered during cleanup operations.
 func stoppedDirtyToStoppedClean(olPath string) error {
-	// Clean up cgroups associated with sandboxes
-	cgRoot := filepath.Join("/sys", "fs", "cgroup", filepath.Base(olPath)+"-sandboxes")
+	// Clean up child cgroups, preserving the pool root
+	cgRoot := common.CgroupPoolPath(olPath)
 	fmt.Printf("Attempting to clean up cgroups at %s\n", cgRoot)
 
 	cgroupErrorCount := 0
@@ -302,7 +303,6 @@ func stoppedDirtyToStoppedClean(olPath string) error {
 		}
 		kill := filepath.Join(cgRoot, "cgroup.kill")
 		if err := os.WriteFile(kill, []byte(fmt.Sprintf("%d", 1)), os.ModeAppend); err != nil {
-			// Print an error if killing processes in the cgroup fails.
 			fmt.Printf("Could not kill processes in cgroup: %s\n", err.Error())
 			cgroupErrorCount += 1
 		}
@@ -311,16 +311,10 @@ func stoppedDirtyToStoppedClean(olPath string) error {
 				cg := filepath.Join(cgRoot, file.Name())
 				fmt.Printf("Attempting to remove %s\n", cg)
 				if err := syscall.Rmdir(cg); err != nil {
-					// Print an error if removing a cgroup fails.
-					fmt.Printf("could not remove cgroup: %s", err.Error())
+					fmt.Printf("could not remove cgroup: %s\n", err.Error())
 					cgroupErrorCount += 1
 				}
 			}
-		}
-		if err := syscall.Rmdir(cgRoot); err != nil {
-			// Print an error if removing the cgroup root directory fails.
-			fmt.Printf("could not remove cgroup root: %s", err.Error())
-			cgroupErrorCount += 1
 		}
 	}
 

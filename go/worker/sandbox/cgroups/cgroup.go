@@ -78,9 +78,9 @@ func (cg *CgroupImpl) Destroy() {
 	}
 }
 
-// GroupPath returns the path to the Cgroup pool for OpenLambda
+// GroupPath returns the path to this cgroup directory.
 func (cg *CgroupImpl) GroupPath() string {
-	return fmt.Sprintf("%s/%s", cg.pool.GroupPath(), cg.name)
+	return fmt.Sprintf("%s/%s", cg.pool.poolPath, cg.name)
 }
 
 func (cg *CgroupImpl) MemoryEvents() map[string]int64 {
@@ -107,7 +107,7 @@ func (cg *CgroupImpl) MemoryEvents() map[string]int64 {
 
 // ResourcePath returns the path to a specific resource in this cgroup
 func (cg *CgroupImpl) ResourcePath(resource string) string {
-	return fmt.Sprintf("%s/%s/%s", cg.pool.GroupPath(), cg.name, resource)
+	return fmt.Sprintf("%s/%s/%s", cg.pool.poolPath, cg.name, resource)
 }
 
 func (cg *CgroupImpl) TryWriteInt(resource string, val int64) error {
