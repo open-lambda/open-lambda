@@ -1,6 +1,10 @@
 // Package sandboxset provides a thread-safe pool of sandboxes for a single
 // Lambda function.
 //
+// A SandboxSet replaces per-instance goroutines with a simple pool.
+// Callers just ask for a sandbox and don't worry about whether it is
+// freshly created or recycled from a previous request.
+//
 // Sandbox lifecycle inside a SandboxSet:
 //
 //	[created]
@@ -32,51 +36,91 @@ import (
 	"github.com/open-lambda/open-lambda/go/worker/sandbox"
 )
 
-// SandboxSet is a thread-safe pool of sandboxes for a single Lambda function.
-// All methods are safe for concurrent use.
+/*
+A SandboxSet manages a pool of sandboxes for one Lambda function.
+All methods are safe to call from multiple goroutines.
+
+The design mirrors the C process API: Get (create), Put (exit),
+Destroy (kill), Close (cleanup). There are no warm-up, shrink, or
+stats methods yet — those can be added in later PRs without
+changing the core interface.
+*/
 type SandboxSet interface {
-	// Get borrows a sandbox, creating one if none are idle.
-	// The returned sandbox is unpaused and ready to handle a request.
-	// Caller MUST call Put or Destroy when done.
+	// Return an unpaused sandbox ready to handle a request.
+	//
+	// If the pool has an idle sandbox, it is unpaused and returned.
+	// If Unpause fails (e.g., the SOCK container died while paused),
+	// that sandbox is destroyed and Get tries the next idle one or
+	// creates a fresh sandbox.
+	//
+	// A fresh scratch directory is created for each new sandbox
+	// via Config.ScratchDirs. Reused sandboxes keep their
+	// existing scratch directory from when they were first created.
 	Get() (sandbox.Sandbox, error)
 
-	// Put returns a sandbox to the pool after successful use.
-	// The sandbox is paused and made available for future Get calls.
-	// If pausing fails, the sandbox is destroyed automatically.
+	// Return a sandbox to the pool after a successful request.
+	//
+	// The sandbox is paused and becomes available for the next Get.
+	// If Pause fails (e.g., the container died during the request),
+	// the sandbox is destroyed automatically — a bad sandbox never
+	// re-enters the pool.
+	//
+	// Passing a sandbox that is not in the pool returns an error
+	// but is otherwise harmless.
 	Put(sb sandbox.Sandbox) error
 
-	// Destroy permanently removes a sandbox from the pool and kills it.
-	// Use when a sandbox is in an unrecoverable state.
+	// Permanently remove a sandbox from the pool and destroy it.
+	//
+	// Use this when a request produced an unrecoverable error and
+	// the sandbox should not be reused. "reason" is a
+	// human-readable explanation that shows up in later error
+	// messages (same convention as sandbox.Sandbox.Destroy).
+	//
+	// If the sandbox is not in the pool it is still destroyed —
+	// resources are always freed. The returned error is
+	// informational only.
 	Destroy(sb sandbox.Sandbox, reason string) error
 
-	// Close destroys all sandboxes in the pool.
-	// After Close returns, Get/Put/Destroy return errors.
+	// Destroy all sandboxes in the pool and mark the set as closed.
+	//
+	// Callers who still hold sandbox references from a previous Get
+	// will find them already dead, which is safe: per the Sandbox
+	// contract, methods on a destroyed sandbox are harmless no-ops
+	// that return errors.
+	//
+	// Calling Close a second time returns an error.
 	Close() error
 }
 
-// Config holds creation parameters for a SandboxSet.
-// Pool, CodeDir, and ScratchDirs are required.
+// Config holds the parameters needed to create a SandboxSet.
 type Config struct {
-	// Pool creates new sandboxes. Required.
+	// Pool creates and destroys the underlying sandboxes.
 	Pool sandbox.SandboxPool
 
-	// Parent is the sandbox to fork from. Nil means create from scratch.
+	// Parent sandbox to fork from (may be nil). When nil, new
+	// sandboxes are created from scratch. Not all SandboxPool
+	// implementations support forking.
 	Parent sandbox.Sandbox
 
-	// IsLeaf marks created sandboxes as non-forkable.
+	// IsLeaf marks sandboxes as non-forkable, meaning they will
+	// not be used as parents for future forks.
 	IsLeaf bool
 
-	// CodeDir is the Lambda function code directory. Required.
+	// CodeDir is the directory containing the Lambda handler code.
 	CodeDir string
 
-	// Meta holds runtime configuration. Nil means pool defaults.
+	// Meta holds runtime configuration (memory limits, packages,
+	// imports, etc.). Nil means the pool fills in defaults.
 	Meta *sandbox.SandboxMeta
 
-	// ScratchDirs creates per-sandbox writable directories. Required.
+	// ScratchDirs creates a unique writable directory for each
+	// new sandbox. The set calls ScratchDirs.Make internally
+	// so that Get can remain argument-free.
 	ScratchDirs *common.DirMaker
 }
 
-// New creates a SandboxSet. Returns an error if cfg is invalid.
+// New creates a SandboxSet from cfg. Returns an error if any of
+// Pool, CodeDir, or ScratchDirs are missing.
 func New(cfg *Config) (SandboxSet, error) {
 	return newSandboxSet(cfg)
 }
