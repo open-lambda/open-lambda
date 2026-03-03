@@ -160,7 +160,9 @@ func (lkc *LambdaKafkaConsumer) processMessage(record *kgo.Record) {
 	defer t.T1()
 
 	// Create synthetic HTTP request from Kafka message
-	req, err := http.NewRequest("POST", "/", bytes.NewReader(record.Value))
+	// Path must be /run/<lambda-name>/ for the Python runtime to parse correctly
+	requestPath := fmt.Sprintf("/run/%s/", lkc.lambdaName)
+	req, err := http.NewRequest("POST", requestPath, bytes.NewReader(record.Value))
 	if err != nil {
 		slog.Error("Failed to create request for lambda invocation",
 			"lambda", lkc.lambdaName,
@@ -168,6 +170,8 @@ func (lkc *LambdaKafkaConsumer) processMessage(record *kgo.Record) {
 			"topic", record.Topic)
 		return
 	}
+	// RequestURI must be set explicitly for synthetic requests (http.NewRequest doesn't set it)
+	req.RequestURI = requestPath
 
 	// Set headers with Kafka metadata (The X- prefix indicates a custom non-standard header)
 	req.Header.Set("Content-Type", "application/json")
