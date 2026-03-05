@@ -37,3 +37,16 @@ func newSandboxSet(cfg *Config) (*sandboxSetImpl, error) {
 	}
 	return &sandboxSetImpl{cfg: cfg}, nil
 }
+
+// makeScratchDir creates a scratch directory for a new sandbox.
+// DirMaker.Make panics on failure (e.g., disk full), so we recover
+// here and return an error instead of crashing the worker.
+func (s *sandboxSetImpl) makeScratchDir() (dir string, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("%v", r)
+		}
+	}()
+	dir = s.cfg.ScratchDirs.Make("sb")
+	return dir, nil
+}
