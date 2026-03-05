@@ -12,6 +12,13 @@ import (
 // If Pause fails, the sandbox is destroyed rather than silently
 // recycled — a bad sandbox should never re-enter the pool.
 func (s *sandboxSetImpl) Put(sb sandbox.Sandbox) error {
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return fmt.Errorf("sandboxset: closed (sandbox %s was destroyed by Close)", sb.ID())
+	}
+	s.mu.Unlock()
+
 	if err := sb.Pause(); err != nil {
 		_ = s.Destroy(sb, fmt.Sprintf("pause failed: %v", err))
 		return fmt.Errorf("sandboxset: sandbox %s destroyed because Pause failed: %w", sb.ID(), err)

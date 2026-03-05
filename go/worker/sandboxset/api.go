@@ -66,7 +66,9 @@ type SandboxSet interface {
 	// re-enters the pool.
 	//
 	// Passing a sandbox that is not in the pool returns an error
-	// but is otherwise harmless.
+	// but is otherwise harmless. If the set has been closed, Put
+	// returns an error immediately — the sandbox was already
+	// destroyed by Close.
 	Put(sb sandbox.Sandbox) error
 
 	// Permanently remove a sandbox from the pool and destroy it.
