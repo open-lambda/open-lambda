@@ -261,7 +261,9 @@ func TestConsumeLoop_ContinuesThroughErrors(t *testing.T) {
 }
 
 func TestUnregister(t *testing.T) {
-	manager, _ := NewKafkaManager(nil)
+	manager := &KafkaManager{
+		lambdaConsumers: make(map[string]*LambdaKafkaConsumer),
+	}
 
 	mockClient := &MockKafkaClient{}
 	manager.lambdaConsumers["test-lambda-0"] = &LambdaKafkaConsumer{

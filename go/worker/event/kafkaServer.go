@@ -101,14 +101,9 @@ func (km *KafkaManager) newLambdaKafkaConsumer(consumerName string, lambdaName s
 
 // NewKafkaManager creates and configures a new Kafka manager
 func NewKafkaManager(lambdaManager *lambda.LambdaMgr) (*KafkaManager, error) {
-	var invoker LambdaInvoker
-	if lambdaManager != nil {
-		invoker = &lambdaMgrInvoker{mgr: lambdaManager}
-	}
-
 	manager := &KafkaManager{
 		lambdaConsumers: make(map[string]*LambdaKafkaConsumer),
-		invoker:         invoker,
+		invoker:         &lambdaMgrInvoker{mgr: lambdaManager},
 	}
 
 	slog.Info("Kafka manager initialized")
