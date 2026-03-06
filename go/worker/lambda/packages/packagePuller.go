@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/open-lambda/open-lambda/go/common"
 	"github.com/open-lambda/open-lambda/go/worker/embedded"
@@ -36,6 +37,11 @@ type Package struct {
 	Meta         PackageMeta
 	installMutex sync.Mutex
 	installed    uint32
+
+	// adding stats to track package usage for eviction purposes
+	InstallTime  time.Time
+	size         int64
+	LastAccessed time.Time
 }
 
 // the pip-install admin lambda returns this
@@ -131,6 +137,10 @@ func (pp *PackagePuller) GetPkg(pkg string) (*Package, error) {
 		return p, nil
 	}
 
+	// add functionality to evict packages here if we have not enough disk space for new package
+	// check disk space and evict packages until we have enough space for new package
+	// build a new function for eviction logic that we call here or add eviction logic in this function?
+
 	// slow path
 	p.installMutex.Lock()
 	defer p.installMutex.Unlock()
@@ -138,7 +148,7 @@ func (pp *PackagePuller) GetPkg(pkg string) (*Package, error) {
 		if err := pp.sandboxInstall(p); err != nil {
 			return p, err
 		}
-
+		// add stats to track package usage for eviction purposes here
 		atomic.StoreUint32(&p.installed, 1)
 		pp.depTracer.TracePackage(p)
 		return p, nil
@@ -223,3 +233,9 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 
 	return nil
 }
+
+// add eviction logic here?
+// implement based on oldest for now
+// 1. get oldest package, get lock, evict, repeat until we have enough space for new package
+// 2. remove from depTracer and packagePuller map
+// 3. remove package with os.RemoveAll()
