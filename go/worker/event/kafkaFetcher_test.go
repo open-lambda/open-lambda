@@ -8,7 +8,7 @@ import (
 
 func newTestFetcher(maxConcurrent int) *KafkaFetcher {
 	cache := NewMessageCache(1024 * 1024)
-	return NewKafkaFetcher(cache, maxConcurrent)
+	return NewKafkaFetcher(cache, maxConcurrent, 5)
 }
 
 func TestNewKafkaFetcher_DefaultConcurrency(t *testing.T) {
@@ -27,7 +27,7 @@ func TestNewKafkaFetcher_CustomConcurrency(t *testing.T) {
 
 func TestKafkaFetcher_CacheHit(t *testing.T) {
 	cache := NewMessageCache(1024 * 1024)
-	kf := NewKafkaFetcher(cache, 1)
+	kf := NewKafkaFetcher(cache, 1, 5)
 
 	// Pre-populate the cache
 	key := CacheKey{Topic: "t", Partition: 0, Offset: 42}

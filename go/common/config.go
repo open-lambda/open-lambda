@@ -65,6 +65,7 @@ type Config struct {
 	// KAFKA CACHE OPTIONS
 	Kafka_cache_size_mb          int `json:"kafka_cache_size_mb"`          // max message cache size in MB (default: 256)
 	Kafka_max_concurrent_fetches int `json:"kafka_max_concurrent_fetches"` // max simultaneous Kafka consumers (default: 10)
+	Kafka_prefetch_count         int `json:"kafka_prefetch_count"`         // messages to prefetch on cache miss (default: 5)
 
 	Docker          DockerConfig   `json:"docker"`
 	Limits          LimitsConfig   `json:"limits"`
@@ -300,6 +301,7 @@ func getDefaultConfigForPatching(olPath string) (*Config, error) {
 		Import_cache_tree:          zygoteTreePath,
 		Kafka_cache_size_mb:          256,
 		Kafka_max_concurrent_fetches: 10,
+		Kafka_prefetch_count:         5,
 		Docker: DockerConfig{
 			Base_image: "ol-min",
 		},

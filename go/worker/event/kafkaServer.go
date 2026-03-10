@@ -40,20 +40,25 @@ func NewKafkaManager(lambdaManager *lambda.LambdaMgr) (*KafkaManager, error) {
 	if maxConcurrent <= 0 {
 		maxConcurrent = 10
 	}
+	prefetchCount := common.Conf.Kafka_prefetch_count
+	if prefetchCount <= 0 {
+		prefetchCount = 5
+	}
 
 	cache := NewMessageCache(int64(cacheSizeMb) * 1024 * 1024)
 
 	manager := &KafkaManager{
 		triggerConfigs: make(map[string][]common.KafkaTrigger),
 		lambdaManager:  lambdaManager,
-		fetcher:        NewKafkaFetcher(cache, maxConcurrent),
+		fetcher:        NewKafkaFetcher(cache, maxConcurrent, prefetchCount),
 		offsets:        make(map[string]map[string]map[int32]int64),
 		stopChans:      make(map[string]chan struct{}),
 	}
 
 	slog.Info("Kafka manager initialized",
 		"cache_size_mb", cacheSizeMb,
-		"max_concurrent_fetches", maxConcurrent)
+		"max_concurrent_fetches", maxConcurrent,
+		"prefetch_count", prefetchCount)
 	return manager, nil
 }
 
