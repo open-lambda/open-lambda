@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -16,75 +15,19 @@ import (
 	"github.com/open-lambda/open-lambda/go/boss/lambdastore"
 	"github.com/open-lambda/open-lambda/go/common"
 	"github.com/open-lambda/open-lambda/go/worker/lambda"
-	"github.com/twmb/franz-go/pkg/kgo"
 )
 
-type KafkaClient interface {
-	PollFetches(context.Context) kgo.Fetches
-	Close()
-}
-
-// LambdaKafkaConsumer manages Kafka consumption for a specific lambda function.
-// Retained for backwards compatibility with the push-based consumption model.
-type LambdaKafkaConsumer struct {
-	consumerName  string // Unique name for this consumer
-	lambdaName    string // lambda function name
-	kafkaTrigger  *common.KafkaTrigger
-	client        KafkaClient       // kgo.client implements the KafkaClient interface
-	lambdaManager *lambda.LambdaMgr // Reference to lambda manager for direct calls
-	stopChan      chan struct{}      // Shutdown signal for this consumer
-}
-
 // KafkaManager manages Kafka consumption for all lambdas on a worker.
-// It maintains a shared message cache and a KafkaFetcher for the pull-based
-// consumption model, as well as legacy push-based consumers.
+// It maintains a shared message cache and a KafkaFetcher. When triggers are
+// registered for a lambda, a background loop automatically consumes messages
+// and invokes the lambda.
 type KafkaManager struct {
-	lambdaConsumers map[string]*LambdaKafkaConsumer // push-model consumers (legacy)
-	triggerConfigs  map[string][]common.KafkaTrigger // lambdaName → trigger configs for pull model
-	lambdaManager   *lambda.LambdaMgr
-	cache           *MessageCache
-	fetcher         *KafkaFetcher
-	offsets         map[string]map[string]map[int32]int64 // groupId → topic → partition → next offset
-	mu              sync.Mutex
-}
-
-
-// newLambdaKafkaConsumer creates a new Kafka consumer for push-based consumption.
-func (km *KafkaManager) newLambdaKafkaConsumer(consumerName string, lambdaName string, trigger *common.KafkaTrigger) (*LambdaKafkaConsumer, error) {
-	if len(trigger.BootstrapServers) == 0 {
-		return nil, fmt.Errorf("no bootstrap servers configured for lambda %s", lambdaName)
-	}
-	if len(trigger.Topics) == 0 {
-		return nil, fmt.Errorf("no topics configured for lambda %s", lambdaName)
-	}
-
-	opts := []kgo.Opt{
-		kgo.SeedBrokers(trigger.BootstrapServers...),
-		kgo.ConsumerGroup(trigger.GroupId),
-		kgo.ConsumeTopics(trigger.Topics...),
-		kgo.SessionTimeout(10 * time.Second),
-		kgo.HeartbeatInterval(3 * time.Second),
-	}
-
-	if trigger.AutoOffsetReset == "earliest" {
-		opts = append(opts, kgo.ConsumeResetOffset(kgo.NewOffset().AtStart()))
-	} else {
-		opts = append(opts, kgo.ConsumeResetOffset(kgo.NewOffset().AtEnd()))
-	}
-
-	client, err := kgo.NewClient(opts...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Kafka client for lambda %s: %w", lambdaName, err)
-	}
-
-	return &LambdaKafkaConsumer{
-		consumerName:  consumerName,
-		lambdaName:    lambdaName,
-		kafkaTrigger:  trigger,
-		client:        client,
-		lambdaManager: km.lambdaManager,
-		stopChan:      make(chan struct{}),
-	}, nil
+	triggerConfigs map[string][]common.KafkaTrigger      // lambdaName → trigger configs
+	lambdaManager  *lambda.LambdaMgr
+	fetcher        *KafkaFetcher
+	offsets        map[string]map[string]map[int32]int64 // groupId → topic → partition → next offset
+	stopChans      map[string]chan struct{}               // lambdaName → stop signal for consumption loop
+	mu             sync.Mutex
 }
 
 // NewKafkaManager creates a KafkaManager with a shared message cache and fetcher.
@@ -98,13 +41,14 @@ func NewKafkaManager(lambdaManager *lambda.LambdaMgr) (*KafkaManager, error) {
 		maxConcurrent = 10
 	}
 
+	cache := NewMessageCache(int64(cacheSizeMb) * 1024 * 1024)
+
 	manager := &KafkaManager{
-		lambdaConsumers: make(map[string]*LambdaKafkaConsumer),
-		triggerConfigs:  make(map[string][]common.KafkaTrigger),
-		lambdaManager:   lambdaManager,
-		cache:           NewMessageCache(int64(cacheSizeMb) * 1024 * 1024),
-		fetcher:         NewKafkaFetcher(maxConcurrent),
-		offsets:         make(map[string]map[string]map[int32]int64),
+		triggerConfigs: make(map[string][]common.KafkaTrigger),
+		lambdaManager:  lambdaManager,
+		fetcher:        NewKafkaFetcher(cache, maxConcurrent),
+		offsets:        make(map[string]map[string]map[int32]int64),
+		stopChans:      make(map[string]chan struct{}),
 	}
 
 	slog.Info("Kafka manager initialized",
@@ -113,104 +57,9 @@ func NewKafkaManager(lambdaManager *lambda.LambdaMgr) (*KafkaManager, error) {
 	return manager, nil
 }
 
-// StartConsuming starts the push-based consuming loop (legacy path).
-func (lkc *LambdaKafkaConsumer) StartConsuming() {
-	slog.Info("Starting Kafka consumer for lambda",
-		"consumer", lkc.consumerName,
-		"lambda", lkc.lambdaName,
-		"topics", lkc.kafkaTrigger.Topics,
-		"brokers", lkc.kafkaTrigger.BootstrapServers,
-		"group_id", lkc.kafkaTrigger.GroupId)
-
-	go lkc.consumeLoop()
-}
-
-// consumeLoop handles push-based Kafka message consumption (legacy path).
-func (lkc *LambdaKafkaConsumer) consumeLoop() {
-	for {
-		select {
-		case <-lkc.stopChan:
-			slog.Info("Stopping Kafka consumer for lambda", "lambda", lkc.lambdaName)
-			return
-		default:
-			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-			fetches := lkc.client.PollFetches(ctx)
-			cancel()
-
-			if errs := fetches.Errors(); len(errs) > 0 {
-				for _, err := range errs {
-					if errors.Is(err.Err, context.DeadlineExceeded) {
-						continue
-					}
-					slog.Warn("Kafka fetch error",
-						"lambda", lkc.lambdaName,
-						"error", err)
-				}
-				continue
-			}
-
-			fetches.EachRecord(func(record *kgo.Record) {
-				slog.Info("Received Kafka message for lambda",
-					"consumer", lkc.consumerName,
-					"lambda", lkc.lambdaName,
-					"topic", record.Topic,
-					"partition", record.Partition,
-					"offset", record.Offset,
-					"size", len(record.Value))
-				lkc.processMessage(record)
-			})
-		}
-	}
-}
-
-// processMessage handles a single Kafka message by invoking the lambda (legacy push path).
-func (lkc *LambdaKafkaConsumer) processMessage(record *kgo.Record) {
-	t := common.T0("kafka-message-processing")
-	defer t.T1()
-
-	requestPath := fmt.Sprintf("/run/%s/", lkc.lambdaName)
-	req, err := http.NewRequest("POST", requestPath, bytes.NewReader(record.Value))
-	if err != nil {
-		slog.Error("Failed to create request for lambda invocation",
-			"lambda", lkc.lambdaName,
-			"error", err,
-			"topic", record.Topic)
-		return
-	}
-	req.RequestURI = requestPath
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Kafka-Topic", record.Topic)
-	req.Header.Set("X-Kafka-Partition", fmt.Sprintf("%d", record.Partition))
-	req.Header.Set("X-Kafka-Offset", fmt.Sprintf("%d", record.Offset))
-	req.Header.Set("X-Kafka-Group-Id", lkc.kafkaTrigger.GroupId)
-
-	w := httptest.NewRecorder()
-
-	lambdaFunc := lkc.lambdaManager.Get(lkc.lambdaName)
-	lambdaFunc.Invoke(w, req)
-
-	slog.Info("Kafka message processed via direct invocation",
-		"consumer", lkc.consumerName,
-		"lambda", lkc.lambdaName,
-		"topic", record.Topic,
-		"partition", record.Partition,
-		"offset", record.Offset,
-		"status", w.Code)
-}
-
-func (lkc *LambdaKafkaConsumer) cleanup() {
-	slog.Info("Shutting down Kafka consumer for lambda", "lambda", lkc.lambdaName)
-	close(lkc.stopChan)
-	if lkc.client != nil {
-		lkc.client.Close()
-	}
-	slog.Info("Kafka consumer shutdown complete for lambda", "lambda", lkc.lambdaName)
-}
-
-// RegisterLambdaKafkaTriggers stores Kafka trigger configs for a lambda.
-// In the pull model, no always-on consumers are started. The configs are used
-// when ConsumeFromCache is called to know which brokers/topics to read from.
+// RegisterLambdaKafkaTriggers stores Kafka trigger configs for a lambda and
+// starts a background consumption loop that automatically fetches messages
+// and invokes the lambda.
 func (km *KafkaManager) RegisterLambdaKafkaTriggers(lambdaName string, triggers []common.KafkaTrigger) error {
 	km.mu.Lock()
 	defer km.mu.Unlock()
@@ -219,13 +68,10 @@ func (km *KafkaManager) RegisterLambdaKafkaTriggers(lambdaName string, triggers 
 		return nil
 	}
 
-	// Clean up any existing push-model consumers for this lambda
-	for consumerName, consumer := range km.lambdaConsumers {
-		if strings.HasPrefix(consumerName, lambdaName+"-") {
-			consumer.cleanup()
-			delete(km.lambdaConsumers, consumerName)
-			slog.Info("Cleaned up existing Kafka consumer for lambda", "lambda", lambdaName, "consumer", consumerName)
-		}
+	// Stop any existing consumption loop for this lambda
+	if stopChan, ok := km.stopChans[lambdaName]; ok {
+		close(stopChan)
+		delete(km.stopChans, lambdaName)
 	}
 
 	// Store trigger configs with auto-generated group IDs
@@ -236,7 +82,12 @@ func (km *KafkaManager) RegisterLambdaKafkaTriggers(lambdaName string, triggers 
 	}
 	km.triggerConfigs[lambdaName] = stored
 
-	slog.Info("Registered Kafka trigger configs for lambda",
+	// Start background consumption loop
+	stopChan := make(chan struct{})
+	km.stopChans[lambdaName] = stopChan
+	go km.consumeLoop(lambdaName, stopChan)
+
+	slog.Info("Started Kafka consumption for lambda",
 		"lambda", lambdaName,
 		"trigger_count", len(triggers))
 
@@ -267,28 +118,54 @@ func (km *KafkaManager) setOffset(groupId, topic string, partition int32, offset
 	km.offsets[groupId][topic][partition] = offset
 }
 
-// ConsumeFromCache reads the next message from the shared cache for a lambda's
-// registered Kafka triggers. On cache miss, it fetches a single message from
-// Kafka, caches it, then invokes the lambda with the message body.
-//
-// Returns true if a message was consumed, or false if none were available.
-func (km *KafkaManager) ConsumeFromCache(lambdaName string, w http.ResponseWriter) (bool, error) {
-	t := common.T0("kafka-consume-from-cache")
+// consumeLoop continuously consumes messages for a lambda until stopped.
+// On each iteration it tries the cache, falls back to Kafka on miss,
+// and invokes the lambda. Backs off when no messages are available.
+func (km *KafkaManager) consumeLoop(lambdaName string, stopChan chan struct{}) {
+	for {
+		select {
+		case <-stopChan:
+			slog.Info("Stopping consumption loop", "lambda", lambdaName)
+			return
+		default:
+		}
+
+		consumed, err := km.consumeNext(lambdaName)
+		if err != nil {
+			slog.Error("Consumption error", "lambda", lambdaName, "error", err)
+			select {
+			case <-stopChan:
+				return
+			case <-time.After(100 * time.Millisecond):
+			}
+			continue
+		}
+
+		if !consumed {
+			select {
+			case <-stopChan:
+				return
+			case <-time.After(100 * time.Millisecond):
+			}
+		}
+	}
+}
+
+// consumeNext tries to consume a single message for the lambda. It checks the
+// cache first, fetches from Kafka on miss, caches the result, and invokes the
+// lambda. Returns true if a message was consumed.
+func (km *KafkaManager) consumeNext(lambdaName string) (bool, error) {
+	t := common.T0("kafka-consume-next")
 	defer t.T1()
 
 	km.mu.Lock()
-	triggers, ok := km.triggerConfigs[lambdaName]
+	triggers := km.triggerConfigs[lambdaName]
 	km.mu.Unlock()
-
-	if !ok || len(triggers) == 0 {
-		return false, fmt.Errorf("no Kafka triggers registered for lambda %s", lambdaName)
-	}
 
 	for _, trigger := range triggers {
 		groupId := trigger.GroupId
 
 		for _, topic := range trigger.Topics {
-			// For pull model, we consume partition 0 by default.
 			// TODO: support multi-partition consumption by discovering partition count.
 			partition := int32(0)
 
@@ -296,57 +173,21 @@ func (km *KafkaManager) ConsumeFromCache(lambdaName string, w http.ResponseWrite
 			offset := km.getOffset(groupId, topic, partition)
 			km.mu.Unlock()
 
-			key := CacheKey{Topic: topic, Partition: partition, Offset: offset}
-
-			// Try cache first
-			msg, hit := km.cache.Get(key)
-
-			if !hit {
-				// Cache miss — fetch from Kafka
-				slog.Info("Cache miss, fetching from Kafka",
+			fetchCtx, fetchCancel := context.WithTimeout(context.Background(), 15*time.Second)
+			msg, err := km.fetcher.Get(fetchCtx, trigger.BootstrapServers, topic, partition, offset)
+			fetchCancel()
+			if err != nil {
+				slog.Error("Failed to get message",
 					"lambda", lambdaName,
 					"topic", topic,
-					"partition", partition,
-					"offset", offset)
-
-				fetchCtx, fetchCancel := context.WithTimeout(context.Background(), 15*time.Second)
-				records, err := km.fetcher.Fetch(
-					fetchCtx, trigger.BootstrapServers, topic, partition, offset, 1,
-				)
-				fetchCancel()
-				if err != nil {
-					slog.Error("Failed to fetch from Kafka",
-						"lambda", lambdaName,
-						"topic", topic,
-						"error", err)
-					continue
-				}
-
-				if len(records) == 0 {
-					continue
-				}
-
-				// Cache the fetched record
-				r := records[0]
-				headers := make(map[string]string)
-				for _, h := range r.Headers {
-					headers[h.Key] = string(h.Value)
-				}
-				msg = &CachedMessage{
-					Key:       r.Key,
-					Value:     r.Value,
-					Headers:   headers,
-					Timestamp: r.Timestamp,
-					size:      int64(len(r.Key) + len(r.Value) + 64),
-				}
-				km.cache.Put(CacheKey{
-					Topic:     r.Topic,
-					Partition: r.Partition,
-					Offset:    r.Offset,
-				}, msg)
+					"error", err)
+				continue
+			}
+			if msg == nil {
+				continue
 			}
 
-			// Invoke the lambda with the message value as the request body
+			// Invoke the lambda
 			requestPath := fmt.Sprintf("/run/%s/", lambdaName)
 			req, err := http.NewRequest("POST", requestPath, bytes.NewReader(msg.Value))
 			if err != nil {
@@ -360,10 +201,10 @@ func (km *KafkaManager) ConsumeFromCache(lambdaName string, w http.ResponseWrite
 			req.Header.Set("X-Kafka-Offset", fmt.Sprintf("%d", offset))
 			req.Header.Set("X-Kafka-Group-Id", groupId)
 
+			w := httptest.NewRecorder()
 			lambdaFunc := km.lambdaManager.Get(lambdaName)
 			lambdaFunc.Invoke(w, req)
 
-			// Advance offset
 			km.mu.Lock()
 			km.setOffset(groupId, topic, partition, offset+1)
 			km.mu.Unlock()
@@ -372,7 +213,8 @@ func (km *KafkaManager) ConsumeFromCache(lambdaName string, w http.ResponseWrite
 				"lambda", lambdaName,
 				"topic", topic,
 				"partition", partition,
-				"offset", offset)
+				"offset", offset,
+				"status", w.Code)
 
 			return true, nil
 		}
@@ -381,38 +223,33 @@ func (km *KafkaManager) ConsumeFromCache(lambdaName string, w http.ResponseWrite
 	return false, nil
 }
 
-// UnregisterLambdaKafkaTriggers removes Kafka triggers for a lambda function.
+// UnregisterLambdaKafkaTriggers stops consumption and removes Kafka triggers for a lambda.
 func (km *KafkaManager) UnregisterLambdaKafkaTriggers(lambdaName string) {
 	km.mu.Lock()
 	defer km.mu.Unlock()
 
-	// Clean up push-model consumers
-	for consumerName, consumer := range km.lambdaConsumers {
-		if strings.HasPrefix(consumerName, lambdaName+"-") {
-			consumer.cleanup()
-			delete(km.lambdaConsumers, consumerName)
-			slog.Info("Unregistered Kafka consumer for lambda", "lambda", lambdaName)
-		}
+	if stopChan, ok := km.stopChans[lambdaName]; ok {
+		close(stopChan)
+		delete(km.stopChans, lambdaName)
 	}
 
-	// Remove trigger configs
 	delete(km.triggerConfigs, lambdaName)
 
 	slog.Info("Unregistered Kafka triggers for lambda", "lambda", lambdaName)
 }
 
-// cleanup shuts down all consumers, the consumer pool, and clears the cache.
+// cleanup shuts down all consumption loops.
 func (km *KafkaManager) cleanup() {
 	slog.Info("Shutting down Kafka manager")
 
 	km.mu.Lock()
 	defer km.mu.Unlock()
 
-	for lambdaName, consumer := range km.lambdaConsumers {
-		consumer.cleanup()
-		slog.Info("Cleaned up Kafka consumer for lambda", "lambda", lambdaName)
+	for lambdaName, stopChan := range km.stopChans {
+		close(stopChan)
+		slog.Info("Stopped consumption loop", "lambda", lambdaName)
 	}
-	km.lambdaConsumers = make(map[string]*LambdaKafkaConsumer)
+	km.stopChans = make(map[string]chan struct{})
 	km.triggerConfigs = make(map[string][]common.KafkaTrigger)
 
 	slog.Info("Kafka manager shutdown complete")
@@ -484,49 +321,5 @@ func HandleKafkaRegister(kafkaManager *KafkaManager, lambdaStore *lambdastore.La
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
-	}
-}
-
-// HandleKafkaConsume handles pull-based Kafka consumption for a lambda.
-// POST /kafka/consume/<lambda> reads the next message from the cache (fetching
-// on miss) and invokes the lambda with the message body.
-func HandleKafkaConsume(kafkaManager *KafkaManager) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		lambdaName := strings.TrimPrefix(r.URL.Path, "/kafka/consume/")
-		if lambdaName == "" {
-			http.Error(w, "lambda name required", http.StatusBadRequest)
-			return
-		}
-
-		recorder := httptest.NewRecorder()
-
-		consumed, err := kafkaManager.ConsumeFromCache(lambdaName, recorder)
-		if err != nil {
-			slog.Error("Failed to consume from cache",
-				"lambda", lambdaName,
-				"error", err)
-			http.Error(w, fmt.Sprintf("consume error: %v", err), http.StatusInternalServerError)
-			return
-		}
-
-		type Response struct {
-			Status       string `json:"status"`
-			Lambda       string `json:"lambda"`
-			Consumed     bool   `json:"consumed"`
-			LambdaStatus int    `json:"lambda_status"`
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(Response{
-			Status:       "success",
-			Lambda:       lambdaName,
-			Consumed:     consumed,
-			LambdaStatus: recorder.Code,
-		})
 	}
 }
