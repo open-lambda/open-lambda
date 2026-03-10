@@ -194,12 +194,10 @@ func (linst *LambdaInstance) Task() {
 			}
 			f.doneChan <- req
 
-			// If reuse is disabled, destroy the sandbox after invocation and stop processing more requests.
+			// If reuse is disabled, destroy the sandbox after invocation.
 			if !reuse && sb != nil {
 				sb.Destroy("reuse-sandbox disabled: destroying sandbox after invocation")
 				sb = nil
-				req = nil
-				break
 			}
 
 			// check whether we should shutdown (non-blocking)
@@ -239,9 +237,12 @@ func (linst *LambdaInstance) Task() {
 			}
 		}
 
-		if reuse && sb != nil {
+		if sb != nil {
+			if !reuse {
+				panic("sb should be nil when reuse is disabled")
+			}
 			if err := sb.Pause(); err != nil {
-				f.printf("discard sandbox %s due to Pause error: %v", sb.ID(), err)
+				f.printf("Discard sandbox %s due to Pause error: %v", sb.ID(), err)
 				sb = nil
 			}
 		}
