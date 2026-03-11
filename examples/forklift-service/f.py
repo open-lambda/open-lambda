@@ -3,10 +3,11 @@ This Lambda function implements the Forklift algorithm to generate zygote trees 
 https://pages.cs.wisc.edu/~yuanzhuo/assets/pdf/forklift.pdf
 '''
 
-import json
 import heapq
-import sys
 from collections import defaultdict
+from flask import Flask, request, jsonify
+
+app = Flask(__name__)
 
 class ZygoteTree: 
     def __init__(self, workload_data, deps_data):
@@ -229,7 +230,8 @@ class Candidate:
         self.utility = utility
 
 
-def f(event):
+@app.route("/", methods=["POST"])
+def f():
     '''
     Expected input format:
 
@@ -263,46 +265,27 @@ def f(event):
     '''
 
     try:
-        # get data from input event
-        workload_data = event.get("workload")
-        deps_data = event.get("deps") 
-        num_nodes = event.get("num_nodes")
-        
-        tree = ZygoteTree(workload_data, deps_data)
+        event = request.get_json()
+        if event is None:
+            return jsonify({"error": "Request body must be valid JSON"}), 400
 
+        workload_data = event.get("workload")
+        deps_data = event.get("deps")
+        num_nodes = event.get("num_nodes")
+
+        if workload_data is None or deps_data is None or num_nodes is None:
+            return jsonify({"error": "Missing required fields: workload, deps, num_nodes"}), 400
+
+        tree = ZygoteTree(workload_data, deps_data)
         tree.build_tree(num_nodes)
-        
-        # get tree structure as dict for output
+
         result = tree.to_dict()
-        
-        return {
-            "status": "success",
-            "result": result
-        }
-        
+
+        return jsonify(result), 200
+
     except Exception as e:
         import traceback
-        return {
-            "status": "error",
+        return jsonify({
             "error": str(e),
             "traceback": traceback.format_exc()
-        }
-
-
-# Testing code
-if __name__ == "__main__":
-    # get workload file from args
-    workload_file = sys.argv[1]
-    with open(workload_file, 'r') as file:
-        workload_data = json.load(file)
-
-    # get dependecies file from args
-    deps_file = sys.argv[2]
-    with open(deps_file, 'r') as file:
-        deps_data = json.load(file)
-
-    # get number of desired nodes
-    num_nodes = int(sys.argv[3]) if len(sys.argv) > 3 else 40 # paper suggests that ~40-80 nodes seems to be optimal
-    
-    result = f({"workload": workload_data, "deps": deps_data, "num_nodes": num_nodes}) 
-    print(json.dumps(result, indent=2))
+        }), 500
