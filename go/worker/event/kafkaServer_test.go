@@ -8,11 +8,11 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/open-lambda/open-lambda/go/common"
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -26,43 +26,98 @@ func TestMain(m *testing.M) {
 
 // --- Mocks ---
 
-// MockKafkaClient implements KafkaClient for testing
+// MockKafkaClient implements KafkaClient for testing.
+//
+// Instead of exposing pollFetchesFunc directly, tests enqueue responses via
+// Send and SendError. The mock serves them in FIFO order and returns empty
+// fetches once the queue is drained. This keeps polling/sequencing logic out
+// of individual tests.
+//
+// The Drained channel (when set) is closed the first time PollFetches is called
+// after the queue is empty. Because the consume loop calls PollFetches only
+// after finishing the previous iteration's processing, a receive on Drained
+// guarantees all enqueued records have been fully processed.
 type MockKafkaClient struct {
-	pollFetchesFunc func(context.Context) kgo.Fetches
-	closeCalled     bool
+	mu              sync.Mutex
+	queue           []kgo.Fetches
+	callCount       int
+	closeCalled     atomic.Bool
+	Drained         chan struct{} // closed when all queued fetches have been consumed and processed
+	drainedSignaled bool
 }
 
+// Send enqueues records that will be returned by the next PollFetches call.
+func (m *MockKafkaClient) Send(records ...*kgo.Record) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.queue = append(m.queue, makeFetches(records...))
+}
+
+// SendError enqueues a fetch error that will be returned by the next PollFetches call.
+func (m *MockKafkaClient) SendError(topic string, partition int32, err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.queue = append(m.queue, makeErrorFetches(topic, partition, err))
+}
+
+// PollFetches returns the next queued fetch, or empty fetches if the queue is
+// drained. When the queue is empty and Drained is set, it closes Drained to
+// signal that all prior records have been processed.
 func (m *MockKafkaClient) PollFetches(ctx context.Context) kgo.Fetches {
-	if m.pollFetchesFunc != nil {
-		return m.pollFetchesFunc(ctx)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.callCount < len(m.queue) {
+		f := m.queue[m.callCount]
+		m.callCount++
+		return f
+	}
+	if !m.drainedSignaled && m.Drained != nil {
+		close(m.Drained)
+		m.drainedSignaled = true
 	}
 	return kgo.Fetches{}
 }
 
 func (m *MockKafkaClient) Close() {
-	m.closeCalled = true
+	m.closeCalled.Store(true)
 }
 
-// MockLambdaInvoker implements LambdaInvoker for testing
+// MockLambdaInvoker implements LambdaInvoker for testing.
 type MockLambdaInvoker struct {
 	mu          sync.Mutex
 	invocations []invokeRecord
 }
 
+// invokeRecord captures the relevant fields from a lambda invocation in simple,
+// comparable types. Tests can build an expected invokeRecord and compare it
+// directly with reflect.DeepEqual instead of asserting each field individually.
 type invokeRecord struct {
 	LambdaName string
-	Request    *http.Request
-	Body       []byte
+	Method     string
+	Path       string
+	RequestURI string
+	Body       string
+	Headers    map[string]string
 }
 
 func (m *MockLambdaInvoker) Invoke(lambdaName string, w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(r.Body)
+
+	// Flatten headers into a simple map for easy comparison in assertions
+	headers := map[string]string{}
+	for key := range r.Header {
+		headers[key] = r.Header.Get(key)
+	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.invocations = append(m.invocations, invokeRecord{
 		LambdaName: lambdaName,
-		Request:    r,
-		Body:       body,
+		Method:     r.Method,
+		Path:       r.URL.Path,
+		RequestURI: r.RequestURI,
+		Body:       string(body),
+		Headers:    headers,
 	})
 	w.WriteHeader(http.StatusOK)
 }
@@ -75,8 +130,18 @@ func (m *MockLambdaInvoker) getInvocations() []invokeRecord {
 	return cp
 }
 
-// --- Helper to build kgo.Fetches with records ---
+// --- Helpers ---
 
+// makeFetches converts flat kgo.Records into the nested kgo.Fetches structure.
+//
+// franz-go's PollFetches returns a deeply nested type that mirrors how Kafka
+// brokers organize data:
+//
+//	Fetches -> []Fetch -> []FetchTopic -> []FetchPartition -> []*Record
+//
+// Records are grouped by topic and then by partition. This helper handles that
+// grouping automatically so tests can think in terms of simple records rather
+// than the broker-level wire format.
 func makeFetches(records ...*kgo.Record) kgo.Fetches {
 	if len(records) == 0 {
 		return kgo.Fetches{}
@@ -122,132 +187,116 @@ func makeErrorFetches(topic string, partition int32, err error) kgo.Fetches {
 	}}
 }
 
-// --- Tests ---
-
-func TestConsumeLoop_ProcessesRecords(t *testing.T) {
-	invoker := &MockLambdaInvoker{}
-
-	record := &kgo.Record{
-		Topic:     "orders",
-		Partition: 3,
-		Offset:    99,
-		Value:     []byte(`{"orderId": 42}`),
-	}
-
-	var callCount atomic.Int32
-	mockClient := &MockKafkaClient{
-		pollFetchesFunc: func(ctx context.Context) kgo.Fetches {
-			if callCount.Add(1) == 1 {
-				return makeFetches(record)
-			}
-			return kgo.Fetches{}
-		},
-	}
-
-	consumer := &LambdaKafkaConsumer{
-		consumerName: "my-lambda-0",
-		lambdaName:   "my-lambda",
-		kafkaTrigger: &common.KafkaTrigger{GroupId: "lambda-my-lambda"},
-		client:       mockClient,
+// newTestConsumer creates a LambdaKafkaConsumer with sensible defaults for testing.
+// The consumerName, kafkaTrigger GroupId, and other fields are derived from lambdaName.
+func newTestConsumer(lambdaName string, client KafkaClient, invoker LambdaInvoker) *LambdaKafkaConsumer {
+	return &LambdaKafkaConsumer{
+		consumerName: lambdaName + "-0",
+		lambdaName:   lambdaName,
+		kafkaTrigger: &common.KafkaTrigger{GroupId: "lambda-" + lambdaName},
+		client:       client,
 		invoker:      invoker,
 		stopChan:     make(chan struct{}),
-	}
-
-	go consumer.consumeLoop()
-	time.Sleep(100 * time.Millisecond)
-	close(consumer.stopChan)
-	time.Sleep(50 * time.Millisecond)
-
-	invocations := invoker.getInvocations()
-	if len(invocations) != 1 {
-		t.Fatalf("Expected 1 invocation, got %d", len(invocations))
-	}
-
-	inv := invocations[0]
-	if inv.LambdaName != "my-lambda" {
-		t.Errorf("Expected lambda name 'my-lambda', got %q", inv.LambdaName)
-	}
-	if string(inv.Body) != `{"orderId": 42}` {
-		t.Errorf("Expected body '{\"orderId\": 42}', got %q", string(inv.Body))
-	}
-	if inv.Request.Method != "POST" {
-		t.Errorf("Expected POST method, got %s", inv.Request.Method)
-	}
-	if inv.Request.URL.Path != "/run/my-lambda/" {
-		t.Errorf("Expected path '/run/my-lambda/', got %q", inv.Request.URL.Path)
-	}
-	if inv.Request.RequestURI != "/run/my-lambda/" {
-		t.Errorf("Expected RequestURI '/run/my-lambda/', got %q", inv.Request.RequestURI)
-	}
-	headers := map[string]string{
-		"Content-Type":      "application/json",
-		"X-Kafka-Topic":     "orders",
-		"X-Kafka-Partition": "3",
-		"X-Kafka-Offset":    "99",
-		"X-Kafka-Group-Id":  "lambda-my-lambda",
-	}
-	for header, expected := range headers {
-		if got := inv.Request.Header.Get(header); got != expected {
-			t.Errorf("Header %s: expected %q, got %q", header, expected, got)
-		}
 	}
 }
 
-func TestConsumeLoop_ContinuesThroughErrors(t *testing.T) {
-	// Capture logs so we can verify what gets logged
-	var logBuf bytes.Buffer
-	old := slog.Default()
-	slog.SetDefault(slog.New(slog.NewTextHandler(&logBuf, nil)))
-	defer slog.SetDefault(old)
-
-	invoker := &MockLambdaInvoker{}
-
-	// Poll sequence: deadline-exceeded errors, then a real error, then a valid record.
-	// The loop should survive both error types and still process the record.
-	var callCount atomic.Int32
-	mockClient := &MockKafkaClient{
-		pollFetchesFunc: func(ctx context.Context) kgo.Fetches {
-			n := callCount.Add(1)
-			switch {
-			case n <= 2:
-				return makeErrorFetches("topic", 0, context.DeadlineExceeded)
-			case n == 3:
-				return makeErrorFetches("topic", 0, fmt.Errorf("broker unreachable"))
-			case n == 4:
-				return makeFetches(&kgo.Record{
-					Topic: "topic", Partition: 0, Offset: 1, Value: []byte("survived"),
-				})
-			default:
-				return kgo.Fetches{}
-			}
-		},
-	}
-
-	consumer := &LambdaKafkaConsumer{
-		consumerName: "test-consumer",
-		lambdaName:   "test-lambda",
-		kafkaTrigger: &common.KafkaTrigger{GroupId: "test-group"},
-		client:       mockClient,
-		invoker:      invoker,
-		stopChan:     make(chan struct{}),
-	}
-
+// runConsumeLoop starts the consume loop in a goroutine and returns a stop
+// function that signals shutdown and waits for the goroutine to exit.
+func runConsumeLoop(consumer *LambdaKafkaConsumer) (stop func()) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		consumer.consumeLoop()
 	}()
-	time.Sleep(100 * time.Millisecond)
-	close(consumer.stopChan)
-	wg.Wait()
+	return func() {
+		close(consumer.stopChan)
+		wg.Wait()
+	}
+}
+
+// --- Tests ---
+
+func TestConsumeLoop_ProcessesRecords(t *testing.T) {
+	invoker := &MockLambdaInvoker{}
+	mockClient := &MockKafkaClient{Drained: make(chan struct{})}
+	mockClient.Send(&kgo.Record{
+		Topic: "orders", Partition: 3, Offset: 99,
+		Value: []byte(`{"orderId": 42}`),
+	})
+
+	consumer := newTestConsumer("my-lambda", mockClient, invoker)
+	stop := runConsumeLoop(consumer)
+	<-mockClient.Drained
+	stop()
+
+	invocations := invoker.getInvocations()
+	if len(invocations) != 1 {
+		t.Fatalf("Expected 1 invocation, got %d", len(invocations))
+	}
+
+	expected := invokeRecord{
+		LambdaName: "my-lambda",
+		Method:     "POST",
+		Path:       "/run/my-lambda/",
+		RequestURI: "/run/my-lambda/",
+		Body:       `{"orderId": 42}`,
+		Headers: map[string]string{
+			"Content-Type":      "application/json",
+			"X-Kafka-Topic":     "orders",
+			"X-Kafka-Partition": "3",
+			"X-Kafka-Offset":    "99",
+			"X-Kafka-Group-Id":  "lambda-my-lambda",
+		},
+	}
+	if !reflect.DeepEqual(invocations[0], expected) {
+		t.Errorf("Invocation mismatch:\n  got:  %+v\n  want: %+v", invocations[0], expected)
+	}
+}
+
+func TestConsumeLoop_ContinuesThroughErrors(t *testing.T) {
+	var logBuf bytes.Buffer
+	old := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logBuf, nil)))
+	defer slog.SetDefault(old)
+
+	invoker := &MockLambdaInvoker{}
+	mockClient := &MockKafkaClient{Drained: make(chan struct{})}
+	// Poll sequence: deadline-exceeded errors (silently skipped), then a real
+	// error (logged), then a valid record. The loop should survive all of them.
+	mockClient.SendError("topic", 0, context.DeadlineExceeded)
+	mockClient.SendError("topic", 0, context.DeadlineExceeded)
+	mockClient.SendError("topic", 0, fmt.Errorf("broker unreachable"))
+	mockClient.Send(&kgo.Record{
+		Topic: "topic", Partition: 0, Offset: 1, Value: []byte("survived"),
+	})
+
+	consumer := newTestConsumer("test-lambda", mockClient, invoker)
+	stop := runConsumeLoop(consumer)
+	<-mockClient.Drained
+	stop()
 
 	invocations := invoker.getInvocations()
 	if len(invocations) != 1 {
 		t.Fatalf("Expected 1 invocation after errors, got %d", len(invocations))
 	}
-	if string(invocations[0].Body) != "survived" {
-		t.Errorf("Expected body 'survived', got %q", string(invocations[0].Body))
+
+	expected := invokeRecord{
+		LambdaName: "test-lambda",
+		Method:     "POST",
+		Path:       "/run/test-lambda/",
+		RequestURI: "/run/test-lambda/",
+		Body:       "survived",
+		Headers: map[string]string{
+			"Content-Type":      "application/json",
+			"X-Kafka-Topic":     "topic",
+			"X-Kafka-Partition": "0",
+			"X-Kafka-Offset":    "1",
+			"X-Kafka-Group-Id":  "lambda-test-lambda",
+		},
+	}
+	if !reflect.DeepEqual(invocations[0], expected) {
+		t.Errorf("Invocation mismatch:\n  got:  %+v\n  want: %+v", invocations[0], expected)
 	}
 
 	// Real errors should be logged, but deadline exceeded should be silently skipped
@@ -278,7 +327,7 @@ func TestUnregister(t *testing.T) {
 	if len(manager.lambdaConsumers) != 0 {
 		t.Errorf("Expected 0 consumers, got %d", len(manager.lambdaConsumers))
 	}
-	if !mockClient.closeCalled {
+	if !mockClient.closeCalled.Load() {
 		t.Error("Expected Close to be called on client")
 	}
 }
