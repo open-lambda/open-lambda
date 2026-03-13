@@ -98,15 +98,15 @@ func TestNew_Valid(t *testing.T) {
 	}
 }
 
-// --- Get tests ---
+// --- GetOrCreateUnpaused tests ---
 
 func TestGet_CreatesNew(t *testing.T) {
 	set, pool := newTestSet(t)
-	sb, err := set.Get()
+	ref, err := set.GetOrCreateUnpaused()
 	if err != nil {
-		t.Fatalf("Get: %v", err)
+		t.Fatalf("GetOrCreateUnpaused: %v", err)
 	}
-	if sb == nil {
+	if ref.Sandbox() == nil {
 		t.Fatal("expected non-nil sandbox")
 	}
 	if n := len(pool.CreatedSandboxes()); n != 1 {
@@ -117,44 +117,45 @@ func TestGet_CreatesNew(t *testing.T) {
 func TestGet_ReusesIdle(t *testing.T) {
 	set, _ := newTestSet(t)
 
-	sb1, err := set.Get()
+	ref1, err := set.GetOrCreateUnpaused()
 	if err != nil {
-		t.Fatalf("Get: %v", err)
+		t.Fatalf("GetOrCreateUnpaused: %v", err)
 	}
-	id1 := sb1.ID()
+	id1 := ref1.Sandbox().ID()
 
-	if err := set.Put(sb1); err != nil {
+	if err := ref1.Put(); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
 
-	sb2, err := set.Get()
+	ref2, err := set.GetOrCreateUnpaused()
 	if err != nil {
-		t.Fatalf("Get: %v", err)
+		t.Fatalf("GetOrCreateUnpaused: %v", err)
 	}
-	if sb2.ID() != id1 {
-		t.Fatalf("expected reuse (ID %s), got new (ID %s)", id1, sb2.ID())
+	if ref2.Sandbox().ID() != id1 {
+		t.Fatalf("expected reuse (ID %s), got new (ID %s)", id1, ref2.Sandbox().ID())
 	}
 }
 
 func TestGet_UnpauseFail(t *testing.T) {
 	set, pool := newTestSet(t)
 
-	sb1, err := set.Get()
+	ref1, err := set.GetOrCreateUnpaused()
 	if err != nil {
-		t.Fatalf("Get: %v", err)
+		t.Fatalf("GetOrCreateUnpaused: %v", err)
 	}
+	sb1 := ref1.Sandbox()
 	// Inject unpause error before putting back.
 	sb1.(*sandbox.MockSandbox).UnpauseErr = errors.New("broken")
-	if err := set.Put(sb1); err != nil {
+	if err := ref1.Put(); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
 
-	// Next Get should find the bad sandbox, destroy it, and create a new one.
-	sb2, err := set.Get()
+	// Next GetOrCreateUnpaused should find the bad sandbox, destroy it, and create a new one.
+	ref2, err := set.GetOrCreateUnpaused()
 	if err != nil {
-		t.Fatalf("Get after unpause fail: %v", err)
+		t.Fatalf("GetOrCreateUnpaused after unpause fail: %v", err)
 	}
-	if sb2.ID() == sb1.ID() {
+	if ref2.Sandbox().ID() == sb1.ID() {
 		t.Fatal("expected a different sandbox after unpause failure")
 	}
 	if !sb1.(*sandbox.MockSandbox).IsDestroyed() {
@@ -169,7 +170,7 @@ func TestGet_CreateFail(t *testing.T) {
 	set, pool := newTestSet(t)
 	pool.CreateErr = errors.New("out of resources")
 
-	_, err := set.Get()
+	_, err := set.GetOrCreateUnpaused()
 	if err == nil {
 		t.Fatal("expected error when pool.Create fails")
 	}
@@ -180,7 +181,7 @@ func TestGet_AfterClose(t *testing.T) {
 	if err := set.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
-	_, err := set.Get()
+	_, err := set.GetOrCreateUnpaused()
 	if err == nil {
 		t.Fatal("expected error after Close")
 	}
@@ -190,16 +191,16 @@ func TestGet_AfterClose(t *testing.T) {
 
 func TestPut_PausesAndReturns(t *testing.T) {
 	set, _ := newTestSet(t)
-	sb, err := set.Get()
+	ref, err := set.GetOrCreateUnpaused()
 	if err != nil {
-		t.Fatalf("Get: %v", err)
+		t.Fatalf("GetOrCreateUnpaused: %v", err)
 	}
-	mock := sb.(*sandbox.MockSandbox)
+	mock := ref.Sandbox().(*sandbox.MockSandbox)
 	if mock.IsPaused() {
-		t.Fatal("sandbox should be unpaused after Get")
+		t.Fatal("sandbox should be unpaused after GetOrCreateUnpaused")
 	}
 
-	if err := set.Put(sb); err != nil {
+	if err := ref.Put(); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
 	if !mock.IsPaused() {
@@ -209,13 +210,14 @@ func TestPut_PausesAndReturns(t *testing.T) {
 
 func TestPut_PauseFail(t *testing.T) {
 	set, _ := newTestSet(t)
-	sb, err := set.Get()
+	ref, err := set.GetOrCreateUnpaused()
 	if err != nil {
-		t.Fatalf("Get: %v", err)
+		t.Fatalf("GetOrCreateUnpaused: %v", err)
 	}
+	sb := ref.Sandbox()
 	sb.(*sandbox.MockSandbox).PauseErr = errors.New("pause broken")
 
-	err = set.Put(sb)
+	err = ref.Put()
 	if err == nil {
 		t.Fatal("expected error when Pause fails")
 	}
@@ -237,24 +239,25 @@ func TestPut_NotInPool(t *testing.T) {
 
 func TestDestroy_RemovesFromPool(t *testing.T) {
 	set, _ := newTestSet(t)
-	sb, err := set.Get()
+	ref, err := set.GetOrCreateUnpaused()
 	if err != nil {
-		t.Fatalf("Get: %v", err)
+		t.Fatalf("GetOrCreateUnpaused: %v", err)
 	}
+	sb := ref.Sandbox()
 
-	if err := set.Destroy(sb, "test"); err != nil {
+	if err := ref.Destroy("test"); err != nil {
 		t.Fatalf("Destroy: %v", err)
 	}
 	if !sb.(*sandbox.MockSandbox).IsDestroyed() {
 		t.Fatal("sandbox should be destroyed")
 	}
 
-	// Next Get should create a new one, not reuse the destroyed one.
-	sb2, err := set.Get()
+	// Next GetOrCreateUnpaused should create a new one, not reuse the destroyed one.
+	ref2, err := set.GetOrCreateUnpaused()
 	if err != nil {
-		t.Fatalf("Get after Destroy: %v", err)
+		t.Fatalf("GetOrCreateUnpaused after Destroy: %v", err)
 	}
-	if sb2.ID() == sb.ID() {
+	if ref2.Sandbox().ID() == sb.ID() {
 		t.Fatal("should not reuse a destroyed sandbox")
 	}
 }
@@ -277,10 +280,10 @@ func TestClose_DestroysAll(t *testing.T) {
 	set, pool := newTestSet(t)
 
 	// Create 3 sandboxes: 2 in-use, 1 idle.
-	sb1, _ := set.Get()
-	sb2, _ := set.Get()
-	sb3, _ := set.Get()
-	_ = set.Put(sb3) // return one to idle
+	ref1, _ := set.GetOrCreateUnpaused()
+	ref2, _ := set.GetOrCreateUnpaused()
+	ref3, _ := set.GetOrCreateUnpaused()
+	_ = ref3.Put() // return one to idle
 
 	if err := set.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
@@ -291,8 +294,8 @@ func TestClose_DestroysAll(t *testing.T) {
 			t.Fatalf("sandbox %s should be destroyed after Close", m.ID())
 		}
 	}
-	_ = sb1
-	_ = sb2
+	_ = ref1
+	_ = ref2
 }
 
 func TestClose_Twice(t *testing.T) {
@@ -318,16 +321,16 @@ func TestClose_EmptyPool(t *testing.T) {
 func TestLifecycle_GetPutReuse(t *testing.T) {
 	set, _ := newTestSet(t)
 
-	// Get → Put → Get should reuse.
-	sb1, _ := set.Get()
-	id := sb1.ID()
-	_ = set.Put(sb1)
+	// GetOrCreateUnpaused → Put → GetOrCreateUnpaused should reuse.
+	ref1, _ := set.GetOrCreateUnpaused()
+	id := ref1.Sandbox().ID()
+	_ = ref1.Put()
 
-	sb2, _ := set.Get()
-	if sb2.ID() != id {
-		t.Fatalf("expected reuse, got different ID: %s vs %s", id, sb2.ID())
+	ref2, _ := set.GetOrCreateUnpaused()
+	if ref2.Sandbox().ID() != id {
+		t.Fatalf("expected reuse, got different ID: %s vs %s", id, ref2.Sandbox().ID())
 	}
-	_ = set.Put(sb2)
+	_ = ref2.Put()
 
 	_ = set.Close()
 }
@@ -335,15 +338,15 @@ func TestLifecycle_GetPutReuse(t *testing.T) {
 func TestLifecycle_GetDestroyGet(t *testing.T) {
 	set, _ := newTestSet(t)
 
-	sb1, _ := set.Get()
-	id := sb1.ID()
-	_ = set.Destroy(sb1, "bad")
+	ref1, _ := set.GetOrCreateUnpaused()
+	id := ref1.Sandbox().ID()
+	_ = ref1.Destroy("bad")
 
-	sb2, _ := set.Get()
-	if sb2.ID() == id {
+	ref2, _ := set.GetOrCreateUnpaused()
+	if ref2.Sandbox().ID() == id {
 		t.Fatal("expected fresh sandbox after Destroy, got same ID")
 	}
-	_ = set.Put(sb2)
+	_ = ref2.Put()
 
 	_ = set.Close()
 }
@@ -355,15 +358,15 @@ func TestConcurrent_Gets(t *testing.T) {
 	const n = 50
 
 	var wg sync.WaitGroup
-	sandboxes := make([]sandbox.Sandbox, n)
+	refs := make([]*sandboxset.SandboxRef, n)
 	errs := make([]error, n)
 
 	for i := 0; i < n; i++ {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			sb, err := set.Get()
-			sandboxes[idx] = sb
+			ref, err := set.GetOrCreateUnpaused()
+			refs[idx] = ref
 			errs[idx] = err
 		}(i)
 	}
@@ -371,13 +374,13 @@ func TestConcurrent_Gets(t *testing.T) {
 
 	for i, err := range errs {
 		if err != nil {
-			t.Fatalf("goroutine %d: Get: %v", i, err)
+			t.Fatalf("goroutine %d: GetOrCreateUnpaused: %v", i, err)
 		}
 	}
 
 	// Clean up: put all back then close.
-	for _, sb := range sandboxes {
-		_ = set.Put(sb)
+	for _, ref := range refs {
+		_ = ref.Put()
 	}
 	_ = set.Close()
 }
@@ -393,12 +396,12 @@ func TestConcurrent_GetPut(t *testing.T) {
 		go func(id int) {
 			defer wg.Done()
 			for j := 0; j < iterations; j++ {
-				sb, err := set.Get()
+				ref, err := set.GetOrCreateUnpaused()
 				if err != nil {
-					t.Errorf("goroutine %d iter %d: Get: %v", id, j, err)
+					t.Errorf("goroutine %d iter %d: GetOrCreateUnpaused: %v", id, j, err)
 					return
 				}
-				if err := set.Put(sb); err != nil {
+				if err := ref.Put(); err != nil {
 					t.Errorf("goroutine %d iter %d: Put: %v", id, j, err)
 					return
 				}
@@ -415,24 +418,24 @@ func TestConcurrent_CloseWhileGet(t *testing.T) {
 
 	// Grab some sandboxes first.
 	for i := 0; i < 5; i++ {
-		sb, _ := set.Get()
-		_ = set.Put(sb)
+		ref, _ := set.GetOrCreateUnpaused()
+		_ = ref.Put()
 	}
 
 	var wg sync.WaitGroup
 	errs := make(chan error, n)
 
-	// Launch goroutines that race Get vs Close.
+	// Launch goroutines that race GetOrCreateUnpaused vs Close.
 	for i := 0; i < n; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			sb, err := set.Get()
+			ref, err := set.GetOrCreateUnpaused()
 			if err != nil {
 				// Expected for some goroutines after Close.
 				return
 			}
-			errs <- set.Put(sb)
+			errs <- ref.Put()
 		}()
 	}
 
@@ -443,7 +446,7 @@ func TestConcurrent_CloseWhileGet(t *testing.T) {
 
 	// Close should succeed (first call).
 	if closeErr != nil {
-		// Close might race with Get; as long as no panic, we're OK.
+		// Close might race with GetOrCreateUnpaused; as long as no panic, we're OK.
 		fmt.Printf("Close returned: %v (acceptable in race)\n", closeErr)
 	}
 }
