@@ -26,9 +26,13 @@
 //	    ScratchDirs: myScratchDirs,
 //	})
 //
-//	sb, err := set.Get()
-//	// ... handle request ...
-//	set.Put(sb)
+//	ref, err := set.GetOrCreateUnpaused()
+//	// ... use ref.Sandbox() to handle request ...
+//	if broken {
+//	    ref.Destroy("reason")
+//	} else {
+//	    ref.Put()
+//	}
 package sandboxset
 
 import (
@@ -40,35 +44,42 @@ import (
 A SandboxSet manages a pool of sandboxes for one Lambda function.
 All methods are safe to call from multiple goroutines.
 
-The design mirrors the C process API: Get (create), Put (exit),
-Destroy (kill), Close (cleanup). There are no warm-up, shrink, or
-stats methods yet — those can be added in later PRs without
-changing the core interface.
+The design mirrors the C process API: GetOrCreateUnpaused (create),
+Put (exit), Destroy (kill), Close (cleanup). There are no warm-up,
+shrink, or stats methods yet — those can be added in later PRs
+without changing the core interface.
+
+GetOrCreateUnpaused returns a *SandboxRef rather than a raw
+sandbox.Sandbox. The ref carries a health State and back-pointer
+to the parent set, so callers can use ref.Put() / ref.Destroy()
+without tracking the set. The set-level Put/Destroy methods are
+also available for callers that prefer them.
 */
 type SandboxSet interface {
-	// Return an unpaused sandbox ready to handle a request.
+	// Return an unpaused sandbox ready to handle a request,
+	// wrapped in a SandboxRef.
 	//
 	// If the pool has an idle sandbox, it is unpaused and returned.
 	// If Unpause fails (e.g., the SOCK container died while paused),
-	// that sandbox is destroyed and Get tries the next idle one or
-	// creates a fresh sandbox.
+	// that sandbox is destroyed and the next idle one is tried, or
+	// a fresh sandbox is created.
 	//
 	// A fresh scratch directory is created for each new sandbox
 	// via Config.ScratchDirs. Reused sandboxes keep their
 	// existing scratch directory from when they were first created.
-	Get() (sandbox.Sandbox, error)
+	GetOrCreateUnpaused() (*SandboxRef, error)
 
 	// Return a sandbox to the pool after a successful request.
 	//
-	// The sandbox is paused and becomes available for the next Get.
-	// If Pause fails (e.g., the container died during the request),
-	// the sandbox is destroyed automatically — a bad sandbox never
-	// re-enters the pool.
+	// The sandbox is paused and becomes available for the next
+	// GetOrCreateUnpaused. If Pause fails (e.g., the container
+	// died during the request), the sandbox is destroyed
+	// automatically — a bad sandbox never re-enters the pool.
 	//
 	// Passing a sandbox that is not in the pool returns an error
-	// but is otherwise harmless. If the set has been closed, Put
-	// returns an error immediately — the sandbox was already
-	// destroyed by Close.
+	// but is otherwise harmless.
+	//
+	// Prefer ref.Put() when you have a SandboxRef.
 	Put(sb sandbox.Sandbox) error
 
 	// Permanently remove a sandbox from the pool and destroy it.
@@ -81,14 +92,16 @@ type SandboxSet interface {
 	// If the sandbox is not in the pool it is still destroyed —
 	// resources are always freed. The returned error is
 	// informational only.
+	//
+	// Prefer ref.Destroy() when you have a SandboxRef.
 	Destroy(sb sandbox.Sandbox, reason string) error
 
 	// Destroy all sandboxes in the pool and mark the set as closed.
 	//
-	// Callers who still hold sandbox references from a previous Get
-	// will find them already dead, which is safe: per the Sandbox
-	// contract, methods on a destroyed sandbox are harmless no-ops
-	// that return errors.
+	// Callers who still hold SandboxRef values from a previous
+	// GetOrCreateUnpaused will find them already dead, which is
+	// safe: per the Sandbox contract, methods on a destroyed
+	// sandbox are harmless no-ops that return errors.
 	//
 	// Calling Close a second time returns an error.
 	Close() error
