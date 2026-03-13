@@ -217,8 +217,7 @@ class ZygoteNode:
     
     def to_dict(self):
         return {
-            "packages": sorted(list(self.packages)),
-            "call_count": len(self.calls),
+            "packages": sorted([pkg.split("==")[0] for pkg in self.packages]),
             "children": [child.to_dict() for child in self.children]
         }
 
