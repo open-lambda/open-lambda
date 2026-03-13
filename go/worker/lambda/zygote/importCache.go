@@ -341,7 +341,8 @@ func (node *ImportCacheNode) Lookup(packages []string) *ImportCacheNode {
 	for _, nodePkg := range node.Packages {
 		found := false
 		for _, p := range packages {
-			if p == nodePkg {
+			// compare only using package name
+			if strings.Split(p, "==")[0] == nodePkg {
 				found = true
 				break
 			}
