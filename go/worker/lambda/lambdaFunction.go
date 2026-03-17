@@ -51,6 +51,16 @@ func (f *LambdaFunc) Invoke(w http.ResponseWriter, r *http.Request) {
 	t := common.T0("LambdaFunc.Invoke")
 	defer t.T1()
 
+	accept := r.Header.Get("Accept")
+
+    if strings.Contains(accept, "application/json") {
+        w.Header().Set("Content-Type", "application/json; charset=utf-8")
+    } else if strings.Contains(accept, "image/png") {
+        w.Header().Set("Content-Type", "image/png")
+    } else {
+        w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+    }
+
 	done := make(chan bool)
 	req := &Invocation{w: w, r: r, done: done}
 
@@ -58,7 +68,14 @@ func (f *LambdaFunc) Invoke(w http.ResponseWriter, r *http.Request) {
 	select {
 	case f.funcChan <- req:
 		// block until it's done
-		<-done
+		select {
+			// worker finished successfully
+			case <-done:
+				return
+			// client gave up, stop waiting and free web handler
+			case <-r.Context().Done():
+				return
+		}
 	default:
 		// queue cannot accept more, so reply with backoff
 		req.w.WriteHeader(http.StatusTooManyRequests)

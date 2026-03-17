@@ -2,6 +2,7 @@ package lambda
 
 import (
 	"container/list"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -14,6 +15,8 @@ import (
 	"github.com/open-lambda/open-lambda/go/worker/lambda/zygote"
 	"github.com/open-lambda/open-lambda/go/worker/sandbox"
 )
+
+var ErrServerClosed = errors.New("lambda manager is closed")
 
 // LambdaMgr provides thread-safe getting of lambda functions and collects all
 // lambda subsystems (resource pullers and sandbox pools) in one place
@@ -32,6 +35,7 @@ type LambdaMgr struct {
 	// thread-safe map from a lambda's name to its LambdaFunc
 	mapMutex sync.Mutex
 	lfuncMap map[string]*LambdaFunc
+	isClosed bool
 }
 
 // represents an HTTP request to be handled by a lambda instance
@@ -123,11 +127,15 @@ func newLambdaMgr() (res *LambdaMgr, err error) {
 }
 
 // Get returns an existing LambdaFunc instance or creates a new one if it doesn't exist.
-func (mgr *LambdaMgr) Get(name string) (f *LambdaFunc) {
+func (mgr *LambdaMgr) Get(name string) (*LambdaFunc, error) {
 	mgr.mapMutex.Lock()
 	defer mgr.mapMutex.Unlock()
 
-	f = mgr.lfuncMap[name]
+	if mgr.isClosed {
+		return nil, ErrServerClosed
+	}
+
+	var f *LambdaFunc = mgr.lfuncMap[name]
 
 	if f == nil {
 		f = &LambdaFunc{
@@ -145,7 +153,7 @@ func (mgr *LambdaMgr) Get(name string) (f *LambdaFunc) {
 		mgr.lfuncMap[name] = f
 	}
 
-	return f
+	return f, nil
 }
 
 // Debug returns the debug information of the sandbox pool.
@@ -193,7 +201,15 @@ func (_ *LambdaMgr) DumpStatsToLog() {
 
 // Cleanup performs cleanup operations for the LambdaMgr and its subsystems.
 func (mgr *LambdaMgr) Cleanup() {
-	mgr.mapMutex.Lock() // don't unlock, because this shouldn't be used anymore
+	mgr.mapMutex.Lock()
+	defer mgr.mapMutex.Unlock()
+
+	// check if server was already shutdown
+	if mgr.isClosed {
+        return
+    }
+
+	mgr.isClosed = true // make sure this lambda server accepts no new request
 
 	mgr.DumpStatsToLog()
 
