@@ -71,20 +71,52 @@ TODO: update ag_forecasting_api URLs from tylerharter fork to UW-Madison-DSI onc
    ```bash
    git clone https://github.com/UW-Madison-DSI/Global-Mosquito-Observations-Dashboard.git
    ```
+2. Edit `docker-compose.yml`:
+```yml
+services:
+  db:
+    image: mysql:latest
+    environment:
+      MYSQL_DATABASE: mosquito_dashboard
+      MYSQL_USER: webuser
+      MYSQL_PASSWORD: password
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_ALLOW_EMPTY_PASSWORD: 1
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./database:/docker-entrypoint-initdb.d
+      - ./mysql:/var/lib/mysql
+    networks:
+      - network
 
-2. Initialize a worker:
+networks:
+  network:
+    driver: bridge
+```
+3. Start the database:
+```bash
+docker compose up
+```
+
+4. Initialize a worker:
 
 ```bash
 ./ol worker init -i ol-min
 ```
 
-3. Start the worker:
+5. Start the worker:
 
 ```bash
 ./ol worker up -d
 ```
 
-4. Create `ol.yaml` to configure the app for OpenLambda:
+6. Create `ol.yaml` to configure the app for OpenLambda:
 
 ```yaml
 triggers:
@@ -100,14 +132,14 @@ environment:
   DB_PASSWORD: "password"
 ```
 
-5. Install pip-compile and pin requirements.txt to versions suitable for OpenLambda:
+7. Install pip-compile and pin requirements.txt to versions suitable for OpenLambda:
 
 ```bash
 ./ol admin install examples/pip-compile
 curl -X POST -d 'https://raw.githubusercontent.com/UW-Madison-DSI/Global-Mosquito-Observations-Dashboard/refs/heads/main/src/server/requirements.txt' http://localhost:5000/run/pip-compile/url > mosquito_requirements.txt
 ```
 
-6. Install and test:
+8. Install and test:
 
 ```bash
 /ol admin install -c ol.yaml -r mosquito_requirements ./Global-Mosquito-Observations-Dashboard/server
