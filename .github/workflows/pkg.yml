@@ -44,7 +44,7 @@ jobs:
       with:
          go-version: '>=1.21.0'
     - name: Install cross
-      run: cargo install cross
+      run: cargo install cross --locked
     - name: Build OpenLambda
       run: |
         make ol imgs/lambda wasm-worker wasm-functions native-functions container-proxy
