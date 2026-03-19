@@ -1,4 +1,4 @@
-1# Deploying Applications
+# Deploying Applications
 
 ## Agricultural Forecasting API (FastAPI)
 
