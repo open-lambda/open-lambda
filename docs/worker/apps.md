@@ -149,7 +149,7 @@ Install and test:
 ./ol admin install -c ol.yaml -r mosquito_requirements ./Global-Mosquito-Observations-Dashboard/server
 # simple test
 curl http://localhost:5000/run/server/
-# get a forecast for the ALTN station
+# get observations according to GLOBE Habitat Mapper
 curl -X GET "http://localhost:5000/run/server/observations/habitat-mapper"
 ```
 
