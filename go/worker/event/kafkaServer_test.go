@@ -80,9 +80,13 @@ func (m *MockKafkaClient) Close() {
 }
 
 // MockLambdaInvoker implements LambdaInvoker for testing.
+// When respondFunc is set, it is called with the ResponseWriter and invocation
+// index instead of the default w.WriteHeader(200). This lets tests simulate
+// custom response headers (e.g., X-Kafka-Seek-Offset) on specific invocations.
 type MockLambdaInvoker struct {
 	mu          sync.Mutex
 	invocations []invokeRecord
+	respondFunc func(w http.ResponseWriter, invocationIndex int)
 }
 
 // invokeRecord captures the relevant fields from a lambda invocation in simple,
@@ -107,7 +111,7 @@ func (m *MockLambdaInvoker) Invoke(lambdaName string, w http.ResponseWriter, r *
 	}
 
 	m.mu.Lock()
-	defer m.mu.Unlock()
+	idx := len(m.invocations)
 	m.invocations = append(m.invocations, invokeRecord{
 		LambdaName: lambdaName,
 		Method:     r.Method,
@@ -116,7 +120,14 @@ func (m *MockLambdaInvoker) Invoke(lambdaName string, w http.ResponseWriter, r *
 		Body:       string(body),
 		Headers:    headers,
 	})
-	w.WriteHeader(http.StatusOK)
+	respondFunc := m.respondFunc
+	m.mu.Unlock()
+
+	if respondFunc != nil {
+		respondFunc(w, idx)
+	} else {
+		w.WriteHeader(http.StatusOK)
+	}
 }
 
 func (m *MockLambdaInvoker) getInvocations() []invokeRecord {
@@ -327,5 +338,115 @@ func TestUnregister(t *testing.T) {
 	}
 	if !mockClient.closeCalled.Load() {
 		t.Error("Expected Close to be called on client")
+	}
+}
+
+// --- cachedKafkaClient unit tests ---
+
+func TestCachedClient_CachesRecords(t *testing.T) {
+	mock := &MockKafkaClient{Drained: make(chan struct{})}
+	mock.Send(
+		&kgo.Record{Topic: "t", Partition: 0, Offset: 0, Value: []byte("a")},
+		&kgo.Record{Topic: "t", Partition: 0, Offset: 1, Value: []byte("b")},
+	)
+
+	cached := newCachedKafkaClient(mock, 100)
+	cached.PollFetches(context.Background())
+
+	// Both records should now be in the cache
+	if _, ok := cached.cache[cacheKey{"t", 0, 0}]; !ok {
+		t.Error("Expected offset 0 to be cached")
+	}
+	if _, ok := cached.cache[cacheKey{"t", 0, 1}]; !ok {
+		t.Error("Expected offset 1 to be cached")
+	}
+}
+
+func TestCachedClient_SeekCacheHit(t *testing.T) {
+	mock := &MockKafkaClient{Drained: make(chan struct{})}
+	mock.Send(
+		&kgo.Record{Topic: "t", Partition: 0, Offset: 10, Value: []byte("ten")},
+		&kgo.Record{Topic: "t", Partition: 0, Offset: 11, Value: []byte("eleven")},
+		&kgo.Record{Topic: "t", Partition: 0, Offset: 12, Value: []byte("twelve")},
+	)
+
+	cached := newCachedKafkaClient(mock, 100)
+	// Populate the cache
+	cached.PollFetches(context.Background())
+
+	// Seek to offset 10
+	cached.Seek("t", 0, 10)
+
+	// Each PollFetches should return the next cached record
+	f1 := cached.PollFetches(context.Background())
+	records1 := f1.Records()
+	if len(records1) != 1 || records1[0].Offset != 10 {
+		t.Fatalf("Expected offset 10, got %v", records1)
+	}
+
+	f2 := cached.PollFetches(context.Background())
+	records2 := f2.Records()
+	if len(records2) != 1 || records2[0].Offset != 11 {
+		t.Fatalf("Expected offset 11, got %v", records2)
+	}
+
+	f3 := cached.PollFetches(context.Background())
+	records3 := f3.Records()
+	if len(records3) != 1 || records3[0].Offset != 12 {
+		t.Fatalf("Expected offset 12, got %v", records3)
+	}
+}
+
+func TestCachedClient_SeekCacheMiss(t *testing.T) {
+	mock := &MockKafkaClient{Drained: make(chan struct{})}
+	mock.Send(
+		&kgo.Record{Topic: "t", Partition: 0, Offset: 5, Value: []byte("five")},
+	)
+	// Second poll returns a new record after seek miss
+	mock.Send(
+		&kgo.Record{Topic: "t", Partition: 0, Offset: 20, Value: []byte("twenty")},
+	)
+
+	cached := newCachedKafkaClient(mock, 100)
+	// Populate cache with offset 5
+	cached.PollFetches(context.Background())
+
+	// Seek to offset 99 which is not in cache
+	cached.Seek("t", 0, 99)
+
+	// Should miss cache, clear seek, and fall through to underlying client
+	fetches := cached.PollFetches(context.Background())
+	records := fetches.Records()
+	if len(records) != 1 || records[0].Offset != 20 {
+		t.Fatalf("Expected offset 20 from underlying after cache miss, got %v", records)
+	}
+
+	// Seek should be cleared
+	if cached.seekTarget != nil {
+		t.Error("Expected seekTarget to be nil after cache miss")
+	}
+}
+
+func TestCachedClient_LRUEviction(t *testing.T) {
+	mock := &MockKafkaClient{Drained: make(chan struct{})}
+	mock.Send(
+		&kgo.Record{Topic: "t", Partition: 0, Offset: 0, Value: []byte("a")},
+		&kgo.Record{Topic: "t", Partition: 0, Offset: 1, Value: []byte("b")},
+		&kgo.Record{Topic: "t", Partition: 0, Offset: 2, Value: []byte("c")},
+	)
+
+	// Cache can only hold 2 records
+	cached := newCachedKafkaClient(mock, 2)
+	cached.PollFetches(context.Background())
+
+	// Offset 0 should have been evicted (LRU), offsets 1 and 2 should remain
+	if _, ok := cached.cache[cacheKey{"t", 0, 0}]; ok {
+		t.Error("Expected offset 0 to be evicted")
+	}
+	if _, ok := cached.cache[cacheKey{"t", 0, 1}]; !ok {
+		t.Error("Expected offset 1 to be cached")
+	}
+	if _, ok := cached.cache[cacheKey{"t", 0, 2}]; !ok {
+		t.Error("Expected offset 2 to be cached")
 	}
 }

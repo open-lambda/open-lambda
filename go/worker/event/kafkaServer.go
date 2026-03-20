@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -22,6 +23,123 @@ import (
 type KafkaClient interface {
 	PollFetches(context.Context) kgo.Fetches
 	Close()
+}
+
+// cacheKey uniquely identifies a Kafka record by its topic, partition, and offset.
+type cacheKey struct {
+	topic     string
+	partition int32
+	offset    int64
+}
+
+// seekState tracks the current seek position when replaying from cache.
+type seekState struct {
+	topic     string
+	partition int32
+	offset    int64 // next offset to serve from cache
+}
+
+// seekRequest is returned by processMessage when the lambda requests a seek.
+type seekRequest struct {
+	offset int64
+}
+
+const defaultCacheSize = 1024
+
+// cachedKafkaClient wraps a KafkaClient and caches records in an LRU map keyed
+// by {topic, partition, offset}. When a seek is active, PollFetches serves
+// records from the cache. On cache miss, the seek ends and normal polling resumes.
+type cachedKafkaClient struct {
+	underlying KafkaClient
+	cache      map[cacheKey]*kgo.Record
+	evictOrder []cacheKey // front = least recently used
+	maxSize    int
+	seekTarget *seekState
+}
+
+func newCachedKafkaClient(underlying KafkaClient, maxSize int) *cachedKafkaClient {
+	return &cachedKafkaClient{
+		underlying: underlying,
+		cache:      make(map[cacheKey]*kgo.Record),
+		maxSize:    maxSize,
+	}
+}
+
+// Seek sets the seek target so that subsequent PollFetches calls serve from cache.
+func (c *cachedKafkaClient) Seek(topic string, partition int32, offset int64) {
+	c.seekTarget = &seekState{topic: topic, partition: partition, offset: offset}
+}
+
+// PollFetches serves from cache when seeking, otherwise delegates to the underlying client.
+func (c *cachedKafkaClient) PollFetches(ctx context.Context) kgo.Fetches {
+	if c.seekTarget != nil {
+		key := cacheKey{
+			topic:     c.seekTarget.topic,
+			partition: c.seekTarget.partition,
+			offset:    c.seekTarget.offset,
+		}
+		record, ok := c.cache[key]
+		if ok {
+			c.touchLRU(key)
+			c.seekTarget.offset++
+			return makeSingleRecordFetches(record)
+		}
+		// Cache miss — end seek, fall through to underlying client
+		slog.Info("Seek cache miss, resuming normal polling",
+			"topic", c.seekTarget.topic,
+			"partition", c.seekTarget.partition,
+			"offset", c.seekTarget.offset)
+		c.seekTarget = nil
+	}
+
+	fetches := c.underlying.PollFetches(ctx)
+	fetches.EachRecord(func(record *kgo.Record) {
+		c.put(cacheKey{topic: record.Topic, partition: record.Partition, offset: record.Offset}, record)
+	})
+	return fetches
+}
+
+func (c *cachedKafkaClient) Close() {
+	c.underlying.Close()
+}
+
+// put adds a record to the cache, evicting the LRU entry if at capacity.
+func (c *cachedKafkaClient) put(key cacheKey, record *kgo.Record) {
+	if _, exists := c.cache[key]; exists {
+		c.touchLRU(key)
+		return
+	}
+	if len(c.cache) >= c.maxSize {
+		evictKey := c.evictOrder[0]
+		c.evictOrder = c.evictOrder[1:]
+		delete(c.cache, evictKey)
+	}
+	c.cache[key] = record
+	c.evictOrder = append(c.evictOrder, key)
+}
+
+// touchLRU moves a key to the back of the eviction order (most recently used).
+func (c *cachedKafkaClient) touchLRU(key cacheKey) {
+	for i, k := range c.evictOrder {
+		if k == key {
+			c.evictOrder = append(c.evictOrder[:i], c.evictOrder[i+1:]...)
+			c.evictOrder = append(c.evictOrder, key)
+			return
+		}
+	}
+}
+
+// makeSingleRecordFetches wraps a single record into the kgo.Fetches structure.
+func makeSingleRecordFetches(record *kgo.Record) kgo.Fetches {
+	return kgo.Fetches{{
+		Topics: []kgo.FetchTopic{{
+			Topic: record.Topic,
+			Partitions: []kgo.FetchPartition{{
+				Partition: record.Partition,
+				Records:   []*kgo.Record{record},
+			}},
+		}},
+	}}
 }
 
 // LambdaInvoker abstracts the lambda invocation layer for testability
@@ -44,11 +162,12 @@ type LambdaKafkaConsumer struct {
 	consumerName string // Unique name for this consumer
 	lambdaName   string // lambda function name
 	kafkaTrigger *common.KafkaTrigger
-	client       KafkaClient    // kgo.client implements the KafkaClient interface
-	invoker      LambdaInvoker  // Abstraction for lambda invocation
-	stopChan     chan struct{}   // Shutdown signal for this consumer
+	client       KafkaClient          // used for PollFetches/Close (may be a cachedKafkaClient)
+	cache        *cachedKafkaClient   // typed reference for Seek; same object as client when caching is enabled
+	invoker      LambdaInvoker        // Abstraction for lambda invocation
+	stopChan     chan struct{}         // Shutdown signal for this consumer
 	// When this channel is closed, the goroutine for the consumer exits
-	errorCount   int            // Number of non-timeout Kafka client errors encountered
+	errorCount   int                  // Number of non-timeout Kafka client errors encountered
 }
 
 // KafkaManager manages multiple lambda-specific Kafka consumers
@@ -90,11 +209,13 @@ func (km *KafkaManager) newLambdaKafkaConsumer(consumerName string, lambdaName s
 		return nil, fmt.Errorf("failed to create Kafka client for lambda %s: %w", lambdaName, err)
 	}
 
+	cached := newCachedKafkaClient(client, defaultCacheSize)
 	return &LambdaKafkaConsumer{
 		consumerName: consumerName,
 		lambdaName:   lambdaName,
 		kafkaTrigger: trigger,
-		client:       client,
+		client:       cached,
+		cache:        cached,
 		invoker:      km.invoker,
 		stopChan:     make(chan struct{}),
 	}, nil
@@ -156,8 +277,9 @@ func (lkc *LambdaKafkaConsumer) consumeLoop() {
 				continue
 			}
 
-			// Process each record
-			fetches.EachRecord(func(record *kgo.Record) {
+			// Process each record. Manual iteration (instead of EachRecord) lets
+			// us break out mid-batch when a seek is requested.
+			for _, record := range fetches.Records() {
 				slog.Info("Received Kafka message for lambda",
 					"consumer", lkc.consumerName,
 					"lambda", lkc.lambdaName,
@@ -165,14 +287,18 @@ func (lkc *LambdaKafkaConsumer) consumeLoop() {
 					"partition", record.Partition,
 					"offset", record.Offset,
 					"size", len(record.Value))
-				lkc.processMessage(record)
-			})
+				if seek := lkc.processMessage(record); seek != nil && lkc.cache != nil {
+					lkc.cache.Seek(record.Topic, record.Partition, seek.offset)
+					break // next PollFetches will serve from cache
+				}
+			}
 		}
 	}
 }
 
-// processMessage handles a single Kafka message by invoking the lambda function directly
-func (lkc *LambdaKafkaConsumer) processMessage(record *kgo.Record) {
+// processMessage handles a single Kafka message by invoking the lambda function directly.
+// If the lambda returns an X-Kafka-Seek-Offset header, the corresponding seekRequest is returned.
+func (lkc *LambdaKafkaConsumer) processMessage(record *kgo.Record) *seekRequest {
 	t := common.T0("kafka-message-processing")
 	defer t.T1()
 
@@ -185,7 +311,7 @@ func (lkc *LambdaKafkaConsumer) processMessage(record *kgo.Record) {
 			"lambda", lkc.lambdaName,
 			"error", err,
 			"topic", record.Topic)
-		return
+		return nil
 	}
 	// RequestURI must be set explicitly for synthetic requests (http.NewRequest doesn't set it)
 	req.RequestURI = requestPath
@@ -198,8 +324,6 @@ func (lkc *LambdaKafkaConsumer) processMessage(record *kgo.Record) {
 	req.Header.Set("X-Kafka-Group-Id", lkc.kafkaTrigger.GroupId)
 
 	// Create response recorder to capture lambda output.
-	// TODO: Capture and log the lambda response body using httptest's response recorder
-	// for kafka triggered lambda invocations.
 	w := httptest.NewRecorder()
 
 	// Invoke the lambda function directly
@@ -213,6 +337,26 @@ func (lkc *LambdaKafkaConsumer) processMessage(record *kgo.Record) {
 		"partition", record.Partition,
 		"offset", record.Offset,
 		"status", w.Code)
+
+	// Check if the lambda requested a seek via response header
+	if seekStr := w.Header().Get("X-Kafka-Seek-Offset"); seekStr != "" {
+		seekOffset, err := strconv.ParseInt(seekStr, 10, 64)
+		if err != nil {
+			slog.Warn("Invalid X-Kafka-Seek-Offset header",
+				"lambda", lkc.lambdaName,
+				"value", seekStr,
+				"error", err)
+			return nil
+		}
+		slog.Info("Lambda requested seek",
+			"lambda", lkc.lambdaName,
+			"topic", record.Topic,
+			"partition", record.Partition,
+			"current_offset", record.Offset,
+			"seek_offset", seekOffset)
+		return &seekRequest{offset: seekOffset}
+	}
+	return nil
 }
 
 // cleanup closes the kgo client
