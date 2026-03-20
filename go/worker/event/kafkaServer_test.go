@@ -187,10 +187,23 @@ func makeErrorFetches(topic string, partition int32, err error) kgo.Fetches {
 	}}
 }
 
-// setupConsumer creates a LambdaKafkaConsumer with sensible defaults for testing.
-// The consumerName, kafkaTrigger GroupId, and other fields are derived from lambdaName.
-func setupConsumer(lambdaName string, client KafkaClient, invoker LambdaInvoker) *LambdaKafkaConsumer {
-	return &LambdaKafkaConsumer{
+// setupConsumerHarness creates the full test harness for exercising the consumer's
+// consumeLoop. It mocks both sides of the consumer:
+//
+//   - Above the consumer (Kafka broker layer): MockKafkaClient replaces the real
+//     Kafka connection so tests can enqueue records and errors without a broker.
+//   - Below the consumer (lambda invocation layer): MockLambdaInvoker replaces the
+//     real lambda invocation path so tests can capture and assert on HTTP requests.
+//
+// The consumer itself is real — it runs the actual consumeLoop logic, so tests
+// exercise the full record-processing and error-handling pipeline.
+func setupConsumerHarness(lambdaName string) (*MockKafkaClient, *MockLambdaInvoker, *LambdaKafkaConsumer) {
+	// Mock above: fake Kafka broker
+	client := &MockKafkaClient{Drained: make(chan struct{})}
+	// Mock below: fake lambda invocation
+	invoker := &MockLambdaInvoker{}
+
+	consumer := &LambdaKafkaConsumer{
 		consumerName: lambdaName + "-0",
 		lambdaName:   lambdaName,
 		kafkaTrigger: &common.KafkaTrigger{GroupId: "lambda-" + lambdaName},
@@ -198,6 +211,7 @@ func setupConsumer(lambdaName string, client KafkaClient, invoker LambdaInvoker)
 		invoker:      invoker,
 		stopChan:     make(chan struct{}),
 	}
+	return client, invoker, consumer
 }
 
 // runConsumeLoop starts the consume loop in a goroutine and returns a stop
@@ -218,14 +232,11 @@ func runConsumeLoop(consumer *LambdaKafkaConsumer) (stop func()) {
 // --- Tests ---
 
 func TestConsumeLoop_ProcessesRecords(t *testing.T) {
-	invoker := &MockLambdaInvoker{}
-	mockClient := &MockKafkaClient{Drained: make(chan struct{})}
+	mockClient, invoker, consumer := setupConsumerHarness("my-lambda")
 	mockClient.Send(&kgo.Record{
 		Topic: "orders", Partition: 3, Offset: 99,
 		Value: []byte(`{"orderId": 42}`),
 	})
-
-	consumer := setupConsumer("my-lambda", mockClient, invoker)
 	stop := runConsumeLoop(consumer)
 	<-mockClient.Drained
 	stop()
@@ -260,8 +271,7 @@ func TestConsumeLoop_ContinuesThroughErrors(t *testing.T) {
 	slog.SetDefault(slog.New(slog.NewTextHandler(&logBuf, nil)))
 	defer slog.SetDefault(old)
 
-	invoker := &MockLambdaInvoker{}
-	mockClient := &MockKafkaClient{Drained: make(chan struct{})}
+	mockClient, invoker, consumer := setupConsumerHarness("test-lambda")
 	// Poll sequence: deadline-exceeded errors (silently skipped), then a real
 	// error (logged), then a valid record. The loop should survive all of them.
 	mockClient.SendError("topic", 0, context.DeadlineExceeded)
@@ -270,8 +280,6 @@ func TestConsumeLoop_ContinuesThroughErrors(t *testing.T) {
 	mockClient.Send(&kgo.Record{
 		Topic: "topic", Partition: 0, Offset: 1, Value: []byte("survived"),
 	})
-
-	consumer := setupConsumer("test-lambda", mockClient, invoker)
 	stop := runConsumeLoop(consumer)
 	<-mockClient.Drained
 	stop()
