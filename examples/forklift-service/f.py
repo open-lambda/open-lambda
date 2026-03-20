@@ -4,70 +4,74 @@ https://pages.cs.wisc.edu/~yuanzhuo/assets/pdf/forklift.pdf
 '''
 
 import heapq
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 from flask import Flask, request, jsonify
 
+Candidate = namedtuple('Candidate', ['parent', 'child_pkgV', 'utility'])
+QueueEntry = namedtuple('QueueEntry', ['neg_utility', 'uid', 'candidate'])
+
 app = Flask(__name__)
+    
+def parse_workload(workload):
+    func_packages = {}
+
+    for func in workload.get("funcs", []):
+        func_name = func.get("name", "")
+        if not func_name:
+            continue
+        
+        packages = set()
+        meta = func.get("meta", {})
+        req_txt = meta.get("requirements_txt", "")
+        
+        for line in req_txt.split("\n"):
+            line = line.strip()
+            if "==" in line and not line.startswith("#"):
+                packages.add(line)
+        
+        if packages:
+            func_packages[func_name] = packages
+    
+    # count call frequencies
+    call_counts = defaultdict(int)
+    for call in workload.get("calls", []):
+        name = call.get("name", "")
+        if name:
+            call_counts[name] += 1
+    
+    # build call matrix
+    calls = {}
+    if call_counts:
+        for func_name, packages in func_packages.items():
+            count = max(1, call_counts.get(func_name, 1))
+            for i in range(count):
+                calls[f"{func_name}_{i}"] = packages.copy()
+    else:
+        # if no call counts, just add one call per function
+        for func_name, packages in func_packages.items():
+            calls[func_name] = packages.copy()
+    
+    return calls
+    
+def parse_deps(deps_json):
+    deps = {}
+    
+    # the deps file contains a mapping of package to its versions and the dependencies for each version
+    for pkg_name, versions in deps_json.items():
+        deps[pkg_name] = {}
+        for version, dep_strings in versions.items():
+            deps[pkg_name][version] = []
+            for dep_str in dep_strings.keys():
+                dep_packages = set(dep_str.split(",")) if dep_str else set()
+                deps[pkg_name][version].append(dep_packages)
+    return deps
 
 class ZygoteTree: 
-    def __init__(self, workload_data, deps_data):
-        self.calls = self._parse_workload(workload_data)    # mapping of call_id to required packages
-        self.deps = self._parse_deps(deps_data)             # mapping of package to its versions and dependencies
+    def __init__(self, calls, deps):
+        self.calls = calls
+        self.deps = deps
         self.root = None
-
-    def _parse_workload(self, workload):
-        func_packages = {}
-    
-        for func in workload.get("funcs", []):
-            func_name = func.get("name", "")
-            if not func_name:
-                continue
-            
-            packages = set()
-            meta = func.get("meta", {})
-            req_txt = meta.get("requirements_txt", "")
-            
-            for line in req_txt.split("\n"):
-                line = line.strip()
-                if "==" in line and not line.startswith("#"):
-                    packages.add(line)
-            
-            if packages:
-                func_packages[func_name] = packages
-        
-        # count call frequencies
-        call_counts = defaultdict(int)
-        for call in workload.get("calls", []):
-            name = call.get("name", "")
-            if name:
-                call_counts[name] += 1
-        
-        # build call matrix
-        calls = {}
-        if call_counts:
-            for func_name, packages in func_packages.items():
-                count = max(1, call_counts.get(func_name, 1))
-                for i in range(count):
-                    calls[f"{func_name}_{i}"] = packages.copy()
-        else:
-            # if no call counts, just add one call per function
-            for func_name, packages in func_packages.items():
-                calls[func_name] = packages.copy()
-        
-        return calls
-    
-    def _parse_deps(self, deps_json):
-        deps = {}
-        
-        # the deps file contains a mapping of package to its versions and the dependencies for each version
-        for pkg_name, versions in deps_json.items():
-            deps[pkg_name] = {}
-            for version, dep_strings in versions.items():
-                deps[pkg_name][version] = []
-                for dep_str in dep_strings.keys():
-                    dep_packages = set(dep_str.split(",")) if dep_str else set()
-                    deps[pkg_name][version].append(dep_packages)
-        return deps
+        self.candidate_queue = []
     
     def _enqueue_top_child_candidate(self, parent):
         if not parent.calls:
@@ -94,21 +98,18 @@ class ZygoteTree:
             version = child_pkgV.split("==")[1] if "==" in child_pkgV else None
             
             # skip if this package but different version is loaded
-            # TODO: see if we can handle multiple versions of the same package
             if pkg_name in loaded_names:
                 continue
             
             # keep track of packages that would be loaded by this candidate
             packages_to_load = {child_pkgV}
             
-            # TODO: double check logic (not sure if this is fully correct)
             # paper suggests that multipackage trees perform better than single package trees
             if pkg_name in self.deps and version in self.deps.get(pkg_name, {}): 
                 # get dependencies for this package and version
                 dep_sets = self.deps[pkg_name][version]
                 if dep_sets:
                     # dep sets are sorted by call frequency so using the first set picks the one that is called the most often
-                    # TODO: might change it to a better approach later instead of choosing first
                     for dep_pkg in dep_sets[0]:
                         if dep_pkg not in loaded_pkgs:
                             dep_name = dep_pkg.split("==")[0]
@@ -137,11 +138,13 @@ class ZygoteTree:
             if not valid:
                 continue
             
-            # calculate utility: number of calls that would be satisfied by loading these packages
-            utility = 0
+            # calculate utility: len(packages_to_load) × matching_calls
+            # assuming equal weigths for all packages
+            matching_calls = 0
             for call_pkgs in parent.calls.values():
                 if all(pkg in call_pkgs for pkg in packages_to_load):
-                    utility += 1
+                    matching_calls += 1
+            utility = len(packages_to_load) * matching_calls
             
             if utility == 0:
                 continue
@@ -152,8 +155,13 @@ class ZygoteTree:
                 best_candidate = Candidate(parent, packages_to_load, utility)
         
         if best_candidate is not None:
-            # push to queue, use negative utility because lower values have higher priority
-            heapq.heappush(self.candidate_queue, (-best_candidate.utility, id(best_candidate), best_candidate)) 
+            # push to queue
+            entry = QueueEntry(
+                neg_utility=-best_candidate.utility, # use negative utility because we're using a min heap
+                uid=id(best_candidate), # using id to sort candidates that have the same utility
+                candidate=best_candidate,
+            )
+            heapq.heappush(self.candidate_queue, entry)
 
     def _add_child_node(self, candidate):
         parent = candidate.parent
@@ -192,10 +200,10 @@ class ZygoteTree:
         # keep adding nodes to tree until we reach desired size
         while desired_nodes > 0 and self.candidate_queue:
             # get best candidate from priority queue
-            _, _, best_candidate = heapq.heappop(self.candidate_queue)
+            entry = heapq.heappop(self.candidate_queue)
             
             # add as child
-            self._add_child_node(best_candidate)
+            self._add_child_node(entry.candidate)
             desired_nodes -= 1       
 
     def to_dict(self):
@@ -203,11 +211,11 @@ class ZygoteTree:
 
 
 class ZygoteNode:    
-    def __init__(self, calls, packages=None):
+    def __init__(self, calls, packages=None, parent=None):
         self.calls = calls 
         self.packages = packages or set()  # packages pre-loaded at this node
         self.children = []
-        self.parent = None
+        self.parent = parent
     
     def all_packages(self):
         # gets all the current packages at this node, including those inherited from parents
@@ -217,16 +225,9 @@ class ZygoteNode:
     
     def to_dict(self):
         return {
-            "packages": sorted([pkg.split("==")[0] for pkg in self.packages]),
+            "packages": sorted(list(self.packages)),
             "children": [child.to_dict() for child in self.children]
         }
-
-
-class Candidate:    
-    def __init__(self, parent, child_pkgV, utility):
-        self.parent = parent
-        self.child_pkgV = child_pkgV
-        self.utility = utility
 
 
 @app.route("/", methods=["POST"])
@@ -241,18 +242,19 @@ def f():
                     "name": "function_name",
                     "meta": {
                         "requirements_txt": "package1==version\npackage2==version\n..."
-                    },
-                    "code": [
-                        "def function_name(...):",
-                        "    ..."
-                    ]
+                    }
                 },
                 ...
+            ],
+            "calls": [
+                {"name": "function_name"},
+                ...
+            ]
         },
         "deps": {
             <package_name>: {
                 <version>: {
-                    <dependency_string>: call_frequency,
+                    <comma_separated_deps>: <call_frequency>,
                     ...
                 },
                 ...
@@ -275,7 +277,12 @@ def f():
         if workload_data is None or deps_data is None or num_nodes is None:
             return jsonify({"error": "Missing required fields: workload, deps, num_nodes"}), 400
 
-        tree = ZygoteTree(workload_data, deps_data)
+        # parse inputs
+        calls = parse_workload(workload_data)
+        deps = parse_deps(deps_data)
+
+        # build tree
+        tree = ZygoteTree(calls, deps)
         tree.build_tree(num_nodes)
 
         result = tree.to_dict()
