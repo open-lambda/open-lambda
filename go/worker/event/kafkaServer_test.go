@@ -75,6 +75,10 @@ func (m *MockKafkaClient) PollFetches(ctx context.Context) kgo.Fetches {
 	return kgo.Fetches{}
 }
 
+func (m *MockKafkaClient) SetOffset(topic string, partition int32, offset int64) {
+	// No-op for mock — tests control what PollFetches returns via Send/SendError
+}
+
 func (m *MockKafkaClient) Close() {
 	m.closeCalled.Store(true)
 }
@@ -402,9 +406,9 @@ func TestCachedClient_SeekCacheMiss(t *testing.T) {
 	mock.Send(
 		&kgo.Record{Topic: "t", Partition: 0, Offset: 5, Value: []byte("five")},
 	)
-	// Second poll returns a new record after seek miss
+	// This is what the underlying client returns after SetOffset + PollFetches
 	mock.Send(
-		&kgo.Record{Topic: "t", Partition: 0, Offset: 20, Value: []byte("twenty")},
+		&kgo.Record{Topic: "t", Partition: 0, Offset: 99, Value: []byte("ninety-nine")},
 	)
 
 	cached := newCachedKafkaClient(mock, 100)
@@ -414,16 +418,43 @@ func TestCachedClient_SeekCacheMiss(t *testing.T) {
 	// Seek to offset 99 which is not in cache
 	cached.Seek("t", 0, 99)
 
-	// Should miss cache, clear seek, and fall through to underlying client
+	// Should miss cache, call SetOffset + PollFetches on underlying, find offset 99, return it
 	fetches := cached.PollFetches(context.Background())
 	records := fetches.Records()
-	if len(records) != 1 || records[0].Offset != 20 {
-		t.Fatalf("Expected offset 20 from underlying after cache miss, got %v", records)
+	if len(records) != 1 || records[0].Offset != 99 {
+		t.Fatalf("Expected offset 99 fetched from Kafka, got %v", records)
 	}
 
-	// Seek should be cleared
+	// Seek should advance to 100
+	if cached.seekTarget == nil || cached.seekTarget.offset != 100 {
+		t.Errorf("Expected seekTarget.offset=100, got %v", cached.seekTarget)
+	}
+}
+
+func TestCachedClient_SeekCacheMiss_OffsetUnavailable(t *testing.T) {
+	mock := &MockKafkaClient{Drained: make(chan struct{})}
+	mock.Send(
+		&kgo.Record{Topic: "t", Partition: 0, Offset: 5, Value: []byte("five")},
+	)
+	// Kafka returns records that don't include the seek offset (e.g., offset is past end)
+	mock.Send(
+		&kgo.Record{Topic: "t", Partition: 0, Offset: 200, Value: []byte("two-hundred")},
+	)
+
+	cached := newCachedKafkaClient(mock, 100)
+	cached.PollFetches(context.Background())
+
+	// Seek to offset 99, but Kafka returns offset 200 instead
+	cached.Seek("t", 0, 99)
+	fetches := cached.PollFetches(context.Background())
+	records := fetches.Records()
+
+	// Should give up on seek and return what Kafka gave us
+	if len(records) != 1 || records[0].Offset != 200 {
+		t.Fatalf("Expected offset 200 from Kafka fallback, got %v", records)
+	}
 	if cached.seekTarget != nil {
-		t.Error("Expected seekTarget to be nil after cache miss")
+		t.Error("Expected seekTarget to be nil after unavailable offset")
 	}
 }
 

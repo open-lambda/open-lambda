@@ -22,7 +22,28 @@ import (
 
 type KafkaClient interface {
 	PollFetches(context.Context) kgo.Fetches
+	SetOffset(topic string, partition int32, offset int64)
 	Close()
+}
+
+// kgoClientWrapper wraps *kgo.Client to implement KafkaClient, adding the
+// SetOffset method that maps to kgo's SetOffsets API.
+type kgoClientWrapper struct {
+	client *kgo.Client
+}
+
+func (w *kgoClientWrapper) PollFetches(ctx context.Context) kgo.Fetches {
+	return w.client.PollFetches(ctx)
+}
+
+func (w *kgoClientWrapper) SetOffset(topic string, partition int32, offset int64) {
+	w.client.SetOffsets(map[string]map[int32]kgo.EpochOffset{
+		topic: {partition: {Offset: offset}},
+	})
+}
+
+func (w *kgoClientWrapper) Close() {
+	w.client.Close()
 }
 
 // cacheKey uniquely identifies a Kafka record by its topic, partition, and offset.
@@ -84,12 +105,31 @@ func (c *cachedKafkaClient) PollFetches(ctx context.Context) kgo.Fetches {
 			c.seekTarget.offset++
 			return makeSingleRecordFetches(record)
 		}
-		// Cache miss — end seek, fall through to underlying client
-		slog.Info("Seek cache miss, resuming normal polling",
+		// Cache miss — seek on Kafka to fetch the record from the broker
+		slog.Info("Seek cache miss, fetching from Kafka",
+			"topic", c.seekTarget.topic,
+			"partition", c.seekTarget.partition,
+			"offset", c.seekTarget.offset)
+		c.underlying.SetOffset(c.seekTarget.topic, c.seekTarget.partition, c.seekTarget.offset)
+		fetches := c.underlying.PollFetches(ctx)
+		fetches.EachRecord(func(record *kgo.Record) {
+			c.put(cacheKey{topic: record.Topic, partition: record.Partition, offset: record.Offset}, record)
+		})
+
+		// Check cache again after fetching
+		record, ok = c.cache[key]
+		if ok {
+			c.touchLRU(key)
+			c.seekTarget.offset++
+			return makeSingleRecordFetches(record)
+		}
+		// Still not found (offset may be past the end of the partition) — give up
+		slog.Warn("Seek offset not available from Kafka, resuming normal polling",
 			"topic", c.seekTarget.topic,
 			"partition", c.seekTarget.partition,
 			"offset", c.seekTarget.offset)
 		c.seekTarget = nil
+		return fetches
 	}
 
 	fetches := c.underlying.PollFetches(ctx)
@@ -97,6 +137,10 @@ func (c *cachedKafkaClient) PollFetches(ctx context.Context) kgo.Fetches {
 		c.put(cacheKey{topic: record.Topic, partition: record.Partition, offset: record.Offset}, record)
 	})
 	return fetches
+}
+
+func (c *cachedKafkaClient) SetOffset(topic string, partition int32, offset int64) {
+	c.underlying.SetOffset(topic, partition, offset)
 }
 
 func (c *cachedKafkaClient) Close() {
@@ -209,7 +253,7 @@ func (km *KafkaManager) newLambdaKafkaConsumer(consumerName string, lambdaName s
 		return nil, fmt.Errorf("failed to create Kafka client for lambda %s: %w", lambdaName, err)
 	}
 
-	cached := newCachedKafkaClient(client, defaultCacheSize)
+	cached := newCachedKafkaClient(&kgoClientWrapper{client: client}, defaultCacheSize)
 	return &LambdaKafkaConsumer{
 		consumerName: consumerName,
 		lambdaName:   lambdaName,
