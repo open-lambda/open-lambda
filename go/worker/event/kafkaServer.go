@@ -69,7 +69,8 @@ const defaultCacheSize = 1024
 
 // cachedKafkaClient wraps a KafkaClient and caches records in an LRU map keyed
 // by {topic, partition, offset}. When a seek is active, PollFetches serves
-// records from the cache. On cache miss, the seek ends and normal polling resumes.
+// records from the cache. On cache miss, it calls SetOffset on the underlying
+// client so the next poll fetches from the right position.
 type cachedKafkaClient struct {
 	underlying KafkaClient
 	cache      map[cacheKey]*kgo.Record
@@ -105,31 +106,14 @@ func (c *cachedKafkaClient) PollFetches(ctx context.Context) kgo.Fetches {
 			c.seekTarget.offset++
 			return makeSingleRecordFetches(record)
 		}
-		// Cache miss — seek on Kafka to fetch the record from the broker
-		slog.Info("Seek cache miss, fetching from Kafka",
+		// Cache miss — tell the underlying client to fetch from this offset.
+		// The next normal PollFetches will get records starting here.
+		slog.Info("Seek cache miss, setting offset on underlying client",
 			"topic", c.seekTarget.topic,
 			"partition", c.seekTarget.partition,
 			"offset", c.seekTarget.offset)
 		c.underlying.SetOffset(c.seekTarget.topic, c.seekTarget.partition, c.seekTarget.offset)
-		fetches := c.underlying.PollFetches(ctx)
-		fetches.EachRecord(func(record *kgo.Record) {
-			c.put(cacheKey{topic: record.Topic, partition: record.Partition, offset: record.Offset}, record)
-		})
-
-		// Check cache again after fetching
-		record, ok = c.cache[key]
-		if ok {
-			c.touchLRU(key)
-			c.seekTarget.offset++
-			return makeSingleRecordFetches(record)
-		}
-		// Still not found (offset may be past the end of the partition) — give up
-		slog.Warn("Seek offset not available from Kafka, resuming normal polling",
-			"topic", c.seekTarget.topic,
-			"partition", c.seekTarget.partition,
-			"offset", c.seekTarget.offset)
 		c.seekTarget = nil
-		return fetches
 	}
 
 	fetches := c.underlying.PollFetches(ctx)
