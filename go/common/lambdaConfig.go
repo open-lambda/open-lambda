@@ -45,8 +45,7 @@ type KafkaTrigger struct {
 type LambdaConfig struct {
 	Triggers     Triggers          `yaml:"triggers"`      // List of HTTP triggers
 	Environment  map[string]string `yaml:"environment"`   // Environment variables for the lambda
-	ReuseSandbox bool              `yaml:"reuse-sandbox"` // controls whether a sandbox is reused across
-	// invocations.
+	ReuseSandbox bool              `yaml:"reuse-sandbox"` // if true, sandbox is reused across invocations
 	// Additional configurations can be added here.
 }
 
