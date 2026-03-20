@@ -62,6 +62,10 @@ jobs:
       working-directory: go/common
       run: go test -v
       timeout-minutes: 5
+    - name: Test Go Worker
+      working-directory: go/worker
+      run: go test -v ./...
+      timeout-minutes: 5
     - name: Test Python (SOCK)
       run: sudo env "PATH=$PATH" ./scripts/test.py --worker_type=sock
       timeout-minutes: 20

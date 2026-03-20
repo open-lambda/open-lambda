@@ -187,9 +187,9 @@ func makeErrorFetches(topic string, partition int32, err error) kgo.Fetches {
 	}}
 }
 
-// newTestConsumer creates a LambdaKafkaConsumer with sensible defaults for testing.
+// setupConsumer creates a LambdaKafkaConsumer with sensible defaults for testing.
 // The consumerName, kafkaTrigger GroupId, and other fields are derived from lambdaName.
-func newTestConsumer(lambdaName string, client KafkaClient, invoker LambdaInvoker) *LambdaKafkaConsumer {
+func setupConsumer(lambdaName string, client KafkaClient, invoker LambdaInvoker) *LambdaKafkaConsumer {
 	return &LambdaKafkaConsumer{
 		consumerName: lambdaName + "-0",
 		lambdaName:   lambdaName,
@@ -225,7 +225,7 @@ func TestConsumeLoop_ProcessesRecords(t *testing.T) {
 		Value: []byte(`{"orderId": 42}`),
 	})
 
-	consumer := newTestConsumer("my-lambda", mockClient, invoker)
+	consumer := setupConsumer("my-lambda", mockClient, invoker)
 	stop := runConsumeLoop(consumer)
 	<-mockClient.Drained
 	stop()
@@ -271,7 +271,7 @@ func TestConsumeLoop_ContinuesThroughErrors(t *testing.T) {
 		Topic: "topic", Partition: 0, Offset: 1, Value: []byte("survived"),
 	})
 
-	consumer := newTestConsumer("test-lambda", mockClient, invoker)
+	consumer := setupConsumer("test-lambda", mockClient, invoker)
 	stop := runConsumeLoop(consumer)
 	<-mockClient.Drained
 	stop()
