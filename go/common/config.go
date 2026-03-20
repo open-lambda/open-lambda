@@ -62,6 +62,11 @@ type Config struct {
 	// pass through to sandbox envirenment variable
 	Sandbox_config any `json:"sandbox_config"`
 
+	// KAFKA CACHE OPTIONS
+	Kafka_cache_size_mb          int `json:"kafka_cache_size_mb"`          // max message cache size in MB (default: 256)
+	Kafka_max_concurrent_fetches int `json:"kafka_max_concurrent_fetches"` // max simultaneous Kafka consumers (default: 10)
+	Kafka_prefetch_count         int `json:"kafka_prefetch_count"`         // messages to prefetch on cache miss (default: 5)
+
 	Docker          DockerConfig   `json:"docker"`
 	Limits          LimitsConfig   `json:"limits"`
 	InstallerLimits LimitsConfig   `json:"installer_limits"` // limits profile for installers
@@ -291,9 +296,12 @@ func getDefaultConfigForPatching(olPath string) (*Config, error) {
 		Pkgs_dir:          packagesDir,
 		Sandbox_config:    map[string]any{},
 		SOCK_base_path:    baseImgDir,
-		Registry_cache_ms: 5000, // 5 seconds
-		Mem_pool_mb:       memPoolMb,
-		Import_cache_tree: zygoteTreePath,
+		Registry_cache_ms:          5000, // 5 seconds
+		Mem_pool_mb:                memPoolMb,
+		Import_cache_tree:          zygoteTreePath,
+		Kafka_cache_size_mb:          256,
+		Kafka_max_concurrent_fetches: 10,
+		Kafka_prefetch_count:         5,
 		Docker: DockerConfig{
 			Base_image: "ol-min",
 		},
