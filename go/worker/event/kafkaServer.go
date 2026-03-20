@@ -48,6 +48,7 @@ type LambdaKafkaConsumer struct {
 	invoker      LambdaInvoker  // Abstraction for lambda invocation
 	stopChan     chan struct{}   // Shutdown signal for this consumer
 	// When this channel is closed, the goroutine for the consumer exits
+	errorCount   int            // Number of non-timeout Kafka client errors encountered
 }
 
 // KafkaManager manages multiple lambda-specific Kafka consumers
@@ -144,6 +145,7 @@ func (lkc *LambdaKafkaConsumer) consumeLoop() {
 						continue
 					}
 
+					lkc.errorCount++
 					// TODO: Surface Kafka consumer errors to lambda developers by invoking an error
 					// handler lambda function. Could allow lambdas to specify an onError callback in
 					// ol.yaml that gets invoked with error details.

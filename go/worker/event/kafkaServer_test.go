@@ -1,15 +1,12 @@
 package event
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"os"
 	"reflect"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -266,14 +263,9 @@ func TestConsumeLoop_ProcessesRecords(t *testing.T) {
 }
 
 func TestConsumeLoop_ContinuesThroughErrors(t *testing.T) {
-	var logBuf bytes.Buffer
-	old := slog.Default()
-	slog.SetDefault(slog.New(slog.NewTextHandler(&logBuf, nil)))
-	defer slog.SetDefault(old)
-
 	mockClient, invoker, consumer := setupConsumerHarness("test-lambda")
 	// Poll sequence: deadline-exceeded errors (silently skipped), then a real
-	// error (logged), then a valid record. The loop should survive all of them.
+	// error (counted), then a valid record. The loop should survive all of them.
 	mockClient.SendError("topic", 0, context.DeadlineExceeded)
 	mockClient.SendError("topic", 0, context.DeadlineExceeded)
 	mockClient.SendError("topic", 0, fmt.Errorf("broker unreachable"))
@@ -307,13 +299,9 @@ func TestConsumeLoop_ContinuesThroughErrors(t *testing.T) {
 		t.Errorf("Invocation mismatch:\n  got:  %+v\n  want: %+v", invocations[0], expected)
 	}
 
-	// Real errors should be logged, but deadline exceeded should be silently skipped
-	logs := logBuf.String()
-	if !strings.Contains(logs, "broker unreachable") {
-		t.Error("Expected 'broker unreachable' to be logged")
-	}
-	if strings.Contains(logs, "DeadlineExceeded") {
-		t.Error("DeadlineExceeded should not appear in logs")
+	// Only real errors should be counted; DeadlineExceeded should be ignored
+	if consumer.errorCount != 1 {
+		t.Errorf("Expected 1 error counted, got %d", consumer.errorCount)
 	}
 }
 
