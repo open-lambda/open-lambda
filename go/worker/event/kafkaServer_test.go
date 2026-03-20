@@ -211,8 +211,10 @@ func setupConsumerHarness(lambdaName string) (*MockKafkaClient, *MockLambdaInvok
 	return client, invoker, consumer
 }
 
-// runConsumeLoop starts the consume loop in a goroutine and returns a stop
-// function that signals shutdown and waits for the goroutine to exit.
+// runConsumeLoop starts consumeLoop in a goroutine and returns a stop function
+// that signals shutdown and waits for the goroutine to exit. Callers should
+// <-mockClient.Drained before stop() — Drained closes once all enqueued
+// records have been fully processed, making it safe to assert on results.
 func runConsumeLoop(consumer *LambdaKafkaConsumer) (stop func()) {
 	var wg sync.WaitGroup
 	wg.Add(1)
