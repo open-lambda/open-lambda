@@ -13,6 +13,11 @@ triggers:
   http:
     - method: PUT
     - method: PATCH
+  kafka:
+    - bootstrap_servers:
+        - "localhost:9092"
+      topics:
+        - "my-topic"
 
 environment:
   MY_ENV_VAR1: "value1"
@@ -22,7 +27,7 @@ environment:
 ## 3. Configuration Options
 
 ### a. Triggers
-OpenLambda only supports HTTP trigger for now, but future development plans include supporting other trigger types.
+OpenLambda currently supports HTTP and Kafka triggers.
 
 #### HTTP Triggers
 Defines which HTTP methods can be used to invoke the lambda.
@@ -35,6 +40,32 @@ triggers:
     - method: POST
 ```
 In this case, the lambda accepts GET and POST requests.
+
+#### Kafka Triggers
+Defines Kafka topics the lambda should consume from. When a message
+arrives on a configured topic, the lambda is invoked with the message
+as the request body.
+
+Example:
+```yaml
+triggers:
+  kafka:
+    - bootstrap_servers:
+        - "localhost:9092"
+      topics:
+        - "my-topic"
+      auto_offset_reset: "latest"
+```
+
+| Field               | Type       | Required | Description                                                                                 |
+| ------------------- | ---------- | -------- | ------------------------------------------------------------------------------------------- |
+| `bootstrap_servers` | `[]string` | Yes      | List of Kafka broker addresses.                                                             |
+| `topics`            | `[]string` | Yes      | Topics this lambda should consume from.                                                     |
+| `auto_offset_reset` | `string`   | No       | Where to start reading if no committed offset exists. `"latest"` (default) or `"earliest"`. |
+
+A lambda can define multiple Kafka trigger entries. Each entry creates a
+separate consumer. For more details on Kafka triggers, including how to access Kafka
+metadata headers in your handler, see [kafka-triggers.md](kafka-triggers.md).
 
 ### b. Environment Variables
 Defines environment variables that will be available to the lambda function at runtime.
