@@ -11,6 +11,38 @@ Candidate = namedtuple('Candidate', ['parent', 'child_pkgV', 'utility'])
 QueueEntry = namedtuple('QueueEntry', ['neg_utility', 'uid', 'candidate'])
 
 app = Flask(__name__)
+
+
+class CallMatrix:
+    def __init__(self, rows):
+        self.rows = rows # {call_id: set(pkg_strings)}
+
+    def __bool__(self):
+        return bool(self.rows)
+    
+    def all_packages(self):
+        pkgs = set()
+        for row in self.rows.values():
+            pkgs.update(row) # add all packages from this call to the set
+        return pkgs
+
+    def count_matching(self, packages):
+        # counts how many calls require all of the given packages
+        return sum(1 for row in self.rows.values() if all(p in row for p in packages))
+
+    def split(self, packages):
+        matching = {}
+        remaining = {}
+        # for each call, check if it requires all of the given packages
+        for call_id, required_pkgs in self.rows.items():
+            # if it does, add it to the matching matrix with those packages removed from its requirements
+            if all(p in required_pkgs for p in packages):
+                matching[call_id] = required_pkgs - packages
+            # if it doesn't, add it to the remaining matrix
+            else:
+                remaining[call_id] = required_pkgs
+        return CallMatrix(matching), CallMatrix(remaining)
+    
     
 def parse_workload(workload):
     func_packages = {}
@@ -40,19 +72,20 @@ def parse_workload(workload):
             call_counts[name] += 1
     
     # build call matrix
-    calls = {}
+    rows = {}
     if call_counts:
         for func_name, packages in func_packages.items():
             count = max(1, call_counts.get(func_name, 1))
             for i in range(count):
-                calls[f"{func_name}_{i}"] = packages.copy()
+                rows[f"{func_name}_{i}"] = packages.copy()
     else:
         # if no call counts, just add one call per function
         for func_name, packages in func_packages.items():
-            calls[func_name] = packages.copy()
+            rows[func_name] = packages.copy()
     
-    return calls
+    return CallMatrix(rows)
     
+
 def parse_deps(deps_json):
     deps = {}
     
@@ -65,6 +98,7 @@ def parse_deps(deps_json):
                 dep_packages = set(dep_str.split(",")) if dep_str else set()
                 deps[pkg_name][version].append(dep_packages)
     return deps
+
 
 class ZygoteTree: 
     def __init__(self, calls, deps):
@@ -81,9 +115,7 @@ class ZygoteTree:
         loaded_names = {pkg.split("==")[0]: pkg for pkg in loaded_pkgs} # get only names for conflict checking
         
         # get all packages needed by calls in this node
-        needed_pkgs = set()
-        for pkgs in parent.calls.values(): # equivalent to parent.calls.column_names in forklift paper
-            needed_pkgs.update(pkgs)
+        needed_pkgs = parent.calls.all_packages()
         
         best_candidate = None
         best_utility = -1
@@ -140,10 +172,7 @@ class ZygoteTree:
             
             # calculate utility: len(packages_to_load) × matching_calls
             # assuming equal weigths for all packages
-            matching_calls = 0
-            for call_pkgs in parent.calls.values():
-                if all(pkg in call_pkgs for pkg in packages_to_load):
-                    matching_calls += 1
+            matching_calls = parent.calls.count_matching(packages_to_load)
             utility = len(packages_to_load) * matching_calls
             
             if utility == 0:
@@ -167,15 +196,7 @@ class ZygoteTree:
         parent = candidate.parent
         child_pkgV = candidate.child_pkgV
         
-        child_calls = {}
-        parent_calls = {}
-        
-        for call_id, required_pkgs in parent.calls.items():
-            if all(pkg in required_pkgs for pkg in child_pkgV):
-                remaining = required_pkgs - child_pkgV
-                child_calls[call_id] = remaining
-            else:
-                parent_calls[call_id] = required_pkgs
+        child_calls, parent_calls = parent.calls.split(child_pkgV)
         
         # create child node and add to parent's children
         child = ZygoteNode(calls=child_calls, packages=child_pkgV)
