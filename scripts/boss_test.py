@@ -135,7 +135,8 @@ def verify_lambda_config(lambda_name):
             "Cron": None,
             "Kafka": None,
         },
-        "Environment": None,
+        "Environment": {},
+        "ReuseSandbox": True,
     }
     assert actual_config == expected_config, (
         f"Lambda config mismatch!\nExpected: {expected_config}\nActual: {actual_config}"
