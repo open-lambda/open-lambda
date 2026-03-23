@@ -71,6 +71,35 @@ func TestLifecycle_GetPutReuse(t *testing.T) {
 	_ = ref2.Put()
 }
 
+// TestDestroy_NilRefReused verifies that after Destroy the ref stays in the pool
+// as a nil ref, and the next GetOrCreateUnpaused reuses it (pool size stays 1).
+func TestDestroy_NilRefReused(t *testing.T) {
+	set, pool := newTestSet(t)
+	defer set.Close()
+
+	ref1, err := set.GetOrCreateUnpaused()
+	if err != nil {
+		t.Fatalf("GetOrCreateUnpaused: %v", err)
+	}
+	id1 := ref1.Sandbox().ID()
+
+	if err := ref1.Destroy("test"); err != nil {
+		t.Fatalf("Destroy: %v", err)
+	}
+
+	ref2, err := set.GetOrCreateUnpaused()
+	if err != nil {
+		t.Fatalf("second GetOrCreateUnpaused: %v", err)
+	}
+	if ref2.Sandbox().ID() == id1 {
+		t.Fatal("expected a new sandbox after Destroy, got the same ID")
+	}
+	if n := len(pool.CreatedSandboxes()); n != 2 {
+		t.Fatalf("expected 2 created sandboxes total, got %d", n)
+	}
+	_ = ref2.Put()
+}
+
 // TestGet_AfterClose verifies that GetOrCreateUnpaused returns an error after Close.
 func TestGet_AfterClose(t *testing.T) {
 	set, _ := newTestSet(t)
