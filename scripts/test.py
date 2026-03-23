@@ -225,6 +225,15 @@ def max_mem_alloc():
     assert limit-16 <= int(result) <= limit
 
 @test
+def fresh_sandbox_test():
+    open_lambda = OpenLambda()
+
+    num_calls = 5
+    for _ in range(num_calls):
+        result = open_lambda.run("counter", {})
+        assert_eq(result, 1) # fresh sandbox each call, counter always resets to 0 and increments to 1
+
+@test
 def ping_test():
     open_lambda = OpenLambda()
 
@@ -484,6 +493,9 @@ def run_tests():
     # test resource limits
     fork_bomb()
     max_mem_alloc()
+
+    # test sandbox-reuse flag behavior
+    fresh_sandbox_test()
 
     # numpy pip install needs a larger memory cap.
     # numpy also spawns threads using OpenBLAS, so a higher
