@@ -75,7 +75,7 @@ func (m *MockKafkaClient) PollFetches(ctx context.Context) kgo.Fetches {
 	return kgo.Fetches{}
 }
 
-func (m *MockKafkaClient) SetOffset(topic string, partition int32, offset int64) {
+func (m *MockKafkaClient) Seek(topic string, partition int32, offset int64) {
 	// No-op for mock — tests control what PollFetches returns via Send/SendError
 }
 

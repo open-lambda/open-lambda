@@ -30,7 +30,7 @@ const defaultCacheSize = 1024
 
 // cachedKafkaClient wraps a KafkaClient and caches records in an LRU map keyed
 // by {topic, partition, offset}. When a seek is active, PollFetches serves
-// records from the cache. On cache miss, it calls SetOffset on the underlying
+// records from the cache. On cache miss, it calls Seek on the underlying
 // client so the next poll fetches from the right position.
 type cachedKafkaClient struct {
 	underlying KafkaClient
@@ -73,7 +73,7 @@ func (c *cachedKafkaClient) PollFetches(ctx context.Context) kgo.Fetches {
 			"topic", c.seekTarget.topic,
 			"partition", c.seekTarget.partition,
 			"offset", c.seekTarget.offset)
-		c.underlying.SetOffset(c.seekTarget.topic, c.seekTarget.partition, c.seekTarget.offset)
+		c.underlying.Seek(c.seekTarget.topic, c.seekTarget.partition, c.seekTarget.offset)
 		c.seekTarget = nil
 	}
 
@@ -82,10 +82,6 @@ func (c *cachedKafkaClient) PollFetches(ctx context.Context) kgo.Fetches {
 		c.put(cacheKey{topic: record.Topic, partition: record.Partition, offset: record.Offset}, record)
 	})
 	return fetches
-}
-
-func (c *cachedKafkaClient) SetOffset(topic string, partition int32, offset int64) {
-	c.underlying.SetOffset(topic, partition, offset)
 }
 
 func (c *cachedKafkaClient) Close() {

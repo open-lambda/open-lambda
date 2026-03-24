@@ -22,12 +22,11 @@ import (
 
 type KafkaClient interface {
 	PollFetches(context.Context) kgo.Fetches
-	SetOffset(topic string, partition int32, offset int64)
+	Seek(topic string, partition int32, offset int64)
 	Close()
 }
 
-// kgoClientWrapper wraps *kgo.Client to implement KafkaClient, adding the
-// SetOffset method that maps to kgo's SetOffsets API.
+// kgoClientWrapper wraps *kgo.Client to implement KafkaClient.
 type kgoClientWrapper struct {
 	client *kgo.Client
 }
@@ -36,7 +35,7 @@ func (w *kgoClientWrapper) PollFetches(ctx context.Context) kgo.Fetches {
 	return w.client.PollFetches(ctx)
 }
 
-func (w *kgoClientWrapper) SetOffset(topic string, partition int32, offset int64) {
+func (w *kgoClientWrapper) Seek(topic string, partition int32, offset int64) {
 	w.client.SetOffsets(map[string]map[int32]kgo.EpochOffset{
 		topic: {partition: {Offset: offset}},
 	})
@@ -66,8 +65,7 @@ type LambdaKafkaConsumer struct {
 	consumerName string // Unique name for this consumer
 	lambdaName   string // lambda function name
 	kafkaTrigger *common.KafkaTrigger
-	client       KafkaClient          // used for PollFetches/Close (may be a cachedKafkaClient)
-	cache        *cachedKafkaClient   // typed reference for Seek; same object as client when caching is enabled
+	client       KafkaClient          // used for PollFetches/Close/Seek
 	invoker      LambdaInvoker        // Abstraction for lambda invocation
 	stopChan     chan struct{}         // Shutdown signal for this consumer
 	// When this channel is closed, the goroutine for the consumer exits
@@ -119,7 +117,6 @@ func (km *KafkaManager) newLambdaKafkaConsumer(consumerName string, lambdaName s
 		lambdaName:   lambdaName,
 		kafkaTrigger: trigger,
 		client:       cached,
-		cache:        cached,
 		invoker:      km.invoker,
 		stopChan:     make(chan struct{}),
 	}, nil
@@ -191,8 +188,8 @@ func (lkc *LambdaKafkaConsumer) consumeLoop() {
 					"partition", record.Partition,
 					"offset", record.Offset,
 					"size", len(record.Value))
-				if seek := lkc.processMessage(record); seek != nil && lkc.cache != nil {
-					lkc.cache.Seek(record.Topic, record.Partition, seek.offset)
+				if seek := lkc.processMessage(record); seek != nil {
+					lkc.client.Seek(record.Topic, record.Partition, seek.offset)
 					break // next PollFetches will serve from cache
 				}
 			}
