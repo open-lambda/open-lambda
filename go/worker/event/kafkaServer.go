@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -21,7 +22,27 @@ import (
 
 type KafkaClient interface {
 	PollFetches(context.Context) kgo.Fetches
+	Seek(topic string, partition int32, offset int64)
 	Close()
+}
+
+// kgoClientWrapper wraps *kgo.Client to implement KafkaClient.
+type kgoClientWrapper struct {
+	client *kgo.Client
+}
+
+func (w *kgoClientWrapper) PollFetches(ctx context.Context) kgo.Fetches {
+	return w.client.PollFetches(ctx)
+}
+
+func (w *kgoClientWrapper) Seek(topic string, partition int32, offset int64) {
+	w.client.SetOffsets(map[string]map[int32]kgo.EpochOffset{
+		topic: {partition: {Offset: offset}},
+	})
+}
+
+func (w *kgoClientWrapper) Close() {
+	w.client.Close()
 }
 
 // LambdaInvoker abstracts the lambda invocation layer for testability
@@ -44,11 +65,11 @@ type LambdaKafkaConsumer struct {
 	consumerName string // Unique name for this consumer
 	lambdaName   string // lambda function name
 	kafkaTrigger *common.KafkaTrigger
-	client       KafkaClient    // kgo.client implements the KafkaClient interface
-	invoker      LambdaInvoker  // Abstraction for lambda invocation
-	stopChan     chan struct{}   // Shutdown signal for this consumer
+	client       KafkaClient          // used for PollFetches/Close/Seek
+	invoker      LambdaInvoker        // Abstraction for lambda invocation
+	stopChan     chan struct{}         // Shutdown signal for this consumer
 	// When this channel is closed, the goroutine for the consumer exits
-	errorCount   int            // Number of non-timeout Kafka client errors encountered
+	errorCount   int                  // Number of non-timeout Kafka client errors encountered
 }
 
 // KafkaManager manages multiple lambda-specific Kafka consumers
@@ -90,11 +111,12 @@ func (km *KafkaManager) newLambdaKafkaConsumer(consumerName string, lambdaName s
 		return nil, fmt.Errorf("failed to create Kafka client for lambda %s: %w", lambdaName, err)
 	}
 
+	cached := newCachedKafkaClient(&kgoClientWrapper{client: client}, defaultCacheSize)
 	return &LambdaKafkaConsumer{
 		consumerName: consumerName,
 		lambdaName:   lambdaName,
 		kafkaTrigger: trigger,
-		client:       client,
+		client:       cached,
 		invoker:      km.invoker,
 		stopChan:     make(chan struct{}),
 	}, nil
@@ -156,8 +178,9 @@ func (lkc *LambdaKafkaConsumer) consumeLoop() {
 				continue
 			}
 
-			// Process each record
-			fetches.EachRecord(func(record *kgo.Record) {
+			// Process each record. Manual iteration (instead of EachRecord) lets
+			// us break out mid-batch when a seek is requested.
+			for _, record := range fetches.Records() {
 				slog.Info("Received Kafka message for lambda",
 					"consumer", lkc.consumerName,
 					"lambda", lkc.lambdaName,
@@ -165,14 +188,18 @@ func (lkc *LambdaKafkaConsumer) consumeLoop() {
 					"partition", record.Partition,
 					"offset", record.Offset,
 					"size", len(record.Value))
-				lkc.processMessage(record)
-			})
+				if seek := lkc.processMessage(record); seek != nil {
+					lkc.client.Seek(record.Topic, record.Partition, seek.offset)
+					break // next PollFetches will serve from cache
+				}
+			}
 		}
 	}
 }
 
-// processMessage handles a single Kafka message by invoking the lambda function directly
-func (lkc *LambdaKafkaConsumer) processMessage(record *kgo.Record) {
+// processMessage handles a single Kafka message by invoking the lambda function directly.
+// If the lambda returns an X-Kafka-Seek-Offset header, the corresponding seekRequest is returned.
+func (lkc *LambdaKafkaConsumer) processMessage(record *kgo.Record) *seekRequest {
 	t := common.T0("kafka-message-processing")
 	defer t.T1()
 
@@ -185,7 +212,7 @@ func (lkc *LambdaKafkaConsumer) processMessage(record *kgo.Record) {
 			"lambda", lkc.lambdaName,
 			"error", err,
 			"topic", record.Topic)
-		return
+		return nil
 	}
 	// RequestURI must be set explicitly for synthetic requests (http.NewRequest doesn't set it)
 	req.RequestURI = requestPath
@@ -198,8 +225,6 @@ func (lkc *LambdaKafkaConsumer) processMessage(record *kgo.Record) {
 	req.Header.Set("X-Kafka-Group-Id", lkc.kafkaTrigger.GroupId)
 
 	// Create response recorder to capture lambda output.
-	// TODO: Capture and log the lambda response body using httptest's response recorder
-	// for kafka triggered lambda invocations.
 	w := httptest.NewRecorder()
 
 	// Invoke the lambda function directly
@@ -213,6 +238,26 @@ func (lkc *LambdaKafkaConsumer) processMessage(record *kgo.Record) {
 		"partition", record.Partition,
 		"offset", record.Offset,
 		"status", w.Code)
+
+	// Check if the lambda requested a seek via response header
+	if seekStr := w.Header().Get("X-Kafka-Seek-Offset"); seekStr != "" {
+		seekOffset, err := strconv.ParseInt(seekStr, 10, 64)
+		if err != nil {
+			slog.Warn("Invalid X-Kafka-Seek-Offset header",
+				"lambda", lkc.lambdaName,
+				"value", seekStr,
+				"error", err)
+			return nil
+		}
+		slog.Info("Lambda requested seek",
+			"lambda", lkc.lambdaName,
+			"topic", record.Topic,
+			"partition", record.Partition,
+			"current_offset", record.Offset,
+			"seek_offset", seekOffset)
+		return &seekRequest{offset: seekOffset}
+	}
+	return nil
 }
 
 // cleanup closes the kgo client
