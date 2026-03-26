@@ -61,4 +61,96 @@ Note, the first request may take minutes because OpenLambda will install all the
 
 TODO: update ag_forecasting_api URLs from tylerharter fork to UW-Madison-DSI once env option is merged upstream.
 
+## Global Mosquito Observations Dashboard API (Flask + MySQL)
+
+[Global Mosquito Observations Dashboard](https://github.com/UW-Madison-DSI/Global-Mosquito-Observations-Dashboard), developed by the UW-Madison Data Science Institute (DSI), is a Flask + MySQL application that aggregates and displays mosquito observation data from different citizen science data sources.  
+
+### Installation
+
+Clone the repo:
+
+```bash
+git clone https://github.com/UW-Madison-DSI/Global-Mosquito-Observations-Dashboard.git
+```
+
+Edit `docker-compose.yml`:
+
+```yml
+services:
+  db:
+    image: mysql:latest
+    environment:
+      MYSQL_DATABASE: mosquito_dashboard
+      MYSQL_USER: webuser
+      MYSQL_PASSWORD: password
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_ALLOW_EMPTY_PASSWORD: 1
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./database:/docker-entrypoint-initdb.d
+      - ./mysql:/var/lib/mysql
+    networks:
+      - network
+networks:
+  network:
+    driver: bridge
+```
+
+Start the database:
+
+```bash
+docker compose up
+```
+
+Initialize a worker:
+
+```bash
+./ol worker init -i ol-min
+```
+
+Start the worker:
+
+```bash
+./ol worker up -d
+```
+
+Create `ol.yaml` to configure the app for OpenLambda:
+
+```yaml
+triggers:
+  http:
+    - method: "*"
+environment:
+  OL_ENTRY_FILE: "app.py"
+  FLASK_ENV: "development"
+  DB_HOST: "127.0.0.1"
+  DB_PORT: "3306"
+  DB_USERNAME: "webuser"
+  DB_DATABASE: "mosquito_dashboard"
+  DB_PASSWORD: "password"
+```
+
+Install pip-compile and pin requirements.txt to versions suitable for OpenLambda:
+
+```bash
+./ol admin install examples/pip-compile
+curl -X POST -d 'https://raw.githubusercontent.com/UW-Madison-DSI/Global-Mosquito-Observations-Dashboard/refs/heads/main/src/server/requirements.txt' http://localhost:5000/run/pip-compile/url > mosquito_requirements.txt
+```
+
+Install and test:
+
+```bash
+./ol admin install -c ol.yaml -r mosquito_requirements ./Global-Mosquito-Observations-Dashboard/src/server
+# simple test
+curl http://localhost:5000/run/server/
+# get observations according to GLOBE Habitat Mapper
+curl -X GET "http://localhost:5000/run/server/observations/habitat-mapper"
+```
+
 ## TODO: add more example apps
