@@ -1,0 +1,52 @@
+{
+	"worker_dir": "/home/amiabuch/open-lambda/test-pool/worker",
+	"worker_url": "localhost",
+	"worker_port": "5000",
+	"log_output": true,
+	"sandbox": "sock",
+	"server_mode": "lambda",
+	"registry": "file:///home/amiabuch/open-lambda/test-pool/registry",
+	"registry_cache_ms": 5000,
+	"Pkgs_dir": "/home/amiabuch/open-lambda/test-pool/lambda/packages",
+	"pip_mirror": "",
+	"mem_pool_mb": 7281,
+	"import_cache_tree": "/home/amiabuch/open-lambda/test-pool/default-zygotes-40.json",
+	"sock_base_path": "/home/amiabuch/open-lambda/test-pool/lambda",
+	"sandbox_config": {},
+	"docker": {
+		"runtime": "",
+		"base_image": "ol-min"
+	},
+	"limits": {
+		"procs": 10,
+		"mem_mb": 50,
+		"cpu_percent": 100,
+		"swappiness": 0,
+		"runtime_sec": 30
+	},
+	"installer_limits": {
+		"procs": 0,
+		"mem_mb": 250,
+		"cpu_percent": 0,
+		"swappiness": 0,
+		"runtime_sec": 300
+	},
+	"features": {
+		"reuse_cgroups": false,
+		"import_cache": "tree",
+		"downsize_paused_mem": true,
+		"enable_seccomp": true
+	},
+	"trace": {
+		"cgroups": false,
+		"memory": false,
+		"evictor": false,
+		"package": false,
+		"latency": false
+	},
+	"storage": {
+		"root": "private",
+		"scratch": "",
+		"code": ""
+	}
+}
