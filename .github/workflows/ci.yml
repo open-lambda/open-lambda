@@ -52,7 +52,7 @@ jobs:
     - name: Install revive (go linter)
       run: go install github.com/mgechev/revive@v1.5.1
     - name: Install cross
-      run: cargo install cross
+      run: cargo install cross --locked
     - name: Build OpenLambda
       run: |
         make ol imgs/ol-wasm wasm-worker wasm-functions native-functions container-proxy
@@ -61,6 +61,10 @@ jobs:
     - name: Test Go Common
       working-directory: go/common
       run: go test -v
+      timeout-minutes: 5
+    - name: Test Go Worker
+      working-directory: go/worker
+      run: go test -v ./...
       timeout-minutes: 5
     - name: Test Python (SOCK)
       run: sudo env "PATH=$PATH" ./scripts/test.py --worker_type=sock

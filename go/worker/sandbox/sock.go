@@ -297,9 +297,8 @@ func (container *SOCKContainer) decCgRefCount() {
 
 		t := common.T0("Destroy()/cleanup-cgroup")
 		if container.cg != nil {
-			container.cg.KillAllProcs()
+			container.cg.KillAndRelease()
 			container.printf("killed PIDs in CG\n")
-			container.cg.Release()
 			container.pool.mem.adjustAvailableMB(container.cg.GetMemLimitMB())
 		}
 		t.T1()

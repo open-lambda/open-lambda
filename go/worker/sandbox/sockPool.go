@@ -34,7 +34,8 @@ type SOCKPool struct {
 
 // NewSOCKPool creates a SOCKPool.
 func NewSOCKPool(name string, mem *MemPool) (cf *SOCKPool, err error) {
-	cgPool, err := cgroups.NewCgroupPool(name)
+	olPath := filepath.Dir(common.Conf.Worker_dir)
+	cgPool, err := cgroups.NewCgroupPool(name, common.CgroupPoolPath(olPath))
 	if err != nil {
 		return nil, err
 	}
