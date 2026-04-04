@@ -18,14 +18,11 @@ func newTestSet(t *testing.T) (sandboxset.SandboxSet, *sandbox.MockSandboxPool) 
 		t.Fatal(err)
 	}
 	pool := &sandbox.MockSandboxPool{}
-	set, err := sandboxset.New(&sandboxset.Config{
+	set := sandboxset.New(&sandboxset.Config{
 		Pool:        pool,
 		CodeDir:     tmpDir + "/code",
 		ScratchDirs: scratchDirs,
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
 	return set, pool
 }
 
@@ -83,8 +80,9 @@ func TestDestroy_NilRefReused(t *testing.T) {
 	}
 	id1 := ref1.Sandbox().ID()
 
-	if err := ref1.Destroy("test"); err != nil {
-		t.Fatalf("Destroy: %v", err)
+	ref1.Broken = true
+	if err := ref1.Put(); err != nil {
+		t.Fatalf("Put (broken): %v", err)
 	}
 
 	ref2, err := set.GetOrCreateUnpaused()

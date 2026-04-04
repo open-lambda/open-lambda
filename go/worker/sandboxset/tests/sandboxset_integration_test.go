@@ -54,15 +54,12 @@ func newDockerSet(t *testing.T) sandboxset.SandboxSet {
 		t.Fatal(err)
 	}
 
-	set, err := sandboxset.New(&sandboxset.Config{
+	set := sandboxset.New(&sandboxset.Config{
 		Pool:        pool,
 		IsLeaf:      true,
 		CodeDir:     codeDir,
 		ScratchDirs: scratchDirs,
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	t.Cleanup(func() {
 		_ = set.Close()
@@ -87,7 +84,8 @@ func TestIntegration_GetCreatesRealContainer(t *testing.T) {
 	t.Logf("created real container: ID=%s", sb.ID())
 	t.Logf("debug: %s", sb.DebugString())
 
-	_ = ref.Destroy("test done")
+	ref.Broken = true
+	_ = ref.Put()
 }
 
 func TestIntegration_PutPausesAndReuses(t *testing.T) {
@@ -117,7 +115,8 @@ func TestIntegration_PutPausesAndReuses(t *testing.T) {
 		t.Fatalf("expected reuse (same ID %s), got new container %s", id1, id2)
 	}
 
-	_ = ref2.Destroy("test done")
+	ref2.Broken = true
+	_ = ref2.Put()
 }
 
 func TestIntegration_DestroyKillsReal(t *testing.T) {
@@ -130,8 +129,9 @@ func TestIntegration_DestroyKillsReal(t *testing.T) {
 	id1 := ref1.Sandbox().ID()
 	t.Logf("first sandbox: ID=%s", id1)
 
-	if err := ref1.Destroy("intentional destroy"); err != nil {
-		t.Fatalf("Destroy: %v", err)
+	ref1.Broken = true
+	if err := ref1.Put(); err != nil {
+		t.Fatalf("Put (broken): %v", err)
 	}
 
 	// Get again — must be a different container since we destroyed the first
@@ -146,7 +146,8 @@ func TestIntegration_DestroyKillsReal(t *testing.T) {
 		t.Fatal("expected new container after Destroy, got same ID")
 	}
 
-	_ = ref2.Destroy("test done")
+	ref2.Broken = true
+	_ = ref2.Put()
 }
 
 func TestIntegration_CloseDestroysAll(t *testing.T) {

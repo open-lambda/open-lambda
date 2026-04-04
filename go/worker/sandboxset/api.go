@@ -1,21 +1,8 @@
 // Package sandboxset provides a thread-safe pool of sandboxes for a single Lambda function. Callers ask for a sandbox and don't worry about whether it is freshly created or recycled from a previous request.
 //
-// Sandbox lifecycle inside a SandboxSet:
-//
-//	[created]
-//	    |
-//	    v
-//	[paused]  <---+
-//	    |         |
-//	    v         |
-//	[in-use]  ----+  (Put)
-//	    |
-//	    v
-//	[destroyed]     (Destroy / Close / error)
-//
 // Usage:
 //
-//	set, err := sandboxset.New(&sandboxset.Config{
+//	set := sandboxset.New(&sandboxset.Config{
 //	    Pool:        myPool,
 //	    CodeDir:     "/path/to/lambda",
 //	    ScratchDirs: myScratchDirs,
@@ -72,8 +59,8 @@ type Config struct {
 	ScratchDirs *common.DirMaker
 }
 
-// New creates a SandboxSet from cfg. Returns an error if any of
-// Pool, CodeDir, or ScratchDirs are missing.
-func New(cfg *Config) (SandboxSet, error) {
+// New creates a SandboxSet from cfg.
+// Panics if Pool, CodeDir, or ScratchDirs are missing.
+func New(cfg *Config) SandboxSet {
 	return newSandboxSet(cfg)
 }
