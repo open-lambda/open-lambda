@@ -119,7 +119,7 @@ curl -X POST -d 'https://raw.githubusercontent.com/UW-Madison-DSI/Global-Mosquit
 Install and test:
 
 ```bash
-./ol admin install -c ol.yaml -r mosquito_requirements ./Global-Mosquito-Observations-Dashboard/src/server
+./ol admin install -c ol.yaml -r mosquito_requirements.txt ./Global-Mosquito-Observations-Dashboard/src/server
 # simple test
 curl http://localhost:5000/run/server/
 # get observations according to GLOBE Habitat Mapper
