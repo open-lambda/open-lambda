@@ -80,12 +80,13 @@ Start the database:
 
 ```bash
 cd Global-Mosquito-Observations-Dashboard
-docker compose up db
+docker compose up db -d
 ```
 
 Navigate back to OL and initialize a worker:
 
 ```bash
+cd ..
 ./ol worker init -i ol-min
 ```
 
