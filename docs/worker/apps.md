@@ -73,44 +73,17 @@ Clone the repo:
 git clone https://github.com/UW-Madison-DSI/Global-Mosquito-Observations-Dashboard.git
 ```
 
-Edit `docker-compose.yml`:
-
-```yml
-services:
-  db:
-    image: mysql:latest
-    environment:
-      MYSQL_DATABASE: mosquito_dashboard
-      MYSQL_USER: webuser
-      MYSQL_PASSWORD: password
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_ALLOW_EMPTY_PASSWORD: 1
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-    ports:
-      - "3306:3306"
-    volumes:
-      - ./database:/docker-entrypoint-initdb.d
-      - ./mysql:/var/lib/mysql
-    networks:
-      - network
-networks:
-  network:
-    driver: bridge
-```
-
 Start the database:
 
 ```bash
-docker compose up
+cd Global-Mosquito-Observations-Dashboard
+docker compose up db
 ```
 
-Initialize a worker:
+Navigate back to OL and initialize a worker:
 
 ```bash
+cd ..
 ./ol worker init -i ol-min
 ```
 
