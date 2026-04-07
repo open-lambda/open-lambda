@@ -32,10 +32,13 @@ triggers:
   http:
     - method: "*"
 environment:
-  OL_ENTRY_FILE: app.py
-  OL_ASGI_ENTRY: app
-  MEASUREMENTS_CACHE_DIR: /host/tmp/cache
-  STATIONS_CACHE_FILE: /host/tmp/cache/wisconsin_stations_cache.csv
+  OL_ENTRY_FILE: "app.py"
+  FLASK_ENV: "development"
+  DB_HOST: "127.0.0.1"
+  DB_PORT: "3306"
+  DB_USERNAME: "webuser"
+  DB_DATABASE: "mosquito_dashboard"
+  DB_PASSWORD: "password"
 ```
 
 Install pip-compile and pin requirements.txt to versions suitable for OpenLambda:
