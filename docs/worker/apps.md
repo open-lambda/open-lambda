@@ -86,7 +86,6 @@ docker compose up db
 Navigate back to OL and initialize a worker:
 
 ```bash
-cd ..
 ./ol worker init -i ol-min
 ```
 
