@@ -5,9 +5,8 @@ import psycopg2
 
 app = Flask(__name__)
 
-DATABASE_URL = os.environ.get(
-    "DATABASE_URL", "postgresql://ol:ol@localhost:5432/ol_demo"
-)
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
 # Probability (0.0–1.0) that a transaction will fail between UPDATE and COMMIT.
 # Set to 0 for normal operation; raise to stress-test seek-back recovery.
 FAIL_PROBABILITY = float(os.environ.get("FAIL_PROBABILITY", "0"))
@@ -102,16 +101,9 @@ def handle():
 
     body = request.get_json(silent=True)
 
-    # Accept {"number": N}, bare int, or string
+    # Accept {"number": N}
     if isinstance(body, dict):
         number = body.get("number", 0)
-    elif isinstance(body, (int, float)):
-        number = body
-    else:
-        try:
-            number = int(body)
-        except (TypeError, ValueError):
-            number = 0
 
     conn = None
     try:
@@ -152,10 +144,7 @@ def handle():
             )
 
             # --- Fault injection ------------------------------------------------
-            # Simulate a crash between UPDATE and COMMIT.  The UPDATE is in the
-            # transaction buffer but NOT committed, so the exception triggers a
-            # rollback — exactly the scenario the seek-back mechanism is designed
-            # to recover from.
+            # Simulate a crash between UPDATE and COMMIT.  
             if FAIL_PROBABILITY > 0 and random.random() < FAIL_PROBABILITY:
                 raise Exception(
                     f"Simulated DB failure at offset {offset} "
