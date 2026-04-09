@@ -26,26 +26,36 @@ type seekRequest struct {
 	offset int64
 }
 
-const defaultCacheSize = 1024
+const defaultCacheSizeMB = 16
 
 // cachedKafkaClient wraps a KafkaClient and caches records in an LRU map keyed
 // by {topic, partition, offset}. When a seek is active, PollFetches serves
 // records from the cache. On cache miss, it calls Seek on the underlying
 // client so the next poll fetches from the right position.
 type cachedKafkaClient struct {
-	underlying KafkaClient
-	cache      map[cacheKey]*kgo.Record
-	evictOrder []cacheKey // front = least recently used
-	maxSize    int
-	seekTarget *seekState
+	underlying   KafkaClient
+	cache        map[cacheKey]*kgo.Record
+	evictOrder   []cacheKey // front = least recently used
+	maxSizeBytes int64
+	currentSize  int64
+	seekTarget   *seekState
 }
 
-func newCachedKafkaClient(underlying KafkaClient, maxSize int) *cachedKafkaClient {
+func newCachedKafkaClient(underlying KafkaClient, maxSizeMB int) *cachedKafkaClient {
 	return &cachedKafkaClient{
-		underlying: underlying,
-		cache:      make(map[cacheKey]*kgo.Record),
-		maxSize:    maxSize,
+		underlying:   underlying,
+		cache:        make(map[cacheKey]*kgo.Record),
+		maxSizeBytes: int64(maxSizeMB) * 1024 * 1024,
 	}
+}
+
+// recordSize returns the approximate in-memory size of a cached record in bytes.
+func recordSize(r *kgo.Record) int64 {
+	size := int64(len(r.Key) + len(r.Value) + len(r.Topic))
+	for _, h := range r.Headers {
+		size += int64(len(h.Key) + len(h.Value))
+	}
+	return size
 }
 
 // Seek sets the seek target so that subsequent PollFetches calls serve from cache.
@@ -88,19 +98,22 @@ func (c *cachedKafkaClient) Close() {
 	c.underlying.Close()
 }
 
-// put adds a record to the cache, evicting the LRU entry if at capacity.
+// put adds a record to the cache, evicting LRU entries until there is room.
 func (c *cachedKafkaClient) put(key cacheKey, record *kgo.Record) {
 	if _, exists := c.cache[key]; exists {
 		c.touchLRU(key)
 		return
 	}
-	if len(c.cache) >= c.maxSize {
+	newSize := recordSize(record)
+	for c.currentSize+newSize > c.maxSizeBytes && len(c.evictOrder) > 0 {
 		evictKey := c.evictOrder[0]
 		c.evictOrder = c.evictOrder[1:]
+		c.currentSize -= recordSize(c.cache[evictKey])
 		delete(c.cache, evictKey)
 	}
 	c.cache[key] = record
 	c.evictOrder = append(c.evictOrder, key)
+	c.currentSize += newSize
 }
 
 // touchLRU moves a key to the back of the eviction order (most recently used).
