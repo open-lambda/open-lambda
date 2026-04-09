@@ -89,13 +89,15 @@ func (km *KafkaManager) newLambdaKafkaConsumer(consumerName string, lambdaName s
 		return nil, fmt.Errorf("no topics configured for lambda %s", lambdaName)
 	}
 
+	kafkaCfg := common.Conf.Kafka
+
 	// Setup kgo client options
 	opts := []kgo.Opt{
 		kgo.SeedBrokers(trigger.BootstrapServers...),
 		kgo.ConsumerGroup(trigger.GroupId),
 		kgo.ConsumeTopics(trigger.Topics...),
-		kgo.SessionTimeout(10 * time.Second),
-		kgo.HeartbeatInterval(3 * time.Second),
+		kgo.SessionTimeout(time.Duration(kafkaCfg.Session_timeout_sec) * time.Second),
+		kgo.HeartbeatInterval(time.Duration(kafkaCfg.Heartbeat_interval_sec) * time.Second),
 	}
 
 	// Use trigger-specific offset reset or default to latest
@@ -111,12 +113,15 @@ func (km *KafkaManager) newLambdaKafkaConsumer(consumerName string, lambdaName s
 		return nil, fmt.Errorf("failed to create Kafka client for lambda %s: %w", lambdaName, err)
 	}
 
-	cached := newCachedKafkaClient(&kgoClientWrapper{client: client}, defaultCacheSize)
+	var kafkaClient KafkaClient = &kgoClientWrapper{client: client}
+	if kafkaCfg.Cache_enabled {
+		kafkaClient = newCachedKafkaClient(kafkaClient, kafkaCfg.Cache_size)
+	}
 	return &LambdaKafkaConsumer{
 		consumerName: consumerName,
 		lambdaName:   lambdaName,
 		kafkaTrigger: trigger,
-		client:       cached,
+		client:       kafkaClient,
 		invoker:      km.invoker,
 		stopChan:     make(chan struct{}),
 	}, nil
@@ -154,7 +159,7 @@ func (lkc *LambdaKafkaConsumer) consumeLoop() {
 			slog.Info("Stopping Kafka consumer for lambda", "lambda", lkc.lambdaName)
 			return
 		default:
-			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Duration(common.Conf.Kafka.Poll_timeout_sec)*time.Second)
 			fetches := lkc.client.PollFetches(ctx)
 			cancel()
 

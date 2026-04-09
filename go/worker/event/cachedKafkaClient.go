@@ -26,8 +26,6 @@ type seekRequest struct {
 	offset int64
 }
 
-const defaultCacheSize = 1024
-
 // cachedKafkaClient wraps a KafkaClient and caches records in an LRU map keyed
 // by {topic, partition, offset}. When a seek is active, PollFetches serves
 // records from the cache. On cache miss, it calls Seek on the underlying

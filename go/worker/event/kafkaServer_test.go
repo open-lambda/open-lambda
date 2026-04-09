@@ -17,7 +17,15 @@ import (
 
 func TestMain(m *testing.M) {
 	// Initialize common.Conf so that common.T0/T1 (latency tracking) doesn't panic
-	common.Conf = &common.Config{}
+	common.Conf = &common.Config{
+		Kafka: common.KafkaConfig{
+			Cache_enabled:          true,
+			Cache_size:             1024,
+			Session_timeout_sec:    10,
+			Heartbeat_interval_sec: 3,
+			Poll_timeout_sec:       1,
+		},
+	}
 	os.Exit(m.Run())
 }
 

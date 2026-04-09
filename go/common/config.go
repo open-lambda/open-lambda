@@ -68,6 +68,20 @@ type Config struct {
 	Features        FeaturesConfig `json:"features"`
 	Trace           TraceConfig    `json:"trace"`
 	Storage         StorageConfig  `json:"storage"`
+	Kafka           KafkaConfig    `json:"kafka"`
+}
+
+type KafkaConfig struct {
+	// whether to enable the LRU message cache for seek-based replay
+	Cache_enabled bool `json:"cache_enabled"`
+	// maximum number of records held in the LRU cache
+	Cache_size int `json:"cache_size"`
+	// Kafka consumer session timeout in seconds
+	Session_timeout_sec int `json:"session_timeout_sec"`
+	// Kafka consumer heartbeat interval in seconds
+	Heartbeat_interval_sec int `json:"heartbeat_interval_sec"`
+	// poll timeout in seconds for each PollFetches call
+	Poll_timeout_sec int `json:"poll_timeout_sec"`
 }
 
 type DockerConfig struct {
@@ -315,6 +329,13 @@ func getDefaultConfigForPatching(olPath string) (*Config, error) {
 			Root:    "private",
 			Scratch: "",
 			Code:    "",
+		},
+		Kafka: KafkaConfig{
+			Cache_enabled:          true,
+			Cache_size:             1024,
+			Session_timeout_sec:    10,
+			Heartbeat_interval_sec: 3,
+			Poll_timeout_sec:       1,
 		},
 	}
 
