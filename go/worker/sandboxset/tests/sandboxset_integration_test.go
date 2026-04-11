@@ -164,14 +164,23 @@ func TestIntegration_CloseDestroysAll(t *testing.T) {
 		t.Logf("sandbox[%d]: ID=%s", i, ref.Sandbox().ID())
 	}
 
-	// Put one back to idle so Close covers both in-use and idle
+	// Put one back to idle so Close covers the idle path.
 	if err := refs[2].Put(); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
 
-	// Close should destroy all
+	// Close destroys idle sandboxes; the two in-use ones are left to be
+	// destroyed by put()'s closed-branch when their holders release them.
 	if err := set.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
+	}
+
+	// Releasing in-use refs after Close should destroy their sandboxes via
+	// put()'s closed branch and return an error indicating the set is closed.
+	for i := 0; i < 2; i++ {
+		if err := refs[i].Put(); err == nil {
+			t.Fatalf("expected error from Put[%d] after Close, got nil", i)
+		}
 	}
 
 	// Verify set is closed — further Gets should fail
