@@ -8,14 +8,23 @@ import (
 )
 
 // SandboxRef is a handle returned by GetOrCreateUnpaused.
-// Set Broken = true before calling Put if the sandbox should not be recycled.
-// sb == nil means the ref has no live sandbox (destroyed or not yet created).
-
+//
+// Contract: a ref with inUse == true is owned by exactly one goroutine; the
+// holder can read and write sb without locking. When inUse is false, sb and
+// inUse are both protected by set.mu.
+//
+// Broken: callers MUST set Broken = true before Put() on any failed request.
+// The set can self-heal from hard container failures (Pause/Unpause errors),
+// but it cannot detect soft failures — a live container with a wedged runtime,
+// a crashed handler, or any error returned by the sandbox's HTTP client. Only
+// the caller knows whether their request succeeded. Forgetting to mark Broken
+// recycles the bad sandbox back to the pool and the next caller inherits it.
 type SandboxRef struct {
 	set    *sandboxSetImpl
 	Broken bool
 
-	// protected by set.mu
+	// sb is owned by the holder while inUse == true (no locking needed).
+	// When inUse == false, both sb and inUse are protected by set.mu.
 	sb    sandbox.Sandbox
 	inUse bool
 }
@@ -27,14 +36,11 @@ func (r *SandboxRef) Sandbox() sandbox.Sandbox {
 
 // Put returns the sandbox to its parent set, or destroys it if Broken is true.
 func (r *SandboxRef) Put() error {
-	r.set.mu.Lock()
-	already := r.sb == nil
-	r.set.mu.Unlock()
-	if already {
-		return fmt.Errorf("sandboxset: sandbox already destroyed")
-	}
 	if r.Broken {
 		return r.set.destroy(r, "state marked broken")
+	}
+	if r.sb == nil {
+		return fmt.Errorf("sandboxset: sandbox already destroyed")
 	}
 	return r.set.put(r)
 }
@@ -65,8 +71,6 @@ func newSandboxSet(cfg *Config) *sandboxSetImpl {
 }
 
 // claimIdle acquires the lock and returns an inUse ref.
-// It prefers a ref with an existing sandbox, falls back to an empty ref,
-// and appends a new ref to the pool if none are idle.
 // Always returns a non-nil ref or an error.
 func (s *sandboxSetImpl) claimIdle() (*SandboxRef, error) {
 	s.mu.Lock()
@@ -114,7 +118,7 @@ func (s *sandboxSetImpl) createSandbox() (sandbox.Sandbox, error) {
 		s.cfg.Meta,
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("sandboxset: pool create: %w", err)
 	}
 	return sb, nil
 }
@@ -132,18 +136,18 @@ func (s *sandboxSetImpl) GetOrCreateUnpaused() (*SandboxRef, error) {
 	// Step 2: make sure the ref has a healthy, unpaused Sandbox.
 	if ref.sb != nil {
 		if err := ref.sb.Unpause(); err != nil {
-			_ = s.destroy(ref, fmt.Sprintf("unpause: %v", err))
-			return nil, fmt.Errorf("sandboxset: unpause: %w", err)
+			ref.sb.Destroy(fmt.Sprintf("unpause: %v", err))
+			ref.sb = nil
+		} else {
+			return ref, nil
 		}
-		return ref, nil
 	}
 
 	newSb, err := s.createSandbox()
 	if err != nil {
-		s.mu.Lock()
-		ref.inUse = false
-		s.mu.Unlock()
-		return nil, fmt.Errorf("sandboxset: create: %w", err)
+		ref.Broken = true
+		_ = ref.Put()
+		return nil, err
 	}
 
 	ref.sb = newSb
@@ -151,12 +155,9 @@ func (s *sandboxSetImpl) GetOrCreateUnpaused() (*SandboxRef, error) {
 }
 
 // put pauses the sandbox and returns the ref to the idle pool.
-// Pause is called before re-acquiring the lock to avoid blocking pool access during I/O.
-func (s *sandboxSetImpl) put(ref *SandboxRef) error {
-	s.mu.Lock()
-	sb := ref.sb
-	s.mu.Unlock()
 
+func (s *sandboxSetImpl) put(ref *SandboxRef) error {
+	sb := ref.sb
 	if sb == nil {
 		return fmt.Errorf("sandboxset: sandbox already destroyed")
 	}
@@ -166,13 +167,15 @@ func (s *sandboxSetImpl) put(ref *SandboxRef) error {
 	}
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if s.closed {
-		return fmt.Errorf("sandboxset: closed (sandbox destroyed by Close)")
+		ref.sb = nil
+		ref.inUse = false
+		s.mu.Unlock()
+		sb.Destroy("sandboxset closed during put")
+		return fmt.Errorf("sandboxset: closed")
 	}
-
 	ref.inUse = false
+	s.mu.Unlock()
 	return nil
 }
 
@@ -193,26 +196,25 @@ func (s *sandboxSetImpl) destroy(ref *SandboxRef, reason string) error {
 }
 
 // Close implements SandboxSet.
+// Close only destroys idle sandboxes; in-use sandboxes are left to their holders,
+// whose put() will see s.closed and destroy them on release. This preserves the
+// "inUse ref is owned by exactly one goroutine" invariant — Close never touches
+// a held ref's sb field.
 func (s *sandboxSetImpl) Close() error {
 	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if s.closed {
-		s.mu.Unlock()
 		return fmt.Errorf("sandboxset: already closed")
 	}
 	s.closed = true
 
-	var toDestroy []sandbox.Sandbox
 	for _, ref := range s.pool {
-		if ref.sb != nil {
-			toDestroy = append(toDestroy, ref.sb)
+		if ref.sb != nil && !ref.inUse {
+			ref.sb.Destroy("sandboxset closed")
 			ref.sb = nil
 		}
 	}
 	s.pool = nil
-	s.mu.Unlock()
-
-	for _, sb := range toDestroy {
-		sb.Destroy("sandboxset closed")
-	}
 	return nil
 }
