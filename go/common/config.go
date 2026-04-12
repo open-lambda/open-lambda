@@ -46,6 +46,9 @@ type Config struct {
 	// directory to install packages to, that sandboxes will read from
 	Pkgs_dir string
 
+	// maximum total size of installed packages in Pkgs_dir, in MB (0 = unlimited)
+	Pkgs_max_size int `json:"pkgs_max_size"`
+
 	// pip index address for installing python packages
 	Pip_index string `json:"pip_mirror"`
 
@@ -289,6 +292,7 @@ func getDefaultConfigForPatching(olPath string) (*Config, error) {
 		Sandbox:           "sock",
 		Log_output:        true,
 		Pkgs_dir:          packagesDir,
+		Pkgs_max_size:     0, // 0 = unlimited
 		Sandbox_config:    map[string]any{},
 		SOCK_base_path:    baseImgDir,
 		Registry_cache_ms: 5000, // 5 seconds
@@ -356,6 +360,10 @@ func ReadInConfig(path string) (*Config, error) {
 func checkConf(cfg *Config) error {
 	if !path.IsAbs(cfg.Worker_dir) {
 		return fmt.Errorf("Worker_dir cannot be relative")
+	}
+
+	if cfg.Pkgs_max_size < 0 {
+		return fmt.Errorf("pkgs_max_size cannot be negative")
 	}
 
 	if cfg.Sandbox == "sock" {

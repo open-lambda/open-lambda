@@ -30,6 +30,9 @@ type PackagePuller struct {
 	pipLambda string
 
 	packages sync.Map
+
+	// total size of all installed packages in bytes (atomic for lock-free reads)
+	totalSize int64
 }
 
 type Package struct {
@@ -72,6 +75,30 @@ func NewPackagePuller(sbPool sandbox.SandboxPool, depTracer *DepTracer) (*Packag
 		sbPool:    sbPool,
 		depTracer: depTracer,
 		pipLambda: pipLambda,
+	}
+
+	// Seed totalSize from any packages left over from a previous worker run
+	if common.Conf.Pkgs_dir != "" {
+		entries, err := os.ReadDir(common.Conf.Pkgs_dir)
+		if err != nil && !os.IsNotExist(err) {
+			return nil, fmt.Errorf("failed to read Pkgs_dir: %w", err)
+		}
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			pkgDir := filepath.Join(common.Conf.Pkgs_dir, entry.Name())
+			size, err := common.DirSize(pkgDir)
+			if err != nil {
+				slog.Warn(fmt.Sprintf("failed to measure size of existing package %s: %v", entry.Name(), err))
+				continue
+			}
+			installer.totalSize += size
+		}
+		if installer.totalSize > 0 {
+			slog.Info(fmt.Sprintf("Seeded package totalSize from existing packages: %d bytes", installer.totalSize))
+			common.SetGauge("packages.total-size-bytes", installer.totalSize)
+		}
 	}
 
 	return installer, nil
@@ -148,7 +175,20 @@ func (pp *PackagePuller) GetPkg(pkg string) (*Package, error) {
 		if err := pp.sandboxInstall(p); err != nil {
 			return p, err
 		}
-		// add stats to track package usage for eviction purposes here
+
+		// track size and timestamps for eviction purposes
+		scratchDir := filepath.Join(common.Conf.Pkgs_dir, p.Name)
+		if size, err := common.DirSize(scratchDir); err == nil {
+			p.size = size
+			atomic.AddInt64(&pp.totalSize, size)
+			common.SetGauge("packages.total-size-bytes", atomic.LoadInt64(&pp.totalSize))
+		} else {
+			slog.Warn(fmt.Sprintf("failed to measure size of package %s: %v", p.Name, err))
+		}
+		now := time.Now()
+		p.InstallTime = now
+		p.LastAccessed = now
+
 		atomic.StoreUint32(&p.installed, 1)
 		pp.depTracer.TracePackage(p)
 		return p, nil
@@ -239,3 +279,8 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 // 1. get oldest package, get lock, evict, repeat until we have enough space for new package
 // 2. remove from depTracer and packagePuller map
 // 3. remove package with os.RemoveAll()
+
+// TotalSize returns the total size of all installed packages in bytes.
+func (pp *PackagePuller) TotalSize() int64 {
+	return atomic.LoadInt64(&pp.totalSize)
+}
