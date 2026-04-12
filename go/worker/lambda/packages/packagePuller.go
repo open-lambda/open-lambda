@@ -31,6 +31,9 @@ type PackagePuller struct {
 
 	packages sync.Map
 
+	// blocks eviction while installs or refcount updates are in flight.
+	lifecycleMu sync.RWMutex
+
 	// total size of all installed packages in bytes (atomic for lock-free reads)
 	totalSize int64
 }
@@ -45,6 +48,8 @@ type Package struct {
 	InstallTime  time.Time
 	size         int64
 	LastAccessed time.Time
+	funcRefs     int32
+	pkgRefs      int32
 }
 
 // the pip-install admin lambda returns this
@@ -97,9 +102,10 @@ func NewPackagePuller(sbPool sandbox.SandboxPool, depTracer *DepTracer) (*Packag
 		}
 		if installer.totalSize > 0 {
 			slog.Info(fmt.Sprintf("Seeded package totalSize from existing packages: %d bytes", installer.totalSize))
-			common.SetGauge("packages.total-size-bytes", installer.totalSize)
 		}
 	}
+
+	common.SetGauge("packages.total-size-bytes", installer.totalSize)
 
 	return installer, nil
 }
@@ -154,21 +160,14 @@ func (pp *PackagePuller) InstallRecursive(installs []string) ([]string, error) {
 
 // GetPkg retrieves the specified package, installing it if necessary.
 func (pp *PackagePuller) GetPkg(pkg string) (*Package, error) {
+	pp.lifecycleMu.RLock()
+	defer pp.lifecycleMu.RUnlock()
+
 	// get (or create) package
 	pkg = NormalizePkg(pkg)
 	tmp, _ := pp.packages.LoadOrStore(pkg, &Package{Name: pkg})
 	p := tmp.(*Package)
 
-	// fast path
-	if atomic.LoadUint32(&p.installed) == 1 {
-		return p, nil
-	}
-
-	// add functionality to evict packages here if we have not enough disk space for new package
-	// check disk space and evict packages until we have enough space for new package
-	// build a new function for eviction logic that we call here or add eviction logic in this function?
-
-	// slow path
 	p.installMutex.Lock()
 	defer p.installMutex.Unlock()
 	if p.installed == 0 {
@@ -188,10 +187,12 @@ func (pp *PackagePuller) GetPkg(pkg string) (*Package, error) {
 		now := time.Now()
 		p.InstallTime = now
 		p.LastAccessed = now
+		pp.addPkgRefsLocked(p)
 
 		atomic.StoreUint32(&p.installed, 1)
 		pp.depTracer.TracePackage(p)
-		return p, nil
+	} else {
+		p.LastAccessed = time.Now()
 	}
 
 	return p, nil
@@ -274,11 +275,69 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 	return nil
 }
 
-// add eviction logic here?
-// implement based on oldest for now
-// 1. get oldest package, get lock, evict, repeat until we have enough space for new package
-// 2. remove from depTracer and packagePuller map
-// 3. remove package with os.RemoveAll()
+func (pp *PackagePuller) addPkgRefsLocked(p *Package) {
+	for _, depName := range uniquePackages(p.Meta.Deps) {
+		if depName == p.Name {
+			continue
+		}
+		tmp, _ := pp.packages.LoadOrStore(depName, &Package{Name: depName})
+		dep := tmp.(*Package)
+		refs := atomic.AddInt32(&dep.pkgRefs, 1)
+		if refs < 1 {
+			panic(fmt.Sprintf("negative pkgRefs for %s", dep.Name))
+		}
+	}
+}
+
+// AddFuncRef records that a function depends on the given top-level packages.
+func (pp *PackagePuller) AddFuncRef(_ string, pkgNames []string) {
+	pp.lifecycleMu.RLock()
+	defer pp.lifecycleMu.RUnlock()
+
+	for _, pkgName := range uniquePackages(pkgNames) {
+		tmp, _ := pp.packages.LoadOrStore(pkgName, &Package{Name: pkgName})
+		p := tmp.(*Package)
+		refs := atomic.AddInt32(&p.funcRefs, 1)
+		if refs < 1 {
+			panic(fmt.Sprintf("negative funcRefs for %s", p.Name))
+		}
+	}
+}
+
+// RemoveFuncRef releases a function's dependency claim on the given packages.
+func (pp *PackagePuller) RemoveFuncRef(_ string, pkgNames []string) {
+	pp.lifecycleMu.RLock()
+	defer pp.lifecycleMu.RUnlock()
+
+	for _, pkgName := range uniquePackages(pkgNames) {
+		tmp, ok := pp.packages.Load(pkgName)
+		if !ok {
+			continue
+		}
+		p := tmp.(*Package)
+		refs := atomic.AddInt32(&p.funcRefs, -1)
+		if refs < 0 {
+			panic(fmt.Sprintf("negative funcRefs for %s", p.Name))
+		}
+	}
+}
+
+func uniquePackages(pkgs []string) []string {
+	seen := make(map[string]struct{}, len(pkgs))
+	unique := make([]string, 0, len(pkgs))
+	for _, pkg := range pkgs {
+		pkg = NormalizePkg(pkg)
+		if pkg == "" {
+			continue
+		}
+		if _, ok := seen[pkg]; ok {
+			continue
+		}
+		seen[pkg] = struct{}{}
+		unique = append(unique, pkg)
+	}
+	return unique
+}
 
 // TotalSize returns the total size of all installed packages in bytes.
 func (pp *PackagePuller) TotalSize() int64 {

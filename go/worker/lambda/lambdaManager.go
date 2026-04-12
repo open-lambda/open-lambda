@@ -21,9 +21,10 @@ type LambdaMgr struct {
 	// subsystems (these are thread safe)
 	sbPool sandbox.SandboxPool
 	*packages.DepTracer
-	*packages.PackagePuller // depends on sbPool and DepTracer
-	zygote.ZygoteProvider   // depends PackagePuller
-	*HandlerPuller          // depends on sbPool and ImportCache[optional]
+	*packages.PackagePuller  // depends on sbPool and DepTracer
+	*packages.PackageEvictor // depends on PackagePuller
+	zygote.ZygoteProvider    // depends PackagePuller
+	*HandlerPuller           // depends on sbPool and ImportCache[optional]
 
 	// storage dirs that we manage
 	codeDirs    *common.DirMaker
@@ -104,6 +105,9 @@ func newLambdaMgr() (res *LambdaMgr, err error) {
 	if err != nil {
 		return nil, err
 	}
+
+	slog.Info("Creating PackageEvictor")
+	mgr.PackageEvictor = packages.NewPackageEvictor(mgr.PackagePuller)
 
 	if common.Conf.Features.Import_cache != "" {
 		slog.Info("Creating ImportCache")
@@ -197,8 +201,6 @@ func (mgr *LambdaMgr) Cleanup() {
 
 	mgr.DumpStatsToLog()
 
-	// HandlerPuller+PackagePuller requires no cleanup
-
 	// 1. cleanup handler Sandboxes
 	// 2. cleanup Zygote Sandboxes (after the handlers, which depend on the Zygotes)
 	// 3. cleanup SandboxPool underlying both of above
@@ -213,6 +215,10 @@ func (mgr *LambdaMgr) Cleanup() {
 
 	if mgr.sbPool != nil {
 		mgr.sbPool.Cleanup() // assumes all Sandboxes are gone
+	}
+
+	if mgr.PackageEvictor != nil {
+		mgr.PackageEvictor.Cleanup()
 	}
 
 	// cleanup DepTracer

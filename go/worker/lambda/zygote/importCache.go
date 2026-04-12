@@ -143,6 +143,10 @@ func (cache *ImportCache) recursiveKill(node *ImportCacheNode) {
 		node.sb = nil
 	}
 	node.mutex.Unlock()
+
+	if node.codeDir != "" && len(node.Packages) > 0 {
+		cache.pkgPuller.RemoveFuncRef(node.refName(), node.Packages)
+	}
 }
 
 // Create creates a new sandbox using the import cache.
@@ -311,6 +315,7 @@ func (cache *ImportCache) createSandboxInNode(node *ImportCacheNode) (err error)
 			Installs: installs,
 			Imports:  topLevelMods,
 		}
+		cache.pkgPuller.AddFuncRef(node.refName(), node.Packages)
 	}
 
 	scratchDir := cache.scratchDirs.Make("import-cache")
@@ -333,6 +338,14 @@ func (cache *ImportCache) createSandboxInNode(node *ImportCacheNode) (err error)
 func (node *ImportCacheNode) AllPackages() []string {
 	n := len(node.indirectPackages)
 	return append(node.indirectPackages[:n:n], node.Packages...)
+}
+
+func (node *ImportCacheNode) refName() string {
+	pkgs := strings.Join(node.AllPackages(), ",")
+	if pkgs == "" {
+		pkgs = "root"
+	}
+	return "import-cache:" + pkgs
 }
 
 func (node *ImportCacheNode) Lookup(packages []string) *ImportCacheNode {
