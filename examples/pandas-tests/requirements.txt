@@ -21,9 +21,11 @@ packaging==23.1
     # via pytest
 pandas==2.0.3
     # via -r requirements.in
-pluggy==1.3.0
+pluggy==1.6.0
     # via pytest
-pytest==7.4.0
+pygments==2.20.0
+    # via pytest
+pytest==9.0.3
     # via -r requirements.in
 python-dateutil==2.8.2
     # via pandas
