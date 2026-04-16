@@ -55,7 +55,7 @@ jobs:
       run: cargo install cross --locked
     - name: Build OpenLambda
       run: |
-        make ol imgs/ol-wasm wasm-worker wasm-functions native-functions container-proxy
+        make ol-bin imgs/ol-wasm wasm-worker wasm-functions native-functions container-proxy
         make install-python-bindings
         make sudo-install
     - name: Test Go Common

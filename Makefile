@@ -35,7 +35,7 @@ endif
 .PHONY: container-proxy
 .PHONY: fmt check-fmt
 
-all: ol imgs/ol-wasm wasm-worker wasm-functions native-functions container-proxy
+all: ol-bin imgs/ol-wasm wasm-worker wasm-functions native-functions container-proxy
 
 wasm-worker:
 	cd wasm-worker && cargo build ${BUILD_FLAGS}
@@ -76,10 +76,10 @@ container-proxy:
 	cd container-proxy && cargo build ${BUILD_FLAGS}
 	cp ./container-proxy/target/${BUILDTYPE}/open-lambda-container-proxy ./ol-container-proxy
 
-ol: ${OL_GO_FILES}
+ol-bin: ${OL_GO_FILES}
 	cd ${OL_DIR} && ${GO} build -o ../ol-bin
 
-build: ol wasm-worker container-proxy
+build: ol-bin wasm-worker container-proxy
 
 install: build
 	cp ol ${INSTALL_PREFIX}/bin/
@@ -129,6 +129,6 @@ lint-wasm-worker:
 lint: lint-wasm-worker lint-functions lint-python lint-go
 
 clean:
-	rm -f ol imgs/ol-min imgs/ol-wasm
+	rm -f ol-bin imgs/ol-min imgs/ol-wasm
 	${MAKE} -C lambda clean
 	${MAKE} -C sock clean
