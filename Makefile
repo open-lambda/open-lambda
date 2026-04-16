@@ -77,18 +77,20 @@ container-proxy:
 	cp ./container-proxy/target/${BUILDTYPE}/open-lambda-container-proxy ./ol-container-proxy
 
 ol: ${OL_GO_FILES}
-	cd ${OL_DIR} && ${GO} build -o ../ol
+	cd ${OL_DIR} && ${GO} build -o ../ol-bin
 
 build: ol wasm-worker container-proxy
 
 install: build
 	cp ol ${INSTALL_PREFIX}/bin/
+	cp ol-bin ${INSTALL_PREFIX}/bin/
 	cp ol-wasm ${INSTALL_PREFIX}/bin/
 	cp ol-container-proxy ${INSTALL_PREFIX}/bin/
 	cp autocomplete/bash_autocomplete /etc/bash_completion.d/ol 
 
 sudo-install: build
 	sudo cp ol ${INSTALL_PREFIX}/bin/
+	sudo cp ol-bin ${INSTALL_PREFIX}/bin/
 	sudo cp ol-wasm ${INSTALL_PREFIX}/bin/
 	sudo cp ol-container-proxy ${INSTALL_PREFIX}/bin/
 	sudo cp autocomplete/bash_autocomplete /etc/bash_completion.d/ol 

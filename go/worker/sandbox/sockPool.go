@@ -34,7 +34,11 @@ type SOCKPool struct {
 
 // NewSOCKPool creates a SOCKPool.
 func NewSOCKPool(name string, mem *MemPool) (cf *SOCKPool, err error) {
-	cgPool, err := cgroups.NewCgroupPool(name)
+	parentPath, err := common.CgroupRoot()
+	if err != nil {
+		return nil, fmt.Errorf("discover cgroup root: %w", err)
+	}
+	cgPool, err := cgroups.NewCgroupPool(name, parentPath)
 	if err != nil {
 		return nil, err
 	}

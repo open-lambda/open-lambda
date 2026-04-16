@@ -21,6 +21,9 @@ type Config struct {
 	// worker directory, which contains handler code, pid file, logs, etc.
 	Worker_dir string `json:"worker_dir"`
 
+	// configure the cgroup pool root - defaults to '/proc/self/cgroup'
+	Cgroup_root string `json:"cgroup_root"`
+
 	// Url/ip the worker server listens to
 	Worker_url string `json:"worker_url"`
 
