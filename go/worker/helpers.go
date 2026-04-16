@@ -21,7 +21,6 @@ import (
 	"github.com/open-lambda/open-lambda/go/worker/embedded"
 )
 
-
 func initOLBaseDir(baseDir string, dockerBaseImage string) error {
 	if dockerBaseImage == "" {
 		dockerBaseImage = "ol-wasm"
@@ -280,8 +279,14 @@ func runningToStoppedClean() error {
 // It cleans up cgroups and mounts associated with the OpenLambda instance at `olPath`.
 // Returns errors encountered during cleanup operations.
 func stoppedDirtyToStoppedClean(olPath string) error {
-	// Clean up child cgroups, preserving the pool root
-	cgRoot := common.CgroupPoolPath(olPath)
+	// Clean up cgroups associated with sandboxes
+	if err := common.EnsureCgroupConfigured(); err != nil {
+		return err
+	}
+	cgRoot, err := common.CgroupRoot()
+	if err != nil {
+		return fmt.Errorf("failed to resolve cgroup root: %s", err)
+	}
 	fmt.Printf("Attempting to clean up cgroups at %s\n", cgRoot)
 
 	cgroupErrorCount := 0
@@ -301,21 +306,25 @@ func stoppedDirtyToStoppedClean(olPath string) error {
 		if err != nil {
 			return fmt.Errorf("error reading cgroup root: %s", err.Error())
 		}
-		kill := filepath.Join(cgRoot, "cgroup.kill")
-		if err := os.WriteFile(kill, []byte(fmt.Sprintf("%d", 1)), os.ModeAppend); err != nil {
-			fmt.Printf("Could not kill processes in cgroup: %s\n", err.Error())
-			cgroupErrorCount += 1
-		}
 		for _, file := range files {
 			if strings.HasPrefix(file.Name(), "cg-") {
 				cg := filepath.Join(cgRoot, file.Name())
 				fmt.Printf("Attempting to remove %s\n", cg)
+				kill := filepath.Join(cg, "cgroup.kill")
+				if err := os.WriteFile(kill, []byte(fmt.Sprintf("%d", 1)), os.ModeAppend); err != nil {
+					// Print an error if killing processes in the cgroup fails.
+					fmt.Printf("Could not kill processes in cgroup: %s\n", err.Error())
+					cgroupErrorCount += 1
+				}
 				if err := syscall.Rmdir(cg); err != nil {
+					// Print an error if removing a cgroup fails.
 					fmt.Printf("could not remove cgroup: %s\n", err.Error())
 					cgroupErrorCount += 1
 				}
 			}
 		}
+		_ = syscall.Rmdir(filepath.Join(cgRoot, "worker"))
+		_ = syscall.Rmdir(cgRoot)
 	}
 
 	sandboxErrorCount := 0
