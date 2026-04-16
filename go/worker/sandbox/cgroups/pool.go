@@ -19,36 +19,36 @@ import (
 const CGROUP_RESERVE = 16
 
 type CgroupPool struct {
-	Name       string
-	parentPath string
-	ready      chan *CgroupImpl
-	recycled   chan *CgroupImpl
-	quit       chan chan bool
-	nextID     int
+	Name     string
+	poolPath string
+	ready    chan *CgroupImpl
+	recycled chan *CgroupImpl
+	quit     chan chan bool
+	nextID   int
 }
 
 // NewCgroupPool creates a new CgroupPool with the specified name.
-func NewCgroupPool(name, parentPath string) (*CgroupPool, error) {
+func NewCgroupPool(name, poolPath string) (*CgroupPool, error) {
 	pool := &CgroupPool{
-		Name:       path.Base(path.Dir(common.Conf.Worker_dir)) + "-" + name,
-		parentPath: parentPath,
-		ready:      make(chan *CgroupImpl, CGROUP_RESERVE),
-		recycled:   make(chan *CgroupImpl, CGROUP_RESERVE),
-		quit:       make(chan chan bool),
-		nextID:     0,
+		Name:     path.Base(path.Dir(common.Conf.Worker_dir)) + "-" + name,
+		poolPath: poolPath,
+		ready:    make(chan *CgroupImpl, CGROUP_RESERVE),
+		recycled: make(chan *CgroupImpl, CGROUP_RESERVE),
+		quit:     make(chan chan bool),
+		nextID:   0,
 	}
 
-	pool.printf("using parent cgroup %s", parentPath)
+	pool.printf("using parent cgroup %s", poolPath)
 
 	// create cgroup pool parent - no-op if already exists
-	if err := os.MkdirAll(parentPath, 0700); err != nil {
-		return nil, fmt.Errorf("mkdir %s: %w", parentPath, err)
+	if err := os.MkdirAll(poolPath, 0700); err != nil {
+		return nil, fmt.Errorf("mkdir %s: %w", poolPath, err)
 	}
 
 	// enumerate controllers delegated to the parent
-	ctrlData, err := os.ReadFile(filepath.Join(parentPath, "cgroup.controllers"))
+	ctrlData, err := os.ReadFile(filepath.Join(poolPath, "cgroup.controllers"))
 	if err != nil {
-		return nil, fmt.Errorf("read %s/cgroup.controllers: %w", parentPath, err)
+		return nil, fmt.Errorf("read %s/cgroup.controllers: %w", poolPath, err)
 	}
 	available := strings.Fields(string(ctrlData))
 
@@ -57,24 +57,24 @@ func NewCgroupPool(name, parentPath string) (*CgroupPool, error) {
 		if !slices.Contains(available, req) {
 			return nil, fmt.Errorf(
 				"cannot delegate required cgroup controller %q to %s (available: %v); ",
-				req, parentPath, available,
+				req, poolPath, available,
 			)
 		}
 	}
 
 	// move self pid to worker cgroup before enabling subtree_control
-	workerPath := filepath.Join(parentPath, "worker")
+	workerPath := filepath.Join(poolPath, "worker")
 	if err := os.Mkdir(workerPath, 0700); err != nil && !os.IsExist(err) {
 		return nil, fmt.Errorf("mkdir %s: %w", workerPath, err)
 	}
 	// migrate every pid in parent to worker/ - --detach leaves >1 in the scope
-	parentProcs, err := os.ReadFile(filepath.Join(parentPath, "cgroup.procs"))
+	parentProcs, err := os.ReadFile(filepath.Join(poolPath, "cgroup.procs"))
 	if err != nil {
-		return nil, fmt.Errorf("read %s/cgroup.procs: %w", parentPath, err)
+		return nil, fmt.Errorf("read %s/cgroup.procs: %w", poolPath, err)
 	}
 	workerProcsPath := filepath.Join(workerPath, "cgroup.procs")
 	for _, pidStr := range strings.Fields(string(parentProcs)) {
-		// pid exited between read and write - ignore
+		// ESRCH: pid exited between read and write - ignore
 		if err := os.WriteFile(workerProcsPath, []byte(pidStr), 0); err != nil && !errors.Is(err, syscall.ESRCH) {
 			return nil, fmt.Errorf("move pid %s into %s: %w", pidStr, workerPath, err)
 		}
@@ -89,7 +89,7 @@ func NewCgroupPool(name, parentPath string) (*CgroupPool, error) {
 		enable.WriteByte('+')
 		enable.WriteString(c)
 	}
-	subPath := filepath.Join(parentPath, "cgroup.subtree_control")
+	subPath := filepath.Join(poolPath, "cgroup.subtree_control")
 	if err := os.WriteFile(subPath, []byte(enable.String()), 0); err != nil {
 		return nil, fmt.Errorf("enable controllers at %s: %w", subPath, err)
 	}
@@ -212,5 +212,5 @@ func (pool *CgroupPool) GetCg(memLimitMB int, moveMemCharge bool, cpuPercent int
 
 // GroupPath returns the path to the Cgroup pool for OpenLambda
 func (pool *CgroupPool) GroupPath() string {
-	return pool.parentPath
+	return pool.poolPath
 }

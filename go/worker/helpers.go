@@ -315,7 +315,7 @@ func stoppedDirtyToStoppedClean(olPath string) error {
 				}
 				if err := syscall.Rmdir(cg); err != nil {
 					// Print an error if removing a cgroup fails.
-					fmt.Printf("could not remove cgroup: %s", err.Error())
+					fmt.Printf("could not remove cgroup: %s\n", err.Error())
 					cgroupErrorCount += 1
 				}
 			}
