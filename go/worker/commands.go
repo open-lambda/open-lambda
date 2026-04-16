@@ -16,7 +16,6 @@ import (
 
 	"github.com/open-lambda/open-lambda/go/common"
 	"github.com/open-lambda/open-lambda/go/worker/event"
-	"github.com/open-lambda/open-lambda/go/worker/sandbox/cgroups"
 
 	"github.com/urfave/cli/v2"
 )
@@ -40,27 +39,18 @@ func udsGet(requestPath string) (*http.Response, error) {
 
 // initCmd corresponds to the "init" command of the admin tool.
 func initCmd(ctx *cli.Context) error {
-	if os.Getuid() != 0 {
-		return fmt.Errorf("'ol worker init' must be run with sudo")
-	}
-
 	olPath, err := common.GetOlPath(ctx)
 	if err != nil {
-		return fmt.Errorf("init failed to get OL path: %w", err)
+		return err
 	}
 
 	if err := common.LoadDefaults(olPath); err != nil {
-		return fmt.Errorf("init failed to load config defaults: %w", err)
+		return err
 	}
 
 	if err := initOLDir(olPath, ctx.String("image"), ctx.Bool("newbase")); err != nil {
-		return fmt.Errorf("init failed to create OL directory: %w", err)
+		return err
 	}
-
-	if err := cgroups.InitPoolRoot(common.CgroupPoolPath(olPath)); err != nil {
-		return fmt.Errorf("init failed to create cgroup pool: %w", err)
-	}
-
 	fmt.Printf("\nYou may optionally modify the defaults here: %s\n\n",
 		filepath.Join(olPath, "config.json"))
 	fmt.Printf("Next start a worker using the \"ol worker up\" command.\n")
