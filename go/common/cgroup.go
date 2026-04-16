@@ -7,6 +7,17 @@ import (
 	"strings"
 )
 
+// EnsureCgroupConfigured fails if neither cgroup_root nor OL_SYSTEMD is set.
+func EnsureCgroupConfigured() error {
+	if Conf != nil && Conf.Cgroup_root != "" {
+		return nil
+	}
+	if os.Getenv("OL_SYSTEMD") == "1" {
+		return nil
+	}
+	return fmt.Errorf("no cgroup root: set cgroup_root in config or run the worker via 'ol'")
+}
+
 func CgroupRoot() (string, error) {
 	if Conf != nil && Conf.Cgroup_root != "" {
 		return Conf.Cgroup_root, nil

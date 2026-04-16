@@ -280,6 +280,9 @@ func runningToStoppedClean() error {
 // Returns errors encountered during cleanup operations.
 func stoppedDirtyToStoppedClean(olPath string) error {
 	// Clean up cgroups associated with sandboxes
+	if err := common.EnsureCgroupConfigured(); err != nil {
+		return err
+	}
 	cgRoot, err := common.CgroupRoot()
 	if err != nil {
 		return fmt.Errorf("failed to resolve cgroup root: %s", err)
