@@ -4,6 +4,7 @@ https://pages.cs.wisc.edu/~yuanzhuo/assets/pdf/forklift.pdf
 '''
 
 import heapq
+import traceback
 from collections import defaultdict, namedtuple
 from flask import Flask, request, jsonify
 
@@ -311,7 +312,6 @@ def f():
         return jsonify(result), 200
 
     except Exception as e:
-        import traceback
         return jsonify({
             "error": str(e),
             "traceback": traceback.format_exc()
