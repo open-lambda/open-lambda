@@ -289,15 +289,10 @@ def f():
 
     try:
         event = request.get_json()
-        if event is None:
-            return jsonify({"error": "Request body must be valid JSON"}), 400
 
         workload_data = event.get("workload")
         deps_data = event.get("deps")
         num_nodes = event.get("num_nodes")
-
-        if workload_data is None or deps_data is None or num_nodes is None:
-            return jsonify({"error": "Missing required fields: workload, deps, num_nodes"}), 400
 
         # parse inputs
         calls = parse_workload(workload_data)
