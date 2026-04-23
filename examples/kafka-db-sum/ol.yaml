@@ -1,0 +1,16 @@
+triggers:
+  http:
+    - method: GET
+    - method: POST
+  kafka:
+    - bootstrap_servers:
+        - "localhost:9092"
+      topics:
+        - "numbers"
+      auto_offset_reset: "earliest"
+
+environment:
+  DATABASE_URL: "postgresql://ol:ol@127.0.0.1:5432/ol_demo"
+  # Probability (0.0-1.0) of simulated DB failure between UPDATE and COMMIT.
+  # Set to "0" for normal operation. Try "0.3" to see seek-back recovery in action.
+  FAIL_PROBABILITY: "0.3"
