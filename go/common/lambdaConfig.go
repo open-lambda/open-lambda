@@ -39,6 +39,7 @@ type KafkaTrigger struct {
 	Topics           []string `yaml:"topics" json:"topics"`                       // e.g., ["events", "logs"]
 	GroupId          string   `yaml:"-" json:"-"`                                 // Auto-generated based on lambda name
 	AutoOffsetReset  string   `yaml:"auto_offset_reset" json:"auto_offset_reset"` // "earliest" or "latest"
+	CacheSizeMB      int      `yaml:"cache_size_mb" json:"cache_size_mb"`         // Max cache size in MB (default: 16)
 }
 
 // LambdaConfig defines the overall configuration for the lambda function.

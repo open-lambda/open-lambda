@@ -354,7 +354,7 @@ func TestCachedClient_CachesRecords(t *testing.T) {
 		&kgo.Record{Topic: "t", Partition: 0, Offset: 1, Value: []byte("b")},
 	)
 
-	cached := newCachedKafkaClient(mock, 100)
+	cached := newCachedKafkaClient(mock, 1) // 1 MB — plenty for tiny records
 	cached.PollFetches(context.Background())
 
 	// Both records should now be in the cache
@@ -374,7 +374,7 @@ func TestCachedClient_SeekCacheHit(t *testing.T) {
 		&kgo.Record{Topic: "t", Partition: 0, Offset: 12, Value: []byte("twelve")},
 	)
 
-	cached := newCachedKafkaClient(mock, 100)
+	cached := newCachedKafkaClient(mock, 1) // 1 MB — plenty for tiny records
 	// Populate the cache
 	cached.PollFetches(context.Background())
 
@@ -411,7 +411,7 @@ func TestCachedClient_SeekCacheMiss(t *testing.T) {
 		&kgo.Record{Topic: "t", Partition: 0, Offset: 99, Value: []byte("ninety-nine")},
 	)
 
-	cached := newCachedKafkaClient(mock, 100)
+	cached := newCachedKafkaClient(mock, 1) // 1 MB — plenty for tiny records
 	// Populate cache with offset 5
 	cached.PollFetches(context.Background())
 
@@ -439,14 +439,16 @@ func TestCachedClient_SeekCacheMiss(t *testing.T) {
 
 func TestCachedClient_LRUEviction(t *testing.T) {
 	mock := &MockKafkaClient{Drained: make(chan struct{})}
+	// Each record: topic "t" (1 byte) + value (1 byte) = 2 bytes via recordSize
 	mock.Send(
 		&kgo.Record{Topic: "t", Partition: 0, Offset: 0, Value: []byte("a")},
 		&kgo.Record{Topic: "t", Partition: 0, Offset: 1, Value: []byte("b")},
 		&kgo.Record{Topic: "t", Partition: 0, Offset: 2, Value: []byte("c")},
 	)
 
-	// Cache can only hold 2 records
-	cached := newCachedKafkaClient(mock, 2)
+	// Set maxSizeBytes directly to 4 bytes — fits 2 records (2 bytes each) but not 3
+	cached := newCachedKafkaClient(mock, 1)
+	cached.maxSizeBytes = 4
 	cached.PollFetches(context.Background())
 
 	// Offset 0 should have been evicted (LRU), offsets 1 and 2 should remain

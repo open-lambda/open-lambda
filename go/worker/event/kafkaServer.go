@@ -111,7 +111,11 @@ func (km *KafkaManager) newLambdaKafkaConsumer(consumerName string, lambdaName s
 		return nil, fmt.Errorf("failed to create Kafka client for lambda %s: %w", lambdaName, err)
 	}
 
-	cached := newCachedKafkaClient(&kgoClientWrapper{client: client}, defaultCacheSize)
+	cacheSizeMB := defaultCacheSizeMB
+	if trigger.CacheSizeMB > 0 {
+		cacheSizeMB = trigger.CacheSizeMB
+	}
+	cached := newCachedKafkaClient(&kgoClientWrapper{client: client}, cacheSizeMB)
 	return &LambdaKafkaConsumer{
 		consumerName: consumerName,
 		lambdaName:   lambdaName,
