@@ -6,6 +6,7 @@ https://pages.cs.wisc.edu/~yuanzhuo/assets/pdf/forklift.pdf
 import heapq
 import traceback
 from collections import defaultdict, namedtuple
+import pandas as pd
 from flask import Flask, request, jsonify
 
 Candidate = namedtuple('Candidate', ['parent', 'child_pkgV', 'utility'])
@@ -14,37 +15,6 @@ QueueEntry = namedtuple('QueueEntry', ['neg_utility', 'uid', 'candidate'])
 app = Flask(__name__)
 
 
-class CallMatrix:
-    def __init__(self, rows):
-        self.rows = rows # {call_id: set(pkg_strings)}
-
-    def __bool__(self):
-        return bool(self.rows)
-    
-    def all_packages(self):
-        pkgs = set()
-        for row in self.rows.values():
-            pkgs.update(row) # add all packages from this call to the set
-        return pkgs
-
-    def count_matching(self, packages):
-        # counts how many calls require all of the given packages
-        return sum(1 for row in self.rows.values() if all(p in row for p in packages))
-
-    def split(self, packages):
-        matching = {}
-        remaining = {}
-        # for each call, check if it requires all of the given packages
-        for call_id, required_pkgs in self.rows.items():
-            # if it does, add it to the matching matrix with those packages removed from its requirements
-            if all(p in required_pkgs for p in packages):
-                matching[call_id] = required_pkgs - packages
-            # if it doesn't, add it to the remaining matrix
-            else:
-                remaining[call_id] = required_pkgs
-        return CallMatrix(matching), CallMatrix(remaining)
-    
-    
 def parse_workload(workload):
     func_packages = {}
 
@@ -72,7 +42,7 @@ def parse_workload(workload):
         if name:
             call_counts[name] += 1
     
-    # build call matrix
+    # rows=calls, columns=package==version, values=0/1
     rows = {}
     if call_counts:
         for func_name, packages in func_packages.items():
@@ -84,20 +54,28 @@ def parse_workload(workload):
         for func_name, packages in func_packages.items():
             rows[func_name] = packages.copy()
     
-    return CallMatrix(rows)
+    if not rows:
+        return pd.DataFrame(dtype=int)
+    
+    # sorted list of all unique packages across all calls, to ensure consistent column ordering
+    all_pkgs = sorted(set().union(*rows.values()))
+    # create DataFrame with 1s for packages used by each call, 0s otherwise (sparse representation)
+    records = [{pkg: 1 for pkg in pkgs} for pkgs in rows.values()]
+    # reindex to ensure all columns are present and in the same order, filling missing values with 0 (dense matrix)
+    df = pd.DataFrame(records, index=list(rows.keys()))
+    df = df.reindex(columns=all_pkgs, fill_value=0).fillna(0).astype(int)
+    return df
     
 
 def parse_deps(deps_json):
     deps = {}
-    
-    # the deps file contains a mapping of package to its versions and the dependencies for each version
     for pkg_name, versions in deps_json.items():
-        deps[pkg_name] = {}
         for version, dep_strings in versions.items():
-            deps[pkg_name][version] = []
+            pkgV = f"{pkg_name}=={version}"
+            deps[pkgV] = []
             for dep_str in dep_strings.keys():
                 dep_packages = set(dep_str.split(",")) if dep_str else set()
-                deps[pkg_name][version].append(dep_packages)
+                deps[pkgV].append(dep_packages)
     return deps
 
 
@@ -106,133 +84,72 @@ class ZygoteTree:
         self.calls = calls
         self.deps = deps
         self.root = None
-        self.candidate_queue = []
+        self.candidateQ = []
     
-    def _enqueue_top_child_candidate(self, parent):
-        if not parent.calls:
-            return
-        
-        loaded_pkgs = parent.all_packages() # get all packages currently loaded at this node (including parents)
-        loaded_names = {pkg.split("==")[0]: pkg for pkg in loaded_pkgs} # get only names for conflict checking
-        
-        # get all packages needed by calls in this node
-        needed_pkgs = parent.calls.all_packages()
-        
-        best_candidate = None
-        best_utility = -1
-        
-        # find best candidate package to load as a child node
-        for child_pkgV in needed_pkgs:
-            # skip if already loaded
-            if child_pkgV in loaded_pkgs:
-                continue
-            
-            pkg_name = child_pkgV.split("==")[0]
-            version = child_pkgV.split("==")[1] if "==" in child_pkgV else None
-            
-            # skip if this package but different version is loaded
-            if pkg_name in loaded_names:
-                continue
-            
-            # keep track of packages that would be loaded by this candidate
-            packages_to_load = {child_pkgV}
-            
-            # paper suggests that multipackage trees perform better than single package trees
-            if pkg_name in self.deps and version in self.deps.get(pkg_name, {}): 
-                # get dependencies for this package and version
-                dep_sets = self.deps[pkg_name][version]
-                if dep_sets:
-                    # dep sets are sorted by call frequency so using the first set picks the one that is called the most often
-                    for dep_pkg in dep_sets[0]:
-                        if dep_pkg not in loaded_pkgs:
-                            dep_name = dep_pkg.split("==")[0]
-                            # check for conflicts with loaded packages
-                            if dep_name not in loaded_names:
-                                packages_to_load.add(dep_pkg)
-            
-            # make sure that packages are valid
-            # according to the Forklift paper:
-            # a package P is valid for a node N if the ancestor nodes of N are responsible for loading all of P's dependencies.
-            valid = True
-            for pkg in packages_to_load:
-                p_name = pkg.split("==")[0]
-                p_version = pkg.split("==")[1] if "==" in pkg else None
-                if p_name in self.deps and p_version in self.deps.get(p_name, {}):
-                    dep_sets = self.deps[p_name][p_version]
-                    if dep_sets:
-                        for dep in dep_sets[0]:
-                            # make sure that this dependency is either already loaded by an ancestor or would be loaded by this candidate
-                            if dep not in loaded_pkgs and dep not in packages_to_load:
-                                valid = False
-                                break
-                if not valid:
-                    break
-            
-            if not valid:
-                continue
-            
-            # calculate utility: len(packages_to_load) × matching_calls
-            # assuming equal weigths for all packages
-            matching_calls = parent.calls.count_matching(packages_to_load)
-            utility = len(packages_to_load) * matching_calls
-            
-            if utility == 0:
-                continue
-            
-            # keep track of best candidate
-            if utility > best_utility:
-                best_utility = utility
-                best_candidate = Candidate(parent, packages_to_load, utility)
-        
-        if best_candidate is not None:
-            # push to queue
-            entry = QueueEntry(
-                neg_utility=-best_candidate.utility, # use negative utility because we're using a min heap
-                uid=id(best_candidate), # using id to sort candidates that have the same utility
-                candidate=best_candidate,
-            )
-            heapq.heappush(self.candidate_queue, entry)
+    def check_candidate_validity(self, parent, child_pkgV):
+        loaded_pkgs = parent.all_packages()
+        loaded_names = {p.split("==")[0] for p in loaded_pkgs}
+        # skip if already loaded or version conflict with ancestor
+        if child_pkgV in loaded_pkgs or child_pkgV.split("==")[0] in loaded_names:
+            return False
+        # all dependencies of child_pkgV must be satisfied by ancestors
+        dep_sets = self.deps.get(child_pkgV, [])
+        if dep_sets:
+            for dep in dep_sets[0]:
+                if dep != child_pkgV and dep not in loaded_pkgs:
+                    return False
+        return True
 
-    def _add_child_node(self, candidate):
+    def enqueue_top_child_candidate(self, parent):
+        best_candidate = None
+        
+        for child_pkgV in parent.calls.columns:
+            if self.check_candidate_validity(parent, child_pkgV):
+                # utility = sum of the package column (usage frequency)
+                utility = int(parent.calls[child_pkgV].sum())
+                # keep track of the best candidate with the highest utility
+                if utility > 0 and (best_candidate is None or utility > best_candidate.utility):
+                    best_candidate = Candidate(parent, child_pkgV, utility)
+        
+        # push the best candidate for this parent into the priority queue
+        if best_candidate is not None:
+            heapq.heappush(self.candidateQ, QueueEntry(-best_candidate.utility, id(best_candidate), best_candidate))
+
+    def add_child_node(self, candidate):
         parent = candidate.parent
         child_pkgV = candidate.child_pkgV
         
-        child_calls, parent_calls = parent.calls.split(child_pkgV)
+        # rows that import child_pkgV move to the child, remaining rows stay with the parent
+        child_calls = parent.calls[parent.calls[child_pkgV] != 0].copy()
         
-        # create child node and add to parent's children
-        child = ZygoteNode(calls=child_calls, packages=child_pkgV)
+        child = Node(calls=child_calls, packages={child_pkgV})
         child.parent = parent
         parent.children.append(child)
         
-        parent.calls = parent_calls
+        parent.calls = parent.calls.drop(child_calls.index).copy()
         
-        # enqueue new candidates for parent and child
-        self._enqueue_top_child_candidate(parent)
-        self._enqueue_top_child_candidate(child)
+        self.enqueue_top_child_candidate(parent)
+        self.enqueue_top_child_candidate(child)
     
     def build_tree(self, desired_nodes):
-        self.candidate_queue = []  
+        self.candidateQ = [] # priority queue of candidates with highest utility first
             
-        # start with empty root node with all calls and no packages
-        self.root = ZygoteNode(self.calls, set())
+        # start from a root with all calls and no preloaded packages.
+        self.root = Node(self.calls, set())
         
-        # add initial best candidate
-        self._enqueue_top_child_candidate(self.root)
+        # initialize the candidate queue with the root's best child candidate
+        self.enqueue_top_child_candidate(self.root)
         
-        # keep adding nodes to tree until we reach desired size
-        while desired_nodes > 0 and self.candidate_queue:
-            # get best candidate from priority queue
-            entry = heapq.heappop(self.candidate_queue)
-            
-            # add as child
-            self._add_child_node(entry.candidate)
-            desired_nodes -= 1       
+        while desired_nodes > 0 and self.candidateQ:
+            best_candidate = heapq.heappop(self.candidateQ).candidate
+            self.add_child_node(best_candidate)
+            desired_nodes -= 1
 
     def to_dict(self):
         return self.root.to_dict()
 
 
-class ZygoteNode:    
+class Node:    
     def __init__(self, calls, packages=None, parent=None):
         self.calls = calls 
         self.packages = packages or set()  # packages pre-loaded at this node
