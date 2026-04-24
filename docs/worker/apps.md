@@ -32,10 +32,13 @@ triggers:
   http:
     - method: "*"
 environment:
-  OL_ENTRY_FILE: app.py
-  OL_ASGI_ENTRY: app
-  MEASUREMENTS_CACHE_DIR: /host/tmp/cache
-  STATIONS_CACHE_FILE: /host/tmp/cache/wisconsin_stations_cache.csv
+  OL_ENTRY_FILE: "app.py"
+  FLASK_ENV: "development"
+  DB_HOST: "127.0.0.1"
+  DB_PORT: "3306"
+  DB_USERNAME: "webuser"
+  DB_DATABASE: "mosquito_dashboard"
+  DB_PASSWORD: "password"
 ```
 
 Install pip-compile and pin requirements.txt to versions suitable for OpenLambda:
@@ -60,5 +63,70 @@ curl "http://localhost:5000/run/ag_forecasting_api/ag_models_wrappers/wisconet?f
 Note, the first request may take minutes because OpenLambda will install all the packages in requirements.txt upon the first call.
 
 TODO: update ag_forecasting_api URLs from tylerharter fork to UW-Madison-DSI once env option is merged upstream.
+
+## Global Mosquito Observations Dashboard API (Flask + MySQL)
+
+[Global Mosquito Observations Dashboard](https://github.com/UW-Madison-DSI/Global-Mosquito-Observations-Dashboard), developed by the UW-Madison Data Science Institute (DSI), is a Flask + MySQL application that aggregates and displays mosquito observation data from different citizen science data sources.  
+
+### Installation
+
+Clone the repo:
+
+```bash
+git clone https://github.com/UW-Madison-DSI/Global-Mosquito-Observations-Dashboard.git
+```
+
+Start the database:
+
+```bash
+cd Global-Mosquito-Observations-Dashboard
+docker compose up db -d
+```
+
+Navigate back to OL and initialize a worker:
+
+```bash
+cd ..
+./ol worker init -i ol-min
+```
+
+Start the worker:
+
+```bash
+./ol worker up -d
+```
+
+Create `ol.yaml` to configure the app for OpenLambda:
+
+```yaml
+triggers:
+  http:
+    - method: "*"
+environment:
+  OL_ENTRY_FILE: "app.py"
+  FLASK_ENV: "development"
+  DB_HOST: "127.0.0.1"
+  DB_PORT: "3306"
+  DB_USERNAME: "webuser"
+  DB_DATABASE: "mosquito_dashboard"
+  DB_PASSWORD: "password"
+```
+
+Install pip-compile and pin requirements.txt to versions suitable for OpenLambda:
+
+```bash
+./ol admin install examples/pip-compile
+curl -X POST -d 'https://raw.githubusercontent.com/UW-Madison-DSI/Global-Mosquito-Observations-Dashboard/refs/heads/main/src/server/requirements.txt' http://localhost:5000/run/pip-compile/url > mosquito_requirements.txt
+```
+
+Install and test:
+
+```bash
+./ol admin install -c ol.yaml -r mosquito_requirements.txt ./Global-Mosquito-Observations-Dashboard/src/server
+# simple test
+curl http://localhost:5000/run/server/
+# get observations according to GLOBE Habitat Mapper
+curl -X GET "http://localhost:5000/run/server/observations/habitat-mapper"
+```
 
 ## TODO: add more example apps
