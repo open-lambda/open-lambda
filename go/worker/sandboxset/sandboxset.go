@@ -1,6 +1,7 @@
 package sandboxset
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -8,17 +9,23 @@ import (
 	"github.com/open-lambda/open-lambda/go/worker/sandbox"
 )
 
+// ErrClosed is returned by operations on a closed SandboxSet. Match with errors.Is.
+var ErrClosed = errors.New("sandboxset: closed")
+
 // SandboxRef is a handle returned by GetOrCreateUnpaused. While inUse is true
 // the holder owns sb; otherwise sb and inUse are protected by set.mu.
 // Callers signal a dead sandbox by calling MarkDead before Put. The set never
 // destroys sandboxes — lifecycle is owned upstream.
 // A ref must not be shared across goroutines; one goroutine holds it at a time.
+// Guards that lock s.mu to panic on !inUse use the lock only for the inUse
+// check, not to protect sb — sb access is governed by the single-owner rule.
 type SandboxRef struct {
 	set   *sandboxSetImpl
 	sb    sandbox.Sandbox
 	inUse bool
 }
 
+// Sandbox returns the underlying sandbox. No inUse guard: hot path; misuse is caught by Put/MarkDead guards instead.
 func (r *SandboxRef) Sandbox() sandbox.Sandbox { return r.sb }
 
 func (r *SandboxRef) MarkDead() {
@@ -67,7 +74,7 @@ func (s *sandboxSetImpl) claimIdle() (*SandboxRef, error) {
 	defer s.mu.Unlock()
 
 	if s.closed {
-		return nil, fmt.Errorf("sandboxset: closed")
+		return nil, fmt.Errorf("claimIdle: %w", ErrClosed)
 	}
 
 	var empty *SandboxRef
@@ -167,7 +174,7 @@ func (s *sandboxSetImpl) put(ref *SandboxRef) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
-		// rare: closed raced in during Pause; sandbox is paused, caller owns lifecycle
+		// rare Close-during-Pause race: sandbox is paused, unreachable, leaked until pool.Cleanup at process exit
 		s.releaseSlotLocked(ref)
 		return
 	}
@@ -197,7 +204,7 @@ func (s *sandboxSetImpl) Close() error {
 	defer s.mu.Unlock()
 
 	if s.closed {
-		return fmt.Errorf("sandboxset: already closed")
+		return fmt.Errorf("Close: already %w", ErrClosed)
 	}
 	s.closed = true
 
