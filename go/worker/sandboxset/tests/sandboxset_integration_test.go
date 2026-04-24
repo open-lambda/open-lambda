@@ -84,8 +84,10 @@ func TestIntegration_GetCreatesRealContainer(t *testing.T) {
 	t.Logf("created real container: ID=%s", sb.ID())
 	t.Logf("debug: %s", sb.DebugString())
 
-	ref.Broken = true
-	_ = ref.Put()
+	// Caller owns lifecycle: destroy the sandbox, mark the ref dead, release.
+	ref.Sandbox().Destroy("test cleanup")
+	ref.MarkDead()
+	ref.Put()
 }
 
 func TestIntegration_PutPausesAndReuses(t *testing.T) {
@@ -99,9 +101,7 @@ func TestIntegration_PutPausesAndReuses(t *testing.T) {
 	id1 := ref1.Sandbox().ID()
 	t.Logf("first sandbox: ID=%s", id1)
 
-	if err := ref1.Put(); err != nil {
-		t.Fatalf("Put: %v", err)
-	}
+	ref1.Put()
 
 	// Get again — should reuse the same container (unpaused from paused state)
 	ref2, err := set.GetOrCreateUnpaused()
@@ -115,11 +115,12 @@ func TestIntegration_PutPausesAndReuses(t *testing.T) {
 		t.Fatalf("expected reuse (same ID %s), got new container %s", id1, id2)
 	}
 
-	ref2.Broken = true
-	_ = ref2.Put()
+	ref2.Sandbox().Destroy("test cleanup")
+	ref2.MarkDead()
+	ref2.Put()
 }
 
-func TestIntegration_DestroyKillsReal(t *testing.T) {
+func TestIntegration_MarkDeadGetsNew(t *testing.T) {
 	set := newDockerSet(t)
 
 	ref1, err := set.GetOrCreateUnpaused()
@@ -129,12 +130,12 @@ func TestIntegration_DestroyKillsReal(t *testing.T) {
 	id1 := ref1.Sandbox().ID()
 	t.Logf("first sandbox: ID=%s", id1)
 
-	ref1.Broken = true
-	if err := ref1.Put(); err != nil {
-		t.Fatalf("Put (broken): %v", err)
-	}
+	// Caller-owned destroy + MarkDead + Put releases the slot without a sandbox.
+	ref1.Sandbox().Destroy("test: simulate handler failure")
+	ref1.MarkDead()
+	ref1.Put()
 
-	// Get again — must be a different container since we destroyed the first
+	// Get again — must be a different container since the slot is empty
 	ref2, err := set.GetOrCreateUnpaused()
 	if err != nil {
 		t.Fatalf("second GetOrCreateUnpaused: %v", err)
@@ -143,11 +144,12 @@ func TestIntegration_DestroyKillsReal(t *testing.T) {
 	t.Logf("second sandbox: ID=%s", id2)
 
 	if id2 == id1 {
-		t.Fatal("expected new container after Destroy, got same ID")
+		t.Fatal("expected new container after MarkDead, got same ID")
 	}
 
-	ref2.Broken = true
-	_ = ref2.Put()
+	ref2.Sandbox().Destroy("test cleanup")
+	ref2.MarkDead()
+	ref2.Put()
 }
 
 func TestIntegration_CloseDestroysAll(t *testing.T) {
@@ -165,22 +167,20 @@ func TestIntegration_CloseDestroysAll(t *testing.T) {
 	}
 
 	// Put one back to idle so Close covers the idle path.
-	if err := refs[2].Put(); err != nil {
-		t.Fatalf("Put: %v", err)
-	}
+	refs[2].Put()
 
-	// Close destroys idle sandboxes; the two in-use ones are left to be
-	// destroyed by put()'s closed-branch when their holders release them.
+	// Close clears idle slots; in-use refs are left to their holders.
+	// The set does not destroy any sandbox — caller owns lifecycle.
 	if err := set.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
 
-	// Releasing in-use refs after Close should destroy their sandboxes via
-	// put()'s closed branch and return an error indicating the set is closed.
+	// Caller destroys the live sandboxes and releases the refs.
+	// Put after Close routes through put()'s closed branch (void; clears the slot).
 	for i := 0; i < 2; i++ {
-		if err := refs[i].Put(); err == nil {
-			t.Fatalf("expected error from Put[%d] after Close, got nil", i)
-		}
+		refs[i].Sandbox().Destroy("test cleanup after close")
+		refs[i].MarkDead()
+		refs[i].Put()
 	}
 
 	// Verify set is closed — further Gets should fail
