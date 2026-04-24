@@ -11,7 +11,7 @@
 //	ref, err := set.GetOrCreateUnpaused()
 //	// ... use ref.Sandbox() to handle request ...
 //	if broken {
-//	    ref.Broken = true
+//	    ref.MarkDead()
 //	}
 //	ref.Put()
 package sandboxset
@@ -39,7 +39,7 @@ type Config struct {
 
 	// Parent is an optional SandboxSet to fork from. When nil, new
 	// sandboxes are created from scratch. Not all SandboxPool
-	// implementations support forking.
+	// implementations support forking. The parent must outlive this child.
 	Parent SandboxSet
 
 	// IsLeaf marks sandboxes as non-forkable, meaning they will
