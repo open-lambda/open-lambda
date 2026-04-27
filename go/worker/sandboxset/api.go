@@ -28,7 +28,8 @@ type SandboxSet interface {
 	// request, wrapped in a SandboxRef.
 	GetOrCreateUnpaused() (*SandboxRef, error)
 
-	// Close destroys all sandboxes in the pool and marks the set as closed.
+	// Close marks the set closed and destroys idle sandboxes. In-use refs
+	// are destroyed when their holder returns them via Put.
 	Close() error
 }
 
