@@ -57,23 +57,20 @@ fn get_slice_mut<'a>(
 }
 
 fn fill_slice(caller: &Caller<'_, BindingsData>, memory: &Memory, offset: i32, data: &[u8]) {
-    let out_slice = unsafe {
-        let raw_ptr = memory.data_ptr(caller).add(offset as usize);
-        std::slice::from_raw_parts_mut(raw_ptr, data.len())
-    };
-
-    out_slice.clone_from_slice(data);
-
     if offset < 0 {
         panic!("failed to allocate");
     }
 
-    let out_slice = unsafe {
-        let raw_ptr = memory.data_ptr(caller).add(offset as usize);
-        std::slice::from_raw_parts_mut(raw_ptr, data.len())
-    };
+    let offset = offset as usize;
+    if offset + data.len() > memory.data_size(caller) {
+        panic!("invalid pointer");
+    }
 
-    out_slice.clone_from_slice(data);
+    unsafe {
+        let raw_ptr = memory.data_ptr(caller).add(offset);
+        let out_slice = std::slice::from_raw_parts_mut(raw_ptr, data.len());
+        out_slice.copy_from_slice(data);
+    }
 }
 
 fn get_str<'a>(
