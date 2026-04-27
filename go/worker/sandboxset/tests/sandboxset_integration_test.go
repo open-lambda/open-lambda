@@ -169,17 +169,15 @@ func TestIntegration_CloseDestroysAll(t *testing.T) {
 	// Put one back to idle so Close covers the idle path.
 	refs[2].Put()
 
-	// Close clears idle slots; in-use refs are left to their holders.
-	// The set does not destroy any sandbox — caller owns lifecycle.
+	// Close destroys the idle sandbox; in-use refs are destroyed by put()
+	// when their holders return them below.
 	if err := set.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
 
-	// Caller destroys the live sandboxes and releases the refs.
-	// Put after Close routes through put()'s closed branch (void; clears the slot).
+	// Put after Close routes through put()'s closed branch, which destroys
+	// the sandbox. The caller does not Destroy here.
 	for i := 0; i < 2; i++ {
-		refs[i].Sandbox().Destroy("test cleanup after close")
-		refs[i].MarkDead()
 		refs[i].Put()
 	}
 

@@ -12,13 +12,6 @@ import (
 // ErrClosed is returned by operations on a closed SandboxSet. Match with errors.Is.
 var ErrClosed = errors.New("sandboxset: closed")
 
-// SandboxRef is a handle returned by GetOrCreateUnpaused. While inUse is true
-// the holder owns sb; otherwise sb and inUse are protected by set.mu.
-// Callers signal a dead sandbox by calling MarkDead before Put. The set never
-// destroys sandboxes — lifecycle is owned upstream.
-// A ref must not be shared across goroutines; one goroutine holds it at a time.
-// Guards that lock s.mu to panic on !inUse use the lock only for the inUse
-// check, not to protect sb — sb access is governed by the single-owner rule.
 type SandboxRef struct {
 	set   *sandboxSetImpl
 	sb    sandbox.Sandbox
@@ -29,21 +22,13 @@ type SandboxRef struct {
 func (r *SandboxRef) Sandbox() sandbox.Sandbox { return r.sb }
 
 func (r *SandboxRef) MarkDead() {
-	r.set.mu.Lock()
-	defer r.set.mu.Unlock()
 	if !r.inUse {
 		panic(fmt.Sprintf("sandboxset: MarkDead on ref %p not currently held (inUse=%v)", r, r.inUse))
 	}
 	r.sb = nil
 }
 
-func (r *SandboxRef) Put() {
-	if r.sb == nil {
-		r.set.releaseSlot(r)
-	} else {
-		r.set.put(r)
-	}
-}
+func (r *SandboxRef) Put() { r.set.put(r) }
 
 type sandboxSetImpl struct {
 	cfg *Config
@@ -141,7 +126,9 @@ func (s *sandboxSetImpl) GetOrCreateUnpaused() (*SandboxRef, error) {
 	if ref.sb == nil {
 		newSb, err := s.createSandbox()
 		if err != nil {
-			s.releaseSlot(ref)
+			s.mu.Lock()
+			ref.inUse = false
+			s.mu.Unlock()
 			return nil, err
 		}
 		ref.sb = newSb
@@ -150,55 +137,33 @@ func (s *sandboxSetImpl) GetOrCreateUnpaused() (*SandboxRef, error) {
 	return ref, nil
 }
 
-// put relies on Sandbox.Pause being no-op-safe after external death (see sandbox/api.go).
 func (s *sandboxSetImpl) put(ref *SandboxRef) {
+	if ref.sb != nil {
+		if err := ref.sb.Pause(); err != nil {
+			ref.sb.Destroy("sandboxset: pause failed")
+			ref.sb = nil
+		}
+	}
+
 	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if !ref.inUse {
-		s.mu.Unlock()
 		panic(fmt.Sprintf("sandboxset: put on ref %p not currently held (inUse=%v)", ref, ref.inUse))
 	}
-	closed := s.closed
-	if closed {
-		s.releaseSlotLocked(ref)
-	}
-	s.mu.Unlock()
-	if closed {
-		return
-	}
-
-	if err := ref.sb.Pause(); err != nil {
-		s.releaseSlot(ref)
-		return
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	if s.closed {
-		// rare Close-during-Pause race: sandbox is paused, unreachable, leaked until pool.Cleanup at process exit
-		s.releaseSlotLocked(ref)
+		sb := ref.sb
+		ref.sb = nil
+		ref.inUse = false
+		if sb != nil {
+			sb.Destroy("sandboxset: closed during put")
+		}
 		return
 	}
 	ref.inUse = false
 }
 
-// releaseSlotLocked clears sb and inUse. Caller must hold s.mu.
-func (s *sandboxSetImpl) releaseSlotLocked(ref *SandboxRef) {
-	ref.sb = nil
-	ref.inUse = false
-}
 
-func (s *sandboxSetImpl) releaseSlot(ref *SandboxRef) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if !ref.inUse {
-		panic(fmt.Sprintf("sandboxset: releaseSlot on ref %p not currently held (inUse=%v)", ref, ref.inUse))
-	}
-	s.releaseSlotLocked(ref)
-}
-
-// Close clears idle slots; in-use refs are left to their holders, whose put()
-// will see s.closed and release them. Never touches a held ref's sb.
-// Best-effort: if a holder never calls Put, the slot is not reclaimed.
 func (s *sandboxSetImpl) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -209,10 +174,10 @@ func (s *sandboxSetImpl) Close() error {
 	s.closed = true
 
 	for _, ref := range s.pool {
-		if !ref.inUse {
-			s.releaseSlotLocked(ref)
+		if !ref.inUse && ref.sb != nil {
+			ref.sb.Destroy("sandboxset: closed")
+			ref.sb = nil
 		}
 	}
-	s.pool = nil
 	return nil
 }

@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/open-lambda/open-lambda/go/common"
@@ -126,6 +127,67 @@ func TestPut_Twice_Panics(t *testing.T) {
 		}
 	}()
 	ref.Put()
+}
+
+// TestPut_PauseFailure_DestroysSandbox verifies that when Pause fails inside
+// put(), the orphaned sandbox is destroyed by the set rather than leaked.
+func TestPut_PauseFailure_DestroysSandbox(t *testing.T) {
+	set, pool := newTestSet(t)
+	defer set.Close()
+
+	ref, err := set.GetOrCreateUnpaused()
+	if err != nil {
+		t.Fatalf("GetOrCreateUnpaused: %v", err)
+	}
+	sb := pool.CreatedSandboxes()[0]
+	sb.PauseErr = errors.New("simulated pause failure")
+
+	ref.Put()
+
+	if !sb.IsDestroyed() {
+		t.Fatal("expected sandbox to be destroyed after Pause failure in Put")
+	}
+}
+
+// TestClose_DestroysIdleSandbox verifies Close destroys idle sandboxes
+// (which the set is the only holder of).
+func TestClose_DestroysIdleSandbox(t *testing.T) {
+	set, pool := newTestSet(t)
+
+	ref, err := set.GetOrCreateUnpaused()
+	if err != nil {
+		t.Fatalf("GetOrCreateUnpaused: %v", err)
+	}
+	sb := pool.CreatedSandboxes()[0]
+	ref.Put() // ref now idle in the pool
+
+	if err := set.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if !sb.IsDestroyed() {
+		t.Fatal("expected idle sandbox to be destroyed by Close")
+	}
+}
+
+// TestPut_AfterClose_DestroysSandbox verifies that a Put arriving after Close
+// destroys the returned sandbox (the set is the only remaining holder).
+func TestPut_AfterClose_DestroysSandbox(t *testing.T) {
+	set, pool := newTestSet(t)
+
+	ref, err := set.GetOrCreateUnpaused()
+	if err != nil {
+		t.Fatalf("GetOrCreateUnpaused: %v", err)
+	}
+	sb := pool.CreatedSandboxes()[0]
+
+	if err := set.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	ref.Put()
+
+	if !sb.IsDestroyed() {
+		t.Fatal("expected sandbox to be destroyed by Put after Close")
+	}
 }
 
 // TestMarkDead_AfterPut_Panics verifies MarkDead is rejected on a ref that
