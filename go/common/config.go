@@ -415,6 +415,8 @@ func checkConf(cfg *Config) error {
 		if cfg.Features.Import_cache != "" {
 			return fmt.Errorf("features.import_cache must be disabled for docker Sandbox")
 		}
+	} else if cfg.Sandbox == "mock" {
+		// mock sandbox: no additional requirements
 	} else {
 		return fmt.Errorf("Unknown Sandbox type '%s'", cfg.Sandbox)
 	}
