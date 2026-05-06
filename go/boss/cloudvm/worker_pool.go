@@ -216,7 +216,8 @@ func (pool *WorkerPool) cleanWorker(worker *Worker) {
 			slog.Info("worker cleaning progress", "worker_id", worker.workerId, "num_tasks", worker.numTask)
 			pool.Lock()
 			if _, ok := pool.workers[CLEANING][worker.workerId]; !ok {
-				return // stop if the worker is recovered
+				pool.Unlock()
+				return
 			}
 			pool.Unlock()
 			time.Sleep(time.Second)
@@ -395,6 +396,9 @@ func (w *Worker) runCmd(command string) {
 
 // return wokers' id and number of tasks
 func (pool *WorkerPool) StatusTasks() map[string]int {
+	pool.Lock()
+	defer pool.Unlock()
+
 	var output = map[string]int{}
 
 	output["task/worker"] = 0
@@ -419,6 +423,9 @@ func (pool *WorkerPool) StatusTasks() map[string]int {
 
 // return status of cluster
 func (pool *WorkerPool) StatusCluster() map[string]int {
+	pool.Lock()
+	defer pool.Unlock()
+
 	var output = map[string]int{}
 
 	output["starting"] = len(pool.workers[STARTING])
@@ -564,5 +571,63 @@ func (pool *WorkerPool) restoreFromEtcd() error {
 	}
 
 	slog.Info("etcd: pool restore complete", "running", len(pool.workers[RUNNING]), "target", pool.target)
+	return nil
+}
+
+// ResyncFromEtcd merges etcd state into the in-memory pool without clearing it.
+// Called when this boss wins the leader election to add any workers the previous
+// leader launched after this instance last read etcd.
+func (pool *WorkerPool) ResyncFromEtcd() error {
+	if pool.etcd == nil {
+		return nil
+	}
+	ctx := context.Background()
+
+	pool.Lock()
+	defer pool.Unlock()
+
+	if meta, ok, err := pool.etcd.GetPoolMeta(ctx); err != nil {
+		return err
+	} else if ok {
+		pool.nextId = meta.NextId
+		pool.target = meta.Target
+	}
+
+	records, err := pool.etcd.RestoreWorkers(ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, rec := range records {
+		known := false
+		for _, stateMap := range pool.workers {
+			if _, exists := stateMap[rec.WorkerId]; exists {
+				known = true
+				break
+			}
+		}
+		if known {
+			continue
+		}
+
+		w := pool.NewWorker(rec.WorkerId)
+		w.host = rec.Host
+		w.port = rec.Port
+		w.state = WorkerState(rec.State)
+
+		switch w.state {
+		case RUNNING, CLEANING:
+			w.state = RUNNING
+			pool.workers[RUNNING][w.workerId] = w
+			pool.queue <- w
+			pool.persistWorker(w)
+			slog.Info("etcd: resync added worker", "worker_id", w.workerId)
+		case STARTING, DESTROYING:
+			pool.evictWorker(w.workerId)
+			slog.Warn("etcd: resync dropped ambiguous worker", "worker_id", w.workerId, "state", rec.State)
+		}
+	}
+
+	slog.Info("etcd: resync complete", "running", len(pool.workers[RUNNING]), "target", pool.target)
 	return nil
 }

@@ -21,6 +21,7 @@ type Config struct {
 	Scaling    string          `json:"scaling"`
 	API_key    string          `json:"api_key"`
 	Boss_port  string          `json:"boss_port"`
+	Boss_host  string          `json:"boss_host"`
 	Worker_Cap int             `json:"worker_cap"`
 	Gcp        GcpConfig       `json:"gcp"`
 	Local      LocalPlatConfig `json:"local"`

@@ -1,6 +1,7 @@
 package boss
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -146,6 +147,29 @@ func (b *Boss) RegistryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// leaderOrRedirect wraps a handler so that follower bosses redirect mutating
+// (non-GET) requests to the current leader. Read-only GET requests are served
+// locally on every replica. If le is nil (HA disabled) the handler runs as-is.
+func leaderOrRedirect(le *etcd.LeaderElection, next http.HandlerFunc) http.HandlerFunc {
+	if le == nil {
+		return next
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		if le.IsLeader() || r.Method == http.MethodGet {
+			next(w, r)
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+		addr, err := le.LeaderAddr(ctx)
+		if err != nil {
+			http.Error(w, "no leader available", http.StatusServiceUnavailable)
+			return
+		}
+		http.Redirect(w, r, fmt.Sprintf("http://%s%s", addr, r.URL.RequestURI()), http.StatusTemporaryRedirect)
+	}
+}
+
 // BossMain is the main function for the boss.
 func BossMain() (err error) {
 	fmt.Printf("WARNING!  Boss incomplete (only use this as part of development process).\n")
@@ -161,9 +185,44 @@ func BossMain() (err error) {
 		slog.Info("etcd connected", "endpoints", config.BossConf.Etcd.Endpoints)
 	}
 
+	// Leader election (Phase 2): campaign in background; HTTP server starts
+	// immediately so followers can serve reads and redirect mutations right away.
+	var le *etcd.LeaderElection
+	var selfAddr string
+	if etcdClient != nil && config.BossConf.Etcd.Enable_HA {
+		le, err = etcdClient.NewLeaderElection(context.Background())
+		if err != nil {
+			return fmt.Errorf("leader election init failed: %w", err)
+		}
+
+		selfHost := config.BossConf.Boss_host
+		if selfHost == "" {
+			if h, e := os.Hostname(); e == nil {
+				selfHost = h
+			} else {
+				selfHost = "localhost"
+			}
+		}
+		selfAddr = fmt.Sprintf("%s:%s", selfHost, config.BossConf.Boss_port)
+	}
+
 	pool, err := cloudvm.NewWorkerPool(config.BossConf.Platform, config.BossConf.Worker_Cap, etcdClient)
 	if err != nil {
 		return err
+	}
+
+	if le != nil {
+		go func() {
+			slog.Info("campaigning for leadership", "self", selfAddr)
+			if err := le.Campaign(context.Background(), selfAddr); err != nil {
+				slog.Error("leader election campaign failed", "err", err)
+				return
+			}
+			if err := pool.ResyncFromEtcd(); err != nil {
+				slog.Error("etcd resync on election win failed", "err", err)
+			}
+			slog.Info("elected leader", "addr", selfAddr)
+		}()
 	}
 
 	store, err := lambdastore.NewLambdaStore(config.BossConf.GetLambdaStoreURL(), pool)
@@ -190,12 +249,15 @@ func BossMain() (err error) {
 		boss.workerPool.SetTarget(pool.GetTarget())
 	}
 
-	http.HandleFunc(BOSS_STATUS_PATH, boss.BossStatus)
-	http.HandleFunc(SCALING_PATH, boss.ScalingWorker)
-	http.HandleFunc(RUN_PATH, boss.workerPool.RunLambda)
-	http.HandleFunc(SHUTDOWN_PATH, boss.Close)
+	wrap := func(h http.HandlerFunc) http.HandlerFunc {
+		return leaderOrRedirect(le, h)
+	}
 
-	http.HandleFunc(REGISTRY_BASE_PATH, boss.RegistryHandler)
+	http.HandleFunc(BOSS_STATUS_PATH, boss.BossStatus)
+	http.HandleFunc(SCALING_PATH, wrap(boss.ScalingWorker))
+	http.HandleFunc(RUN_PATH, wrap(boss.workerPool.RunLambda))
+	http.HandleFunc(SHUTDOWN_PATH, boss.Close)
+	http.HandleFunc(REGISTRY_BASE_PATH, wrap(boss.RegistryHandler))
 
 	// clean up if signal hits us
 	c := make(chan os.Signal, 1)
@@ -204,6 +266,12 @@ func BossMain() (err error) {
 	go func() {
 		<-c
 		slog.Info("received kill signal, cleaning up")
+		if le != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			le.Resign(ctx)
+			le.Close()
+			cancel()
+		}
 		boss.Close(nil, nil)
 		os.Exit(0)
 	}()

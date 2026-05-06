@@ -8,8 +8,8 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
-// Client wraps the etcd v3 client and owns the connection lifecycle.
-// All key-space operations are namespaced under a configurable prefix.
+// client wraps the etcd v3 client and owns the connection lifecycle.
+// all key-space operations are namespaced under a configurable prefix.
 type Client struct {
 	raw    *clientv3.Client
 	kv     clientv3.KV

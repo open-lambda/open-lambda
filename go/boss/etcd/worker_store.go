@@ -9,8 +9,8 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
-// WorkerRecord is the etcd-serialized snapshot of a single worker.
-// State mirrors the cloudvm WorkerState constants (0=STARTING … 3=DESTROYING).
+// etcd-serialized snapshot of a single worker.
+// State mirrors the cloudvm WorkerState constants
 type WorkerRecord struct {
 	WorkerId string `json:"worker_id"`
 	State    int    `json:"state"`
@@ -18,10 +18,10 @@ type WorkerRecord struct {
 	Port     string `json:"port"`
 }
 
-// PoolMeta holds pool-level counters that must survive boss restarts.
+// holds pool-level counters that must survive boss restarts.
 type PoolMeta struct {
-	NextId int `json:"next_id"` // next worker ID to assign; prevents ID reuse
-	Target int `json:"target"`  // desired number of running workers
+	NextId int `json:"next_id"`
+	Target int `json:"target"`
 }
 
 func (c *Client) workerKey(workerId string) string {
@@ -46,7 +46,7 @@ func (c *Client) DeleteWorker(ctx context.Context, workerId string) error {
 	return err
 }
 
-// RestoreWorkers fetches all worker records stored under the workers/ prefix.
+// fetches all worker records stored under the workers/ prefix.
 func (c *Client) RestoreWorkers(ctx context.Context) ([]WorkerRecord, error) {
 	prefix := c.key("workers") + "/"
 	resp, err := c.kv.Get(ctx, prefix, clientv3.WithPrefix())
@@ -74,8 +74,7 @@ func (c *Client) PutPoolMeta(ctx context.Context, meta PoolMeta) error {
 	return err
 }
 
-// GetPoolMeta returns the stored pool metadata. The bool is false when no
-// metadata has been written yet (fresh etcd, first boss start).
+// returns the stored pool metadata.
 func (c *Client) GetPoolMeta(ctx context.Context) (PoolMeta, bool, error) {
 	resp, err := c.kv.Get(ctx, c.poolMetaKey())
 	if err != nil {
