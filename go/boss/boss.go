@@ -148,8 +148,7 @@ func (b *Boss) RegistryHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // leaderOrRedirect wraps a handler so that follower bosses redirect mutating
-// (non-GET) requests to the current leader. Read-only GET requests are served
-// locally on every replica. If le is nil (HA disabled) the handler runs as-is.
+// requests to the current leader. read-only GET requests are served locally on every replica.
 func leaderOrRedirect(le *etcd.LeaderElection, next http.HandlerFunc) http.HandlerFunc {
 	if le == nil {
 		return next
@@ -185,8 +184,6 @@ func BossMain() (err error) {
 		slog.Info("etcd connected", "endpoints", config.BossConf.Etcd.Endpoints)
 	}
 
-	// Leader election (Phase 2): campaign in background; HTTP server starts
-	// immediately so followers can serve reads and redirect mutations right away.
 	var le *etcd.LeaderElection
 	var selfAddr string
 	if etcdClient != nil && config.BossConf.Etcd.Enable_HA {
