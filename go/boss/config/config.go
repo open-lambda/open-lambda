@@ -9,6 +9,13 @@ import (
 
 var BossConf *Config
 
+type EtcdConfig struct {
+	Endpoints        []string `json:"endpoints"`
+	Prefix           string   `json:"prefix"`
+	Dial_timeout_sec int      `json:"dial_timeout_sec"`
+	Enable_HA        bool     `json:"enable_ha"`
+}
+
 type Config struct {
 	Platform   string          `json:"platform"`
 	Scaling    string          `json:"scaling"`
@@ -17,6 +24,7 @@ type Config struct {
 	Worker_Cap int             `json:"worker_cap"`
 	Gcp        GcpConfig       `json:"gcp"`
 	Local      LocalPlatConfig `json:"local"`
+	Etcd       EtcdConfig      `json:"etcd"`
 }
 
 func LoadDefaults() error {
@@ -28,6 +36,7 @@ func LoadDefaults() error {
 		Worker_Cap: 4,
 		Gcp:        GetGcpConfigDefaults(),
 		Local:      GetLocalPlatformConfigDefaults(),
+		Etcd:       EtcdConfig{Prefix: "ol", Dial_timeout_sec: 5},
 	}
 
 	return checkConf()

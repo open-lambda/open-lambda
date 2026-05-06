@@ -11,10 +11,12 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/open-lambda/open-lambda/go/boss/autoscaling"
 	"github.com/open-lambda/open-lambda/go/boss/cloudvm"
 	"github.com/open-lambda/open-lambda/go/boss/config"
+	"github.com/open-lambda/open-lambda/go/boss/etcd"
 	"github.com/open-lambda/open-lambda/go/boss/lambdastore"
 )
 
@@ -148,7 +150,18 @@ func (b *Boss) RegistryHandler(w http.ResponseWriter, r *http.Request) {
 func BossMain() (err error) {
 	fmt.Printf("WARNING!  Boss incomplete (only use this as part of development process).\n")
 
-	pool, err := cloudvm.NewWorkerPool(config.BossConf.Platform, config.BossConf.Worker_Cap)
+	var etcdClient *etcd.Client
+	if len(config.BossConf.Etcd.Endpoints) > 0 {
+		timeout := time.Duration(config.BossConf.Etcd.Dial_timeout_sec) * time.Second
+		etcdClient, err = etcd.NewClient(config.BossConf.Etcd.Endpoints, config.BossConf.Etcd.Prefix, timeout)
+		if err != nil {
+			return fmt.Errorf("etcd connect failed: %w", err)
+		}
+		defer etcdClient.Close()
+		slog.Info("etcd connected", "endpoints", config.BossConf.Etcd.Endpoints)
+	}
+
+	pool, err := cloudvm.NewWorkerPool(config.BossConf.Platform, config.BossConf.Worker_Cap, etcdClient)
 	if err != nil {
 		return err
 	}
@@ -168,9 +181,14 @@ func BossMain() (err error) {
 		boss.autoScaler.Launch(boss.workerPool)
 	}
 
-	// Launch 1 worker by default when boss starts
-	slog.Info("Launching 1 worker by default")
-	boss.workerPool.SetTarget(1)
+	// restore a prior target, else default to 1.
+	if pool.GetTarget() == 0 {
+		slog.Info("Launching 1 worker by default")
+		boss.workerPool.SetTarget(1)
+	} else {
+		slog.Info("resuming from etcd", "target", pool.GetTarget())
+		boss.workerPool.SetTarget(pool.GetTarget())
+	}
 
 	http.HandleFunc(BOSS_STATUS_PATH, boss.BossStatus)
 	http.HandleFunc(SCALING_PATH, boss.ScalingWorker)
