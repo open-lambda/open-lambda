@@ -140,7 +140,6 @@ func (s *sandboxSetImpl) GetOrCreateUnpaused() (*SandboxRef, error) {
 func (s *sandboxSetImpl) put(ref *SandboxRef) {
 	if ref.sb != nil {
 		if err := ref.sb.Pause(); err != nil {
-			ref.sb.Destroy("sandboxset: pause failed")
 			ref.sb = nil
 		}
 	}
