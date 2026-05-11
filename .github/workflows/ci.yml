@@ -19,7 +19,7 @@ jobs:
         shell: bash
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
     - name: Install Docker and Prereqs
       # This uses a workaround for a known issue with docker. See here: https://github.com/actions/virtual-environments/issues/5490#issuecomment-1118328567
       run: |
@@ -40,11 +40,11 @@ jobs:
       with:
          workspaces: "wasm-worker-> target"
     - name: Install golang
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v6
       with:
          go-version: '>=1.21'
     - name: Set up Python 3
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
          python-version: '3.12'
     - name: Install pylint
