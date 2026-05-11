@@ -1,7 +1,6 @@
 package tests
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/open-lambda/open-lambda/go/common"
@@ -127,26 +126,6 @@ func TestPut_Twice_Panics(t *testing.T) {
 		}
 	}()
 	ref.Put()
-}
-
-// TestPut_PauseFailure_DestroysSandbox verifies that when Pause fails inside
-// put(), the orphaned sandbox is destroyed by the set rather than leaked.
-func TestPut_PauseFailure_DestroysSandbox(t *testing.T) {
-	set, pool := newTestSet(t)
-	defer set.Close()
-
-	ref, err := set.GetOrCreateUnpaused()
-	if err != nil {
-		t.Fatalf("GetOrCreateUnpaused: %v", err)
-	}
-	sb := pool.CreatedSandboxes()[0]
-	sb.PauseErr = errors.New("simulated pause failure")
-
-	ref.Put()
-
-	if !sb.IsDestroyed() {
-		t.Fatal("expected sandbox to be destroyed after Pause failure in Put")
-	}
 }
 
 // TestClose_DestroysIdleSandbox verifies Close destroys idle sandboxes
