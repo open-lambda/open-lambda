@@ -1,11 +1,13 @@
 package cgroups
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
+	"path"
 	"path/filepath"
-	"strconv"
+	"slices"
 	"strings"
 	"syscall"
 
@@ -25,37 +27,10 @@ type CgroupPool struct {
 	nextID   int
 }
 
-// InitPoolRoot creates the cgroup pool root directory and enables controllers.
-func InitPoolRoot(poolPath string) error {
-
-	if err := os.MkdirAll(poolPath, 0700); err != nil {
-		return fmt.Errorf("failed to create cgroup pool root %s: %w", poolPath, err)
-	}
-
-	ctrlPath := filepath.Join(poolPath, "cgroup.subtree_control")
-	if err := os.WriteFile(ctrlPath, []byte("+pids +io +memory +cpu"), os.ModeAppend); err != nil {
-		return fmt.Errorf("failed to enable controllers at %s: %w", ctrlPath, err)
-	}
-
-	uidStr := os.Getenv("SUDO_UID")
-	if uidStr == "" {
-		return fmt.Errorf("SUDO_UID not set; worker must be run with sudo")
-	}
-	uid, err := strconv.Atoi(uidStr)
-	if err != nil {
-		return fmt.Errorf("invalid SUDO_UID value %q: %w", uidStr, err)
-	}
-	if err := os.Chown(poolPath, uid, uid); err != nil {
-		return fmt.Errorf("failed to chown cgroup pool root: %w", err)
-	}
-
-	fmt.Printf("\tCreated cgroup pool root at %s\n", poolPath)
-	return nil
-}
-
-func NewCgroupPool(name string, poolPath string) (*CgroupPool, error) {
+// NewCgroupPool creates a new CgroupPool with the specified name.
+func NewCgroupPool(name, poolPath string) (*CgroupPool, error) {
 	pool := &CgroupPool{
-		Name:     name,
+		Name:     path.Base(path.Dir(common.Conf.Worker_dir)) + "-" + name,
 		poolPath: poolPath,
 		ready:    make(chan *CgroupImpl, CGROUP_RESERVE),
 		recycled: make(chan *CgroupImpl, CGROUP_RESERVE),
@@ -63,11 +38,62 @@ func NewCgroupPool(name string, poolPath string) (*CgroupPool, error) {
 		nextID:   0,
 	}
 
-	if st, err := os.Stat(poolPath); err != nil || !st.IsDir() {
-		return nil, fmt.Errorf("cgroup pool root %s does not exist.", poolPath)
+	pool.printf("using parent cgroup %s", poolPath)
+
+	// create cgroup pool parent - no-op if already exists
+	if err := os.MkdirAll(poolPath, 0700); err != nil {
+		return nil, fmt.Errorf("mkdir %s: %w", poolPath, err)
 	}
 
-	pool.printf("reusing pool root %s", poolPath)
+	// enumerate controllers delegated to the parent
+	ctrlData, err := os.ReadFile(filepath.Join(poolPath, "cgroup.controllers"))
+	if err != nil {
+		return nil, fmt.Errorf("read %s/cgroup.controllers: %w", poolPath, err)
+	}
+	available := strings.Fields(string(ctrlData))
+
+	// require cpu, memory, pids
+	for _, req := range []string{"cpu", "memory", "pids"} {
+		if !slices.Contains(available, req) {
+			return nil, fmt.Errorf(
+				"cannot delegate required cgroup controller %q to %s (available: %v); ",
+				req, poolPath, available,
+			)
+		}
+	}
+
+	// move self pid to worker cgroup before enabling subtree_control
+	workerPath := filepath.Join(poolPath, "worker")
+	if err := os.Mkdir(workerPath, 0700); err != nil && !os.IsExist(err) {
+		return nil, fmt.Errorf("mkdir %s: %w", workerPath, err)
+	}
+	// migrate every pid in parent to worker/ - --detach leaves >1 in the scope
+	parentProcs, err := os.ReadFile(filepath.Join(poolPath, "cgroup.procs"))
+	if err != nil {
+		return nil, fmt.Errorf("read %s/cgroup.procs: %w", poolPath, err)
+	}
+	workerProcsPath := filepath.Join(workerPath, "cgroup.procs")
+	for _, pidStr := range strings.Fields(string(parentProcs)) {
+		// ESRCH: pid exited between read and write - ignore
+		if err := os.WriteFile(workerProcsPath, []byte(pidStr), 0); err != nil && !errors.Is(err, syscall.ESRCH) {
+			return nil, fmt.Errorf("move pid %s into %s: %w", pidStr, workerPath, err)
+		}
+	}
+
+	// enable every available controller on parent's subtree_control
+	var enable strings.Builder
+	for i, c := range available {
+		if i > 0 {
+			enable.WriteByte(' ')
+		}
+		enable.WriteByte('+')
+		enable.WriteString(c)
+	}
+	subPath := filepath.Join(poolPath, "cgroup.subtree_control")
+	if err := os.WriteFile(subPath, []byte(enable.String()), 0); err != nil {
+		return nil, fmt.Errorf("enable controllers at %s: %w", subPath, err)
+	}
+
 	go pool.cgTask()
 	return pool, nil
 }
@@ -156,14 +182,13 @@ Empty:
 	done <- true
 }
 
-// Destroy drains all child cgroups but preserves the pool root.
+// Destroy this entire cgroup pool
 func (pool *CgroupPool) Destroy() {
 	// signal cgTask, then wait for it to finish
 	ch := make(chan bool)
 	pool.quit <- ch
 	<-ch
-
-	pool.printf("destroyed all child cgroups, pool root preserved")
+	pool.printf("cgroup pool drained")
 }
 
 // GetCg retrieves a cgroup from the pool, setting its memory limit and CPU percentage.
@@ -183,4 +208,9 @@ func (pool *CgroupPool) GetCg(memLimitMB int, moveMemCharge bool, cpuPercent int
 		}*/
 
 	return cg
+}
+
+// GroupPath returns the path to the Cgroup pool for OpenLambda
+func (pool *CgroupPool) GroupPath() string {
+	return pool.poolPath
 }

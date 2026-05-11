@@ -47,7 +47,7 @@ jobs:
       run: cargo install cross --locked
     - name: Build OpenLambda
       run: |
-        make ol imgs/lambda wasm-worker wasm-functions native-functions container-proxy
+        make ol-bin imgs/lambda wasm-worker wasm-functions native-functions container-proxy
         sudo make install-python-bindings
     - name: Test PyPI Packages
       run: sudo ./scripts/package_tests.py

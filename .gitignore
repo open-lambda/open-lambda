@@ -60,7 +60,7 @@
 /test.json
 
 # binaries
-ol
+ol-bin
 ol-wasm
 ol-container-proxy
 
