@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"os"
 	"sync"
+
+	"github.com/open-lambda/open-lambda/go/boss/etcd"
 )
 
 // The WorkerState integer
@@ -51,6 +53,8 @@ type WorkerPool struct {
 	totalTask      int32
 	sumLatency     int64
 	nLatency       int64
+
+	etcd *etcd.Client
 }
 
 /*
