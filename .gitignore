@@ -96,3 +96,7 @@ azure.json
 boss.json
 cluster.log
 tasks.log
+
+# local dev
+.vscode/
+myworker/
