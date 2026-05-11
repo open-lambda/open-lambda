@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package lambda;                       
+
+option go_package = "example.com/open-lambda/grpc-lambda/lambda";
+
+service LambdaService {
+  rpc Invoke (LambdaRequest) returns (LambdaResponse);
+}
+
+message LambdaRequest {
+  string name = 1;   
+  string payload = 2;   
+}
+
+message LambdaResponse {
+  string result = 1;   
+}
