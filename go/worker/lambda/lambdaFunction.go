@@ -2,7 +2,6 @@ package lambda
 
 import (
 	"bufio"
-	"container/list"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -36,14 +35,17 @@ type LambdaFunc struct {
 	Meta     *FunctionMeta
 
 	// lambda execution
-	funcChan  chan *Invocation // server to func
-	instChan  chan *Invocation // func to instances
-	doneChan  chan *Invocation // instances to func
-	instances *list.List
+	funcChan   chan *Invocation // server to func
+	instChan   chan *Invocation // func to instances
+	doneChan   chan *Invocation // instances to func
+	nInstances int
 
 	// send chan to the kill chan to destroy the instance, then
 	// wait for msg on sent chan to block until it is done
 	killChan chan chan bool
+
+	// killChan shared with each invocation.
+	invocationKillChan chan chan bool
 }
 
 // Invoke handles the invocation of the lambda function.
@@ -315,13 +317,11 @@ func (f *LambdaFunc) Task() {
 			}
 
 			if oldCodeDir != "" && oldCodeDir != f.codeDir {
-				el := f.instances.Front()
-				for el != nil {
-					waitChan := el.Value.(*LambdaInstance).AsyncKill()
+				for i := 0; i < f.nInstances; i++ {
+					waitChan := f.AsyncKillOneInvocation()
 					cleanupChan <- waitChan
-					el = el.Next()
 				}
-				f.instances = list.New()
+				f.nInstances = 0
 
 				// cleanupChan is a FIFO, so this will
 				// happen after the cleanup task waits
@@ -353,11 +353,9 @@ func (f *LambdaFunc) Task() {
 		case done := <-f.killChan:
 			// signal all instances to die, then wait for
 			// cleanup task to finish and exit
-			el := f.instances.Front()
-			for el != nil {
-				waitChan := el.Value.(*LambdaInstance).AsyncKill()
+			for i := 0; i < f.nInstances; i++ {
+				waitChan := f.AsyncKillOneInvocation()
 				cleanupChan <- waitChan
-				el = el.Next()
 			}
 			if f.codeDir != "" {
 				// cleanupChan <- f.codeDir
@@ -397,7 +395,7 @@ func (f *LambdaFunc) Task() {
 		if lastScaling != nil {
 			elapsed := now.Sub(*lastScaling)
 			if elapsed < adjustFreq {
-				if desiredInstances != f.instances.Len() {
+				if desiredInstances != f.nInstances {
 					timeout = time.NewTimer(adjustFreq - elapsed)
 				}
 				continue
@@ -406,19 +404,19 @@ func (f *LambdaFunc) Task() {
 
 		// kill or start at most one instance to get closer to
 		// desired number
-		if f.instances.Len() < desiredInstances {
-			f.printf("increase instances to %d", f.instances.Len()+1)
+		if f.nInstances < desiredInstances {
+			f.printf("increase instances to %d", f.nInstances+1)
 			f.newInstance()
 			lastScaling = &now
-		} else if f.instances.Len() > desiredInstances {
-			f.printf("reduce instances to %d", f.instances.Len()-1)
-			waitChan := f.instances.Back().Value.(*LambdaInstance).AsyncKill()
-			f.instances.Remove(f.instances.Back())
+		} else if f.nInstances > desiredInstances {
+			f.printf("reduce instances to %d", f.nInstances-1)
+			waitChan := f.AsyncKillOneInvocation()
+			f.nInstances--
 			cleanupChan <- waitChan
 			lastScaling = &now
 		}
 
-		if f.instances.Len() != desiredInstances {
+		if f.nInstances != desiredInstances {
 			// we can only adjust quickly, so we want to
 			// run through this loop again as soon as
 			// possible, even if there are no requests to
@@ -438,10 +436,10 @@ func (f *LambdaFunc) newInstance() {
 		lfunc:    f,
 		codeDir:  f.codeDir,
 		meta:     f.Meta,
-		killChan: make(chan chan bool, 1),
+		killChan: f.invocationKillChan,
 	}
 
-	f.instances.PushBack(linst)
+	f.nInstances++
 
 	go linst.Task()
 }
@@ -451,4 +449,10 @@ func (f *LambdaFunc) Kill() {
 	done := make(chan bool)
 	f.killChan <- done
 	<-done
+}
+
+func (f *LambdaFunc) AsyncKillOneInvocation() chan bool {
+	done := make(chan bool)
+	f.invocationKillChan <- done
+	return done
 }

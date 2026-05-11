@@ -1,7 +1,6 @@
 package lambda
 
 import (
-	"container/list"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -134,11 +133,12 @@ func (mgr *LambdaMgr) Get(name string) (f *LambdaFunc) {
 			lmgr: mgr,
 			name: name,
 			// TODO make these configurable
-			funcChan:  make(chan *Invocation, 1024),
-			instChan:  make(chan *Invocation, 1024),
-			doneChan:  make(chan *Invocation, 1024),
-			instances: list.New(),
-			killChan:  make(chan chan bool, 1),
+			funcChan:           make(chan *Invocation, 1024),
+			instChan:           make(chan *Invocation, 1024),
+			doneChan:           make(chan *Invocation, 1024),
+			nInstances:         0,
+			killChan:           make(chan chan bool, 1),
+			invocationKillChan: make(chan chan bool),
 		}
 
 		go f.Task()
