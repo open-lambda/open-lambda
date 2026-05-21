@@ -30,7 +30,7 @@ type Config struct {
 	// log output of the runtime and proxy?
 	Log_output bool `json:"log_output"`
 
-	// sandbox type: "docker" or "sock"
+	// sandbox type: "docker", "sock", "containerd", or "mock"
 	// currently ignored as cgroup sandbox is not fully integrated
 	Sandbox string `json:"sandbox"`
 
@@ -62,13 +62,14 @@ type Config struct {
 	// pass through to sandbox envirenment variable
 	Sandbox_config any `json:"sandbox_config"`
 
-	Docker          DockerConfig   `json:"docker"`
-	Limits          LimitsConfig   `json:"limits"`
-	InstallerLimits LimitsConfig   `json:"installer_limits"` // limits profile for installers
-	Features        FeaturesConfig `json:"features"`
-	Trace           TraceConfig    `json:"trace"`
-	Storage         StorageConfig  `json:"storage"`
-	Kafka           KafkaConfig    `json:"kafka"`
+	Docker          DockerConfig     `json:"docker"`
+	Containerd      ContainerdConfig `json:"containerd"`
+	Limits          LimitsConfig     `json:"limits"`
+	InstallerLimits LimitsConfig     `json:"installer_limits"` // limits profile for installers
+	Features        FeaturesConfig   `json:"features"`
+	Trace           TraceConfig      `json:"trace"`
+	Storage         StorageConfig    `json:"storage"`
+	Kafka           KafkaConfig      `json:"kafka"`
 }
 
 type KafkaConfig struct {
@@ -88,6 +89,20 @@ type DockerConfig struct {
 	// which OCI implementation to use for the docker sandbox (e.g., runc or runsc)
 	Runtime string `json:"runtime"`
 	// name of the image used for Docker containers
+	Base_image string `json:"base_image"`
+}
+
+type ContainerdConfig struct {
+	// Path to containerd socket (default: /run/containerd/containerd.sock)
+	SocketAddress string `json:"socket_address"`
+
+	// Namespace to use (default: "openlambda")
+	Namespace string `json:"namespace"`
+
+	// Runtime handler (default: "io.containerd.runc.v2")
+	Runtime string `json:"runtime"`
+
+	// Base image name for containers
 	Base_image string `json:"base_image"`
 }
 
@@ -311,6 +326,12 @@ func getDefaultConfigForPatching(olPath string) (*Config, error) {
 		Docker: DockerConfig{
 			Base_image: "ol-min",
 		},
+		Containerd: ContainerdConfig{
+			SocketAddress: "/run/containerd/containerd.sock",
+			Namespace:     "openlambda",
+			Runtime:       "io.containerd.runc.v2",
+			Base_image:    "docker.io/library/ol-min:latest",
+		},
 		Limits:          userLimits,
 		InstallerLimits: installerLimits,
 		Features: FeaturesConfig{
@@ -414,6 +435,10 @@ func checkConf(cfg *Config) error {
 
 		if cfg.Features.Import_cache != "" {
 			return fmt.Errorf("features.import_cache must be disabled for docker Sandbox")
+		}
+	} else if cfg.Sandbox == "containerd" {
+		if cfg.Features.Import_cache != "" {
+			return fmt.Errorf("features.import_cache must be disabled for containerd Sandbox")
 		}
 	} else if cfg.Sandbox == "mock" {
 		// mock sandbox: no additional requirements
