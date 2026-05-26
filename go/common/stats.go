@@ -44,6 +44,11 @@ type msLatencyMsg struct {
 	x    int64
 }
 
+type gaugeMsg struct {
+	name string
+	val  int64
+}
+
 type snapshotMsg struct {
 	stats map[string]int64
 	done  chan bool
@@ -61,16 +66,22 @@ func initTaskOnce() {
 func statsTask() {
 	msCounts := make(map[string]int64)
 	msSums := make(map[string]int64)
+	gauges := make(map[string]int64)
 
 	for raw := range statsChan {
 		switch msg := raw.(type) {
 		case *msLatencyMsg:
 			msCounts[msg.name] += 1
 			msSums[msg.name] += msg.x
+		case *gaugeMsg:
+			gauges[msg.name] = msg.val
 		case *snapshotMsg:
 			for k, cnt := range msCounts {
 				msg.stats[k+".cnt"] = cnt
 				msg.stats[k+".ms-avg"] = msSums[k] / cnt
+			}
+			for k, v := range gauges {
+				msg.stats[k] = v
 			}
 			msg.done <- true
 		default:
@@ -82,6 +93,12 @@ func statsTask() {
 func record(name string, x int64) {
 	initTaskOnce()
 	statsChan <- &msLatencyMsg{name, x}
+}
+
+// SetGauge sets a point-in-time stat value (e.g. current disk usage).
+func SetGauge(name string, val int64) {
+	initTaskOnce()
+	statsChan <- &gaugeMsg{name, val}
 }
 
 func SnapshotStats() map[string]int64 {

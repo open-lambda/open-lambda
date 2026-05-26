@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/open-lambda/open-lambda/go/common"
 	"github.com/open-lambda/open-lambda/go/worker/embedded"
@@ -29,6 +30,12 @@ type PackagePuller struct {
 	pipLambda string
 
 	packages sync.Map
+
+	// blocks eviction while installs or refcount updates are in flight.
+	lifecycleMu sync.RWMutex
+
+	// total size of all installed packages in bytes (atomic for lock-free reads)
+	totalSize int64
 }
 
 type Package struct {
@@ -36,6 +43,13 @@ type Package struct {
 	Meta         PackageMeta
 	installMutex sync.Mutex
 	installed    uint32
+
+	// adding stats to track package usage for eviction purposes
+	InstallTime  time.Time
+	size         int64
+	LastAccessed time.Time
+	funcRefs     int32
+	pkgRefs      int32
 }
 
 // the pip-install admin lambda returns this
@@ -67,6 +81,31 @@ func NewPackagePuller(sbPool sandbox.SandboxPool, depTracer *DepTracer) (*Packag
 		depTracer: depTracer,
 		pipLambda: pipLambda,
 	}
+
+	// Seed totalSize from any packages left over from a previous worker run
+	if common.Conf.Pkgs_dir != "" {
+		entries, err := os.ReadDir(common.Conf.Pkgs_dir)
+		if err != nil && !os.IsNotExist(err) {
+			return nil, fmt.Errorf("failed to read Pkgs_dir: %w", err)
+		}
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			pkgDir := filepath.Join(common.Conf.Pkgs_dir, entry.Name())
+			size, err := common.DirSize(pkgDir)
+			if err != nil {
+				slog.Warn(fmt.Sprintf("failed to measure size of existing package %s: %v", entry.Name(), err))
+				continue
+			}
+			installer.totalSize += size
+		}
+		if installer.totalSize > 0 {
+			slog.Info(fmt.Sprintf("Seeded package totalSize from existing packages: %d bytes", installer.totalSize))
+		}
+	}
+
+	common.SetGauge("packages.total-size-bytes", installer.totalSize)
 
 	return installer, nil
 }
@@ -121,17 +160,14 @@ func (pp *PackagePuller) InstallRecursive(installs []string) ([]string, error) {
 
 // GetPkg retrieves the specified package, installing it if necessary.
 func (pp *PackagePuller) GetPkg(pkg string) (*Package, error) {
+	pp.lifecycleMu.RLock()
+	defer pp.lifecycleMu.RUnlock()
+
 	// get (or create) package
 	pkg = NormalizePkg(pkg)
 	tmp, _ := pp.packages.LoadOrStore(pkg, &Package{Name: pkg})
 	p := tmp.(*Package)
 
-	// fast path
-	if atomic.LoadUint32(&p.installed) == 1 {
-		return p, nil
-	}
-
-	// slow path
 	p.installMutex.Lock()
 	defer p.installMutex.Unlock()
 	if p.installed == 0 {
@@ -139,9 +175,24 @@ func (pp *PackagePuller) GetPkg(pkg string) (*Package, error) {
 			return p, err
 		}
 
+		// track size and timestamps for eviction purposes
+		scratchDir := filepath.Join(common.Conf.Pkgs_dir, p.Name)
+		if size, err := common.DirSize(scratchDir); err == nil {
+			p.size = size
+			atomic.AddInt64(&pp.totalSize, size)
+			common.SetGauge("packages.total-size-bytes", atomic.LoadInt64(&pp.totalSize))
+		} else {
+			slog.Warn(fmt.Sprintf("failed to measure size of package %s: %v", p.Name, err))
+		}
+		now := time.Now()
+		p.InstallTime = now
+		p.LastAccessed = now
+		pp.addPkgRefsLocked(p)
+
 		atomic.StoreUint32(&p.installed, 1)
 		pp.depTracer.TracePackage(p)
-		return p, nil
+	} else {
+		p.LastAccessed = time.Now()
 	}
 
 	return p, nil
@@ -222,4 +273,73 @@ func (pp *PackagePuller) sandboxInstall(p *Package) (err error) {
 	}
 
 	return nil
+}
+
+func (pp *PackagePuller) addPkgRefsLocked(p *Package) {
+	for _, depName := range uniquePackages(p.Meta.Deps) {
+		if depName == p.Name {
+			continue
+		}
+		tmp, _ := pp.packages.LoadOrStore(depName, &Package{Name: depName})
+		dep := tmp.(*Package)
+		refs := atomic.AddInt32(&dep.pkgRefs, 1)
+		if refs < 1 {
+			panic(fmt.Sprintf("negative pkgRefs for %s", dep.Name))
+		}
+	}
+}
+
+// AddFuncRef records that a function depends on the given top-level packages.
+func (pp *PackagePuller) AddFuncRef(_ string, pkgNames []string) {
+	pp.lifecycleMu.RLock()
+	defer pp.lifecycleMu.RUnlock()
+
+	for _, pkgName := range uniquePackages(pkgNames) {
+		tmp, _ := pp.packages.LoadOrStore(pkgName, &Package{Name: pkgName})
+		p := tmp.(*Package)
+		refs := atomic.AddInt32(&p.funcRefs, 1)
+		if refs < 1 {
+			panic(fmt.Sprintf("negative funcRefs for %s", p.Name))
+		}
+	}
+}
+
+// RemoveFuncRef releases a function's dependency claim on the given packages.
+func (pp *PackagePuller) RemoveFuncRef(_ string, pkgNames []string) {
+	pp.lifecycleMu.RLock()
+	defer pp.lifecycleMu.RUnlock()
+
+	for _, pkgName := range uniquePackages(pkgNames) {
+		tmp, ok := pp.packages.Load(pkgName)
+		if !ok {
+			continue
+		}
+		p := tmp.(*Package)
+		refs := atomic.AddInt32(&p.funcRefs, -1)
+		if refs < 0 {
+			panic(fmt.Sprintf("negative funcRefs for %s", p.Name))
+		}
+	}
+}
+
+func uniquePackages(pkgs []string) []string {
+	seen := make(map[string]struct{}, len(pkgs))
+	unique := make([]string, 0, len(pkgs))
+	for _, pkg := range pkgs {
+		pkg = NormalizePkg(pkg)
+		if pkg == "" {
+			continue
+		}
+		if _, ok := seen[pkg]; ok {
+			continue
+		}
+		seen[pkg] = struct{}{}
+		unique = append(unique, pkg)
+	}
+	return unique
+}
+
+// TotalSize returns the total size of all installed packages in bytes.
+func (pp *PackagePuller) TotalSize() int64 {
+	return atomic.LoadInt64(&pp.totalSize)
 }

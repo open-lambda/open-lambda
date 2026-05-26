@@ -31,9 +31,10 @@ type LambdaFunc struct {
 	name string
 
 	// lambda code
-	lastPull *time.Time
-	codeDir  string
-	Meta     *FunctionMeta
+	lastPull      *time.Time
+	codeDir       string
+	installedPkgs []string
+	Meta          *FunctionMeta
 
 	// lambda execution
 	funcChan  chan *Invocation // server to func
@@ -188,7 +189,6 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 			}
 		}
 
-		f.lmgr.DepTracer.TraceFunction(codeDir, meta.Sandbox.Installs)
 	} else if meta.Sandbox.Runtime == common.RT_NATIVE {
 		slog.Info("Got native function")
 	}
@@ -212,6 +212,14 @@ func (f *LambdaFunc) pullHandlerIfStale() (err error) {
 				fmt.Fprintf(envFile, "%s=%s\n", key, value)
 			}
 		}
+	}
+
+	if meta.Sandbox.Runtime == common.RT_PYTHON {
+		f.lmgr.PackagePuller.AddFuncRef(f.name, meta.Sandbox.Installs)
+		f.lmgr.DepTracer.TraceFunction(codeDir, meta.Sandbox.Installs)
+		f.installedPkgs = append([]string(nil), meta.Sandbox.Installs...)
+	} else {
+		f.installedPkgs = nil
 	}
 
 	f.Meta = meta
@@ -271,6 +279,8 @@ func (f *LambdaFunc) Task() {
 				}
 			case chan bool:
 				<-op
+			case func():
+				op()
 			}
 		}
 	}()
@@ -293,6 +303,7 @@ func (f *LambdaFunc) Task() {
 			// check for new code, and cleanup old code
 			// (and instances that use it) if necessary
 			oldCodeDir := f.codeDir
+			oldInstalledPkgs := append([]string(nil), f.installedPkgs...)
 			if err := f.pullHandlerIfStale(); err != nil {
 				f.printf("Error checking for new lambda code at `%s`: %v", f.codeDir, err)
 				req.w.WriteHeader(http.StatusInternalServerError)
@@ -326,6 +337,13 @@ func (f *LambdaFunc) Task() {
 				// cleanupChan is a FIFO, so this will
 				// happen after the cleanup task waits
 				// for all instance kills to finish
+				if len(oldInstalledPkgs) > 0 {
+					oldPkgs := append([]string(nil), oldInstalledPkgs...)
+					cleanupChan <- func() {
+						f.lmgr.PackagePuller.RemoveFuncRef(f.name, oldPkgs)
+						f.lmgr.PackageEvictor.NotifyEvictionCheck()
+					}
+				}
 				cleanupChan <- oldCodeDir
 			}
 
@@ -364,6 +382,10 @@ func (f *LambdaFunc) Task() {
 			}
 			close(cleanupChan)
 			<-cleanupTaskDone
+			if len(f.installedPkgs) > 0 {
+				f.lmgr.PackagePuller.RemoveFuncRef(f.name, f.installedPkgs)
+				f.lmgr.PackageEvictor.NotifyEvictionCheck()
+			}
 			done <- true
 			return
 		}
