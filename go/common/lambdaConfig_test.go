@@ -9,6 +9,55 @@ import (
 	"testing"
 )
 
+// TestReuseSandbox verifies that the reuse-sandbox field defaults to true
+// when not specified, and correctly reflects the value when explicitly set.
+func TestReuseSandbox(t *testing.T) {
+	tests := []struct {
+		name     string
+		yaml     string
+		expected bool
+	}{
+		{
+			name:     "no ol.yaml — defaults to true",
+			yaml:     "",
+			expected: true,
+		},
+		{
+			name:     "ol.yaml present but reuse-sandbox is not specified - defaults to true",
+			yaml:     "triggers:\n  http:\n    - method: \"GET\"\n",
+			expected: true,
+		},
+		{
+			name:     "reuse-sandbox explicitly set to false",
+			yaml:     "reuse-sandbox: false\n",
+			expected: false,
+		},
+		{
+			name:     "reuse-sandbox explicitly set to true",
+			yaml:     "reuse-sandbox: true\n",
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if tt.yaml != "" {
+				if err := os.WriteFile(filepath.Join(dir, "ol.yaml"), []byte(tt.yaml), 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			config, err := LoadLambdaConfig(dir)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if config.ReuseSandbox != tt.expected {
+				t.Errorf("expected ReuseSandbox=%v, got %v", tt.expected, config.ReuseSandbox)
+			}
+		})
+	}
+}
+
 // createTestTarGz creates a tar.gz file in memory with the given files
 func createTestTarGz(t *testing.T, files map[string]string) []byte {
 	var buf bytes.Buffer
